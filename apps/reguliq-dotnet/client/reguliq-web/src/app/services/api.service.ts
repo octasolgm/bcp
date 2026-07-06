@@ -47,6 +47,15 @@ export interface DualVerifySessionSummary {
   label: string;
 }
 
+export interface ComplianceSessionSummary {
+  id: string;
+  label: string;
+  comparedPoints: number;
+  granularity?: string;
+  source?: string;
+  updatedAt?: string;
+}
+
 export interface GovPoint {
   point_id: string;
   title?: string;
@@ -65,6 +74,7 @@ export interface SessionProgress {
     queuedPoints: number;
     transport: string;
     phase2Model: string;
+    granularity?: string;
   };
   points: Array<{
     id: string;
@@ -73,7 +83,7 @@ export interface SessionProgress {
     status: string;
     landingMessage?: string;
     llmMessage?: string;
-    agreementJson?: { status: string; label: string };
+    agreementJson?: { status: string; label: string; summary?: string };
     errorMessage?: string;
   }>;
 }
@@ -94,6 +104,22 @@ export class ApiService {
 
   listDualVerifySessions() {
     return this.http.get<ApiResponse<DualVerifySessionSummary[]>>(`${this.base}/dual-verify-kafka/sessions`);
+  }
+
+  listComplianceSessions(granularity = 'dual-leaf', limit = 30) {
+    return this.http.get<{ success: boolean; sessions: ComplianceSessionSummary[] }>(
+      `${this.base}/landing-ai/compliance-sessions?limit=${limit}&granularity=${granularity}`,
+    );
+  }
+
+  loadComplianceSession(id: string, granularity = 'dual-leaf') {
+    return this.http.get<{ success: boolean; results: unknown[] }>(
+      `${this.base}/landing-ai/compliance-sessions/${id}?granularity=${granularity}`,
+    );
+  }
+
+  saveComplianceSession(body: Record<string, unknown>) {
+    return this.http.post(`${this.base}/landing-ai/compliance-sessions`, body);
   }
 
   getGovPoints() {

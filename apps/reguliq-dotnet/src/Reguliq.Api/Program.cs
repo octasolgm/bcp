@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
+using Reguliq.Api.Infrastructure;
 using Reguliq.Api.Services;
 using Reguliq.Api.Workers;
 
@@ -20,6 +21,8 @@ if (File.Exists(repoEnv))
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration.AddEnvironmentVariables();
+
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase);
 
@@ -30,9 +33,11 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithOrigins("http://localhost:4200", "http://localhost:4201", "http://localhost:3002")
         .AllowAnyHeader().AllowAnyMethod()));
 
-var pgConn = Environment.GetEnvironmentVariable("REGULIQ_DATABASE_URL")
+var pgRaw = Environment.GetEnvironmentVariable("REGULIQ_DATABASE_URL")
     ?? Environment.GetEnvironmentVariable("DIRECT_URL")
+    ?? Environment.GetEnvironmentVariable("DATABASE_URL")
     ?? builder.Configuration.GetConnectionString("PostgreSQL");
+var pgConn = DatabaseConnectionHelper.ResolvePostgresConnection(pgRaw);
 
 var sqlitePath = Path.Combine(builder.Environment.ContentRootPath, "data", "reguliq.db");
 Directory.CreateDirectory(Path.GetDirectoryName(sqlitePath)!);
@@ -60,10 +65,12 @@ builder.Services.Configure<NodeBridgeOptions>(o =>
 builder.Services.AddHttpClient<GeminiService>();
 builder.Services.AddHttpClient<NodeBridgeService>();
 
+builder.Services.AddSingleton<KafkaConfig>();
+builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddSingleton<SessionPdfCache>();
 builder.Services.AddSingleton<GovPointsService>();
 builder.Services.AddSingleton<LocalJobQueue>();
-builder.Services.AddSingleton<DualVerifyWorker>();
+builder.Services.AddSingleton<DualVerifyJobProcessor>();
 builder.Services.AddHostedService<DualVerifyWorkerHosted>();
 builder.Services.AddScoped<DualVerifyStoreService>();
 builder.Services.AddScoped<DualVerifyService>();

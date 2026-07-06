@@ -1,128 +1,166 @@
-<div class="header">
-  <div>
-    <p class="eyebrow">Kafka Pipeline · .NET Core</p>
-    <h1>Dual Verify Analysis</h1>
-    <p class="muted">Phase 1 Landing AI (via Node bridge) → Phase 2 Gemini · EF Core persistence</p>
-  </div>
-  <a routerLink="/dashboard" class="link-btn">← Dashboard</a>
-</div>
-
-@if (health) {
-  <div class="health card">
-    <span>Transport: <strong class="emerald">{{ health.transport }}</strong></span>
-    <span>Save: <strong [class.red]="health.persistence.mode === 'memory'">{{ health.persistence.mode }}</strong></span>
-    @if (health.persistence.hint) {
-      <p class="hint">{{ health.persistence.hint }}</p>
-    }
-  </div>
-}
-
-@if (error) {
-  <div class="error">{{ error }}</div>
-}
-
-@if (govPoints.length === 0) {
-  <div class="warn card">
-    <p>Gov points not loaded.</p>
-    <button type="button" (click)="seedBuiltin()">Load embedded seed</button>
-  </div>
-}
-
-<div class="grid">
-  <section class="main">
-    <div class="card">
-      <div class="row">
-        <h2>Gov points ({{ granularity }})</h2>
-        <div class="toggle">
-          <button type="button" [class.on]="granularity === 'section'" (click)="granularity='section'; onGranularityChange()">Section</button>
-          <button type="button" [class.on]="granularity === 'leaf'" (click)="granularity='leaf'; onGranularityChange()">Leaf</button>
-        </div>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Kafka dual verify · Landing AI + Gemini</p>
+      <h1>Dual Verify Workbench</h1>
+    </div>
+    @if (health) {
+      <div class="health-badges">
+        <span class="badge" [class.ok]="persistenceOk">{{ health.persistence.mode }}</span>
+        <span class="badge violet">{{ health.transport }}</span>
       </div>
-      <p class="muted small">{{ selected.size }} selected · {{ govPoints.length }} available</p>
-      <ul class="points">
-        @for (p of govPoints; track p.point_id) {
-          <li>
-            <label>
-              <input type="checkbox" [checked]="selected.has(p.point_id)" (change)="toggle(p.point_id)" />
-              <span class="pid">{{ p.point_id }}</span>
-              @if (p.title) { <span> — {{ p.title }}</span> }
-            </label>
-          </li>
-        }
-      </ul>
-    </div>
+    }
+  </header>
 
-    <div class="card">
-      <h2>Phase 2 model & PDF</h2>
-      <select [(ngModel)]="aiModel">
-        @for (m of models; track m) {
-          <option [value]="m">{{ m }}</option>
-        }
-      </select>
-      <label class="check">
-        <input type="checkbox" [(ngModel)]="forceRefresh" /> Force fresh Phase 1 (Landing AI credits)
-      </label>
-      <input type="file" accept=".pdf" (change)="onFile($event)" />
-    </div>
+  @if (health && !persistenceOk) {
+    <div class="alert alert-error">{{ health.persistence.hint ?? 'Persistence not ready' }}</div>
+  }
+  @if (error) {
+    <div class="alert alert-error">{{ error }}</div>
+  }
 
-    <button type="button" class="run" [disabled]="running || !persistenceOk" (click)="startPipeline()">
-      {{ running ? 'Pipeline running…' : 'Run dual verify (' + selected.size + ' points)' }}
-    </button>
+  <div class="layout">
+    <div class="main-col">
+      <!-- Step 1: Load saved -->
+      <section class="card">
+        <h2>1 · Load saved results (optional)</h2>
+        <div class="row">
+          <select [(ngModel)]="selectedSavedSession">
+            <option value="">— Select saved session —</option>
+            @for (s of savedSessions; track s.id) {
+              <option [value]="s.id">{{ s.label }}</option>
+            }
+          </select>
+          <input type="text" placeholder="Or Kafka session UUID" [(ngModel)]="manualSessionId" />
+          <button type="button" class="btn-secondary" (click)="loadSavedIntoReport()">Load into report</button>
+          <button type="button" class="btn-ghost" (click)="clearReport()">Clear report</button>
+          <button type="button" class="btn-ghost" (click)="refreshSavedSessions()">Refresh</button>
+        </div>
+      </section>
 
-    <div class="card">
-      <h2>Load saved session</h2>
-      <input type="text" [(ngModel)]="manualSessionId" placeholder="Session UUID" />
-      <button type="button" (click)="loadSession()">Load session</button>
-    </div>
-
-    @if (progress) {
-      <div class="card results">
-        <h2>Results ({{ progress.session.completedPoints }}/{{ progress.session.totalPoints }})</h2>
-        @for (pt of progress.points; track pt.id) {
-          @if (pt.status === 'completed') {
-            <details class="point-card">
-              <summary>
-                <span class="pid">{{ pt.pointId }}</span>
-                <span class="badge">{{ pt.agreementJson?.label ?? pt.status }}</span>
-              </summary>
-              <div class="pass">
-                <h4>Pass 1 — Landing AI</h4>
-                <pre>{{ pt.landingMessage }}</pre>
-              </div>
-              <div class="pass">
-                <h4>Pass 2 — Gemini</h4>
-                <pre>{{ pt.llmMessage }}</pre>
-              </div>
-            </details>
-          } @else if (pt.status === 'failed') {
-            <div class="failed">{{ pt.pointId }}: {{ pt.errorMessage }}</div>
+      <!-- Step 2: Gov points -->
+      <section class="card">
+        <div class="section-head">
+          <h2>2 · Government requirement points</h2>
+          <div class="granularity">
+            <label><input type="radio" name="g" value="section" [(ngModel)]="granularity" (change)="onGranularityChange()" /> Section (2.1)</label>
+            <label><input type="radio" name="g" value="leaf" [(ngModel)]="granularity" (change)="onGranularityChange()" /> Leaf (2.1.1)</label>
+          </div>
+        </div>
+        @if (govPoints.length === 0) {
+          <p class="muted">No points loaded. <button type="button" class="link" (click)="seedBuiltin()">Seed builtin</button></p>
+        } @else {
+          <div class="toolbar">
+            <button type="button" class="btn-ghost" (click)="selectAll()">Select all</button>
+            <button type="button" class="btn-ghost" (click)="clearSelection()">Clear</button>
+            <span class="muted">{{ selected.size }} selected</span>
+          </div>
+          @for (ch of chapterGroups; track ch.chapter) {
+            <div class="chapter">
+              <h3>{{ ch.label }}</h3>
+              @for (p of ch.points; track p.point_id) {
+                <label class="point-row" [class.in-report]="inReport(p.point_id)">
+                  <input type="checkbox" [checked]="selected.has(p.point_id)" (change)="toggle(p.point_id)" />
+                  <span class="pid">{{ p.point_id }}</span>
+                  <span class="ptitle">{{ p.title || p.text.slice(0, 80) }}</span>
+                  @if (inReport(p.point_id)) { <span class="tag">✓ report</span> }
+                </label>
+              }
+            </div>
           }
         }
-      </div>
-    }
-  </section>
+      </section>
 
-  <aside class="card sidebar">
-    <h2>Live progress</h2>
-    @if (!progress) {
-      <p class="muted">Start a job to see progress.</p>
-    } @else {
-      <p>Status: <strong class="emerald">{{ progress.session.status }}</strong></p>
-      <div class="bar"><div [style.width.%]="pct"></div></div>
-      <ul class="stats">
-        <li>Completed: {{ progress.session.completedPoints }}</li>
-        <li>Failed: {{ progress.session.failedPoints }}</li>
-        <li>Running: {{ progress.session.runningPoints }}</li>
-        <li>Queued: {{ progress.session.queuedPoints }}</li>
-      </ul>
-      @if (progress.session.failedPoints > 0 && !running) {
-        <button type="button" class="retry" (click)="retryFailed()">Retry failed</button>
+      <!-- Step 3: Run -->
+      <section class="card">
+        <h2>3 · Phase 2 model &amp; internal PDF</h2>
+        <div class="row wrap">
+          <label>Model
+            <select [(ngModel)]="aiModel">
+              @for (m of models; track m) { <option [value]="m">{{ m }}</option> }
+            </select>
+          </label>
+          <label class="checkbox"><input type="checkbox" [(ngModel)]="forceRefresh" /> Force fresh Phase 1</label>
+          <label>Internal PDF <input type="file" accept=".pdf" (change)="onFile($event)" /></label>
+          <button type="button" class="btn-primary" [disabled]="running" (click)="startPipeline()">
+            {{ running ? 'Running…' : 'Run pipeline' }}
+          </button>
+        </div>
+      </section>
+
+      <!-- Report -->
+      @if (reportItems.length > 0 && reportSummary) {
+        <section class="card report-panel">
+          <div class="section-head">
+            <h2>Combined report · {{ reportSummary.total }} points</h2>
+            <div class="export-btns">
+              <button type="button" class="btn-export" (click)="exportBothPdf()">Both passes PDF</button>
+              <button type="button" class="btn-export" (click)="exportExcel()">Both passes Excel</button>
+              <button type="button" class="btn-export" (click)="exportSummary()">Summary PDF</button>
+            </div>
+          </div>
+          <div class="stats">
+            <span class="emerald">{{ reportSummary.aligned }} aligned</span>
+            <span class="amber">{{ reportSummary.needsReview }} review</span>
+            <span class="red">{{ reportSummary.failed }} failed</span>
+          </div>
+          <pre class="summary-text">{{ executiveSummary }}</pre>
+          @for (item of reportItems; track item.pointId) {
+            <article class="result-card">
+              <header>
+                <strong>{{ item.pointId }}</strong>
+                @if (item.agreement) {
+                  <span class="agreement" [class.aligned]="item.agreement.status === 'aligned'">{{ item.agreement.label }}</span>
+                }
+              </header>
+              @if (item.landingMessage) {
+                <div class="pass pass1">
+                  <h4>Pass 1 — Landing AI</h4>
+                  <pre>{{ item.landingMessage }}</pre>
+                </div>
+              }
+              @if (item.llmMessage) {
+                <div class="pass pass2">
+                  <h4>Pass 2 — LLM Verify</h4>
+                  <pre>{{ item.llmMessage }}</pre>
+                </div>
+              }
+              @if (item.errorMessage) {
+                <p class="error-text">{{ item.errorMessage }}</p>
+              }
+            </article>
+          }
+        </section>
       }
-      <ul class="mini-list">
-        @for (pt of progress.points; track pt.id) {
-          <li><span>{{ pt.pointId }}</span><span>{{ pt.status }}</span></li>
+    </div>
+
+    <!-- Live progress sidebar -->
+    <aside class="progress-aside card">
+      <h2>Live progress</h2>
+      @if (!progress) {
+        <p class="muted">Start a run or load a session.</p>
+      } @else {
+        <p class="session-id">{{ sessionId }}</p>
+        <p>Status: <strong>{{ progress.session.status }}</strong></p>
+        <div class="progress-bar"><div class="fill" [style.width.%]="pct"></div></div>
+        <p class="counts">
+          ✓ {{ progress.session.completedPoints }} ·
+          ✗ {{ progress.session.failedPoints }} ·
+          ⟳ {{ progress.session.runningPoints }} ·
+          ○ {{ progress.session.queuedPoints }}
+        </p>
+        <ul class="point-status">
+          @for (p of progress.points; track p.id) {
+            <li [class]="p.status">
+              {{ p.pointId }}
+              @if (p.agreementJson) { <span class="mini-badge">{{ p.agreementJson.label }}</span> }
+            </li>
+          }
+        </ul>
+        @if (progress.session.failedPoints > 0) {
+          <button type="button" class="btn-secondary full" (click)="retryFailed()">Retry failed</button>
         }
-      </ul>
-    }
-  </aside>
+      }
+    </aside>
+  </div>
 </div>

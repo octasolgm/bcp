@@ -2,7 +2,13 @@ import { Component, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { forkJoin } from 'rxjs';
-import { ApiService, DashboardMetrics, DualVerifyHealth, DualVerifySessionSummary } from '../../services/api.service';
+import {
+  ApiService,
+  ComplianceSessionSummary,
+  DashboardMetrics,
+  DualVerifyHealth,
+  DualVerifySessionSummary,
+} from '../../services/api.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -17,16 +23,36 @@ export class DashboardComponent implements OnInit {
   sessions: DualVerifySessionSummary[] = [];
   loading = true;
 
+  constructor(private api: ApiService) {}
+
   ngOnInit(): void {
     forkJoin({
       dash: this.api.getDashboard(),
       health: this.api.getDualVerifyHealth(),
-      sessions: this.api.listDualVerifySessions(),
+      kafka: this.api.listDualVerifySessions(),
+      compliance: this.api.listComplianceSessions('dual-leaf', 10),
     }).subscribe({
-      next: ({ dash, health, sessions }) => {
+      next: ({ dash, health, kafka, compliance }) => {
         this.seed = dash.data;
         this.health = health.data;
-        this.sessions = sessions.data ?? [];
+        const merged = [...(kafka.data ?? [])];
+        for (const c of compliance.sessions ?? []) {
+          if (!merged.some((s) => s.id === c.id)) {
+            merged.push({
+              id: c.id,
+              status: 'saved',
+              granularity: c.granularity ?? 'dual-leaf',
+              totalPoints: c.comparedPoints,
+              completedPoints: c.comparedPoints,
+              failedPoints: 0,
+              phase2Model: 'saved',
+              transport: 'db',
+              updatedAt: c.updatedAt ?? c.label,
+              label: c.label,
+            });
+          }
+        }
+        this.sessions = merged;
         this.loading = false;
       },
       error: () => (this.loading = false),
@@ -42,8 +68,6 @@ export class DashboardComponent implements OnInit {
   }
 
   get activeJobs(): number {
-    return this.sessions.filter((s) => s.status === 'running' || s.status === 'queued').length;
+    return this.sessions.filter((s) => s.status === 'running' || s.status === 'queued' || s.status === 'processing').length;
   }
-
-  constructor(private api: ApiService) {}
 }

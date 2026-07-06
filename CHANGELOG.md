@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Added
+- **Reguliq .NET Kafka parity** — Confluent.Kafka producer/consumer (jobs/retry/dlq/results), transient retry with backoff, `GET /jobs/{id}/results`, Postgres URI builder for `@` in passwords, agreement unit tests
+- **Reguliq Angular workbench** — App shell with sidebar, combined report bag, saved session load (DB/Kafka/recent), chapter-grouped gov points, live progress, PDF/Excel export (jspdf + exceljs)
+- `apps/reguliq-dotnet/.env.example`, `appsettings.Development.json` placeholders, expanded README
+
+### Changed
+- **Reguliq .NET** — health reports `supabase` when Postgres enabled; compliance-sessions save merges by session key; worker PDF/markdown fallback for Phase 2
+
+### Added
 - **Reguliq .NET + Angular stack** (`apps/reguliq-dotnet/`) — ASP.NET Core 8 API + Angular 19 UI
   - Dashboard + Kafka dual verify workbench (ports 5100 API, 3002 UI)
   - EF Core persistence (SQLite default, optional PostgreSQL via `REGULIQ_USE_POSTGRES=true`)
@@ -25,6 +33,7 @@
 - Dashboard link **Open BCP Web (Reguliq)** on `apps/web` MIS Dashboard
 
 ### Changed
+- **Reguliq .NET API** — Kafka infrastructure parity with NestJS: `KafkaConfig`, `KafkaProducerService`, job processor refactor, compliance-sessions API expansion, Postgres connection helper, `apps/reguliq-dotnet/.env.example`, unit tests for agreement service
 - **Kafka dual verify UI** — workbench-style combined report: full Pass 1/Pass 2 cards (no truncation), summary stats, load saved sessions before run, accumulate results (6 + 50 = 56), Summary PDF / Detail PDF / Excel export
 - **Kafka dual verify** — cost/quality optimizations: Phase 1 Supabase cache by default (`forceRefresh` off), internal markdown supplement for Phase 2, UI defaults (3 points, `gemini-2.5-flash-lite`), force-refresh checkbox
 - **Docs** — `KAFKA_DUAL_VERIFY_PROCESS.md` (full run process + cost vs quality); updated `KAFKA_DUAL_VERIFY_SIMPLE.md` to reflect implemented pipeline

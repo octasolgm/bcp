@@ -10,6 +10,10 @@
     <a routerLink="/dual-verify" class="btn-primary">Kafka Dual Verify →</a>
   </div>
 
+  @if (persistenceMode === 'memory') {
+    <div class="alert">Persistence is memory-only — configure REGULIQ_USE_POSTGRES=true + DIRECT_URL before running paid pipelines.</div>
+  }
+
   <div class="pipeline-grid">
     <div class="card">
       <span class="label">Transport</span>
@@ -87,4 +91,9 @@
       </tbody>
     </table>
   </section>
+
+  <div class="quick-actions">
+    <a routerLink="/dual-verify" class="qa">Kafka Dual Verify</a>
+    <a routerLink="/dual-verify" class="qa secondary">Start new run</a>
+  </div>
 }

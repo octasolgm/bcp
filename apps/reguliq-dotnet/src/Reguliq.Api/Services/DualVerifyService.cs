@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Reguliq.Api.Data.Entities;
+using Reguliq.Api.Infrastructure;
 using Reguliq.Api.Models;
 using Reguliq.Api.Workers;
 
@@ -11,7 +10,10 @@ public class DualVerifyService(
     GovPointsService govPoints,
     DualVerifyStoreService store,
     LocalJobQueue queue,
+    KafkaConfig kafkaConfig,
+    KafkaProducerService kafka,
     IConfiguration config,
+    IWebHostEnvironment env,
     ILogger<DualVerifyService> logger)
 {
     private const string GovFileHash = "c84713f9aacd18415680356aeae47bcacff9c17458b5595b575400b12fe8f2ff";
@@ -20,12 +22,17 @@ public class DualVerifyService(
     public async Task<DualVerifyHealthDto> GetHealthAsync(CancellationToken ct = default)
     {
         var tablesReady = await store.TablesReadyAsync();
-        var kafkaEnabled = config.GetValue("KAFKA_ENABLED", false);
-        var mode = tablesReady ? "file" : "memory";
+        var usePostgres = Environment.GetEnvironmentVariable("REGULIQ_USE_POSTGRES") == "true";
+        var kafkaConfigured = kafkaConfig.IsKafkaConfigured();
+        var transport = kafkaConfig.GetTransportMode();
+        var mode = !tablesReady ? "memory"
+            : usePostgres ? "supabase"
+            : "file";
+
         return new DualVerifyHealthDto(
             "ok",
-            kafkaEnabled ? "kafka" : "local",
-            kafkaEnabled,
+            transport,
+            kafkaConfigured,
             new KafkaTopicsDto(
                 config["KAFKA_TOPIC_JOBS"] ?? "dual-verify-jobs",
                 config["KAFKA_TOPIC_RETRY"] ?? "dual-verify-retry",
@@ -34,7 +41,9 @@ public class DualVerifyService(
             new PersistenceDto(
                 tablesReady, tablesReady, Directory.Exists(store.DataDir),
                 store.DataDir, mode,
-                mode == "memory" ? "Database not connected — SQLite file at data/reguliq.db" : null));
+                mode == "memory"
+                    ? "Database not connected — configure REGULIQ_USE_POSTGRES=true + DIRECT_URL"
+                    : null));
     }
 
     public async Task<DualVerifySession> CreateJobAsync(
@@ -53,7 +62,8 @@ public class DualVerifyService(
 
         var sessionId = Guid.NewGuid();
         var now = DateTime.UtcNow;
-        var transport = config.GetValue("KAFKA_ENABLED", false) ? "kafka" : "local";
+        var transport = kafkaConfig.GetTransportMode();
+        var maxAttempts = kafkaConfig.GetMaxAttempts();
 
         var session = new DualVerifySession
         {
@@ -79,6 +89,8 @@ public class DualVerifyService(
 
         await store.SaveSessionAsync(session, ct);
 
+        var messages = new List<DualVerifyJobMessage>();
+
         foreach (var point in filtered)
         {
             var jobId = Guid.NewGuid();
@@ -90,24 +102,48 @@ public class DualVerifyService(
                 PointTitle = point.Title,
                 GovText = point.Text,
                 Status = "queued",
-                MaxAttempts = config.GetValue("DUAL_VERIFY_MAX_RETRIES", 3),
+                MaxAttempts = maxAttempts,
                 CreatedAt = now,
                 UpdatedAt = now
             };
             await store.SavePointJobAsync(pointJob, ct);
 
-            queue.Enqueue(new DualVerifyJobMessage(
+            messages.Add(new DualVerifyJobMessage(
                 Guid.NewGuid().ToString(), jobId, sessionId,
                 point.PointId, point.Title, point.Text,
                 request.Granularity, request.GovDocId, request.InternalDocId,
                 GovFileHash, InternalFileHash,
                 session.GovFileName ?? "", session.InternalFileName ?? "",
-                request.Phase2Model, 1, pointJob.MaxAttempts,
-                request.ForceRefresh, sessionId.ToString(), now));
+                request.Phase2Model, 1, maxAttempts,
+                request.ForceRefresh, sessionId.ToString(), now,
+                Transport: transport));
         }
 
-        logger.LogInformation("Created dual verify session {SessionId} with {Count} points", sessionId, filtered.Count);
+        await EnqueueJobsAsync(messages, ct);
+
+        logger.LogInformation("Created dual verify session {SessionId} with {Count} points ({Transport})",
+            sessionId, filtered.Count, transport);
         return session;
+    }
+
+    private async Task EnqueueJobsAsync(List<DualVerifyJobMessage> messages, CancellationToken ct)
+    {
+        if (kafkaConfig.IsEnabled() && kafka.IsReady)
+        {
+            foreach (var msg in messages)
+                await kafka.PublishJobAsync(msg, ct);
+
+            if (env.IsDevelopment())
+            {
+                foreach (var msg in messages)
+                    queue.Enqueue(msg);
+            }
+        }
+        else
+        {
+            foreach (var msg in messages)
+                queue.Enqueue(msg);
+        }
     }
 
     public async Task<SessionProgressDto?> GetProgressAsync(Guid sessionId, CancellationToken ct = default)
@@ -115,6 +151,21 @@ public class DualVerifyService(
         var session = await store.GetSessionAsync(sessionId, ct);
         if (session == null) return null;
         return MapProgress(session);
+    }
+
+    public async Task<List<PointJobDto>> GetResultsAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await store.GetSessionAsync(sessionId, ct);
+        if (session == null) return [];
+        return session.PointJobs
+            .Where(p => p.Status is "completed" or "failed")
+            .OrderBy(p => p.PointId)
+            .Select(p => new PointJobDto(
+                p.Id, p.PointId, p.PointTitle, p.Status,
+                p.LandingMessage, p.LlmMessage,
+                DualVerifyAgreementService.FromJson(p.AgreementJson),
+                p.ErrorMessage))
+            .ToList();
     }
 
     public static SessionProgressDto MapProgress(DualVerifySession session) =>
@@ -136,6 +187,9 @@ public class DualVerifyService(
         var session = await store.GetSessionAsync(sessionId, ct);
         if (session == null) return 0;
         var failed = session.PointJobs.Where(p => p.Status == "failed").ToList();
+        var transport = kafkaConfig.GetTransportMode();
+        var messages = new List<DualVerifyJobMessage>();
+
         foreach (var job in failed)
         {
             job.Status = "queued";
@@ -143,15 +197,19 @@ public class DualVerifyService(
             job.ErrorMessage = null;
             job.UpdatedAt = DateTime.UtcNow;
             await store.SavePointJobAsync(job, ct);
-            queue.Enqueue(new DualVerifyJobMessage(
+
+            messages.Add(new DualVerifyJobMessage(
                 Guid.NewGuid().ToString(), job.Id, sessionId,
                 job.PointId, job.PointTitle, job.GovText,
                 session.Granularity, session.GovDocId, session.InternalDocId,
                 session.GovFileHash, session.InternalFileHash,
                 session.GovFileName ?? "", session.InternalFileName ?? "",
                 session.Phase2Model ?? "gemini-2.5-flash-lite",
-                1, job.MaxAttempts, false, sessionId.ToString(), DateTime.UtcNow));
+                1, job.MaxAttempts, false, sessionId.ToString(), DateTime.UtcNow,
+                Transport: transport));
         }
+
+        await EnqueueJobsAsync(messages, ct);
         await store.UpdateSessionCountsAsync(sessionId, ct);
         return failed.Count;
     }
@@ -160,6 +218,6 @@ public class DualVerifyService(
     {
         var health = await GetHealthAsync(ct);
         if (health.Persistence.Mode == "memory")
-            throw new InvalidOperationException("Cannot run — persistence not ready. Configure PostgreSQL connection string.");
+            throw new InvalidOperationException("Cannot run — persistence not ready. Configure PostgreSQL or SQLite.");
     }
 }

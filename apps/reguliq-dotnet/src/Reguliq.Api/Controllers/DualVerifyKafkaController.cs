@@ -95,6 +95,19 @@ public class DualVerifyKafkaController(DualVerifyService service, DualVerifyStor
         return Ok(new ApiResponse<SessionProgressDto>(true, progress));
     }
 
+    [HttpGet("jobs/{sessionId:guid}/results")]
+    public async Task<ActionResult<ApiResponse<List<PointJobDto>>>> GetResults(Guid sessionId, CancellationToken ct)
+    {
+        var results = await service.GetResultsAsync(sessionId, ct);
+        if (results.Count == 0)
+        {
+            var progress = await service.GetProgressAsync(sessionId, ct);
+            if (progress == null)
+                return NotFound(new ApiResponse<List<PointJobDto>>(false, null!, "Session not found"));
+        }
+        return Ok(new ApiResponse<List<PointJobDto>>(true, results));
+    }
+
     [HttpPost("jobs/{sessionId:guid}/retry-failed")]
     public async Task<ActionResult<ApiResponse<object>>> RetryFailed(Guid sessionId, CancellationToken ct)
     {

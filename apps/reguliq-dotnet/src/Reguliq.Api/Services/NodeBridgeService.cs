@@ -60,6 +60,26 @@ public class NodeBridgeService(HttpClient http, IOptions<NodeBridgeOptions> opti
         throw new InvalidOperationException("Invalid compare-point response");
     }
 
+    public async Task<string?> GetStoredParseAsync(string fileHash, CancellationToken ct = default)
+    {
+        if (!_opts.Enabled) return null;
+        try
+        {
+            var res = await http.GetAsync(
+                $"{_opts.BaseUrl}/landing-ai/stored-parse?fileHash={Uri.EscapeDataString(fileHash)}", ct);
+            if (!res.IsSuccessStatusCode) return null;
+            var text = await res.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(text);
+            if (doc.RootElement.TryGetProperty("markdown", out var md))
+                return md.GetString();
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Stored parse unavailable for {Hash}", fileHash);
+        }
+        return null;
+    }
+
     public async Task<bool> IsReachableAsync(CancellationToken ct = default)
     {
         if (!_opts.Enabled) return false;

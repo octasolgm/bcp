@@ -41,7 +41,9 @@ public record DualVerifyJobMessage(
     int MaxAttempts,
     bool ForceRefresh,
     string CorrelationId,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string SchemaVersion = "1.0",
+    string? Transport = null);
 
 public record DashboardMetricsDto(
     int CriticalGaps,
