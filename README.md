@@ -39,6 +39,9 @@ npm run dev:api
 # Web (http://localhost:3000)
 npm run dev:web
 
+# BCP Web / Reguliq UI (http://localhost:3001)
+npm run dev:bcpweb
+
 # Mobile
 npm run dev:mobile
 ```

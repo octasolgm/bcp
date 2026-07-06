@@ -17,6 +17,8 @@ import { ComplianceItemsModule } from './modules/compliance-items/compliance-ite
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { AiModule } from './modules/ai/ai.module';
 import { LandingAiModule } from './modules/landing-ai/landing-ai.module';
+import { BcpwebModule } from './modules/bcpweb/bcpweb.module';
+import { DualVerifyKafkaModule } from './modules/dual-verify-kafka/dual-verify-kafka.module';
 
 @Module({
   imports: [
@@ -43,6 +45,8 @@ import { LandingAiModule } from './modules/landing-ai/landing-ai.module';
     AlertsModule,
     AiModule,
     LandingAiModule,
+    BcpwebModule,
+    DualVerifyKafkaModule,
   ],
 })
 export class AppModule {}

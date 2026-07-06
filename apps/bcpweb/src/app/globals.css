@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-[#0b111b] text-slate-100 antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+select,
+textarea,
+input {
+  @apply bg-[#0f1729] text-slate-100;
+}
+
+select option {
+  @apply bg-[#0f1729] text-slate-100;
+}

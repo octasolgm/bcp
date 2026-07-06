@@ -10,6 +10,8 @@
   "scripts": {
     "dev:api": "npm run start:dev --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
+    "dev:bcpweb": "npm run dev --workspace=apps/bcpweb",
+    "dev:reguliq-dotnet": "bash apps/reguliq-dotnet/scripts/start-all.sh",
     "dev:mobile": "npm run dev --workspace=apps/mobile",
     "db:migrate": "npm run db:migrate --workspace=apps/api",
     "db:seed": "npm run seed:landing-ai --workspace=apps/api",

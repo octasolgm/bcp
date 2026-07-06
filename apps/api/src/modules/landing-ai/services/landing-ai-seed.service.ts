@@ -104,24 +104,39 @@ export class LandingAiSeedService {
     return { success: true, seeded: results };
   }
 
-  async getStoredPoints(
+  /** Load points from repo seed JSON when Supabase extract cache is empty (dev fallback). */
+  private loadPointsFromSeedFile(
     fileHash: string,
     schemaKey: ExtractSchemaKey,
-  ): Promise<LandingAiExtractResponse | null> {
-    const cached = await this.cache.getExtractCache(fileHash, schemaKey);
-    if (!cached?.points_json) return null;
+  ): GovRequirementPoint[] | null {
+    const doc = BUILTIN_EXTRACT_DOCS.find(
+      (d) => d.fileHash === fileHash && d.schemaKey === schemaKey,
+    );
+    if (!doc) return null;
+    try {
+      const data = this.loadSeedFile(doc.seedFile);
+      return data.points?.length ? data.points : null;
+    } catch (err) {
+      this.logger.warn(
+        `Seed file fallback failed for ${doc.id}: ${err instanceof Error ? err.message : err}`,
+      );
+      return null;
+    }
+  }
 
-    const obj = cached.points_json as { points?: GovRequirementPoint[] };
-    const points = Array.isArray(obj.points) ? obj.points : [];
-    if (!points.length) return null;
-
+  private buildStoredPointsResponse(
+    fileHash: string,
+    schemaKey: ExtractSchemaKey,
+    points: GovRequirementPoint[],
+    cached: boolean,
+  ): LandingAiExtractResponse {
     const doc = BUILTIN_EXTRACT_DOCS.find(
       (d) => d.fileHash === fileHash && d.schemaKey === schemaKey,
     );
 
     return {
       success: true,
-      cached: true,
+      cached,
       fileName: doc?.fileName ?? 'document.pdf',
       fileHash,
       schemaKey,
@@ -144,5 +159,29 @@ export class LandingAiSeedService {
           })()
         : {}),
     };
+  }
+
+  async getStoredPoints(
+    fileHash: string,
+    schemaKey: ExtractSchemaKey,
+  ): Promise<LandingAiExtractResponse | null> {
+    const cached = await this.cache.getExtractCache(fileHash, schemaKey);
+    if (cached?.points_json) {
+      const obj = cached.points_json as { points?: GovRequirementPoint[] };
+      const points = Array.isArray(obj.points) ? obj.points : [];
+      if (points.length) {
+        return this.buildStoredPointsResponse(fileHash, schemaKey, points, true);
+      }
+    }
+
+    const seedPoints = this.loadPointsFromSeedFile(fileHash, schemaKey);
+    if (seedPoints?.length) {
+      this.logger.log(
+        `Using builtin seed file for ${schemaKey} (${seedPoints.length} points) — Supabase cache empty`,
+      );
+      return this.buildStoredPointsResponse(fileHash, schemaKey, seedPoints, false);
+    }
+
+    return null;
   }
 }

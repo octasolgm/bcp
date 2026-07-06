@@ -28,6 +28,10 @@ packages/*/dist/
 .DS_Store
 Thumbs.db
 
+# Local dual-verify backups (paid run results — do not commit)
+data/dual-verify-kafka/
+apps/api/data/dual-verify-kafka/
+
 # Logs
 npm-debug.log*
 yarn-debug.log*

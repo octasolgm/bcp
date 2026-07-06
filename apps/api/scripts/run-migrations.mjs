@@ -32,7 +32,19 @@ function resolveMigrationsDir() {
 
 function buildConnectionString() {
   const direct = process.env.DATABASE_URL?.trim();
-  if (direct) return direct;
+  if (direct) {
+    try {
+      const u = new URL(direct);
+      if (u.password === 'password' || u.password === 'your-password') {
+        throw new Error(
+          'DATABASE_URL still has placeholder password. Supabase → Settings → Database → Connection string (URI) → paste real password into .env',
+        );
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('placeholder')) throw e;
+    }
+    return direct;
+  }
 
   const password = process.env.SUPABASE_DB_PASSWORD?.trim();
   const url = process.env.SUPABASE_URL?.trim();

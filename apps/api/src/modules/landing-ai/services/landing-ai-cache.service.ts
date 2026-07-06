@@ -39,24 +39,25 @@ export class LandingAiCacheService {
   }
 
   async isCacheEnabled(): Promise<boolean> {
-    if (this.cacheAvailable !== null) return this.cacheAvailable;
+    if (this.cacheAvailable === true) return true;
     try {
       const client = this.supabaseService.getAdminClient();
       const { error } = await client
         .from('landing_ai_parse_cache')
         .select('id')
         .limit(1);
-      this.cacheAvailable = !error;
-      if (error) {
-        this.logger.warn(
-          `Supabase Landing AI cache tables not ready: ${error.message}. Run npm run db:migrate`,
-        );
+      if (!error) {
+        this.cacheAvailable = true;
+        return true;
       }
+      this.logger.warn(
+        `Supabase Landing AI cache tables not ready: ${error.message}. Run npm run db:migrate`,
+      );
     } catch (e) {
-      this.cacheAvailable = false;
       this.logger.warn('Supabase cache check failed', e);
     }
-    return this.cacheAvailable;
+    this.cacheAvailable = false;
+    return false;
   }
 
   async getParseCache(fileHash: string): Promise<{

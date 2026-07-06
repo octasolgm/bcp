@@ -1,0 +1,90 @@
+@if (loading) {
+  <p class="muted">Loading dashboard…</p>
+} @else if (seed) {
+  <div class="header">
+    <div>
+      <p class="eyebrow">Reguliq Compliance · .NET + Angular</p>
+      <h1>Compliance Dashboard</h1>
+      <p class="muted">SNB UAE / DIFC · Last analysis: {{ seed.lastAnalysisDate }}</p>
+    </div>
+    <a routerLink="/dual-verify" class="btn-primary">Kafka Dual Verify →</a>
+  </div>
+
+  <div class="pipeline-grid">
+    <div class="card">
+      <span class="label">Transport</span>
+      <strong class="emerald">{{ health?.transport ?? '—' }}</strong>
+      <small>{{ health?.kafkaConfigured ? 'Azure Event Hubs' : 'Local queue' }}</small>
+    </div>
+    <div class="card">
+      <span class="label">Persistence</span>
+      <strong [class]="persistenceMode === 'memory' ? 'red' : 'emerald'">{{ persistenceMode }}</strong>
+      <small>{{ health?.persistence?.fileDataDir }}</small>
+    </div>
+    <div class="card">
+      <span class="label">Dual verify points</span>
+      <strong class="violet">{{ completedPoints }}</strong>
+      <small>{{ sessions.length }} session(s)</small>
+    </div>
+    <div class="card">
+      <span class="label">Active jobs</span>
+      <strong class="amber">{{ activeJobs }}</strong>
+      <small>{{ activeJobs > 0 ? 'Pipeline running' : 'Idle' }}</small>
+    </div>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="card metric"><span>Critical Gaps</span><strong class="red">{{ seed.criticalGaps }}</strong></div>
+    <div class="card metric"><span>High Risk</span><strong class="orange">{{ seed.highRisk }}</strong></div>
+    <div class="card metric"><span>Total Findings</span><strong>{{ seed.totalFindings }}</strong></div>
+    <div class="card metric"><span>Compliant</span><strong class="blue">{{ seed.compliantItems }}</strong></div>
+  </div>
+
+  <div class="two-col">
+    <section class="card">
+      <h2>Risk breakdown</h2>
+      <ul class="risk-list">
+        @for (r of seed.riskBreakdown; track r.name) {
+          <li><span class="dot" [style.background]="r.color"></span>{{ r.name }} <strong>{{ r.value }}</strong></li>
+        }
+      </ul>
+    </section>
+    <section class="card">
+      <div class="section-head">
+        <h2>Kafka pipeline</h2>
+        <a routerLink="/dual-verify">Open workbench →</a>
+      </div>
+      @if (sessions.length === 0) {
+        <p class="muted">No sessions yet. <a routerLink="/dual-verify">Start dual verify</a></p>
+      } @else {
+        <ul class="session-list">
+          @for (s of sessions.slice(0, 6); track s.id) {
+            <li>
+              <a [routerLink]="['/dual-verify']" [queryParams]="{ session: s.id }">
+                <span>{{ s.label }}</span>
+                <span class="badge" [class.done]="s.status === 'completed'">{{ s.status }}</span>
+              </a>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>Remediation tracker</h2>
+    <table>
+      <thead><tr><th>Item</th><th>Severity</th><th>Target</th><th>Status</th></tr></thead>
+      <tbody>
+        @for (row of seed.remediationItems; track row.item) {
+          <tr>
+            <td>{{ row.item }}</td>
+            <td><span class="sev" [class]="row.severity">{{ row.severity }}</span></td>
+            <td>{{ row.target }}</td>
+            <td>{{ row.status }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+}
