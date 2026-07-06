@@ -46,18 +46,18 @@ public record DualVerifyJobMessage(
     string? Transport = null);
 
 public record DashboardMetricsDto(
-    int CriticalGaps,
-    int HighRisk,
+    int Compliant,
+    int Partial,
+    int NonCompliant,
     int TotalFindings,
-    int CompliantItems,
     string LastAnalysisDate,
-    List<RiskBreakdownItem> RiskBreakdown,
-    List<RemediationItemDto> RemediationItems,
+    List<ComplianceBreakdownItem> ComplianceBreakdown,
     List<RecentAnalysisDto> RecentAnalyses);
 
-public record RiskBreakdownItem(string Name, int Value, string Color);
-public record RemediationItemDto(string Item, string Severity, string Target, string Status);
-public record RecentAnalysisDto(string Id, string Title, string Date, int Findings, int Critical, int High);
+public record ComplianceBreakdownItem(string Name, int Value, string Color);
+public record RecentAnalysisDto(string Id, string Title, string Date, int Findings, int Compliant, int Partial, int NonCompliant);
+
+public record ClientGovPointDto(string PointId, string? Title, string Text, string? Section);
 
 public record DualVerifyHealthDto(
     string Status,

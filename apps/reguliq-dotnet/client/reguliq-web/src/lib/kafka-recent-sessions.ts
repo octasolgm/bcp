@@ -6,7 +6,7 @@ export type RecentKafkaSession = {
   savedAt: string;
 };
 
-const STORAGE_KEY = 'reguliq-kafka-dual-verify-recent';
+const STORAGE_KEY = 'bcp-app-kafka-dual-verify-recent';
 const MAX_RECENT = 20;
 
 export function readRecentKafkaSessions(): RecentKafkaSession[] {

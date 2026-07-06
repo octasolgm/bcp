@@ -39,9 +39,8 @@
 }
 
 .top-nav {
-  display: none;
+  display: flex;
   gap: 0.25rem;
-  @media (min-width: 768px) { display: flex; }
   a {
     padding: 0.4rem 0.75rem;
     border-radius: 8px;
@@ -78,24 +77,23 @@
 }
 
 .sidebar {
-  display: none;
   width: 208px;
   flex-shrink: 0;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   padding: 1rem 0.75rem;
-  @media (min-width: 768px) { display: block; }
+  background: #0b111b;
 
   .nav-label {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: #64748b;
-    margin: 0.75rem 0.5rem 0.35rem;
+    margin: 0 0.5rem 0.35rem;
   }
 
-  a, .disabled {
+  a {
     display: block;
-    padding: 0.45rem 0.65rem;
+    padding: 0.5rem 0.65rem;
     border-radius: 8px;
     font-size: 14px;
     text-decoration: none;
@@ -103,16 +101,22 @@
     margin-bottom: 2px;
   }
 
-  a.active, a:hover {
+  a.active,
+  a:hover {
     background: rgba(255, 255, 255, 0.1);
     color: #f1f5f9;
   }
-
-  .disabled { color: #475569; cursor: default; }
 }
 
 .content {
   flex: 1;
   overflow: auto;
   padding: 1.5rem;
+  min-width: 0;
+}
+
+:host-context(.route-dual-verify) .content,
+.content:has(app-dual-verify) {
+  padding: 0;
+  overflow: hidden;
 }

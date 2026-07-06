@@ -50,13 +50,15 @@ public class DualVerifyService(
         CreateDualVerifyJobRequest request,
         byte[]? internalPdf,
         string? internalFileName,
+        IReadOnlyList<GovPoint>? clientGovPoints = null,
         CancellationToken ct = default)
     {
         await AssertPersistenceReadyAsync(ct);
 
-        var filtered = govPoints.FilterByGranularity(request.Granularity)
-            .Where(p => request.PointIds.Contains(p.PointId))
-            .ToList();
+        var filtered = govPoints.ResolveSelectedPoints(
+            request.PointIds,
+            request.Granularity,
+            clientGovPoints);
         if (filtered.Count == 0)
             throw new InvalidOperationException("No matching gov points selected");
 

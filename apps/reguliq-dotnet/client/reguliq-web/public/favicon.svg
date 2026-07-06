@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="BCP App">
+  <rect width="32" height="32" rx="7" fill="#0b111b"/>
+  <rect x="4" y="4" width="24" height="24" rx="5" fill="#10b981"/>
+  <text
+    x="16"
+    y="21"
+    text-anchor="middle"
+    font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+    font-size="14"
+    font-weight="700"
+    fill="#ffffff"
+  >B</text>
+</svg>

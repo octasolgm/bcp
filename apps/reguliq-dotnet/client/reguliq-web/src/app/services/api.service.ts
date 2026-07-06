@@ -8,15 +8,24 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+export type { ComplianceStatusFilter } from '../../lib/dual-verify-workflow';
+
 export interface DashboardMetrics {
-  criticalGaps: number;
-  highRisk: number;
+  compliant: number;
+  partial: number;
+  nonCompliant: number;
   totalFindings: number;
-  compliantItems: number;
   lastAnalysisDate: string;
-  riskBreakdown: { name: string; value: number; color: string }[];
-  remediationItems: { item: string; severity: string; target: string; status: string }[];
-  recentAnalyses: { id: string; title: string; date: string; findings: number; critical: number; high: number }[];
+  complianceBreakdown: { name: string; value: number; color: string }[];
+  recentAnalyses: {
+    id: string;
+    title: string;
+    date: string;
+    findings: number;
+    compliant: number;
+    partial: number;
+    nonCompliant: number;
+  }[];
 }
 
 export interface DualVerifyHealth {
@@ -91,6 +100,8 @@ export interface SessionProgress {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private base = environment.apiUrl;
+  /** Optional — load Kafka sessions created via Next.js / Nest */
+  private nest = environment.nestjsApiUrl;
 
   constructor(private http: HttpClient) {}
 
@@ -106,14 +117,21 @@ export class ApiService {
     return this.http.get<ApiResponse<DualVerifySessionSummary[]>>(`${this.base}/dual-verify-kafka/sessions`);
   }
 
+  /** Kafka sessions from Nest (runs started via Next.js / Nest) */
+  listNestDualVerifySessions() {
+    return this.http.get<ApiResponse<DualVerifySessionSummary[]>>(`${this.nest}/dual-verify-kafka/sessions`);
+  }
+
   listComplianceSessions(granularity = 'dual-leaf', limit = 30) {
-    return this.http.get<{ success: boolean; sessions: ComplianceSessionSummary[] }>(
-      `${this.base}/landing-ai/compliance-sessions?limit=${limit}&granularity=${granularity}`,
-    );
+    return this.http.get<{
+      success: boolean;
+      sessions: ComplianceSessionSummary[];
+      diagnostics?: { hint?: string };
+    }>(`${this.base}/landing-ai/compliance-sessions?limit=${limit}&granularity=${granularity}`);
   }
 
   loadComplianceSession(id: string, granularity = 'dual-leaf') {
-    return this.http.get<{ success: boolean; results: unknown[] }>(
+    return this.http.get<{ success: boolean; results: unknown[]; message?: string }>(
       `${this.base}/landing-ai/compliance-sessions/${id}?granularity=${granularity}`,
     );
   }
@@ -123,11 +141,17 @@ export class ApiService {
   }
 
   getGovPoints() {
-    return this.http.get<{ points: GovPoint[] }>(`${this.base}/landing-ai/stored-points?docId=gov-tfs-guidelines`);
+    return this.http.get<{ points: GovPoint[]; message?: string }>(
+      `${this.base}/landing-ai/stored-points?docId=gov-tfs-guidelines`,
+    );
   }
 
   seedBuiltin() {
     return this.http.post(`${this.base}/landing-ai/seed/builtin`, {});
+  }
+
+  getNestJob(sessionId: string) {
+    return this.http.get<ApiResponse<SessionProgress>>(`${this.nest}/dual-verify-kafka/jobs/${sessionId}`);
   }
 
   getJob(sessionId: string) {

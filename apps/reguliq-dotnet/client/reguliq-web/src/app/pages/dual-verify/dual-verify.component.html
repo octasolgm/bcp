@@ -1,166 +1,393 @@
-<div class="page">
-  <header class="page-header">
-    <div>
-      <p class="eyebrow">Kafka dual verify · Landing AI + Gemini</p>
-      <h1>Dual Verify Workbench</h1>
-    </div>
-    @if (health) {
-      <div class="health-badges">
-        <span class="badge" [class.ok]="persistenceOk">{{ health.persistence.mode }}</span>
-        <span class="badge violet">{{ health.transport }}</span>
+<div class="workbench">
+  <!-- ── Top command bar ── -->
+  <header class="cmd-bar">
+    <div class="cmd-brand">
+      <div class="brand">
+        <span class="brand-tag">BCP App</span>
+        <h1>Dual Verify</h1>
       </div>
-    }
+      @if (health) {
+        <div class="status-chips">
+          <span class="chip" [class.ok]="persistenceOk">{{ persistenceLabel }}</span>
+          <span class="chip violet">{{ health.transport }}</span>
+          @if (running) {
+            <span class="chip running">Running</span>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="cmd-sections">
+      <section class="cmd-section load-section" aria-label="Load session">
+        <span class="section-label">Load</span>
+        <div class="section-body">
+          <p class="section-hint">{{ copy.loadHint }}</p>
+          <div class="section-controls">
+            <select class="session-select" [(ngModel)]="selectedSavedSession" [title]="copy.loadTitle">
+              <option value="">Saved session…</option>
+              @for (s of savedSessions; track s.id) {
+                <option [value]="s.id">{{ s.label }}</option>
+              }
+            </select>
+            <input
+              type="text"
+              class="session-input"
+              placeholder="Kafka session UUID"
+              [(ngModel)]="manualSessionId"
+              title="Paste a Kafka dual-verify session ID"
+            />
+            <button
+              type="button"
+              class="btn-sm accent"
+              [disabled]="!canLoadSaved || loadingAnalysis"
+              (click)="loadSavedIntoReport()"
+            >
+              {{ loadingAnalysis ? '…' : 'Load report' }}
+            </button>
+            <button type="button" class="btn-sm" (click)="refreshSavedSessions()" title="Refresh saved sessions">↻</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="cmd-section run-section" aria-label="Run pipeline">
+        <span class="section-label">Run</span>
+        <div class="section-body">
+          <p class="section-hint">{{ copy.runHint }}</p>
+          <div class="section-controls">
+            <select class="model-select" [(ngModel)]="aiModel" title="Phase 2 Gemini model">
+              @for (m of models; track m) {
+                <option [value]="m">{{ m }}</option>
+              }
+            </select>
+            <div class="file-field" [class.missing]="!internalFile">
+              <span class="file-field-label">{{ copy.internalPolicyLabel }}</span>
+              <label class="file-btn" [title]="copy.internalPolicyHint">
+                <input type="file" accept=".pdf" hidden (change)="onFile($event)" />
+                {{ internalFile ? '📄 ' + internalFile.name : copy.internalPolicyAttach }}
+              </label>
+            </div>
+            <label class="check-inline" title="Force fresh Pass 1 via Landing AI (uses credits)">
+              <input type="checkbox" [(ngModel)]="forceRefresh" /> Fresh Pass 1
+            </label>
+            <button
+              type="button"
+              class="btn-run"
+              [disabled]="running || !!runBlockedReason"
+              [title]="runBlockedReason ?? 'Run dual verify on selected gov points'"
+              (click)="startPipeline()"
+            >
+              {{ running ? 'Running…' : '▶ Run (' + selected.size + ' gov points)' }}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="cmd-right">
+      @if (reportSummary) {
+        <div class="mini-stats">
+          <span class="s-ok">{{ reportSummary.aligned }}</span>
+          <span class="s-warn">{{ reportSummary.needsReview }}</span>
+          <span class="s-bad">{{ reportSummary.failed }}</span>
+        </div>
+      }
+      <button type="button" class="btn-sm" [disabled]="exportsDisabled" (click)="exportCombinedPdf()" title="Both passes PDF">Both PDF</button>
+      <button type="button" class="btn-sm accent" [disabled]="exportsDisabled" (click)="exportBothPassesExcel()" title="BCP formatted Excel">Both XLS</button>
+      <button type="button" class="btn-sm" [disabled]="reportBag.size === 0" (click)="clearReport()" title="Clear report">✕</button>
+    </div>
   </header>
 
-  @if (health && !persistenceOk) {
-    <div class="alert alert-error">{{ health.persistence.hint ?? 'Persistence not ready' }}</div>
-  }
   @if (error) {
-    <div class="alert alert-error">{{ error }}</div>
+    <div class="toast-error">
+      <span>{{ error }}</span>
+      <button type="button" class="toast-close" (click)="dismissError()">✕</button>
+    </div>
   }
 
-  <div class="layout">
-    <div class="main-col">
-      <!-- Step 1: Load saved -->
-      <section class="card">
-        <h2>1 · Load saved results (optional)</h2>
-        <div class="row">
-          <select [(ngModel)]="selectedSavedSession">
-            <option value="">— Select saved session —</option>
-            @for (s of savedSessions; track s.id) {
-              <option [value]="s.id">{{ s.label }}</option>
-            }
-          </select>
-          <input type="text" placeholder="Or Kafka session UUID" [(ngModel)]="manualSessionId" />
-          <button type="button" class="btn-secondary" (click)="loadSavedIntoReport()">Load into report</button>
-          <button type="button" class="btn-ghost" (click)="clearReport()">Clear report</button>
-          <button type="button" class="btn-ghost" (click)="refreshSavedSessions()">Refresh</button>
-        </div>
-      </section>
+  @if (govPoints.length === 0 && !loadingPoints) {
+    <div class="toast-warn">
+      <span>Gov points not loaded.</span>
+      <button type="button" class="btn-sm" [disabled]="seeding" (click)="seedBuiltin()">
+        {{ seeding ? '…' : 'Seed' }}
+      </button>
+    </div>
+  }
 
-      <!-- Step 2: Gov points -->
-      <section class="card">
-        <div class="section-head">
-          <h2>2 · Government requirement points</h2>
-          <div class="granularity">
-            <label><input type="radio" name="g" value="section" [(ngModel)]="granularity" (change)="onGranularityChange()" /> Section (2.1)</label>
-            <label><input type="radio" name="g" value="leaf" [(ngModel)]="granularity" (change)="onGranularityChange()" /> Leaf (2.1.1)</label>
-          </div>
+  @if (reportNote || savedAnalysisHint) {
+    <div class="toast-info">
+      @if (reportNote) { <span>{{ reportNote }}</span> }
+      @if (savedAnalysisHint) { <span class="hint">{{ savedAnalysisHint }}</span> }
+    </div>
+  }
+
+  <!-- ── Three-panel workspace (fills viewport, no page scroll) ── -->
+  <div class="workspace" [class.gov-collapsed]="govPanelCollapsed">
+    <!-- LEFT: Gov points -->
+    <aside class="panel panel-left" [class.is-collapsed]="govPanelCollapsed">
+      <div class="panel-head">
+        <div class="panel-title">
+          <span>{{ copy.govPointsTitle }}</span>
+          @if (!govPanelCollapsed) {
+            <span class="count">{{ selected.size }}/{{ govPoints.length }} selected</span>
+          }
         </div>
-        @if (govPoints.length === 0) {
-          <p class="muted">No points loaded. <button type="button" class="link" (click)="seedBuiltin()">Seed builtin</button></p>
-        } @else {
-          <div class="toolbar">
-            <button type="button" class="btn-ghost" (click)="selectAll()">Select all</button>
-            <button type="button" class="btn-ghost" (click)="clearSelection()">Clear</button>
-            <span class="muted">{{ selected.size }} selected</span>
-          </div>
-          @for (ch of chapterGroups; track ch.chapter) {
-            <div class="chapter">
-              <h3>{{ ch.label }}</h3>
-              @for (p of ch.points; track p.point_id) {
-                <label class="point-row" [class.in-report]="inReport(p.point_id)">
-                  <input type="checkbox" [checked]="selected.has(p.point_id)" (change)="toggle(p.point_id)" />
-                  <span class="pid">{{ p.point_id }}</span>
-                  <span class="ptitle">{{ p.title || p.text.slice(0, 80) }}</span>
-                  @if (inReport(p.point_id)) { <span class="tag">✓ report</span> }
-                </label>
-              }
+        <div class="panel-actions">
+          @if (!govPanelCollapsed) {
+            <div class="seg-toggle">
+              <button type="button" [class.on]="granularity === 'section'" (click)="granularity = 'section'; onGranularityChange()">§2.1</button>
+              <button type="button" [class.on]="granularity === 'leaf'" (click)="granularity = 'leaf'; onGranularityChange()">2.1.1</button>
             </div>
           }
-        }
-      </section>
-
-      <!-- Step 3: Run -->
-      <section class="card">
-        <h2>3 · Phase 2 model &amp; internal PDF</h2>
-        <div class="row wrap">
-          <label>Model
-            <select [(ngModel)]="aiModel">
-              @for (m of models; track m) { <option [value]="m">{{ m }}</option> }
-            </select>
-          </label>
-          <label class="checkbox"><input type="checkbox" [(ngModel)]="forceRefresh" /> Force fresh Phase 1</label>
-          <label>Internal PDF <input type="file" accept=".pdf" (change)="onFile($event)" /></label>
-          <button type="button" class="btn-primary" [disabled]="running" (click)="startPipeline()">
-            {{ running ? 'Running…' : 'Run pipeline' }}
+          <button
+            type="button"
+            class="panel-collapse-btn"
+            (click)="toggleGovPanel()"
+            [title]="govPanelCollapsed ? 'Show gov points' : 'Hide gov points'"
+          >
+            {{ govPanelCollapsed ? '›' : '‹' }}
           </button>
         </div>
-      </section>
-
-      <!-- Report -->
-      @if (reportItems.length > 0 && reportSummary) {
-        <section class="card report-panel">
-          <div class="section-head">
-            <h2>Combined report · {{ reportSummary.total }} points</h2>
-            <div class="export-btns">
-              <button type="button" class="btn-export" (click)="exportBothPdf()">Both passes PDF</button>
-              <button type="button" class="btn-export" (click)="exportExcel()">Both passes Excel</button>
-              <button type="button" class="btn-export" (click)="exportSummary()">Summary PDF</button>
+      </div>
+      @if (!govPanelCollapsed) {
+      <p class="panel-hint">{{ copy.govPointsHint }}</p>
+      <div class="panel-toolbar">
+        <input type="search" class="search" placeholder="Search points…" [(ngModel)]="govSearch" />
+        <button type="button" class="link-btn" (click)="selectAll()">All</button>
+        <button type="button" class="link-btn muted" (click)="clearSelection()">None</button>
+        <button type="button" class="link-btn" (click)="loadGovPoints()" title="Reload">↻</button>
+      </div>
+      <div class="panel-body">
+        @if (loadingPoints) {
+          <p class="empty">Loading…</p>
+        } @else if (visibleChapterGroups.length === 0) {
+          <p class="empty">No points match.</p>
+        } @else {
+          @for (ch of visibleChapterGroups; track ch.chapter) {
+            <div class="acc-item">
+              <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
+                <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
+                <span>§{{ ch.chapter }}</span>
+                <span class="acc-meta">{{ ch.points.length }}</span>
+                <button
+                  type="button"
+                  class="acc-action"
+                  (click)="$event.stopPropagation(); togglePointsByPrefix(ch.chapter)"
+                >
+                  {{ chapterAllSelected(ch.chapter, ch.points) ? '−' : '+' }}
+                </button>
+              </button>
+              @if (isChapterExpanded(ch.chapter)) {
+                <div class="acc-body">
+                  @for (sec of ch.sections; track sec.key) {
+                    @if (showSectionBar(ch.sections, sec.key, ch.chapter)) {
+                      <div class="sec-head">
+                        <span>{{ formatSectionGroupLabel(sec.key) }}</span>
+                        <button type="button" class="link-btn" (click)="togglePointsByPrefix(sec.key)">
+                          {{ sectionAllSelected(sec.points) ? '−' : '+' }}
+                        </button>
+                      </div>
+                    }
+                    @for (p of sec.points; track p.point_id) {
+                      <label
+                        class="point-line"
+                        [class.in-report]="inReport(p.point_id) && reportPointStatus(p.point_id) !== 'running' && reportPointStatus(p.point_id) !== 'queued'"
+                        [class.running]="reportPointStatus(p.point_id) === 'running'"
+                        [class.queued]="reportPointStatus(p.point_id) === 'queued'"
+                      >
+                        <input type="checkbox" [checked]="selected.has(p.point_id)" (change)="toggle(p.point_id)" />
+                        <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
+                        <span class="ptxt">{{ truncate(p.title || p.text, 48) }}</span>
+                        @if (reportPointStatus(p.point_id) === 'running') {
+                          <span class="ptag running" title="Running">⟳</span>
+                        } @else if (reportPointStatus(p.point_id) === 'queued') {
+                          <span class="ptag queued" title="Queued">○</span>
+                        } @else if (inReport(p.point_id)) {
+                          <span class="dot" title="In report"></span>
+                        }
+                      </label>
+                    }
+                  }
+                </div>
+              }
             </div>
-          </div>
-          <div class="stats">
-            <span class="emerald">{{ reportSummary.aligned }} aligned</span>
-            <span class="amber">{{ reportSummary.needsReview }} review</span>
-            <span class="red">{{ reportSummary.failed }} failed</span>
-          </div>
-          <pre class="summary-text">{{ executiveSummary }}</pre>
-          @for (item of reportItems; track item.pointId) {
-            <article class="result-card">
-              <header>
-                <strong>{{ item.pointId }}</strong>
-                @if (item.agreement) {
-                  <span class="agreement" [class.aligned]="item.agreement.status === 'aligned'">{{ item.agreement.label }}</span>
-                }
-              </header>
-              @if (item.landingMessage) {
-                <div class="pass pass1">
-                  <h4>Pass 1 — Landing AI</h4>
-                  <pre>{{ item.landingMessage }}</pre>
-                </div>
-              }
-              @if (item.llmMessage) {
-                <div class="pass pass2">
-                  <h4>Pass 2 — LLM Verify</h4>
-                  <pre>{{ item.llmMessage }}</pre>
-                </div>
-              }
-              @if (item.errorMessage) {
-                <p class="error-text">{{ item.errorMessage }}</p>
-              }
-            </article>
           }
-        </section>
-      }
-    </div>
-
-    <!-- Live progress sidebar -->
-    <aside class="progress-aside card">
-      <h2>Live progress</h2>
-      @if (!progress) {
-        <p class="muted">Start a run or load a session.</p>
-      } @else {
-        <p class="session-id">{{ sessionId }}</p>
-        <p>Status: <strong>{{ progress.session.status }}</strong></p>
-        <div class="progress-bar"><div class="fill" [style.width.%]="pct"></div></div>
-        <p class="counts">
-          ✓ {{ progress.session.completedPoints }} ·
-          ✗ {{ progress.session.failedPoints }} ·
-          ⟳ {{ progress.session.runningPoints }} ·
-          ○ {{ progress.session.queuedPoints }}
-        </p>
-        <ul class="point-status">
-          @for (p of progress.points; track p.id) {
-            <li [class]="p.status">
-              {{ p.pointId }}
-              @if (p.agreementJson) { <span class="mini-badge">{{ p.agreementJson.label }}</span> }
-            </li>
-          }
-        </ul>
-        @if (progress.session.failedPoints > 0) {
-          <button type="button" class="btn-secondary full" (click)="retryFailed()">Retry failed</button>
         }
+      </div>
       }
+    </aside>
+
+    <!-- CENTER: Report master-detail -->
+    <main class="panel panel-center">
+      <div class="panel-head panel-head-stack">
+        <div class="panel-head-top">
+          <div class="panel-title">
+            <span>Combined Report</span>
+            @if (reportSummary) {
+              <span class="count">{{ reportSummary.completed }}/{{ reportSummary.total }} done</span>
+            }
+            @if (running && progress) {
+              <span class="count run-progress">{{ progressDone }}/{{ progress.session.totalPoints }} this run</span>
+            }
+          </div>
+          <div class="panel-head-actions">
+            @if (!showAllReportCards && visibleReportItems.length) {
+              <button type="button" class="btn-sm linkish" (click)="toggleReportList()">
+                {{ reportListCollapsed ? 'Show list' : 'Hide list' }}
+              </button>
+            }
+            <button type="button" class="btn-sm linkish" (click)="showAllReportCards = !showAllReportCards">
+              {{ showAllReportCards ? 'Table view' : 'All cards' }}
+            </button>
+          </div>
+        </div>
+        @if (reportSummary) {
+          <div class="export-row">
+            <button type="button" class="btn-sm linkish" (click)="toggleExports()">
+              Exports {{ exportsExpanded ? '▴' : '▾' }}
+            </button>
+            @if (exportsExpanded) {
+              <div class="export-bar">
+                <button type="button" class="exp amber" [disabled]="exportsDisabled" (click)="exportCombinedPdf()">Both passes PDF</button>
+                <button type="button" class="exp sky" [disabled]="exportsDisabled" (click)="exportBothPassesExcel()">Both passes Excel</button>
+                <button type="button" class="exp ghost" [disabled]="exportsDisabled" (click)="exportSummary()">Summary PDF</button>
+                <button type="button" class="exp teal" [disabled]="exportsDisabled" (click)="exportPass1Pdf()">Pass 1 PDF</button>
+                <button type="button" class="exp emerald" [disabled]="exportsDisabled" (click)="exportPass2Pdf()">Pass 2 PDF</button>
+                <button type="button" class="exp violet" [disabled]="exportsDisabled" (click)="exportRawExcel()">Raw Excel</button>
+                <button type="button" class="exp ghost" [disabled]="exportsDisabled" (click)="exportPass2Excel()">Pass 2 Excel only</button>
+              </div>
+            }
+          </div>
+          <p class="report-stats-line">
+            {{ pass2Stats.compliant }} compliant · {{ pass2Stats.partial }} partial · {{ pass2Stats.nonCompliant }} non-compliant (Pass 2)
+          </p>
+        }
+      </div>
+      @if (complianceFilter) {
+        <div class="compliance-filter-bar">
+          <span>Showing <strong>{{ complianceFilterLabel }}</strong> only ({{ visibleReportItems.length }})</span>
+          <button type="button" class="btn-sm linkish" (click)="clearComplianceFilter()">Show all</button>
+        </div>
+      }
+      @if (showAllReportCards && visibleReportItems.length) {
+        <div class="report-all-cards">
+          @for (item of visibleReportItems; track item.pointId) {
+            <app-dual-verify-result-card [item]="item" />
+          }
+        </div>
+      } @else {
+      <div class="report-split" [class.list-collapsed]="reportListCollapsed">
+        <div class="report-list">
+          @if (!visibleReportItems.length) {
+            <div class="empty-state">
+              @if (complianceFilter && reportItems.length) {
+                <p>No {{ complianceFilterLabel | lowercase }} results in this session</p>
+                <p class="sub">Clear the filter or load a session with matching analyses.</p>
+              } @else {
+                <p>No results yet</p>
+                <p class="sub">Run the pipeline or load a saved session — results appear here automatically.</p>
+              }
+            </div>
+          } @else {
+            <table class="result-table">
+              <thead>
+                <tr>
+                  <th>Point</th>
+                  <th>Status</th>
+                  <th>Summary</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of visibleReportItems; track item.pointId) {
+                  <tr
+                    [class.active]="activeReportPointId === item.pointId"
+                    (click)="selectReportPoint(item.pointId)"
+                  >
+                    <td class="col-id">{{ item.pointId }}</td>
+                    <td>
+                      @if (item.agreement) {
+                        <span class="pill-status" [ngClass]="agreementClass(item.agreement.status)">
+                          {{ item.agreement.label }}
+                        </span>
+                      } @else if (item.status === 'running') {
+                        <span class="pill-status running">Running</span>
+                      } @else if (item.status === 'queued') {
+                        <span class="pill-status queued">Queued</span>
+                      } @else if (item.errorMessage || item.status === 'failed') {
+                        <span class="pill-status failed">Error</span>
+                      } @else {
+                        <span class="pill-status pending">…</span>
+                      }
+                    </td>
+                    <td class="col-sum">{{ truncate(item.agreement?.summary || item.landingMessage || item.errorMessage || '—', 56) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+        <div class="report-detail">
+          @if (activeReportItem; as item) {
+            <app-dual-verify-result-card class="detail-card" [item]="item" />
+          } @else {
+            <div class="empty-state small">
+              <p>Select a point to view Pass 1 &amp; Pass 2 detail</p>
+            </div>
+          }
+        </div>
+      </div>
+      }
+    </main>
+
+    <!-- RIGHT: Live progress -->
+    <aside class="panel panel-right">
+      <div class="panel-head">
+        <div class="panel-title"><span>Live Progress</span></div>
+        @if (progress) {
+          <span class="status-badge" [class]="progress.session.status">{{ progress.session.status }}</span>
+        }
+      </div>
+      <div class="panel-body">
+        @if (!progress) {
+          <div class="empty-state small">
+            <p>Idle</p>
+            <p class="sub">Start a run or load a session to track jobs.</p>
+          </div>
+        } @else {
+          @if (sessionId) {
+            <p class="mono-id" title="{{ sessionId }}">{{ sessionId.slice(0, 13) }}…</p>
+          }
+          <p class="progress-summary">
+            <strong>{{ progressDone }}</strong> / {{ progress.session.totalPoints }} done
+            · <strong>{{ progressRemaining }}</strong> remaining
+          </p>
+          <div class="progress-bar">
+            <div class="fill" [style.width.%]="pct"></div>
+          </div>
+          <div class="progress-counts">
+            <span class="c-ok" title="Completed">✓ {{ progress.session.completedPoints }}</span>
+            <span class="c-bad" title="Failed">✗ {{ progress.session.failedPoints }}</span>
+            <span class="c-run" title="Running">⟳ {{ progress.session.runningPoints }}</span>
+            <span class="c-q" title="Queued">○ {{ progress.session.queuedPoints }}</span>
+          </div>
+          <ul class="job-list">
+            @for (p of progress.points; track p.id) {
+              <li [class]="p.status">
+                <span class="jid">{{ p.pointId }}</span>
+                <span class="jstatus">{{ p.status }}</span>
+                @if (p.agreementJson) {
+                  <span class="jbadge">{{ p.agreementJson.label }}</span>
+                }
+              </li>
+            }
+          </ul>
+          @if (progress.session.failedPoints > 0) {
+            <button type="button" class="btn-retry" (click)="retryFailed()">Retry failed</button>
+          }
+          @if (sessionId) {
+            <button type="button" class="link-btn block" (click)="useCurrentSessionId()">Use this session ID</button>
+          }
+        }
+      </div>
     </aside>
   </div>
 </div>

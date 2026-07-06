@@ -467,12 +467,102 @@ export function resolveAnnexChapter(
   return null;
 }
 
+/** First short phrase before semicolon — used as sub-point title when splitting bullets. */
+function inferBulletTitle(bullet: string): string | null {
+  const head = bullet.split(/[.;]/)[0]?.trim();
+  if (!head || head.length > 72) return null;
+  return head;
+}
+
+/** Split obligation bullet lists inside §X.Y section points into X.Y.1, X.Y.2, … */
+function splitGovPointObligationBullets(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  if (/\s\*\s+/.test(trimmed) || /^\*\s+/m.test(trimmed)) {
+    const parts = trimmed
+      .split(/(?:^|\s)\*\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length < 2) return [];
+    const [intro, ...bullets] = parts;
+    if (bullets.length < 2) return [];
+    if (/:\s*$/.test(intro)) return bullets;
+    if (intro.length > 40) {
+      return bullets.map((b, i) => (i === 0 ? `${intro}: ${b}` : b));
+    }
+    return bullets;
+  }
+
+  const colonLabels = trimmed.split(
+    /(?=\b(?:Periodic|Ad hoc|Re-screening)\b[^:]*:)/i,
+  );
+  const labeled = colonLabels
+    .map((s) => s.trim())
+    .filter((s) => /^(?:Periodic|Ad hoc|Re-screening)\b/i.test(s) && s.length > 20);
+  if (labeled.length >= 2) return labeled;
+
+  const dashTail = trimmed.match(/:\s+(-\s+.+)$/s);
+  if (dashTail?.index !== undefined) {
+    const preamble = trimmed.slice(0, dashTail.index).trim();
+    const list = trimmed.slice(dashTail.index + 1).trim();
+    const items = list
+      .split(/\s+-\s+/)
+      .map((s) => s.replace(/^-\s*/, '').trim())
+      .filter(Boolean);
+    if (items.length >= 2) {
+      return items.map((item) => `${preamble}: ${item}`);
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Expand §X.Y extract blobs with inline bullet lists into leaf ids (3.1 → 3.1.1 …).
+ * Keep in sync with apps/api/src/modules/landing-ai/utils/gov-point-filter.ts
+ */
+export function expandGovPointSubLeaves(points: GovPoint[]): GovPoint[] {
+  const expanded: GovPoint[] = [];
+
+  for (const point of points) {
+    const norm = normalizeNumericPointId(point.point_id);
+    if (!norm || norm.split('.').length !== 2) {
+      expanded.push(point);
+      continue;
+    }
+
+    const bullets = splitGovPointObligationBullets(point.text);
+    if (bullets.length < 2) {
+      expanded.push(point);
+      continue;
+    }
+
+    const section =
+      (point.section ?? '').trim() ||
+      (point.title ? `${norm}. ${point.title}` : `${norm}.`);
+
+    bullets.forEach((bullet, index) => {
+      expanded.push({
+        ...point,
+        point_id: `${norm}.${index + 1}`,
+        title: inferBulletTitle(bullet) ?? point.title,
+        text: bullet,
+        section,
+      });
+    });
+  }
+
+  return expanded;
+}
+
 /**
  * Fix annex context on extracted points — e.g. section "2. Red Flag Indicators for PF"
  * becomes "Annex 1 · 2. Red Flag Indicators for PF" so it is not grouped under main §2.
  */
 export function enrichGovPointSections(points: GovPoint[]): GovPoint[] {
-  return points.map((point) => {
+  const expanded = expandGovPointSubLeaves(points);
+  return expanded.map((point) => {
     const section = (point.section ?? '').trim();
     if (!section || isAnnexSectionHeading(section)) return point;
 

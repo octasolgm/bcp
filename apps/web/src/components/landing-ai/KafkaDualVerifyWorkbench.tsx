@@ -182,7 +182,7 @@ export function KafkaDualVerifyWorkbench({
     (points: FilterGovPoint[], mode: CompareGranularity) => {
       const comparable = filterGovByGranularity(points, mode);
       setGovPoints(comparable);
-      setSelectedIds(new Set(comparable.slice(0, 3).map((p) => p.point_id)));
+      setSelectedIds(new Set());
     },
     [],
   );

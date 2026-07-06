@@ -62,8 +62,19 @@ public class DualVerifyKafkaController(DualVerifyService service, DualVerifyStor
                 pdf = ms.ToArray();
             }
 
-            var session = await service.CreateJobAsync(request, pdf, fileName, ct);
-            return Ok(new ApiResponse<object>(true, session));
+            IReadOnlyList<GovPoint>? clientGovPoints = null;
+            var govPointsJson = form["govPointsJson"].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(govPointsJson))
+            {
+                clientGovPoints = JsonSerializer.Deserialize<List<ClientGovPointDto>>(
+                    govPointsJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true })?
+                    .Select(p => new GovPoint(p.PointId, p.Title, p.Text, p.Section))
+                    .ToList();
+            }
+
+            var session = await service.CreateJobAsync(request, pdf, fileName, clientGovPoints, ct);
+            return Ok(new ApiResponse<object>(true, new { id = session.Id }));
         }
         catch (Exception ex)
         {
@@ -77,8 +88,8 @@ public class DualVerifyKafkaController(DualVerifyService service, DualVerifyStor
     {
         try
         {
-            var session = await service.CreateJobAsync(request, null, null, ct);
-            return Ok(new ApiResponse<object>(true, session));
+            var session = await service.CreateJobAsync(request, null, null, null, ct);
+            return Ok(new ApiResponse<object>(true, new { id = session.Id }));
         }
         catch (Exception ex)
         {

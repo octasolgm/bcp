@@ -21,7 +21,11 @@ async function bootstrap(): Promise<void> {
   app.useStaticAssets(join(__dirname, 'swagger-ui'));
 
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+    ],
     credentials: true,
   });
 

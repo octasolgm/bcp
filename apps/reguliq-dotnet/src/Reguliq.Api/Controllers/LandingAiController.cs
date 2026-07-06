@@ -26,7 +26,7 @@ public class LandingAiController(GovPointsService govPoints, AppDbContext db) : 
 
     [HttpPost("seed/builtin")]
     public IActionResult SeedBuiltin() =>
-        Ok(new { success = true, message = "Gov points loaded from embedded seed (NestJS seed for Supabase cache: start api on :4000)" });
+        Ok(new { success = true, message = "Gov points loaded from embedded seed in Reguliq.Api." });
 
     [HttpGet("compliance-sessions")]
     public async Task<IActionResult> ListComplianceSessions(
@@ -147,6 +147,7 @@ public class LandingAiController(GovPointsService govPoints, AppDbContext db) : 
             compareGranularity = granularity,
             comparedPoints = existing.ComparedPoints,
             merged,
+            id = existing.Id,
             message = merged ? "Merged into existing compliance session" : "Saved new compliance session"
         });
     }

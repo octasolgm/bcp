@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
@@ -86,6 +87,12 @@ public class DualVerifyStoreService(
         await SaveSessionAsync(session, ct);
     }
 
+    private static readonly JsonSerializerOptions DiskJsonOptions = new()
+    {
+        ReferenceHandler = ReferenceHandler.IgnoreCycles,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
     private async Task PersistDiskAsync(Guid sessionId, CancellationToken ct)
     {
         try
@@ -94,7 +101,9 @@ public class DualVerifyStoreService(
             var session = await GetSessionAsync(sessionId, ct);
             if (session == null) return;
             var path = Path.Combine(_dataDir, $"{sessionId}.json");
-            var json = JsonSerializer.Serialize(new { session, points = session.PointJobs });
+            var json = JsonSerializer.Serialize(
+                new { session, points = session.PointJobs },
+                DiskJsonOptions);
             await File.WriteAllTextAsync(path, json, ct);
         }
         catch (Exception ex)

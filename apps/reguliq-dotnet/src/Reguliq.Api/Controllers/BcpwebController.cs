@@ -9,6 +9,6 @@ namespace Reguliq.Api.Controllers;
 public class BcpwebController(DashboardService dashboard) : ControllerBase
 {
     [HttpGet("dashboard")]
-    public ActionResult<ApiResponse<DashboardMetricsDto>> GetDashboard() =>
-        Ok(new ApiResponse<DashboardMetricsDto>(true, dashboard.GetSeedMetrics()));
+    public async Task<ActionResult<ApiResponse<DashboardMetricsDto>>> GetDashboard(CancellationToken ct) =>
+        Ok(new ApiResponse<DashboardMetricsDto>(true, await dashboard.GetMetricsAsync(ct)));
 }
