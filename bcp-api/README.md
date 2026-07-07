@@ -2,19 +2,34 @@
 
 Standalone ASP.NET Core API for Reguliq compliance dashboard and Kafka dual-verify pipeline.
 
+**Persistence: Supabase PostgreSQL (shared across all developers).**
+
 ## Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- **Supabase project** with PostgreSQL connection string
 
-## Setup
+## Setup (team — shared data)
+
+1. Run Supabase SQL migrations (once per project) from `scripts/supabase/` or the main BCP repo `docs/supabase/migrations/`:
+   - `002_compliance_sessions.sql`
+   - `003_dual_verify_kafka.sql`
+   - `004_bcp_api_extra_columns.sql`
+
+2. Copy env file and set **the same** `DATABASE_URL` for every developer:
 
 ```bash
 cd bcp-api
-copy .env.example .env    # Windows
-# cp .env.example .env    # macOS/Linux
+copy .env.example .env
 ```
 
-Edit `.env` with your keys (`GEMINI_API_KEY`, `DATABASE_URL`, etc.).
+```env
+REGULIQ_USE_POSTGRES=true
+DATABASE_URL=postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres
+GEMINI_API_KEY=your-key
+```
+
+3. On first startup, existing **local** data (`data/reguliq.db`, `data/dual-verify-kafka/*.json`) is imported into Supabase automatically (`MIGRATE_LOCAL_DATA_TO_SUPABASE=true`).
 
 ## Run
 
@@ -24,27 +39,27 @@ dotnet run
 ```
 
 - API: http://localhost:5100
-- Swagger: http://localhost:5100/swagger
-- Health: http://localhost:5100/dual-verify-kafka/health
+- Health: http://localhost:5100/dual-verify-kafka/health → `persistence.mode` should be **`supabase`**
 
-## Build & test
+## Verify shared storage
 
 ```bash
-dotnet build Bcp.Api.sln
-dotnet test Bcp.Api.sln
+curl http://localhost:5100/dual-verify-kafka/health
+curl http://localhost:5100/dual-verify-kafka/sessions
 ```
+
+All developers with the same `DATABASE_URL` see the same sessions.
 
 ## Environment
 
-Loads **`bcp-api/.env`** automatically on startup.
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `BCP_API_PORT` | `5100` | Local API port |
-| `GEMINI_API_KEY` | — | Required for live dual-verify |
-| `REGULIQ_USE_POSTGRES` | `false` | `true` + `DATABASE_URL` for PostgreSQL |
-| `BCP_CORS_ORIGINS` | `http://localhost:3002` | Angular origins (comma-separated) |
-| `KAFKA_ENABLED` | `false` | Azure Event Hubs when `true` |
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `DATABASE_URL` | **Yes** | Supabase PostgreSQL URI |
+| `REGULIQ_USE_POSTGRES` | Yes (`true`) | Use Supabase instead of SQLite |
+| `GEMINI_API_KEY` | For live runs | Gemini Phase 2 |
+| `MIGRATE_LOCAL_DATA_TO_SUPABASE` | No (`true`) | Import local SQLite/JSON on startup |
+| `BCP_ALLOW_SQLITE` | No | `true` = offline local-only (not shared) |
+| `BCP_CORS_ORIGINS` | No | Angular origins |
 
 ## Deploy
 

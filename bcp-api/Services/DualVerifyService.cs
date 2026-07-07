@@ -12,6 +12,7 @@ public class DualVerifyService(
     LocalJobQueue queue,
     KafkaConfig kafkaConfig,
     KafkaProducerService kafka,
+    DatabaseConfig dbConfig,
     IConfiguration config,
     IWebHostEnvironment env,
     ILogger<DualVerifyService> logger)
@@ -22,11 +23,10 @@ public class DualVerifyService(
     public async Task<DualVerifyHealthDto> GetHealthAsync(CancellationToken ct = default)
     {
         var tablesReady = await store.TablesReadyAsync();
-        var usePostgres = Environment.GetEnvironmentVariable("REGULIQ_USE_POSTGRES") == "true";
         var kafkaConfigured = kafkaConfig.IsKafkaConfigured();
         var transport = kafkaConfig.GetTransportMode();
         var mode = !tablesReady ? "memory"
-            : usePostgres ? "supabase"
+            : dbConfig.UsePostgres ? "supabase"
             : "file";
 
         return new DualVerifyHealthDto(
@@ -39,10 +39,12 @@ public class DualVerifyService(
                 config["KAFKA_TOPIC_DLQ"] ?? "dual-verify-dlq",
                 config["KAFKA_TOPIC_RESULTS"] ?? "dual-verify-results"),
             new PersistenceDto(
-                tablesReady, tablesReady, Directory.Exists(store.DataDir),
+                tablesReady, tablesReady,
+                !dbConfig.RequireSupabase && Directory.Exists(store.DataDir),
                 store.DataDir, mode,
                 mode == "memory"
-                    ? "Database not connected — configure REGULIQ_USE_POSTGRES=true + DIRECT_URL"
+                    ? PostgresConnectionDiagnostics.LastError
+                      ?? "Database not connected — set DATABASE_URL or SUPABASE_DB_* in bcp-api/.env"
                     : null));
     }
 
@@ -220,6 +222,7 @@ public class DualVerifyService(
     {
         var health = await GetHealthAsync(ct);
         if (health.Persistence.Mode == "memory")
-            throw new InvalidOperationException("Cannot run — persistence not ready. Configure PostgreSQL or SQLite.");
+            throw new InvalidOperationException(
+                "Cannot run — Supabase/PostgreSQL not ready. Set DATABASE_URL in bcp-api/.env.");
     }
 }

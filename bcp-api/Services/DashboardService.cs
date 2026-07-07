@@ -9,32 +9,43 @@ public class DashboardService(IServiceScopeFactory scopeFactory)
 {
     public async Task<DashboardMetricsDto> GetMetricsAsync(CancellationToken ct = default)
     {
-        using var scope = scopeFactory.CreateScope();
-        var store = scope.ServiceProvider.GetRequiredService<DualVerifyStoreService>();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-        var (compliant, partial, nonCompliant, lastDate) = await AggregateFromKafkaSessionsAsync(store, ct);
-        if (compliant + partial + nonCompliant == 0)
+        try
         {
-            var fromDb = await AggregateFromComplianceSessionsAsync(db, ct);
-            compliant = fromDb.compliant;
-            partial = fromDb.partial;
-            nonCompliant = fromDb.nonCompliant;
-            lastDate = fromDb.lastDate ?? lastDate;
+            using var scope = scopeFactory.CreateScope();
+            var store = scope.ServiceProvider.GetRequiredService<DualVerifyStoreService>();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var (compliant, partial, nonCompliant, lastDate) = await AggregateFromKafkaSessionsAsync(store, ct);
+            if (compliant + partial + nonCompliant == 0)
+            {
+                var fromDb = await AggregateFromComplianceSessionsAsync(db, ct);
+                compliant = fromDb.compliant;
+                partial = fromDb.partial;
+                nonCompliant = fromDb.nonCompliant;
+                lastDate = fromDb.lastDate ?? lastDate;
+            }
+
+            var total = compliant + partial + nonCompliant;
+            var breakdown = BuildBreakdown(compliant, partial, nonCompliant);
+            var recent = await BuildRecentAnalysesAsync(store, db, ct);
+
+            return new DashboardMetricsDto(
+                compliant,
+                partial,
+                nonCompliant,
+                total,
+                lastDate ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                breakdown,
+                recent);
         }
-
-        var total = compliant + partial + nonCompliant;
-        var breakdown = BuildBreakdown(compliant, partial, nonCompliant);
-        var recent = await BuildRecentAnalysesAsync(store, db, ct);
-
-        return new DashboardMetricsDto(
-            compliant,
-            partial,
-            nonCompliant,
-            total,
-            lastDate ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
-            breakdown,
-            recent);
+        catch
+        {
+            return new DashboardMetricsDto(
+                0, 0, 0, 0,
+                DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                [],
+                []);
+        }
     }
 
     private static List<ComplianceBreakdownItem> BuildBreakdown(int compliant, int partial, int nonCompliant)

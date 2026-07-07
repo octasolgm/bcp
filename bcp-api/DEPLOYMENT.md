@@ -21,7 +21,8 @@ Configuration → Application settings:
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
 | `WEBSITES_PORT` | `8080` |
 | `REGULIQ_USE_POSTGRES` | `true` |
-| `DATABASE_URL` | PostgreSQL connection string |
+| `DATABASE_URL` | **Same Supabase URI for all devs** |
+| `MIGRATE_LOCAL_DATA_TO_SUPABASE` | `true` (first deploy) |
 | `GEMINI_API_KEY` | your key |
 | `BCP_CORS_ORIGINS` | `https://YOUR-bcp-web.azurewebsites.net` |
 | `KAFKA_ENABLED` | `false` (or Kafka vars) |

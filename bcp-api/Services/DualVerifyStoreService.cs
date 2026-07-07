@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
+using Reguliq.Api.Infrastructure;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services;
 
@@ -11,6 +12,7 @@ namespace Reguliq.Api.Services;
 
 public class DualVerifyStoreService(
     AppDbContext db,
+    DatabaseConfig dbConfig,
     SessionPdfCache pdfCache,
     IWebHostEnvironment env,
     IConfiguration config,
@@ -28,10 +30,15 @@ public class DualVerifyStoreService(
     {
         try
         {
-            return await db.Database.CanConnectAsync();
+            var conn = db.Database.GetDbConnection();
+            if (conn.State != System.Data.ConnectionState.Open)
+                await conn.OpenAsync();
+            PostgresConnectionDiagnostics.SetSuccess();
+            return true;
         }
-        catch
+        catch (Exception ex)
         {
+            PostgresConnectionDiagnostics.SetError(ex);
             return false;
         }
     }
@@ -64,8 +71,19 @@ public class DualVerifyStoreService(
     public async Task<DualVerifyPointJob?> GetPointJobAsync(Guid sessionId, string pointId, CancellationToken ct = default) =>
         await db.DualVerifyPointJobs.FirstOrDefaultAsync(p => p.SessionId == sessionId && p.PointId == pointId, ct);
 
-    public async Task<List<DualVerifySession>> ListRecentAsync(int limit = 30, CancellationToken ct = default) =>
-        await db.DualVerifySessions.OrderByDescending(s => s.UpdatedAt).Take(limit).ToListAsync(ct);
+    public async Task<List<DualVerifySession>> ListRecentAsync(int limit = 30, CancellationToken ct = default)
+    {
+        try
+        {
+            if (!await TablesReadyAsync()) return [];
+            return await db.DualVerifySessions.OrderByDescending(s => s.UpdatedAt).Take(limit).ToListAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ListRecentAsync failed — database unavailable");
+            return [];
+        }
+    }
 
     public async Task UpdateSessionCountsAsync(Guid sessionId, CancellationToken ct = default)
     {
@@ -95,6 +113,7 @@ public class DualVerifyStoreService(
 
     private async Task PersistDiskAsync(Guid sessionId, CancellationToken ct)
     {
+        if (dbConfig.RequireSupabase) return;
         try
         {
             Directory.CreateDirectory(_dataDir);

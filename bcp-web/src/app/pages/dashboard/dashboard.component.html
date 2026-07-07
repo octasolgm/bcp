@@ -1,5 +1,14 @@
 @if (loading) {
   <p class="muted">Loading dashboard…</p>
+} @else if (loadError) {
+  <div class="header">
+    <div>
+      <p class="eyebrow">BCP App · Bank Compliance Platform</p>
+      <h1>Compliance Dashboard</h1>
+    </div>
+  </div>
+  <div class="alert error">{{ loadError }}</div>
+  <p class="muted">Health check: <code>curl http://localhost:5100/dual-verify-kafka/health</code></p>
 } @else if (seed) {
   <div class="header">
     <div>
@@ -10,7 +19,14 @@
   </div>
 
   @if (persistenceMode === 'memory') {
-    <div class="alert">Persistence is memory-only — configure REGULIQ_USE_POSTGRES=true + DIRECT_URL before running paid pipelines.</div>
+    <div class="alert">
+      Persistence is memory-only — not using shared Supabase.
+      @if (health?.persistence?.hint) {
+        <br /><strong>{{ health!.persistence!.hint }}</strong>
+      } @else {
+        Set <code>DATABASE_URL</code> or <code>SUPABASE_DB_*</code> in <code>bcp-api/.env</code> and restart the API.
+      }
+    </div>
   }
 
   <div class="status-grid">

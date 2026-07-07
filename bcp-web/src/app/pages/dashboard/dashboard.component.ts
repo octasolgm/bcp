@@ -81,6 +81,7 @@ export class DashboardComponent implements OnInit {
   sessions: DualVerifySessionSummary[] = [];
   sessionStats: ReportStats | null = null;
   loading = true;
+  loadError: string | null = null;
 
   constructor(private api: ApiService) {}
 
@@ -115,9 +116,14 @@ export class DashboardComponent implements OnInit {
         }
         this.sessions = merged;
         this.loading = false;
+        this.loadError = null;
         this.loadLatestSessionStats();
       },
-      error: () => (this.loading = false),
+      error: () => {
+        this.loading = false;
+        this.loadError =
+          'Cannot reach BCP API at http://localhost:5100. Start bcp-api (dotnet run) and set DATABASE_URL to your Supabase Session pooler URI.';
+      },
     });
   }
 
