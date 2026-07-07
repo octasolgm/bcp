@@ -8,6 +8,8 @@ bcp-api/bin/
 bcp-api/obj/
 bcp-api/publish/
 bcp-api/**/reguliq.db
+bcp-api/**/*.db-shm
+bcp-api/**/*.db-wal
 bcp-api/**/dual-verify-kafka/
 *.user
 *.suo

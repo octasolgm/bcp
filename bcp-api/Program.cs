@@ -100,10 +100,10 @@ app.MapControllers();
 
 app.MapGet("/", () => Results.Ok(new { name = "BCP API", version = "1.0.0" }));
 
-var port = Environment.GetEnvironmentVariable("PORT")
-    ?? Environment.GetEnvironmentVariable("WEBSITES_PORT")
-    ?? Environment.GetEnvironmentVariable("BCP_API_PORT")
+var port = Environment.GetEnvironmentVariable("BCP_API_PORT")
     ?? Environment.GetEnvironmentVariable("REGULIQ_API_PORT")
+    ?? Environment.GetEnvironmentVariable("WEBSITES_PORT")
+    ?? Environment.GetEnvironmentVariable("PORT")
     ?? "5100";
 app.Urls.Add($"http://0.0.0.0:{port}");
 
