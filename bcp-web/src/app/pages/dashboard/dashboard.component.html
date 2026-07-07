@@ -24,7 +24,7 @@
       @if (health?.persistence?.hint) {
         <br /><strong>{{ health!.persistence!.hint }}</strong>
       } @else {
-        Set <code>DATABASE_URL</code> or <code>SUPABASE_DB_*</code> in <code>bcp-api/.env</code> and restart the API.
+        Set <code>ConnectionStrings:PostgreSQL</code> or <code>Supabase:Db*</code> in <code>bcp-api/appsettings.Development.json</code> and restart the API.
       }
     </div>
   }

@@ -1,7 +1,5 @@
-# Secrets
-.env
-.env.*
-!.env.example
+# Secrets (local dev only — copy from appsettings.Development.example.json)
+bcp-api/appsettings.Development.json
 
 # .NET build + runtime artifacts
 bcp-api/bin/

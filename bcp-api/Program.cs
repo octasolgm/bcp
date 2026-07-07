@@ -4,47 +4,23 @@ using Reguliq.Api.Infrastructure;
 using Reguliq.Api.Services;
 using Reguliq.Api.Workers;
 
-// Load bcp-api/.env when present (standalone app folder)
-var repoEnv = Path.Combine(Directory.GetCurrentDirectory(), ".env");
-if (File.Exists(repoEnv))
-{
-    foreach (var line in File.ReadAllLines(repoEnv))
-    {
-        var t = line.Trim();
-        if (t.StartsWith('#') || t.StartsWith("//") || !t.Contains('=')) continue;
-        var idx = t.IndexOf('=');
-        var key = t[..idx].Trim();
-        var val = t[(idx + 1)..].Trim().Trim('"');
-        Environment.SetEnvironmentVariable(key, val);
-    }
-}
-
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddEnvironmentVariables();
 
-var rawDatabaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL")
-    ?? Environment.GetEnvironmentVariable("SUPABASE_POOLER_URL")
-    ?? Environment.GetEnvironmentVariable("DIRECT_URL");
-var workingDatabaseUrl = SupabasePoolerResolver.ResolveWorkingConnection(rawDatabaseUrl);
-if (!string.IsNullOrWhiteSpace(workingDatabaseUrl)
-    && !string.Equals(workingDatabaseUrl, rawDatabaseUrl, StringComparison.Ordinal))
+var dbConfig = DatabaseConfig.Resolve(builder.Configuration, builder.Environment);
+Directory.CreateDirectory(Path.Combine(builder.Environment.ContentRootPath, "data"));
+
+if (!string.IsNullOrWhiteSpace(dbConfig.PostgresConnection))
 {
-    Environment.SetEnvironmentVariable("DATABASE_URL", workingDatabaseUrl);
-    Console.WriteLine("Supabase: using auto-discovered pooler connection.");
-}
-else if (!string.IsNullOrWhiteSpace(rawDatabaseUrl))
-{
-    LogDatabaseUrlHint(rawDatabaseUrl);
+    LogDatabaseUrlHint(dbConfig.PostgresConnection);
 }
 
-static void LogDatabaseUrlHint(string raw)
+static void LogDatabaseUrlHint(string connectionString)
 {
     try
     {
-        if (!Uri.TryCreate(raw.Trim(), UriKind.Absolute, out var uri)) return;
-        var user = uri.UserInfo.Split(':')[0];
-        Console.WriteLine($"DATABASE_URL host={uri.Host} port={uri.Port} user={user}");
-        if (uri.Host.StartsWith("db.", StringComparison.OrdinalIgnoreCase))
+        var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+        Console.WriteLine($"PostgreSQL host={builder.Host} port={builder.Port} user={builder.Username}");
+        if (builder.Host?.StartsWith("db.", StringComparison.OrdinalIgnoreCase) == true)
         {
             Console.WriteLine(
                 "WARNING: Direct db.*.supabase.co often fails on Windows (IPv6). " +
@@ -53,9 +29,6 @@ static void LogDatabaseUrlHint(string raw)
     }
     catch { /* ignore */ }
 }
-
-var dbConfig = DatabaseConfig.Resolve(builder.Configuration, builder.Environment);
-Directory.CreateDirectory(Path.Combine(builder.Environment.ContentRootPath, "data"));
 
 builder.Services.AddSingleton(dbConfig);
 
@@ -67,8 +40,11 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 {
-    var raw = Environment.GetEnvironmentVariable("BCP_CORS_ORIGINS")
-        ?? Environment.GetEnvironmentVariable("REGULIQ_CORS_ORIGINS")
+    var raw = BcpConfiguration.GetString(
+        builder.Configuration,
+        "Bcp:CorsOrigins",
+        "BCP_CORS_ORIGINS",
+        "REGULIQ_CORS_ORIGINS")
         ?? "http://localhost:3002,http://localhost:4200";
     var origins = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
@@ -84,12 +60,21 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 
 builder.Services.Configure<GeminiOptions>(o =>
 {
-    o.ApiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY") ?? "";
-    o.DefaultModel = Environment.GetEnvironmentVariable("GEMINI_DEFAULT_MODEL") ?? "gemini-2.5-flash-lite";
+    o.ApiKey = BcpConfiguration.GetString(
+        builder.Configuration,
+        "Gemini:ApiKey",
+        "GEMINI_API_KEY") ?? "";
+    o.DefaultModel = BcpConfiguration.GetString(
+        builder.Configuration,
+        "Gemini:DefaultModel",
+        "GEMINI_DEFAULT_MODEL") ?? "gemini-2.5-flash-lite";
 });
 builder.Services.Configure<NodeBridgeOptions>(o =>
 {
-    o.BaseUrl = Environment.GetEnvironmentVariable("NODE_API_URL") ?? "http://localhost:4000";
+    o.BaseUrl = BcpConfiguration.GetString(
+        builder.Configuration,
+        "NodeBridge:BaseUrl",
+        "NODE_API_URL") ?? "http://localhost:4000";
     o.Enabled = true;
 });
 
@@ -127,9 +112,11 @@ using (var scope = app.Services.CreateScope())
         if (dbConfig.RequireSupabase)
         {
             Console.Error.WriteLine();
-            Console.Error.WriteLine("FATAL: BCP_REQUIRE_SUPABASE=true but Postgres is not reachable.");
+            Console.Error.WriteLine("FATAL: Bcp:RequireSupabase=true but Postgres is not reachable.");
             Console.Error.WriteLine(PostgresConnectionDiagnostics.LastError);
-            Console.Error.WriteLine("Fix SUPABASE_DB_PASSWORD in bcp-api/.env (reset in Supabase Dashboard → Database).");
+            Console.Error.WriteLine(
+                "Fix Supabase:DbPassword in appsettings.Development.json " +
+                "(reset in Supabase Dashboard → Database).");
             Console.Error.WriteLine("If you see ECIRCUITBREAKER, wait 10 minutes with API stopped, then restart.");
             throw;
         }
@@ -152,10 +139,13 @@ app.MapGet("/", () => Results.Ok(new
     persistence = dbConfig.UsePostgres ? "supabase" : "sqlite",
 }));
 
-var port = Environment.GetEnvironmentVariable("BCP_API_PORT")
-    ?? Environment.GetEnvironmentVariable("REGULIQ_API_PORT")
-    ?? Environment.GetEnvironmentVariable("WEBSITES_PORT")
-    ?? Environment.GetEnvironmentVariable("PORT")
+var port = BcpConfiguration.GetString(
+    builder.Configuration,
+    "Bcp:ApiPort",
+    "BCP_API_PORT",
+    "REGULIQ_API_PORT",
+    "WEBSITES_PORT",
+    "PORT")
     ?? "5100";
 app.Urls.Add($"http://0.0.0.0:{port}");
 

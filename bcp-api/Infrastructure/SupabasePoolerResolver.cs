@@ -16,12 +16,13 @@ public static class SupabasePoolerResolver
     private static readonly int[] Ports = [5432, 6543];
 
     /// <summary>Try opening the connection; if it fails, probe pooler hosts and return a working URI.</summary>
-    public static string? ResolveWorkingConnection(string? rawUri)
+    public static string? ResolveWorkingConnection(string? rawUri, IConfiguration? config = null)
     {
-        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("SUPABASE_DB_HOST")))
+        if (config is not null
+            && !string.IsNullOrWhiteSpace(BcpConfiguration.GetString(config, "Supabase:DbHost", "SUPABASE_DB_HOST")))
             return null;
 
-        var resolved = DatabaseConnectionHelper.ResolvePostgresConnection(rawUri);
+        var resolved = DatabaseConnectionHelper.ResolvePostgresConnection(rawUri, config);
         if (resolved is null) return null;
 
         var builder = new NpgsqlConnectionStringBuilder(resolved);

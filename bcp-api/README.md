@@ -16,20 +16,33 @@ Standalone ASP.NET Core API for Reguliq compliance dashboard and Kafka dual-veri
    - `003_dual_verify_kafka.sql`
    - `004_bcp_api_extra_columns.sql`
 
-2. Copy env file and set **the same** `DATABASE_URL` for every developer:
+2. Copy the appsettings template and set **the same** Supabase credentials for every developer:
 
 ```bash
 cd bcp-api
-copy .env.example .env
+copy appsettings.Development.example.json appsettings.Development.json
 ```
 
-```env
-REGULIQ_USE_POSTGRES=true
-DATABASE_URL=postgresql://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres
-GEMINI_API_KEY=your-key
+Edit `appsettings.Development.json`:
+
+```json
+{
+  "Bcp": { "UsePostgres": true },
+  "ConnectionStrings": {
+    "PostgreSQL": "postgresql://postgres.YOUR_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres"
+  },
+  "Supabase": {
+    "DbHost": "aws-0-REGION.pooler.supabase.com",
+    "DbUser": "postgres.YOUR_REF",
+    "DbPassword": "PASSWORD"
+  },
+  "Gemini": { "ApiKey": "your-key" }
+}
 ```
 
-3. On first startup, existing **local** data (`data/reguliq.db`, `data/dual-verify-kafka/*.json`) is imported into Supabase automatically (`MIGRATE_LOCAL_DATA_TO_SUPABASE=true`).
+Prefer `Supabase:DbPassword` when the password contains `@` (no URL encoding needed).
+
+3. On first startup, existing **local** data (`data/reguliq.db`, `data/dual-verify-kafka/*.json`) is imported into Supabase automatically (`Bcp:MigrateLocalDataToSupabase=true`).
 
 ## Run
 
@@ -48,18 +61,19 @@ curl http://localhost:5100/dual-verify-kafka/health
 curl http://localhost:5100/dual-verify-kafka/sessions
 ```
 
-All developers with the same `DATABASE_URL` see the same sessions.
+All developers with the same Supabase connection see the same sessions.
 
-## Environment
+## Configuration (`appsettings`)
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `DATABASE_URL` | **Yes** | Supabase PostgreSQL URI |
-| `REGULIQ_USE_POSTGRES` | Yes (`true`) | Use Supabase instead of SQLite |
-| `GEMINI_API_KEY` | For live runs | Gemini Phase 2 |
-| `MIGRATE_LOCAL_DATA_TO_SUPABASE` | No (`true`) | Import local SQLite/JSON on startup |
-| `BCP_ALLOW_SQLITE` | No | `true` = offline local-only (not shared) |
-| `BCP_CORS_ORIGINS` | No | Angular origins |
+| Key | Required | Purpose |
+|-----|----------|---------|
+| `ConnectionStrings:PostgreSQL` | **Yes** | Supabase Session pooler URI |
+| `Supabase:DbPassword` | Recommended | Plain password (use when password contains `@`) |
+| `Bcp:UsePostgres` | Yes (`true`) | Use Supabase instead of SQLite |
+| `Gemini:ApiKey` | For live runs | Gemini Phase 2 |
+| `Bcp:MigrateLocalDataToSupabase` | No (`true`) | Import local SQLite/JSON on startup |
+| `Bcp:AllowSqlite` | No | `true` = offline local-only (not shared) |
+| `Bcp:CorsOrigins` | No | Angular origins |
 
 ## Deploy
 

@@ -26,8 +26,10 @@ public class LocalDataMigrationService(
         if (!dbConfig.UsePostgres)
             return;
 
-        var flag = config["MIGRATE_LOCAL_DATA_TO_SUPABASE"]
-            ?? Environment.GetEnvironmentVariable("MIGRATE_LOCAL_DATA_TO_SUPABASE")
+        var flag = BcpConfiguration.GetString(
+            config,
+            "Bcp:MigrateLocalDataToSupabase",
+            "MIGRATE_LOCAL_DATA_TO_SUPABASE")
             ?? "true";
         if (flag is "false" or "0")
         {

@@ -20,12 +20,14 @@ Configuration → Application settings:
 |------|--------|
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
 | `WEBSITES_PORT` | `8080` |
-| `REGULIQ_USE_POSTGRES` | `true` |
-| `DATABASE_URL` | **Same Supabase URI for all devs** |
-| `MIGRATE_LOCAL_DATA_TO_SUPABASE` | `true` (first deploy) |
-| `GEMINI_API_KEY` | your key |
-| `BCP_CORS_ORIGINS` | `https://YOUR-bcp-web.azurewebsites.net` |
+| `Bcp__UsePostgres` | `true` |
+| `ConnectionStrings__PostgreSQL` | **Same Supabase URI for all devs** |
+| `Bcp__MigrateLocalDataToSupabase` | `true` (first deploy) |
+| `Gemini__ApiKey` | your key |
+| `Bcp__CorsOrigins` | `https://YOUR-bcp-web.azurewebsites.net` |
 | `KAFKA_ENABLED` | `false` (or Kafka vars) |
+
+Azure maps `Section__Key` to nested appsettings. Flat names like `DATABASE_URL` still work as overrides.
 
 Use Key Vault for secrets in production.
 
@@ -56,6 +58,6 @@ curl https://bcp-api.azurewebsites.net/dual-verify-kafka/health
 
 ## Notes
 
-- Do **not** commit `.env` — use App Service Configuration only.
+- Do **not** commit `appsettings.Development.json` — use App Service Configuration or Key Vault in production.
 - SQLite is not suitable on App Service; use PostgreSQL.
-- Set `BCP_CORS_ORIGINS` to your **bcp-web** URL before Angular can call the API.
+- Set `Bcp__CorsOrigins` (or `BCP_CORS_ORIGINS`) to your **bcp-web** URL before Angular can call the API.

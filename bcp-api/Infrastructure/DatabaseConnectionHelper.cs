@@ -5,9 +5,9 @@ namespace Reguliq.Api.Infrastructure;
 /// <summary>Builds Npgsql connection strings from postgres:// URIs (handles @ in passwords).</summary>
 public static class DatabaseConnectionHelper
 {
-    public static string? ResolvePostgresConnection(string? raw)
+    public static string? ResolvePostgresConnection(string? raw, IConfiguration? config = null)
     {
-        var fromParts = BuildFromComponentEnv();
+        var fromParts = BuildFromConfiguration(config);
         if (!string.IsNullOrWhiteSpace(fromParts)) return fromParts;
 
         if (string.IsNullOrWhiteSpace(raw)) return null;
@@ -36,17 +36,19 @@ public static class DatabaseConnectionHelper
         return builder.ConnectionString;
     }
 
-    /// <summary>Prefer SUPABASE_DB_* vars — avoids URL-encoding passwords with @ # etc.</summary>
-    public static string? BuildFromComponentEnv()
+    /// <summary>Prefer Supabase:Db* settings — avoids URL-encoding passwords with @ # etc.</summary>
+    public static string? BuildFromConfiguration(IConfiguration? config)
     {
-        var host = Environment.GetEnvironmentVariable("SUPABASE_DB_HOST");
-        var user = Environment.GetEnvironmentVariable("SUPABASE_DB_USER");
-        var pass = Environment.GetEnvironmentVariable("SUPABASE_DB_PASSWORD");
+        if (config is null) return null;
+
+        var host = BcpConfiguration.GetString(config, "Supabase:DbHost", "SUPABASE_DB_HOST");
+        var user = BcpConfiguration.GetString(config, "Supabase:DbUser", "SUPABASE_DB_USER");
+        var pass = BcpConfiguration.GetString(config, "Supabase:DbPassword", "SUPABASE_DB_PASSWORD");
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
             return null;
 
-        var port = int.TryParse(Environment.GetEnvironmentVariable("SUPABASE_DB_PORT"), out var p) ? p : 5432;
-        var database = Environment.GetEnvironmentVariable("SUPABASE_DB_NAME") ?? "postgres";
+        var port = BcpConfiguration.GetInt(config, 5432, "Supabase:DbPort", "SUPABASE_DB_PORT");
+        var database = BcpConfiguration.GetString(config, "Supabase:DbName", "SUPABASE_DB_NAME") ?? "postgres";
 
         return new NpgsqlConnectionStringBuilder
         {

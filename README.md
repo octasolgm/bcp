@@ -17,7 +17,7 @@ Remote: [github.com/octasolgm/bcp](https://github.com/octasolgm/bcp.git)
 
 ```bash
 cd bcp-api
-copy .env.example .env   # first time only; edit keys
+copy appsettings.Development.example.json appsettings.Development.json   # first time only; edit keys
 dotnet run
 ```
 
@@ -33,7 +33,7 @@ Open **http://localhost:3002/dashboard**
 
 ## Environment
 
-- **API:** `bcp-api/.env` (copied from your main BCP project — never commit)
+- **API:** `bcp-api/appsettings.Development.json` (copy from `appsettings.Development.example.json` — never commit)
 - **Web:** `bcp-web/src/environments/environment.ts` (local) and `environment.production.ts` (Azure)
 
 ## Deploy to Azure

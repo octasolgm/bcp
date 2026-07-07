@@ -44,7 +44,7 @@ public class DualVerifyService(
                 store.DataDir, mode,
                 mode == "memory"
                     ? PostgresConnectionDiagnostics.LastError
-                      ?? "Database not connected — set DATABASE_URL or SUPABASE_DB_* in bcp-api/.env"
+                      ?? "Database not connected — set ConnectionStrings:PostgreSQL or Supabase:Db* in appsettings.Development.json"
                     : null));
     }
 
@@ -223,6 +223,6 @@ public class DualVerifyService(
         var health = await GetHealthAsync(ct);
         if (health.Persistence.Mode == "memory")
             throw new InvalidOperationException(
-                "Cannot run — Supabase/PostgreSQL not ready. Set DATABASE_URL in bcp-api/.env.");
+                "Cannot run — Supabase/PostgreSQL not ready. Set ConnectionStrings:PostgreSQL in appsettings.Development.json.");
     }
 }

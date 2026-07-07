@@ -122,7 +122,7 @@ export class DashboardComponent implements OnInit {
       error: () => {
         this.loading = false;
         this.loadError =
-          'Cannot reach BCP API at http://localhost:5100. Start bcp-api (dotnet run) and set DATABASE_URL to your Supabase Session pooler URI.';
+          'Cannot reach BCP API at http://localhost:5100. Start bcp-api (dotnet run) and set ConnectionStrings:PostgreSQL in appsettings.Development.json.';
       },
     });
   }
