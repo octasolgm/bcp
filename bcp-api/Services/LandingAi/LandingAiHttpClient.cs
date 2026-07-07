@@ -62,6 +62,34 @@ public class LandingAiHttpClient(HttpClient http, IOptions<LandingAiOptions> opt
         throw new InvalidOperationException("Landing AI extract response missing extraction");
     }
 
+    /// <summary>Extract numbered government requirement points from markdown.</summary>
+    public async Task<JsonElement> ExtractGovRequirementPointsAsync(string markdown, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        var schemaPath = Path.Combine(env.ContentRootPath, "Schemas", "gov-requirement-points.schema.json");
+        if (!File.Exists(schemaPath))
+            throw new FileNotFoundException("Missing gov-requirement-points.schema.json", schemaPath);
+
+        var schema = await File.ReadAllTextAsync(schemaPath, ct);
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(schema, Encoding.UTF8, "application/json"), "schema");
+        form.Add(new StringContent(markdown, Encoding.UTF8, "text/markdown"), "markdown", "document.md");
+        form.Add(new StringContent(_opts.ExtractModel), "model");
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{_opts.ApiBase.TrimEnd('/')}/v1/ade/extract") { Content = form };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _opts.ApiKey);
+
+        using var res = await http.SendAsync(req, ct);
+        var body = await res.Content.ReadAsStringAsync(ct);
+        if (!res.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Landing AI gov extract failed ({(int)res.StatusCode}): {Trim(body)}");
+
+        using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("extraction", out var extraction))
+            return extraction.Clone();
+        throw new InvalidOperationException("Landing AI extract response missing extraction");
+    }
+
     private void EnsureConfigured()
     {
         if (!_opts.IsConfigured)

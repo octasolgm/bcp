@@ -12,6 +12,7 @@ namespace Reguliq.Api.Controllers;
 [Route("landing-ai")]
 public class LandingAiController(
     GovPointsService govPoints,
+    LandingAiGovExtractService govExtract,
     AppDbContext db,
     LandingAiCompareService landingAi) : ControllerBase
 {
@@ -93,12 +94,97 @@ public class LandingAiController(
             section = p.Section,
             point_type = "mandatory"
         });
-        return Ok(new { success = true, cached = true, pointCount = points.Count(), points, docId = docId ?? "gov-tfs-guidelines" });
+        return Ok(new
+        {
+            success = true,
+            cached = true,
+            pointCount = points.Count(),
+            points,
+            docId = docId ?? "gov-tfs-guidelines",
+            source = govPoints.Source,
+        });
+    }
+
+    [HttpPost("gov-points/load-from-db")]
+    public async Task<IActionResult> LoadGovFromDb(
+        [FromQuery] string docId = LandingAiGovExtractService.BuiltinGovDocId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await govExtract.LoadFromDatabaseOrSeedAsync(docId, ct);
+            return Ok(new
+            {
+                success = result.Success,
+                source = result.Source,
+                pointCount = result.PointCount,
+                activeSource = result.ActiveSource,
+                message = result.Source == "db-cache"
+                    ? $"Loaded {result.PointCount} gov points from Supabase extract cache."
+                    : $"No DB extract cache — loaded {result.PointCount} points from embedded seed.",
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpPost("extract-gov-points")]
+    [RequestSizeLimit(50_000_000)]
+    public async Task<IActionResult> ExtractGovPoints(
+        [FromQuery] string? markdown,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            byte[]? pdf = null;
+            var fileName = "gov-document.pdf";
+            if (Request.HasFormContentType)
+            {
+                var form = await Request.ReadFormAsync(ct);
+                var file = form.Files.GetFile("file") ?? form.Files.FirstOrDefault();
+                if (file != null)
+                {
+                    fileName = file.FileName;
+                    using var ms = new MemoryStream();
+                    await file.CopyToAsync(ms, ct);
+                    pdf = ms.ToArray();
+                }
+            }
+
+            var result = await govExtract.ExtractFromUploadAsync(pdf, fileName, markdown, ct);
+            return Ok(new
+            {
+                success = result.Success,
+                cached = result.Cached,
+                fileName = result.FileName,
+                fileHash = result.FileHash,
+                schemaKey = result.SchemaKey,
+                pointCount = result.PointCount,
+                points = result.Points,
+                creditUsage = result.CreditUsage,
+                source = result.Source,
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
     }
 
     [HttpPost("seed/builtin")]
-    public IActionResult SeedBuiltin() =>
-        Ok(new { success = true, message = "Gov points loaded from embedded seed in Reguliq.Api." });
+    public IActionResult SeedBuiltin()
+    {
+        govPoints.ReloadFromSeed();
+        return Ok(new
+        {
+            success = true,
+            message = "Gov points loaded from embedded seed.",
+            pointCount = govPoints.GetAllPoints().Count,
+            source = govPoints.Source,
+        });
+    }
 
     [HttpGet("compliance-sessions")]
     public async Task<IActionResult> ListComplianceSessions(
@@ -150,6 +236,18 @@ public class LandingAiController(
                 ? null
                 : JsonSerializer.Deserialize<object>(session.SummaryJson)
         });
+    }
+
+    [HttpDelete("compliance-sessions/{id:guid}")]
+    public async Task<IActionResult> DeleteComplianceSession(Guid id, CancellationToken ct)
+    {
+        var session = await db.ComplianceSessions.FindAsync([id], ct);
+        if (session == null)
+            return NotFound(new { success = false, message = "Not found" });
+
+        db.ComplianceSessions.Remove(session);
+        await db.SaveChangesAsync(ct);
+        return Ok(new { success = true, deleted = true, id });
     }
 
     [HttpPost("compliance-sessions")]

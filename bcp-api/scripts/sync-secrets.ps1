@@ -24,5 +24,22 @@ $secrets = [ordered]@{
     LandingAi         = [ordered]@{ ApiKey = $dev.LandingAi.ApiKey }
 }
 
+# Kafka / Azure Event Hubs (same as monorepo reguliq-dotnet .env)
+$kafkaKeys = @(
+    "KAFKA_ENABLED",
+    "KAFKA_BROKERS",
+    "KAFKA_SASL_USERNAME",
+    "KAFKA_PRODUCER_CONNECTION_STRING",
+    "KAFKA_CONSUMER_CONNECTION_STRING",
+    "KAFKA_WORKER_SEND_CONNECTION_STRING",
+    "KAFKA_SASL_PASSWORD"
+)
+foreach ($key in $kafkaKeys) {
+    $prop = $dev.PSObject.Properties[$key]
+    if ($null -ne $prop -and -not [string]::IsNullOrWhiteSpace([string]$prop.Value)) {
+        $secrets[$key] = $prop.Value
+    }
+}
+
 $secrets | ConvertTo-Json -Depth 6 | Set-Content -Path $outPath -Encoding UTF8
 Write-Host "Wrote $outPath (from Development.json, not committed to git)"

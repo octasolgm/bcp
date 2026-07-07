@@ -45,6 +45,26 @@
               {{ loadingAnalysis ? '…' : 'Load report' }}
             </button>
             <button type="button" class="btn-sm" (click)="refreshSavedSessions()" title="Refresh saved sessions">↻</button>
+            @if (canDeleteSelectedSession) {
+              <button
+                type="button"
+                class="btn-sm btn-delete-session"
+                (click)="confirmDeleteSelectedSession()"
+                [title]="copy.deleteSessionTitle"
+              >
+                Delete session
+              </button>
+            }
+            @if (canClearAll) {
+              <button
+                type="button"
+                class="btn-sm btn-clear-all"
+                (click)="clearAll()"
+                [title]="copy.clearAllTitle"
+              >
+                Clear all
+              </button>
+            }
             @if (canRetryFailed) {
               <button
                 type="button"
@@ -88,6 +108,11 @@
             >
               {{ running ? 'Running…' : '▶ Run (' + selected.size + ' gov points)' }}
             </button>
+            @if (running && sessionId) {
+              <button type="button" class="btn-cancel" (click)="cancelPipeline()" title="Stop queued work and skip remaining AI passes">
+                ✕ Cancel
+              </button>
+            }
           </div>
         </div>
       </section>
@@ -103,7 +128,9 @@
       }
       <button type="button" class="btn-sm" [disabled]="exportsDisabled" (click)="exportCombinedPdf()" title="Both passes PDF">Both PDF</button>
       <button type="button" class="btn-sm accent" [disabled]="exportsDisabled" (click)="exportBothPassesExcel()" title="BCP formatted Excel">Both XLS</button>
-      <button type="button" class="btn-sm" [disabled]="reportBag.size === 0" (click)="clearReport()" title="Clear report">✕</button>
+      @if (canClearAll) {
+        <button type="button" class="btn-sm btn-clear-all" (click)="clearAll()" [title]="copy.clearAllTitle">Clear all</button>
+      }
     </div>
   </header>
 
@@ -117,6 +144,9 @@
   @if (govPoints.length === 0 && !loadingPoints) {
     <div class="toast-warn">
       <span>Gov points not loaded.</span>
+      <button type="button" class="btn-sm" [disabled]="loadingGovFromDb" (click)="loadGovFromDb()">
+        {{ loadingGovFromDb ? '…' : copy.govLoadFromDb }}
+      </button>
       <button type="button" class="btn-sm" [disabled]="seeding" (click)="seedBuiltin()">
         {{ seeding ? '…' : 'Seed' }}
       </button>
@@ -160,6 +190,41 @@
       </div>
       @if (!govPanelCollapsed) {
       <p class="panel-hint">{{ copy.govPointsHint }}</p>
+      <div class="gov-doc-bar">
+        <label class="gov-file-label">
+          <span class="gov-file-title">{{ copy.govDocLabel }}</span>
+          <input
+            type="file"
+            accept=".pdf,.html,.htm,.png,.jpg,.jpeg"
+            (change)="onGovFile($event)"
+            [title]="copy.govDocAttach"
+          />
+          <span class="gov-file-name">{{ govFileName }}</span>
+        </label>
+        <div class="gov-doc-actions">
+          <button
+            type="button"
+            class="btn-sm teal"
+            [disabled]="loadingGovFromDb"
+            (click)="loadGovFromDb()"
+            [title]="copy.govLoadFromDb"
+          >
+            {{ loadingGovFromDb ? '…' : copy.govLoadFromDb }}
+          </button>
+          <button
+            type="button"
+            class="btn-sm violet"
+            [disabled]="extractingGov || !govFile"
+            (click)="extractGovPoints()"
+            [title]="copy.govExtractLive"
+          >
+            {{ extractingGov ? '…' : copy.govExtractLive }}
+          </button>
+        </div>
+        @if (govSourceLabel) {
+          <p class="gov-source-note">{{ govSourceLabel }}</p>
+        }
+      </div>
       <div class="panel-toolbar">
         <input type="search" class="search" placeholder="Search points…" [(ngModel)]="govSearch" />
         <button type="button" class="link-btn" (click)="selectAll()">All</button>
@@ -240,6 +305,11 @@
             }
           </div>
           <div class="panel-head-actions">
+            @if (canClearAll) {
+              <button type="button" class="btn-sm btn-clear-all" (click)="clearAll()" [title]="copy.clearAllTitle">
+                Clear all
+              </button>
+            }
             @if (canRetryFailed) {
               <button
                 type="button"
@@ -291,7 +361,19 @@
       @if (showAllReportCards && visibleReportItems.length) {
         <div class="report-all-cards">
           @for (item of visibleReportItems; track item.pointId) {
-            <app-dual-verify-result-card [item]="item" />
+            <div class="report-card-wrap">
+              @if (canRemoveReportItem(item)) {
+                <button
+                  type="button"
+                  class="btn-remove-item"
+                  (click)="confirmRemoveReportItem(item.pointId, $event)"
+                  [title]="copy.removeReportItemTitle"
+                >
+                  Remove
+                </button>
+              }
+              <app-dual-verify-result-card [item]="item" />
+            </div>
           }
         </div>
       } @else {
@@ -314,6 +396,7 @@
                   <th>Point</th>
                   <th>Status</th>
                   <th>Summary</th>
+                  <th class="col-actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -339,6 +422,19 @@
                       }
                     </td>
                     <td class="col-sum">{{ truncate(item.agreement?.summary || item.landingMessage || item.errorMessage || '—', 56) }}</td>
+                    <td class="col-actions">
+                      @if (canRemoveReportItem(item)) {
+                        <button
+                          type="button"
+                          class="btn-remove-item compact"
+                          (click)="confirmRemoveReportItem(item.pointId, $event)"
+                          [title]="copy.removeReportItemTitle"
+                          [attr.aria-label]="'Remove ' + item.pointId"
+                        >
+                          ✕
+                        </button>
+                      }
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -347,6 +443,18 @@
         </div>
         <div class="report-detail">
           @if (activeReportItem; as item) {
+            <div class="report-detail-head">
+              @if (canRemoveReportItem(item)) {
+                <button
+                  type="button"
+                  class="btn-remove-item"
+                  (click)="confirmRemoveReportItem(item.pointId, $event)"
+                  [title]="copy.removeReportItemTitle"
+                >
+                  Remove from session
+                </button>
+              }
+            </div>
             <app-dual-verify-result-card class="detail-card" [item]="item" />
           } @else {
             <div class="empty-state small">
@@ -407,6 +515,9 @@
           </ul>
           @if (canRetryFailed) {
             <button type="button" class="btn-retry" (click)="retryFailed()">Retry failed ({{ failedJobCount }})</button>
+          }
+          @if (running && sessionId) {
+            <button type="button" class="btn-cancel block" (click)="cancelPipeline()">Cancel run</button>
           }
           @if (sessionId) {
             <button type="button" class="link-btn block" (click)="useCurrentSessionId()">Use this session ID</button>

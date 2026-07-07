@@ -2,6 +2,7 @@ import {
   buildReportSummary,
   exportableReportItems,
   mergeReportItems,
+  removeReportItemFromBag,
   reportItemsToSortedArray,
   type DualVerifyReportItem,
 } from './dual-verify-report';
@@ -115,5 +116,17 @@ describe('dual-verify-report', () => {
       { pointId: '3.1.1', status: 'completed', landingMessage: 'a' },
     ];
     expect(exportableReportItems(items).length).toBe(1);
+  });
+
+  it('removeReportItemFromBag deletes one point', () => {
+    const bag = new Map<string, DualVerifyReportItem>([
+      ['2.1.1', { pointId: '2.1.1', status: 'loaded' }],
+      ['2.1.2', { pointId: '2.1.2', status: 'loaded' }],
+    ]);
+    const next = removeReportItemFromBag(bag, '2.1.1');
+    expect(next.size).toBe(1);
+    expect(next.has('2.1.1')).toBe(false);
+    expect(next.get('2.1.2')?.pointId).toBe('2.1.2');
+    expect(bag.size).toBe(2);
   });
 });

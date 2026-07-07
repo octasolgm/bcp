@@ -113,6 +113,58 @@ public class LandingAiCacheRepository(AppDbContext db, ILogger<LandingAiCacheRep
         }
     }
 
+    public async Task<string?> GetExtractPointsJsonAsync(
+        string fileHash,
+        string schemaKey,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var row = await db.Database
+                .SqlQueryRaw<ExtractCacheRow>(
+                    """
+                    SELECT points_json::text AS "PointsJson"
+                    FROM landing_ai_extract_cache
+                    WHERE file_hash = {0} AND schema_key = {1}
+                    LIMIT 1
+                    """,
+                    fileHash, schemaKey)
+                .FirstOrDefaultAsync(ct);
+            return row?.PointsJson;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Gov extract cache miss for {Hash}", fileHash);
+            return null;
+        }
+    }
+
+    public async Task SaveExtractPointsCacheAsync(
+        string fileHash,
+        string schemaKey,
+        string pointsJson,
+        string extractModel,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO landing_ai_extract_cache (file_hash, schema_key, points_json, extract_model, updated_at)
+                VALUES ({0}, {1}, {2}::jsonb, {3}, NOW())
+                ON CONFLICT (file_hash, schema_key) DO UPDATE SET
+                  points_json = EXCLUDED.points_json,
+                  extract_model = EXCLUDED.extract_model,
+                  updated_at = NOW()
+                """,
+                fileHash, schemaKey, pointsJson, extractModel);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Could not save gov extract cache for {Hash}", fileHash);
+        }
+    }
+
     public static string HashBuffer(byte[] data) =>
         Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
 

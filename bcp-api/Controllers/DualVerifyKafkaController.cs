@@ -139,4 +139,22 @@ public class DualVerifyKafkaController(DualVerifyService service, DualVerifyStor
         var count = await service.RetryFailedAsync(sessionId, pdf, ct);
         return Ok(new ApiResponse<object>(true, new { requeued = count }));
     }
+
+    [HttpPost("jobs/{sessionId:guid}/cancel")]
+    public async Task<ActionResult<ApiResponse<object>>> CancelJob(Guid sessionId, CancellationToken ct)
+    {
+        var ok = await service.CancelSessionAsync(sessionId, ct);
+        if (!ok)
+            return NotFound(new ApiResponse<object>(false, null!, "Session not found"));
+        return Ok(new ApiResponse<object>(true, new { cancelled = true }));
+    }
+
+    [HttpDelete("jobs/{sessionId:guid}")]
+    public async Task<ActionResult<ApiResponse<object>>> DeleteJob(Guid sessionId, CancellationToken ct)
+    {
+        var ok = await service.DeleteSessionAsync(sessionId, ct);
+        if (!ok)
+            return NotFound(new ApiResponse<object>(false, null!, "Session not found"));
+        return Ok(new ApiResponse<object>(true, new { deleted = true }));
+    }
 }

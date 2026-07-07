@@ -10,4 +10,6 @@ public class SessionPdfCache
 
     public byte[]? Get(Guid sessionId) =>
         _buffers.TryGetValue(sessionId, out var b) ? b : null;
+
+    public void Remove(Guid sessionId) => _buffers.TryRemove(sessionId, out _);
 }

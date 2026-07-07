@@ -10,6 +10,7 @@ public class DualVerifyService(
     GovPointsService govPoints,
     DualVerifyStoreService store,
     DualVerifyJobStageTracker stageTracker,
+    SessionCancellationTracker cancellationTracker,
     LocalJobQueue queue,
     KafkaConfig kafkaConfig,
     KafkaProducerService kafka,
@@ -182,6 +183,47 @@ public class DualVerifyService(
             .ToList();
     }
 
+    /// <summary>Stop queued work and signal workers to skip remaining AI passes.</summary>
+    public async Task<bool> CancelSessionAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await store.GetSessionAsync(sessionId, ct);
+        if (session == null) return false;
+
+        if (session.Status is "completed" or "failed" or "cancelled")
+            return true;
+
+        cancellationTracker.MarkCancelled(sessionId);
+        session.Status = "cancelled";
+        session.UpdatedAt = DateTime.UtcNow;
+        session.CompletedAt ??= DateTime.UtcNow;
+
+        foreach (var job in session.PointJobs.Where(p => p.Status is "queued"))
+        {
+            job.Status = "cancelled";
+            job.ErrorMessage = "Cancelled by user";
+            job.UpdatedAt = DateTime.UtcNow;
+            await store.SavePointJobAsync(job, ct);
+        }
+
+        await store.SaveSessionAsync(session, ct);
+        await store.UpdateSessionCountsAsync(sessionId, ct);
+        logger.LogInformation("Cancelled dual verify session {SessionId}", sessionId);
+        return true;
+    }
+
+    /// <summary>Permanently remove a session and all point jobs from the database.</summary>
+    public async Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await store.GetSessionAsync(sessionId, ct);
+        if (session == null) return false;
+
+        if (session.Status is "processing" or "queued")
+            await CancelSessionAsync(sessionId, ct);
+
+        cancellationTracker.MarkCancelled(sessionId);
+        return await store.DeleteSessionAsync(sessionId, ct);
+    }
+
     public static SessionProgressDto MapProgress(DualVerifySession session) =>
         new(
             new DualVerifySessionDto(
@@ -216,6 +258,7 @@ public class DualVerifyService(
             job.Attempt = 1;
             job.ErrorMessage = null;
             job.UpdatedAt = DateTime.UtcNow;
+            // Preserve job.LandingMessage — manual retry resumes at Gemini when Pass 1 is cached.
             await store.SavePointJobAsync(job, ct);
 
             messages.Add(new DualVerifyJobMessage(

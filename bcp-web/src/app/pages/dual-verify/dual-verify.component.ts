@@ -36,6 +36,7 @@ import {
   mergeReportItems,
   parsedResultsFromReport,
   progressPointToReportItem,
+  removeReportItemFromBag,
   reportItemsToSortedArray,
   savedResultToReportItem,
   type DualVerifyReportItem,
@@ -43,7 +44,6 @@ import {
 } from '../../../lib/dual-verify-report';
 import {
   clearReportBagStorage,
-  loadReportBagFromStorage,
   saveReportBagToStorage,
 } from '../../../lib/dual-verify-report-persistence';
 import { buildReportStats } from '../../../lib/ai-lab/parse-compliance-results';
@@ -61,6 +61,7 @@ import {
   isKafkaSessionId,
   pushRecentKafkaSession,
   readRecentKafkaSessions,
+  removeRecentKafkaSession,
 } from '../../../lib/kafka-recent-sessions';
 
 type SavedSessionOption = {
@@ -85,7 +86,7 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
   chapterGroups: GovPointChapterGroup[] = [];
   selected = new Set<string>();
   granularity: 'leaf' | 'section' = 'leaf';
-  aiModel = 'gemini-2.5-flash-lite';
+  aiModel = 'gemini-2.5-flash';
   forceRefresh = false;
   internalFile: File | null = null;
   sessionId: string | null = null;
@@ -94,6 +95,10 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
   loadingPoints = false;
   loadingAnalysis = false;
   seeding = false;
+  extractingGov = false;
+  loadingGovFromDb = false;
+  govFile: File | null = null;
+  govSourceLabel = '';
   error = '';
   manualSessionId = '';
   selectedSavedSession = '';
@@ -108,6 +113,8 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
   reportSummary: DualVerifyReportSummary | null = null;
   executiveSummary = '';
   pollTimer: ReturnType<typeof setInterval> | null = null;
+  /** Bumped when polling must stop — ignores stale HTTP responses after clear/load. */
+  private pollGeneration = 0;
   govSearch = '';
   activeReportPointId: string | null = null;
   expandedChapters = new Set<string>();
@@ -144,26 +151,44 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
       }
     });
     this.api.getDualVerifyHealth().subscribe((r) => (this.health = r.data));
-    this.restoreReportFromStorage();
     this.refreshSavedSessions();
     this.loadGovPoints();
   }
 
-  private restoreReportFromStorage(): void {
-    const stored = loadReportBagFromStorage();
-    if (!stored?.items.length) return;
-    this.reportBag = mergeReportItems(new Map(), stored.items);
-    if (stored.sessionId) this.sessionId = stored.sessionId;
-    if (stored.complianceSessionId) {
-      this.combinedComplianceSessionId = stored.complianceSessionId;
-      this.selectedSavedSession = `compliance:${stored.complianceSessionId}`;
-    }
-    this.updateReportMeta();
-    this.reportNote = `Restored ${stored.items.length} point(s) from last combined report.`;
+  ngOnDestroy(): void {
+    this.stopPolling();
   }
 
-  ngOnDestroy(): void {
+  /** Stop poll timer and invalidate in-flight poll responses. */
+  private stopPolling(): void {
+    this.pollGeneration += 1;
     if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollTimer = null;
+  }
+
+  /** Clear report/progress before loading a different saved session. */
+  private prepareForSessionLoad(kafkaSessionId?: string): void {
+    if (
+      this.sessionId
+      && this.running
+      && kafkaSessionId
+      && this.sessionId !== kafkaSessionId
+    ) {
+      this.api.cancelSession(this.sessionId).subscribe();
+    } else if (this.sessionId && this.running) {
+      this.api.cancelSession(this.sessionId).subscribe();
+    }
+    this.stopPolling();
+    this.running = false;
+    this.progress = null;
+    this.sessionId = null;
+    this.loadedKafkaSessionId = null;
+    this.combinedComplianceSessionId = null;
+    this.reportBag = new Map();
+    this.reportSummary = null;
+    this.executiveSummary = '';
+    this.activeReportPointId = null;
+    clearReportBagStorage();
   }
 
   get sessionGranularity(): string {
@@ -218,6 +243,19 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
     return Boolean(this.sessionId) && this.failedJobCount > 0 && !this.running;
   }
 
+  /** True when a session or combined report is loaded — show Clear all. */
+  get canClearAll(): boolean {
+    return (
+      this.reportBag.size > 0
+      || Boolean(this.sessionId)
+      || Boolean(this.manualSessionId.trim())
+      || Boolean(this.selectedSavedSession)
+      || Boolean(this.progress)
+      || Boolean(this.loadedKafkaSessionId)
+      || Boolean(this.combinedComplianceSessionId)
+    );
+  }
+
   get activeRunningStage(): string | null {
     const running = this.progress?.points.find((p) => p.status === 'running');
     return running?.runningStage ?? null;
@@ -231,6 +269,10 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
     return Boolean(this.selectedSavedSession) || isKafkaSessionId(this.manualSessionId.trim());
   }
 
+  get canDeleteSelectedSession(): boolean {
+    return Boolean(this.selectedSavedSession) || isKafkaSessionId(this.manualSessionId.trim());
+  }
+
   get persistenceLabel(): string {
     const m = this.health?.persistence?.mode;
     if (m === 'supabase') return 'Supabase';
@@ -241,6 +283,10 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
 
   get internalFileName(): string {
     return this.internalFile?.name ?? DUAL_VERIFY_COPY.defaultInternalPdfName;
+  }
+
+  get govFileName(): string {
+    return this.govFile?.name ?? 'No gov PDF attached';
   }
 
   get runBlockedReason(): string | null {
@@ -396,14 +442,67 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
     this.api.getGovPoints().subscribe({
       next: (r) => {
         this.rawGovPoints = r.points ?? [];
+        this.govSourceLabel = r.source ? `Source: ${r.source}` : '';
         this.selected.clear();
         this.applyGranularity(this.rawGovPoints);
         this.loadingPoints = false;
       },
       error: () => {
         this.loadingPoints = false;
-        this.error =
-          'Failed to load gov points from .NET API (:5100). Start Reguliq.Api (dotnet run in apps/reguliq-dotnet/src/Reguliq.Api).';
+        this.error = 'Failed to load gov points from API.';
+      },
+    });
+  }
+
+  loadGovFromDb(): void {
+    this.loadingGovFromDb = true;
+    this.error = '';
+    this.api.loadGovPointsFromDb().subscribe({
+      next: (r) => {
+        this.loadingGovFromDb = false;
+        this.reportNote = r.message ?? `Loaded ${r.pointCount} gov points (${r.source}).`;
+        this.loadGovPoints();
+      },
+      error: (e) => {
+        this.loadingGovFromDb = false;
+        this.error = e?.error?.message ?? 'Could not load gov points from database.';
+      },
+    });
+  }
+
+  onGovFile(e: Event): void {
+    const input = e.target as HTMLInputElement;
+    this.govFile = input.files?.[0] ?? null;
+  }
+
+  extractGovPoints(): void {
+    if (!this.govFile) {
+      this.error = this.copy.govExtractMissing;
+      return;
+    }
+    this.extractingGov = true;
+    this.error = '';
+    const form = new FormData();
+    form.append('file', this.govFile);
+    this.api.extractGovPoints(form).subscribe({
+      next: (r) => {
+        this.extractingGov = false;
+        const pts = r.points ?? [];
+        if (!pts.length) {
+          this.error = 'No requirement points found in document.';
+          return;
+        }
+        this.rawGovPoints = pts;
+        this.selected.clear();
+        this.applyGranularity(this.rawGovPoints);
+        const cacheNote = r.cached ? ' (cached)' : '';
+        const credits = r.creditUsage != null ? ` · credits ${r.creditUsage}` : '';
+        this.reportNote = `Gov extract: ${this.govPoints.length} comparable points${cacheNote}${credits}`;
+        this.govSourceLabel = r.source ? `Source: ${r.source}` : '';
+      },
+      error: (e) => {
+        this.extractingGov = false;
+        this.error = e?.error?.message ?? e?.message ?? 'Gov extraction failed.';
       },
     });
   }
@@ -486,6 +585,36 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
     this.reportListCollapsed = true;
   }
 
+  canRemoveReportItem(item: DualVerifyReportItem): boolean {
+    return item.status !== 'running' && item.status !== 'queued';
+  }
+
+  confirmRemoveReportItem(pointId: string, event?: Event): void {
+    event?.stopPropagation();
+    const item = this.reportBag.get(pointId);
+    if (!item) return;
+    if (!this.canRemoveReportItem(item)) {
+      this.reportNote = this.copy.removeReportItemBlocked;
+      return;
+    }
+    const label = item.pointTitle ? `${pointId} — ${item.pointTitle}` : pointId;
+    const ok = window.confirm(
+      `Remove point ${label} from this session report?\n\nExports and summaries will no longer include it.`,
+    );
+    if (!ok) return;
+    this.removeReportItem(pointId);
+  }
+
+  private removeReportItem(pointId: string): void {
+    this.reportBag = removeReportItemFromBag(this.reportBag, pointId);
+    if (this.progress?.points?.length) {
+      const points = this.progress.points.filter((p) => p.pointId !== pointId);
+      this.progress = { ...this.progress, points };
+    }
+    this.updateReportMeta();
+    this.reportNote = `Removed ${pointId} from session report.`;
+  }
+
   toggleGovPanel(): void {
     this.govPanelCollapsed = !this.govPanelCollapsed;
   }
@@ -519,6 +648,74 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
     this.internalFile = input.files?.[0] ?? null;
   }
 
+  confirmDeleteSelectedSession(): void {
+    const manualId = this.manualSessionId.trim();
+    const useManual = isKafkaSessionId(manualId);
+    const selected = this.selectedSavedSession;
+    if (!useManual && !selected) return;
+
+    const opt = selected ? this.savedSessions.find((s) => s.id === selected) : null;
+    const label = opt?.label ?? (useManual ? manualId : selected);
+    const ok = window.confirm(
+      `Delete session "${label}" permanently?\n\nThis removes it from the saved list and database. Loaded report data for this session will be cleared.`,
+    );
+    if (!ok) return;
+
+    if (useManual) {
+      this.deleteKafkaSessionRecord(manualId, 'dotnet');
+      return;
+    }
+
+    const [source, id] = selected.split(':');
+    if (source === 'compliance') {
+      this.api.deleteComplianceSession(id).subscribe({
+        next: () => this.afterSessionDeleted(id, 'compliance'),
+        error: (e) => {
+          this.error = e?.error?.message ?? 'Could not delete compliance session.';
+        },
+      });
+      return;
+    }
+
+    if (source === 'kafka') {
+      this.deleteKafkaSessionRecord(id, opt?.kafkaApi ?? 'dotnet');
+    }
+  }
+
+  private deleteKafkaSessionRecord(id: string, api: 'nestjs' | 'dotnet'): void {
+    if (api === 'dotnet') {
+      this.api.deleteDualVerifySession(id).subscribe({
+        next: () => this.afterSessionDeleted(id, 'kafka'),
+        error: () => {
+          removeRecentKafkaSession(id);
+          this.afterSessionDeleted(id, 'kafka');
+          this.reportNote = 'Removed from recent list (session may already be gone on server).';
+        },
+      });
+      return;
+    }
+    removeRecentKafkaSession(id);
+    this.afterSessionDeleted(id, 'kafka');
+    this.reportNote = 'Removed from recent list (Nest sessions are not deleted server-side).';
+  }
+
+  private afterSessionDeleted(id: string, source: 'kafka' | 'compliance'): void {
+    removeRecentKafkaSession(id);
+    if (
+      this.sessionId === id
+      || this.loadedKafkaSessionId === id
+      || this.combinedComplianceSessionId === id
+      || this.manualSessionId.trim() === id
+      || this.selectedSavedSession === `${source}:${id}`
+    ) {
+      this.resetWorkspace('Session deleted.');
+    }
+    this.selectedSavedSession = '';
+    if (this.manualSessionId.trim() === id) this.manualSessionId = '';
+    this.refreshSavedSessions();
+    this.reportNote = 'Session deleted.';
+  }
+
   loadSavedIntoReport(): void {
     const manualId = this.manualSessionId.trim();
     const useManual = isKafkaSessionId(manualId);
@@ -531,11 +728,14 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
     this.error = '';
 
     if (useManual) {
+      this.prepareForSessionLoad(manualId);
       this.loadKafkaIntoReport(manualId, 'dotnet');
       return;
     }
 
     const [source, id] = this.selectedSavedSession.split(':');
+    this.prepareForSessionLoad(source === 'kafka' ? id : undefined);
+
     if (source === 'compliance') {
       this.api.loadComplianceSession(id, this.sessionGranularity).subscribe({
         next: (r) => {
@@ -551,7 +751,7 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
             this.loadingAnalysis = false;
             return;
           }
-          this.reportBag = mergeReportItems(this.reportBag, incoming);
+          this.reportBag = mergeReportItems(new Map(), incoming);
           this.combinedComplianceSessionId = id;
           this.selectedSavedSession = `compliance:${id}`;
           this.updateReportMeta();
@@ -649,7 +849,7 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.reportBag = mergeReportItems(this.reportBag, incoming);
+    this.reportBag = mergeReportItems(new Map(), incoming);
     this.updateReportMeta();
     const failed = normalized.points.filter((p) => p.status === 'failed').length;
     const completed = normalized.points.filter((p) => p.status === 'completed').length;
@@ -661,14 +861,48 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
   }
 
   clearReport(): void {
+    this.clearAll();
+  }
+
+  /** Reset loaded session, combined report, progress, and load fields. */
+  clearAll(): void {
+    const cancelId = this.sessionId;
+    const shouldCancel = Boolean(cancelId && (this.running || this.pollTimer));
+    this.stopPolling();
+    this.running = false;
+    this.resetWorkspace(
+      shouldCancel
+        ? 'Cleared — cancelling run and report reset.'
+        : 'Cleared — combined report and session fields reset.',
+    );
+    if (shouldCancel && cancelId) {
+      this.api.cancelSession(cancelId).subscribe({
+        error: () => {
+          this.reportNote = 'Report cleared (cancel request may have failed).';
+        },
+      });
+    }
+  }
+
+  private resetWorkspace(note: string): void {
+    this.stopPolling();
+    this.running = false;
+    this.progress = null;
+    this.sessionId = null;
+    this.manualSessionId = '';
+    this.selectedSavedSession = '';
+    this.loadingAnalysis = false;
     this.reportBag = new Map();
     this.reportSummary = null;
     this.executiveSummary = '';
     this.activeReportPointId = null;
     this.loadedKafkaSessionId = null;
     this.combinedComplianceSessionId = null;
+    this.complianceFilter = null;
+    this.showAllReportCards = false;
+    this.exportsExpanded = false;
     clearReportBagStorage();
-    this.reportNote = 'Combined report cleared.';
+    this.reportNote = note;
   }
 
   startPipeline(): void {
@@ -700,6 +934,7 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
     form.append('forceRefresh', String(this.forceRefresh));
     form.append('internalFile', this.internalFile!);
 
+    this.stopPolling();
     this.running = true;
     this.error = '';
     this.progress = null;
@@ -721,37 +956,60 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
   }
 
   poll(id: string): void {
-    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.stopPolling();
+    const generation = this.pollGeneration;
     const tick = () => {
+      if (generation !== this.pollGeneration) return;
       this.api.getJob(id).subscribe({
         next: (r) => {
+          if (generation !== this.pollGeneration) return;
           const data = this.normalizeProgress(r.data);
           this.progress = data;
+          this.sessionId = id;
           this.mergeProgressIntoReport(data);
           const st = data.session.status;
-          if (st === 'completed' || st === 'failed') {
+          if (st === 'completed' || st === 'failed' || st === 'cancelled') {
             this.running = false;
-            if (this.pollTimer) clearInterval(this.pollTimer);
-            this.persistCompletedSession(data);
+            if (generation === this.pollGeneration) this.stopPolling();
+            if (st !== 'cancelled') {
+              this.persistCompletedSession(data);
+            }
             const totalInReport = this.exportItems.length;
-            pushRecentKafkaSession({
-              id,
-              label: `${data.session.granularity ?? this.granularity} · ${totalInReport} pts combined`,
-              completedPoints: totalInReport,
-              totalPoints: totalInReport,
-            });
-            this.reportNote = `Run finished — ${data.session.completedPoints} new point(s); combined report now has ${totalInReport} point(s).`;
-            this.refreshSavedSessions();
+            if (st === 'cancelled') {
+              this.reportNote = `Run cancelled — ${data.session.completedPoints} completed, ${data.session.queuedPoints} skipped.`;
+            } else {
+              pushRecentKafkaSession({
+                id,
+                label: `${data.session.granularity ?? this.granularity} · ${totalInReport} pts combined`,
+                completedPoints: totalInReport,
+                totalPoints: totalInReport,
+              });
+              this.reportNote = `Run finished — ${data.session.completedPoints} new point(s); combined report now has ${totalInReport} point(s).`;
+              this.refreshSavedSessions();
+            }
           }
         },
         error: () => {
+          if (generation !== this.pollGeneration) return;
           this.running = false;
-          if (this.pollTimer) clearInterval(this.pollTimer);
+          this.stopPolling();
         },
       });
     };
     tick();
     this.pollTimer = setInterval(tick, 2500);
+  }
+
+  cancelPipeline(): void {
+    if (!this.sessionId || !this.running) return;
+    this.api.cancelSession(this.sessionId).subscribe({
+      next: () => {
+        this.reportNote = 'Cancelling… queued points will stop; current AI pass may finish first.';
+      },
+      error: (e) => {
+        this.error = e?.error?.message ?? e?.message ?? 'Cancel failed';
+      },
+    });
   }
 
   /** Normalize API progress payload (camelCase + numeric defaults). */

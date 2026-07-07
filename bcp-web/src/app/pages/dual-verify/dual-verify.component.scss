@@ -100,6 +100,65 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+.gov-doc-bar {
+  margin: 0.35rem 0.5rem 0.25rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.gov-file-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 10px;
+  color: #94a3b8;
+  input[type='file'] {
+    font-size: 10px;
+    color: #cbd5e1;
+    max-width: 100%;
+  }
+}
+
+.gov-file-title {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.gov-file-name {
+  font-size: 10px;
+  color: #64748b;
+  word-break: break-all;
+}
+
+.gov-doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+.gov-source-note {
+  margin: 0.35rem 0 0;
+  font-size: 10px;
+  color: #5eead4;
+}
+
+.btn-sm.teal {
+  border-color: rgba(45, 212, 191, 0.35);
+  background: rgba(45, 212, 191, 0.12);
+  color: #5eead4;
+  &:hover { background: rgba(45, 212, 191, 0.22); }
+}
+
+.btn-sm.violet {
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(167, 139, 250, 0.12);
+  color: #c4b5fd;
+  &:hover { background: rgba(167, 139, 250, 0.22); }
+}
+
 .load-section {
   flex: 1.1;
   border-color: rgba(56, 189, 248, 0.2);
@@ -756,6 +815,46 @@ input[type='search'] {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .col-actions {
+    width: 2rem;
+    text-align: right;
+    padding-right: 0.35rem;
+  }
+}
+
+.report-card-wrap {
+  position: relative;
+
+  .btn-remove-item {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 1;
+  }
+}
+
+.report-detail-head {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.35rem 0.5rem 0;
+}
+
+.btn-remove-item {
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.08);
+  color: #fca5a5;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover { background: rgba(248, 113, 113, 0.18); color: #fecaca; }
+  &.compact {
+    padding: 0.1rem 0.35rem;
+    font-size: 11px;
+    line-height: 1.2;
+  }
 }
 
 .pill-status {
@@ -942,6 +1041,33 @@ input[type='search'] {
   font-size: 11px;
   cursor: pointer;
   &:hover { background: rgba(248, 113, 113, 0.18); }
+}
+
+.btn-cancel {
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover { background: rgba(248, 113, 113, 0.22); }
+  &.block { width: 100%; margin-top: 0.5rem; }
+}
+
+.btn-clear-all {
+  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.08);
+  color: #cbd5e1;
+  &:hover { background: rgba(148, 163, 184, 0.16); color: #f1f5f9; }
+}
+
+.btn-delete-session {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.1);
+  color: #fca5a5;
+  &:hover { background: rgba(248, 113, 113, 0.2); color: #fecaca; }
 }
 
 .empty,

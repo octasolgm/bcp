@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "properties": {
+    "points": {
+      "type": "array",
+      "description": "Every numbered government or regulatory requirement clause extracted from the document",
+      "items": {
+        "type": "object",
+        "properties": {
+          "point_id": {
+            "type": "string",
+            "description": "Official numbering such as 2.6.5, Article 3, TFS-REQ-03"
+          },
+          "title": {
+            "type": "string",
+            "description": "Short title of the requirement point"
+          },
+          "text": {
+            "type": "string",
+            "description": "Full verbatim requirement text including all sub-conditions"
+          },
+          "section": {
+            "type": "string",
+            "description": "Parent section or article reference"
+          },
+          "page_hint": {
+            "type": "integer",
+            "description": "Approximate page number in source document if visible"
+          },
+          "point_type": {
+            "type": "string",
+            "enum": ["mandatory", "informational", "definition"],
+            "description": "mandatory = enforceable requirement to compare; informational = introduction/purpose/background (skip compare); definition = glossary term only (skip compare)"
+          }
+        },
+        "required": ["point_id", "text"]
+      }
+    }
+  },
+  "required": ["points"]
+}

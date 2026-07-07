@@ -8,11 +8,29 @@ namespace Reguliq.Api.Services;
 public class GovPointsService(IWebHostEnvironment env, ILogger<GovPointsService> logger)
 {
     private List<GovPoint>? _cache;
+    private string _source = "seed";
+
+    /// <summary>Where active points came from: seed | db-cache | extract-live</summary>
+    public string Source => _source;
 
     public IReadOnlyList<GovPoint> GetAllPoints()
     {
         _cache ??= ExpandSubLeaves(LoadSeed());
         return _cache;
+    }
+
+    public void SetPoints(IReadOnlyList<GovPoint> points, string source)
+    {
+        _cache = ExpandSubLeaves(points.ToList());
+        _source = source;
+        logger.LogInformation("Gov points set from {Source} ({Count} raw)", source, points.Count);
+    }
+
+    public void ReloadFromSeed()
+    {
+        _cache = null;
+        _source = "seed";
+        _ = GetAllPoints();
     }
 
     public IReadOnlyList<GovPoint> FilterByGranularity(string granularity)

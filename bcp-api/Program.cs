@@ -58,17 +58,7 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-{
-    var raw = BcpConfiguration.GetString(
-        builder.Configuration,
-        "Bcp:CorsOrigins",
-        "BCP_CORS_ORIGINS",
-        "REGULIQ_CORS_ORIGINS")
-        ?? "http://localhost:3002,http://localhost:4200";
-    var origins = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
-}));
+CorsPolicySetup.AddBcpCors(builder.Services, builder.Configuration);
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
 {
@@ -90,6 +80,7 @@ builder.Services.Configure<LandingAiOptions>(o =>
 });
 builder.Services.AddScoped<LandingAiCacheRepository>();
 builder.Services.AddScoped<LandingAiCompareService>();
+builder.Services.AddScoped<LandingAiGovExtractService>();
 
 var httpTimeout = TimeSpan.FromMinutes(
     BcpConfiguration.GetInt(builder.Configuration, 15, "Bcp:HttpTimeoutMinutes", "BCP_HTTP_TIMEOUT_MINUTES"));
@@ -125,6 +116,7 @@ builder.Services.AddSingleton<SessionPdfCache>();
 builder.Services.AddSingleton<GovPointsService>();
 builder.Services.AddSingleton<LocalJobQueue>();
 builder.Services.AddSingleton<DualVerifyJobStageTracker>();
+builder.Services.AddSingleton<SessionCancellationTracker>();
 builder.Services.AddSingleton<DualVerifyJobProcessor>();
 builder.Services.AddHostedService<DualVerifyWorkerHosted>();
 builder.Services.AddScoped<DualVerifyStoreService>();
@@ -168,6 +160,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseRouting();
 app.UseCors();
 app.MapControllers();
 

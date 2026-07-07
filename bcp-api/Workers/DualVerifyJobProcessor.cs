@@ -18,6 +18,7 @@ public class DualVerifyJobProcessor(
     KafkaProducerService kafka,
     LocalJobQueue localQueue,
     DualVerifyJobStageTracker stageTracker,
+    SessionCancellationTracker cancellationTracker,
     IConfiguration config,
     ILogger<DualVerifyJobProcessor> logger)
 {
@@ -30,8 +31,11 @@ public class DualVerifyJobProcessor(
         var govPoints = scope.ServiceProvider.GetRequiredService<GovPointsService>();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        if (await ShouldCancelAsync(store, job, ct))
+            return;
+
         var existing = await store.GetPointJobAsync(job.SessionId, job.PointId, ct);
-        if (existing?.Status is "completed" or "running") return;
+        if (existing?.Status is "completed" or "running" or "cancelled") return;
 
         var now = DateTime.UtcNow;
         var pointJob = existing ?? new DualVerifyPointJob
@@ -57,18 +61,15 @@ public class DualVerifyJobProcessor(
 
         try
         {
-            SetStage(job, "Pass 1 — Landing AI compare…");
-            logger.LogInformation("Dual verify {Session}:{Point} — Pass 1 starting", job.SessionId, job.PointId);
-            var phase1 = await landingAi.ComparePointAsync(
-                point, job.InternalFileHash, job.InternalFileName,
-                ResolveInternalPdf(store, job), job.ForceRefresh, ct);
+            var (phase1, pass1Cached) = await GetOrRunPass1Async(
+                store, landingAi, job, pointJob, point, ct);
             if (string.IsNullOrWhiteSpace(phase1))
                 throw new InvalidOperationException("Landing AI returned empty Phase 1 message");
-            logger.LogInformation(
-                "Dual verify {Session}:{Point} — Pass 1 done in {Sec:F1}s",
-                job.SessionId, job.PointId, sw.Elapsed.TotalSeconds);
 
-            var phase1Sec = sw.Elapsed.TotalSeconds;
+            if (await ShouldCancelAsync(store, job, ct))
+                return;
+
+            var phase1Sec = pass1Cached ? 0 : sw.Elapsed.TotalSeconds;
             var markdown = await TryLoadInternalMarkdownAsync(landingAi, job, ct);
             var prompt = DualVerifyPromptBuilder.Build(point, phase1, markdown);
             var pdf = ResolveInternalPdf(store, job);
@@ -79,18 +80,19 @@ public class DualVerifyJobProcessor(
             string phase2;
             if (!string.IsNullOrWhiteSpace(markdown) && markdown.Length > 100)
             {
-                SetStage(job, "Pass 2 — Gemini (text)…");
+                SetStage(job, pass1Cached ? "Pass 2 — Gemini (resume, text)…" : "Pass 2 — Gemini (text)…");
                 logger.LogInformation(
-                    "Dual verify {Session}:{Point} — Pass 2 text mode ({Model})",
-                    job.SessionId, job.PointId, job.Phase2Model);
+                    "Dual verify {Session}:{Point} — Pass 2 text mode ({Model}{Resume})",
+                    job.SessionId, job.PointId, job.Phase2Model, pass1Cached ? ", Pass 1 cached" : "");
                 phase2 = await gemini.AnalyzeTextAsync(prompt, job.Phase2Model, ct);
             }
             else
             {
-                SetStage(job, "Pass 2 — Gemini (PDF)…");
+                SetStage(job, pass1Cached ? "Pass 2 — Gemini (resume, PDF)…" : "Pass 2 — Gemini (PDF)…");
                 logger.LogInformation(
-                    "Dual verify {Session}:{Point} — Pass 2 PDF mode ({Model}, {Kb} KB)",
-                    job.SessionId, job.PointId, job.Phase2Model, (pdf?.Length ?? 0) / 1024);
+                    "Dual verify {Session}:{Point} — Pass 2 PDF mode ({Model}, {Kb} KB{Resume})",
+                    job.SessionId, job.PointId, job.Phase2Model, (pdf?.Length ?? 0) / 1024,
+                    pass1Cached ? ", Pass 1 cached" : "");
                 phase2 = await gemini.AnalyzeWithPdfAsync(pdf!, job.InternalFileName, prompt, job.Phase2Model, ct);
             }
 
@@ -140,6 +142,75 @@ public class DualVerifyJobProcessor(
 
     private void SetStage(DualVerifyJobMessage job, string stage) =>
         stageTracker.Set(job.SessionId, job.PointId, stage);
+
+    /// <summary>Run Pass 1 or reuse cached Landing AI output saved on a prior attempt.</summary>
+    private async Task<(string Phase1, bool Cached)> GetOrRunPass1Async(
+        DualVerifyStoreService store,
+        LandingAiCompareService landingAi,
+        DualVerifyJobMessage job,
+        DualVerifyPointJob pointJob,
+        GovPoint point,
+        CancellationToken ct)
+    {
+        if (!job.ForceRefresh && !string.IsNullOrWhiteSpace(pointJob.LandingMessage))
+        {
+            logger.LogInformation(
+                "Dual verify {Session}:{Point} — Pass 1 skipped (cached Landing AI result)",
+                job.SessionId, job.PointId);
+            return (pointJob.LandingMessage, true);
+        }
+
+        SetStage(job, "Pass 1 — Landing AI compare…");
+        logger.LogInformation("Dual verify {Session}:{Point} — Pass 1 starting", job.SessionId, job.PointId);
+        var phase1 = await landingAi.ComparePointAsync(
+            point, job.InternalFileHash, job.InternalFileName,
+            ResolveInternalPdf(store, job), job.ForceRefresh, ct);
+        logger.LogInformation(
+            "Dual verify {Session}:{Point} — Pass 1 done",
+            job.SessionId, job.PointId);
+
+        pointJob.LandingMessage = phase1;
+        pointJob.UpdatedAt = DateTime.UtcNow;
+        await store.SavePointJobAsync(pointJob, ct);
+        return (phase1, false);
+    }
+
+    private async Task<bool> ShouldCancelAsync(
+        DualVerifyStoreService store,
+        DualVerifyJobMessage job,
+        CancellationToken ct)
+    {
+        if (cancellationTracker.IsCancelled(job.SessionId))
+        {
+            await MarkPointCancelledAsync(store, job, ct);
+            return true;
+        }
+
+        var session = await store.GetSessionAsync(job.SessionId, ct);
+        if (session?.Status == "cancelled")
+        {
+            cancellationTracker.MarkCancelled(job.SessionId);
+            await MarkPointCancelledAsync(store, job, ct);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static async Task MarkPointCancelledAsync(
+        DualVerifyStoreService store,
+        DualVerifyJobMessage job,
+        CancellationToken ct)
+    {
+        var pointJob = await store.GetPointJobAsync(job.SessionId, job.PointId, ct);
+        if (pointJob == null || pointJob.Status is "completed" or "cancelled") return;
+
+        pointJob.Status = "cancelled";
+        pointJob.ErrorMessage = "Cancelled by user";
+        pointJob.UpdatedAt = DateTime.UtcNow;
+        await store.SavePointJobAsync(pointJob, ct);
+        await store.UpdateSessionCountsAsync(job.SessionId, ct);
+    }
 
     private byte[]? ResolveInternalPdf(DualVerifyStoreService store, DualVerifyJobMessage job)
     {
@@ -210,6 +281,7 @@ public class DualVerifyJobProcessor(
             pointJob.Attempt = retryJob.Attempt;
             pointJob.ErrorMessage = message;
             pointJob.UpdatedAt = DateTime.UtcNow;
+            // LandingMessage kept — retry resumes at Pass 2 (Gemini).
             await store.SavePointJobAsync(pointJob, ct);
 
             var delayMs = kafkaConfig.IsEnabled() ? 5000 * retryJob.Attempt : 3000 * retryJob.Attempt;
@@ -241,6 +313,7 @@ public class DualVerifyJobProcessor(
         pointJob.ErrorMessage = message;
         pointJob.CompletedAt = DateTime.UtcNow;
         pointJob.UpdatedAt = DateTime.UtcNow;
+        // Keep LandingMessage when Pass 1 succeeded — UI can show partial results on retry.
         await store.SavePointJobAsync(pointJob, ct);
         await store.UpdateSessionCountsAsync(job.SessionId, ct);
 
@@ -255,6 +328,7 @@ public class DualVerifyJobProcessor(
         var m = message.ToLowerInvariant();
         return m.Contains("timeout") || m.Contains("elapsing") || m.Contains("canceled")
             || m.Contains("429") || m.Contains("503") || m.Contains("502")
+            || m.Contains("serviceunavailable") || m.Contains("too many requests")
             || m.Contains("quota") || m.Contains("rate limit") || m.Contains("econnreset")
             || m.Contains("fetch failed") || m.Contains("network") || m.Contains("socket");
     }

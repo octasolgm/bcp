@@ -85,6 +85,38 @@ public class DualVerifyStoreService(
         }
     }
 
+    public async Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await db.DualVerifySessions
+            .Include(s => s.PointJobs)
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session == null) return false;
+
+        db.DualVerifyPointJobs.RemoveRange(session.PointJobs);
+        db.DualVerifySessions.Remove(session);
+        await db.SaveChangesAsync(ct);
+
+        pdfCache.Remove(sessionId);
+        await DeleteDiskFileAsync(sessionId);
+        logger.LogInformation("Deleted dual verify session {SessionId}", sessionId);
+        return true;
+    }
+
+    private Task DeleteDiskFileAsync(Guid sessionId)
+    {
+        try
+        {
+            var path = Path.Combine(_dataDir, $"{sessionId}.json");
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Disk delete failed for {SessionId}", sessionId);
+        }
+        return Task.CompletedTask;
+    }
+
     public async Task UpdateSessionCountsAsync(Guid sessionId, CancellationToken ct = default)
     {
         var session = await GetSessionAsync(sessionId, ct);
@@ -95,7 +127,17 @@ public class DualVerifyStoreService(
         session.RunningPoints = points.Count(p => p.Status == "running");
         session.QueuedPoints = points.Count(p => p.Status == "queued");
         session.UpdatedAt = DateTime.UtcNow;
-        if (session.CompletedPoints + session.FailedPoints >= session.TotalPoints && session.TotalPoints > 0)
+
+        if (session.Status == "cancelled")
+        {
+            session.CompletedAt ??= DateTime.UtcNow;
+        }
+        else if (points.Any(p => p.Status == "cancelled"))
+        {
+            session.Status = "cancelled";
+            session.CompletedAt ??= DateTime.UtcNow;
+        }
+        else if (session.CompletedPoints + session.FailedPoints >= session.TotalPoints && session.TotalPoints > 0)
         {
             session.Status = session.FailedPoints > 0 && session.CompletedPoints == 0 ? "failed" : "completed";
             session.CompletedAt ??= DateTime.UtcNow;

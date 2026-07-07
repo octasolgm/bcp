@@ -152,9 +152,33 @@ export class ApiService {
   }
 
   getGovPoints() {
-    return this.http.get<{ points: GovPoint[]; message?: string }>(
-      `${this.base}/landing-ai/stored-points?docId=gov-tfs-guidelines`,
-    );
+    return this.http.get<{
+      points: GovPoint[];
+      pointCount?: number;
+      source?: string;
+      message?: string;
+    }>(`${this.base}/landing-ai/stored-points?docId=gov-tfs-guidelines`);
+  }
+
+  loadGovPointsFromDb(docId = 'gov-tfs-guidelines') {
+    return this.http.post<{
+      success: boolean;
+      source: string;
+      pointCount: number;
+      message?: string;
+    }>(`${this.base}/landing-ai/gov-points/load-from-db?docId=${docId}`, {});
+  }
+
+  extractGovPoints(form: FormData) {
+    return this.http.post<{
+      success: boolean;
+      cached?: boolean;
+      pointCount: number;
+      points: GovPoint[];
+      creditUsage?: number;
+      source?: string;
+      message?: string;
+    }>(`${this.base}/landing-ai/extract-gov-points`, form);
   }
 
   seedBuiltin() {
@@ -186,5 +210,24 @@ export class ApiService {
       );
     }
     return this.http.post(`${this.base}/dual-verify-kafka/jobs/${sessionId}/retry-failed`, {});
+  }
+
+  cancelSession(sessionId: string) {
+    return this.http.post<ApiResponse<{ cancelled: boolean }>>(
+      `${this.base}/dual-verify-kafka/jobs/${sessionId}/cancel`,
+      {},
+    );
+  }
+
+  deleteDualVerifySession(sessionId: string) {
+    return this.http.delete<ApiResponse<{ deleted: boolean }>>(
+      `${this.base}/dual-verify-kafka/jobs/${sessionId}`,
+    );
+  }
+
+  deleteComplianceSession(id: string) {
+    return this.http.delete<{ success: boolean; deleted?: boolean; message?: string }>(
+      `${this.base}/landing-ai/compliance-sessions/${id}`,
+    );
   }
 }

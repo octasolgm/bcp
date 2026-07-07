@@ -42,7 +42,9 @@ cd bcp-api/scripts
 | `Gemini__ApiKey` | your key |
 | `LandingAi__ApiKey` | your Vision Agent key |
 | `Bcp__CorsOrigins` | `https://YOUR-bcp-web.azurewebsites.net,http://localhost:3002` |
-| `KAFKA_ENABLED` | `false` |
+| `KAFKA_ENABLED` | `true` (same as monorepo `reguliq-dotnet`; requires Event Hubs connection strings in secrets) |
+
+**Kafka on Azure:** `sync-secrets.ps1` copies `KAFKA_*` connection strings from `appsettings.Development.json` into `appsettings.Secrets.json` on publish — same as monorepo `.env`. Health should show `"transport":"kafka"`.
 
 **Important:** `appsettings.json` in the published package has an **empty** `ConnectionStrings:PostgreSQL`. Either:
 
