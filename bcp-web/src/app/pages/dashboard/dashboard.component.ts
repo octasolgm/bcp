@@ -9,6 +9,7 @@ import {
   DualVerifyHealth,
   DualVerifySessionSummary,
 } from '../../services/api.service';
+import { environment } from '../../../environments/environment';
 import { complianceKeyFromBreakdownName } from '../../../lib/dual-verify-workflow';
 import type { ComplianceStatusFilter } from '../../../lib/dual-verify-workflow';
 import {
@@ -76,6 +77,8 @@ type RecentRow = {
   styleUrl: './dashboard.component.scss',
 })
 export class DashboardComponent implements OnInit {
+  readonly apiUrl = environment.apiUrl;
+
   seed: DashboardMetrics | null = null;
   health: DualVerifyHealth | null = null;
   sessions: DualVerifySessionSummary[] = [];
@@ -110,7 +113,8 @@ export class DashboardComponent implements OnInit {
         },
         error: () => {
           this.healthError =
-            'Cannot reach BCP API. Start bcp-api on http://localhost:5100.';
+            `Cannot reach BCP API at ${environment.apiUrl}. ` +
+            'If the API is up, republish bcp-api with CORS for this web URL.';
         },
       });
   }

@@ -1,11 +1,10 @@
-/** Local development — `ng serve` uses this file */
+import { LOCAL_API_URL, resolveApiUrl } from './api-url';
+
+/** Local development — `ng serve` on http://localhost:3002 */
 export const environment = {
   production: false,
-  /** Reguliq .NET API (primary) */
-  apiUrl: 'http://localhost:5100',
-  /**
-   * Optional NestJS API — only for legacy Kafka sessions started from Next.js.
-   * Leave empty to stop all :4000 requests.
-   */
+  apiUrl: resolveApiUrl(),
+  /** Override when testing local web against Azure API only */
+  localApiUrl: LOCAL_API_URL,
   nestjsApiUrl: '',
 };

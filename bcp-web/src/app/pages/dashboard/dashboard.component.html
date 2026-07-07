@@ -8,7 +8,7 @@
 
 @if (healthError) {
   <div class="alert error">{{ healthError }}</div>
-  <p class="muted">Health check: <code>curl http://localhost:5100/dual-verify-kafka/health</code></p>
+  <p class="muted">Health check: <code>curl {{ apiUrl }}/dual-verify-kafka/health</code></p>
 }
 
 @if (!healthLoading && persistenceMode === 'memory') {

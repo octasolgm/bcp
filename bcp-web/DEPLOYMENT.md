@@ -12,19 +12,18 @@ Angular builds to static files — you deploy the **`dist`** output, not the who
 | Runtime | .NET 8 or Node 20 (Linux) — static files only |
 | OS | Windows (IIS) or Linux |
 
-## 2. Set production API URL (before build)
+## 2. API URL (automatic — no manual switch)
 
-Edit `src/environments/environment.production.ts`:
+`src/environments/api-url.ts` picks the API from **where you open the web app**:
 
-```typescript
-export const environment = {
-  production: true,
-  apiUrl: 'https://bcp-api-dev.azurewebsites.net',
-  nestjsApiUrl: '',
-};
-```
+| You open | API used |
+|----------|----------|
+| `http://localhost:3002` (`ng serve`) | `http://localhost:5100` |
+| `https://bcp-web-dev.azurewebsites.net` | `https://bcp-api-dev.azurewebsites.net` |
 
-This is baked into the build — change it **before** `npm run build:prod`.
+Run `npm run build:prod` before deploy — the same build works for both hosts.
+
+Optional override for local web → Azure API testing: temporarily set `apiUrl` in `environment.ts` to the Azure URL.
 
 ## 3. Build + zip (one command)
 
