@@ -63,6 +63,10 @@ public class LocalDataMigrationService(
                 if (bundle?.Session == null)
                     continue;
 
+                NormalizeTimestamps(bundle.Session);
+                foreach (var point in bundle.Points ?? [])
+                    NormalizeTimestamps(point);
+
                 if (await UpsertSessionAsync(bundle.Session, ct))
                     count++;
 
@@ -106,6 +110,7 @@ public class LocalDataMigrationService(
             {
                 var points = session.PointJobs.ToList();
                 session.PointJobs = new List<DualVerifyPointJob>();
+                NormalizeTimestamps(session);
 
                 if (await UpsertSessionAsync(session, ct))
                     count++;
@@ -114,6 +119,7 @@ public class LocalDataMigrationService(
                 {
                     point.SessionId = session.Id;
                     point.Session = null!;
+                    NormalizeTimestamps(point);
                     if (await UpsertPointJobAsync(point, ct))
                         count++;
                 }
@@ -122,6 +128,7 @@ public class LocalDataMigrationService(
             var compliance = await sqlite.ComplianceSessions.AsNoTracking().ToListAsync(ct);
             foreach (var row in compliance)
             {
+                NormalizeTimestamps(row);
                 if (await UpsertComplianceSessionAsync(row, ct))
                     count++;
             }
@@ -206,4 +213,36 @@ public class LocalDataMigrationService(
         public DualVerifySession? Session { get; set; }
         public List<DualVerifyPointJob>? Points { get; set; }
     }
+
+    private static void NormalizeTimestamps(DualVerifySession session)
+    {
+        session.CreatedAt = ToUtc(session.CreatedAt);
+        session.UpdatedAt = ToUtc(session.UpdatedAt);
+        if (session.CompletedAt.HasValue)
+            session.CompletedAt = ToUtc(session.CompletedAt.Value);
+    }
+
+    private static void NormalizeTimestamps(DualVerifyPointJob job)
+    {
+        job.CreatedAt = ToUtc(job.CreatedAt);
+        job.UpdatedAt = ToUtc(job.UpdatedAt);
+        if (job.StartedAt.HasValue)
+            job.StartedAt = ToUtc(job.StartedAt.Value);
+        if (job.CompletedAt.HasValue)
+            job.CompletedAt = ToUtc(job.CompletedAt.Value);
+    }
+
+    private static void NormalizeTimestamps(ComplianceSession row)
+    {
+        row.CreatedAt = ToUtc(row.CreatedAt);
+        row.UpdatedAt = ToUtc(row.UpdatedAt);
+    }
+
+    private static DateTime ToUtc(DateTime value) =>
+        value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+        };
 }

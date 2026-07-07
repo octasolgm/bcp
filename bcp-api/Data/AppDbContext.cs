@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Reguliq.Api.Data.Entities;
 
 namespace Reguliq.Api.Data;
@@ -32,7 +33,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Phase2Model).HasColumnName("phase2_model");
             e.Property(x => x.Pipeline).HasColumnName("pipeline");
             e.Property(x => x.ComplianceSessionKey).HasColumnName("compliance_session_key");
-            e.Property(x => x.SummaryJson).HasColumnName("summary_json");
+            e.Property(x => x.SummaryJson).HasColumnName("summary_json").HasColumnType("jsonb");
             e.Property(x => x.Transport).HasColumnName("transport");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
@@ -54,7 +55,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.MaxAttempts).HasColumnName("max_attempts");
             e.Property(x => x.LandingMessage).HasColumnName("landing_message");
             e.Property(x => x.LlmMessage).HasColumnName("llm_message");
-            e.Property(x => x.AgreementJson).HasColumnName("agreement_json");
+            e.Property(x => x.AgreementJson).HasColumnName("agreement_json").HasColumnType("jsonb");
             e.Property(x => x.ErrorMessage).HasColumnName("error_message");
             e.Property(x => x.StartedAt).HasColumnName("started_at");
             e.Property(x => x.CompletedAt).HasColumnName("completed_at");
@@ -76,12 +77,46 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.TotalGovPoints).HasColumnName("total_gov_points");
             e.Property(x => x.ComparedPoints).HasColumnName("compared_points");
             e.Property(x => x.SkippedPoints).HasColumnName("skipped_points");
-            e.Property(x => x.SkippedJson).HasColumnName("skipped_json");
-            e.Property(x => x.ResultsJson).HasColumnName("results_json");
-            e.Property(x => x.SummaryJson).HasColumnName("summary_json");
+            e.Property(x => x.SkippedJson).HasColumnName("skipped_json").HasColumnType("jsonb");
+            e.Property(x => x.ResultsJson).HasColumnName("results_json").HasColumnType("jsonb");
+            e.Property(x => x.SummaryJson).HasColumnName("summary_json").HasColumnType("jsonb");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             e.HasIndex(x => x.SessionKey).IsUnique();
         });
+
+        ConfigureUtcDateTimes(modelBuilder);
     }
+
+    private static void ConfigureUtcDateTimes(ModelBuilder modelBuilder)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTime))
+                {
+                    property.SetValueConverter(
+                        new ValueConverter<DateTime, DateTime>(
+                            v => ToUtc(v),
+                            v => DateTime.SpecifyKind(v, DateTimeKind.Utc)));
+                }
+                else if (property.ClrType == typeof(DateTime?))
+                {
+                    property.SetValueConverter(
+                        new ValueConverter<DateTime?, DateTime?>(
+                            v => v.HasValue ? ToUtc(v.Value) : v,
+                            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v));
+                }
+            }
+        }
+    }
+
+    private static DateTime ToUtc(DateTime value) =>
+        value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+        };
 }

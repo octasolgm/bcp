@@ -4,6 +4,8 @@ using Reguliq.Api.Infrastructure;
 using Reguliq.Api.Services;
 using Reguliq.Api.Workers;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 var dbConfig = DatabaseConfig.Resolve(builder.Configuration, builder.Environment);
