@@ -1,5 +1,6 @@
 # Secrets (local dev only — copy from appsettings.Development.example.json)
 bcp-api/appsettings.Development.json
+bcp-api/appsettings.Secrets.json
 
 # .NET build + runtime artifacts
 bcp-api/bin/

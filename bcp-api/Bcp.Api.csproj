@@ -25,6 +25,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+    <Content Update="appsettings.Secrets.json" CopyToPublishDirectory="PreserveNewest" />
     <None Update="SeedData\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -32,5 +34,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <Target Name="SyncAppSettingsSecrets" BeforeTargets="PrepareForPublish">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)scripts\sync-secrets.ps1&quot;"
+          Condition="Exists('$(ProjectDir)appsettings.Development.json')" />
+  </Target>
 
 </Project>

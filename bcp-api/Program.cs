@@ -9,7 +9,24 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
-var dbConfig = DatabaseConfig.Resolve(builder.Configuration, builder.Environment);
+// Optional local secrets file — published to Azure with deploy (gitignored). See appsettings.Secrets.example.json.
+builder.Configuration.AddJsonFile("appsettings.Secrets.json", optional: true, reloadOnChange: false);
+
+AzureHosting.ConfigureWebHost(builder);
+
+DatabaseConfig dbConfig;
+try
+{
+    dbConfig = DatabaseConfig.Resolve(builder.Configuration, builder.Environment);
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine();
+    Console.Error.WriteLine("=== BCP API STARTUP FAILED ===");
+    Console.Error.WriteLine(ex.Message);
+    Console.Error.WriteLine("==============================");
+    throw;
+}
 Directory.CreateDirectory(Path.Combine(builder.Environment.ContentRootPath, "data"));
 
 if (!string.IsNullOrWhiteSpace(dbConfig.PostgresConnection))
@@ -160,15 +177,5 @@ app.MapGet("/", () => Results.Ok(new
     version = "1.0.0",
     persistence = dbConfig.UsePostgres ? "supabase" : "sqlite",
 }));
-
-var port = BcpConfiguration.GetString(
-    builder.Configuration,
-    "Bcp:ApiPort",
-    "BCP_API_PORT",
-    "REGULIQ_API_PORT",
-    "WEBSITES_PORT",
-    "PORT")
-    ?? "5100";
-app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
