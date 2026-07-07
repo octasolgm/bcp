@@ -1,0 +1,685 @@
+{
+    "success": true,
+    "cached": false,
+    "fileName": "TFS Guidelines.pdf",
+    "fileHash": "c84713f9aacd18415680356aeae47bcacff9c17458b5595b575400b12fe8f2ff",
+    "schemaKey": "gov_requirement_points",
+    "pointCount": 96,
+    "points": [
+        {
+            "point_id": "1.2.",
+            "title": "Applicability",
+            "text": "Unless otherwise noted, this Guidance applies to all natural and legal persons, which are licensed and/or supervised by CBUAE, in the following categories:\n\n* National banks, branches of foreign banks, exchange houses, finance companies, payment service providers, registered hawala providers and other LFIs; and\n* Insurance companies, agencies, and brokers.",
+            "section": "1.2. Applicability",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.",
+            "title": "SANCTIONS COMPLIANCE PROGRAM",
+            "text": "LFIs should take appropriate steps to develop, implement and regularly update an appropriate Sanctions Compliance Program (SCP) in order to fulfil their obligation to comply with the provisions of the Cabinet Decision 74 as well as with the directives of the relevant competent authorities and supervisory authorities in regard to sanctions issued by the UNSC. An appropriate SCP also assists LFIs to manage their exposure to the risks associated with international financial sanctions programs and restrictive measures implemented by other countries. LFIs should design and update their SCP so that its scope is proportionate to the level of their risk profile, tailored to their nature, scale, and complexity, appropriate for the products and services they offer, the customers, clients, and partner relationships they maintain, and the geographic regions in which they operate. LFIs should ensure the SCP includes the eight (8) essential components: senior management commitment, risk assessment, sanctions risk appetite, internal controls, policies and procedures, training, independent audit and testing of processes and systems, and record keeping.",
+            "section": "2. SANCTIONS COMPLIANCE PROGRAM",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.1.1",
+            "title": "Review and approval of SCP",
+            "text": "Ensure that senior management has reviewed and approved the organization's SCP.",
+            "section": "2.1. Senior Management Commitment",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.1.2",
+            "title": "Review and approval of risk assessment methodology and assessments",
+            "text": "Ensure that senior management has reviewed and approved the methodology used for undertaking the risk assessment and reviewed and approved the LFI's risk assessments at least on an annual basis.",
+            "section": "2.1. Senior Management Commitment",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.1.3",
+            "title": "Designation of responsible personnel",
+            "text": "Clearly designate the personnel responsible for ensuring proper implementation of the SCP, including day-to-day operations, and compliance with statutory obligations. This personnel should have the appropriate competencies and experience, or be appropriately trained, to perform the duties and responsibilities associated with this role, has sufficient seniority, and is delegated sufficient authority and autonomy in order to discharge the LFI's responsibilities. The personnel may have other responsibilities in the LFI, provided that these responsibilities do not conflict with their role in implementing the SCP. For example, large LFIs may choose to hire a dedicated sanctions compliance officer, while smaller LFIs may choose a specific officer or manager currently working at the LFI to be responsible for the SCP in addition to their other duties.",
+            "section": "2.1. Senior Management Commitment",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.1.4",
+            "title": "Direct reporting lines to senior management",
+            "text": "Ensure the existence of direct reporting lines between the personnel responsible for the SCP and senior management to facilitate the escalation of financial sanctions issues, including regular and periodic meetings.",
+            "section": "2.1. Senior Management Commitment",
+            "page_hint": 2
+        },
+        {
+            "point_id": "2.1.5",
+            "title": "Integration of SCP and resource allocation",
+            "text": "Ensure that the SCP is fully integrated into the organization's daily operations and allocated adequate resources in the form of human capital, expertise, information technology, and other resources as appropriate.",
+            "section": "2.1. Senior Management Commitment",
+            "page_hint": 2
+        },
+        {
+            "point_id": "2.1.6",
+            "title": "Recognize compliance failings and implement corrective measures",
+            "text": "Recognize compliance failings and implement necessary measures to reduce future incidents, including through addressing root causes and implementing systemic solutions.",
+            "section": "2.1. Senior Management Commitment",
+            "page_hint": 2
+        },
+        {
+            "point_id": "2.2.1",
+            "title": "Determining potential risks",
+            "text": "In determining potential risks, LFIs should take into account, to the extent relevant, any vulnerabilities relating to: * its customers, supply chain, intermediaries, and counterparties; * its products and services, including how and where such items fit into other financial or commercial products, services, networks, or systems; * the geographic locations of the organization, as well as its customers, supply chain, intermediaries, and counterparties; * its distribution channels and business partners; * the complexity and volume of its transactions; * the development of new products and business practices including new delivery mechanisms, channels, and partners; and * the use of new or developing technologies for both new and pre-existing products and services.",
+            "section": "2.2. Risk Assessment",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.2.2",
+            "title": "Documenting risk assessment operations",
+            "text": "LFIs should document risk assessment operations, maintain them up-to-date on an on-going basis, and make them available upon request.",
+            "section": "2.2. Risk Assessment",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.2.3",
+            "title": "Informing SCP policies with risk assessment results",
+            "text": "The results of a risk assessment are integral to informing the SCP's policies, procedures, internal controls, and training in order to effectively mitigate risks.",
+            "section": "2.2. Risk Assessment",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.2.4",
+            "title": "Developing and documenting risk assessment methodologies",
+            "text": "LFIs should develop and thoroughly document their risk assessment methodologies to identify, analyze, and address relevant risks. The methodologies should reflect the conduct and root cause of any violations or systemic deficiencies identified.",
+            "section": "2.2. Risk Assessment",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.3",
+            "title": "Sanctions Risk appetite",
+            "text": "LFIs should develop and maintain a comprehensive written sanctions risk appetite approved by the LFI's senior management and embedded through policies, procedures, and screening systems parameterization. The sanctions risk appetite should specify which sanctions regimes are applicable to the LFI (for example UNSCR, OFAC, EU, UK etc.). LFIs should specify their policy on treating of interests, properties, assets, or entities that are owned or controlled 50% or more by a Listed Person. LFIs should specify their approach on mitigating the risk of breaching of unilateral sanctions, especially in the context of sanctions that may have extra-territorial implications or the Listed Persons may or may not have a presence in UAE (for example secondary sanctions by OFAC). LFIs should specify their approach on screening of alias names such as one word synonyms, vessel names or paper based instruments. LFIs should identify and document any exceptions to sanctions risk appetite or deviations from their policies and procedures; these should be approved by senior management.",
+            "section": "2.3",
+            "page_hint": 53
+        },
+        {
+            "point_id": "2.4",
+            "title": "Internal Controls",
+            "text": "Internal controls are the mechanisms, rules, and procedures implemented to help ensure the integrity and effectiveness of an LFI's SCP. As required by Cabinet Decision 74, LFIs must have appropriate internal controls in place, including the most recent publication of Targeted Financial Sanctions of the UN Consolidated List and the Local Terrorist List. Accordingly, LFIs must maintain strong and clear internal controls that ensure the effective implementation of their SCP, including policies, procedures, processes, and systems.",
+            "section": "2.4. Internal Controls",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.4.1",
+            "title": "Documenting System Configuration for Sanctions Risk Detection",
+            "text": "LFIs should document how their processes and systems are configured in order to demonstrate that their configuration is reasonably expected to detect and manage the specific sanctions risks to which the LFI is exposed to and ensure transparency of any system limitations or risk-based decisions that the screening controls are not designed to detect.",
+            "section": "2.4. Internal Controls",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.4.2",
+            "title": "Remediation of SPC Compliance Weaknesses",
+            "text": "LFIs should establish a mechanism to ensure that, upon learning of a weakness pertaining to its SPC compliance, immediate and effective action is taken to identify compliance gaps and their root causes, including all program-related software, systems, and other technology, and remediate them by implementing systemic solutions to reduce the chances of future failures.",
+            "section": "2.4. Internal Controls",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.5",
+            "title": "Develop and Maintain Policies and Procedures",
+            "text": "LFIs should develop and maintain clear and comprehensive written policies and procedures to enable them to manage and mitigate the sanctions risks they have identified, commensurate with the nature and size of their business.",
+            "section": "2.5. Policies and Procedures",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.5.1",
+            "title": "Policies and Procedures Approval and Characteristics",
+            "text": "LFIs should ensure that policies and procedures are approved by senior management and that they: Enable the LFI to clearly and effectively identify, prevent, escalate, and report suspicious transactions and activities; Are tailored to the organization and capture the organization's day-to-day operations and processes; Are easy to follow and designed to prevent employees from engaging in misconduct; Prohibit employees from, directly or indirectly, informing the customer or any third party that freezing or any Other Measures shall be implemented; Require enhanced due diligence to be conducted on all customers and transactions that are assessed to be high-risk for TF and PF; and Contain sufficient detail of their record keeping obligations.",
+            "section": "2.5. Policies and Procedures",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.5.2",
+            "title": "Effective and Consistent Implementation of Policies",
+            "text": "LFIs should ensure the effective and consistent implementation of the policies and procedures related to the SCP across their organizations, including branches, Subsidiaries, and other entities in which LFIs hold a majority interest.",
+            "section": "2.5. Policies and Procedures",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.5.3",
+            "title": "Communicate SCP Policies and Procedures",
+            "text": "LFIs should clearly communicate the SCP's policies and procedures, including for record keeping, to all relevant employees and external or outsourced service providers.",
+            "section": "2.5. Policies and Procedures",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.5.4",
+            "title": "Review and Update Policies and Procedures",
+            "text": "LFIs should review and update policies and procedures in a timely manner in response to events or emerging risks and ensure that such updates are communicated to employees on a timely basis.",
+            "section": "2.5. Policies and Procedures",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.5.5",
+            "title": "Formal Annual Review Process",
+            "text": "LFIs should implement a formal review process at least annually of the policies and procedures at appropriate levels subject to approval where changes are material.",
+            "section": "2.5. Policies and Procedures",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.5.6",
+            "title": "Document Exceptions or Deviations",
+            "text": "LFIs should identify and document any exceptions or deviations from the policies and procedures related to the SCP; these should be approved by senior management.",
+            "section": "2.5. Policies and Procedures",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2.6.1",
+            "title": "Proportionate Scope and Nature",
+            "text": "Be of a scope and nature proportionate to the LFI's overall risk profile;",
+            "section": "2.6. Training",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.6.2",
+            "title": "Role-Specific Training",
+            "text": "Be specific to the role carried out by the employee, with tailored training for employees engaged in sensitive roles;",
+            "section": "2.6. Training",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.6.3",
+            "title": "Timely and Annual Training",
+            "text": "Provide training to all appropriate employees and personnel upon onboarding in a timely manner and at least annually thereafter;",
+            "section": "2.6. Training",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.6.4",
+            "title": "Accountability Through Assessments",
+            "text": "Hold employees accountable for training through assessments;",
+            "section": "2.6. Training",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.6.5",
+            "title": "Corrective Actions for Deficiencies",
+            "text": "Include measures to take immediate and effective action to provide corrective training or other corrective actions to relevant personnel upon learning of a confirmed negative risk assessment result or audit finding, or other deficiency pertaining to the SPC.",
+            "section": "2.6. Training",
+            "page_hint": 0
+        },
+        {
+            "point_id": "2.7",
+            "title": "Independent Audit and Testing of Processes and Systems",
+            "text": "Independent audit helps the LFI assess the effectiveness of current processes, including by assessing the sufficiency of the program and by checking for any inconsistencies between the policy and procedures and day-to-day operations in order to identify SCP weaknesses and deficiencies. Independent audits should:\n\n* Be undertaken regularly to review and assess the effectiveness of the financial sanctions policies, procedures, systems and controls, and their compliance with the LFI's obligations;\n* Be undertaken by the internal audit function, or by a competent independent external auditor, or both, and resourced with skilled and competent staff that understand the SCP of the LFI; and\n* Be commensurate to the level and sophistication of the SCP and updated to account for changing risk assessments or sanctions environments.\n\nLFIs should ensure that the audit function is independent of the audited activities and functions, and has sufficient authority, skills, expertise, and resources within the organization. LFIs should immediately address negative audit findings and take the necessary steps to identify and implement compensating controls until the root cause is remediated.\n\nIn addition, LFIs should deploy an independent risk-based testing regime to regularly test their processes' and systems' adequacy and expected outcomes, as well as to assess their effectiveness in managing the specific risks articulated in the risk assessment. Regular testing of processes and systems ensures that the screening application generates expected alerts, threshold settings and/or screening rules to forego or suppress undesirable alerts in accordance with the LFI's risk appetite. Regular testing should be supported by metrics, analysis, and reporting, and be reviewed by the personnel responsible for the SPC to determine whether risk acceptance or remediation is appropriate with respect to any relevant findings. Regular testing could be undertaken by the internal audit function, or by a competent external provider, or both.",
+            "section": "2.7",
+            "page_hint": 65
+        },
+        {
+            "point_id": "2.8",
+            "title": "Record Keeping",
+            "text": "According to the AML-CFT Law and the AML-CFT Decision, LFIs must maintain detailed records associated with their ML/FT risk assessment and mitigation measures as well as all records, documents, data and statistics for all financial transactions, all records obtained through CDD measures for both the originators and the beneficiaries, account files and business correspondence, and copies of personal identification documents, including STRs and results of any analysis performed. LFIs must maintain the records in an organized manner so as to permit data analysis and the tracking of financial transactions. Records should be sufficient to permit reconstruction of individual transactions so as to provide, if necessary, evidence for prosecution of criminal activity. LFIs must make the records available to the competent authorities immediately upon request. The statutory retention period for all records is at least five (5) years, from the date of completion of the transaction or termination of the business relationship, or from the date of completion of the inspection by the CBUAE, or from the date of issuance of a final judgment of the competent judicial authorities, all depending on the circumstances.",
+            "section": "2.8. Record Keeping",
+            "page_hint": 0
+        },
+        {
+            "point_id": "Article 21.2",
+            "title": "Screening Operations",
+            "text": "Under Article 21.2 of Cabinet Decision 74, LFIs must regularly screen their databases and transactions against names on the UN Consolidated List and the Local Terrorist List, and also immediately when notified of any changes to any of such lists, provided that such screening includes the following: - Searching their customer databases - Search for the names of parties to any transactions. - Search for the names of potential customers. - Search for the names of beneficial owners. - Search for names of persons and organizations with which they have a direct or indirect relationship. - Continuously search their customer database before conducting any transaction, or entering into a serious business relationship with any person, to ensure that their name is not listed on the UN Consolidated List or the Local Terrorist List.",
+            "section": "3. SCREENING OPERATIONS",
+            "page_hint": 0
+        },
+        {
+            "point_id": "3.1",
+            "title": "Prohibition of Sanctions Evasion Activities",
+            "text": "LFIs should also prohibit activity that aims to evade or circumvent sanctions prohibitions. Accordingly, LFIs must not engage in activities that could be part of a sanctions evasion scheme, including but not limited to: * Tipping off customers or counterparties; * Omitting, withholding, altering, misstating, or removing any information about customers or transactions; * Accepting incomplete (when the customer deliberately does not provide an identifier to obscure being matched with the sanctions lists, such as a date of birth or address) or false information (when the customer provides a false identifier that would not match with the sanctions lists listed details, such as a wrong date of birth); * Providing false or incomplete information to counterparties or sanctions-imposing authorities; or * Any other activities that would cause a conflict with or failure to comply with this Guidance.",
+            "section": "3.1. Sanctions Evasion",
+            "page_hint": 74
+        },
+        {
+            "point_id": "Article 21",
+            "title": "LFIs must register for notifications",
+            "text": "In addition, under Article 21 of Cabinet Decision 74, LFIs must register on the Executive Office's website in order to receive automated email notifications with updated and timely information about the Listing and de-Listing of individuals or entities in the Local Terrorist List and in the UN Consolidated List.",
+            "section": "3.2. Maintenance of UN Consolidated List and Local Terrorist List, Cabinet Decision 74",
+            "page_hint": 0
+        },
+        {
+            "point_id": "3.3",
+            "title": "Customer Screening",
+            "text": "Screening processes should be conducted at various stages of the customer lifecycle to include: Periodic name screening: A change to either the customer identifying information or UN Consolidated List /Local Terrorist List should trigger an automatic rescreening. Ad hoc name screening: Such screening is triggered by a specific business need or in order to comply with a request by a competent authority, or in the case of feedback from a downstream financial institution. Re-screening: A specific scenario in the transaction monitoring system identifies a high-risk jurisdiction in updated customer information.",
+            "section": "",
+            "page_hint": 82
+        },
+        {
+            "point_id": "1",
+            "title": "Ownership/Control Rule",
+            "text": "Individuals or legal entities that are directly or indirectly owned or controlled mainly or fully by one or more Listed Person are subject to the same prohibitions as the Listed Person, even if such individuals or legal entities are not specifically named by the competent authority on the respective UN Consolidated List or Local Terrorist List. The criterion to be taken into account when assessing whether an individual or legal entity is mainly owned by a Listed Person is the possession of more than 50% of the proprietary rights of an entity or having majority interest in it. If this criterion is satisfied, it is considered that the individual or legal entity is owned by a Listed Person. The criteria to be taken into account when assessing whether an individual or legal entity or arrangement is mainly controlled by a Listed Person, alone or pursuant to an agreement with another shareholder or other third party, include the following: * Having the right to appoint or remove a majority of the members of the administrative or management body of such a legal person, entity, group or arrangement; * Having appointed solely as a result of the exercise of one's voting rights a majority of the members of the administrative or management body of a legal person, entity, group or arrangement who have held office during the present and previous financial year; * Controlling alone, pursuant to an agreement with other shareholders in or members of a legal person, group or entity, a majority of shareholders' or members' voting rights in that legal person, entity, group or arrangement; * Having the right to exercise a dominant influence over a legal person, group or entity, pursuant to an agreement entered into with that legal person, entity, group or arrangement, or to a provision in its Memorandum or Articles of Association, where the law governing that legal person, entity, group or arrangement permits its being subject to such agreement or provision; * Having the power to exercise the right to exercise a dominant influence referred to in the previous point, without being the holder of that right; * Having the right to use all or part of the assets of that legal person, entity, group or arrangement; * Managing the business of that legal person, entity, group or arrangement on a unified basis, while publishing consolidated accounts; or * Sharing jointly and severally the financial liabilities of legal person, entity, group or arrangement, or guaranteeing them.",
+            "section": "3.4. Name Screening",
+            "page_hint": 1
+        },
+        {
+            "point_id": "2",
+            "title": "Fuzzy Matching",
+            "text": "An algorithm-based technique to match one data point, where the contents of the information being screened is not identical, but its spelling, pattern or sound is a close match to the contents contained on a list used for screening.",
+            "section": "3.4. Name Screening",
+            "page_hint": 2
+        },
+        {
+            "point_id": "3",
+            "title": "Weak or Low-quality Aliases",
+            "text": "Relatively broad or generic alias may generate a large volume of false hits when such names are run through a computer-based screening system. LFIs should perform their own assessments on whether to screen for weak aliases based on their understanding of their own risk profile.",
+            "section": "3.4. Name Screening",
+            "page_hint": 2
+        },
+        {
+            "point_id": "3.5",
+            "title": "Verification of False Positives",
+            "text": "Because many names may be common, various potential matches may be found. A potential match is when there is any match between data in the sanctions lists with any information in the LFI's databases. However, it does not necessarily mean that the individual or entity the LFI is dealing with is subject to sanctions. When identifying the potential match, LFIs should suspend any transaction until they are satisfied it is not a Listed Person. LFIs should compare potential matches with the UN Consolidated List and the Local Terrorist List in order to confirm whether they are true matches and to eliminate \"false positives.\" LFIs should compare information that is known about the party in question, such as date of birth and address, with other information provided in the designation order. Furthermore, LFIs should undertake efforts to obtain additional information and identification documents, which may have previously not been obtained from the customer or a counterparty to ascertain whether the customer is the actual designated person in the case of similar or common names. If the LFI establishes that the match is a false positive, then the LFI does not need to freezing or apply Other Measures related to sanctions. Therefore, the LFI may allow the transaction or relationship to continue its normal course, provided that the transaction or relationship is not suspicious and does not trigger any other concerns. LFIs are required to maintain evidence of the false positive verification process in their records and make them available to the competent authorities immediately upon request. LFIs may create a \"white list\" (or a \"good customer list\") of names of customers that have been flagged as potential matches to the UN Consolidated List and the Local Terrorist List but subsequently cleared through thorough due diligence by the LFI. Those \"white lists\" may be used to improve the process related to screening by leveraging the results of past due diligences and reducing the number of false positives. While an LFI should not overly rely on such a list and must diligently and continuously screen customers and transactions in case they are implicated in updated UN Consolidated List and Local Terrorist List, the use of such a \"white list\" may assist the LFI in expediting the dispositioning in case of repeated false positive matches. LFIs should have documented procedures to managing and periodically reviewing and updating those \"white lists\".",
+            "section": "3.5",
+            "page_hint": 1
+        },
+        {
+            "point_id": "3.6",
+            "title": "Payments Screening",
+            "text": "LFIs should also screen information regarding counterparties of all incoming and outgoing transfers in order to identify any potential match to Listed Persons. The information to be screened includes: * The parties involved in a transaction, including the sender and the receiver; * Third parties and intermediaries; * Bank Names, Bank Identifier Code (\"BIC\") and other routing codes; * Free text fields; * International Securities Identification Number (\"ISINs\") or other risk relevant product identifiers (there are multiple fields in the identifier information section for sanctions lists. An ISIN number can be screened as an identifier number similar to a date of birth/passport number, and towns/regions can be screened as jurisdictions operating in); * Geography, including addresses, countries, cities, towns, regions.",
+            "section": "3.6. Payments Screening",
+            "page_hint": 0
+        },
+        {
+            "point_id": "3.7",
+            "title": "Confirmed match",
+            "text": "Under Articles 15 and 21 of Cabinet Decision 74, when a match is found through the screening process, LFIs must immediately, without delay and without prior notice, freeze all Funds. Without delay, as defined by Article 1 of Cabinet Decision 74, means within 24 hours of the Listing decision being issued by the UNSC, the Sanctions Committee or the UAE Cabinet, as the case may be.",
+            "section": "3.7. Confirmed match",
+            "page_hint": 0
+        },
+        {
+            "point_id": "Article 21(5)",
+            "title": "Immediate Notification to CBUAE",
+            "text": "Under Article 21(5) of Cabinet Decision 74, LFIs must immediately notify the CBUAE in the following cases:\n\n*   Identification of funds and actions that have been taken as per requirements of Relevant UNSCRs or decisions of the Cabinet regarding the issuance of Local Terrorist List (including but not limited to freezing), including attempted transactions.\n*   Detection of any match with Listed Persons or entities, details of the matched data, and actions that have been taken as per the requirements of Relevant UNSCRs and Local Terrorist Lists, including attempted transactions.\n*   Identification of a previous customer or an occasional customer listed on the UN Consolidated List or Local Terrorist List.\n*   Suspicion that a current or previous customer, or a person with whom they have a business relationship, is a Listed Person or has a direct or indirect relationship with a Listed Person.\n*   No action has been taken due to a false positive and the inability to dismiss a false positive through available or accessible information (i.e. given insufficient information, such as matching identifier information, address, DOB, or nationality). Please see also section 3.5 above.\n*   Unfreezing of Funds, identifying the information relating to funds that have been unfrozen, including their status, nature, value and measures that were taken in respect thereof, and any other information relevant to such decisions.",
+            "section": "4. NOTIFICATION TO CBUAE AND EXECUTIVE OFFICE",
+            "page_hint": 102
+        },
+        {
+            "point_id": "Article 15(2)",
+            "title": "Notification to Executive Office of Freezing Measures/Attempted Transactions",
+            "text": "Under Article 15(2) of Cabinet Decision, LFIs must also notify the Executive Office of any freezing measures and/or attempted transactions.",
+            "section": "4. NOTIFICATION TO CBUAE AND EXECUTIVE OFFICE",
+            "page_hint": 103
+        },
+        {
+            "point_id": "Executive Office Guidance",
+            "title": "Notification Timeframe to CBUAE and Executive Office",
+            "text": "According to the Executive Office's Guidance on Targeted Financial Sanctions for FIs and DNFBPs, LFIs should notify the CBUAE and the Executive Office within two (2) business days from taking any freezing measure and/or attempted transactions.",
+            "section": "4. NOTIFICATION TO CBUAE AND EXECUTIVE OFFICE",
+            "page_hint": 104
+        },
+        {
+            "point_id": "1",
+            "title": "Red Flag Indicators for TF",
+            "text": "Potentially Suspicious Activity That May Indicate Terrorist Financing Published in the FFIEC BSA/AML Examination Manual5\nActivity Inconsistent with the Customer's Business:\n* Funds are generated by a business owned by persons of the same origin or by a business that involves persons of the same origin from higher-risk countries (e.g., countries designated by national authorities and FATF as non-cooperative countries and territories).\n* The stated occupation of the customer is not commensurate with the type or level of activity.\n* Persons involved in currency transactions share an address or phone number, particularly when the address is also a business location or does not seem to correspond to the stated occupation (e.g., student, unemployed, or self-employed).\n* Regarding nonprofit or charitable organizations, financial transactions occur for which there appears to be no logical economic purpose or in which there appears to be no link between the stated activity of the organization and the other parties in the transaction.\n* A safe deposit box opened on behalf of a commercial entity when the business activity of the customer is unknown or such activity does not appear to justify the use of a safe deposit box.\nFunds Transfers:\n* A large number of incoming or outgoing funds transfers take place through a business account, and there appears to be no logical business or other economic purpose for the transfers, particularly when this activity involves higher-risk locations.\n* Funds transfers are ordered in small amounts in an apparent effort to avoid triggering identification or reporting requirements.\n* Funds transfers do not include information on the originator, or the person on whose behalf the transaction is conducted, when the inclusion of such information would be expected.\n* Multiple personal and business accounts or the accounts of nonprofit organizations or charities are used to collect and funnel funds to a small number of foreign beneficiaries.\n* Foreign exchange transactions are performed on behalf of a customer by a third party, followed by funds transfers to locations having no apparent business connection with the customer or to higher-risk countries.\nOther Transactions That Appear Unusual or Suspicious:\n* Transactions involving foreign currency exchanges are followed within a short time by funds transfers to higher-risk locations.\n* Multiple accounts are used to collect and funnel funds to a small number of foreign beneficiaries, both persons and businesses, particularly in higher-risk locations.\n* A customer obtains a credit instrument or engages in commercial financial transactions involving the movement of funds to or from higher-risk locations when there appear to be no logical business reasons for dealing with those locations.\n* Banks from higher-risk locations open accounts.\n* Funds are sent or received via international transfers from or to higher-risk locations.\n* Insurance policy loans or policy surrender values that are subject to a substantial surrender charge.\nTerrorist Financing Indicators Published by FINTRAC (Canada's Financial Intelligence Unit)\n* Transactions involving certain high-risk jurisdictions such as locations in the midst of or in proximity to, armed conflict where terrorist groups operate or locations which are subject to weaker ML/TF controls.\n* An account opened in the name of an entity, a foundation or association, which may be linked or involved with a suspected terrorist organization.\n* The use of funds by a non-profit organization is not consistent with the purpose for which it was established.\n* Raising donations in an unofficial or unregistered manner.\n* Client identified by media or law enforcement as having travelled, attempted or intended to travel to high-risk jurisdictions (including cities or districts of concern), specifically countries (and adjacent countries) under conflict and/or political instability or known to support terrorist activities and organizations.\n* Transactions involve individual(s) or entity(ies) identified by media and/or Sanctions List as being linked to a terrorist organization or terrorist activities.\n* Law enforcement information provided which indicates individual(s) or entity(ies) may be linked to a terrorist organization or terrorist activities.\n* Client conducted travel-related purchases (e.g. purchase of airline tickets, travel visa, passport, etc.) linked to high-risk jurisdictions (including cities or districts of concern), specifically countries (and adjacent countries) under conflict and/or political instability or known to support terrorist activities and organizations.\n* Individual or entity's online presence supports violent extremism or radicalization.\n* Client donates to a cause that is subject to derogatory information that is publicly available (e.g. crowdfunding initiative, charity, non-profit organization, non-government organization, etc.).",
+            "section": "Annex 1. Red Flag Indicators for TF and PF",
+            "page_hint": 107
+        },
+        {
+            "point_id": "(i)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Transaction involves person or entity in foreign country of proliferation concern.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(ii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Transaction involves person or entity in foreign country of diversion concern.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(iii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "The customer or counterparty or its address is similar to one of the parties found on publicly available lists of \"denied persons\" or has a history of export control contraventions.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(iv)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Customer activity does not match business profile, or end-user information does not match end-user's business profile.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(v)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "A freight forwarding firm is listed as the product's final destination.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(vi)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Order for goods is placed by firms or persons from foreign countries other than the country of the stated end-user.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(vii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Transaction involves shipment of goods incompatible with the technical level of the country to which it is being shipped, (e.g. semiconductor manufacturing equipment being shipped to a country that has no electronics industry).",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(viii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Transaction involves possible shell companies (e.g. companies do not have a high level of capitalisation or displays other shell company indicators).",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(ix)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Transaction demonstrates links between representatives of companies exchanging goods i.e. same owners or management.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(x)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Circuitous route of shipment (if available) and/or circuitous route of financial transaction.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xi)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Trade finance transaction involves shipment route (if available) through country with weak export control laws or weak enforcement of export control laws.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Transaction involves persons or companies (particularly trading companies) located in countries with weak export control laws or weak enforcement of export control laws.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xiii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Transaction involves shipment of goods inconsistent with normal geographic trade patterns (e.g. does the country involved normally export/import good involved?).",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xiv)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Transaction involves financial institutions with known deficiencies in AML/CFT controls and/or domiciled in countries with weak export control laws or weak enforcement of export control laws.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xv)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Based on the documentation obtained in the transaction, the declared value of the shipment was obviously under-valued vis-à-vis the shipping cost.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xvi)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Inconsistencies in information contained in trade documents and financial flows, such as names, companies, addresses, final destination etc.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xvii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Pattern of wire transfer activity that shows unusual patterns or has no apparent purpose.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xviii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Customer vague/incomplete on information it provides, resistant to providing additional information when queried.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xix)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "New customer requests letter of credit transaction awaiting approval of new account.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xx)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Wire instructions or payment from or due to parties not identified on the original letter of credit or other documentation.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xxi)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Involvement of items controlled under WMD export control regimes or national control regimes.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xxii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Involvement of a person connected with a country of proliferation concern (e.g. a dual-national), and/or dealing with complex equipment for which he/she lacks technical background.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 119
+        },
+        {
+            "point_id": "(xxiii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Use of cash or precious metals (e.g. gold) in transactions for industrial items.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 123
+        },
+        {
+            "point_id": "(xxiv)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Involvement of a small trading, brokering or intermediary company, often carrying out business inconsistent with their normal business.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 123
+        },
+        {
+            "point_id": "(xxv)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Involvement of a customer or counterparty, declared to be a commercial business, whose transactions suggest they are acting as a money-remittance business.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 123
+        },
+        {
+            "point_id": "(xxvi)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Transactions between companies on the basis of \"ledger\" arrangements that obviate the need for international financial transactions.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 123
+        },
+        {
+            "point_id": "(xxvii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Customers or counterparties to transactions are linked (e.g. they share a common physical address, IP address or telephone number, or their activities may be coordinated).",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 123
+        },
+        {
+            "point_id": "(xxviii)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Involvement of a university in a country of proliferation concern.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 123
+        },
+        {
+            "point_id": "(xxix)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Description of goods on trade or financial documentation is nonspecific, innocuous or misleading.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 123
+        },
+        {
+            "point_id": "(xxx)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Evidence that documents or other representations (e.g. relating to shipping, customs, or payment) are fake or fraudulent.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 123
+        },
+        {
+            "point_id": "(xxxi)",
+            "title": "Indicators of Possible Proliferation Financing as mentioned in Annex 1 to the 2008 FATF Typologies Report on Proliferation Financing",
+            "text": "Use of personal account to purchase industrial items.",
+            "section": "2. Red Flag Indicators for PF",
+            "page_hint": 123
+        },
+        {
+            "point_id": "Purpose of this Guidance - Purpose",
+            "title": "Purpose",
+            "text": "The purpose of this Guidance is to assist the understanding and effective performance by the CBUAE licensed financial institutions (LFIs) of their statutory obligations under the legal and regulatory framework in force in the UAE related to targeted financial sanctions, screening and reporting requirements as well as the development of an appropriate sanctions compliance program.",
+            "section": "Purpose of this Guidance",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Purpose of this Guidance - Applicability",
+            "title": "Applicability",
+            "text": "This Guidance applies to all natural and legal persons, which are licensed and/or supervised by the CBUAE, in the following categories: national banks, branches of foreign banks, exchange houses, finance companies, payment service providers, registered hawala providers and other LFIs; and insurance companies, agencies, and brokers.",
+            "section": "Purpose of this Guidance",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Sanctions Compliance Program - Senior Management Commitment",
+            "title": "Senior Management Commitment",
+            "text": "LFI senior management's commitment to, and support of, the Sanctions Compliance Program (SCP) is one of the most important factors in determining its success. In order to facilitate effective senior management commitment, an LFI should, among other things: Ensure that senior management has reviewed and approved the organization's SCP; Clearly designate the personnel responsible for ensuring proper implementation of the SCP; and Ensure that the SCP is fully integrated into the organization's daily operations and allocating adequate resources to it.",
+            "section": "Sanctions Compliance Program",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Sanctions Compliance Program - Risk Assessment",
+            "title": "Risk Assessment",
+            "text": "LFIs should take appropriate steps to conduct a regular and updated sanctions risk assessment to identify, understand, assess, monitor and manage their risks in line with their business nature and size.",
+            "section": "Sanctions Compliance Program",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Sanctions Compliance Program - Sanctions Risk appetite",
+            "title": "Sanctions Risk appetite",
+            "text": "LFIs should develop and maintain a comprehensive written sanctions risk appetite approved by the LFI's senior management and embedded through policies, procedures, and screening systems parameterization.",
+            "section": "Sanctions Compliance Program",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Sanctions Compliance Program - Internal Controls",
+            "title": "Internal Controls",
+            "text": "Internal controls are the mechanisms, rules, and procedures implemented to help ensure the integrity and effectiveness of an LFI's SCP. LFIs must have and maintain strong and clear internal controls to ensure compliance with their statutory sanctions obligations and ensure the effective implementation of their SCP.",
+            "section": "Sanctions Compliance Program",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Sanctions Compliance Program - Policies and Procedures",
+            "title": "Policies and Procedures",
+            "text": "LFIs should develop and maintain clear and comprehensive written policies and procedures that should, among other things: Be approved by senior management; and Enable the LFI to clearly and effectively identify, prevent, escalate, and report potentially prohibited transactions and activities. LFIs should ensure the effective and consistent implementation of the policies and procedures related to the SCP across their organizations, including branches, subsidiaries, and other entities in which LFIs hold a majority interest. LFIs should implement a formal review process, at least annually, of the policies and procedures at appropriate levels subject to approval where changes are material.",
+            "section": "Sanctions Compliance Program",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Sanctions Compliance Program - Training",
+            "title": "Training",
+            "text": "A robust training program is an integral component of an effective SCP and should, among other things: Be of a scope and nature proportionate to the LFI's overall risk profile; Be specific to the role carried out by the employee, with tailored training for employees engaged in sensitive roles; and Provide training to all appropriate employees and personnel upon onboarding in a timely manner and at least annually thereafter.",
+            "section": "Sanctions Compliance Program",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Sanctions Compliance Program - Independent Audit and Testing of Processes and Systems",
+            "title": "Independent Audit and Testing of Processes and Systems",
+            "text": "Independent audit helps the LFI assess the effectiveness of current processes, including by assessing the sufficiency of the program and by checking for any inconsistencies between the policy and procedures and day-to-day operations in order to identify SCP weaknesses and deficiencies. In addition, LFIs should deploy an independent risk-based testing regime to regularly test their processes' and systems' adequacy and expected outcomes, as well as to assess their effectiveness in managing the specific risks articulated in the risk assessment.",
+            "section": "Sanctions Compliance Program",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Sanctions Compliance Program - Record keeping",
+            "title": "Record keeping",
+            "text": "LFIs must maintain, at least for five years, detailed records associated with their ML/FT risk assessment and mitigation measures as well as all records, documents, data and statistics for all financial transactions, all records obtained through CDD measures for both the originators and the beneficiaries, account files and business correspondence, and copies of personal identification documents, including STRs and results of any analysis performed; and make them available to authorities on request.",
+            "section": "Sanctions Compliance Program",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Screening Operations - Sanctions Evasion",
+            "title": "Sanctions Evasion",
+            "text": "LFIs should remain vigilant in order to identify attempts to evade, avoid, or circumvent sanctioned activities. LFIs should monitor not only for sanctions violations but also for red flags of potential evasion risks. LFI's should also prohibit activity that aims to evade or circumvent sanctions prohibitions.",
+            "section": "Screening Operations",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Screening Operations - Maintenance of Sanctions List and Local Lists",
+            "title": "Maintenance of Sanctions List and Local Lists",
+            "text": "LFIs should rely on the official websites of the UNSC and the Executive Office of the Committee for Goods & Materials Subject to Import & Export Control (Executive Office) respectively for the most updated UN Consolidated List and Local Terrorist List. LFIs must register on the Executive Office's website in order to receive automated email notifications with updated and timely information about the listing and de-listing of individuals or entities in the Local Terrorist List and in the UN Consolidated List.",
+            "section": "Screening Operations",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Screening Operations - Customer Screening",
+            "title": "Customer Screening",
+            "text": "Screening should be conduct at various stages of the customer lifecycle, to include periodic name screening, ad hoc name screening, and re-screening.",
+            "section": "Screening Operations",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Screening Operations - Name Screening",
+            "title": "Name Screening",
+            "text": "In addition to the regular screening utilizing the lists indicated above, LFIs should maintain additional sanctions compliance procedures relating to name screening to prevent and detect sanctions breaches. These procedures should address the ownership/control rule, fuzzy matching, and weak or low-quality aliases.",
+            "section": "Screening Operations",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Screening Operations - Verification of False Positives",
+            "title": "Verification of False Positives",
+            "text": "LFIs should compare potential matches with the sanctions lists indicated above in order to confirm whether they are true matches and to eliminate \"false positives.\" If the LFI establishes that the match is a false positive, then the LFI does not need to freezing or apply other measures related to sanctions. The LFI may allow the transaction or relationship to continue its normal course, provided that the transaction or relationship is not suspicious and does not trigger any other concerns. LFIs are required to maintain evidence of the false positive verification process in their records and make them available to the competent authorities immediately upon request.",
+            "section": "Screening Operations",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Screening Operations - Payments Screening",
+            "title": "Payments Screening",
+            "text": "LFIs should also screen information regarding counterparties of all incoming and outgoing transfers in order to identify any potential match to Listed Persons.",
+            "section": "Screening Operations",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Screening Operations - Confirmed Match",
+            "title": "Confirmed Match",
+            "text": "When a match is found through the screening process, LFIs must immediately, without delay and without prior notice, freeze all Funds. Without delay, as defined by Cabinet Decision 74, means within 24 hours of the listing decision being issued by the UNSC, the Sanctions Committee or the UAE Cabinet, as the case may be.",
+            "section": "Screening Operations",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Notifications - Notifications to the CBUAE and Executive Office",
+            "title": "Notifications to the CBUAE and Executive Office",
+            "text": "LFIs must immediately notify the CBUAE, as well as the Executive Office, of any freezing measures and/or attempted transactions. LFIs should notify the CBUAE and the Executive Office within two (2) business days from taking any freezing measures and/or attempted transactions. For the reporting mechanism and form(s), please consult the CBUAE's and the Executive Office's websites as updated from time to time.",
+            "section": "Notifications",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Annexes - Annex 1",
+            "title": "Annex 1",
+            "text": "Red flag indicators for TF and PF",
+            "section": "Annexes",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Annexes - Annex 2",
+            "title": "Annex 2",
+            "text": "Lessons learned from CBUAE Supervision",
+            "section": "Annexes",
+            "page_hint": 23
+        },
+        {
+            "point_id": "Annexes - Annex 3",
+            "title": "Annex 3",
+            "text": "Synopsis of the Guidance",
+            "section": "Annexes",
+            "page_hint": 23
+        }
+    ],
+    "creditUsage": 72.015,
+    "jobId": "f4ccb4d749c54cbbb11ee39a5e50826d",
+    "durationMs": 42839
+}

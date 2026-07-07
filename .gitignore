@@ -1,0 +1,25 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# .NET build + runtime artifacts
+bcp-api/bin/
+bcp-api/obj/
+bcp-api/publish/
+bcp-api/**/reguliq.db
+bcp-api/**/dual-verify-kafka/
+*.user
+*.suo
+
+# Angular
+bcp-web/node_modules/
+bcp-web/.angular/
+bcp-web/dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

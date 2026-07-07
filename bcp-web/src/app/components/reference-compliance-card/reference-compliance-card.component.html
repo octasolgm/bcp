@@ -1,0 +1,96 @@
+<article class="ref-card" [ngClass]="tierClass('card')">
+  <span class="badge" [ngClass]="tierClass('badge')">{{ badge }}</span>
+
+  @if (block.title) {
+    <h2 class="title" [ngClass]="tierClass('title')">{{ block.title }}</h2>
+  }
+
+  @if (block.body) {
+    <div class="req-box">
+      <p class="label">Requirement</p>
+      @if (reqLines.length > 1) {
+        <ol class="req-list">
+          @for (line of reqLines; track $index) {
+            <li>{{ stripLinePrefix(line) }}</li>
+          }
+        </ol>
+      } @else {
+        <p class="req-text">{{ block.body }}</p>
+      }
+    </div>
+  }
+
+  @if (block.referencePdf) {
+    <div class="ref-pdfs">
+      <span class="label">Reference PDF</span>
+      @for (name of block.referencePdf.split(';'); track name) {
+        <span class="pdf-chip">📄 {{ name.trim() }}</span>
+      }
+    </div>
+  }
+
+  <div class="evidence" [class.missing]="isMissing" [ngClass]="tierClass('evidence')">
+    <p class="label">Compliance evidence (Output/Response)</p>
+    @if (!isMissing && (citation.page || citation.section)) {
+      <div class="citation-tags">
+        @if (citation.page) { <span class="tag">Page {{ citation.page }}</span> }
+        @if (citation.section) { <span class="tag">Section {{ citation.section }}</span> }
+      </div>
+    }
+    @if (citation.quote) {
+      <blockquote class="quote" [ngClass]="tierClass('quote')">&ldquo;{{ citation.quote }}&rdquo;</blockquote>
+    } @else {
+      <p class="output">{{ block.outputResponse || '—' }}</p>
+    }
+  </div>
+
+  @if (showFulfilled) {
+    <div class="fulfilled">
+      <p class="label">What this reference fulfills</p>
+      <ol class="fulfilled-list" [ngClass]="tierClass('fulfilled')">
+        @for (line of fulfilledLines; track $index) {
+          <li><span class="check">✓</span>{{ line }}</li>
+        }
+      </ol>
+    </div>
+  }
+
+  <div class="stats">
+    <p class="label">Status &amp; confidence</p>
+    <dl class="stat-grid">
+      <div class="stat" [ngClass]="tierClass('stat')">
+        <dt>Status</dt>
+        <dd>{{ block.status || '—' }}</dd>
+      </div>
+      <div class="stat" [ngClass]="tierClass('stat')">
+        <dt>Compliance Confidence %</dt>
+        <dd>{{ block.confidence || '—' }}</dd>
+      </div>
+    </dl>
+  </div>
+
+  @if (capGaps.length > 0) {
+    <div class="cap">
+      <p class="cap-title">Corrective Action Plan</p>
+      @for (gap of capGaps; track gap.index) {
+        <div class="cap-gap">
+          <p class="gap-label">Gap {{ gap.index }} — Missing</p>
+          <p>{{ gap.missing }}</p>
+          @if (gap.fix) {
+            <p class="fix-label">Fix:</p>
+            <p>{{ gap.fix }}</p>
+          }
+        </div>
+      }
+    </div>
+  } @else if (block.correctiveAction && block.correctiveAction !== 'N/A') {
+    <div class="cap">
+      <p class="cap-title">Corrective Action Plan</p>
+      <p class="cap-text">{{ block.correctiveAction }}</p>
+    </div>
+  }
+
+  @if (block.responsibility && block.responsibility !== 'N/A') {
+    <p class="resp"><strong>Responsibility:</strong> {{ block.responsibility }}</p>
+  }
+</article>

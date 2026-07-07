@@ -1,0 +1,31 @@
+@if (item.errorMessage || item.status === 'failed') {
+  <div class="card-error">
+    <p class="pid">{{ item.pointId }}@if (item.pointTitle) { — {{ item.pointTitle }} }</p>
+    <p>{{ item.errorMessage ?? 'Analysis failed' }}</p>
+  </div>
+} @else if (!item.landingMessage || !item.llmMessage || !item.agreement) {
+  <div class="card-pending">
+    {{ item.pointId }} —
+    @if (item.status === 'running') { Running… }
+    @else if (item.status === 'queued') { Queued… }
+    @else { In progress… }
+  </div>
+} @else {
+  <article class="card-done">
+    <header>
+      <h3>{{ item.pointId }}@if (item.pointTitle) { — {{ item.pointTitle }} }</h3>
+      <span class="agreement" [ngClass]="agreementClass(item.agreement.status)">{{ item.agreement.label }}</span>
+    </header>
+    <p class="summary">{{ item.agreement.summary }}</p>
+    <div class="passes">
+      <div class="pass">
+        <p class="pass-label p1">Pass 1 — Landing AI</p>
+        <app-reference-compliance-card [message]="item.landingMessage" />
+      </div>
+      <div class="pass">
+        <p class="pass-label p2">Pass 2 — LLM Verify</p>
+        <app-reference-compliance-card [message]="item.llmMessage" />
+      </div>
+    </div>
+  </article>
+}

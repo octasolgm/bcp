@@ -1,0 +1,8 @@
+bin/
+obj/
+publish/
+*.user
+*.suo
+# runtime sqlite + job backups (not Data/ EF source)
+reguliq.db
+dual-verify-kafka/
