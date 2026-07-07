@@ -120,9 +120,23 @@ public class DualVerifyKafkaController(DualVerifyService service, DualVerifyStor
     }
 
     [HttpPost("jobs/{sessionId:guid}/retry-failed")]
+    [RequestSizeLimit(50_000_000)]
     public async Task<ActionResult<ApiResponse<object>>> RetryFailed(Guid sessionId, CancellationToken ct)
     {
-        var count = await service.RetryFailedAsync(sessionId, ct);
+        byte[]? pdf = null;
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync(ct);
+            var file = form.Files.GetFile("internalFile");
+            if (file != null)
+            {
+                using var ms = new MemoryStream();
+                await file.CopyToAsync(ms, ct);
+                pdf = ms.ToArray();
+            }
+        }
+
+        var count = await service.RetryFailedAsync(sessionId, pdf, ct);
         return Ok(new ApiResponse<object>(true, new { requeued = count }));
     }
 }

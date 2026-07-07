@@ -9,6 +9,7 @@ namespace Reguliq.Api.Services;
 public class DualVerifyService(
     GovPointsService govPoints,
     DualVerifyStoreService store,
+    DualVerifyJobStageTracker stageTracker,
     LocalJobQueue queue,
     KafkaConfig kafkaConfig,
     KafkaProducerService kafka,
@@ -152,9 +153,18 @@ public class DualVerifyService(
 
     public async Task<SessionProgressDto?> GetProgressAsync(Guid sessionId, CancellationToken ct = default)
     {
+        await store.UpdateSessionCountsAsync(sessionId, ct);
         var session = await store.GetSessionAsync(sessionId, ct);
         if (session == null) return null;
-        return MapProgress(session);
+        var progress = MapProgress(session);
+        var points = progress.Points.Select(p =>
+        {
+            if (p.Status != "running") return p;
+            return stageTracker.TryGet(sessionId, p.PointId, out var stage)
+                ? p with { RunningStage = stage }
+                : p;
+        }).ToList();
+        return progress with { Points = points };
     }
 
     public async Task<List<PointJobDto>> GetResultsAsync(Guid sessionId, CancellationToken ct = default)
@@ -186,10 +196,16 @@ public class DualVerifyService(
                 DualVerifyAgreementService.FromJson(p.AgreementJson),
                 p.ErrorMessage)).ToList());
 
-    public async Task<int> RetryFailedAsync(Guid sessionId, CancellationToken ct = default)
+    public async Task<int> RetryFailedAsync(
+        Guid sessionId,
+        byte[]? internalPdf = null,
+        CancellationToken ct = default)
     {
         var session = await store.GetSessionAsync(sessionId, ct);
         if (session == null) return 0;
+
+        if (internalPdf is { Length: > 0 })
+            store.SetInternalPdf(sessionId, internalPdf);
         var failed = session.PointJobs.Where(p => p.Status == "failed").ToList();
         var transport = kafkaConfig.GetTransportMode();
         var messages = new List<DualVerifyJobMessage>();

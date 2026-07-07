@@ -1,15 +1,87 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
+using Reguliq.Api.Models;
 using Reguliq.Api.Services;
+using Reguliq.Api.Services.LandingAi;
 using System.Text.Json;
 
 namespace Reguliq.Api.Controllers;
 
 [ApiController]
 [Route("landing-ai")]
-public class LandingAiController(GovPointsService govPoints, AppDbContext db) : ControllerBase
+public class LandingAiController(
+    GovPointsService govPoints,
+    AppDbContext db,
+    LandingAiCompareService landingAi) : ControllerBase
 {
+    [HttpGet("status")]
+    public IActionResult GetStatus() =>
+        Ok(new
+        {
+            configured = landingAi.IsConfigured,
+            transport = "bcp-api",
+            message = landingAi.IsConfigured
+                ? "Landing AI Phase 1 ready (standalone bcp-api)"
+                : "Set LandingAi:ApiKey in appsettings.Development.json",
+        });
+
+    [HttpGet("stored-parse")]
+    public async Task<IActionResult> GetStoredParse([FromQuery] string fileHash, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(fileHash))
+            return BadRequest(new { success = false, message = "fileHash is required" });
+
+        var markdown = await landingAi.GetStoredParseAsync(fileHash.Trim(), ct);
+        if (string.IsNullOrWhiteSpace(markdown))
+            return NotFound(new { success = false, message = "No cached parse markdown for this fileHash" });
+
+        return Ok(new { success = true, markdown, fileHash });
+    }
+
+    [HttpPost("compare-point")]
+    [RequestSizeLimit(50_000_000)]
+    public async Task<IActionResult> ComparePoint(CancellationToken ct)
+    {
+        try
+        {
+            var form = await Request.ReadFormAsync(ct);
+            var pointJson = form["point"].FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(pointJson))
+                return BadRequest(new { success = false, message = "point JSON is required" });
+
+            using var pointDoc = JsonDocument.Parse(pointJson);
+            var root = pointDoc.RootElement;
+            var point = new GovPoint(
+                root.GetProperty("point_id").GetString() ?? "",
+                root.TryGetProperty("title", out var t) ? t.GetString() : null,
+                root.GetProperty("text").GetString() ?? "",
+                root.TryGetProperty("section", out var s) ? s.GetString() : null);
+
+            var internalFileHash = form["internalFileHash"].FirstOrDefault() ?? "";
+            var internalFileName = form["internalFileName"].FirstOrDefault() ?? "internal-policy.pdf";
+            var forceCompare = string.Equals(form["forceCompare"].FirstOrDefault(), "true", StringComparison.OrdinalIgnoreCase);
+
+            byte[]? pdf = null;
+            var file = form.Files.GetFile("internalFile") ?? form.Files.FirstOrDefault();
+            if (file != null)
+            {
+                using var ms = new MemoryStream();
+                await file.CopyToAsync(ms, ct);
+                pdf = ms.ToArray();
+            }
+
+            var message = await landingAi.ComparePointAsync(
+                point, internalFileHash, internalFileName, pdf, forceCompare, ct);
+
+            return Ok(new { success = true, cached = false, message });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
     [HttpGet("stored-points")]
     public IActionResult GetStoredPoints([FromQuery] string? docId)
     {

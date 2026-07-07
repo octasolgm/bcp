@@ -863,6 +863,17 @@ input[type='search'] {
   strong { color: #34d399; }
 }
 
+.progress-stage {
+  font-size: 11px;
+  color: #93c5fd;
+  margin: 0 0 0.5rem;
+  line-height: 1.35;
+
+  &.muted {
+    color: #64748b;
+  }
+}
+
 .count.run-progress {
   color: #fbbf24;
   margin-left: 0.35rem;

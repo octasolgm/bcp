@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Infrastructure;
 using Reguliq.Api.Services;
+using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Workers;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -60,6 +61,24 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
         opt.UseSqlite($"Data Source={dbConfig.SqlitePath}");
 });
 
+builder.Services.Configure<LandingAiOptions>(o =>
+{
+    o.ApiKey = BcpConfiguration.GetString(builder.Configuration, "LandingAi:ApiKey", "VISION_AGENT_API_KEY") ?? "";
+    o.ApiBase = BcpConfiguration.GetString(builder.Configuration, "LandingAi:ApiBase", "LANDING_AI_API_BASE")
+        ?? "https://api.va.landing.ai";
+    o.ParseModel = BcpConfiguration.GetString(builder.Configuration, "LandingAi:ParseModel", "LANDING_AI_PARSE_MODEL")
+        ?? "dpt-2-latest";
+    o.ExtractModel = BcpConfiguration.GetString(builder.Configuration, "LandingAi:ExtractModel", "LANDING_AI_EXTRACT_MODEL")
+        ?? "extract-latest";
+});
+builder.Services.AddScoped<LandingAiCacheRepository>();
+builder.Services.AddScoped<LandingAiCompareService>();
+
+var httpTimeout = TimeSpan.FromMinutes(
+    BcpConfiguration.GetInt(builder.Configuration, 15, "Bcp:HttpTimeoutMinutes", "BCP_HTTP_TIMEOUT_MINUTES"));
+static void ConfigureAiHttpTimeout(HttpClient client, TimeSpan timeout) => client.Timeout = timeout;
+builder.Services.AddHttpClient<LandingAiHttpClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));
+
 builder.Services.Configure<GeminiOptions>(o =>
 {
     o.ApiKey = BcpConfiguration.GetString(
@@ -80,14 +99,15 @@ builder.Services.Configure<NodeBridgeOptions>(o =>
     o.Enabled = true;
 });
 
-builder.Services.AddHttpClient<GeminiService>();
-builder.Services.AddHttpClient<NodeBridgeService>();
+builder.Services.AddHttpClient<GeminiService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddHttpClient<NodeBridgeService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 
 builder.Services.AddSingleton<KafkaConfig>();
 builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddSingleton<SessionPdfCache>();
 builder.Services.AddSingleton<GovPointsService>();
 builder.Services.AddSingleton<LocalJobQueue>();
+builder.Services.AddSingleton<DualVerifyJobStageTracker>();
 builder.Services.AddSingleton<DualVerifyJobProcessor>();
 builder.Services.AddHostedService<DualVerifyWorkerHosted>();
 builder.Services.AddScoped<DualVerifyStoreService>();

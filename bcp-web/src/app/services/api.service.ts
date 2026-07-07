@@ -95,6 +95,7 @@ export interface SessionProgress {
     llmMessage?: string;
     agreementJson?: { status: string; label: string; summary?: string };
     errorMessage?: string;
+    runningStage?: string;
   }>;
 }
 
@@ -175,7 +176,15 @@ export class ApiService {
     return this.http.post<ApiResponse<{ id: string }>>(`${this.base}/dual-verify-kafka/jobs`, form);
   }
 
-  retryFailed(sessionId: string) {
+  retryFailed(sessionId: string, internalFile?: File | null) {
+    if (internalFile) {
+      const form = new FormData();
+      form.append('internalFile', internalFile);
+      return this.http.post(
+        `${this.base}/dual-verify-kafka/jobs/${sessionId}/retry-failed`,
+        form,
+      );
+    }
     return this.http.post(`${this.base}/dual-verify-kafka/jobs/${sessionId}/retry-failed`, {});
   }
 }

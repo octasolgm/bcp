@@ -45,6 +45,16 @@
               {{ loadingAnalysis ? '…' : 'Load report' }}
             </button>
             <button type="button" class="btn-sm" (click)="refreshSavedSessions()" title="Refresh saved sessions">↻</button>
+            @if (canRetryFailed) {
+              <button
+                type="button"
+                class="btn-sm btn-retry"
+                (click)="retryFailed()"
+                title="Re-run failed points in this Kafka session"
+              >
+                Retry failed ({{ failedJobCount }})
+              </button>
+            }
           </div>
         </div>
       </section>
@@ -230,6 +240,16 @@
             }
           </div>
           <div class="panel-head-actions">
+            @if (canRetryFailed) {
+              <button
+                type="button"
+                class="btn-sm btn-retry"
+                (click)="retryFailed()"
+                title="Re-run failed points (attach internal PDF if API was restarted)"
+              >
+                Retry failed ({{ failedJobCount }})
+              </button>
+            }
             @if (!showAllReportCards && visibleReportItems.length) {
               <button type="button" class="btn-sm linkish" (click)="toggleReportList()">
                 {{ reportListCollapsed ? 'Show list' : 'Hide list' }}
@@ -360,6 +380,11 @@
             <strong>{{ progressDone }}</strong> / {{ progress.session.totalPoints }} done
             · <strong>{{ progressRemaining }}</strong> remaining
           </p>
+          @if (activeRunningStage) {
+            <p class="progress-stage">{{ activeRunningStage }}</p>
+          } @else if (running) {
+            <p class="progress-stage muted">Each point: Pass 1 (Landing AI) then Pass 2 (Gemini) — often 1–3 min first run.</p>
+          }
           <div class="progress-bar">
             <div class="fill" [style.width.%]="pct"></div>
           </div>
@@ -373,15 +398,15 @@
             @for (p of progress.points; track p.id) {
               <li [class]="p.status">
                 <span class="jid">{{ p.pointId }}</span>
-                <span class="jstatus">{{ p.status }}</span>
+                <span class="jstatus">{{ p.runningStage || p.status }}</span>
                 @if (p.agreementJson) {
                   <span class="jbadge">{{ p.agreementJson.label }}</span>
                 }
               </li>
             }
           </ul>
-          @if (progress.session.failedPoints > 0) {
-            <button type="button" class="btn-retry" (click)="retryFailed()">Retry failed</button>
+          @if (canRetryFailed) {
+            <button type="button" class="btn-retry" (click)="retryFailed()">Retry failed ({{ failedJobCount }})</button>
           }
           @if (sessionId) {
             <button type="button" class="link-btn block" (click)="useCurrentSessionId()">Use this session ID</button>

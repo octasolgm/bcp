@@ -71,6 +71,7 @@ All developers with the same Supabase connection see the same sessions.
 | `Supabase:DbPassword` | Recommended | Plain password (use when password contains `@`) |
 | `Bcp:UsePostgres` | Yes (`true`) | Use Supabase instead of SQLite |
 | `Gemini:ApiKey` | For live runs | Gemini Phase 2 |
+| `LandingAi:ApiKey` | For live runs | Landing AI Phase 1 (no NestJS :4000 needed) |
 | `Bcp:MigrateLocalDataToSupabase` | No (`true`) | Import local SQLite/JSON on startup |
 | `Bcp:AllowSqlite` | No | `true` = offline local-only (not shared) |
 | `Bcp:CorsOrigins` | No | Angular origins |

@@ -83,4 +83,4 @@ public record DualVerifySessionDto(
 public record PointJobDto(
     Guid Id, string PointId, string? PointTitle, string Status,
     string? LandingMessage, string? LlmMessage, DualVerifyAgreementDto? AgreementJson,
-    string? ErrorMessage);
+    string? ErrorMessage, string? RunningStage = null);

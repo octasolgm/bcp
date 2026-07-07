@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,7 @@ using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Infrastructure;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services;
+using Reguliq.Api.Services.LandingAi;
 
 namespace Reguliq.Api.Workers;
 
@@ -15,6 +17,7 @@ public class DualVerifyJobProcessor(
     KafkaConfig kafkaConfig,
     KafkaProducerService kafka,
     LocalJobQueue localQueue,
+    DualVerifyJobStageTracker stageTracker,
     IConfiguration config,
     ILogger<DualVerifyJobProcessor> logger)
 {
@@ -22,7 +25,7 @@ public class DualVerifyJobProcessor(
     {
         using var scope = scopeFactory.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<DualVerifyStoreService>();
-        var nodeBridge = scope.ServiceProvider.GetRequiredService<NodeBridgeService>();
+        var landingAi = scope.ServiceProvider.GetRequiredService<LandingAiCompareService>();
         var gemini = scope.ServiceProvider.GetRequiredService<GeminiService>();
         var govPoints = scope.ServiceProvider.GetRequiredService<GovPointsService>();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -49,30 +52,55 @@ public class DualVerifyJobProcessor(
         await store.SavePointJobAsync(pointJob, ct);
         await store.UpdateSessionCountsAsync(job.SessionId, ct);
 
+        var sw = Stopwatch.StartNew();
         var point = new GovPoint(job.PointId, job.PointTitle, job.GovText, null);
 
         try
         {
-            var phase1 = await nodeBridge.ComparePointAsync(
+            SetStage(job, "Pass 1 — Landing AI compare…");
+            logger.LogInformation("Dual verify {Session}:{Point} — Pass 1 starting", job.SessionId, job.PointId);
+            var phase1 = await landingAi.ComparePointAsync(
                 point, job.InternalFileHash, job.InternalFileName,
                 ResolveInternalPdf(store, job), job.ForceRefresh, ct);
             if (string.IsNullOrWhiteSpace(phase1))
                 throw new InvalidOperationException("Landing AI returned empty Phase 1 message");
+            logger.LogInformation(
+                "Dual verify {Session}:{Point} — Pass 1 done in {Sec:F1}s",
+                job.SessionId, job.PointId, sw.Elapsed.TotalSeconds);
 
-            var markdown = await TryLoadInternalMarkdownAsync(nodeBridge, job, ct);
+            var phase1Sec = sw.Elapsed.TotalSeconds;
+            var markdown = await TryLoadInternalMarkdownAsync(landingAi, job, ct);
             var prompt = DualVerifyPromptBuilder.Build(point, phase1, markdown);
             var pdf = ResolveInternalPdf(store, job);
             if ((pdf == null || pdf.Length == 0) && string.IsNullOrWhiteSpace(markdown))
                 throw new InvalidOperationException(
                     "Phase 2 needs internal PDF (upload in UI) or parsed markdown. Upload PDF or configure DUAL_VERIFY_INTERNAL_PDF_PATH.");
 
-            var phase2 = pdf is { Length: > 0 }
-                ? await gemini.AnalyzeWithPdfAsync(pdf, job.InternalFileName, prompt, job.Phase2Model, ct)
-                : await gemini.AnalyzeTextAsync(prompt, job.Phase2Model, ct);
+            string phase2;
+            if (!string.IsNullOrWhiteSpace(markdown) && markdown.Length > 100)
+            {
+                SetStage(job, "Pass 2 — Gemini (text)…");
+                logger.LogInformation(
+                    "Dual verify {Session}:{Point} — Pass 2 text mode ({Model})",
+                    job.SessionId, job.PointId, job.Phase2Model);
+                phase2 = await gemini.AnalyzeTextAsync(prompt, job.Phase2Model, ct);
+            }
+            else
+            {
+                SetStage(job, "Pass 2 — Gemini (PDF)…");
+                logger.LogInformation(
+                    "Dual verify {Session}:{Point} — Pass 2 PDF mode ({Model}, {Kb} KB)",
+                    job.SessionId, job.PointId, job.Phase2Model, (pdf?.Length ?? 0) / 1024);
+                phase2 = await gemini.AnalyzeWithPdfAsync(pdf!, job.InternalFileName, prompt, job.Phase2Model, ct);
+            }
 
             if (string.IsNullOrWhiteSpace(phase2))
                 throw new InvalidOperationException("Gemini returned empty Phase 2 message");
+            logger.LogInformation(
+                "Dual verify {Session}:{Point} — Pass 2 done in {Sec:F1}s (total {Total:F1}s)",
+                job.SessionId, job.PointId, sw.Elapsed.TotalSeconds - phase1Sec, sw.Elapsed.TotalSeconds);
 
+            SetStage(job, "Saving results…");
             var agreement = DualVerifyAgreementService.Compare(phase1, phase2);
 
             pointJob.Status = "completed";
@@ -99,14 +127,19 @@ public class DualVerifyJobProcessor(
                 }, ct);
             }
 
-            logger.LogInformation("Dual verify completed {Session}:{Point} → {Status}",
-                job.SessionId, job.PointId, agreement.Status);
+            logger.LogInformation("Dual verify completed {Session}:{Point} → {Status} in {Sec:F1}s",
+                job.SessionId, job.PointId, agreement.Status, sw.Elapsed.TotalSeconds);
+            stageTracker.Clear(job.SessionId, job.PointId);
         }
         catch (Exception ex)
         {
+            stageTracker.Clear(job.SessionId, job.PointId);
             await HandleFailureAsync(store, job, pointJob, ex, ct);
         }
     }
+
+    private void SetStage(DualVerifyJobMessage job, string stage) =>
+        stageTracker.Set(job.SessionId, job.PointId, stage);
 
     private byte[]? ResolveInternalPdf(DualVerifyStoreService store, DualVerifyJobMessage job)
     {
@@ -135,13 +168,13 @@ public class DualVerifyJobProcessor(
     }
 
     private static async Task<string?> TryLoadInternalMarkdownAsync(
-        NodeBridgeService nodeBridge,
+        LandingAiCompareService landingAi,
         DualVerifyJobMessage job,
         CancellationToken ct)
     {
         try
         {
-            var md = await nodeBridge.GetStoredParseAsync(job.InternalFileHash, ct);
+            var md = await landingAi.GetStoredParseAsync(job.InternalFileHash, ct);
             return md is { Length: > 100 } ? md : null;
         }
         catch
@@ -220,7 +253,8 @@ public class DualVerifyJobProcessor(
     private static bool IsTransientError(string message)
     {
         var m = message.ToLowerInvariant();
-        return m.Contains("timeout") || m.Contains("429") || m.Contains("503") || m.Contains("502")
+        return m.Contains("timeout") || m.Contains("elapsing") || m.Contains("canceled")
+            || m.Contains("429") || m.Contains("503") || m.Contains("502")
             || m.Contains("quota") || m.Contains("rate limit") || m.Contains("econnreset")
             || m.Contains("fetch failed") || m.Contains("network") || m.Contains("socket");
     }
