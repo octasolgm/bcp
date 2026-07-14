@@ -1,0 +1,235 @@
+<div class="page-header">
+  <div>
+    <h1>Gap Analysis — Working Document</h1>
+    <p class="subtitle">{{ subtitle }}</p>
+  </div>
+  <div class="header-actions">
+    @if (canDeleteSession) {
+      <button
+        type="button"
+        class="btn-secondary btn-delete-session"
+        [disabled]="deletingSession"
+        (click)="confirmDeleteSession()"
+      >
+        {{ deletingSession ? 'Deleting…' : 'Delete session' }}
+      </button>
+    }
+    <button
+      type="button"
+      class="btn-secondary"
+      [disabled]="exporting || !items.length"
+      (click)="exportXlsx()"
+    >
+      {{ exporting ? 'Exporting…' : 'Export XLSX' }}
+    </button>
+    <a routerLink="/analyse-v2" class="btn-primary">Re-run</a>
+  </div>
+</div>
+
+@if (loading) {
+  <div class="card-surface empty-state">
+    <strong>Loading analysis…</strong>
+    <p>Pulling findings from the dual-verify / compliance session.</p>
+  </div>
+}
+
+@if (!loading) {
+<div class="summary-row">
+  <div class="summary-card critical">
+    <span class="label">Critical</span>
+    <strong>{{ summary.critical }}</strong>
+    <span class="hint">Immediate action</span>
+  </div>
+  <div class="summary-card high">
+    <span class="label">High</span>
+    <strong>{{ summary.high }}</strong>
+    <span class="hint">Significant gap</span>
+  </div>
+  <div class="summary-card medium">
+    <span class="label">Medium</span>
+    <strong>{{ summary.medium }}</strong>
+    <span class="hint">Partial coverage</span>
+  </div>
+  <div class="summary-card compliant">
+    <span class="label">Compliant</span>
+    <strong>{{ summary.compliant }}</strong>
+    <span class="hint">Fully addressed</span>
+  </div>
+</div>
+
+@if (items.length) {
+<div class="ai-banner card-surface">
+  <span class="tag-ai">AI draft</span>
+  <p>Data was extracted from source documents using AI. All findings require human review before sign-off. Edit gaps, management responses, and effectiveness ratings below — changes are saved automatically.</p>
+</div>
+
+<div class="filter-pills">
+  @for (f of filters; track f.id) {
+    <button type="button" [class.active]="activeFilter === f.id" (click)="setFilter(f.id)">
+      {{ f.id === 'all' ? 'All (' + items.length + ')' : f.label }}
+    </button>
+  }
+</div>
+}
+}
+
+@if (!loading && !items.length) {
+  <div class="card-surface empty-state">
+    <strong>{{ loadError ? 'Could not load findings' : 'No gap findings yet' }}</strong>
+    <p>
+      @if (loadError) {
+        {{ loadError }} Open a valid session from Documents → View analysis, or start a new run on Analyse V2.
+      } @else {
+        Run an analysis on Analyse V2 (TFS Guidelines × I M P T F S), then open this page again — findings come from the real dual-verify / compliance session.
+      }
+    </p>
+    <a routerLink="/analyse-v2" class="btn-primary">Go to Analyse V2</a>
+  </div>
+}
+
+<div class="items-list">
+  @for (item of filteredItems; track item.id) {
+    <article class="item-card card-surface" [class.expanded]="item.expanded">
+      <button type="button" class="item-header" (click)="toggleItem(item)">
+        <span class="item-index">{{ item.id }}</span>
+        <span class="item-section">{{ item.section }}</span>
+        <strong class="item-title">{{ item.title }}</strong>
+        <span class="severity-badge" [class]="item.severity">{{ item.severity }}</span>
+        @if (item.signedOff) {
+          <span class="signed-off">Signed off</span>
+        }
+        <svg class="chevron" [class.open]="item.expanded" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+
+      @if (item.expanded) {
+        <div class="item-body">
+          <div class="compare-row">
+            <div class="compare-col">
+              <div class="col-header">
+                <span class="col-label reg">Regulatory Requirement</span>
+                <span class="tag-ai">AI Extracted</span>
+              </div>
+              <p>{{ item.regulatoryText }}</p>
+              <button type="button" class="view-pdf" (click)="openPdf('reg', item)">View PDF {{ item.regPage }}</button>
+            </div>
+            <div class="compare-col">
+              <div class="col-header">
+                <span class="col-label policy">Policy Extract</span>
+                <span class="tag-ai">AI Extracted</span>
+              </div>
+              <p>{{ item.policyText }}</p>
+              <button type="button" class="view-pdf" (click)="openPdf('policy', item)">View PDF {{ item.policyPage }}</button>
+            </div>
+          </div>
+
+          <div class="gaps-section">
+            <div class="field-header">
+              <span class="field-label gaps-label">Gaps Identified</span>
+              <span class="tag-ai">AI Draft — Review &amp; Edit</span>
+            </div>
+            <textarea class="field-textarea" rows="4" [(ngModel)]="item.gaps" (ngModelChange)="onFieldChange()"></textarea>
+          </div>
+
+          <div class="gaps-section">
+            <div class="field-header">
+              <span class="field-label">Management Response</span>
+              <span class="tag-action">Fill in</span>
+            </div>
+            <textarea
+              class="field-textarea"
+              rows="3"
+              [(ngModel)]="item.managementResponse"
+              (ngModelChange)="onFieldChange()"
+              placeholder="Describe what management has done or documented in response to this requirement…"
+            ></textarea>
+          </div>
+
+          <div class="effectiveness-grid">
+            <div class="field-group">
+              <div class="field-header">
+                <span class="field-label">Design Effectiveness</span>
+                <span class="tag-action">Select</span>
+              </div>
+              <select class="field-select" [(ngModel)]="item.designEffectiveness" (ngModelChange)="onFieldChange()">
+                <option value="">— Select —</option>
+                <option>Effective</option>
+                <option>Partially effective</option>
+                <option>Not effective</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <div class="field-header">
+                <span class="field-label">Operating Effectiveness</span>
+                <span class="tag-action">Select</span>
+              </div>
+              <select class="field-select" [(ngModel)]="item.operatingEffectiveness" (ngModelChange)="onFieldChange()">
+                <option value="">— Select —</option>
+                <option>Effective</option>
+                <option>Partially effective</option>
+                <option>Not effective</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <div class="field-header">
+                <span class="field-label">Overall Effectiveness</span>
+                <span class="tag-action">Select</span>
+              </div>
+              <select class="field-select" [(ngModel)]="item.overallEffectiveness" (ngModelChange)="onFieldChange()">
+                <option value="">— Select —</option>
+                <option>Effective</option>
+                <option>Partially effective</option>
+                <option>Not effective</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <div class="field-header">
+                <span class="field-label">Document Reference</span>
+                <span class="tag-action">Fill in</span>
+              </div>
+              <input
+                type="text"
+                class="field-input"
+                [(ngModel)]="item.documentReference"
+                (ngModelChange)="onFieldChange()"
+                placeholder="e.g. TFS Manual §4.2, p.22"
+              />
+            </div>
+          </div>
+
+          <div class="gaps-section">
+            <div class="field-header">
+              <span class="field-label">Evidence of Implementation</span>
+              <span class="tag-action">Fill in</span>
+            </div>
+            <textarea
+              class="field-textarea"
+              rows="3"
+              [(ngModel)]="item.evidence"
+              (ngModelChange)="onFieldChange()"
+              placeholder="Attach or describe evidence supporting the management response…"
+            ></textarea>
+          </div>
+        </div>
+      }
+    </article>
+  }
+</div>
+
+@if (pdfPreview) {
+  <div class="pdf-backdrop" (click)="closePdf()"></div>
+  <aside class="pdf-panel" role="dialog" aria-label="Source preview">
+    <header>
+      <div>
+        <h3>{{ pdfPreview.title }}</h3>
+        <p>{{ pdfPreview.page }}</p>
+      </div>
+      <button type="button" class="btn-close" (click)="closePdf()" aria-label="Close">✕</button>
+    </header>
+    <div class="pdf-body">
+      <p>{{ pdfPreview.body }}</p>
+      <p class="pdf-note">Source excerpt preview — connect document storage for full PDF page rendering.</p>
+    </div>
+  </aside>
+}

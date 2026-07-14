@@ -1,0 +1,85 @@
+<div class="page-header">
+  <div>
+    <h1>Regulation Library</h1>
+    <p class="subtitle">Uploaded regulations for {{ workspaceLabel }} — from Documents storage</p>
+  </div>
+  <div class="header-actions">
+    <button type="button" class="btn-secondary" (click)="refresh()" [disabled]="loading">
+      {{ loading ? 'Loading…' : 'Refresh' }}
+    </button>
+    <button type="button" class="btn-primary" [disabled]="uploading" (click)="triggerUpload(fileInput)">
+      {{ uploading ? 'Uploading…' : '+ Upload regulation' }}
+    </button>
+    <input #fileInput type="file" accept=".pdf,.docx,.doc" hidden (change)="onUpload($event)" />
+  </div>
+</div>
+
+@if (loading) {
+  <p class="muted-loading">Loading regulations…</p>
+} @else if (!regulations.length) {
+  <div class="card-surface empty-state">
+    <strong>No regulations uploaded yet</strong>
+    <p>Upload a regulation or guideline PDF — Landing AI extract runs automatically and saves points by file hash.</p>
+    <button type="button" class="btn-primary" [disabled]="uploading" (click)="triggerUpload(fileInputEmpty)">
+      {{ uploading ? 'Uploading…' : '+ Upload regulation' }}
+    </button>
+    <input #fileInputEmpty type="file" accept=".pdf,.docx,.doc" hidden (change)="onUpload($event)" />
+  </div>
+} @else {
+  <div class="card-surface table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Regulation</th>
+          <th>Issuing Body</th>
+          <th>Type</th>
+          <th>Version</th>
+          <th>Points</th>
+          <th>Last Updated</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (reg of regulations; track reg.id) {
+          <tr>
+            <td class="reg-cell">
+              <strong>{{ reg.title }}</strong>
+              <span class="reg-desc">{{ reg.description }}</span>
+            </td>
+            <td>{{ reg.issuingBody }}</td>
+            <td><span class="type-badge">{{ reg.type }}</span></td>
+            <td>{{ reg.version }}</td>
+            <td>{{ reg.pointCount ?? '—' }}</td>
+            <td class="muted">{{ reg.lastUpdated }}</td>
+            <td>
+              <span class="status-badge" [class]="reg.status">
+                {{ reg.status === 'active' ? 'Active' : 'Updated' }}
+              </span>
+            </td>
+            <td>
+              <a routerLink="/analyse" [queryParams]="{ regulation: reg.regulationKey }" class="btn-use">Use</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (pendingUpload) {
+  <div class="confirm-backdrop" (click)="cancelVersionBump()"></div>
+  <div class="confirm-dialog" role="alertdialog">
+    <h3>Regulation already exists</h3>
+    <p>
+      <strong>{{ pendingUpload.title }}</strong> is already stored.
+      Upload again as <span class="version-tag">{{ pendingUpload.nextVersion }}</span>?
+    </p>
+    <div class="confirm-actions">
+      <button type="button" class="btn-secondary" (click)="cancelVersionBump()">Cancel</button>
+      <button type="button" class="btn-primary" (click)="confirmVersionBump()">
+        Upload as {{ pendingUpload.nextVersion }}
+      </button>
+    </div>
+  </div>
+}

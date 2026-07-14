@@ -9,6 +9,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DualVerifySession> DualVerifySessions => Set<DualVerifySession>();
     public DbSet<DualVerifyPointJob> DualVerifyPointJobs => Set<DualVerifyPointJob>();
     public DbSet<ComplianceSession> ComplianceSessions => Set<ComplianceSession>();
+    public DbSet<StoredDocument> StoredDocuments => Set<StoredDocument>();
+    public DbSet<DocumentAnalysisRun> DocumentAnalysisRuns => Set<DocumentAnalysisRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -83,6 +85,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             e.HasIndex(x => x.SessionKey).IsUnique();
+        });
+
+        modelBuilder.Entity<StoredDocument>(e =>
+        {
+            e.ToTable("stored_documents");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.WorkspaceId, x.DocKind, x.Title });
+            e.HasIndex(x => x.FileHash);
+            e.Property(x => x.HistoryJson).HasColumnType("jsonb");
+            e.Property(x => x.FileHash).HasColumnName("file_hash");
+            e.Property(x => x.PointCount).HasColumnName("point_count");
+        });
+
+        modelBuilder.Entity<DocumentAnalysisRun>(e =>
+        {
+            e.ToTable("document_analysis_runs");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.InternalDocumentId);
+            e.HasIndex(x => x.DualVerifySessionId);
+            e.HasIndex(x => x.InternalFileHash);
         });
 
         ConfigureUtcDateTimes(modelBuilder);

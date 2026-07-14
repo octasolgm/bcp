@@ -1,0 +1,390 @@
+<div class="analyse-v-page">
+<header class="page-header-v with-actions">
+  <div>
+    <h1>Gap Analysis <span class="ver-tag">{{ versionLabel }}</span></h1>
+    <p class="subtitle">Select regulations and compliance, then run analysis</p>
+  </div>
+  <app-in-progress-nav-button />
+</header>
+
+@if (pendingRegBump) {
+  <div class="bump-banner">
+    <div>
+      <strong>{{ pendingRegBump.title }}</strong> already exists.
+      Upload as <em>{{ pendingRegBump.nextVersion }}</em>?
+    </div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmRegVersionBump()">Upload new version</button>
+      <button type="button" class="btn-sm" (click)="cancelRegVersionBump()">Cancel</button>
+    </div>
+  </div>
+}
+
+@if (pendingComplianceBump) {
+  <div class="bump-banner">
+    <div>
+      <strong>{{ pendingComplianceBump.title }}</strong> already exists.
+      Upload as <em>{{ pendingComplianceBump.nextVersion }}</em>?
+    </div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmComplianceVersionBump()">Upload new version</button>
+      <button type="button" class="btn-sm" (click)="cancelComplianceVersionBump()">Cancel</button>
+    </div>
+  </div>
+}
+
+@if (error) {
+  <p class="error-banner">{{ error }}</p>
+}
+
+<div class="v2-setup-stage">
+<section class="setup-row setup-row-resizable">
+  <div class="setup-row-inner">
+  <!-- Regulation -->
+  <div class="doc-panel doc-panel-stretch" [style.width.%]="setupSplitPct">
+    <div class="panel-header">
+      <h2>Regulation</h2>
+      <input
+        type="search"
+        class="search-field header-search"
+        placeholder="Search regulations…"
+        [(ngModel)]="regSearch"
+        aria-label="Search regulations"
+      />
+      <div class="header-actions">
+        <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredRegs()">All</button>
+        <button type="button" class="toolbar-btn secondary" (click)="clearRegSelection()">Clear</button>
+        <label class="btn-upload" [class.busy]="uploadingReg">
+          <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" [disabled]="uploadingReg" />
+          {{ uploadingReg ? '…' : 'Upload' }}
+        </label>
+      </div>
+    </div>
+
+    @if (loadingRegs) {
+      <p class="empty-msg">Loading regulations…</p>
+    } @else {
+      <ul class="file-list">
+        @for (doc of filteredRegulationDocs; track doc.id) {
+          <li>
+            <button type="button" class="file-row" [class.selected]="isRegFileSelected(doc.id)" (click)="toggleRegFile(doc)">
+              <span class="multi-check" [class.on]="isRegFileSelected(doc.id)">{{ isRegFileSelected(doc.id) ? '✓' : '' }}</span>
+              <span class="fname">{{ fileLabel(doc) }}</span>
+              <span class="fmeta">{{ pointMeta(doc) }}</span>
+              <span class="fmeta muted">{{ doc.version }}</span>
+            </button>
+          </li>
+        } @empty {
+          <li class="empty-msg">No regulation files</li>
+        }
+      </ul>
+    }
+
+    @if (selectedRegIds.size) {
+      <p class="panel-foot">{{ selectedRegIds.size }} selected · {{ govPoints.length }} points</p>
+    }
+  </div>
+
+  <div
+    class="resize-handle resize-handle-v"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize regulation and compliance panels"
+    (mousedown)="startSetupSplitResize($event)"
+  ></div>
+
+  <!-- Compliance document -->
+  <div class="doc-panel doc-panel-flex doc-panel-stretch">
+    <div class="panel-header">
+      <h2>Compliance document</h2>
+      <input
+        type="search"
+        class="search-field header-search"
+        placeholder="Search compliance docs…"
+        [(ngModel)]="complianceSearch"
+        aria-label="Search compliance documents"
+      />
+      <div class="header-actions">
+        <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredCompliance()">All</button>
+        <button type="button" class="toolbar-btn secondary" (click)="clearComplianceSelection()">Clear</button>
+        <label class="btn-upload" [class.busy]="uploadingCompliance">
+          <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" [disabled]="uploadingCompliance" />
+          {{ uploadingCompliance ? '…' : 'Upload' }}
+        </label>
+      </div>
+    </div>
+
+    @if (loadingCompliance) {
+      <p class="empty-msg">Loading…</p>
+    } @else {
+      <ul class="file-list">
+        @for (doc of filteredComplianceDocs; track doc.id) {
+          <li>
+            <button
+              type="button"
+              class="file-row"
+              [class.selected]="isComplianceFileSelected(doc.id)"
+              [disabled]="attachingCompliance"
+              (click)="toggleComplianceFile(doc)"
+            >
+              <span class="multi-check" [class.on]="isComplianceFileSelected(doc.id)">{{ isComplianceFileSelected(doc.id) ? '✓' : '' }}</span>
+              <span class="fname">{{ fileLabel(doc) }}</span>
+              <span class="fmeta">{{ doc.category || 'Compliance' }}</span>
+              <span class="fmeta muted">{{ doc.version }}</span>
+            </button>
+          </li>
+        } @empty {
+          <li class="empty-msg">No compliance files</li>
+        }
+      </ul>
+    }
+
+    @if (filteredComplianceDocs.length) {
+      <p class="panel-foot">{{ selectedComplianceIds.size }}/{{ filteredComplianceDocs.length }} selected</p>
+    }
+  </div>
+  </div>
+</section>
+
+<section class="action-strip" aria-label="Analysis summary and run">
+  <div class="metrics-row metrics-row-4">
+    <div class="stat-box">
+      <strong>{{ selectedCount }}</strong>
+      <em>Regulation points</em>
+    </div>
+    <div class="stat-box">
+      <strong>{{ selectedComplianceIds.size }}</strong>
+      <em>Compliance docs</em>
+    </div>
+    <div class="stat-box">
+      <strong>{{ coverageCounts.completed }}</strong>
+      <em>Done</em>
+    </div>
+    <div class="stat-box warn">
+      <strong>{{ coverageCounts.failed }}</strong>
+      <em>Failed</em>
+    </div>
+  </div>
+  <div class="run-row">
+    @if (isSessionActive) {
+      <button type="button" class="btn-stop v2-stop" (click)="stopAnalysis()">Stop</button>
+      <span class="run-progress-pill v2-run-progress" aria-live="polite">{{ sessionProgressLabel }}</span>
+    } @else {
+      <button type="button" class="btn-run v2-run" [disabled]="!canRun" (click)="runAnalysisAndScroll()">
+        Run
+      </button>
+    }
+  </div>
+</section>
+
+@if (!isSessionActive && !canRun && runBlockedReason) {
+  <p class="run-hint">{{ runBlockedReason }}</p>
+}
+</div>
+
+<!-- 3-column workspace -->
+<div #workspaceEl class="workspace-3col workspace-resizable v2-workspace">
+  <!-- Col 1: Regulation points -->
+  <div class="col-panel col-points" [style.width.px]="colLeftWidth">
+    <div class="col-head">
+      <h3>Regulation points</h3>
+      <span class="count">{{ selectedCount }}/{{ govPoints.length }}</span>
+    </div>
+    <div class="col-toolbar">
+      <input type="search" class="search-field" placeholder="Search points…" [(ngModel)]="govSearch" />
+      <button type="button" class="toolbar-btn primary" (click)="selectAll()">All</button>
+      <button type="button" class="toolbar-btn secondary" (click)="clearSelection()">Clear</button>
+    </div>
+    <div class="col-body">
+      @if (loadingPoints || uploadingReg) {
+        <p class="empty-msg">Loading points…</p>
+      } @else if (!govPoints.length) {
+        <p class="empty-msg">Select regulation file(s) above to load points.</p>
+      } @else if (visibleChapterGroups.length === 0) {
+        <p class="empty-msg">No points match search.</p>
+      } @else {
+        @if (govSourceLabel) { <p class="source-note">{{ govSourceLabel }}</p> }
+        @for (ch of visibleChapterGroups; track ch.chapter) {
+          <div class="acc-item">
+            <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
+              <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
+              <span>{{ formatChapterLabel(ch.chapter) }}</span>
+              <span class="acc-meta">{{ ch.points.length }}</span>
+              <button type="button" class="acc-action" (click)="$event.stopPropagation(); togglePointsByPrefix(ch.chapter)">
+                {{ chapterAllSelected(ch.chapter, ch.points) ? '−' : '+' }}
+              </button>
+            </button>
+            @if (isChapterExpanded(ch.chapter)) {
+              <div class="acc-body">
+                @for (sec of ch.sections; track sec.key) {
+                  @if (showSectionBar(ch.sections, sec.key, ch.chapter)) {
+                    <div class="sec-head">
+                      <span>{{ formatSectionGroupLabel(sec.key) }}</span>
+                      <button type="button" class="link-btn" (click)="togglePointsByPrefix(sec.key)">
+                        {{ sectionAllSelected(sec.points) ? '−' : '+' }}
+                      </button>
+                    </div>
+                  }
+                  @for (p of sec.points; track p.point_id) {
+                    <label class="point-line" [class.detail-selected]="selectedDetailPointId === p.point_id">
+                      <input type="checkbox" [checked]="selected.has(p.point_id)" (change)="toggle(p.point_id)" />
+                      <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
+                      <span class="ptxt" (click)="selectPointForDetail(p.point_id); $event.preventDefault()">{{ truncate(p.title || p.text, 56) }}</span>
+                    </label>
+                  }
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+  </div>
+
+  <div
+    class="resize-handle resize-handle-v"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize regulation points column"
+    (mousedown)="startColResize('left', $event)"
+  ></div>
+
+  <!-- Col 2: Analysis status -->
+  <div class="col-panel col-status" [style.width.px]="colMidWidth">
+    <div class="col-head">
+      <h3>Analysing list</h3>
+      <span class="count">{{ coverageCounts.completed }}/{{ selectedCoverageRows.length }}</span>
+    </div>
+
+    @if (analysisState === 'running') {
+      <div class="progress-block">
+        <h4>Analysing against {{ selectedRegLabel }}…</h4>
+        <ul class="step-list">
+          @for (step of analysisSteps; track step.label) {
+            <li [class.done]="step.done" [class.active]="step.active">
+              <span class="step-dot"></span>{{ step.label }}
+            </li>
+          }
+        </ul>
+        <div class="progress-bar"><div class="progress-fill" [style.width.%]="progress"></div></div>
+      </div>
+    }
+
+    @if (sessionId || analysisState !== 'idle') {
+      <div class="coverage-actions">
+        <button type="button" class="btn-sm" [disabled]="!sessionId || !!retryingPointId || coverageCounts.notRun === 0" (click)="runRemainingPoints()">
+          Run remaining ({{ coverageCounts.notRun }})
+        </button>
+        <button type="button" class="btn-sm" [disabled]="!sessionId || !!retryingPointId || coverageCounts.failed === 0" (click)="retryFailedOnly()">
+          Retry failed ({{ coverageCounts.failed }})
+        </button>
+      </div>
+    }
+
+    <div class="col-body">
+      @if (!govPoints.length) {
+        <p class="empty-msg">Point status appears here after you load regulation points.</p>
+      } @else if (!selectedCoverageRows.length) {
+        <p class="empty-msg">Select regulation points to analyse.</p>
+      } @else if (analysisState === 'idle' && !sessionId) {
+        <p class="empty-msg">Run analysis to track point-by-point status.</p>
+      } @else {
+        <ul class="status-list">
+          @for (row of selectedCoverageRows; track row.pointId) {
+            <li
+              class="status-row"
+              [class.detail-selected]="selectedDetailPointId === row.pointId"
+              (click)="selectPointForDetail(row.pointId)"
+            >
+              <span class="sid">{{ row.pointId }}</span>
+              <span class="stitle" [title]="row.title">{{ truncate(row.title, 40) }}</span>
+              <span class="sstatus" [class]="row.status">{{ formatCoverageStatus(row.status) }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </div>
+
+  <div
+    class="resize-handle resize-handle-v"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize analysing list column"
+    (mousedown)="startColResize('right', $event)"
+  ></div>
+
+  <!-- Col 3: Results -->
+  <div class="col-panel col-result col-panel-flex">
+    <div class="col-head">
+      <h3>Result</h3>
+      <span class="count">{{ selectedDetailPointId || '—' }}</span>
+      @if (analysisState === 'complete') {
+        <button type="button" class="btn-primary btn-sm" (click)="openFullReport()">Report</button>
+      }
+    </div>
+    <div class="result-detail result-detail-only">
+      @if (!selectedCoverageRows.length) {
+        <div class="detail-empty">
+          <strong>No points selected</strong>
+          Select regulation points on the left, then run analysis.
+        </div>
+      } @else if (selectedPointReportItem) {
+        <div class="result-detail-card-full">
+          <app-dual-verify-result-card [item]="selectedPointReportItem" />
+          <div class="detail-actions">
+            @if (sessionId && selectedPointDetail) {
+              <button type="button" class="link-btn" (click)="openFinding(selectedPointDetail.pointId)">Open in workbench →</button>
+              <button
+                type="button"
+                class="btn-sm"
+                [disabled]="retryingPointId === selectedPointDetail.pointId || selectedPointDetail.status === 'running'"
+                (click)="retrySinglePoint(selectedPointDetail.pointId)"
+              >
+                {{ selectedPointDetail.status === 'not-run' ? 'Run' : 'Re-run' }}
+              </button>
+            }
+          </div>
+        </div>
+      } @else if (selectedPointDetail) {
+        <div class="detail-card result-detail-card">
+          <div class="detail-head">
+            <span class="severity-badge" [class]="selectedPointDetail.severity">{{ selectedPointDetail.severity }}</span>
+            <h4>{{ selectedPointDetail.title }}</h4>
+          </div>
+          <p class="detail-section">{{ selectedPointDetail.section }} · {{ formatCoverageStatus(selectedPointDetail.status) }}</p>
+          <span class="solved-badge" [class]="selectedPointDetail.solved ? 'solved' : selectedPointDetail.status === 'completed' ? 'gap' : 'pending'">
+            @if (selectedPointDetail.solved) {
+              ✓ Point solved / compliant
+            } @else if (selectedPointDetail.status === 'completed') {
+              Gap identified — needs remediation
+            } @else {
+              {{ formatCoverageStatus(selectedPointDetail.status) }}
+            }
+          </span>
+          <p class="detail-summary">{{ selectedPointDetail.summary }}</p>
+          @if (sessionId && selectedPointDetail.status !== 'not-run') {
+            <button type="button" class="link-btn" (click)="openFinding(selectedPointDetail.pointId)">Open in workbench →</button>
+          }
+          @if (sessionId) {
+            <button
+              type="button"
+              class="btn-sm"
+              style="margin-left:0.5rem"
+              [disabled]="retryingPointId === selectedPointDetail.pointId || selectedPointDetail.status === 'running'"
+              (click)="retrySinglePoint(selectedPointDetail.pointId)"
+            >
+              {{ selectedPointDetail.status === 'not-run' ? 'Run' : 'Re-run' }}
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="detail-empty">
+          <strong>Select a point</strong>
+          Click a row in <em>Analysing list</em> to view compliance result and gap detail here.
+        </div>
+      }
+    </div>
+  </div>
+</div>
+</div>

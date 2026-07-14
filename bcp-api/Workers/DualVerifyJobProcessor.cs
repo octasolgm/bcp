@@ -19,7 +19,6 @@ public class DualVerifyJobProcessor(
     LocalJobQueue localQueue,
     DualVerifyJobStageTracker stageTracker,
     SessionCancellationTracker cancellationTracker,
-    IConfiguration config,
     ILogger<DualVerifyJobProcessor> logger)
 {
   public async Task ProcessJobAsync(DualVerifyJobMessage job, CancellationToken ct)
@@ -29,6 +28,7 @@ public class DualVerifyJobProcessor(
         var landingAi = scope.ServiceProvider.GetRequiredService<LandingAiCompareService>();
         var gemini = scope.ServiceProvider.GetRequiredService<GeminiService>();
         var govPoints = scope.ServiceProvider.GetRequiredService<GovPointsService>();
+        var compliancePdf = scope.ServiceProvider.GetRequiredService<CompliancePdfResolver>();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         if (await ShouldCancelAsync(store, job, ct))
@@ -62,7 +62,7 @@ public class DualVerifyJobProcessor(
         try
         {
             var (phase1, pass1Cached) = await GetOrRunPass1Async(
-                store, landingAi, job, pointJob, point, ct);
+                store, landingAi, compliancePdf, job, pointJob, point, ct);
             if (string.IsNullOrWhiteSpace(phase1))
                 throw new InvalidOperationException("Landing AI returned empty Phase 1 message");
 
@@ -72,7 +72,7 @@ public class DualVerifyJobProcessor(
             var phase1Sec = pass1Cached ? 0 : sw.Elapsed.TotalSeconds;
             var markdown = await TryLoadInternalMarkdownAsync(landingAi, job, ct);
             var prompt = DualVerifyPromptBuilder.Build(point, phase1, markdown);
-            var pdf = ResolveInternalPdf(store, job);
+            var pdf = await compliancePdf.ResolveForWorkerAsync(job, ct);
             if ((pdf == null || pdf.Length == 0) && string.IsNullOrWhiteSpace(markdown))
                 throw new InvalidOperationException(
                     "Phase 2 needs internal PDF (upload in UI) or parsed markdown. Upload PDF or configure DUAL_VERIFY_INTERNAL_PDF_PATH.");
@@ -147,6 +147,7 @@ public class DualVerifyJobProcessor(
     private async Task<(string Phase1, bool Cached)> GetOrRunPass1Async(
         DualVerifyStoreService store,
         LandingAiCompareService landingAi,
+        CompliancePdfResolver compliancePdf,
         DualVerifyJobMessage job,
         DualVerifyPointJob pointJob,
         GovPoint point,
@@ -164,7 +165,7 @@ public class DualVerifyJobProcessor(
         logger.LogInformation("Dual verify {Session}:{Point} — Pass 1 starting", job.SessionId, job.PointId);
         var phase1 = await landingAi.ComparePointAsync(
             point, job.InternalFileHash, job.InternalFileName,
-            ResolveInternalPdf(store, job), job.ForceRefresh, ct);
+            await compliancePdf.ResolveForWorkerAsync(job, ct), job.ForceRefresh, ct);
         logger.LogInformation(
             "Dual verify {Session}:{Point} — Pass 1 done",
             job.SessionId, job.PointId);
@@ -210,32 +211,6 @@ public class DualVerifyJobProcessor(
         pointJob.UpdatedAt = DateTime.UtcNow;
         await store.SavePointJobAsync(pointJob, ct);
         await store.UpdateSessionCountsAsync(job.SessionId, ct);
-    }
-
-    private byte[]? ResolveInternalPdf(DualVerifyStoreService store, DualVerifyJobMessage job)
-    {
-        var pdf = store.GetInternalPdf(job.SessionId);
-        if (pdf is { Length: > 0 }) return pdf;
-
-        var envPath = config["DUAL_VERIFY_INTERNAL_PDF_PATH"];
-        if (!string.IsNullOrWhiteSpace(envPath) && File.Exists(envPath))
-            return File.ReadAllBytes(envPath);
-
-        foreach (var candidate in DefaultPdfCandidates())
-        {
-            if (File.Exists(candidate))
-                return File.ReadAllBytes(candidate);
-        }
-
-        return null;
-    }
-
-    private static IEnumerable<string> DefaultPdfCandidates()
-    {
-        var cwd = Directory.GetCurrentDirectory();
-        yield return Path.Combine(cwd, "apps", "web", "public", "default-docs", "imptfs.pdf");
-        yield return Path.GetFullPath(Path.Combine(cwd, "..", "..", "..", "..", "web", "public", "default-docs", "imptfs.pdf"));
-        yield return Path.GetFullPath(Path.Combine(cwd, "..", "..", "..", "..", "..", "web", "public", "default-docs", "imptfs.pdf"));
     }
 
     private static async Task<string?> TryLoadInternalMarkdownAsync(

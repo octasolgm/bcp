@@ -11,15 +11,15 @@
 .card-pending {
   padding: 0.65rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .card-done {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-strong);
   border-radius: 12px;
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--bg-overlay);
   padding: 0.75rem;
 }
 
@@ -50,7 +50,7 @@ header {
     margin: 0;
     font-size: 13px;
     font-family: ui-monospace, monospace;
-    color: #10b981;
+    color: var(--accent);
   }
 }
 
@@ -69,7 +69,7 @@ header {
 .summary {
   margin: 0 0 0.65rem;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   line-height: 1.45;
 }
 

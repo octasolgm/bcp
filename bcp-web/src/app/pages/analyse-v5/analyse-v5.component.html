@@ -1,0 +1,166 @@
+@if (error) { <p class="error-banner">{{ error }}</p> }
+
+<div class="analyse-v-page v5-app">
+  <!-- Left rail -->
+  <aside class="v5-rail">
+    <div class="rail-brand">
+      <strong>Gap Analysis</strong>
+      <span>{{ versionLabel }}</span>
+    </div>
+
+    <nav class="rail-tabs">
+      <button type="button" [class.on]="activeSetupTab === 'regulation'" (click)="activeSetupTab = 'regulation'">
+        <span class="rail-icon">§</span> Regulation
+        <em>{{ selectedRegIds.size }}</em>
+      </button>
+      <button type="button" [class.on]="activeSetupTab === 'compliance'" (click)="activeSetupTab = 'compliance'">
+        <span class="rail-icon">📄</span> Compliance
+        <em>{{ complianceFile ? '1' : '0' }}</em>
+      </button>
+    </nav>
+
+    <div class="rail-panel">
+      @if (activeSetupTab === 'regulation') {
+        <input type="search" class="search-field" placeholder="Search…" [(ngModel)]="regSearch" />
+        <label class="btn-upload rail-upload">
+          <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" />
+          Upload
+        </label>
+        <ul class="file-list rail-files">
+          @for (doc of filteredRegulationDocs; track doc.id) {
+            <li>
+              <button type="button" class="file-row" [class.selected]="isRegFileSelected(doc.id)" (click)="toggleRegFile(doc)">
+                <span class="multi-check" [class.on]="isRegFileSelected(doc.id)">{{ isRegFileSelected(doc.id) ? '✓' : '' }}</span>
+                <span class="fname">{{ fileLabel(doc) }}</span>
+                <span class="fmeta">{{ pointMeta(doc) }}</span>
+              </button>
+            </li>
+          } @empty {
+            <li class="empty-msg">No files</li>
+          }
+        </ul>
+      } @else {
+        <input type="search" class="search-field" placeholder="Search…" [(ngModel)]="complianceSearch" />
+        <label class="btn-upload rail-upload">
+          <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" />
+          Upload
+        </label>
+        <ul class="file-list rail-files">
+          @for (doc of filteredComplianceDocs; track doc.id) {
+            <li>
+              <button type="button" class="file-row" [class.selected]="selectedComplianceDocId === doc.id" (click)="selectComplianceDoc(doc)">
+                <span class="multi-check" [class.on]="selectedComplianceDocId === doc.id">✓</span>
+                <span class="fname">{{ fileLabel(doc) }}</span>
+                <span class="fmeta">{{ doc.version }}</span>
+              </button>
+            </li>
+          } @empty {
+            <li class="empty-msg">No files</li>
+          }
+        </ul>
+        @if (complianceFile) {
+          <p class="panel-foot">{{ complianceFileName }}</p>
+        }
+      }
+    </div>
+
+    <div class="rail-footer">
+      <div class="rail-stat">
+        <span>{{ selectedCount }}</span>
+        <small>points</small>
+      </div>
+      <button type="button" class="btn-run rail-run" [disabled]="!canRun" (click)="runAnalysis()">
+        {{ analysisState === 'running' ? progressDone + '/' + progressTotal : 'Run' }}
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main: 3 columns full width -->
+  <main class="v5-main">
+    <div class="v5-main-head">
+      <div>
+        <h1>Workspace</h1>
+        <span>{{ govPoints.length }} regulation points · {{ coverageCounts.completed }} analysed</span>
+      </div>
+      <div class="v5-main-head-actions">
+        <app-in-progress-nav-button />
+        <button type="button" class="link-btn" (click)="openAdvancedWorkbench()">Advanced</button>
+      </div>
+    </div>
+
+    <div class="workspace-3col v5-cols">
+      <div class="col-panel col-points">
+        <div class="col-head"><h3>Regulation points</h3><span>{{ selectedCount }}/{{ govPoints.length }}</span></div>
+        <div class="col-toolbar">
+          <input type="search" class="search-field" [(ngModel)]="govSearch" placeholder="Search…" />
+          <button type="button" class="toolbar-btn primary" (click)="selectAll()">All</button>
+        </div>
+        <div class="col-body">
+          @for (ch of visibleChapterGroups; track ch.chapter) {
+            <div class="acc-item">
+              <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
+                <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
+                {{ formatChapterLabel(ch.chapter) }}
+              </button>
+              @if (isChapterExpanded(ch.chapter)) {
+                <div class="acc-body">
+                  @for (p of ch.points; track p.point_id) {
+                    <label class="point-line" [class.detail-selected]="selectedDetailPointId === p.point_id">
+                      <input type="checkbox" [checked]="selected.has(p.point_id)" (change)="toggle(p.point_id)" />
+                      <span class="pid">{{ p.point_id }}</span>
+                      <span class="ptxt" (click)="selectPointForDetail(p.point_id); $event.preventDefault()">{{ truncate(p.title || p.text, 50) }}</span>
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          } @empty {
+            <p class="empty-msg">Select regulations in the left rail</p>
+          }
+        </div>
+      </div>
+
+      <div class="col-panel col-status">
+        <div class="col-head"><h3>Analysing</h3><span>{{ coverageCounts.completed }}/{{ coverageCounts.total }}</span></div>
+        @if (analysisState === 'running') {
+          <div class="progress-block">
+            <div class="progress-bar"><div class="progress-fill" [style.width.%]="progress"></div></div>
+          </div>
+        }
+        <div class="col-body">
+          <ul class="status-list">
+            @for (row of coverageRows; track row.pointId) {
+              <li class="status-row" [class.detail-selected]="selectedDetailPointId === row.pointId" (click)="selectPointForDetail(row.pointId)">
+                <span class="sid">{{ row.pointId }}</span>
+                <span class="stitle">{{ truncate(row.title, 36) }}</span>
+                <span class="sstatus" [class]="row.status">{{ formatCoverageStatus(row.status) }}</span>
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+
+      <div class="col-panel col-result">
+        <div class="col-head">
+          <h3>Result</h3>
+          @if (analysisState === 'complete') {
+            <button type="button" class="btn-primary btn-sm" (click)="openFullReport()">Report</button>
+          }
+        </div>
+        <div class="result-detail">
+          @if (selectedPointDetail) {
+            <div class="detail-card">
+              <span class="solved-badge" [class]="selectedPointDetail.solved ? 'solved' : 'gap'">
+                {{ selectedPointDetail.solved ? '✓ Solved' : 'Gap' }}
+              </span>
+              <h4>{{ selectedPointDetail.title }}</h4>
+              <p class="detail-summary">{{ selectedPointDetail.summary }}</p>
+            </div>
+          } @else {
+            <div class="detail-empty"><strong>Pick a point</strong> from the list</div>
+          }
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

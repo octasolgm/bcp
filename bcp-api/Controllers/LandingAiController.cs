@@ -113,12 +113,22 @@ public class LandingAiController(
         try
         {
             var result = await govExtract.LoadFromDatabaseOrSeedAsync(docId, ct);
+            var points = govPoints.GetAllPoints().Select(p => new
+            {
+                point_id = p.PointId,
+                title = p.Title,
+                text = p.Text,
+                section = p.Section,
+                point_type = "mandatory",
+            });
             return Ok(new
             {
                 success = result.Success,
                 source = result.Source,
                 pointCount = result.PointCount,
                 activeSource = result.ActiveSource,
+                points,
+                docId,
                 message = result.Source == "db-cache"
                     ? $"Loaded {result.PointCount} gov points from Supabase extract cache."
                     : $"No DB extract cache — loaded {result.PointCount} points from embedded seed.",
@@ -244,6 +254,12 @@ public class LandingAiController(
         var session = await db.ComplianceSessions.FindAsync([id], ct);
         if (session == null)
             return NotFound(new { success = false, message = "Not found" });
+
+        var analysisRuns = await db.DocumentAnalysisRuns
+            .Where(r => r.ComplianceSessionId == id)
+            .ToListAsync(ct);
+        if (analysisRuns.Count > 0)
+            db.DocumentAnalysisRuns.RemoveRange(analysisRuns);
 
         db.ComplianceSessions.Remove(session);
         await db.SaveChangesAsync(ct);

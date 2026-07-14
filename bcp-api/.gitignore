@@ -6,3 +6,5 @@ publish/
 # runtime sqlite + job backups (not Data/ EF source)
 reguliq.db
 dual-verify-kafka/
+
+data/seed-docs/

@@ -2,13 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>BCP App — Compliance</title>
+  <title>Reguliq — Regulatory Compliance Platform</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b111b">
-  <meta name="description" content="Bank Compliance Platform — dual verify, gap analysis, regulatory reporting">
+  <meta name="theme-color" content="#0b121e">
+  <meta name="description" content="Reguliq — AI-powered regulatory gap analysis and compliance management for SNB UAE / DIFC">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="alternate icon" href="favicon.svg">
+  <script>
+    (function () {
+      // One-shot wipe of stale demo / dual-verify local caches (keeps theme + workspace).
+      var CLEAR_VERSION = '2026-07-08';
+      var MARKER = 'reguliq-storage-cleared';
+      try {
+        if (localStorage.getItem(MARKER) !== CLEAR_VERSION) {
+          var keep = { 'reguliq-theme': 1, 'reguliq-workspace': 1 };
+          var kill = [
+            'reguliq-gap-report',
+            'reguliq-gap-drafts',
+            'reguliq-documents',
+            'bcp-app-dual-verify-report',
+            'bcp-app-kafka-dual-verify-recent'
+          ];
+          for (var i = 0; i < kill.length; i++) localStorage.removeItem(kill[i]);
+          var toRemove = [];
+          for (var j = 0; j < localStorage.length; j++) {
+            var k = localStorage.key(j);
+            if (!k || keep[k] || k === MARKER) continue;
+            if (k.indexOf('reguliq-') === 0 || k.indexOf('bcp-app-') === 0) toRemove.push(k);
+          }
+          for (var n = 0; n < toRemove.length; n++) localStorage.removeItem(toRemove[n]);
+          try { sessionStorage.clear(); } catch (e) {}
+          localStorage.setItem(MARKER, CLEAR_VERSION);
+        }
+      } catch (e) {}
+
+      var stored = localStorage.getItem('reguliq-theme');
+      var theme = stored === 'light' ? 'light' : 'dark';
+      if (stored === 'system') {
+        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.style.colorScheme = theme;
+    })();
+  </script>
 </head>
 <body>
   <app-root></app-root>

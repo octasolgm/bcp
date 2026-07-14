@@ -51,10 +51,14 @@ export interface DualVerifySessionSummary {
   totalPoints: number;
   completedPoints: number;
   failedPoints: number;
+  runningPoints?: number;
   phase2Model: string;
   transport: string;
   updatedAt: string;
   label: string;
+  regulationFileName?: string | null;
+  internalFileName?: string | null;
+  govFileName?: string | null;
 }
 
 export interface ComplianceSessionSummary {
@@ -85,6 +89,12 @@ export interface SessionProgress {
     transport: string;
     phase2Model: string;
     granularity?: string;
+    govFileName?: string | null;
+    internalFileName?: string | null;
+    govFileHash?: string | null;
+    internalFileHash?: string | null;
+    regulationDocumentId?: string | null;
+    internalDocumentId?: string | null;
   };
   points: Array<{
     id: string;
@@ -123,6 +133,12 @@ export class ApiService {
 
   listDualVerifySessions() {
     return this.http.get<ApiResponse<DualVerifySessionSummary[]>>(`${this.base}/dual-verify-kafka/sessions`);
+  }
+
+  listActiveDualVerifySessions() {
+    return this.http.get<ApiResponse<DualVerifySessionSummary[]>>(
+      `${this.base}/dual-verify-kafka/sessions/active`,
+    );
   }
 
   /** Kafka sessions from Nest (optional — skipped when nestjsApiUrl is empty) */
@@ -165,6 +181,7 @@ export class ApiService {
       success: boolean;
       source: string;
       pointCount: number;
+      points?: GovPoint[];
       message?: string;
     }>(`${this.base}/landing-ai/gov-points/load-from-db?docId=${docId}`, {});
   }
@@ -197,19 +214,53 @@ export class ApiService {
   }
 
   startJob(form: FormData) {
-    return this.http.post<ApiResponse<{ id: string }>>(`${this.base}/dual-verify-kafka/jobs`, form);
+    return this.http.post<ApiResponse<{ id: string; analysisRunId?: string }>>(
+      `${this.base}/dual-verify-kafka/jobs`,
+      form,
+    );
+  }
+
+  /** Analysis runs linked to a stored document (compliance or regulation). */
+  listDocumentAnalysisRuns(documentId: string) {
+    return this.http.get<{
+      success: boolean;
+      documentId: string;
+      count: number;
+      runs: DocumentAnalysisRunDto[];
+      message?: string;
+    }>(`${this.base}/documents/${documentId}/analysis-runs`);
+  }
+
+  deleteDocumentAnalysisRun(documentId: string, runId: string) {
+    return this.http.delete<{ success: boolean; deleted?: boolean; message?: string }>(
+      `${this.base}/documents/${documentId}/analysis-runs/${runId}`,
+    );
   }
 
   retryFailed(sessionId: string, internalFile?: File | null) {
     if (internalFile) {
       const form = new FormData();
       form.append('internalFile', internalFile);
-      return this.http.post(
+      return this.http.post<ApiResponse<{ requeued: number }>>(
         `${this.base}/dual-verify-kafka/jobs/${sessionId}/retry-failed`,
         form,
       );
     }
-    return this.http.post(`${this.base}/dual-verify-kafka/jobs/${sessionId}/retry-failed`, {});
+    return this.http.post<ApiResponse<{ requeued: number }>>(
+      `${this.base}/dual-verify-kafka/jobs/${sessionId}/retry-failed`,
+      {},
+    );
+  }
+
+  /**
+   * Re-run specific points on an existing session, or append not-yet-run points.
+   * Form: pointIds (JSON), optional govPointsJson, forceRefresh, internalFile.
+   */
+  retryPoints(sessionId: string, form: FormData) {
+    return this.http.post<ApiResponse<{ requeued: number }>>(
+      `${this.base}/dual-verify-kafka/jobs/${sessionId}/retry-points`,
+      form,
+    );
   }
 
   cancelSession(sessionId: string) {
@@ -230,4 +281,130 @@ export class ApiService {
       `${this.base}/landing-ai/compliance-sessions/${id}`,
     );
   }
+
+  getDocumentsStorageHealth() {
+    return this.http.get<{
+      success: boolean;
+      storageConfigured: boolean;
+      bucket: string;
+      hint?: string;
+    }>(`${this.base}/documents/health`);
+  }
+
+  listStoredDocuments(kind?: string, workspaceId?: string) {
+    const qs = new URLSearchParams();
+    if (kind) qs.set('kind', kind);
+    if (workspaceId) qs.set('workspaceId', workspaceId);
+    const q = qs.toString();
+    return this.http.get<ApiResponse<StoredDocumentDto[]>>(
+      `${this.base}/documents${q ? `?${q}` : ''}`,
+    );
+  }
+
+  uploadDocument(form: FormData) {
+    return this.http.post<
+      | ApiResponse<StoredDocumentDto>
+      | {
+          success: false;
+          duplicate: true;
+          message: string;
+          existing: StoredDocumentDto;
+          nextVersion: string;
+        }
+    >(`${this.base}/documents/upload`, form);
+  }
+
+  /** Seed TFS Guidelines.pdf into Storage + link existing extract cache by file hash. */
+  seedTfsGuidelines(form?: FormData) {
+    return this.http.post<{
+      success: boolean;
+      message?: string;
+      documentId?: string;
+      fileHash?: string;
+      pointCount?: number;
+      uploadedToStorage?: boolean;
+      storageConfigured?: boolean;
+      storagePath?: string;
+      sourcePdfPath?: string;
+      document?: StoredDocumentDto;
+    }>(`${this.base}/documents/seed-tfs-guidelines`, form ?? new FormData());
+  }
+
+  /** Upload regulation to Storage + Landing extract (DB cache by file hash). */
+  uploadRegulation(form: FormData) {
+    return this.http.post<{
+      success: boolean;
+      message?: string;
+      document?: StoredDocumentDto;
+      cached?: boolean;
+      fileHash?: string;
+      pointCount?: number;
+      points?: GovPoint[];
+      source?: string;
+      duplicate?: boolean;
+      existing?: StoredDocumentDto;
+      nextVersion?: string;
+    }>(`${this.base}/documents/upload-regulation`, form);
+  }
+
+  /** Load gov points for a stored regulation (DB cache first, else extract from Storage). */
+  loadDocumentPoints(id: string) {
+    return this.http.post<{
+      success: boolean;
+      source?: string;
+      cached?: boolean;
+      fileHash?: string;
+      pointCount?: number;
+      document?: StoredDocumentDto;
+      points?: GovPoint[];
+      message?: string;
+    }>(`${this.base}/documents/${id}/load-points`, {});
+  }
+
+  getDocumentSignedUrl(id: string) {
+    return this.http.get<{ success: boolean; url: string; expiresIn: number; path: string }>(
+      `${this.base}/documents/${id}/signed-url`,
+    );
+  }
+}
+
+export interface StoredDocumentDto {
+  id: string;
+  title: string;
+  category: string;
+  pages: number;
+  uploaded: string;
+  version: string;
+  status: string;
+  gapCount?: number | null;
+  filter: string;
+  fileType: string;
+  docKind: string;
+  storagePath: string;
+  history: string[];
+  originalFileName: string;
+  sizeBytes: number;
+  fileHash?: string | null;
+  pointCount?: number | null;
+  activeAnalysisCount?: number;
+}
+
+export interface DocumentAnalysisRunDto {
+  id: string;
+  dualVerifySessionId?: string | null;
+  complianceSessionId?: string | null;
+  label: string;
+  regulationFileName?: string | null;
+  internalFileName?: string | null;
+  status: string;
+  pointCount: number;
+  completedPoints: number;
+  failedPoints?: number;
+  runningPoints?: number;
+  isActive?: boolean;
+  sessionAvailable?: boolean;
+  granularity: string;
+  createdAt: string;
+  updatedAt: string;
+  openUrl: string;
 }

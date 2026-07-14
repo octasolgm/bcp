@@ -423,6 +423,16 @@
                     </td>
                     <td class="col-sum">{{ truncate(item.agreement?.summary || item.landingMessage || item.errorMessage || '—', 56) }}</td>
                     <td class="col-actions">
+                      @if (sessionId && item.status !== 'running' && item.status !== 'queued') {
+                        <button
+                          type="button"
+                          class="link-btn compact"
+                          (click)="retryPoint(item.pointId, $event)"
+                          title="Re-run this point"
+                        >
+                          Re-run
+                        </button>
+                      }
                       @if (canRemoveReportItem(item)) {
                         <button
                           type="button"

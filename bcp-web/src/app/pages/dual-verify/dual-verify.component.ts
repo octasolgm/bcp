@@ -86,7 +86,7 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
   chapterGroups: GovPointChapterGroup[] = [];
   selected = new Set<string>();
   granularity: 'leaf' | 'section' = 'leaf';
-  aiModel = 'gemini-2.5-flash';
+  aiModel = 'gemini-3.5-flash';
   forceRefresh = false;
   internalFile: File | null = null;
   sessionId: string | null = null;
@@ -125,7 +125,7 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
   reportListCollapsed = false;
   exportsExpanded = false;
 
-  readonly models = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-3.5-flash'];
+  readonly models = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
   readonly copy = DUAL_VERIFY_COPY;
 
   constructor(
@@ -1131,6 +1131,29 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
       error: (e) => {
         this.error =
           e?.error?.message ?? e?.message ?? 'Retry failed — check API is running and session ID is valid.';
+      },
+    });
+  }
+
+  /** Re-run a single report point on the current Kafka session. */
+  retryPoint(pointId: string, event?: Event): void {
+    event?.stopPropagation();
+    if (!this.sessionId) return;
+    this.error = '';
+    const form = new FormData();
+    form.append('pointIds', JSON.stringify([pointId]));
+    form.append('forceRefresh', 'true');
+    if (this.internalFile) form.append('internalFile', this.internalFile);
+    this.api.retryPoints(this.sessionId, form).subscribe({
+      next: (r) => {
+        const n = r.data?.requeued ?? 1;
+        this.reportNote = `Re-queued ${pointId} (${n})…`;
+        this.running = true;
+        this.poll(this.sessionId!);
+      },
+      error: (e) => {
+        this.error =
+          e?.error?.message ?? e?.message ?? `Could not re-run ${pointId}`;
       },
     });
   }

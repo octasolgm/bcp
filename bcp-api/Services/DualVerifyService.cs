@@ -1,4 +1,5 @@
-using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore;
+using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Infrastructure;
 using Reguliq.Api.Models;
@@ -9,12 +10,14 @@ namespace Reguliq.Api.Services;
 public class DualVerifyService(
     GovPointsService govPoints,
     DualVerifyStoreService store,
+    CompliancePdfResolver compliancePdf,
     DualVerifyJobStageTracker stageTracker,
     SessionCancellationTracker cancellationTracker,
     LocalJobQueue queue,
     KafkaConfig kafkaConfig,
     KafkaProducerService kafka,
     DatabaseConfig dbConfig,
+    AppDbContext db,
     IConfiguration config,
     IWebHostEnvironment env,
     ILogger<DualVerifyService> logger)
@@ -55,6 +58,7 @@ public class DualVerifyService(
         byte[]? internalPdf,
         string? internalFileName,
         IReadOnlyList<GovPoint>? clientGovPoints = null,
+        Guid? internalStoredDocumentId = null,
         CancellationToken ct = default)
     {
         await AssertPersistenceReadyAsync(ct);
@@ -65,6 +69,14 @@ public class DualVerifyService(
             clientGovPoints);
         if (filtered.Count == 0)
             throw new InvalidOperationException("No matching gov points selected");
+
+        var compliance = await compliancePdf.ResolveForJobAsync(
+            internalPdf,
+            internalStoredDocumentId,
+            request.InternalDocId,
+            internalFileName,
+            ct);
+        internalPdf = compliance.PdfBytes ?? internalPdf;
 
         var sessionId = Guid.NewGuid();
         var now = DateTime.UtcNow;
@@ -77,11 +89,11 @@ public class DualVerifyService(
             Status = "queued",
             Granularity = request.Granularity,
             GovDocId = request.GovDocId,
-            InternalDocId = request.InternalDocId,
+            InternalDocId = compliance.InternalDocId,
             GovFileHash = GovFileHash,
-            InternalFileHash = InternalFileHash,
+            InternalFileHash = compliance.FileHash,
             GovFileName = "TFS Guidelines.pdf",
-            InternalFileName = internalFileName ?? "I M P T F S.pdf",
+            InternalFileName = compliance.FileName,
             TotalPoints = filtered.Count,
             QueuedPoints = filtered.Count,
             Phase2Model = request.Phase2Model,
@@ -117,8 +129,8 @@ public class DualVerifyService(
             messages.Add(new DualVerifyJobMessage(
                 Guid.NewGuid().ToString(), jobId, sessionId,
                 point.PointId, point.Title, point.Text,
-                request.Granularity, request.GovDocId, request.InternalDocId,
-                GovFileHash, InternalFileHash,
+                request.Granularity, request.GovDocId, compliance.InternalDocId,
+                GovFileHash, compliance.FileHash,
                 session.GovFileName ?? "", session.InternalFileName ?? "",
                 request.Phase2Model, 1, maxAttempts,
                 request.ForceRefresh, sessionId.ToString(), now,
@@ -157,7 +169,9 @@ public class DualVerifyService(
         await store.UpdateSessionCountsAsync(sessionId, ct);
         var session = await store.GetSessionAsync(sessionId, ct);
         if (session == null) return null;
-        var progress = MapProgress(session);
+        var run = await db.DocumentAnalysisRuns.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.DualVerifySessionId == sessionId, ct);
+        var progress = MapProgress(session, run);
         var points = progress.Points.Select(p =>
         {
             if (p.Status != "running") return p;
@@ -224,14 +238,20 @@ public class DualVerifyService(
         return await store.DeleteSessionAsync(sessionId, ct);
     }
 
-    public static SessionProgressDto MapProgress(DualVerifySession session) =>
+    public static SessionProgressDto MapProgress(DualVerifySession session, DocumentAnalysisRun? run = null) =>
         new(
             new DualVerifySessionDto(
                 session.Id, session.Status, session.TotalPoints,
                 session.CompletedPoints, session.FailedPoints,
                 session.RunningPoints, session.QueuedPoints,
                 session.Transport, session.Phase2Model ?? "",
-                session.Granularity, session.UpdatedAt),
+                session.Granularity, session.UpdatedAt,
+                session.GovFileName,
+                session.InternalFileName,
+                session.GovFileHash,
+                session.InternalFileHash,
+                run?.RegulationDocumentId,
+                run?.InternalDocumentId),
             session.PointJobs.OrderBy(p => p.PointId).Select(p => new PointJobDto(
                 p.Id, p.PointId, p.PointTitle, p.Status,
                 p.LandingMessage, p.LlmMessage,
@@ -245,36 +265,131 @@ public class DualVerifyService(
     {
         var session = await store.GetSessionAsync(sessionId, ct);
         if (session == null) return 0;
+        var failedIds = session.PointJobs
+            .Where(p => p.Status == "failed")
+            .Select(p => p.PointId)
+            .ToList();
+        return await RetryPointsAsync(sessionId, failedIds, null, internalPdf, forceRefresh: false, ct);
+    }
+
+    /// <summary>
+    /// Re-queue specific points in an existing session. Existing jobs are reset;
+    /// missing point IDs are created and appended (e.g. run remaining not-yet-analysed points).
+    /// Same Kafka message shape as CreateJob / RetryFailed.
+    /// </summary>
+    public async Task<int> RetryPointsAsync(
+        Guid sessionId,
+        IReadOnlyList<string> pointIds,
+        IReadOnlyList<GovPoint>? clientGovPoints = null,
+        byte[]? internalPdf = null,
+        bool forceRefresh = false,
+        CancellationToken ct = default)
+    {
+        var session = await store.GetSessionAsync(sessionId, ct);
+        if (session == null) return 0;
+        if (pointIds.Count == 0) return 0;
 
         if (internalPdf is { Length: > 0 })
             store.SetInternalPdf(sessionId, internalPdf);
-        var failed = session.PointJobs.Where(p => p.Status == "failed").ToList();
-        var transport = kafkaConfig.GetTransportMode();
-        var messages = new List<DualVerifyJobMessage>();
 
-        foreach (var job in failed)
+        cancellationTracker.Clear(sessionId);
+
+        var transport = kafkaConfig.GetTransportMode();
+        var maxAttempts = kafkaConfig.GetMaxAttempts();
+        var now = DateTime.UtcNow;
+        var byId = session.PointJobs.ToDictionary(p => p.PointId, StringComparer.OrdinalIgnoreCase);
+        var messages = new List<DualVerifyJobMessage>();
+        var added = 0;
+
+        // Resolve only IDs that need a new job
+        var missingIds = pointIds
+            .Where(id => !string.IsNullOrWhiteSpace(id) && !byId.ContainsKey(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var resolvedNew = missingIds.Count == 0
+            ? []
+            : govPoints.ResolveSelectedPoints(missingIds, session.Granularity, clientGovPoints);
+        var resolvedMap = resolvedNew.ToDictionary(p => p.PointId, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var rawId in pointIds.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            job.Status = "queued";
-            job.Attempt = 1;
-            job.ErrorMessage = null;
-            job.UpdatedAt = DateTime.UtcNow;
-            // Preserve job.LandingMessage — manual retry resumes at Gemini when Pass 1 is cached.
-            await store.SavePointJobAsync(job, ct);
+            if (string.IsNullOrWhiteSpace(rawId)) continue;
+
+            if (byId.TryGetValue(rawId, out var job))
+            {
+                if (job.Status is "running" or "queued")
+                    continue;
+
+                job.Status = "queued";
+                job.Attempt = 1;
+                job.ErrorMessage = null;
+                job.UpdatedAt = now;
+                if (forceRefresh)
+                {
+                    job.LandingMessage = null;
+                    job.LlmMessage = null;
+                    job.AgreementJson = null;
+                }
+                await store.SavePointJobAsync(job, ct);
+
+                messages.Add(new DualVerifyJobMessage(
+                    Guid.NewGuid().ToString(), job.Id, sessionId,
+                    job.PointId, job.PointTitle, job.GovText,
+                    session.Granularity, session.GovDocId, session.InternalDocId,
+                    session.GovFileHash, session.InternalFileHash,
+                    session.GovFileName ?? "", session.InternalFileName ?? "",
+                    session.Phase2Model ?? "gemini-3.5-flash",
+                    1, job.MaxAttempts, forceRefresh, sessionId.ToString(), now,
+                    Transport: transport));
+                continue;
+            }
+
+            if (!resolvedMap.TryGetValue(rawId, out var point))
+                continue;
+
+            var jobId = Guid.NewGuid();
+            var pointJob = new DualVerifyPointJob
+            {
+                Id = jobId,
+                SessionId = sessionId,
+                PointId = point.PointId,
+                PointTitle = point.Title,
+                GovText = point.Text,
+                Status = "queued",
+                MaxAttempts = maxAttempts,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            await store.SavePointJobAsync(pointJob, ct);
+            added++;
 
             messages.Add(new DualVerifyJobMessage(
-                Guid.NewGuid().ToString(), job.Id, sessionId,
-                job.PointId, job.PointTitle, job.GovText,
+                Guid.NewGuid().ToString(), jobId, sessionId,
+                point.PointId, point.Title, point.Text,
                 session.Granularity, session.GovDocId, session.InternalDocId,
                 session.GovFileHash, session.InternalFileHash,
                 session.GovFileName ?? "", session.InternalFileName ?? "",
-                session.Phase2Model ?? "gemini-2.5-flash-lite",
-                1, job.MaxAttempts, false, sessionId.ToString(), DateTime.UtcNow,
+                session.Phase2Model ?? "gemini-3.5-flash",
+                1, maxAttempts, forceRefresh, sessionId.ToString(), now,
                 Transport: transport));
         }
 
+        if (messages.Count == 0) return 0;
+
+        // Reload so newly inserted jobs are included when recounting totals.
+        session = await store.GetSessionAsync(sessionId, ct) ?? session;
+        session.TotalPoints = session.PointJobs.Count;
+        session.Status = "queued";
+        session.UpdatedAt = now;
+        session.CompletedAt = null;
+        await store.SaveSessionAsync(session, ct);
+
         await EnqueueJobsAsync(messages, ct);
         await store.UpdateSessionCountsAsync(sessionId, ct);
-        return failed.Count;
+        logger.LogInformation(
+            "Requeued {Count} point(s) on session {SessionId} ({Added} newly added)",
+            messages.Count, sessionId, added);
+        return messages.Count;
     }
 
     private async Task AssertPersistenceReadyAsync(CancellationToken ct)

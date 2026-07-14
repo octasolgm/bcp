@@ -19,7 +19,7 @@ public record CreateDualVerifyJobRequest(
     string Granularity = "leaf",
     string GovDocId = "gov-tfs-guidelines",
     string InternalDocId = "internal-imptfs",
-    string Phase2Model = "gemini-2.5-flash-lite",
+    string Phase2Model = "gemini-3.5-flash",
     bool ForceRefresh = false);
 
 public record DualVerifyJobMessage(
@@ -79,7 +79,13 @@ public record SessionProgressDto(DualVerifySessionDto Session, List<PointJobDto>
 public record DualVerifySessionDto(
     Guid Id, string Status, int TotalPoints, int CompletedPoints, int FailedPoints,
     int RunningPoints, int QueuedPoints, string Transport, string Phase2Model,
-    string Granularity, DateTime UpdatedAt);
+    string Granularity, DateTime UpdatedAt,
+    string? GovFileName = null,
+    string? InternalFileName = null,
+    string? GovFileHash = null,
+    string? InternalFileHash = null,
+    Guid? RegulationDocumentId = null,
+    Guid? InternalDocumentId = null);
 public record PointJobDto(
     Guid Id, string PointId, string? PointTitle, string Status,
     string? LandingMessage, string? LlmMessage, DualVerifyAgreementDto? AgreementJson,

@@ -1,0 +1,117 @@
+@if (sessions().length) {
+  <section
+    class="active-sessions"
+    [class.compact]="compact"
+    [class.page-mode]="mode === 'page'"
+    aria-label="Analyses in progress"
+  >
+    @if (mode === 'inline') {
+      <header class="active-sessions-head">
+        <span class="pulse-dot" aria-hidden="true"></span>
+        <div>
+          <strong>{{ sessions().length }} analysis{{ sessions().length === 1 ? '' : 'es' }} in progress</strong>
+          @if (loading()) {
+            <span class="refresh-hint"> · updating…</span>
+          }
+        </div>
+      </header>
+    }
+    <ul class="active-sessions-list">
+      @for (s of sessions(); track s.id) {
+        <li class="active-session-item" [class.page-card]="mode === 'page'">
+          <div class="active-session-card">
+            <div class="active-session-top">
+              <button
+                type="button"
+                class="active-session-row"
+                [class.current]="s.id === currentSessionId"
+                (click)="openSession(s)"
+              >
+                <span class="session-main">
+                  @if (sessionFilePair(s); as files) {
+                    <span class="session-file-pair" [title]="sessionTitle(s)">
+                      <strong class="session-file-name">{{ files.reg }}</strong>
+                      <span class="session-file-sep" aria-hidden="true">×</span>
+                      <strong class="session-file-name">{{ files.internal }}</strong>
+                    </span>
+                  } @else {
+                    <span class="session-label">{{ sessionTitle(s) }}</span>
+                  }
+                  <span class="session-meta">
+                    {{ progressLabel(s) }} · {{ statusLabel(s) }} · {{ formatWhen(s.updatedAt) }}
+                  </span>
+                </span>
+                <span class="session-bar" aria-hidden="true">
+                  <span class="session-bar-fill" [style.width.%]="progressPct(s)"></span>
+                </span>
+                <span class="session-open">Resume →</span>
+              </button>
+              <div class="session-actions">
+                @if (mode === 'inline') {
+                  <button
+                    type="button"
+                    class="btn-details-session"
+                    (click)="toggleDetails(s, $event)"
+                  >
+                    {{ expandedSessionId === s.id ? 'Hide' : 'Details' }}
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="btn-stop-session"
+                  [disabled]="stoppingSessionId === s.id"
+                  (click)="stopSession(s, $event)"
+                  title="Stop this analysis"
+                >
+                  {{ stoppingSessionId === s.id ? '…' : 'Stop' }}
+                </button>
+              </div>
+            </div>
+
+            @if (isExpanded(s)) {
+              <div class="session-point-history" aria-label="Point-by-point progress">
+                <button
+                  type="button"
+                  class="session-point-history-head"
+                  (click)="togglePointHistory(s.id, $event)"
+                  [attr.aria-expanded]="isPointHistoryOpen(s.id)"
+                  [attr.aria-controls]="'point-history-' + s.id"
+                >
+                  <strong>Point history</strong>
+                  <span class="session-point-history-meta">
+                    <span>{{ (sessionPoints[s.id] ?? []).length || s.totalPoints }} points</span>
+                    <span class="session-point-history-chevron" [class.is-open]="isPointHistoryOpen(s.id)" aria-hidden="true"></span>
+                  </span>
+                </button>
+                @if (isPointHistoryOpen(s.id)) {
+                  <div class="session-point-history-body" id="point-history-{{ s.id }}">
+                    @if (loadingSessionId === s.id && !sessionPoints[s.id]) {
+                      <p class="session-points-loading">Loading point status…</p>
+                    } @else if (sessionPoints[s.id]?.length) {
+                      <ul class="session-points-list">
+                        @for (p of sessionPoints[s.id]; track p.id) {
+                          <li class="session-point-row" [class]="p.status">
+                            <span class="point-id">{{ p.pointId }}</span>
+                            <span class="point-title" [title]="p.pointTitle || ''">{{ p.pointTitle || '—' }}</span>
+                            <span class="point-status" [class]="p.status">{{ formatPointStatus(p.status) }}</span>
+                          </li>
+                        }
+                      </ul>
+                    } @else {
+                      <p class="session-points-loading">No point detail yet — open session to refresh.</p>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  </section>
+} @else if (mode === 'page') {
+  <div class="card-surface active-sessions-empty">
+    <strong>No analyses in progress</strong>
+    <p>When you start a gap analysis, running sessions will appear here until they complete.</p>
+  </div>
+}

@@ -3,6 +3,7 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Infrastructure;
 using Reguliq.Api.Services;
 using Reguliq.Api.Services.LandingAi;
+using Reguliq.Api.Services.Storage;
 using Reguliq.Api.Workers;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -96,7 +97,10 @@ builder.Services.Configure<GeminiOptions>(o =>
     o.DefaultModel = BcpConfiguration.GetString(
         builder.Configuration,
         "Gemini:DefaultModel",
-        "GEMINI_DEFAULT_MODEL") ?? "gemini-2.5-flash-lite";
+        "GEMINI_DEFAULT_MODEL") ?? "gemini-3.5-flash";
+    var fallbacks = builder.Configuration.GetSection("Gemini:FallbackModels").Get<string[]>();
+    if (fallbacks is { Length: > 0 })
+        o.FallbackModels = fallbacks;
 });
 builder.Services.Configure<NodeBridgeOptions>(o =>
 {
@@ -120,9 +124,22 @@ builder.Services.AddSingleton<SessionCancellationTracker>();
 builder.Services.AddSingleton<DualVerifyJobProcessor>();
 builder.Services.AddHostedService<DualVerifyWorkerHosted>();
 builder.Services.AddScoped<DualVerifyStoreService>();
+builder.Services.AddScoped<CompliancePdfResolver>();
 builder.Services.AddScoped<DualVerifyService>();
 builder.Services.AddScoped<LocalDataMigrationService>();
+builder.Services.AddScoped<TfsGuidelinesSeedService>();
+builder.Services.AddScoped<AnalysisBundleSeedService>();
 builder.Services.AddSingleton<DashboardService>();
+
+builder.Services.Configure<SupabaseStorageOptions>(o =>
+{
+    o.Url = BcpConfiguration.GetString(builder.Configuration, "Supabase:Url", "SUPABASE_URL") ?? "";
+    o.ServiceRoleKey = BcpConfiguration.GetString(
+        builder.Configuration, "Supabase:ServiceRoleKey", "SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    o.Bucket = BcpConfiguration.GetString(builder.Configuration, "Supabase:StorageBucket", "SUPABASE_STORAGE_BUCKET")
+        ?? "doc";
+});
+builder.Services.AddHttpClient<SupabaseStorageService>(c => c.Timeout = TimeSpan.FromMinutes(5));
 
 var app = builder.Build();
 

@@ -1,0 +1,250 @@
+@import '../shared/analyse-v-shared.scss';
+
+:host {
+  display: block;
+}
+
+.ver-tag {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-left: 0.35rem;
+}
+
+.v4-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+
+.v4-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.v4-hint {
+  margin: 0;
+}
+
+.v4-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.v4-tier {
+  border: 1px solid var(--v-border);
+  border-radius: var(--v-panel-radius);
+  background: var(--v-surface);
+  overflow: hidden;
+}
+
+.tier-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0.45rem 0.55rem;
+  background: color-mix(in srgb, var(--bg-muted) 55%, transparent);
+  border-bottom: 1px solid var(--v-border);
+  min-height: var(--v-row-h);
+
+  h3 {
+    margin: 0;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+  }
+
+  span {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    font-weight: 650;
+  }
+
+  .tier-search {
+    flex: 1;
+    min-width: 7rem;
+    margin-left: auto;
+  }
+
+  .progress-bar.inline {
+    flex: 1;
+    max-width: 100px;
+    margin: 0;
+  }
+}
+
+.v4-tier-points {
+  max-height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
+.points-matrix {
+  overflow-y: auto;
+  padding: 0.4rem 0.5rem;
+  flex: 1;
+}
+
+.matrix-chapter {
+  margin-bottom: 0.5rem;
+
+  h4 {
+    margin: 0 0 0.3rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+
+    em {
+      font-style: normal;
+      font-weight: 600;
+    }
+  }
+}
+
+.matrix-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.matrix-point {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 5px;
+  border: 1px solid var(--v-border);
+  background: var(--bg-input);
+  font-size: 0.6875rem;
+  cursor: pointer;
+  min-height: 24px;
+
+  &.on {
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--v-border));
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg-input));
+  }
+
+  &.focused {
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .mp-id {
+    font-family: ui-monospace, monospace;
+    font-weight: 650;
+    font-size: 0.625rem;
+    color: var(--text-muted);
+  }
+
+  .mp-title {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+}
+
+.v4-tier-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  min-height: 280px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 8px 3rem minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 0.45rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--v-border) 65%, transparent);
+  cursor: pointer;
+  font-size: 0.75rem;
+
+  &:hover,
+  &.focused {
+    background: var(--bg-muted);
+  }
+
+  &.focused {
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+
+  .tl-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border-strong);
+  }
+
+  &.completed .tl-dot { background: var(--low); }
+  &.failed .tl-dot { background: var(--critical); }
+  &.running .tl-dot, &.queued .tl-dot { background: var(--accent); }
+
+  .tl-id {
+    font-family: ui-monospace, monospace;
+    font-weight: 650;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+  }
+
+  .tl-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .tl-status {
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+}
+
+.v4-detail {
+  padding: 0.5rem 0.55rem;
+
+  header {
+    display: flex;
+    gap: 0.35rem;
+    margin-bottom: 0.35rem;
+  }
+
+  h4 {
+    margin: 0 0 0.35rem;
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
+  p {
+    margin: 0 0 0.45rem;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--text-primary);
+  }
+}

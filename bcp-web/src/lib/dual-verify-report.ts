@@ -133,16 +133,20 @@ export function savedResultToReportItem(r: {
 }): DualVerifyReportItem | null {
   const landingMessage = r.landingMessage ?? r.message ?? '';
   const llmMessage = r.llmMessage ?? '';
-  if (!landingMessage || !llmMessage) return null;
+  // Landing-only results still count (Pass 2 may be narrative markdown)
+  if (!landingMessage && !llmMessage) return null;
 
   return {
     pointId: r.point_id,
     pointTitle: r.title,
     govText: r.text,
-    landingMessage,
-    llmMessage,
+    landingMessage: landingMessage || undefined,
+    llmMessage: llmMessage || undefined,
     agreement:
-      r.agreementJson ?? compareDualVerifyResults(landingMessage, llmMessage),
+      r.agreementJson ??
+      (landingMessage && llmMessage
+        ? compareDualVerifyResults(landingMessage, llmMessage)
+        : undefined),
     status: 'loaded',
   };
 }

@@ -1,0 +1,14 @@
+<button
+  type="button"
+  class="in-progress-nav-btn"
+  [class.has-active]="sessions().length > 0"
+  [attr.aria-label]="sessions().length ? sessions().length + ' analyses in progress' : 'View analyses in progress'"
+  (click)="openInProgressPage()"
+>
+  <span class="pulse-dot" [class.on]="sessions().length > 0" aria-hidden="true"></span>
+  <span class="btn-label">In progress</span>
+  <span class="count-badge">{{ sessions().length }}</span>
+  @if (loading()) {
+    <span class="loading-hint" aria-hidden="true">…</span>
+  }
+</button>

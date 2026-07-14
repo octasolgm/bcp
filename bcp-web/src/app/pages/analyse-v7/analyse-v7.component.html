@@ -1,0 +1,155 @@
+@if (error) { <p class="error-banner">{{ error }}</p> }
+
+<div class="analyse-v-page v7-split">
+  <!-- LEFT 38%: setup + points -->
+  <div class="v7-left">
+    <header class="v7-left-head">
+      <h1>Gap Analysis <span class="ver-tag">{{ versionLabel }}</span></h1>
+      <div class="v7-head-actions">
+        <app-in-progress-nav-button />
+        <button type="button" class="btn-run v7-run" [disabled]="!canRun" (click)="runAnalysis()">
+          {{ analysisState === 'running' ? progressDone + '/' + progressTotal : 'Run' }}
+        </button>
+      </div>
+    </header>
+
+    <div class="v7-docs">
+      <div class="v7-doc-block">
+        <div class="block-title">
+          <h2>Regulation</h2>
+          <input type="search" class="search-field" [(ngModel)]="regSearch" placeholder="Search" />
+          <label class="btn-upload"><input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" />Upload</label>
+        </div>
+        <ul class="file-list v7-file-list">
+          @for (doc of filteredRegulationDocs; track doc.id) {
+            <li>
+              <button type="button" class="file-row" [class.selected]="isRegFileSelected(doc.id)" (click)="toggleRegFile(doc)">
+                <span class="multi-check" [class.on]="isRegFileSelected(doc.id)">{{ isRegFileSelected(doc.id) ? '✓' : '' }}</span>
+                <span class="fname">{{ fileLabel(doc) }}</span>
+                <span class="fmeta">{{ doc.pointCount ?? 0 }} pts</span>
+              </button>
+            </li>
+          } @empty { <li class="empty-msg">No files</li> }
+        </ul>
+      </div>
+      <div class="v7-doc-block">
+        <div class="block-title">
+          <h2>Compliance</h2>
+          <input type="search" class="search-field" [(ngModel)]="complianceSearch" placeholder="Search" />
+          <label class="btn-upload"><input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" />Upload</label>
+        </div>
+        <ul class="file-list v7-file-list">
+          @for (doc of filteredComplianceDocs; track doc.id) {
+            <li>
+              <button type="button" class="file-row" [class.selected]="selectedComplianceDocId === doc.id" (click)="selectComplianceDoc(doc)">
+                <span class="multi-check" [class.on]="selectedComplianceDocId === doc.id">✓</span>
+                <span class="fname">{{ fileLabel(doc) }}</span>
+                <span class="fmeta">{{ doc.version }}</span>
+              </button>
+            </li>
+          } @empty { <li class="empty-msg">No files</li> }
+        </ul>
+      </div>
+    </div>
+
+    <div class="v7-points-head">
+      <h3>Points <span>{{ selectedCount }}/{{ govPoints.length }}</span></h3>
+      <input type="search" class="search-field" [(ngModel)]="govSearch" placeholder="Filter points" />
+    </div>
+    <div class="v7-points-list">
+      @for (p of govPoints; track p.point_id) {
+        @if (!govSearch.trim() || (p.point_id + p.title + p.text).toLowerCase().includes(govSearch.trim().toLowerCase())) {
+          <label class="v7-point" [class.on]="selected.has(p.point_id)" [class.focus]="selectedDetailPointId === p.point_id">
+            <input type="checkbox" [checked]="selected.has(p.point_id)" (change)="toggle(p.point_id)" />
+            <button type="button" class="v7-point-btn" (click)="selectPointForDetail(p.point_id)">
+              <span class="pid">{{ p.point_id }}</span>
+              <span>{{ truncate(p.title || p.text, 44) }}</span>
+            </button>
+            @if (sessionPointStatus.get(p.point_id); as st) {
+              <span class="mini-status" [class]="st">{{ formatCoverageStatus(st) }}</span>
+            }
+          </label>
+        }
+      } @empty {
+        <p class="empty-msg">Select regulations to load points</p>
+      }
+    </div>
+  </div>
+
+  <!-- RIGHT 62%: status timeline + large result -->
+  <div class="v7-right">
+    @if (analysisState === 'running') {
+      <div class="v7-progress-banner">
+        <strong>Analysing…</strong>
+        <div class="progress-bar"><div class="progress-fill" [style.width.%]="progress"></div></div>
+        <span>{{ progressDone }}/{{ progressTotal }}</span>
+      </div>
+    }
+
+    <div class="v7-right-grid">
+      <section class="v7-status-panel">
+        <h3>Analysis progress</h3>
+        <ul class="v7-steps">
+          @for (step of analysisSteps; track step.label) {
+            <li [class.done]="step.done" [class.active]="step.active">{{ step.label }}</li>
+          }
+        </ul>
+        <div class="v7-actions">
+          <button type="button" class="btn-sm" [disabled]="!sessionId || coverageCounts.notRun === 0" (click)="runRemainingPoints()">Run remaining</button>
+          <button type="button" class="btn-sm" [disabled]="!sessionId || coverageCounts.failed === 0" (click)="retryFailedOnly()">Retry failed</button>
+        </div>
+      </section>
+
+      <section class="v7-result-panel">
+        <div class="v7-result-head">
+          <h3>Point result</h3>
+          @if (analysisState === 'complete') {
+            <button type="button" class="btn-primary btn-sm" (click)="openFullReport()">Full report →</button>
+          }
+        </div>
+        @if (selectedPointDetail) {
+          <article class="v7-result-card">
+            <div class="v7-result-status">
+              <span class="severity-badge" [class]="selectedPointDetail.severity">{{ selectedPointDetail.severity }}</span>
+              <span class="solved-badge large" [class]="selectedPointDetail.solved ? 'solved' : selectedPointDetail.status === 'completed' ? 'gap' : 'pending'">
+                @if (selectedPointDetail.solved) {
+                  ✓ This point is solved — requirement met
+                } @else if (selectedPointDetail.status === 'completed') {
+                  ✕ Gap found — remediation required
+                } @else {
+                  {{ formatCoverageStatus(selectedPointDetail.status) }}
+                }
+              </span>
+            </div>
+            <h2>{{ selectedPointDetail.title }}</h2>
+            <p class="v7-result-id">Point {{ selectedPointDetail.pointId }} · {{ selectedPointDetail.section }}</p>
+            <div class="v7-result-body">{{ selectedPointDetail.summary }}</div>
+            <div class="v7-result-foot">
+              @if (sessionId) {
+                <button type="button" class="btn-sm" (click)="retrySinglePoint(selectedPointDetail.pointId)">Re-run point</button>
+                <button type="button" class="link-btn" (click)="openFinding(selectedPointDetail.pointId)">Open in workbench →</button>
+              }
+            </div>
+          </article>
+        } @else {
+          <div class="v7-result-empty detail-empty">
+            <strong>No point selected</strong>
+            <p>Choose a regulation point on the left to see compliance result.</p>
+          </div>
+        }
+
+        @if (findingsPreview.length) {
+          <div class="v7-findings">
+            <h4>Recent findings</h4>
+            @for (f of findingsPreview; track f.pointId) {
+              <button type="button" class="v7-finding" [class.on]="selectedDetailPointId === f.pointId" (click)="selectPointForDetail(f.pointId)">
+                <span class="severity-badge" [class]="f.severity">{{ f.severity }}</span>
+                {{ f.title }}
+              </button>
+            }
+          </div>
+        }
+      </section>
+    </div>
+  </div>
+</div>

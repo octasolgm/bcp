@@ -1,0 +1,164 @@
+<div class="analyse-v-page v4-page">
+<header class="page-header-v v4-header">
+  <div>
+    <h1>Gap Analysis <span class="ver-tag">{{ versionLabel }}</span></h1>
+    <p class="subtitle">Select documents and points, then run analysis</p>
+  </div>
+  <div class="v4-header-actions">
+    <app-in-progress-nav-button />
+    <button type="button" class="btn-run" [disabled]="!canRun" (click)="runAnalysis()">
+      {{ analysisState === 'running' ? progressDone + '/' + progressTotal : 'Run' }}
+    </button>
+  </div>
+</header>
+
+@if (error) { <p class="error-banner">{{ error }}</p> }
+@if (pendingRegBump) {
+  <div class="bump-banner">
+    <div><strong>{{ pendingRegBump.title }}</strong> — upload as {{ pendingRegBump.nextVersion }}?</div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmRegVersionBump()">Yes</button>
+      <button type="button" class="btn-sm" (click)="cancelRegVersionBump()">No</button>
+    </div>
+  </div>
+}
+@if (pendingComplianceBump) {
+  <div class="bump-banner">
+    <div><strong>{{ pendingComplianceBump.title }}</strong> — upload as {{ pendingComplianceBump.nextVersion }}?</div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmComplianceVersionBump()">Yes</button>
+      <button type="button" class="btn-sm" (click)="cancelComplianceVersionBump()">No</button>
+    </div>
+  </div>
+}
+
+<section class="setup-row">
+  <div class="doc-panel">
+    <div class="panel-header">
+      <h2>Regulation</h2>
+      <input type="search" class="search-field header-search" placeholder="Search…" [(ngModel)]="regSearch" />
+      <div class="header-actions">
+        <label class="btn-upload"><input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" />Upload</label>
+      </div>
+    </div>
+    <ul class="file-list">
+      @for (doc of filteredRegulationDocs; track doc.id) {
+        <li>
+          <button type="button" class="file-row" [class.selected]="isRegFileSelected(doc.id)" (click)="toggleRegFile(doc)">
+            <span class="multi-check" [class.on]="isRegFileSelected(doc.id)">{{ isRegFileSelected(doc.id) ? '✓' : '' }}</span>
+            <span class="fname">{{ fileLabel(doc) }}</span>
+            <span class="fmeta">{{ pointMeta(doc) }}</span>
+            <span class="fmeta muted">{{ doc.version }}</span>
+          </button>
+        </li>
+      } @empty { <li class="empty-msg">No files</li> }
+    </ul>
+  </div>
+  <div class="doc-panel">
+    <div class="panel-header">
+      <h2>Compliance</h2>
+      <input type="search" class="search-field header-search" placeholder="Search…" [(ngModel)]="complianceSearch" />
+      <div class="header-actions">
+        <label class="btn-upload"><input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" />Upload</label>
+      </div>
+    </div>
+    <ul class="file-list">
+      @for (doc of filteredComplianceDocs; track doc.id) {
+        <li>
+          <button type="button" class="file-row" [class.selected]="selectedComplianceDocId === doc.id" (click)="selectComplianceDoc(doc)">
+            <span class="multi-check" [class.on]="selectedComplianceDocId === doc.id">✓</span>
+            <span class="fname">{{ fileLabel(doc) }}</span>
+            <span class="fmeta">{{ doc.version }}</span>
+            <span class="fmeta muted">{{ doc.category || 'Doc' }}</span>
+          </button>
+        </li>
+      } @empty { <li class="empty-msg">No files</li> }
+    </ul>
+  </div>
+</section>
+
+@if (!canRun && runBlockedReason) {
+  <p class="run-hint v4-hint">{{ runBlockedReason }}</p>
+}
+
+<!-- Two-tier workspace: full-width points on top, status+result below -->
+<div class="v4-workspace">
+  <section class="v4-tier v4-tier-points">
+    <div class="tier-head">
+      <h3>Regulation points</h3>
+      <span>{{ selectedCount }} of {{ govPoints.length }} selected</span>
+      <input type="search" class="search-field tier-search" placeholder="Search points…" [(ngModel)]="govSearch" />
+      <button type="button" class="toolbar-btn primary" (click)="selectAll()">Select all</button>
+      <button type="button" class="toolbar-btn secondary" (click)="clearSelection()">Clear</button>
+    </div>
+    <div class="points-matrix">
+      @if (!govPoints.length) {
+        <p class="empty-msg">Select regulation files above</p>
+      } @else {
+        @for (ch of visibleChapterGroups; track ch.chapter) {
+          <div class="matrix-chapter">
+            <h4>{{ formatChapterLabel(ch.chapter) }} <em>({{ ch.points.length }})</em></h4>
+            <div class="matrix-points">
+              @for (p of ch.points; track p.point_id) {
+                <label class="matrix-point" [class.on]="selected.has(p.point_id)" [class.focused]="selectedDetailPointId === p.point_id">
+                  <input type="checkbox" [checked]="selected.has(p.point_id)" (change)="toggle(p.point_id)" />
+                  <span class="mp-id">{{ p.point_id }}</span>
+                  <span class="mp-title" (click)="selectPointForDetail(p.point_id); $event.preventDefault()">{{ truncate(p.title || p.text, 36) }}</span>
+                </label>
+              }
+            </div>
+          </div>
+        }
+      }
+    </div>
+  </section>
+
+  <div class="v4-tier-bottom">
+    <section class="v4-tier v4-tier-status">
+      <div class="tier-head">
+        <h3>Analysing list</h3>
+        @if (analysisState === 'running') {
+          <div class="progress-bar inline"><div class="progress-fill" [style.width.%]="progress"></div></div>
+        }
+        <span>{{ coverageCounts.completed }}/{{ coverageCounts.total }}</span>
+      </div>
+      <ul class="timeline-list">
+        @for (row of coverageRows; track row.pointId) {
+          <li class="timeline-item" [class]="row.status" [class.focused]="selectedDetailPointId === row.pointId" (click)="selectPointForDetail(row.pointId)">
+            <span class="tl-dot"></span>
+            <span class="tl-id">{{ row.pointId }}</span>
+            <span class="tl-title">{{ truncate(row.title, 32) }}</span>
+            <span class="tl-status">{{ formatCoverageStatus(row.status) }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <section class="v4-tier v4-tier-result">
+      <div class="tier-head">
+        <h3>Result</h3>
+        @if (analysisState === 'complete') {
+          <button type="button" class="btn-primary btn-sm" (click)="openFullReport()">Report</button>
+        }
+      </div>
+      @if (selectedPointDetail) {
+        <div class="v4-detail">
+          <header>
+            <span class="severity-badge" [class]="selectedPointDetail.severity">{{ selectedPointDetail.severity }}</span>
+            <span class="solved-badge" [class]="selectedPointDetail.solved ? 'solved' : 'gap'">
+              {{ selectedPointDetail.solved ? 'Compliant' : 'Gap' }}
+            </span>
+          </header>
+          <h4>{{ selectedPointDetail.title }}</h4>
+          <p>{{ selectedPointDetail.summary }}</p>
+          @if (sessionId) {
+            <button type="button" class="link-btn" (click)="openFinding(selectedPointDetail.pointId)">Open workbench</button>
+          }
+        </div>
+      } @else {
+        <p class="empty-msg">Click a point in the matrix or timeline</p>
+      }
+    </section>
+  </div>
+</div>
+</div>

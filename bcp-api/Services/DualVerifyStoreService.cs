@@ -85,12 +85,40 @@ public class DualVerifyStoreService(
         }
     }
 
+    public async Task<List<DualVerifySession>> ListActiveAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            if (!await TablesReadyAsync()) return [];
+            var candidates = await db.DualVerifySessions
+                .AsNoTracking()
+                .Where(s =>
+                    s.Status != "completed"
+                    && s.Status != "failed"
+                    && s.Status != "cancelled")
+                .OrderByDescending(s => s.UpdatedAt)
+                .ToListAsync(ct);
+            return candidates.Where(AnalysisActivityHelper.IsStillActive).ToList();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ListActiveAsync failed — database unavailable");
+            return [];
+        }
+    }
+
     public async Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken ct = default)
     {
         var session = await db.DualVerifySessions
             .Include(s => s.PointJobs)
             .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
         if (session == null) return false;
+
+        var analysisRuns = await db.DocumentAnalysisRuns
+            .Where(r => r.DualVerifySessionId == sessionId)
+            .ToListAsync(ct);
+        if (analysisRuns.Count > 0)
+            db.DocumentAnalysisRuns.RemoveRange(analysisRuns);
 
         db.DualVerifyPointJobs.RemoveRange(session.PointJobs);
         db.DualVerifySessions.Remove(session);
@@ -145,6 +173,26 @@ public class DualVerifyStoreService(
         else if (session.RunningPoints > 0 || session.CompletedPoints > 0)
             session.Status = "processing";
         await SaveSessionAsync(session, ct);
+        await SyncDocumentAnalysisRunAsync(session, ct);
+    }
+
+    private async Task SyncDocumentAnalysisRunAsync(DualVerifySession session, CancellationToken ct)
+    {
+        try
+        {
+            var run = await db.DocumentAnalysisRuns
+                .FirstOrDefaultAsync(r => r.DualVerifySessionId == session.Id, ct);
+            if (run == null) return;
+            run.Status = session.Status;
+            run.PointCount = session.TotalPoints;
+            run.CompletedPoints = session.CompletedPoints;
+            run.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "DocumentAnalysisRun sync failed for session {SessionId}", session.Id);
+        }
     }
 
     private static readonly JsonSerializerOptions DiskJsonOptions = new()

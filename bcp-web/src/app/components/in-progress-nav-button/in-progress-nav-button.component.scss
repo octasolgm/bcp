@@ -1,0 +1,91 @@
+:host {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.in-progress-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 32px;
+  padding: 0 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s,
+    box-shadow 0.15s;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--border-strong));
+    background: var(--accent-tint);
+    color: var(--text-primary);
+  }
+
+  &.has-active {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+    background: var(--accent-tint);
+    color: var(--text-primary);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+
+    .count-badge {
+      background: var(--accent);
+      color: var(--accent-text);
+    }
+  }
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+
+  &.on {
+    background: var(--accent);
+    animation: in-progress-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes in-progress-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.loading-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

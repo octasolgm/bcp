@@ -1,0 +1,567 @@
+<div class="page-header">
+  <div>
+    <h1>New Gap Analysis</h1>
+    <p class="subtitle">Select a regulation, upload your compliance document, and run AI analysis</p>
+  </div>
+</div>
+
+@if (pendingRegBump) {
+  <div class="bump-banner card-surface">
+    <div>
+      <strong>{{ pendingRegBump.title }}</strong> already exists.
+      Upload as <em>{{ pendingRegBump.nextVersion }}</em>?
+    </div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmRegVersionBump()">Upload new version</button>
+      <button type="button" class="btn-sm" (click)="cancelRegVersionBump()">Cancel</button>
+    </div>
+  </div>
+}
+
+@if (pendingComplianceBump) {
+  <div class="bump-banner card-surface">
+    <div>
+      <strong>{{ pendingComplianceBump.title }}</strong> already exists.
+      Upload as <em>{{ pendingComplianceBump.nextVersion }}</em> or pick it from <em>Already uploaded</em> in Step 2.
+    </div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmComplianceVersionBump()">Upload new version</button>
+      <button type="button" class="btn-sm" (click)="cancelComplianceVersionBump()">Cancel</button>
+    </div>
+  </div>
+}
+
+@if (error) {
+  <p class="error-banner">{{ error }}</p>
+}
+
+<div class="analyse-grid">
+  <div class="steps-col">
+    <section class="step-card card-surface">
+      <div class="step-toolbar">
+        <h2 class="step-title">Step 1 — Select regulation</h2>
+        <input
+          type="search"
+          class="search-field step-search"
+          placeholder="Search regulations…"
+          [(ngModel)]="regSearch"
+          aria-label="Search regulations"
+        />
+        <div class="view-toggle" role="group" aria-label="Regulation view">
+          <button
+            type="button"
+            class="view-btn"
+            [class.on]="regViewMode === 'grid'"
+            (click)="setRegViewMode('grid')"
+            title="Grid view"
+          >
+            Grid
+          </button>
+          <button
+            type="button"
+            class="view-btn"
+            [class.on]="regViewMode === 'list'"
+            (click)="setRegViewMode('list')"
+            title="List view"
+          >
+            List
+          </button>
+        </div>
+      </div>
+
+      <div class="reg-panel-actions in-step">
+        <button
+          type="button"
+          class="panel-btn"
+          [class.on]="regPanelMode === 'uploaded'"
+          (click)="openAlreadyUploaded()"
+        >
+          Already uploaded
+        </button>
+        <button
+          type="button"
+          class="panel-btn"
+          [class.on]="regPanelMode === 'upload'"
+          (click)="openUploadRegulation()"
+        >
+          Upload regulation doc
+        </button>
+      </div>
+
+      @if (regPanelMode === 'uploaded') {
+        <div class="reg-browser-toolbar single">
+          <div class="ms-dropdown" [class.open]="regDropdownOpen">
+            <button
+              type="button"
+              class="ms-dropdown-trigger"
+              (click)="toggleRegDropdown($event)"
+              [attr.aria-expanded]="regDropdownOpen"
+            >
+              <span class="ms-label">{{ dropdownSummary }}</span>
+              <span class="ms-chevron">▾</span>
+            </button>
+            @if (regDropdownOpen) {
+              <div class="ms-dropdown-menu" (click)="$event.stopPropagation()">
+                <div class="ms-menu-actions">
+                  <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredRegs()">Select all</button>
+                  <button type="button" class="toolbar-btn secondary" (click)="clearRegSelection()">Clear</button>
+                </div>
+                @if (!filteredRegulationDocs.length) {
+                  <p class="ms-empty">No files match</p>
+                } @else {
+                  <ul class="ms-options">
+                    @for (doc of filteredRegulationDocs; track doc.id) {
+                      <li>
+                        <label class="ms-option">
+                          <input
+                            type="checkbox"
+                            [checked]="isRegFileSelected(doc.id)"
+                            (change)="toggleRegFile(doc, $event)"
+                          />
+                          <span class="ms-option-text">
+                            <strong>{{ fileLabel(doc) }}</strong>
+                            <span>{{ pointMeta(doc) }}</span>
+                          </span>
+                        </label>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        @if (regViewMode === 'grid') {
+          <div class="reg-grid">
+            @for (card of filteredCatalogCards; track card.id) {
+              <button
+                type="button"
+                class="reg-card"
+                [class.selected]="isCardSelected(card)"
+                (click)="selectRegCard(card)"
+              >
+                @if (isCardSelected(card)) {
+                  <span class="check-icon" aria-hidden="true">✓</span>
+                } @else {
+                  <span class="check-empty" aria-hidden="true"></span>
+                }
+                <strong>{{ card.title }}</strong>
+                <span class="reg-source">{{ card.source }}</span>
+                <div class="reg-meta">
+                  <span>Clauses <em>{{ card.clauses }}</em></span>
+                  <span>Type <em>{{ card.type }}</em></span>
+                </div>
+              </button>
+            } @empty {
+              <p class="empty inline-empty">No regulations match “{{ regSearch }}”</p>
+            }
+          </div>
+        } @else {
+          <ul class="reg-list">
+            @for (card of filteredCatalogCards; track card.id) {
+              <li>
+                <button
+                  type="button"
+                  class="reg-list-row"
+                  [class.selected]="isCardSelected(card)"
+                  (click)="selectRegCard(card)"
+                >
+                  <span class="multi-check" [class.on]="isCardSelected(card)">
+                    {{ isCardSelected(card) ? '✓' : '' }}
+                  </span>
+                  <span class="reg-list-main">
+                    <strong>{{ card.title }}</strong>
+                    <span class="reg-source">{{ card.source }}</span>
+                  </span>
+                  <span class="reg-list-meta">
+                    <span>{{ card.clauses }} clauses</span>
+                    <span>{{ card.type }}</span>
+                  </span>
+                </button>
+              </li>
+            } @empty {
+              <li class="empty inline-empty">No regulations match “{{ regSearch }}”</li>
+            }
+          </ul>
+        }
+
+        <p class="step-hint">
+          Select regulation cards or use the dropdown to multi-select files — regulation points load on the right.
+        </p>
+      }
+
+      @if (regPanelMode === 'upload') {
+        <div class="step-reg-upload">
+          <label class="upload-zone" [class.busy]="uploadingReg">
+            <input
+              type="file"
+              accept=".pdf,.docx,.doc"
+              hidden
+              (change)="onRegulationUpload($event)"
+              [disabled]="uploadingReg"
+            />
+            <span class="upload-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+            </span>
+            <strong>{{ uploadingReg ? 'Uploading & extracting…' : 'Regulation / guideline PDF' }}</strong>
+            <span class="upload-hint">Drag & drop or click to browse — Landing extract runs here and saves points by file hash</span>
+          </label>
+          @if (!storageConfigured) {
+            <p class="warn-hint">Storage not configured — set ServiceRoleKey and restart API.</p>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="step-card card-surface">
+      <div class="step-toolbar">
+        <h2 class="step-title">Step 2 — Internal compliance document</h2>
+        <input
+          type="search"
+          class="search-field step-search"
+          placeholder="Search compliance docs…"
+          [(ngModel)]="complianceSearch"
+          aria-label="Search compliance documents"
+        />
+      </div>
+
+      <div class="reg-panel-actions in-step">
+        <button
+          type="button"
+          class="panel-btn"
+          [class.on]="compliancePanelMode === 'uploaded'"
+          (click)="openAlreadyUploadedCompliance()"
+        >
+          Already uploaded
+        </button>
+        <button
+          type="button"
+          class="panel-btn"
+          [class.on]="compliancePanelMode === 'upload'"
+          (click)="openUploadCompliance()"
+        >
+          Upload compliance doc
+        </button>
+      </div>
+
+      @if (compliancePanelMode === 'uploaded') {
+        @if (loadingCompliance) {
+          <p class="empty inline-empty">Loading uploaded compliance documents…</p>
+        } @else if (!filteredComplianceDocs.length) {
+          <p class="empty inline-empty">
+            @if (complianceDocs.length) {
+              No documents match “{{ complianceSearch }}”.
+            } @else {
+              No compliance documents yet — use Upload compliance doc.
+            }
+          </p>
+        } @else {
+          <ul class="reg-list compliance-doc-list">
+            @for (doc of filteredComplianceDocs; track doc.id) {
+              <li>
+                <button
+                  type="button"
+                  class="reg-list-row"
+                  [class.selected]="selectedComplianceDocId === doc.id"
+                  [disabled]="attachingCompliance"
+                  (click)="selectComplianceDoc(doc)"
+                >
+                  <span class="multi-check" [class.on]="selectedComplianceDocId === doc.id">
+                    {{ selectedComplianceDocId === doc.id ? '✓' : '' }}
+                  </span>
+                  <span class="reg-list-main">
+                    <strong>{{ fileLabel(doc) }}</strong>
+                    <span class="reg-source">{{ doc.category || 'Compliance' }}</span>
+                  </span>
+                  <span class="reg-list-meta">
+                    <span>{{ doc.version }}</span>
+                    <span>{{ complianceMeta(doc) }}</span>
+                  </span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+        <p class="step-hint">
+          Pick a document from storage — no re-upload. The file is fetched when you run analysis.
+        </p>
+      }
+
+      @if (compliancePanelMode === 'upload') {
+        <div class="step-reg-upload">
+          <label class="upload-zone" [class.has-file]="complianceFile" [class.busy]="uploadingCompliance">
+            <input
+              type="file"
+              accept=".pdf,.docx,.doc"
+              hidden
+              (change)="onComplianceSelect($event)"
+              [disabled]="uploadingCompliance"
+            />
+            <span class="upload-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </span>
+            <strong>{{ uploadingCompliance ? 'Uploading to storage…' : 'Internal compliance document' }}</strong>
+            <span class="upload-hint">Policy/manual — stored in your workspace (no Landing extract).</span>
+          </label>
+          @if (!storageConfigured) {
+            <p class="warn-hint">Storage not configured — set ServiceRoleKey and restart API.</p>
+          }
+        </div>
+      }
+
+      @if (complianceFile) {
+        <div class="file-chip">
+          <span class="file-type">PDF</span>
+          <div class="file-details">
+            <strong>{{ complianceFileName }}</strong>
+            <span>
+              {{ complianceFileSize }}
+              ·
+              <em class="ready">
+                {{
+                  attachingCompliance
+                    ? 'Attaching…'
+                    : uploadingCompliance
+                      ? 'Uploading…'
+                      : complianceDoc
+                        ? 'Ready · ' + complianceDoc.version
+                        : 'Ready (local)'
+                }}
+              </em>
+            </span>
+          </div>
+          <button type="button" class="btn-remove" (click)="removeCompliance()" aria-label="Remove">✕</button>
+        </div>
+      }
+    </section>
+
+    <button
+      type="button"
+      class="btn-run-full"
+      [disabled]="!canRun"
+      (click)="runAnalysis()"
+    >
+      @if (analysisState === 'running') {
+        Analysing… {{ progressDone }}/{{ progressTotal }}
+      } @else {
+        Run AI Gap Analysis
+      }
+    </button>
+
+    @if (!canRun && runBlockedReason) {
+      <p class="run-hint">{{ runBlockedReason }}</p>
+    }
+
+    <p class="advanced-link">
+      Need the original dual-verify workbench?
+      <button type="button" class="btn-link" (click)="openAdvancedWorkbench()">Open advanced →</button>
+    </p>
+  </div>
+
+  <!-- RIGHT: regulation points + analysis progress / results -->
+  <aside class="results-col">
+    @if (selectedRegDocs.length || govPoints.length || loadingPoints) {
+      <div
+        class="points-panel card-surface"
+        [class.collapsed]="pointsCollapsed"
+        [class.compact]="analysisState !== 'idle'"
+      >
+        <button
+          type="button"
+          class="panel-head points-head"
+          (click)="togglePointsCollapsed()"
+          [attr.aria-expanded]="!pointsCollapsed"
+        >
+          <span class="points-head-left">
+            <span class="chevron" [class.open]="!pointsCollapsed">›</span>
+            <h3>Regulation points</h3>
+            <span class="count">{{ selectedCount }}/{{ govPoints.length }}</span>
+          </span>
+          <span class="collapse-hint">{{ pointsCollapsed ? 'Expand' : 'Collapse' }}</span>
+        </button>
+        @if (!pointsCollapsed) {
+          @if (govSourceLabel) {
+            <p class="source-note">{{ govSourceLabel }}</p>
+          }
+          <div class="panel-toolbar">
+            <input type="search" class="search-field" placeholder="Search points…" [(ngModel)]="govSearch" />
+            <button type="button" class="toolbar-btn primary" (click)="selectAll()">Select all</button>
+            <button type="button" class="toolbar-btn secondary" (click)="clearSelection()">Clear</button>
+          </div>
+          <div class="panel-body" [class.shrunk]="analysisState !== 'idle'">
+            @if (loadingPoints || uploadingReg) {
+              <p class="empty">Loading points…</p>
+            } @else if (!govPoints.length) {
+              <p class="empty">Select regulation file(s) in Step 1 to load extract points.</p>
+            } @else if (visibleChapterGroups.length === 0) {
+              <p class="empty">No points match search.</p>
+            } @else {
+              @for (ch of visibleChapterGroups; track ch.chapter) {
+                <div class="acc-item">
+                  <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
+                    <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
+                    <span>{{ formatChapterLabel(ch.chapter) }}</span>
+                    <span class="acc-meta">{{ ch.points.length }}</span>
+                    <button
+                      type="button"
+                      class="acc-action"
+                      (click)="$event.stopPropagation(); togglePointsByPrefix(ch.chapter)"
+                    >
+                      {{ chapterAllSelected(ch.chapter, ch.points) ? '−' : '+' }}
+                    </button>
+                  </button>
+                  @if (isChapterExpanded(ch.chapter)) {
+                    <div class="acc-body">
+                      @for (sec of ch.sections; track sec.key) {
+                        @if (showSectionBar(ch.sections, sec.key, ch.chapter)) {
+                          <div class="sec-head">
+                            <span>{{ formatSectionGroupLabel(sec.key) }}</span>
+                            <button type="button" class="link-btn" (click)="togglePointsByPrefix(sec.key)">
+                              {{ sectionAllSelected(sec.points) ? '−' : '+' }}
+                            </button>
+                          </div>
+                        }
+                        @for (p of sec.points; track p.point_id) {
+                          <label class="point-line">
+                            <input
+                              type="checkbox"
+                              [checked]="selected.has(p.point_id)"
+                              (change)="toggle(p.point_id)"
+                            />
+                            <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
+                            <span class="ptxt">{{ truncate(p.title || p.text, 48) }}</span>
+                          </label>
+                        }
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+    } @else if (analysisState === 'idle') {
+      <div class="results-placeholder card-surface">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+          <path d="M11 8v6M8 11h6"/>
+        </svg>
+        <strong>Analysis results will appear here</strong>
+        <span>Select a regulation in Step 1 and a compliance document in Step 2 to begin</span>
+      </div>
+    }
+
+    @if (analysisState === 'running') {
+      <div class="status-panel card-surface">
+        <h3>Analysing document against {{ selectedRegLabel }}…</h3>
+        <ul class="step-list">
+          @for (step of analysisSteps; track step.label) {
+            <li [class.done]="step.done" [class.active]="step.active">
+              <span class="step-dot"></span>
+              {{ step.label }}
+            </li>
+          }
+        </ul>
+        <div class="progress-bar">
+          <div class="progress-fill" [style.width.%]="progress"></div>
+        </div>
+      </div>
+      <div class="log-panel card-surface">
+        <h3>Reading documents…</h3>
+        <pre class="log-text">{{ logText }}</pre>
+      </div>
+    }
+
+    @if (analysisState === 'complete' || (sessionId && coverageCounts.run > 0)) {
+      <div class="coverage-panel card-surface">
+        <div class="complete-header">
+          <h3>Point status</h3>
+          <span class="count">
+            {{ coverageCounts.completed }}/{{ coverageCounts.total }} analysed
+            · {{ coverageCounts.notRun }} not run
+          </span>
+        </div>
+        <p class="panel-sub">
+          You ran {{ coverageCounts.run }} of {{ coverageCounts.total }} loaded regulation points
+          ({{ coverageCounts.selected }} selected for this session).
+        </p>
+        <div class="coverage-actions">
+          <button
+            type="button"
+            class="btn-sm"
+            [disabled]="!sessionId || !!retryingPointId || coverageCounts.notRun === 0"
+            (click)="runRemainingPoints()"
+          >
+            Run remaining ({{ coverageCounts.notRun }})
+          </button>
+          <button
+            type="button"
+            class="btn-sm"
+            [disabled]="!sessionId || !!retryingPointId || coverageCounts.failed === 0"
+            (click)="retryFailedOnly()"
+          >
+            Retry failed ({{ coverageCounts.failed }})
+          </button>
+          <button
+            type="button"
+            class="btn-sm"
+            [disabled]="!sessionId || !!retryingPointId || coverageCounts.run === 0"
+            (click)="retryAllRunPoints()"
+          >
+            Re-run all analysed
+          </button>
+        </div>
+        <ul class="coverage-list">
+          @for (row of coverageRows; track row.pointId) {
+            <li class="coverage-row" [class]="row.status">
+              <span class="cov-id">{{ row.pointId }}</span>
+              <span class="cov-title" [title]="row.title">{{ truncate(row.title, 42) }}</span>
+              <span class="cov-status">{{ formatCoverageStatus(row.status) }}</span>
+              <button
+                type="button"
+                class="link-btn"
+                [disabled]="!sessionId || retryingPointId === row.pointId || row.status === 'running' || row.status === 'queued'"
+                (click)="retrySinglePoint(row.pointId)"
+              >
+                {{ row.status === 'not-run' ? 'Run' : 'Re-run' }}
+              </button>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
+    @if (analysisState === 'complete') {
+      <div class="complete-panel card-surface">
+        <div class="complete-header">
+          <h3>Analysis complete ✓</h3>
+          <button type="button" class="btn-primary btn-sm" (click)="openFullReport()">View full report →</button>
+        </div>
+        <ul class="findings-list">
+          @for (f of findingsPreview; track f.pointId) {
+            <li class="finding-row" (click)="openFinding(f.pointId)" role="button" tabindex="0">
+              <span class="severity-badge" [class]="f.severity">{{ f.severity }}</span>
+              <div>
+                <strong>{{ f.title }}</strong>
+                <span>{{ f.section }}</span>
+              </div>
+            </li>
+          }
+        </ul>
+      </div>
+      <div class="briefing-panel card-surface">
+        <h3>Briefing Preview</h3>
+        <pre class="briefing-text">{{ briefingText }}</pre>
+      </div>
+    }
+  </aside>
+</div>

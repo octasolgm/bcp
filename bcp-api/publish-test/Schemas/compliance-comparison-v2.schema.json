@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "description": "Semantically evaluate the ENTIRE REQUIREMENT POINT TO CHECK (regulatory intent + all sub-obligations) against the ATTACHED INTERNAL PROCESS DOCUMENT markdown. Compare by operational meaning and control equivalence — NOT keyword overlap. Return one structured compliance object (or a one-element array). No markdown fences or conversational text.",
+  "properties": {
+    "requirement_id": {
+      "type": "string",
+      "description": "The exact clause number and header title being evaluated (e.g. '2.4 Internal Controls')."
+    },
+    "requirement_text": {
+      "type": "string",
+      "description": "The explicit rule or obligation text provided under REQUIREMENT POINT TO CHECK."
+    },
+    "uae_response_compliance_level": {
+      "type": "string",
+      "description": "Page [Number], Section [Header Code]: '[Verbatim internal document quote that operationally satisfies the regulatory intent]'. Judgment must be semantic (intent match), not literal word match to gov text. If Non-Compliant, output exactly: No corresponding procedure found."
+    },
+    "comply_status": {
+      "type": "string",
+      "enum": ["Compliant", "Partial Compliant", "Non-Compliant"],
+      "description": "Based on whole-point semantic intent comparison. Compliant = all regulatory sub-intents operationally satisfied (wording may differ). Partial = some sub-intents met. Non-Compliant = no procedural equivalent."
+    },
+    "compliance_confidence_percentage": {
+      "type": "integer",
+      "description": "0–100 reflecting semantic completeness of intent coverage (not keyword overlap): Compliant 86–100 (100 only if every sub-intent fully satisfied), Partial 31–85, Non-Compliant 0–30."
+    },
+    "fulfilled_clauses": {
+      "type": "string",
+      "description": "For each sub-intent that IS semantically satisfied: bullet lines starting with • describing gov sub-obligation → internal procedure mapping (e.g. '• [sub-intent] — semantically satisfied by [procedure] (Page X, Section Y)'). Output None if nothing is covered."
+    },
+    "corrective_action_plan": {
+      "type": "string",
+      "description": "Required when Partial or Non-Compliant. Start with Gap(s): then numbered items (1) Missing: [regulatory sub-intent not operationally met], Fix: [operational action]. Name every gap by intent — never keyword-only analysis. Empty string when Compliant."
+    },
+    "suggested_responsibility": {
+      "type": "string",
+      "description": "Department or role responsible for the corrective action. Must be empty string when Compliant."
+    }
+  },
+  "required": [
+    "requirement_id",
+    "requirement_text",
+    "uae_response_compliance_level",
+    "comply_status",
+    "compliance_confidence_percentage",
+    "fulfilled_clauses",
+    "corrective_action_plan",
+    "suggested_responsibility"
+  ]
+}

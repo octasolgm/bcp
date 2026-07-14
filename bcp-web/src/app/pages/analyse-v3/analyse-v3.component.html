@@ -1,0 +1,307 @@
+@if (pendingRegBump) {
+  <div class="bump-banner">
+    <div><strong>{{ pendingRegBump.title }}</strong> exists — upload as <em>{{ pendingRegBump.nextVersion }}</em>?</div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmRegVersionBump()">Upload version</button>
+      <button type="button" class="btn-sm" (click)="cancelRegVersionBump()">Cancel</button>
+    </div>
+  </div>
+}
+@if (pendingComplianceBump) {
+  <div class="bump-banner">
+    <div><strong>{{ pendingComplianceBump.title }}</strong> exists — upload as <em>{{ pendingComplianceBump.nextVersion }}</em>?</div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmComplianceVersionBump()">Upload version</button>
+      <button type="button" class="btn-sm" (click)="cancelComplianceVersionBump()">Cancel</button>
+    </div>
+  </div>
+}
+@if (error) { <p class="error-banner">{{ error }}</p> }
+
+<div class="analyse-v-page v3-shell">
+  <header class="cmd-bar">
+    <div class="cmd-brand">
+      <h1>Gap Analysis</h1>
+      <span class="cmd-tag">{{ versionLabel }}</span>
+    </div>
+    <app-in-progress-nav-button />
+    <div class="view-toggle" role="group" aria-label="Document view">
+      <button type="button" class="view-btn" [class.on]="docViewMode === 'list'" (click)="setDocViewMode('list')">List</button>
+      <button type="button" class="view-btn" [class.on]="docViewMode === 'table'" (click)="setDocViewMode('table')">Table</button>
+    </div>
+    <label class="btn-upload">
+      <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" [disabled]="uploadingReg" />
+      {{ uploadingReg ? '…' : 'Upload regulation' }}
+    </label>
+    <label class="btn-upload">
+      <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" [disabled]="uploadingCompliance" />
+      {{ uploadingCompliance ? '…' : 'Upload internal' }}
+    </label>
+  </header>
+
+  <section class="v3-docs" [style.height.px]="docsPanelHeight">
+    <div class="v3-docs-inner">
+      <div class="doc-panel" [style.width.%]="setupSplitPct">
+        <div class="panel-header">
+          <h2>Regulation</h2>
+          <input type="search" class="search-field header-search" placeholder="Search…" [(ngModel)]="regSearch" />
+          <div class="header-actions">
+            <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredRegs()">All</button>
+            <button type="button" class="toolbar-btn secondary" (click)="clearRegSelection()">Clear</button>
+          </div>
+        </div>
+        @if (docViewMode === 'list') {
+          <ul class="file-list resizable-body">
+            @for (doc of filteredRegulationDocs; track doc.id) {
+              <li>
+                <button type="button" class="file-row" [class.selected]="isRegFileSelected(doc.id)" (click)="toggleRegFile(doc)">
+                  <span class="multi-check" [class.on]="isRegFileSelected(doc.id)">{{ isRegFileSelected(doc.id) ? '✓' : '' }}</span>
+                  <span class="fname">{{ fileLabel(doc) }}</span>
+                  <span class="fmeta">{{ pointMeta(doc) }}</span>
+                  <span class="fmeta muted">{{ doc.version }}</span>
+                </button>
+              </li>
+            } @empty { <li class="empty-msg">No files</li> }
+          </ul>
+        } @else {
+          <div class="doc-table-wrap resizable-body">
+            <table class="doc-table">
+              <thead>
+                <tr><th></th><th>File</th><th>Version</th><th>Points</th></tr>
+              </thead>
+              <tbody>
+                @for (doc of filteredRegulationDocs; track doc.id) {
+                  <tr [class.selected]="isRegFileSelected(doc.id)" (click)="toggleRegFile(doc)">
+                    <td><span class="multi-check" [class.on]="isRegFileSelected(doc.id)">{{ isRegFileSelected(doc.id) ? '✓' : '' }}</span></td>
+                    <td class="cell-name">{{ fileLabel(doc) }}</td>
+                    <td>{{ doc.version }}</td>
+                    <td>{{ doc.pointCount ?? '—' }}</td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="4" class="empty-cell">No files</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        @if (selectedRegIds.size) {
+          <p class="panel-foot">{{ selectedRegIds.size }} selected · {{ govPoints.length }} points</p>
+        }
+      </div>
+
+      <div
+        class="resize-handle resize-handle-v"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize regulation and internal panels"
+        (mousedown)="startSetupSplitResize($event)"
+      ></div>
+
+      <div class="doc-panel doc-panel-flex">
+        <div class="panel-header">
+          <h2>Internal</h2>
+          <input type="search" class="search-field header-search" placeholder="Search…" [(ngModel)]="complianceSearch" />
+          <div class="header-actions">
+            <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredCompliance()">All</button>
+            <button type="button" class="toolbar-btn secondary" (click)="clearComplianceSelection()">Clear</button>
+          </div>
+        </div>
+        @if (docViewMode === 'list') {
+          <ul class="file-list resizable-body">
+            @for (doc of filteredComplianceDocs; track doc.id) {
+              <li>
+                <button
+                  type="button"
+                  class="file-row"
+                  [class.selected]="isComplianceFileSelected(doc.id)"
+                  [disabled]="attachingCompliance"
+                  (click)="toggleComplianceFile(doc)"
+                >
+                  <span class="multi-check" [class.on]="isComplianceFileSelected(doc.id)">{{ isComplianceFileSelected(doc.id) ? '✓' : '' }}</span>
+                  <span class="fname">{{ fileLabel(doc) }}</span>
+                  <span class="fmeta">{{ doc.version }}</span>
+                  <span class="fmeta muted">{{ doc.category || 'Doc' }}</span>
+                </button>
+              </li>
+            } @empty { <li class="empty-msg">No files</li> }
+          </ul>
+        } @else {
+          <div class="doc-table-wrap resizable-body">
+            <table class="doc-table">
+              <thead>
+                <tr><th></th><th>File</th><th>Version</th><th>Category</th></tr>
+              </thead>
+              <tbody>
+                @for (doc of filteredComplianceDocs; track doc.id) {
+                  <tr
+                    [class.selected]="isComplianceFileSelected(doc.id)"
+                    [class.disabled]="attachingCompliance"
+                    (click)="toggleComplianceFile(doc)"
+                  >
+                    <td><span class="multi-check" [class.on]="isComplianceFileSelected(doc.id)">{{ isComplianceFileSelected(doc.id) ? '✓' : '' }}</span></td>
+                    <td class="cell-name">{{ fileLabel(doc) }}</td>
+                    <td>{{ doc.version }}</td>
+                    <td>{{ doc.category || 'Doc' }}</td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="4" class="empty-cell">No files</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        @if (selectedComplianceIds.size) {
+          <p class="panel-foot">
+            {{ selectedComplianceIds.size }} selected
+            @if (complianceFileName) { · {{ complianceFileName }} }
+          </p>
+        }
+      </div>
+    </div>
+
+    <div
+      class="resize-handle resize-handle-h"
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label="Resize document section height"
+      (mousedown)="startDocsHeightResize($event)"
+    ></div>
+  </section>
+
+  <section class="action-strip" aria-label="Analysis summary and run">
+    <div class="metrics-row metrics-row-4">
+      <div class="stat-box"><strong>{{ selectedCount }}</strong><em>Regulation points</em></div>
+      <div class="stat-box"><strong>{{ selectedComplianceIds.size }}</strong><em>Compliance docs</em></div>
+      <div class="stat-box"><strong>{{ coverageCounts.completed }}</strong><em>Done</em></div>
+      <div class="stat-box warn"><strong>{{ coverageCounts.failed }}</strong><em>Failed</em></div>
+    </div>
+    <div class="run-row">
+      <button type="button" class="btn-run" [disabled]="!canRun" (click)="runAnalysis()">
+        {{ analysisState === 'running' ? progressDone + '/' + progressTotal : 'Run' }}
+      </button>
+    </div>
+  </section>
+
+  @if (!canRun && runBlockedReason) {
+    <p class="run-hint">{{ runBlockedReason }}</p>
+  }
+
+  <div class="v3-workspace">
+    <section class="v3-col v3-points col-panel" [style.width.px]="colLeftWidth">
+      <header class="col-head"><h3>Points</h3><span class="count">{{ selectedCount }}/{{ govPoints.length }}</span></header>
+      <div class="col-toolbar">
+        <input type="search" class="search-field" placeholder="Filter…" [(ngModel)]="govSearch" />
+        <button type="button" class="toolbar-btn primary" (click)="selectAll()">All</button>
+        <button type="button" class="toolbar-btn secondary" (click)="clearSelection()">Clear</button>
+      </div>
+      <div class="col-scroll">
+        @if (!govPoints.length) {
+          <p class="empty-msg">Select regulations above</p>
+        } @else {
+          @for (ch of visibleChapterGroups; track ch.chapter) {
+            <div class="acc-item">
+              <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
+                <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
+                {{ formatChapterLabel(ch.chapter) }}
+                <span class="acc-meta">{{ ch.points.length }}</span>
+              </button>
+              @if (isChapterExpanded(ch.chapter)) {
+                <div class="acc-body">
+                  @for (p of ch.points; track p.point_id) {
+                    <label class="point-line" [class.detail-selected]="selectedDetailPointId === p.point_id">
+                      <input type="checkbox" [checked]="selected.has(p.point_id)" (change)="toggle(p.point_id)" />
+                      <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
+                      <span class="ptxt" (click)="selectPointForDetail(p.point_id); $event.preventDefault()">{{ truncate(p.title || p.text, 42) }}</span>
+                    </label>
+                  }
+                </div>
+              }
+            </div>
+          }
+        }
+      </div>
+    </section>
+
+    <div
+      class="resize-handle resize-handle-v"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize points column"
+      (mousedown)="startColResize('left', $event)"
+    ></div>
+
+    <section class="v3-col v3-status col-panel" [style.width.px]="colMidWidth">
+      <header class="col-head"><h3>Status</h3><span class="count">{{ coverageCounts.completed }}/{{ coverageCounts.total }}</span></header>
+      @if (analysisState === 'running') {
+        <div class="progress-block">
+          <div class="progress-bar"><div class="progress-fill" [style.width.%]="progress"></div></div>
+          <p class="progress-label">{{ progressDone }}/{{ progressTotal }} points</p>
+        </div>
+      }
+      <div class="col-scroll">
+        <ul class="status-list">
+          @for (row of coverageRows; track row.pointId) {
+            <li class="status-row" [class.detail-selected]="selectedDetailPointId === row.pointId" (click)="selectPointForDetail(row.pointId)">
+              <span class="sid">{{ row.pointId }}</span>
+              <span class="stitle">{{ truncate(row.title, 36) }}</span>
+              <span class="sstatus" [class]="row.status">{{ formatCoverageStatus(row.status) }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+    </section>
+
+    <div
+      class="resize-handle resize-handle-v"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize status column"
+      (mousedown)="startColResize('right', $event)"
+    ></div>
+
+    <section class="v3-col v3-result col-panel col-panel-flex">
+      <header class="col-head">
+        <h3>Result</h3>
+        @if (analysisState === 'complete') {
+          <button type="button" class="btn-primary btn-sm" (click)="openFullReport()">Report</button>
+        }
+      </header>
+      <div class="result-detail">
+        @if (selectedPointDetail) {
+          <div class="detail-card">
+            <div class="detail-head">
+              <span class="severity-badge" [class]="selectedPointDetail.severity">{{ selectedPointDetail.severity }}</span>
+              <span class="solved-badge" [class]="selectedPointDetail.solved ? 'solved' : selectedPointDetail.status === 'completed' ? 'gap' : 'pending'">
+                {{ selectedPointDetail.solved ? 'Solved' : selectedPointDetail.status === 'completed' ? 'Gap' : formatCoverageStatus(selectedPointDetail.status) }}
+              </span>
+            </div>
+            <h4>{{ selectedPointDetail.title }}</h4>
+            <p class="detail-section">{{ selectedPointDetail.section }} · {{ selectedPointDetail.pointId }}</p>
+            <p class="detail-summary">{{ selectedPointDetail.summary }}</p>
+            @if (sessionId) {
+              <button type="button" class="link-btn" (click)="openFinding(selectedPointDetail.pointId)">Workbench</button>
+            }
+          </div>
+        } @else {
+          <div class="detail-empty">
+            <strong>Select a point</strong>
+            <p>Click a regulation point or status row to inspect the result.</p>
+          </div>
+        }
+        @if (findingsPreview.length) {
+          <ul class="findings-mini">
+            @for (f of findingsPreview; track f.pointId) {
+              <li [class.active]="selectedDetailPointId === f.pointId" (click)="selectPointForDetail(f.pointId)">
+                <span class="severity-badge" [class]="f.severity">{{ f.severity }}</span>
+                <div>
+                  <strong>{{ f.title }}</strong>
+                  <span>{{ f.section }}</span>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
+  </div>
+</div>

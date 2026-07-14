@@ -1,0 +1,172 @@
+<div class="page-header">
+  <div>
+    <h1>Document Library</h1>
+    <p class="subtitle">
+      @if (storageConfigured) {
+        Uploads go to private Supabase Storage bucket <code>doc</code>
+      } @else {
+        {{ storageHint || 'Configure Supabase Storage to enable uploads' }}
+      }
+    </p>
+  </div>
+  <div class="header-actions">
+    <button type="button" class="btn-secondary" [disabled]="connectingOneDrive" (click)="connectOneDrive()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/>
+      </svg>
+      {{ connectingOneDrive ? 'Connecting…' : 'OneDrive' }}
+    </button>
+    <button type="button" class="btn-secondary" (click)="refresh()" [disabled]="loading">Refresh</button>
+    <button type="button" class="btn-primary" [disabled]="uploading" (click)="triggerUpload(fileInput)">
+      {{ uploading ? 'Uploading…' : '+ Upload' }}
+    </button>
+    <input #fileInput type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" hidden (change)="onUpload($event)" />
+  </div>
+</div>
+
+<div class="doc-tabs">
+  @for (tab of tabs; track tab.id) {
+    <button type="button" [class.active]="activeTab === tab.id" (click)="setTab(tab.id)">
+      {{ tab.label }}
+    </button>
+  }
+</div>
+
+@if (loading) {
+  <p class="muted-loading">Loading documents…</p>
+} @else if (filteredDocuments.length === 0) {
+  <div class="card-surface empty-state">
+    <strong>No documents yet</strong>
+    <p>Upload a PDF/DOCX to the private Supabase <code>doc</code> bucket.</p>
+  </div>
+} @else {
+  <div class="card-surface doc-list">
+    @for (doc of filteredDocuments; track doc.id) {
+      <div class="doc-row">
+        <span class="file-type" [class]="fileTypeClass(doc.fileType)">{{ doc.fileType }}</span>
+        <div class="doc-info">
+          <strong>{{ doc.title }}</strong>
+          <span class="doc-meta">{{ doc.category }} · {{ doc.pages }} pages · Uploaded {{ doc.uploaded }}</span>
+        </div>
+        <div class="doc-right">
+          <span class="version-tag">{{ doc.version }}</span>
+          <button
+            type="button"
+            class="doc-status"
+            [class]="statusClass(doc)"
+            (click)="viewAnalysis(doc)"
+            [attr.title]="doc.status === 'gaps' ? 'Open analysis findings' : null"
+          >
+            {{ statusLabel(doc) }}
+          </button>
+          <button type="button" class="doc-action btn-link" (click)="openFile(doc)">Open</button>
+          <button type="button" class="doc-action btn-link" (click)="viewAnalysis(doc)">View analysis</button>
+          <button type="button" class="doc-action btn-link" (click)="openHistory(doc)">History</button>
+        </div>
+      </div>
+    }
+  </div>
+}
+
+@if (historyFor) {
+  <div class="hist-backdrop" (click)="closeHistory()"></div>
+  <aside class="hist-panel" role="dialog" aria-label="Document history">
+    <header>
+      <div>
+        <h3>{{ historyFor.title }}</h3>
+        <p>Version history</p>
+      </div>
+      <button type="button" class="btn-close" (click)="closeHistory()" aria-label="Close">✕</button>
+    </header>
+    <ul>
+      @for (entry of historyFor.history ?? ['No history recorded']; track entry) {
+        <li>{{ entry }}</li>
+      }
+    </ul>
+  </aside>
+}
+
+@if (analysisFor) {
+  <div class="hist-backdrop" (click)="closeAnalysisPicker()"></div>
+  <aside class="hist-panel analysis-panel" role="dialog" aria-label="Analysis runs">
+    <header>
+      <div>
+        <h3>{{ analysisFor.title }}</h3>
+        <p>
+          @if (loadingAnalysisRuns) {
+            Loading analyses…
+          } @else {
+            {{ analysisRuns.length }} analysis run{{ analysisRuns.length === 1 ? '' : 's' }} — pick one to open
+          }
+        </p>
+      </div>
+      <button type="button" class="btn-close" (click)="closeAnalysisPicker()" aria-label="Close">✕</button>
+    </header>
+    @if (loadingAnalysisRuns) {
+      <p class="muted-loading">Fetching…</p>
+    } @else {
+      <ul class="analysis-run-list">
+        @for (run of analysisRuns; track run.id) {
+          <li
+            class="analysis-run-item"
+            [class.in-progress]="isRunInProgress(run)"
+            [class.failed]="run.status === 'failed' && !isRunInProgress(run)"
+            [class.unavailable]="run.status === 'unavailable' || run.sessionAvailable === false"
+          >
+            <button
+              type="button"
+              class="analysis-run-row"
+              (click)="openAnalysisRun(run)"
+            >
+              <strong>
+                @if (isRunInProgress(run)) {
+                  <span class="run-progress-badge">In progress</span>
+                } @else if (run.status === 'failed') {
+                  <span class="run-failed-badge">Failed</span>
+                } @else if (run.status === 'completed') {
+                  <span class="run-completed-badge">Completed</span>
+                } @else if (run.status === 'unavailable' || run.sessionAvailable === false) {
+                  <span class="run-unavailable-badge">Unavailable</span>
+                }
+                {{ run.regulationFileName || 'Regulation' }} × {{ run.internalFileName || analysisFor.title }}
+              </strong>
+              <span class="run-meta">
+                {{ runProgressMeta(run) }} · {{ runStatusLabel(run) }} · {{ formatRunWhen(run.updatedAt || run.createdAt) }}
+              </span>
+              <span class="run-open" [class.run-open-resume]="isRunInProgress(run)">{{ runOpenLabel(run) }}</span>
+            </button>
+            <button
+              type="button"
+              class="btn-delete-run"
+              [disabled]="deletingRunId === run.id"
+              (click)="confirmDeleteAnalysisRun(run, $event)"
+              title="Delete this analysis session"
+            >
+              {{ deletingRunId === run.id ? '…' : 'Delete' }}
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </aside>
+}
+
+@if (pendingUpload) {
+  <div class="confirm-backdrop" (click)="cancelVersionBump()"></div>
+  <div class="confirm-dialog" role="alertdialog" aria-labelledby="dup-title" aria-describedby="dup-desc">
+    <h3 id="dup-title">File already exists</h3>
+    <p id="dup-desc">
+      <strong>{{ pendingUpload.existing.title }}</strong> is already stored as
+      <span class="version-tag">{{ pendingUpload.existing.version }}</span>.
+      Upload again as
+      <span class="version-tag">{{ pendingUpload.nextVersion }}</span>
+      to the private Supabase bucket?
+    </p>
+    <div class="confirm-actions">
+      <button type="button" class="btn-secondary" (click)="cancelVersionBump()">No, cancel</button>
+      <button type="button" class="btn-primary" (click)="confirmVersionBump()">
+        Yes, upload as {{ pendingUpload.nextVersion }}
+      </button>
+    </div>
+  </div>
+}

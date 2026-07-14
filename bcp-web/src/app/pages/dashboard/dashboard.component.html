@@ -1,234 +1,124 @@
-<div class="header">
+<div class="page-header">
   <div>
-    <p class="eyebrow">BCP App · Bank Compliance Platform</p>
     <h1>Compliance Dashboard</h1>
-    <p class="muted">SNB UAE / DIFC · Last analysis: {{ lastAnalysisLabel }}</p>
+    <p class="subtitle">SNB UAE / DIFC Branch · Last analysis: {{ lastAnalysisLabel }}</p>
   </div>
 </div>
 
 @if (healthError) {
   <div class="alert error">{{ healthError }}</div>
-  <p class="muted">Health check: <code>curl {{ apiUrl }}/dual-verify-kafka/health</code></p>
 }
 
-@if (!healthLoading && persistenceMode === 'memory') {
-  <div class="alert">
-    Persistence is memory-only — not using shared Supabase.
-    @if (health?.persistence?.hint) {
-      <br /><strong>{{ health!.persistence!.hint }}</strong>
-    } @else {
-      Set <code>ConnectionStrings:PostgreSQL</code> or <code>Supabase:Db*</code> in
-      <code>bcp-api/appsettings.Development.json</code> and restart the API.
-    }
-  </div>
-}
-
-<div class="status-grid">
-  <div class="card" [class.is-loading]="healthLoading">
-    <span class="label">Transport</span>
-    @if (healthLoading) {
-      <span class="sk-value" aria-hidden="true"></span>
-      <span class="sk-line short" aria-hidden="true"></span>
-    } @else {
-      <strong class="emerald">{{ health?.transport ?? '—' }}</strong>
-      <small>{{ health?.kafkaConfigured ? 'Azure Event Hubs' : 'Local queue' }}</small>
-    }
-  </div>
-  <div class="card" [class.is-loading]="healthLoading">
-    <span class="label">Persistence</span>
-    @if (healthLoading) {
-      <span class="sk-value" aria-hidden="true"></span>
-      <span class="sk-line short" aria-hidden="true"></span>
-    } @else {
-      <strong [class]="persistenceMode === 'memory' ? 'red' : 'emerald'">{{ persistenceMode }}</strong>
-      <small>{{ health?.persistence?.fileDataDir }}</small>
-    }
-  </div>
-  <div class="card" [class.is-loading]="sessionsLoading">
-    <span class="label">Analyzed points</span>
-    @if (sessionsLoading) {
-      <span class="sk-value" aria-hidden="true"></span>
-      <span class="sk-line short" aria-hidden="true"></span>
-    } @else {
-      <strong class="violet">{{ completedPoints }}</strong>
-      <small>{{ sessions.length }} session(s)</small>
-    }
-  </div>
-  <div class="card" [class.is-loading]="sessionsLoading">
-    <span class="label">Active jobs</span>
-    @if (sessionsLoading) {
-      <span class="sk-value" aria-hidden="true"></span>
-      <span class="sk-line short" aria-hidden="true"></span>
-    } @else {
-      <strong class="amber">{{ activeJobs }}</strong>
-      <small>{{ activeJobs > 0 ? 'Pipeline running' : 'Idle' }}</small>
-    }
-  </div>
+<div class="stats-row">
+  <button type="button" class="stat-card critical" (click)="openBySeverity('critical')">
+    <span class="stat-label">Critical Gaps</span>
+    <strong class="stat-value">{{ criticalCount }}</strong>
+    <span class="stat-hint">Immediate action required</span>
+  </button>
+  <button type="button" class="stat-card high" (click)="openBySeverity('high')">
+    <span class="stat-label">High Risk</span>
+    <strong class="stat-value">{{ highCount }}</strong>
+    <span class="stat-hint">Significant exposure</span>
+  </button>
+  <button type="button" class="stat-card neutral" (click)="openBySeverity('all')">
+    <span class="stat-label">Total Findings</span>
+    <strong class="stat-value">{{ totalFindings }}</strong>
+    <span class="stat-hint">Across 1 analysis</span>
+  </button>
+  <button type="button" class="stat-card compliant" (click)="openBySeverity('compliant')">
+    <span class="stat-label">Compliant Items</span>
+    <strong class="stat-value">{{ compliantCount }}</strong>
+    <span class="stat-hint">Fully addressed</span>
+  </button>
 </div>
 
-@if (hasComplianceMetrics) {
-  <div class="metrics-grid">
-    <div class="card metric" [class.is-loading]="metricsLoadingAny">
-      <span>Compliant</span>
-      @if (metricsLoadingAny) {
-        <span class="sk-value" aria-hidden="true"></span>
-      } @else if (compliantCount > 0) {
-        <a
-          class="metric-link"
-          [routerLink]="['/dual-verify']"
-          [queryParams]="analysisQuery('compliant')"
-          title="View compliant analyses"
-        >
-          <strong class="green">{{ compliantCount }}</strong>
-        </a>
-      } @else {
-        <strong class="muted-num">0</strong>
-      }
-    </div>
-    <div class="card metric" [class.is-loading]="metricsLoadingAny">
-      <span>Partial</span>
-      @if (metricsLoadingAny) {
-        <span class="sk-value" aria-hidden="true"></span>
-      } @else if (partialCount > 0) {
-        <a
-          class="metric-link"
-          [routerLink]="['/dual-verify']"
-          [queryParams]="analysisQuery('partial')"
-          title="View partial analyses"
-        >
-          <strong class="amber">{{ partialCount }}</strong>
-        </a>
-      } @else {
-        <strong class="muted-num">0</strong>
-      }
-    </div>
-    <div class="card metric" [class.is-loading]="metricsLoadingAny">
-      <span>Non-compliant</span>
-      @if (metricsLoadingAny) {
-        <span class="sk-value" aria-hidden="true"></span>
-      } @else if (nonCompliantCount > 0) {
-        <a
-          class="metric-link"
-          [routerLink]="['/dual-verify']"
-          [queryParams]="analysisQuery('non-compliant')"
-          title="View non-compliant analyses"
-        >
-          <strong class="red">{{ nonCompliantCount }}</strong>
-        </a>
-      } @else {
-        <strong class="muted-num">0</strong>
-      }
-    </div>
-    <div class="card metric" [class.is-loading]="metricsLoadingAny">
-      <span>Total findings</span>
-      @if (metricsLoadingAny) {
-        <span class="sk-value" aria-hidden="true"></span>
-      } @else {
-        <strong>{{ totalFindings }}</strong>
-      }
-    </div>
-  </div>
-}
-
-<div class="two-col">
-  @if (showBreakdownSection) {
-    <section class="card" [class.is-loading]="metricsLoadingAny">
-      <h2>Compliance breakdown</h2>
-      @if (metricsLoadingAny) {
-        <ul class="breakdown-list skeleton-list">
-          @for (i of [1, 2, 3]; track i) {
-            <li><span class="sk-line" aria-hidden="true"></span></li>
+<div class="charts-row">
+  <section class="card-surface chart-card">
+    <h2>Risk Breakdown</h2>
+    <div class="donut-wrap">
+      <div class="donut-chart">
+        <svg viewBox="0 0 36 36" class="donut-svg">
+          @for (seg of donutSegments; track seg.color) {
+            <circle
+              class="donut-segment"
+              cx="18" cy="18" r="15.915"
+              fill="none"
+              [attr.stroke]="seg.color"
+              stroke-width="3.5"
+              [attr.stroke-dasharray]="(seg.value / totalFindings) * 100 + ' ' + (100 - (seg.value / totalFindings) * 100)"
+              [attr.stroke-dashoffset]="25 - seg.offset"
+            />
           }
-        </ul>
-      } @else if (complianceBreakdown.length === 0) {
-        <p class="muted">No breakdown data yet.</p>
-      } @else {
-        <ul class="breakdown-list">
-          @for (r of complianceBreakdown; track r.name) {
-            @if (complianceKey(r.name); as key) {
-              <li>
-                <a [routerLink]="['/dual-verify']" [queryParams]="analysisQuery(key)">
-                  <span class="dot" [style.background]="r.color"></span>
-                  <span class="name">{{ r.name }}</span>
-                  <strong>{{ r.value }}</strong>
-                </a>
-              </li>
-            } @else {
-              <li>
-                <span class="dot" [style.background]="r.color"></span>
-                <span class="name">{{ r.name }}</span>
-                <strong>{{ r.value }}</strong>
-              </li>
-            }
-          }
-        </ul>
-      }
-    </section>
-  }
+        </svg>
+        <div class="donut-center">
+          <strong>{{ riskPercent }}%</strong>
+          <span>critical/high</span>
+        </div>
+      </div>
+      <ul class="legend">
+        <li><span class="dot" style="background:#ef4444"></span> Critical <strong>{{ criticalCount }}</strong></li>
+        <li><span class="dot" style="background:#f97316"></span> High <strong>{{ highCount }}</strong></li>
+        <li><span class="dot" style="background:#eab308"></span> Medium <strong>{{ mediumCount }}</strong></li>
+        <li><span class="dot" style="background:#22c55e"></span> Low <strong>1</strong></li>
+        <li><span class="dot" style="background:#3b82f6"></span> Compliant <strong>{{ compliantCount }}</strong></li>
+      </ul>
+    </div>
+  </section>
 
-  <section class="card" [class.is-loading]="sessionsLoading" [class.span-full]="!showBreakdownSection">
-    <h2>Recent sessions</h2>
-    @if (sessionsLoading) {
-      <ul class="session-list skeleton-list">
-        @for (i of [1, 2, 3]; track i) {
-          <li><span class="sk-line" aria-hidden="true"></span></li>
+  <section class="card-surface tracker-card">
+    <h2>Remediation Tracker</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Severity</th>
+          <th>Target</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of remediationItems; track row.item) {
+          <tr class="clickable-row" (click)="openRemediation(row)" role="link" tabindex="0">
+            <td>{{ row.item }}</td>
+            <td><span class="severity-badge" [class]="severityClass(row.severity)">{{ row.severity }}</span></td>
+            <td>{{ row.target }}</td>
+            <td class="status-open">{{ row.status }}</td>
+          </tr>
         }
-      </ul>
-    } @else if (sessionsError) {
-      <p class="muted error-inline">{{ sessionsError }}</p>
-    } @else if (sessions.length === 0) {
-      <p class="muted">No sessions yet. Use Dual Verify in the menu to start.</p>
-    } @else {
-      <ul class="session-list">
-        @for (s of sessions.slice(0, 6); track s.id) {
-          <li>
-            <a [routerLink]="['/dual-verify']" [queryParams]="sessionRecordQuery(s)">
-              <span>{{ s.label }}</span>
-              <span class="badge" [class.done]="s.status === 'completed'">{{ s.status }}</span>
-            </a>
-          </li>
-        }
-      </ul>
-    }
+      </tbody>
+    </table>
   </section>
 </div>
 
-<section class="card" [class.is-loading]="sessionsLoading || metricsLoading">
-  <h2>Recent analyses</h2>
+<section class="card-surface recent-section">
+  <div class="section-head">
+    <h2>Recent analyses</h2>
+    <a
+      routerLink="/gap-analysis"
+      [queryParams]="{ saved: 'compliance:a339de5e-06b9-4067-bd97-e7d8086bf31e' }"
+      class="view-all"
+    >View all →</a>
+  </div>
+
   @if (sessionsLoading || metricsLoading) {
-    <ul class="recent-list skeleton-list">
-      @for (i of [1, 2, 3]; track i) {
-        <li><span class="sk-line tall" aria-hidden="true"></span></li>
-      }
-    </ul>
-  } @else if (metricsError && recentRows.length === 0) {
-    <p class="muted error-inline">{{ metricsError }}</p>
-  } @else if (recentRows.length === 0) {
-    <p class="muted">No analysis records yet.</p>
+    <p class="loading">Loading analyses…</p>
   } @else {
     <ul class="recent-list">
-      @for (a of recentRows; track a.kind + a.id) {
+      @for (a of recentRows.slice(0, 4); track a.id) {
         <li>
-          <a [routerLink]="['/dual-verify']" [queryParams]="a.queryParams" class="recent-row">
-            <span class="kind" [class]="a.kind">{{ a.kind === 'kafka' ? 'KAFKA' : a.kind === 'demo' ? 'DEMO' : 'SYNC' }}</span>
+          <a [routerLink]="['/gap-analysis']" [queryParams]="a.queryParams" class="recent-item">
+            <span class="file-icon">PDF</span>
             <div class="recent-body">
               <span class="recent-title">{{ a.title }}</span>
-              <span class="recent-meta">
-                {{ a.date }} · {{ a.findings }} findings
-                @if (a.status) { · {{ a.status }} }
-              </span>
+              <span class="recent-meta">{{ a.date }} · {{ a.findings }} findings</span>
             </div>
-            <div class="recent-badges">
-              @if (a.compliant > 0) {
-                <span class="pill ok">{{ a.compliant }} Compliant</span>
-              }
-              @if (a.partial > 0) {
-                <span class="pill warn">{{ a.partial }} Partial</span>
-              }
-              @if (a.nonCompliant > 0) {
-                <span class="pill bad">{{ a.nonCompliant }} Non-compliant</span>
-              }
-            </div>
+            @if (a.nonCompliant > 0) {
+              <span class="severity-badge critical">{{ a.nonCompliant }} Critical</span>
+            } @else if (a.partial > 0) {
+              <span class="severity-badge high">{{ a.partial }} High</span>
+            } @else {
+              <span class="severity-badge compliant">Compliant</span>
+            }
           </a>
         </li>
       }

@@ -1,0 +1,20 @@
+<div class="page-header in-progress-header">
+  <div>
+    <h1>Analyses in progress</h1>
+    <p class="subtitle">
+      @if (loading()) {
+        Updating live session status…
+      } @else if (sessions().length) {
+        {{ sessions().length }} active run{{ sessions().length === 1 ? '' : 's' }} — open to resume or view the report
+      } @else {
+        No analyses are running right now
+      }
+    </p>
+  </div>
+  <div class="in-progress-actions">
+    <a routerLink="/analyse-v2" class="btn-primary">New analysis</a>
+    <button type="button" class="btn-secondary" [disabled]="loading()" (click)="refresh()">Refresh</button>
+  </div>
+</div>
+
+<app-active-sessions-panel mode="page" resumePath="/analyse-v8" />

@@ -7,5 +7,7 @@ public sealed class SessionCancellationTracker
 
     public void MarkCancelled(Guid sessionId) => _cancelled[sessionId] = 0;
 
+    public void Clear(Guid sessionId) => _cancelled.TryRemove(sessionId, out _);
+
     public bool IsCancelled(Guid sessionId) => _cancelled.ContainsKey(sessionId);
 }

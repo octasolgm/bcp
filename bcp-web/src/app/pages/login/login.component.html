@@ -1,0 +1,73 @@
+<div class="login-page">
+  <div class="login-bg" aria-hidden="true"></div>
+
+  <div class="login-card">
+    <header class="login-brand">
+      <span class="logo-icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 20 20" fill="none">
+          <rect x="2" y="2" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.9"/>
+          <rect x="11" y="2" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/>
+          <rect x="2" y="11" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/>
+          <rect x="11" y="11" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.9"/>
+        </svg>
+      </span>
+      <div>
+        <h1>Reguliq</h1>
+        <p>Compliance &amp; gap analysis workspace</p>
+      </div>
+    </header>
+
+    <form class="login-form" (ngSubmit)="submit()">
+      <label class="field">
+        <span>Username</span>
+        <input
+          type="text"
+          name="username"
+          autocomplete="username"
+          [(ngModel)]="username"
+          placeholder="Username"
+          [disabled]="loading"
+        />
+      </label>
+
+      <label class="field">
+        <span>Password</span>
+        <div class="password-wrap">
+          <input
+            [type]="showPassword ? 'text' : 'password'"
+            name="password"
+            autocomplete="current-password"
+            [(ngModel)]="password"
+            placeholder="••••••"
+            [disabled]="loading"
+          />
+          <button
+            type="button"
+            class="toggle-pass"
+            (click)="showPassword = !showPassword"
+            [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'"
+          >
+            {{ showPassword ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+      </label>
+
+      @if (error) {
+        <p class="login-error" role="alert">{{ error }}</p>
+      }
+
+      <button type="submit" class="btn-primary login-submit" [disabled]="loading">
+        {{ loading ? 'Signing in…' : 'Sign in' }}
+      </button>
+    </form>
+
+    <div class="login-theme" role="group" aria-label="Theme">
+      <span>Theme</span>
+      <div class="theme-pills">
+        <button type="button" [class.on]="theme.currentMode() === 'light'" (click)="setTheme('light')">Light</button>
+        <button type="button" [class.on]="theme.currentMode() === 'dark'" (click)="setTheme('dark')">Dark</button>
+        <button type="button" [class.on]="theme.currentMode() === 'system'" (click)="setTheme('system')">System</button>
+      </div>
+    </div>
+  </div>
+</div>

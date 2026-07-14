@@ -1,9 +1,9 @@
 .ref-card {
   border-radius: 12px;
   padding: 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  background: #f8fafc;
-  color: #0f172a;
+  border: 2px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-primary);
   font-size: 13px;
 }
 
@@ -29,15 +29,15 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .req-box {
   margin-bottom: 0.75rem;
   padding: 0.65rem;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
 }
 
 .req-list {
@@ -74,7 +74,7 @@
   margin-bottom: 0.75rem;
   padding: 0.75rem;
   border-radius: 8px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--border);
   &.missing { border-color: #fca5a5; background: #fef2f2; }
 }
 
@@ -117,14 +117,14 @@
     padding: 0.45rem 0.6rem;
     margin-bottom: 0.35rem;
     border-radius: 6px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
   }
   .check { font-weight: 700; color: #059669; }
 }
 
 .stats {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border);
   padding-top: 0.65rem;
 }
 
@@ -138,12 +138,12 @@
 .stat {
   padding: 0.5rem;
   border-radius: 8px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--border);
   dt {
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
-    color: #64748b;
+    color: var(--text-muted);
   }
   dd { margin: 0.25rem 0 0; font-weight: 600; }
 }

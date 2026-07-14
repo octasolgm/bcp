@@ -1,0 +1,141 @@
+<div class="analyse-v-page">
+<header class="v6-hero">
+  <div class="v6-hero-text">
+    <h1>Gap Analysis <span class="ver-tag">{{ versionLabel }}</span></h1>
+    <p class="subtitle">Document tables and unified analysis grid</p>
+  </div>
+  <app-in-progress-nav-button />
+  <div class="v6-metrics">
+    <div class="metric"><b>{{ selectedRegIds.size }}</b><span>Regs</span></div>
+    <div class="metric"><b>{{ selectedCount }}</b><span>Points</span></div>
+    <div class="metric"><b>{{ coverageCounts.completed }}</b><span>Done</span></div>
+    <div class="metric warn"><b>{{ coverageCounts.failed }}</b><span>Failed</span></div>
+  </div>
+  <button type="button" class="btn-run" [disabled]="!canRun" (click)="runAnalysis()">
+    {{ analysisState === 'running' ? progressDone + '/' + progressTotal : 'Run' }}
+  </button>
+</header>
+
+@if (error) { <p class="error-banner">{{ error }}</p> }
+
+<!-- Document tables -->
+<div class="v6-tables">
+  <section class="data-table-wrap">
+    <div class="table-toolbar">
+      <h2>Regulation documents</h2>
+      <input type="search" class="search-field" [(ngModel)]="regSearch" placeholder="Filter…" />
+      <label class="btn-upload"><input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" />Upload</label>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th></th><th>File</th><th>Version</th><th>Points</th><th>Uploaded</th></tr>
+      </thead>
+      <tbody>
+        @for (doc of filteredRegulationDocs; track doc.id) {
+          <tr [class.selected]="isRegFileSelected(doc.id)" (click)="toggleRegFile(doc)">
+            <td><span class="multi-check" [class.on]="isRegFileSelected(doc.id)">{{ isRegFileSelected(doc.id) ? '✓' : '' }}</span></td>
+            <td><strong>{{ fileLabel(doc) }}</strong></td>
+            <td>{{ doc.version }}</td>
+            <td>{{ doc.pointCount ?? '—' }}</td>
+            <td>{{ doc.uploaded }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="5" class="empty-cell">No regulation files</td></tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="data-table-wrap">
+    <div class="table-toolbar">
+      <h2>Compliance documents</h2>
+      <input type="search" class="search-field" [(ngModel)]="complianceSearch" placeholder="Filter…" />
+      <label class="btn-upload"><input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" />Upload</label>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th></th><th>File</th><th>Version</th><th>Size</th></tr>
+      </thead>
+      <tbody>
+        @for (doc of filteredComplianceDocs; track doc.id) {
+          <tr [class.selected]="selectedComplianceDocId === doc.id" (click)="selectComplianceDoc(doc)">
+            <td><span class="multi-check" [class.on]="selectedComplianceDocId === doc.id">✓</span></td>
+            <td><strong>{{ fileLabel(doc) }}</strong></td>
+            <td>{{ doc.version }}</td>
+            <td>{{ doc.sizeBytes ? (doc.sizeBytes / 1024 | number:'1.0-0') + ' KB' : '—' }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="4" class="empty-cell">No compliance files</td></tr>
+        }
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<!-- Unified analysis table -->
+<section class="analysis-table-wrap">
+  <div class="table-toolbar">
+    <h2>Analysis grid</h2>
+    <input type="search" class="search-field" [(ngModel)]="govSearch" placeholder="Search points…" />
+    <button type="button" class="toolbar-btn primary" (click)="selectAll()">Select all</button>
+    @if (analysisState === 'complete') {
+      <button type="button" class="btn-primary btn-sm" (click)="openFullReport()">Report</button>
+    }
+  </div>
+  <div class="analysis-scroll">
+    <table class="data-table analysis-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Point</th>
+          <th>Requirement</th>
+          <th>Status</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of coverageRows; track row.pointId) {
+          <tr
+            class="analysis-row"
+            [class.expanded]="selectedDetailPointId === row.pointId"
+            [class.selected-row]="selected.has(row.pointId)"
+            (click)="selectPointForDetail(row.pointId)"
+          >
+            <td (click)="$event.stopPropagation()">
+              <input type="checkbox" [checked]="selected.has(row.pointId)" (change)="toggle(row.pointId)" />
+            </td>
+            <td class="mono">{{ row.pointId }}</td>
+            <td>{{ truncate(row.title, 55) }}</td>
+            <td><span class="status-pill" [class]="row.status">{{ formatCoverageStatus(row.status) }}</span></td>
+            <td>
+              @if (sessionPointResults.get(row.pointId)?.agreementJson; as ag) {
+                <span class="result-pill" [class.solved]="isPointSolved(ag, row.status)">
+                  {{ isPointSolved(ag, row.status) ? 'Solved' : 'Gap' }}
+                </span>
+              } @else {
+                <span class="result-pill pending">—</span>
+              }
+            </td>
+          </tr>
+          @if (selectedDetailPointId === row.pointId && selectedPointDetail) {
+            <tr class="detail-row">
+              <td colspan="5">
+                <div class="inline-detail">
+                  <span class="severity-badge" [class]="selectedPointDetail.severity">{{ selectedPointDetail.severity }}</span>
+                  <p>{{ selectedPointDetail.summary }}</p>
+                  @if (sessionId) {
+                    <button type="button" class="btn-sm" (click)="retrySinglePoint(row.pointId)">Re-run</button>
+                    <button type="button" class="link-btn" (click)="openFinding(row.pointId)">Workbench</button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        } @empty {
+          <tr><td colspan="5" class="empty-cell">Load regulation points to populate grid</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+</div>

@@ -98,12 +98,12 @@ public class LandingAiCacheRepository(AppDbContext db, ILogger<LandingAiCacheRep
             var json = comparison.GetRawText();
             await db.Database.ExecuteSqlRawAsync(
                 """
-                INSERT INTO landing_ai_extract_cache (file_hash, schema_key, points_json, extract_model, updated_at)
+                INSERT INTO landing_ai_extract_cache (file_hash, schema_key, points_json, extract_model, created_at)
                 VALUES ({0}, 'compliance_comparison', {1}::jsonb, {2}, NOW())
                 ON CONFLICT (file_hash, schema_key) DO UPDATE SET
                   points_json = EXCLUDED.points_json,
                   extract_model = EXCLUDED.extract_model,
-                  updated_at = NOW()
+                  created_at = NOW()
                 """,
                 compareKey, json, extractModel);
         }
@@ -146,23 +146,19 @@ public class LandingAiCacheRepository(AppDbContext db, ILogger<LandingAiCacheRep
         string extractModel,
         CancellationToken ct = default)
     {
-        try
-        {
-            await db.Database.ExecuteSqlRawAsync(
-                """
-                INSERT INTO landing_ai_extract_cache (file_hash, schema_key, points_json, extract_model, updated_at)
-                VALUES ({0}, {1}, {2}::jsonb, {3}, NOW())
-                ON CONFLICT (file_hash, schema_key) DO UPDATE SET
-                  points_json = EXCLUDED.points_json,
-                  extract_model = EXCLUDED.extract_model,
-                  updated_at = NOW()
-                """,
-                fileHash, schemaKey, pointsJson, extractModel);
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug(ex, "Could not save gov extract cache for {Hash}", fileHash);
-        }
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO landing_ai_extract_cache (file_hash, schema_key, points_json, extract_model, created_at)
+            VALUES ({0}, {1}, {2}::jsonb, {3}, NOW())
+            ON CONFLICT (file_hash, schema_key) DO UPDATE SET
+              points_json = EXCLUDED.points_json,
+              extract_model = EXCLUDED.extract_model,
+              created_at = NOW()
+            """,
+            fileHash, schemaKey, pointsJson, extractModel);
+        logger.LogInformation(
+            "Saved gov extract cache ({Schema}) for {Hash} ({Bytes} bytes)",
+            schemaKey, fileHash, pointsJson.Length);
     }
 
     public static string HashBuffer(byte[] data) =>
