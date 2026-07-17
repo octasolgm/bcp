@@ -1,0 +1,98 @@
+<div class="page-header">
+  <div>
+    <h1>{{ detail?.run?.name ?? 'Analysis Progress' }}</h1>
+  </div>
+</div>
+
+<div class="nd-page-body">
+<div class="nd-page nd-page-fill">
+  <div class="nd-progress-header nd-shrink">
+    <app-nd-status-badge [status]="currentStatus" />
+    <span class="nd-muted">{{ processedPoints }} / {{ totalPoints }} points</span>
+    @if (canResume) {
+      <button
+        type="button"
+        class="nd-btn-primary"
+        [disabled]="resuming || currentStatus === 'running'"
+        (click)="handleResume()"
+      >
+        @if (currentStatus === 'running') {
+          Running…
+        } @else if (resuming) {
+          Starting…
+        } @else {
+          Resume
+        }
+      </button>
+    }
+  </div>
+
+  @if (detail) {
+    <div class="nd-card nd-form-card">
+      <h3>Selected configuration</h3>
+      <p class="nd-muted">
+        {{ snapshotCount }} regulation points · {{ internalDocCount }} internal document(s) ·
+        {{ regulationDocCount }} regulation document(s)
+      </p>
+    </div>
+  }
+
+  @if (status) {
+    <div class="nd-card nd-form-card">
+      <div class="nd-progress-label">
+        <span>Overall progress</span>
+        <span>{{ progress }}%</span>
+      </div>
+      <div class="nd-progress-bar">
+        <div class="nd-progress-fill" [style.width.%]="progress"></div>
+      </div>
+      <div class="nd-progress-stats">
+        <div>
+          <div class="nd-stat-value">{{ status.landingAiCompletedCount }}</div>
+          <div class="nd-muted">Landing AI</div>
+        </div>
+        <div>
+          <div class="nd-stat-value">{{ status.dualVerifyCompletedCount }}</div>
+          <div class="nd-muted">Dual verify</div>
+        </div>
+        <div>
+          <div class="nd-stat-value nd-danger-text">{{ status.dualVerifyFailedCount }}</div>
+          <div class="nd-muted">Failed</div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <div class="nd-points">
+    @for (p of displayPoints; track p.id) {
+      @let snap = parsePointSnapshot(p.pointSnapshot);
+      <div class="nd-card nd-point-row">
+        <span>
+          {{ snap.pointNumber }}
+          @if (snap.pointTitle) {
+            — {{ snap.pointTitle }}
+          }
+        </span>
+        <div class="nd-actions">
+          <app-nd-status-badge [status]="p.landingAiStatus" />
+          <app-nd-status-badge [status]="p.dualVerifyStatus" />
+          @if (p.finalStatus) {
+            <app-nd-status-badge [status]="p.finalStatus" />
+          }
+        </div>
+      </div>
+    }
+    @if (displayPoints.length === 0) {
+      <p class="nd-muted">No points loaded.</p>
+    }
+  </div>
+
+  @if (isDone) {
+    <a [routerLink]="['/nd/results', runId]" class="nd-btn-primary">View results</a>
+  }
+
+  @if (error) {
+    <p class="nd-error">{{ error }}</p>
+  }
+</div>
+</div>

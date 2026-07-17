@@ -1,0 +1,129 @@
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.table-wrap {
+  padding: 0;
+  overflow-x: auto;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+
+  th,
+  td {
+    padding: 0.85rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  tr.clickable-row {
+    cursor: pointer;
+
+    &:hover {
+      background: var(--bg-muted);
+    }
+  }
+
+  .muted {
+    color: var(--text-muted);
+  }
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+
+.btn-use {
+  display: inline-flex;
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.severity-badge.completed {
+  background: var(--low-bg);
+  color: var(--low);
+}
+
+.severity-badge.pending {
+  background: var(--medium-bg);
+  color: var(--medium);
+}
+
+.severity-badge.running {
+  background: var(--medium-bg);
+  color: var(--medium);
+}
+
+.severity-badge.failed {
+  background: var(--critical-bg);
+  color: var(--critical);
+}
+
+.empty-state {
+  padding: 2rem 1.5rem;
+  text-align: center;
+
+  strong {
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+
+  p {
+    margin: 0;
+    color: var(--text-muted);
+  }
+}
+
+.muted-loading {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.row-action-link,
+.row-action-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}

@@ -1,0 +1,167 @@
+@if (!embedMode) {
+  <div class="page-header">
+    <div>
+      <h1>Analysis Results</h1>
+      @if (data) {
+        <p class="subtitle">{{ data.run.name }}</p>
+      }
+    </div>
+  </div>
+}
+
+<div class="nd-page-body" [class.nd-embedded]="embedMode">
+  @if (loading) {
+    <p class="nd-muted">Loading results…</p>
+  } @else if (!data) {
+    <p class="nd-error">{{ error || 'No data' }}</p>
+  } @else {
+    @if (error) {
+      <p class="nd-error nd-shrink">{{ error }}</p>
+    }
+
+    @if (embedMode) {
+      <div class="embedded-results-head">
+        <div>
+          <h2>Gap report</h2>
+          <p class="embedded-sub">
+            {{ data.run.name }} · {{ data.run.processedPointsCount }}/{{ data.run.totalPointsCount }} points analysed
+          </p>
+          <p class="embedded-hint">
+            Maker workflow: review each point → edit corrective actions → <strong>Submit for review</strong> when done.
+          </p>
+        </div>
+        <div class="embedded-head-actions">
+          @if (canSubmitReview) {
+            <button type="button" class="nd-btn-primary" [disabled]="actionLoading" (click)="submitReview()">
+              {{ actionLoading ? 'Submitting…' : (data.run.status === 'pulled_back' ? 'Resubmit for review' : 'Submit for review') }}
+            </button>
+          }
+        </div>
+      </div>
+    }
+
+    <div class="nd-results-header nd-shrink" [class.embedded-bar]="embedMode">
+      <div>
+        @if (!embedMode) {
+          <p class="nd-muted">
+            {{ data.run.createdByName ?? '—' }} · {{ formatDate(data.run.createdAt) }}
+          </p>
+        }
+        <app-nd-status-badge [status]="data.run.status" />
+        @if (data.run.status === 'submitted_for_review') {
+          <p class="workflow-hint">With checker — <a routerLink="/nd/checker">open checker queue</a></p>
+        }
+        @if (data.run.status === 'checker_approved') {
+          <p class="workflow-hint">With reviewer — <a routerLink="/nd/reviewer">open reviewer queue</a></p>
+        }
+        @if (data.run.status === 'pulled_back') {
+          <p class="workflow-hint">Pulled back — edit action plans and resubmit for review.</p>
+        }
+      </div>
+      <div class="nd-actions">
+        @if (canSubmitReview && !embedMode) {
+          <button type="button" class="nd-btn-primary" [disabled]="actionLoading" (click)="submitReview()">
+            {{ actionLoading ? 'Sending…' : (data.run.status === 'pulled_back' ? 'Resubmit for review' : 'Submit for review') }}
+          </button>
+        }
+        @if (!embedMode) {
+          <button type="button" class="nd-btn-secondary" [disabled]="!canExport" (click)="exportPdf()">Export PDF</button>
+          <button type="button" class="nd-btn-secondary" [disabled]="!canExport" (click)="exportExcel()">Export Excel</button>
+        }
+      </div>
+    </div>
+
+    @if (embedMode) {
+      <div class="summary-row embedded-summary">
+        <div class="summary-card compliant">
+          <span class="label">Compliance</span>
+          <strong>{{ compliantCount }}</strong>
+        </div>
+        <div class="summary-card partial_compliant">
+          <span class="label">Partial compliance</span>
+          <strong>{{ partialCount }}</strong>
+        </div>
+        <div class="summary-card non_compliant">
+          <span class="label">Non-compliance</span>
+          <strong>{{ nonCompliantCount }}</strong>
+        </div>
+      </div>
+    }
+
+    <div class="nd-list-toolbar nd-shrink">
+      <input type="search" class="nd-input" [(ngModel)]="search" placeholder="Search points…" />
+      <select class="nd-input" [(ngModel)]="statusFilter">
+        <option value="all">All statuses</option>
+        <option value="compliant">Compliance</option>
+        <option value="partial_compliant">Partial compliance</option>
+        <option value="non_compliant">Non-compliance</option>
+        <option value="dual_verify_failed">Dual verify failed</option>
+      </select>
+      <span class="nd-muted">{{ filteredPoints.length }} of {{ data.points.length }} points</span>
+    </div>
+
+    <div class="nd-points" [class.nd-points-embedded]="embedMode">
+      @for (p of filteredPoints; track p.id) {
+        @let snap = parsePointSnapshot(p.pointSnapshot);
+        <div class="nd-card nd-point-card" [class.collapsed]="embedMode && !isPointExpanded(p.id)">
+          @if (embedMode) {
+            <button type="button" class="nd-point-toggle" (click)="togglePointExpanded(p.id)">
+              <span class="nd-list-title">
+                §{{ snap.pointNumber }}
+                @if (snap.pointTitle) { — {{ snap.pointTitle }} }
+              </span>
+              @if (p.finalStatus) {
+                <span class="status-pill" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
+              }
+              <span class="chevron" [class.open]="isPointExpanded(p.id)">›</span>
+            </button>
+          } @else {
+            <div class="nd-point-row">
+              <span class="nd-list-title">
+                {{ snap.pointNumber }}
+                @if (snap.pointTitle) { — {{ snap.pointTitle }} }
+              </span>
+              @if (p.finalStatus) {
+                <span class="status-pill" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
+              }
+            </div>
+          }
+
+          @if (!embedMode || isPointExpanded(p.id)) {
+            @if (!embedMode) {
+              <p class="phase-line">{{ phaseSummary(p) }}</p>
+            }
+
+            @if (isMaker && p.landingAiStatus === 'failed') {
+              <button type="button" class="nd-btn-secondary nd-btn-sm rerun-btn" (click)="rerunPoint(p.id)">Rerun gap analysis (phase 1)</button>
+            }
+            @if (isMaker && p.landingAiStatus !== 'failed' && (p.dualVerifyStatus === 'failed' || p.googleAiStatus === 'failed')) {
+              <button type="button" class="nd-btn-secondary nd-btn-sm rerun-btn" (click)="rerunDualOnly(p.id)">Rerun phase 2 (optional)</button>
+            }
+
+            @if (showCap(p)) {
+              <app-nd-gap-point-detail
+                [point]="p"
+                [snapshot]="snap"
+                [canEdit]="canEditCap"
+                [editing]="editingPointId === p.id"
+                [saving]="capSavingPointId === p.id"
+                [history]="historyPointId === p.id ? history : []"
+                [showHistoryPanel]="historyPointId === p.id"
+                [policyDocId]="policyDocId"
+                [regulationDocId]="regDocIdForPoint(p)"
+                (startEdit)="startEditCap(p)"
+                (cancelEdit)="cancelEditCap()"
+                (save)="saveCap(p.id, $event)"
+                (openHistory)="openHistory(p.id)"
+                (closeHistory)="closeHistory()"
+                (restoreVersion)="revertToVersion($event)"
+                (openPdf)="onOpenPdf($event)"
+              />
+            }
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

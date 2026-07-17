@@ -1,0 +1,83 @@
+<div class="page-header">
+  <div>
+    <h1>Final Review: {{ data?.run?.name ?? '' }}</h1>
+  </div>
+</div>
+
+<div class="nd-review-back nd-shrink">
+  <a routerLink="/nd/reviewer" class="nd-link">← Back to queue</a>
+</div>
+
+<div class="nd-fill-panel nd-fill-panel--viewport nd-review-page">
+@if (loading) {
+  <p class="nd-muted nd-page">Loading…</p>
+} @else if (data) {
+  <div class="nd-review-grid">
+    <div class="nd-review-panel">
+      <h3>Points</h3>
+      <div class="nd-review-points">
+        @for (p of data.points; track p.id) {
+          @let snap = parsePointSnapshot(p.pointSnapshot);
+          <button
+            type="button"
+            class="nd-review-point"
+            [class.active]="p.id === selectedId"
+            (click)="selectPoint(p.id)"
+          >
+            <span>{{ snap.pointNumber }}</span>
+            @if (p.finalStatus) {
+              <app-nd-status-badge [status]="p.finalStatus" />
+            }
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="nd-review-panel nd-review-detail">
+      @if (selected; as point) {
+        @let snap = parsePointSnapshot(point.pointSnapshot);
+        <div class="nd-review-point-head">
+          <h3>
+            {{ snap.pointNumber }}
+            @if (snap.pointTitle) { — {{ snap.pointTitle }} }
+          </h3>
+          @if (point.finalStatus) {
+            <app-nd-status-badge [status]="point.finalStatus" />
+          }
+        </div>
+
+        @if (showCap(point)) {
+          <app-nd-gap-point-detail
+            [point]="point"
+            [snapshot]="snap"
+            [canEdit]="false"
+            [history]="history"
+            [showHistoryPanel]="historyOpen"
+            (openHistory)="openHistory()"
+            (closeHistory)="closeHistory()"
+          />
+        }
+      }
+
+      <div class="nd-review-actions">
+        <label class="nd-label">
+          Overall comment
+          <textarea class="nd-input" rows="4" [(ngModel)]="overallComment"></textarea>
+        </label>
+        @if (error) {
+          <p class="nd-error">{{ error }}</p>
+        }
+        <div class="nd-actions">
+          <button type="button" class="nd-btn-primary" [disabled]="submitting" (click)="handleFinalize()">
+            Finalize
+          </button>
+          <button type="button" class="nd-btn-secondary" [disabled]="submitting" (click)="handlePullBack()">
+            Pull back to checker
+          </button>
+          <a [routerLink]="['/nd/results', runId]" class="nd-btn-secondary">Full results</a>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+</div>

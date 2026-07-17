@@ -32,16 +32,16 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   get workspaceNav() {
     return [
-      { path: '/dashboard', label: 'Overview', icon: 'grid' as const },
+      { path: '/old/dashboard', label: 'Overview', icon: 'grid' as const },
       {
-        path: '/documents',
+        path: '/old/documents',
         label: 'Documents',
         icon: 'file' as const,
         badge: this.documentsBadge ?? undefined,
       },
       {
-        path: '/regulations',
-        label: 'Regulation Library',
+        path: '/old/regulations',
+        label: 'Regulation Docs Library',
         icon: 'library' as const,
         badge: this.regulationsBadge ?? undefined,
       },

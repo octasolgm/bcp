@@ -1,0 +1,62 @@
+<div class="points-panel">
+  <div class="panel-head">
+    <p class="panel-status">{{ statusLabel }}</p>
+    @if (points.length > 0) {
+      <input
+        type="search"
+        class="panel-search"
+        placeholder="Search points…"
+        [(ngModel)]="search"
+        aria-label="Search points"
+      />
+    }
+  </div>
+
+  <div class="panel-body">
+    @if (loading) {
+      <p class="empty">Loading…</p>
+    } @else if (visibleChapterGroups.length === 0) {
+      <p class="empty">
+        @if (points.length === 0) {
+          Run extraction to load regulation points.
+        } @else {
+          No points match your search.
+        }
+      </p>
+    } @else {
+      @for (ch of visibleChapterGroups; track ch.chapter) {
+        <div class="acc-item">
+          <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
+            <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
+            <span>{{ formatChapterLabel(ch.chapter) }}</span>
+            <span class="acc-meta">{{ ch.points.length }}</span>
+          </button>
+          @if (isChapterExpanded(ch.chapter)) {
+            <div class="acc-body">
+              @for (sec of ch.sections; track sec.key) {
+                @if (showSectionBar(ch.sections, sec.key, ch.chapter)) {
+                  <div class="sec-head">
+                    <span>{{ formatSectionGroupLabel(sec.key) }}</span>
+                  </div>
+                }
+                @for (p of sec.points; track p.point_id) {
+                  <div class="point-line" [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint">
+                    <span class="point-check" aria-hidden="true">✓</span>
+                    <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
+                    @if (pointMeta(p.point_id)?.isIntroductionPoint) {
+                      <span class="point-tag">Intro</span>
+                    }
+                    @if (pointMeta(p.point_id)?.isAnnexPoint) {
+                      <span class="point-tag point-tag-annex">Annex</span>
+                    }
+                    <span class="ptxt">{{ truncate(p.title || p.text, 52) }}</span>
+                  </div>
+                }
+              }
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>

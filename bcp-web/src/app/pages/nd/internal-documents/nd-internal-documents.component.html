@@ -1,0 +1,149 @@
+<div class="page-header">
+  <div>
+    <h1>Document Library</h1>
+    <p class="subtitle">Internal compliance documents — includes existing uploads from storage</p>
+  </div>
+  @if (canUpload) {
+    <div class="header-actions">
+      <button type="button" class="btn-secondary" (click)="load()" [disabled]="loading">Refresh</button>
+      <button type="button" class="btn-primary" [disabled]="uploading" (click)="fileInput.click()">
+        {{ uploading ? 'Uploading…' : '+ Upload' }}
+      </button>
+      <input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
+    </div>
+  }
+</div>
+
+<div class="nd-page-body">
+@if (error) {
+  <div class="alert error nd-shrink">{{ error }}</div>
+}
+
+@if (loading && docs.length === 0) {
+  <p class="muted-loading">Loading documents…</p>
+} @else if (docs.length === 0) {
+  <div class="card-surface empty-state">
+    <strong>No documents yet</strong>
+    <p>Upload a PDF to add internal compliance documents.</p>
+  </div>
+} @else {
+  <div class="filter-pills nd-list-toolbar nd-shrink">
+    <input
+      type="search"
+      class="filter-search"
+      [(ngModel)]="searchQuery"
+      placeholder="Search documents…"
+      aria-label="Search documents"
+    />
+    <select class="filter-select" [(ngModel)]="sourceFilter" aria-label="Filter by source">
+      <option value="">All sources</option>
+      <option value="nd">ND</option>
+      <option value="legacy">Legacy</option>
+    </select>
+    <select class="filter-select" [(ngModel)]="sortColumn" aria-label="Sort by">
+      <option value="uploaded">Sort: Uploaded</option>
+      <option value="title">Sort: Title</option>
+      <option value="size">Sort: Size</option>
+      <option value="source">Sort: Source</option>
+    </select>
+    <select class="filter-select" [(ngModel)]="sortDir" aria-label="Sort direction">
+      <option value="desc">Newest first</option>
+      <option value="asc">Oldest first</option>
+    </select>
+    <span class="filter-count">{{ visibleDocs.length }} of {{ docs.length }}</span>
+    @if (hasActiveFilters) {
+      <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+    }
+  </div>
+
+  @if (!visibleDocs.length) {
+    <div class="card-surface empty-state">
+      <strong>No documents match your filters</strong>
+      <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
+    </div>
+  } @else {
+  <div class="card-surface doc-list">
+    @for (d of visibleDocs; track d.id) {
+      <div class="doc-row">
+        <span class="file-type pdf">PDF</span>
+        <div class="doc-info">
+          <strong>{{ d.title }}</strong>
+          <span class="doc-meta">
+            {{ d.originalFileName }}
+            @if (d.department) {
+              · {{ d.department }}
+            }
+            · {{ formatBytes(d.sizeBytes) }} · Uploaded {{ formatDate(d.uploaded) }}
+            @if (d.source === 'legacy') {
+              · Legacy
+            }
+          </span>
+        </div>
+        <div class="doc-right">
+          @if (d.version) {
+            <span class="version-tag">v{{ d.version }}</span>
+          }
+          <button type="button" class="doc-action btn-link" (click)="viewAnalysis(d)">View analysis</button>
+          <button type="button" class="doc-action btn-link" (click)="openHistory(d)">History</button>
+        </div>
+      </div>
+    }
+  </div>
+  }
+}
+</div>
+
+@if (historyFor) {
+  <div class="hist-backdrop" (click)="closeHistory()"></div>
+  <aside class="hist-panel" role="dialog" aria-label="Document history">
+    <header>
+      <div>
+        <h3>{{ historyFor.title }}</h3>
+        <p>Version history</p>
+      </div>
+      <button type="button" class="btn-close" (click)="closeHistory()" aria-label="Close">✕</button>
+    </header>
+    <ul>
+      <li>v{{ historyFor.version ?? 1 }} — uploaded {{ formatDate(historyFor.uploaded) }}</li>
+      <li>{{ historyFor.originalFileName }}</li>
+    </ul>
+  </aside>
+}
+
+@if (analysisFor) {
+  <div class="hist-backdrop" (click)="closeAnalysisPicker()"></div>
+  <aside class="hist-panel analysis-panel" role="dialog" aria-label="Analysis runs">
+    <header>
+      <div>
+        <h3>{{ analysisFor.title }}</h3>
+        <p>
+          @if (loadingAnalysisRuns) {
+            Loading analyses…
+          } @else {
+            {{ analysisRuns.length }} analysis run{{ analysisRuns.length === 1 ? '' : 's' }} — pick one to open
+          }
+        </p>
+      </div>
+      <button type="button" class="btn-close" (click)="closeAnalysisPicker()" aria-label="Close">✕</button>
+    </header>
+    @if (loadingAnalysisRuns) {
+      <p class="muted-loading">Fetching…</p>
+    } @else {
+      <ul class="analysis-run-list">
+        @for (run of analysisRuns; track run.id) {
+          <li class="analysis-run-item" [class.in-progress]="isRunInProgress(run)">
+            <button type="button" class="analysis-run-row" (click)="openAnalysisRun(run)">
+              <strong>
+                {{ run.regulationFileName || 'Regulation' }} × {{ run.internalFileName || analysisFor.title }}
+              </strong>
+              <span class="run-meta">
+                {{ runStatusLabel(run) }} · {{ formatRunWhen(run.updatedAt || run.createdAt) }}
+              </span>
+              <span class="run-open">{{ isRunInProgress(run) ? 'Resume →' : 'Open →' }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </aside>
+}

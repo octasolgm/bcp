@@ -38,7 +38,7 @@ export class LoginComponent {
         this.error = 'Invalid username or password.';
         return;
       }
-      this.router.navigate(['/dashboard']);
+      this.router.navigate(['/old/dashboard']);
     }, 280);
   }
 

@@ -1,0 +1,118 @@
+<div class="page-header">
+  <div>
+    <h1>Department Management</h1>
+  </div>
+</div>
+
+<div class="nd-page-body">
+<div class="nd-page nd-page-fill">
+  @if (!isSuperAdmin) {
+    <p class="nd-error">Access denied</p>
+  } @else {
+    <form class="nd-card nd-form-card nd-form-grid nd-shrink" (ngSubmit)="handleCreate()">
+      <label class="nd-label">
+        Name
+        <input class="nd-input" [(ngModel)]="name" name="name" required />
+      </label>
+      <label class="nd-label">
+        Description
+        <input class="nd-input" [(ngModel)]="description" name="description" />
+      </label>
+      <div class="nd-form-actions">
+        <button type="submit" class="nd-btn-primary" [disabled]="creating">
+          {{ creating ? 'Adding…' : 'Add department' }}
+        </button>
+      </div>
+    </form>
+
+    @if (error) {
+      <p class="nd-error">{{ error }}</p>
+    }
+
+    @if (loading && departments.length === 0) {
+      <p class="nd-muted">Loading…</p>
+    } @else {
+      <div class="filter-pills nd-list-toolbar nd-shrink">
+        <input
+          type="search"
+          class="filter-search"
+          [(ngModel)]="searchQuery"
+          placeholder="Search departments…"
+          aria-label="Search departments"
+        />
+        <select class="filter-select" [(ngModel)]="statusFilter" aria-label="Filter by status">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <select class="filter-select" [(ngModel)]="sortColumn" aria-label="Sort by">
+          <option value="name">Sort: Name</option>
+          <option value="docs">Sort: Regulation docs</option>
+          <option value="libraries">Sort: Libraries</option>
+          <option value="status">Sort: Status</option>
+        </select>
+        <select class="filter-select" [(ngModel)]="sortDir" aria-label="Sort direction">
+          <option value="asc">Ascending</option>
+          <option value="desc">Descending</option>
+        </select>
+        <span class="filter-count">{{ visibleDepartments.length }} of {{ departments.length }}</span>
+        @if (hasActiveFilters) {
+          <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+        }
+      </div>
+
+      @if (!visibleDepartments.length) {
+        <div class="nd-card nd-empty">
+          <strong>No departments match your filters</strong>
+        </div>
+      } @else {
+      <div class="nd-card nd-list">
+        @for (d of visibleDepartments; track d.id) {
+          <div
+            class="nd-list-row nd-list-row-static"
+            [class.row-saving]="savingDeptId === d.id || deletingDeptId === d.id"
+          >
+            <div>
+              <div class="nd-list-title">
+                {{ d.name }}
+                @if (savingDeptId === d.id) {
+                  <span class="row-status">Saving…</span>
+                }
+                @if (deletingDeptId === d.id) {
+                  <span class="row-status">Deleting…</span>
+                }
+              </div>
+              @if (d.description) {
+                <p class="nd-muted">{{ d.description }}</p>
+              }
+              <div class="nd-muted nd-list-meta">
+                {{ d.documentCount ?? 0 }} regulation docs · {{ d.libraryCount ?? 0 }} points libraries
+              </div>
+            </div>
+            <div class="nd-actions">
+              <app-nd-status-badge [status]="d.isActive ? 'completed' : 'failed'" />
+              <button
+                type="button"
+                class="nd-btn-secondary"
+                [disabled]="savingDeptId === d.id || deletingDeptId === d.id"
+                (click)="toggleActive(d)"
+              >
+                {{ savingDeptId === d.id ? '…' : d.isActive ? 'Deactivate' : 'Activate' }}
+              </button>
+              <button
+                type="button"
+                class="nd-btn-secondary nd-danger"
+                [disabled]="savingDeptId === d.id || deletingDeptId === d.id"
+                (click)="handleDelete(d.id)"
+              >
+                {{ deletingDeptId === d.id ? '…' : 'Delete' }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+      }
+    }
+  }
+</div>
+</div>

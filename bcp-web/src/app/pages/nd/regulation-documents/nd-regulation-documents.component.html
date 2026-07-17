@@ -1,0 +1,217 @@
+<div class="page-header">
+  <div>
+    <h1>Regulation Docs Library</h1>
+    <p class="subtitle">Regulation documents and custom manual points grouped by department</p>
+  </div>
+  @if (canUpload) {
+    <div class="header-actions">
+      <label class="upload-dept field">
+        <span>Department</span>
+        <select [(ngModel)]="uploadDept" name="uploadDept">
+          <option value="">Uncategorized</option>
+          @for (d of departments; track d.id) {
+            <option [value]="d.id">{{ d.name }}</option>
+          }
+        </select>
+      </label>
+      <button type="button" class="btn-secondary" (click)="loadDocs()" [disabled]="loading">Refresh</button>
+      <button type="button" class="btn-primary" [disabled]="uploading" (click)="uploadInput.click()">
+        {{ uploading ? 'Uploading…' : '+ Upload regulation' }}
+      </button>
+      <input #uploadInput type="file" accept=".pdf" hidden (change)="onFileChange($event); handleUpload()" />
+    </div>
+  }
+</div>
+
+<div class="nd-fill-panel reg-docs-fill">
+@if (!loading && docs.length) {
+<div class="filter-pills nd-list-toolbar nd-shrink">
+  <input
+    type="search"
+    class="filter-search"
+    [(ngModel)]="searchQuery"
+    placeholder="Search regulations…"
+    aria-label="Search regulations"
+  />
+  <select class="filter-select" [(ngModel)]="deptFilter" (ngModelChange)="onFiltersChange()">
+    <option value="">All departments</option>
+    @for (d of departments; track d.id) {
+      <option [value]="d.id">{{ d.name }}</option>
+    }
+  </select>
+  <select class="filter-select" [(ngModel)]="statusFilter" (ngModelChange)="onFiltersChange()">
+    <option value="">All statuses</option>
+    <option value="extracted">Extracted</option>
+    <option value="pending">Pending</option>
+  </select>
+  <span class="filter-count">{{ visibleDocs.length }} of {{ docs.length }}</span>
+  @if (hasActiveFilters) {
+    <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+  }
+</div>
+}
+
+@if (message) {
+  <div class="alert success nd-shrink">{{ message }}</div>
+}
+@if (error) {
+  <div class="alert error nd-shrink">{{ error }}</div>
+}
+
+<div class="library-layout" [class.with-panel]="showPointsPanel">
+  <div class="library-main">
+    @if (loading && docs.length === 0) {
+      <p class="muted-loading">Loading regulations…</p>
+    } @else if (!docs.length) {
+      <div class="card-surface empty-state">
+        <strong>No regulations uploaded yet</strong>
+        <p>Upload a regulation PDF or add custom points in the manual entry row.</p>
+      </div>
+    } @else if (!visibleDocs.length) {
+      <div class="card-surface empty-state">
+        <strong>No regulations match your filters</strong>
+        <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
+      </div>
+    } @else {
+      <div class="card-surface table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="sortable" (click)="toggleSort('name')">Regulation <span class="sort-indicator">{{ sortMark('name') }}</span></th>
+              <th class="sortable" (click)="toggleSort('department')">Department <span class="sort-indicator">{{ sortMark('department') }}</span></th>
+              <th class="sortable" (click)="toggleSort('points')">Stored pts <span class="sort-indicator">{{ sortMark('points') }}</span></th>
+              <th class="sortable" (click)="toggleSort('created')">Uploaded <span class="sort-indicator">{{ sortMark('created') }}</span></th>
+              <th class="sortable" (click)="toggleSort('status')">Status <span class="sort-indicator">{{ sortMark('status') }}</span></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of visibleDocs; track d.id) {
+              <tr
+                class="clickable-row"
+                [class.selected-row]="isSelected(d)"
+                [class.manual-row]="isManualDoc(d)"
+                [class.row-saving]="savingDeptId === d.id || extractingId === d.id || hidingId === d.id"
+                (click)="viewPoints(d)"
+              >
+                <td class="reg-cell">
+                  <strong>{{ d.name }}</strong>
+                  @if (isManualDoc(d)) {
+                    <span class="manual-hint">Custom points you enter manually</span>
+                  }
+                </td>
+                <td (click)="$event.stopPropagation()">
+                  @if (canUpload) {
+                    <select
+                      class="inline-select"
+                      [ngModel]="d.departmentId ?? ''"
+                      [disabled]="savingDeptId === d.id"
+                      (ngModelChange)="handleDeptChange(d, $event)"
+                    >
+                      <option value="">Uncategorized</option>
+                      @for (dept of departments; track dept.id) {
+                        <option [value]="dept.id">{{ dept.name }}</option>
+                      }
+                    </select>
+                  } @else {
+                    <span class="muted">{{ d.departmentName ?? 'Uncategorized' }}</span>
+                  }
+                </td>
+                <td>{{ docPointMeta(d) }}</td>
+                <td class="muted">{{ isManualDoc(d) ? '—' : formatDate(d.createdAt) }}</td>
+                <td>
+                  @if (isManualDoc(d)) {
+                    <span class="severity-badge completed">{{ extractionLabel(d.extractionStatus) }}</span>
+                  } @else {
+                    <span class="severity-badge" [class]="extractionClass(d.extractionStatus)">
+                      {{ extractionLabel(d.extractionStatus) }}
+                    </span>
+                  }
+                </td>
+                <td (click)="$event.stopPropagation()">
+                  <button type="button" class="btn-use" (click)="viewPoints(d, $event)">
+                    {{ isManualDoc(d) ? 'Manage points' : 'View points' }}
+                  </button>
+                  @if (canExtract && !isManualDoc(d)) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-sm"
+                      [disabled]="extractingId === d.id"
+                      (click)="handleExtract(d, $event)"
+                    >
+                      {{ extractingId === d.id ? 'Extracting…' : 'Run extraction' }}
+                    </button>
+                  }
+                  @if (!isManualDoc(d)) {
+                    <button type="button" class="btn-link" (click)="openDocument(d, $event)">Open PDF</button>
+                  }
+                  @if (canUpload && !isManualDoc(d)) {
+                    <button
+                      type="button"
+                      class="btn-link btn-hide"
+                      [disabled]="hidingId === d.id"
+                      (click)="handleHide(d, $event)"
+                    >
+                      {{ hidingId === d.id ? 'Hiding…' : 'Hide' }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @if (showPointsPanel) {
+    <aside class="library-points-panel">
+      <div class="panel-top">
+        <div>
+          <strong>{{ selectedDoc?.name ?? 'Points' }}</strong>
+          @if (selectedDoc) {
+            <span class="muted panel-sub">
+              @if (isManualDoc(selectedDoc)) {
+                Manual entry · {{ docPointMeta(selectedDoc) }}
+              } @else {
+                {{ extractionLabel(selectedDoc.extractionStatus) }} · {{ docPointMeta(selectedDoc) }}
+              }
+            </span>
+          }
+        </div>
+        <button type="button" class="btn-close" (click)="closePointsPanel()" aria-label="Close points panel">
+          ×
+        </button>
+      </div>
+      @if (canExtract && selectedDoc && !isManualDoc(selectedDoc)) {
+        <div class="panel-extract">
+          <button
+            type="button"
+            class="btn-primary btn-sm"
+            [disabled]="extractingId === selectedDoc.id"
+            (click)="handleExtract(selectedDoc)"
+          >
+            {{ extractingId === selectedDoc.id ? 'Extracting…' : 'Run extraction' }}
+          </button>
+        </div>
+      }
+      @if (selectedDoc && isManualDoc(selectedDoc)) {
+        <app-nd-manual-regulation-points-panel
+          [docId]="selectedDoc.id"
+          [docName]="selectedDoc.name"
+          [points]="selectedPoints"
+          [loading]="pointsLoading"
+          (pointsChanged)="onManualPointsChanged()"
+        />
+      } @else {
+        <app-nd-regulation-points-panel
+          [docName]="selectedDoc?.name ?? ''"
+          [points]="selectedPoints"
+          [source]="pointsSource"
+          [loading]="pointsLoading"
+        />
+      }
+    </aside>
+  }
+</div>
+</div>

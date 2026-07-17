@@ -1,6 +1,44 @@
 /** Shared local persistence for Reguliq gap-analysis working document. */
 
-export type GapSeverity = 'critical' | 'high' | 'medium' | 'low' | 'compliant';
+/** Gap analysis uses three compliance outcomes only. */
+export type GapSeverity = 'compliant' | 'partial_compliant' | 'non_compliant';
+
+export function gapSeverityLabel(severity: GapSeverity | string): string {
+  switch (severity) {
+    case 'compliant':
+      return 'Compliance';
+    case 'partial_compliant':
+      return 'Partial compliance';
+    case 'non_compliant':
+      return 'Non-compliance';
+    default:
+      return gapSeverityLabel(normalizeGapSeverity(severity));
+  }
+}
+
+export function gapSeverityShortLabel(severity: GapSeverity | string): string {
+  switch (severity) {
+    case 'compliant':
+      return 'Compliant';
+    case 'partial_compliant':
+      return 'Partial';
+    case 'non_compliant':
+      return 'Non-compliant';
+    default:
+      return gapSeverityShortLabel(normalizeGapSeverity(severity));
+  }
+}
+
+/** Map legacy 5-tier severities and free-text to the 3 compliance statuses. */
+export function normalizeGapSeverity(value: string): GapSeverity {
+  const v = value.trim().toLowerCase().replace(/\s+/g, '_');
+  if (v === 'compliant' || v === 'compliance') return 'compliant';
+  if (v === 'partial_compliant' || v === 'partial' || v === 'partial_compliance') return 'partial_compliant';
+  if (v === 'non_compliant' || v === 'non_compliance' || v === 'non-compliant') return 'non_compliant';
+  if (v === 'critical' || v === 'high') return 'non_compliant';
+  if (v === 'medium' || v === 'low') return 'partial_compliant';
+  return 'partial_compliant';
+}
 
 export type GapItemData = {
   id: string;

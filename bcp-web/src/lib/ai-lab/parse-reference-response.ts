@@ -274,6 +274,15 @@ export function parseCapGaps(cap: string): CapGap[] {
   return gaps;
 }
 
+/** Serialize structured gaps back to the AI action-plan text format. */
+export function serializeCapGaps(gaps: CapGap[]): string {
+  if (!gaps.length) return '';
+  const body = gaps
+    .map((g) => `(${g.index}) Missing: ${g.missing.trim()}.${g.fix?.trim() ? ` Fix: ${g.fix.trim()}` : ''}`)
+    .join('\n');
+  return `Gap(s):\n${body}`;
+}
+
 export function referenceBlockBadgeLabel(block: ReferenceComplianceBlock): string {
   const tier = referenceBlockToTier(block);
   if (block.status === 'Non-Compliant') return 'NON-COMPLIANT';

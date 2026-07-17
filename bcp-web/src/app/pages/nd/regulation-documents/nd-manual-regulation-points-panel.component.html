@@ -1,0 +1,119 @@
+<div class="manual-panel">
+  <p class="manual-intro">
+    Add custom regulation points in a tree. Numbers are assigned automatically (1, 2.1, 2.1.1 — up to 3 levels).
+    Select where to add below, then enter the point text and option ref.
+  </p>
+
+  <div class="tree-section">
+    <div class="tree-toolbar">
+      <span class="tree-label">Point tree</span>
+      <button
+        type="button"
+        class="hint-btn"
+        [class.active]="selectedParent === null && !editingId"
+        (click)="selectParent(null)"
+      >
+        + Main point
+      </button>
+    </div>
+
+    @if (loading) {
+      <p class="empty">Loading manual points…</p>
+    } @else if (!treeRoots.length) {
+      <p class="empty">No points yet — add your first main point below.</p>
+    } @else {
+      <div class="tree-list">
+        @for (node of treeRoots; track node.id) {
+          <ng-container *ngTemplateOutlet="treeNode; context: { $implicit: node }" />
+        }
+      </div>
+    }
+  </div>
+
+  <ng-template #treeNode let-node>
+    <div class="tree-node" [class.selected-parent]="selectedParent === node.pointNumber">
+      <div class="tree-node-row" [style.paddingLeft.rem]="(node.depth - 1) * 0.75">
+        <span class="depth-badge">{{ depthLabel(node.depth) }}</span>
+        <strong class="point-num">{{ node.pointNumber }}</strong>
+        @if (node.pointTitle) {
+          <span class="point-title">— {{ node.pointTitle }}</span>
+        }
+        <div class="tree-node-actions">
+          @if (canAddChild(node.pointNumber)) {
+            <button type="button" class="hint-btn" (click)="selectParent(node.pointNumber)">+ Sub</button>
+          }
+          <button type="button" class="nd-btn-secondary tree-edit" (click)="startEdit(node)">Edit</button>
+          <button
+            type="button"
+            class="nd-btn-secondary nd-danger tree-delete"
+            [disabled]="deletingId === node.id"
+            (click)="deletePoint(node)"
+          >
+            {{ deletingId === node.id ? '…' : 'Delete' }}
+          </button>
+        </div>
+      </div>
+      <p class="point-text tree-text" [style.paddingLeft.rem]="(node.depth - 1) * 0.75 + 0.5">{{ node.pointContent }}</p>
+      @if (node.pageReference) {
+        <p class="point-ref tree-ref" [style.paddingLeft.rem]="(node.depth - 1) * 0.75 + 0.5">
+          <span>Option ref:</span> {{ node.pageReference }}
+        </p>
+      }
+      @for (child of node.children; track child.id) {
+        <ng-container *ngTemplateOutlet="treeNode; context: { $implicit: child }" />
+      }
+    </div>
+  </ng-template>
+
+  <form class="manual-form" (ngSubmit)="addPoint()">
+    <div class="add-context">
+      @if (editingId) {
+        <strong>Editing point {{ editingPointNumber }}</strong>
+      } @else {
+        <strong>Next point: {{ previewNumber }}</strong>
+        <span class="muted-small">{{ parentLabel }}</span>
+      }
+    </div>
+    <div class="manual-form-grid">
+      <label class="field">
+        <span>Title (optional)</span>
+        <input class="nd-input" [(ngModel)]="form.pointTitle" name="pointTitle" placeholder="Short title" />
+      </label>
+      <label class="field field-wide">
+        <span>Point text</span>
+        <textarea
+          class="nd-input"
+          [(ngModel)]="form.pointContent"
+          name="pointContent"
+          rows="3"
+          placeholder="Requirement or guidance text"
+          required
+        ></textarea>
+      </label>
+      <label class="field field-wide">
+        <span>Option ref / where it exists</span>
+        <input
+          class="nd-input"
+          [(ngModel)]="form.pageReference"
+          name="pageReference"
+          placeholder="e.g. Section 2.1, page 14, Annex A"
+        />
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="nd-btn-primary" [disabled]="saving || !form.pointContent.trim()">
+        {{ saving ? (editingId ? 'Saving…' : 'Adding…') : (editingId ? 'Save changes' : 'Add point') }}
+      </button>
+      @if (editingId) {
+        <button type="button" class="nd-btn-secondary" (click)="cancelEdit()">Cancel edit</button>
+      }
+    </div>
+  </form>
+
+  @if (message) {
+    <p class="manual-success">{{ message }}</p>
+  }
+  @if (error) {
+    <p class="manual-error">{{ error }}</p>
+  }
+</div>

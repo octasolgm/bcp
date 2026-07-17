@@ -1,0 +1,481 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.lib-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.lib-picker-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.lib-picker-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+
+  h3 {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+}
+
+.lib-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.lib-picker-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0.5rem;
+}
+
+.lib-picker-empty {
+  padding: 0.75rem;
+}
+
+.lib-doc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  width: 100%;
+  margin-bottom: 0.25rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background: var(--bg-input);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  &.active {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+}
+
+.lib-doc-check {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+  pointer-events: none;
+}
+
+.lib-doc-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.lib-header-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+
+  input[type='checkbox'] {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    cursor: pointer;
+
+    &.partial:not(:checked) {
+      opacity: 0.65;
+      accent-color: var(--accent);
+    }
+  }
+}
+
+.lib-selection-count {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--accent);
+  margin-left: 0.25rem;
+}
+
+.lib-doc-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.25rem;
+  padding: 0.625rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg-input);
+  }
+
+  &.active {
+    background: var(--accent);
+    color: var(--accent-text);
+
+    .nd-muted {
+      color: inherit;
+      opacity: 0.85;
+    }
+  }
+}
+
+.lib-doc-name {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.lib-doc-meta {
+  font-size: 0.75rem;
+}
+
+.lib-hint {
+  font-size: 0.75rem;
+}
+
+.lib-doc-points-group {
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.lib-doc-points-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: none;
+  background: var(--bg-muted);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.8125rem;
+
+  &:hover {
+    background: var(--bg-input);
+  }
+
+  strong {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+  }
+}
+
+.lib-chapter-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: none;
+  background: var(--bg-muted);
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: var(--bg-input);
+  }
+}
+
+.chevron {
+  display: inline-block;
+  transition: transform 0.15s;
+  color: var(--text-muted);
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.lib-doc-points-actions {
+  margin-left: auto;
+}
+
+.lib-doc-points-body {
+  padding: 0.5rem;
+}
+
+.lib-batch-bar {
+  margin-bottom: 0.5rem;
+}
+
+.lib-chapter-group {
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.lib-chapter-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.lib-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  padding: 0.35rem 0.25rem;
+  margin-top: 0.25rem;
+  border-top: 1px dashed var(--border);
+}
+
+.lib-point-tag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.625rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+
+.lib-point-tag-annex {
+  background: color-mix(in srgb, #c47a00 16%, transparent);
+  color: #a86800;
+}
+
+.lib-chapter-body {
+  padding: 0.35rem 0.45rem 0.45rem;
+}
+
+.lib-selected-doc-group {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.lib-selected-doc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.lib-point-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+
+  &.in-library {
+    opacity: 0.65;
+  }
+}
+
+.lib-point-check {
+  flex-shrink: 0;
+  padding-top: 0.125rem;
+
+  input[type='checkbox'] {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+  }
+}
+
+.lib-point-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.lib-point-title {
+  font-weight: 500;
+}
+
+.lib-point-content {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lib-selected-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+
+  &.lib-selected-row-checked {
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+    background: color-mix(in srgb, var(--accent) 6%, var(--bg-elevated));
+  }
+}
+
+.lib-selected-check {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+
+  input[type='checkbox'] {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+  }
+}
+
+.lib-selected-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.lib-selected-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.25rem;
+}
+
+.lib-btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.lib-picker-error {
+  margin-top: 0.75rem;
+}
+
+.lib-point-tag-dup {
+  background: color-mix(in srgb, var(--critical, #c62828) 12%, transparent);
+  color: var(--critical, #c62828);
+}
+
+.lib-point-tag-ref {
+  background: color-mix(in srgb, var(--primary, #0d7a72) 14%, transparent);
+  color: var(--primary, #0d7a72);
+}
+
+.lib-dup-hint {
+  margin: 0.2rem 0 0;
+  font-size: 0.6875rem;
+  color: var(--critical, #c62828);
+}
+
+.lib-add-summary {
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
+  font-size: 0.8125rem;
+}
+
+.lib-add-dup-list {
+  margin: 0.4rem 0 0.5rem;
+  padding-left: 1.1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.lib-selected-dup-acc {
+  margin-bottom: 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
+.lib-selected-dup-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.lib-selected-dup-body {
+  padding: 0 0.6rem 0.6rem;
+}
+
+.lib-selected-dup-group {
+  margin-bottom: 0.5rem;
+}
+
+.lib-selected-dup-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.lib-selected-dup-item {
+  font-size: 0.75rem;
+  padding-left: 0.5rem;
+}
+
+@media (max-width: 1100px) {
+  .lib-picker-grid {
+    grid-template-columns: repeat(3, minmax(260px, 1fr));
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+}

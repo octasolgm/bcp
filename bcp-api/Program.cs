@@ -5,6 +5,7 @@ using Reguliq.Api.Services;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.Storage;
 using Reguliq.Api.Workers;
+using System.Net.Http.Headers;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -108,7 +109,7 @@ builder.Services.Configure<NodeBridgeOptions>(o =>
         builder.Configuration,
         "NodeBridge:BaseUrl",
         "NODE_API_URL") ?? "http://localhost:4000";
-    o.Enabled = true;
+    o.Enabled = !BcpConfiguration.IsFalse(builder.Configuration, "NodeBridge:Enabled", "NODE_BRIDGE_ENABLED");
 });
 
 builder.Services.AddHttpClient<GeminiService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
@@ -141,6 +142,41 @@ builder.Services.Configure<SupabaseStorageOptions>(o =>
 });
 builder.Services.AddHttpClient<SupabaseStorageService>(c => c.Timeout = TimeSpan.FromMinutes(5));
 
+// New Dashboard (enterprise platform)
+builder.Services.Configure<Reguliq.Api.Infrastructure.NewDashboard.SupabaseJwtOptions>(o =>
+{
+    o.JwtSecret = BcpConfiguration.GetString(builder.Configuration, "Supabase:JwtSecret", "SUPABASE_JWT_SECRET") ?? "";
+    o.Url = BcpConfiguration.GetString(builder.Configuration, "Supabase:Url", "SUPABASE_URL") ?? "";
+    o.ServiceRoleKey = BcpConfiguration.GetString(
+        builder.Configuration, "Supabase:ServiceRoleKey", "SUPABASE_SERVICE_ROLE_KEY") ?? "";
+});
+builder.Services.AddSingleton<Reguliq.Api.Infrastructure.NewDashboard.SupabaseJwtValidator>();
+builder.Services.AddHttpClient(nameof(Reguliq.Api.Infrastructure.NewDashboard.SupabaseJwtValidator), c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(15);
+    c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+});
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationUploadService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisProcessor>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.DemoAnalysisSeedService>();
+builder.Services.AddHttpClient();
+
+var ndJwtSecret = BcpConfiguration.GetString(builder.Configuration, "Supabase:JwtSecret", "SUPABASE_JWT_SECRET");
+var ndSupabaseUrl = BcpConfiguration.GetString(builder.Configuration, "Supabase:Url", "SUPABASE_URL");
+if (string.IsNullOrWhiteSpace(ndJwtSecret))
+{
+    Console.WriteLine(
+        "WARNING: Supabase:JwtSecret is not set. ND auth will validate tokens via Supabase Auth API (slower). " +
+        "For local HS256 validation, copy JWT secret from Supabase Dashboard → Project Settings → API → JWT Settings " +
+        "into appsettings.Development.json (Supabase:JwtSecret) and re-run scripts/sync-secrets.ps1.");
+}
+else
+{
+    Console.WriteLine(
+        $"ND JWT validator: secret prefix={ndJwtSecret[..Math.Min(5, ndJwtSecret.Length)]}..., " +
+        $"issuer={(string.IsNullOrWhiteSpace(ndSupabaseUrl) ? "(set Supabase:Url)" : $"{ndSupabaseUrl.TrimEnd('/')}/auth/v1")}");
+}
+
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
@@ -150,6 +186,7 @@ using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await SupabaseSchemaBootstrap.EnsureAsync(db, dbConfig);
+        await NdSchemaBootstrap.EnsureAsync(db);
         var migrator = scope.ServiceProvider.GetRequiredService<LocalDataMigrationService>();
         await migrator.MigrateAsync();
     }

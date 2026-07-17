@@ -1,0 +1,125 @@
+<div class="page-header">
+  <div>
+    <h1>{{ pageTitle }}</h1>
+    <p class="subtitle">{{ subtitle }}</p>
+  </div>
+  @if (canCreate) {
+    <div class="header-actions">
+      <a routerLink="/nd/analyse-v8" class="btn-primary">+ New analysis</a>
+    </div>
+  }
+</div>
+
+<div class="nd-page-body">
+@if (loading) {
+  <p class="muted-loading">Loading analysis runs…</p>
+} @else if (!allRuns.length) {
+  <div class="card-surface empty-state">
+    <strong>No analysis runs yet</strong>
+    @if (canCreate) {
+      <p><a routerLink="/nd/analyse-v8">Create your first analysis run</a></p>
+    } @else {
+      <p>Nothing to show right now.</p>
+    }
+  </div>
+} @else {
+  <div class="filter-pills nd-list-toolbar nd-shrink">
+    <input
+      type="search"
+      class="filter-search"
+      [(ngModel)]="searchQuery"
+      placeholder="Search runs…"
+      aria-label="Search analysis runs"
+    />
+    <select class="filter-select" [(ngModel)]="statusFilter" aria-label="Filter by status">
+      <option value="">All statuses</option>
+      <option value="draft">Draft</option>
+      <option value="running">Running</option>
+      <option value="failed">Failed</option>
+      <option value="review">In review</option>
+      <option value="completed">Completed</option>
+    </select>
+    <select class="filter-select" [(ngModel)]="sourceFilter" aria-label="Filter by source">
+      <option value="">All sources</option>
+      <option value="nd_analysis">ND</option>
+      <option value="legacy_analysis">Legacy</option>
+      <option value="legacy_dual_verify">Legacy DV</option>
+    </select>
+    <span class="filter-count">{{ visibleRuns.length }} of {{ allRuns.length }}</span>
+    @if (hasActiveFilters) {
+      <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+    }
+  </div>
+
+  @if (!visibleRuns.length) {
+    <div class="card-surface empty-state">
+      <strong>No runs match your filters</strong>
+      <p>Try a different search or <button type="button" class="btn-link" (click)="clearFilters()">clear filters</button>.</p>
+    </div>
+  } @else {
+  <div class="card-surface table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="sortable" (click)="toggleSort('name')">
+            Run <span class="sort-indicator">{{ sortIndicator('name') }}</span>
+          </th>
+          <th class="sortable" (click)="toggleSort('points')">
+            Points <span class="sort-indicator">{{ sortIndicator('points') }}</span>
+          </th>
+          <th class="sortable" (click)="toggleSort('created')">
+            Created <span class="sort-indicator">{{ sortIndicator('created') }}</span>
+          </th>
+          <th class="sortable" (click)="toggleSort('source')">
+            Source <span class="sort-indicator">{{ sortIndicator('source') }}</span>
+          </th>
+          <th class="sortable" (click)="toggleSort('status')">
+            Status <span class="sort-indicator">{{ sortIndicator('status') }}</span>
+          </th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (run of visibleRuns; track run.id) {
+          <tr
+            class="clickable-row"
+            [routerLink]="runLink(run)"
+            [queryParams]="runQuery(run) || null"
+          >
+            <td><strong>{{ run.name }}</strong></td>
+            <td class="muted">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
+            <td class="muted">{{ formatDate(run.createdAt) }}</td>
+            <td>
+              <span class="type-badge">
+                @if (run.source === 'legacy_dual_verify') {
+                  Legacy DV
+                } @else if (run.source === 'legacy_analysis') {
+                  Legacy
+                } @else {
+                  ND
+                }
+              </span>
+            </td>
+            <td>
+              <span class="severity-badge" [class]="statusClass(run.status)">{{ run.status }}</span>
+            </td>
+            <td class="row-actions" (click)="$event.stopPropagation()">
+              <a class="row-action-link" [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null">View</a>
+              @if (canSubmitRun(run)) {
+                <button type="button" class="row-action-btn" (click)="submitRunForChecker(run, $event)">Submit</button>
+              }
+              @if (canReviewRun(run)) {
+                <a class="row-action-link" [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null">Review</a>
+              }
+              @if (canEditPlans(run)) {
+                <a class="row-action-link" [routerLink]="['/nd/results', run.id]">Edit plans</a>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  }
+}
+</div>

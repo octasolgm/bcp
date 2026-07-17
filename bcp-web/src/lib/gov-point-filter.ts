@@ -425,6 +425,22 @@ export function filterComparableGovLeafPoints(points: GovPoint[]): {
   return { comparable, skipped };
 }
 
+/**
+ * Main-body numeric leaf points only (e.g. 2.1.1) — excludes annex roman (i)/(ii),
+ * §1 introduction, and non-numeric ids. Use for library builder and regulation view.
+ */
+export function filterMainBodyNumericLeafPoints(points: GovPoint[]): GovPoint[] {
+  const { comparable } = filterComparableGovLeafPoints(points);
+  return comparable.filter((p) => {
+    if (isRomanPointId(p.point_id)) return false;
+    if (isAnnexPoint(p)) return false;
+    if (/red flag indicators/i.test(p.title ?? '') || /red flag indicators/i.test(p.text)) {
+      return false;
+    }
+    return normalizeNumericPointId(p.point_id) != null;
+  });
+}
+
 /** Chapter from section heading, e.g. "4. NOTIFICATION…" → "4". */
 export function chapterFromSection(section?: string): string | null {
   const s = (section ?? '').trim();
@@ -579,6 +595,14 @@ export function enrichGovPointSections(points: GovPoint[]): GovPoint[] {
  */
 export function formatGovPointDisplayId(point: GovPoint): string {
   const id = point.point_id.trim();
+  const section = (point.section ?? '').trim();
+
+  if (section) {
+    const sectionNorm = normalizeNumericPointId(section);
+    if (sectionNorm) return sectionNorm;
+    if (!normalizeNumericPointId(id)) return section;
+  }
+
   const norm = normalizeNumericPointId(id);
   if (norm) return norm;
 
@@ -598,6 +622,7 @@ export function formatGovPointDisplayId(point: GovPoint): string {
 /** Chapter header — main body §N; annex chapters shown without § prefix. */
 export function formatChapterLabel(chapter: string): string {
   const c = chapter.trim();
+  if (c === 'other') return 'Other points';
   if (/^annex\s+\d+/i.test(c)) return c;
   return `§${c}`;
 }
@@ -719,4 +744,41 @@ export function groupGovPointsByChapter(points: GovPoint[]): GovPointChapterGrou
         .sort(([a], [b]) => compareGovPointIds(a, b))
         .map(([key, sectionPoints]) => ({ key, points: sectionPoints })),
     }));
+}
+
+/** Annex section labelling only — no sub-leaf expansion (picker rows must match DB point numbers). */
+export function enrichGovPointSectionsForPicker(points: GovPoint[]): GovPoint[] {
+  return points.map((point) => {
+    const section = (point.section ?? '').trim();
+    if (!section || isAnnexSectionHeading(section)) return point;
+
+    const annex = resolveAnnexChapter(section, point.point_id);
+    if (!annex || section.startsWith(`${annex} ·`)) return point;
+
+    return { ...point, section: `${annex} · ${section}` };
+  });
+}
+
+/** Group regulation points for library picker — one UI row per stored point. */
+export function groupGovPointsForPicker(points: GovPoint[]): GovPointChapterGroup[] {
+  const enriched = enrichGovPointSectionsForPicker(points);
+  const grouped = groupGovPointsByChapter(enriched);
+  const inGroup = new Set<string>();
+  for (const ch of grouped) {
+    for (const p of ch.points) inGroup.add(p.point_id);
+  }
+  const orphans = enriched.filter((p) => !inGroup.has(p.point_id));
+  if (orphans.length > 0) {
+    grouped.push({
+      chapter: 'other',
+      points: orphans,
+      sections: [{ key: 'other', points: orphans }],
+    });
+  }
+  return grouped;
+}
+
+/** All extracted points grouped for display (§2, §3, §4, intro, annex). */
+export function groupAllGovPointsForDisplay(points: GovPoint[]): GovPointChapterGroup[] {
+  return groupGovPointsByChapter(enrichGovPointSections(points));
 }

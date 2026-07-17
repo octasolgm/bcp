@@ -1,3 +1,21 @@
+@if (capOnly) {
+  @if (capGaps.length > 0) {
+    @for (gap of capGaps; track gap.index) {
+      <div class="cap-gap">
+        <p class="gap-label">Gap {{ gap.index }} — Missing</p>
+        <p>{{ gap.missing }}</p>
+        @if (gap.fix) {
+          <p class="fix-label">Fix:</p>
+          <p>{{ gap.fix }}</p>
+        }
+      </div>
+    }
+  } @else if (block.correctiveAction && block.correctiveAction !== 'N/A') {
+    <p class="cap-text">{{ block.correctiveAction }}</p>
+  } @else {
+    <p class="cap-text muted">No corrective action plan for this point.</p>
+  }
+} @else {
 <article class="ref-card" [ngClass]="tierClass('card')">
   <span class="badge" [ngClass]="tierClass('badge')">{{ badge }}</span>
 
@@ -94,3 +112,4 @@
     <p class="resp"><strong>Responsibility:</strong> {{ block.responsibility }}</p>
   }
 </article>
+}

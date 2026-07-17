@@ -1,0 +1,127 @@
+<div class="lib-points-panel">
+  <div class="panel-head">
+    <p class="panel-status" [class.panel-error]="error">{{ statusLabel }}</p>
+    @if (!loading && libraryStoredCount > 0) {
+      <p class="panel-hint">✓ = compared in gap analysis · unmarked rows are section headers (context only)</p>
+      <input
+        type="search"
+        class="panel-search"
+        placeholder="Search points…"
+        [(ngModel)]="pointSearch"
+        aria-label="Search points in library"
+      />
+    }
+  </div>
+
+  <div class="panel-body">
+    @if (loading) {
+      <p class="empty">Loading…</p>
+    } @else if (error) {
+      <p class="empty error">{{ error }}</p>
+    } @else if (!libraryStoredCount) {
+      <p class="empty">No points in this regulation points library.</p>
+    } @else if (visibleDisplay.length === 0) {
+      <p class="empty">No points match your search.</p>
+    } @else {
+      @for (lib of visibleDisplay; track lib.key) {
+        <div class="acc-item">
+          <button type="button" class="acc-head" (click)="toggleLibrary(lib.key)">
+            <span class="chevron" [class.open]="isLibraryExpanded(lib.key)">›</span>
+            <span>{{ lib.libraryName }}</span>
+            <span class="acc-meta">{{ lib.analyseCount }}/{{ lib.storedCount }}</span>
+          </button>
+          @if (isLibraryExpanded(lib.key)) {
+            <div class="acc-body">
+              @for (doc of lib.documents; track doc.key) {
+                <div class="acc-item acc-nested">
+                  <button type="button" class="acc-head acc-head-nested" (click)="toggleDoc(doc.key)">
+                    <span class="chevron" [class.open]="isDocExpanded(doc.key)">›</span>
+                    <span>{{ doc.docName }}</span>
+                    <span class="acc-meta">{{ doc.analyseCount }}/{{ doc.storedCount }}</span>
+                  </button>
+                  @if (isDocExpanded(doc.key)) {
+                    <div class="acc-body acc-points">
+                      @if (doc.useChapters) {
+                        @for (ch of doc.chapters; track ch.chapter) {
+                          <div class="acc-item tree-chapter-item">
+                            <button
+                              type="button"
+                              class="acc-head tree-chapter-head"
+                              (click)="toggleChapter(doc.key, ch.chapter)"
+                            >
+                              <span class="chevron" [class.open]="isChapterExpanded(doc.key, ch.chapter)">›</span>
+                              <span>{{ ch.label }}</span>
+                              <span class="acc-meta">{{ ch.analyseCount }}/{{ ch.storedCount }}</span>
+                            </button>
+                            @if (isChapterExpanded(doc.key, ch.chapter)) {
+                              <div class="acc-body tree-chapter-body">
+                                <app-nd-point-number-tree
+                                  [nodes]="ch.tree"
+                                  mode="view"
+                                />
+                              </div>
+                            }
+                          </div>
+                        }
+                      } @else {
+                        <app-nd-point-number-tree
+                          [nodes]="doc.pointTree.length ? doc.pointTree : []"
+                          mode="view"
+                        />
+                        @if (!doc.pointTree.length) {
+                          @for (row of doc.flatRows; track row.point.regulationPointId ?? row.displayId) {
+                            <ng-container *ngTemplateOutlet="pointRow; context: { $implicit: row }" />
+                          }
+                        }
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      @if (libraryDuplicateGroups.length) {
+        <div class="acc-item acc-muted">
+          <button type="button" class="acc-head" (click)="duplicatesExpanded = !duplicatesExpanded">
+            <span class="chevron" [class.open]="duplicatesExpanded">›</span>
+            <span>Duplicates merged ({{ libraryDuplicateCount }})</span>
+          </button>
+          @if (duplicatesExpanded) {
+            <div class="acc-body">
+              @for (grp of libraryDuplicateGroups; track grp.key) {
+                <div class="dup-group">
+                  <div class="point-line">
+                    <span class="pid">{{ formatGovPointDisplayId(grp.primary) }}</span>
+                    <span class="ptxt">{{ truncate(grp.primary.title || grp.primary.text, 48) }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>
+
+<ng-template #pointRow let-row>
+  <div
+    class="point-line"
+    [class.point-header-row]="!row.forAnalysis"
+    [style.paddingLeft.rem]="(row.depth - 1) * 0.65"
+  >
+    @if (row.forAnalysis) {
+      <span class="point-check" title="Compared in gap analysis">✓</span>
+    } @else {
+      <span class="point-header-mark" title="Section header — not compared directly">§</span>
+    }
+    <span class="pid">{{ row.displayId }}</span>
+    <span class="ptxt">{{ truncate(row.point.title || row.point.text, 52) }}</span>
+    @if (!row.forAnalysis) {
+      <span class="point-tag-header">Header</span>
+    }
+  </div>
+</ng-template>

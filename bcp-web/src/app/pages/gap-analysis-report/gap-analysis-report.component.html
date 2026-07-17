@@ -22,9 +22,38 @@
     >
       {{ exporting ? 'Exporting…' : 'Export XLSX' }}
     </button>
-    <a routerLink="/analyse-v2" class="btn-primary">Re-run</a>
+    <a routerLink="/analyse-v8" class="btn-primary">Re-run</a>
+    @if (ndRunId) {
+      <button type="button" class="btn-secondary" (click)="openNdResultsEditor()">Edit action plans</button>
+      @if (canSubmitNdReview) {
+        <button type="button" class="btn-secondary" [disabled]="workflowLoading" (click)="submitNdReview()">
+          {{ workflowLoading ? 'Sending…' : (ndRunStatus === 'pulled_back' ? 'Resubmit to checker' : 'Send to checker') }}
+        </button>
+      }
+    }
   </div>
 </div>
+
+@if (ndRunId && ndRunData) {
+  <div class="workflow-bar card-surface">
+    <div class="workflow-bar-main">
+      <app-nd-status-badge [status]="ndRunData.run.status" />
+      @if (ndWorkflowHint) {
+        <p class="workflow-hint">{{ ndWorkflowHint }}</p>
+      }
+    </div>
+    <div class="workflow-bar-actions">
+      <a routerLink="/nd/analysis-runs" class="workflow-link">All analysis runs</a>
+      @if (ndRunData.run.status === 'submitted_for_review') {
+        <button type="button" class="workflow-link-btn" (click)="openCheckerQueue()">Checker queue →</button>
+      }
+      @if (ndRunData.run.status === 'checker_approved') {
+        <button type="button" class="workflow-link-btn" (click)="openReviewerQueue()">Reviewer queue →</button>
+      }
+      <button type="button" class="workflow-link-btn" (click)="openNdResultsEditor()">Action plan history →</button>
+    </div>
+  </div>
+}
 
 @if (loading) {
   <div class="card-surface empty-state">
@@ -35,25 +64,20 @@
 
 @if (!loading) {
 <div class="summary-row">
-  <div class="summary-card critical">
-    <span class="label">Critical</span>
-    <strong>{{ summary.critical }}</strong>
-    <span class="hint">Immediate action</span>
-  </div>
-  <div class="summary-card high">
-    <span class="label">High</span>
-    <strong>{{ summary.high }}</strong>
-    <span class="hint">Significant gap</span>
-  </div>
-  <div class="summary-card medium">
-    <span class="label">Medium</span>
-    <strong>{{ summary.medium }}</strong>
-    <span class="hint">Partial coverage</span>
-  </div>
   <div class="summary-card compliant">
-    <span class="label">Compliant</span>
+    <span class="label">Compliance</span>
     <strong>{{ summary.compliant }}</strong>
     <span class="hint">Fully addressed</span>
+  </div>
+  <div class="summary-card partial_compliant">
+    <span class="label">Partial compliance</span>
+    <strong>{{ summary.partialCompliant }}</strong>
+    <span class="hint">Needs improvement</span>
+  </div>
+  <div class="summary-card non_compliant">
+    <span class="label">Non-compliance</span>
+    <strong>{{ summary.nonCompliant }}</strong>
+    <span class="hint">Corrective action required</span>
   </div>
 </div>
 
@@ -69,6 +93,8 @@
       {{ f.id === 'all' ? 'All (' + items.length + ')' : f.label }}
     </button>
   }
+  <button type="button" class="filter-util" (click)="collapseAllItems()">Collapse all</button>
+  <button type="button" class="filter-util" (click)="expandAllItems()">Expand all</button>
 </div>
 }
 }
@@ -94,7 +120,7 @@
         <span class="item-index">{{ item.id }}</span>
         <span class="item-section">{{ item.section }}</span>
         <strong class="item-title">{{ item.title }}</strong>
-        <span class="severity-badge" [class]="item.severity">{{ item.severity }}</span>
+        <span class="severity-badge" [class]="item.severity">{{ severityLabel(item.severity) }}</span>
         @if (item.signedOff) {
           <span class="signed-off">Signed off</span>
         }

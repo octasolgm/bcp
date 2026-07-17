@@ -94,19 +94,19 @@
   <div class="section-head">
     <h2>Recent analyses</h2>
     <a
-      routerLink="/gap-analysis"
-      [queryParams]="{ saved: 'compliance:a339de5e-06b9-4067-bd97-e7d8086bf31e' }"
+      [routerLink]="viewAllAnalysesPath()"
+      [queryParams]="inNdShell ? null : preferredReportQueryParams()"
       class="view-all"
     >View all →</a>
   </div>
 
-  @if (sessionsLoading || metricsLoading) {
+  @if (recentAnalysesLoading()) {
     <p class="loading">Loading analyses…</p>
   } @else {
     <ul class="recent-list">
       @for (a of recentRows.slice(0, 4); track a.id) {
         <li>
-          <a [routerLink]="['/gap-analysis']" [queryParams]="a.queryParams" class="recent-item">
+          <a [routerLink]="recentRowLink(a)" [queryParams]="a.queryParams" class="recent-item">
             <span class="file-icon">PDF</span>
             <div class="recent-body">
               <span class="recent-title">{{ a.title }}</span>

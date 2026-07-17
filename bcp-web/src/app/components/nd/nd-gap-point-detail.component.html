@@ -1,0 +1,147 @@
+<div class="gap-point-detail">
+  <div class="compare-columns">
+    <section class="compare-col compare-col-reg">
+      <p class="col-label col-label-reg">
+        Regulatory requirement
+        <span class="ai-tag">AI extracted</span>
+      </p>
+      <p class="col-body">{{ regulatoryText }}</p>
+      @if (regulationDocId) {
+        <button type="button" class="pdf-link" (click)="onViewRegPdf()">View PDF source</button>
+      }
+    </section>
+
+    <section class="compare-col compare-col-policy">
+      <p class="col-label col-label-policy">
+        Policy extract
+        <span class="ai-tag">AI extracted</span>
+      </p>
+      @if (policyRefLabel) {
+        <p class="policy-ref">{{ policyRefLabel }}:</p>
+      }
+      <blockquote class="policy-quote">&ldquo;{{ policyExtract }}&rdquo;</blockquote>
+      @if (policyDocId) {
+        <button type="button" class="pdf-link" (click)="onViewPolicyPdf()">
+          View PDF@if (policyPage) { p.{{ policyPage }} }
+        </button>
+      }
+    </section>
+  </div>
+
+  @if (showGapsSection) {
+    <section class="cap-section">
+      <div class="cap-toolbar">
+        <div class="cap-toolbar-title">
+          <span class="gaps-label">Gaps identified</span>
+          @if (!showHistoryPanel && !editing) {
+            <span class="draft-badge">AI draft</span>
+          }
+        </div>
+        <div class="cap-toolbar-actions">
+          @if (showHistoryPanel) {
+            <button type="button" class="toolbar-btn" (click)="onCloseHistory()">Close history</button>
+          } @else if (editing) {
+            <button type="button" class="toolbar-btn" (click)="onCancelEdit()">Cancel</button>
+          } @else if (canEdit) {
+            <button type="button" class="toolbar-btn primary" (click)="onStartEdit()">Edit actions</button>
+            @if (history.length || currentPlan) {
+              <button type="button" class="toolbar-btn" (click)="onOpenHistory()">History</button>
+            }
+          } @else if (history.length) {
+            <button type="button" class="toolbar-btn" (click)="onOpenHistory()">History</button>
+          }
+        </div>
+      </div>
+
+      @if (showHistoryPanel) {
+        <div class="history-panel">
+          @if (!history.length) {
+            <p class="muted">No history recorded yet.</p>
+          } @else {
+            <ol class="history-timeline">
+              @for (h of history; track h.id) {
+                <li class="history-entry" [class.is-current]="h.isCurrent">
+                  <div class="history-entry-head">
+                    <span class="history-version">v{{ h.versionNumber }}</span>
+                    <span class="history-type">{{ changeTypeLabel(h.changeType) }}</span>
+                    @if (h.isCurrent) { <span class="current-pill">Current</span> }
+                  </div>
+                  <p class="history-meta-line">
+                    @if (h.changedByName) { <span>{{ h.changedByName }}</span> · }
+                    <span>{{ formatDate(h.createdAt) }}</span>
+                  </p>
+                  @if (historyGaps(h.actionPlanContent).length) {
+                    <ul class="history-action-list">
+                      @for (gap of historyGaps(h.actionPlanContent); track gap.index) {
+                        <li class="history-action-item">
+                          <strong>Action {{ gap.index }}</strong>
+                          <p>{{ gap.fix || gap.missing }}</p>
+                          @if (gap.fix && gap.missing) {
+                            <p class="history-missing">Gap: {{ gap.missing }}</p>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  } @else if (h.actionPlanContent) {
+                    <p class="history-plain">{{ h.actionPlanContent }}</p>
+                  }
+                  @if (canEdit && !h.isCurrent) {
+                    <button type="button" class="toolbar-btn subtle" (click)="restoreVersion.emit(h)">
+                      Restore this version
+                    </button>
+                  }
+                </li>
+              }
+            </ol>
+          }
+        </div>
+      } @else if (editing) {
+        <p class="cap-hint">Add one or more corrective actions for this point.</p>
+        <div class="action-edit-list">
+          @for (gap of editGaps; track gap.index) {
+            <div class="action-edit-card">
+              <div class="action-edit-head">
+                <span class="action-num">Action {{ gap.index }}</span>
+                @if (editGaps.length > 1) {
+                  <button type="button" class="toolbar-btn subtle danger" (click)="removeActionItem(gap.index)">
+                    Remove
+                  </button>
+                }
+              </div>
+              <label class="field-label">What is missing</label>
+              <textarea class="nd-input gap-field" rows="2" [(ngModel)]="gap.missing" placeholder="Describe the gap…"></textarea>
+              <label class="field-label">Corrective action</label>
+              <textarea class="nd-input gap-field" rows="3" [(ngModel)]="gap.fix" placeholder="What will you do to fix it…"></textarea>
+            </div>
+          }
+        </div>
+        <button type="button" class="toolbar-btn add-row-btn" (click)="addActionItem()">+ Add action</button>
+        <div class="cap-edit-actions">
+          <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="saving" (click)="onSave()">
+            {{ saving ? 'Saving…' : 'Save' }}
+          </button>
+        </div>
+      } @else {
+        @if (capGaps.length) {
+          <ol class="action-read-list">
+            @for (gap of capGaps; track gap.index) {
+              <li class="action-read-card">
+                <span class="action-num">Action {{ gap.index }}</span>
+                @if (gap.missing) {
+                  <p class="action-gap">{{ gap.missing }}</p>
+                }
+                @if (gap.fix) {
+                  <p class="action-fix">{{ gap.fix }}</p>
+                }
+              </li>
+            }
+          </ol>
+        } @else if (currentPlan) {
+          <p class="gap-plain">{{ currentPlan }}</p>
+        } @else {
+          <p class="gap-plain muted">No corrective actions yet.</p>
+        }
+      }
+    </section>
+  }
+</div>

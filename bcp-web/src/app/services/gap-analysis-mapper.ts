@@ -60,19 +60,15 @@ function severityFromAgreement(
 
   const anyStatus = `${llm} ${landing} ${structured}`;
   const isNon =
-    /\bnon[- ]?compliant\b/.test(anyStatus) || /\bnon\b/.test(llm) && /compliant/.test(llm);
+    /\bnon[- ]?compliant\b/.test(anyStatus) || (/\bnon\b/.test(llm) && /compliant/.test(llm));
   const isPartial = /\bpartial\b/.test(anyStatus);
   const isCompliant =
     /\bcompliant\b/.test(anyStatus) && !isNon && !isPartial;
 
-  if (isNon || agree === 'both_non_compliant') return 'critical';
-  if (isPartial) return 'high';
-  // Status mismatch where both sides are effectively compliant → treat as review/medium, not gap
-  if (agree === 'status_mismatch' && isCompliant) return 'medium';
-  if (agree === 'status_mismatch') return 'high';
-  if (agree === 'confidence_gap') return 'medium';
+  if (isNon || agree === 'both_non_compliant') return 'non_compliant';
+  if (isPartial || agree === 'status_mismatch' || agree === 'confidence_gap') return 'partial_compliant';
   if (isCompliant || agree === 'aligned') return 'compliant';
-  return 'high';
+  return 'partial_compliant';
 }
 
 function pageLabel(citationPage: string | null, fallbackLabel: string): string {

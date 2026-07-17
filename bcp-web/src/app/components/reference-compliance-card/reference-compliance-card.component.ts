@@ -22,6 +22,7 @@ import type { ColorTier } from '../../../lib/ai-lab/color-tier';
 })
 export class ReferenceComplianceCardComponent implements OnChanges {
   @Input({ required: true }) message!: string;
+  @Input() capOnly = false;
 
   block!: ReferenceComplianceBlock;
   tier: ColorTier = 'neutral';

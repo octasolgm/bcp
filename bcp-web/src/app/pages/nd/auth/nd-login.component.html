@@ -1,0 +1,81 @@
+<div class="nd-auth-page">
+  <div class="nd-auth-bg" aria-hidden="true"></div>
+
+  <div class="nd-card nd-auth-card">
+    <header class="nd-auth-brand">
+      <span class="logo-icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 20 20" fill="none">
+          <rect x="2" y="2" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.9"/>
+          <rect x="11" y="2" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/>
+          <rect x="2" y="11" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.6"/>
+          <rect x="11" y="11" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.9"/>
+        </svg>
+      </span>
+      <div>
+        <h1>Reguliq</h1>
+        <p class="nd-muted">Sign in to your workspace</p>
+      </div>
+    </header>
+
+    <form (ngSubmit)="submit()">
+      <label class="field">
+        <span>Email</span>
+        <input
+          class="nd-input"
+          type="email"
+          [(ngModel)]="email"
+          name="email"
+          autocomplete="email"
+          placeholder="you@company.com"
+          required
+          [disabled]="loading"
+        />
+      </label>
+
+      <label class="field">
+        <span>Password</span>
+        <div class="password-wrap">
+          <input
+            class="nd-input"
+            [type]="showPassword ? 'text' : 'password'"
+            [(ngModel)]="password"
+            name="password"
+            autocomplete="current-password"
+            placeholder="••••••"
+            required
+            [disabled]="loading"
+          />
+          <button
+            type="button"
+            class="toggle-pass"
+            (click)="showPassword = !showPassword"
+            [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'"
+          >
+            {{ showPassword ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+      </label>
+
+      @if (error) {
+        <p class="nd-error" role="alert">{{ error }}</p>
+      }
+
+      <button type="submit" class="nd-btn-primary w-full" [disabled]="loading">
+        {{ loading ? 'Signing in…' : 'Sign in' }}
+      </button>
+    </form>
+
+    <p class="nd-muted center">
+      <a routerLink="/nd/auth/forgot-password">Forgot password?</a>
+    </p>
+
+    <div class="nd-auth-theme" role="group" aria-label="Theme">
+      <span>Theme</span>
+      <div class="theme-pills">
+        <button type="button" [class.on]="theme.currentMode() === 'light'" (click)="setTheme('light')">Light</button>
+        <button type="button" [class.on]="theme.currentMode() === 'dark'" (click)="setTheme('dark')">Dark</button>
+        <button type="button" [class.on]="theme.currentMode() === 'system'" (click)="setTheme('system')">System</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -387,6 +387,10 @@ export interface StoredDocumentDto {
   fileHash?: string | null;
   pointCount?: number | null;
   activeAnalysisCount?: number;
+  /** ND regulation library manual entry (not a stored PDF). */
+  isNdManual?: boolean;
+  /** Legacy stored document id when this row comes from the ND catalog. */
+  ndStoredDocumentId?: string | null;
 }
 
 export interface DocumentAnalysisRunDto {

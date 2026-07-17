@@ -158,7 +158,7 @@ a {
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
 
   h1 {
@@ -236,7 +236,8 @@ a {
   margin-bottom: 1.25rem;
 
   button,
-  a {
+  a,
+  .filter-util {
     padding: 0.4rem 0.85rem;
     border-radius: var(--radius-pill);
     font-size: 0.8125rem;
@@ -289,6 +290,14 @@ a {
     background: var(--compliant-bg);
     color: var(--compliant);
   }
+  &.partial_compliant {
+    background: var(--medium-bg);
+    color: var(--medium);
+  }
+  &.non_compliant {
+    background: var(--critical-bg);
+    color: var(--critical);
+  }
 }
 
 .type-badge {
@@ -340,3 +349,5 @@ a {
   background: var(--updated-bg);
   color: var(--updated);
 }
+
+@import 'app/pages/nd/nd-shared.scss';

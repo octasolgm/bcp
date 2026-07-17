@@ -12,9 +12,9 @@
     </p>
   </div>
   <div class="in-progress-actions">
-    <a routerLink="/analyse-v2" class="btn-primary">New analysis</a>
+    <a [routerLink]="newAnalysisPath" class="btn-primary">New analysis</a>
     <button type="button" class="btn-secondary" [disabled]="loading()" (click)="refresh()">Refresh</button>
   </div>
 </div>
 
-<app-active-sessions-panel mode="page" resumePath="/analyse-v8" />
+<app-active-sessions-panel mode="page" [resumePath]="resumePath" />

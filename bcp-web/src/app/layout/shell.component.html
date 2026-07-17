@@ -1,6 +1,6 @@
 <div class="shell">
   <header class="topbar">
-    <a routerLink="/dashboard" class="brand">
+    <a routerLink="/old/dashboard" class="brand">
       <span class="logo-icon" aria-hidden="true">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
           <rect x="2" y="2" width="7" height="7" rx="1.5" fill="currentColor" opacity="0.9"/>
@@ -13,7 +13,7 @@
     </a>
 
     <div class="topbar-actions">
-      <a routerLink="/analyse-v8" class="btn-new-analysis">New analysis</a>
+      <a routerLink="/old/analyse-v8" class="btn-new-analysis">New analysis</a>
       <div class="workspace-wrap">
         <button
           type="button"
@@ -59,7 +59,7 @@
       <div class="sidebar-nav">
       <p class="nav-label">Workspace</p>
       @for (item of workspaceNav; track item.path) {
-        <a [routerLink]="item.path" routerLinkActive="active" class="nav-item" [routerLinkActiveOptions]="{ exact: item.path === '/dashboard' }">
+        <a [routerLink]="item.path" routerLinkActive="active" class="nav-item" [routerLinkActiveOptions]="{ exact: item.path === '/old/dashboard' }">
           @switch (item.icon) {
             @case ('grid') {
               <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -87,7 +87,7 @@
       }
 
       <a
-        routerLink="/in-progress"
+        routerLink="/old/in-progress"
         routerLinkActive="active"
         class="nav-item"
         [routerLinkActiveOptions]="{ exact: true }"
@@ -103,7 +103,7 @@
       </a>
 
       <a
-        routerLink="/analyse-v8"
+        routerLink="/old/analyse-v8"
         routerLinkActive="active"
         class="nav-item nav-item-cta"
         [routerLinkActiveOptions]="{ exact: true }"

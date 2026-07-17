@@ -1,0 +1,65 @@
+<div class="page-header">
+  <div>
+    <h1>Overview</h1>
+    @if (auth.profile(); as profile) {
+      <p class="subtitle">Welcome back, {{ profile.fullName }}. {{ welcome }}</p>
+    }
+  </div>
+</div>
+
+<div class="nd-page-body">
+@if (loading) {
+  <p class="muted-loading">Loading…</p>
+} @else {
+  <div class="stats-row">
+    @for (s of stats; track s.label) {
+      @if (s.href) {
+        <a [routerLink]="s.href" class="stat-card neutral">
+          <span class="stat-label">{{ s.label }}</span>
+          <strong class="stat-value">{{ s.value }}</strong>
+          <span class="stat-hint">View all →</span>
+        </a>
+      } @else {
+        <div class="stat-card neutral">
+          <span class="stat-label">{{ s.label }}</span>
+          <strong class="stat-value">{{ s.value }}</strong>
+        </div>
+      }
+    }
+  </div>
+
+  @if (recentRuns.length > 0) {
+    <section class="card-surface recent-section">
+      <div class="section-head">
+        <h2>
+          @if (auth.getRole() === 'checker' || auth.getRole() === 'reviewer') {
+            Queue
+          } @else {
+            Recent analysis runs
+          }
+        </h2>
+        <a [routerLink]="viewAllLink" class="view-all">{{ viewAllLabel }}</a>
+      </div>
+      <ul class="recent-list">
+        @for (run of recentRuns.slice(0, 5); track run.id) {
+          <li>
+            <a [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null" class="recent-item">
+              <span class="file-icon">RUN</span>
+              <div class="recent-body">
+                <span class="recent-title">{{ run.name }}</span>
+                <span class="recent-meta">
+                  {{ formatDate(run.createdAt) }}
+                  @if (isLegacy(run)) {
+                    · Legacy
+                  }
+                </span>
+              </div>
+              <span class="severity-badge" [class]="statusClass(run.status)">{{ run.status }}</span>
+            </a>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+}
+</div>

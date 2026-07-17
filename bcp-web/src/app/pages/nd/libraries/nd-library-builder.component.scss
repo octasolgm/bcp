@@ -1,0 +1,143 @@
+:host {
+  display: block;
+}
+
+.lib-page-header {
+  margin-bottom: 0.5rem;
+  align-items: center;
+}
+
+.lib-header-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.lib-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  min-width: 0;
+
+  h1 {
+    margin: 0;
+    min-width: 0;
+  }
+}
+
+.lib-back-link {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.lib-view-link {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.lib-builder-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.lib-points-count {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.lib-builder-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.lib-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  flex-shrink: 0;
+}
+
+.lib-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.lib-field-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lib-columns-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 1rem;
+  width: 100%;
+  overflow: hidden;
+  height: clamp(22rem, 68vh, 42rem);
+  max-height: clamp(22rem, 68vh, 42rem);
+  flex-shrink: 0;
+
+  app-nd-library-points-picker {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+  }
+}
+
+.lib-columns-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-shrink: 0;
+
+  h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+}
+
+.lib-meta-loading {
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .lib-meta-row {
+    grid-template-columns: 1fr;
+  }
+}

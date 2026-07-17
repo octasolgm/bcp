@@ -1,0 +1,95 @@
+@for (node of nodes; track node.key) {
+  @if (node.children.length) {
+    <div
+      class="tree-group"
+      [class.tree-group-top]="node.depth === 1"
+      [class.tree-group-nested]="node.depth > 1"
+      [style.marginLeft.rem]="baseDepth * 0.35"
+    >
+      <button type="button" class="tree-group-head" (click)="toggleExpand(node.key)">
+        <span class="chevron" [class.open]="isExpanded(node.key)">›</span>
+        <span class="tree-group-label">{{ groupLabel(node) }}</span>
+        @if (mode === 'analysis') {
+          <span class="acc-meta">{{ groupSelectedCount(node) }}/{{ node.analyseCount }}</span>
+          @if (node.analyseCount > 0) {
+            <button
+              type="button"
+              class="acc-action"
+              [attr.aria-label]="groupAllSelected(node) ? 'Deselect group' : 'Select group'"
+              (click)="toggleGroupSelection(node, $event)"
+            >
+              {{ groupAllSelected(node) ? '−' : '+' }}
+            </button>
+          }
+        } @else {
+          <span class="acc-meta">{{ node.analyseCount }}/{{ node.storedCount }}</span>
+        }
+      </button>
+
+      @if (isExpanded(node.key)) {
+        <div class="tree-group-body">
+          @if (node.row && !resolvePointId(node.row)) {
+            <div class="point-line point-header-row point-header-inline">
+              <span class="point-header-mark">§</span>
+              <span class="pid">{{ node.row.displayId }}</span>
+              <span class="ptxt muted">{{
+                truncate(node.row.point.title || node.row.point.text, 52)
+              }}</span>
+              <span class="point-tag-header">Header</span>
+            </div>
+          }
+
+          <app-nd-point-number-tree
+            [nodes]="node.children"
+            [baseDepth]="0"
+            [mode]="mode"
+            [selected]="selected"
+            [selectedDetailPointId]="selectedDetailPointId"
+            [resolvePointId]="resolvePointId"
+            (togglePoint)="togglePoint.emit($event)"
+            (toggleGroup)="toggleGroup.emit($event)"
+            (selectDetail)="selectDetail.emit($event)"
+          />
+        </div>
+      }
+    </div>
+  } @else if (node.row) {
+    @if (mode === 'analysis' && resolvePointId(node.row); as pid) {
+      <label
+        class="point-line"
+        [class.detail-selected]="selectedDetailPointId === pid"
+        [style.marginLeft.rem]="baseDepth * 0.35"
+      >
+        <input
+          type="checkbox"
+          [checked]="selected.has(pid)"
+          [attr.aria-label]="'Select point ' + node.row.displayId"
+          (change)="onToggle(pid)"
+        />
+        <span class="pid">{{ node.row.displayId }}</span>
+        <span class="ptxt" (click)="onSelectDetail(pid, $event)">{{
+          truncate(node.row.point.title || node.row.point.text, 48)
+        }}</span>
+      </label>
+    } @else if (mode === 'view' || !resolvePointId(node.row)) {
+      <div
+        class="point-line"
+        [class.point-header-row]="!node.row.forAnalysis"
+        [style.marginLeft.rem]="baseDepth * 0.35"
+      >
+        @if (node.row.forAnalysis) {
+          <span class="point-check" title="Compared in gap analysis">✓</span>
+        } @else {
+          <span class="point-header-mark">§</span>
+        }
+        <span class="pid">{{ node.row.displayId }}</span>
+        <span class="ptxt" [class.muted]="!node.row.forAnalysis">{{
+          truncate(node.row.point.title || node.row.point.text, 52)
+        }}</span>
+        @if (!node.row.forAnalysis) {
+          <span class="point-tag-header">Header</span>
+        }
+      </div>
+    }
+  }
+}

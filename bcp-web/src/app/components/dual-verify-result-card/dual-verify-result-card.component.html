@@ -1,9 +1,10 @@
-@if (item.errorMessage || item.status === 'failed') {
+@if ((item.errorMessage || item.status === 'failed') && !item.landingMessage) {
   <div class="card-error">
     <p class="pid">{{ item.pointId }}@if (item.pointTitle) { — {{ item.pointTitle }} }</p>
     <p>{{ item.errorMessage ?? 'Analysis failed' }}</p>
+    <p class="phase-hint">Phase 1 (Landing AI) failed — use <strong>Re-run</strong> to retry gap analysis.</p>
   </div>
-} @else if (!item.landingMessage || !item.llmMessage || !item.agreement) {
+} @else if (!item.landingMessage) {
   <div class="card-pending">
     {{ item.pointId }} —
     @if (item.status === 'running') { Running… }
@@ -12,20 +13,73 @@
   </div>
 } @else {
   <article class="card-done">
+    @if (!item.llmMessage && item.errorMessage) {
+      <div class="card-phase2-warn">
+        <p>Phase 1 passed · Phase 2 (dual verify) failed — phase 1 results are shown below. Use <strong>Re-run Phase 2</strong> to retry dual verify.</p>
+        <p class="phase2-error">{{ item.errorMessage }}</p>
+      </div>
+    }
+    @if (!item.llmMessage && (item.status === 'running' || item.status === 'queued')) {
+      <p class="phase-progress">Phase 1 complete · Phase 2 dual verify in progress…</p>
+    }
     <header>
       <h3>{{ item.pointId }}@if (item.pointTitle) { — {{ item.pointTitle }} }</h3>
-      <span class="agreement" [ngClass]="agreementClass(item.agreement.status)">{{ item.agreement.label }}</span>
+      <span class="compliance-pill">{{ displayComplianceStatus }}</span>
+      @if (item.agreement) {
+        <span class="agreement" [ngClass]="agreementClass(item.agreement.status)">{{ item.agreement.label }}</span>
+      }
     </header>
-    <p class="summary">{{ item.agreement.summary }}</p>
-    <div class="passes">
-      <div class="pass">
-        <p class="pass-label p1">Pass 1 — Landing AI</p>
-        <app-reference-compliance-card [message]="item.landingMessage" />
-      </div>
-      <div class="pass">
-        <p class="pass-label p2">Pass 2 — LLM Verify</p>
-        <app-reference-compliance-card [message]="item.llmMessage" />
-      </div>
+    @if (item.agreement?.summary) {
+      <p class="summary">{{ item.agreement?.summary }}</p>
+    }
+
+    <div class="compare-columns">
+      <section class="compare-col">
+        <p class="col-label">Regulatory requirement <span class="ai-tag">AI extracted</span></p>
+        <p class="col-body">{{ regulatoryText }}</p>
+        @if (regulationDocId) {
+          <button type="button" class="pdf-link" (click)="onViewRegPdf()">View PDF source</button>
+        }
+      </section>
+      <section class="compare-col">
+        <p class="col-label">Policy extract <span class="ai-tag">AI extracted</span></p>
+        @if (policyPage || policySection) {
+          <p class="policy-ref">
+            @if (policyPage) { Page {{ policyPage }}@if (policySection) {, Section {{ policySection }} }: }
+            @if (!policyPage && policySection) { Section {{ policySection }}: }
+          </p>
+        }
+        <blockquote class="policy-quote">&ldquo;{{ policyExtract }}&rdquo;</blockquote>
+        @if (policyDocId) {
+          <button type="button" class="pdf-link" (click)="onViewPolicyPdf()">
+            View PDF@if (policyPage) { p.{{ policyPage }} }
+          </button>
+        }
+      </section>
     </div>
+
+  @if (showCap) {
+    <div class="cap-block">
+      <div class="gaps-head-inline">
+        <p class="cap-label gaps-label-inline">Gaps identified</p>
+        <span class="draft-badge-inline">AI draft — review &amp; edit</span>
+      </div>
+      <app-reference-compliance-card [message]="item.landingMessage ?? item.llmMessage ?? ''" [capOnly]="true" />
+    </div>
+  }
+
+    <details class="pass-details">
+      <summary>Full phase 1 &amp; 2 AI output</summary>
+      <div class="passes">
+        <div class="pass">
+          <p class="pass-label p1">Pass 1 — Landing AI</p>
+          <app-reference-compliance-card [message]="item.landingMessage ?? ''" />
+        </div>
+        <div class="pass">
+          <p class="pass-label p2">Pass 2 — LLM verify</p>
+          <app-reference-compliance-card [message]="item.llmMessage ?? ''" />
+        </div>
+      </div>
+    </details>
   </article>
 }

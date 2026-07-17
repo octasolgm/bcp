@@ -1,0 +1,90 @@
+<div class="page-header">
+  <div>
+    <h1>{{ showHistory ? 'Review history' : 'Pending review' }}</h1>
+    <p class="subtitle">
+      @if (showHistory) {
+        Analyses you have already reviewed
+      } @else {
+        Analyses submitted by makers and waiting for checker review
+      }
+    </p>
+  </div>
+</div>
+
+<div class="nd-page-body">
+<div class="filter-pills tabs nd-shrink">
+  <a routerLink="/nd/checker" class="tab" [class.active]="!showHistory">Pending</a>
+  <a routerLink="/nd/checker" [queryParams]="{ history: '1' }" class="tab" [class.active]="showHistory">History</a>
+  <a routerLink="/nd/analysis-runs" class="tab muted-tab">All analyses</a>
+</div>
+
+@if (!loading && allRuns.length) {
+  <div class="filter-pills nd-list-toolbar nd-shrink">
+    <input
+      type="search"
+      class="filter-search"
+      [(ngModel)]="searchQuery"
+      placeholder="Search runs…"
+      aria-label="Search runs"
+    />
+    <select class="filter-select" [(ngModel)]="statusFilter" aria-label="Filter by status">
+      <option value="">All statuses</option>
+      <option value="submitted_for_review">Submitted</option>
+      <option value="checker_approved">Checker approved</option>
+      <option value="pulled_back">Pulled back</option>
+      <option value="completed">Completed</option>
+    </select>
+    <select class="filter-select" [(ngModel)]="sortColumn" aria-label="Sort by">
+      <option value="date">Sort: Date</option>
+      <option value="name">Sort: Name</option>
+      <option value="maker">Sort: Maker</option>
+      <option value="status">Sort: Status</option>
+    </select>
+    <select class="filter-select" [(ngModel)]="sortDir" aria-label="Sort direction">
+      <option value="desc">Newest first</option>
+      <option value="asc">Oldest first</option>
+    </select>
+    <span class="filter-count">{{ visibleRuns.length }} of {{ allRuns.length }}</span>
+    @if (hasActiveFilters) {
+      <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+    }
+  </div>
+}
+
+@if (loading) {
+  <p class="muted-loading">Loading…</p>
+} @else if (!allRuns.length) {
+  <div class="card-surface empty-state">
+    <strong>{{ showHistory ? 'No review history' : 'No pending reviews' }}</strong>
+    <p>{{ showHistory ? 'Completed reviews will appear here.' : 'New submissions will show up here.' }}</p>
+  </div>
+} @else if (!visibleRuns.length) {
+  <div class="card-surface empty-state">
+    <strong>No runs match your filters</strong>
+    <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
+  </div>
+} @else {
+  <div class="card-surface run-list-wrap">
+    <ul class="run-list">
+      @for (run of visibleRuns; track run.id) {
+        <li>
+          <a [routerLink]="['/nd/checker/review', run.id]" class="run-item">
+            <div class="run-body">
+              <strong>{{ run.name }}</strong>
+              <span class="run-meta">
+                {{ run.makerName ?? 'Maker' }} · {{ formatDate(run.submittedAt ?? run.createdAt) }}
+              </span>
+              @if (run.compliant !== undefined) {
+                <span class="run-meta">
+                  {{ run.compliant }} compliant · {{ run.partial }} partial · {{ run.nonCompliant }} non-compliant
+                </span>
+              }
+            </div>
+            <span class="severity-badge pending">{{ run.status }}</span>
+          </a>
+        </li>
+      }
+    </ul>
+  </div>
+}
+</div>

@@ -1,0 +1,165 @@
+.lib-view-header {
+  align-items: flex-start;
+}
+
+.lib-back-link {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.lib-count-summary {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.lib-view-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lib-view-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.lib-view-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.lib-view-points {
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.lib-view-empty {
+  padding: 1rem;
+}
+
+.lib-acc {
+  border-bottom: 1px solid var(--border);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.lib-acc-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.35rem;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg-muted);
+  }
+}
+
+.lib-acc-head-nested {
+  font-size: 0.8125rem;
+  padding-left: 1rem;
+}
+
+.lib-acc-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.lib-acc-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.lib-acc-body {
+  padding-bottom: 0.35rem;
+}
+
+.lib-acc-doc {
+  margin-left: 0.75rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+}
+
+.lib-acc-points {
+  padding-left: 1.25rem;
+}
+
+.lib-acc-muted .lib-acc-head {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.chevron {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--text-muted);
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.lib-point-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.3rem 0.35rem 0.3rem 1.25rem;
+  font-size: 0.8125rem;
+
+  &.nested {
+    padding-left: 2rem;
+  }
+
+  &.muted {
+    color: var(--text-muted);
+  }
+}
+
+.lib-point-id {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 3rem;
+}
+
+.lib-point-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.lib-point-reason {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.lib-skip-note {
+  margin: 0 0 0.5rem 1.25rem;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.lib-dup-group {
+  margin-bottom: 0.5rem;
+}
+
+.empty-state {
+  padding: 2rem 1.5rem;
+  text-align: center;
+
+  p {
+    margin: 0.5rem 0 1rem;
+    color: var(--text-muted);
+  }
+}

@@ -1,15 +1,20 @@
 import { Component, OnInit } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { forkJoin, of } from 'rxjs';
-import { catchError, finalize } from 'rxjs/operators';
+import { forkJoin, Observable, of } from 'rxjs';
+import { catchError, finalize, timeout } from 'rxjs/operators';
 import {
   ApiService,
   DashboardMetrics,
   DualVerifyHealth,
   DualVerifySessionSummary,
 } from '../../services/api.service';
+import { NdApiService } from '../../services/nd/nd-api.service';
+import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { environment } from '../../../environments/environment';
+import { shellRoute, shellRouteSegments } from '../../services/app-route-prefix';
+import { ndAnalysisRunTarget } from '../../../lib/nd/run-links';
+import type { AnalysisRunSummary } from '../../../lib/nd/types';
 import {
   buildReportStats,
   type ReportStats,
@@ -62,8 +67,9 @@ type RecentRow = {
   compliant: number;
   partial: number;
   nonCompliant: number;
-  kind: 'kafka' | 'sync' | 'demo';
+  kind: 'kafka' | 'sync' | 'demo' | 'nd';
   status?: string;
+  routerLink?: string[];
   queryParams: Record<string, string>;
 };
 
@@ -92,19 +98,31 @@ export class DashboardComponent implements OnInit {
   sessionsError: string | null = null;
 
   remediationItems: Array<{ item: string; severity: string; target: string; status: string }> = [];
+  ndRuns: AnalysisRunSummary[] = [];
+  ndRunsLoading = false;
 
   private readonly seededComplianceId = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
+  private readonly sessionRequestTimeoutMs = 12_000;
 
   constructor(
     private api: ApiService,
+    private ndApi: NdApiService,
+    private ndAuth: NdAuthService,
     private router: Router,
   ) {}
+
+  get inNdShell(): boolean {
+    return this.router.url.startsWith('/nd');
+  }
 
   ngOnInit(): void {
     this.loadHealth();
     this.loadMetrics();
     this.loadSessions();
     this.loadRemediationFromCompliance();
+    if (this.inNdShell) {
+      void this.loadNdRuns();
+    }
   }
 
   private loadHealth(): void {
@@ -143,15 +161,46 @@ export class DashboardComponent implements OnInit {
       });
   }
 
+  private async loadNdRuns(): Promise<void> {
+    this.ndRunsLoading = true;
+    try {
+      const role = this.ndAuth.getRole();
+      const res = await this.ndApi.getAnalysisRuns(
+        role === 'maker' ? { mineOnly: true } : undefined,
+      );
+      if (res.success && res.data) {
+        this.ndRuns = res.data as AnalysisRunSummary[];
+      }
+    } catch {
+      this.ndRuns = [];
+    } finally {
+      this.ndRunsLoading = false;
+    }
+  }
+
+  private withSessionTimeout<T>(obs: Observable<T>, fallback: T) {
+    return obs.pipe(
+      timeout(this.sessionRequestTimeoutMs),
+      catchError(() => of(fallback)),
+    );
+  }
+
   private loadSessions(): void {
     this.sessionsLoading = true;
     this.sessionsError = null;
     forkJoin({
-      kafka: this.api.listDualVerifySessions().pipe(catchError(() => of({ data: [] }))),
-      kafkaNest: this.api.listNestDualVerifySessions().pipe(catchError(() => of({ data: [] }))),
-      compliance: this.api
-        .listComplianceSessions('dual-leaf', 10)
-        .pipe(catchError(() => of({ sessions: [] }))),
+      kafka: this.withSessionTimeout(this.api.listDualVerifySessions(), {
+        success: true,
+        data: [],
+      }),
+      kafkaNest: this.withSessionTimeout(this.api.listNestDualVerifySessions(), {
+        success: true,
+        data: [],
+      }),
+      compliance: this.withSessionTimeout(this.api.listComplianceSessions('dual-leaf', 10), {
+        success: true,
+        sessions: [],
+      }),
     })
       .pipe(finalize(() => (this.sessionsLoading = false)))
       .subscribe({
@@ -248,9 +297,29 @@ export class DashboardComponent implements OnInit {
 
   get recentRows(): RecentRow[] {
     const rows: RecentRow[] = [];
+    const seen = new Set<string>();
+
+    for (const run of this.ndRuns) {
+      const target = ndAnalysisRunTarget(run, this.ndAuth.getRole());
+      seen.add(run.id);
+      rows.push({
+        id: run.id,
+        title: run.name || 'Analysis run',
+        date: (run.createdAt ?? '').slice(0, 10),
+        findings: run.totalPointsCount ?? 0,
+        compliant: run.compliant ?? 0,
+        partial: run.partial ?? 0,
+        nonCompliant: run.nonCompliant ?? run.dualVerifyFailedCount ?? 0,
+        kind: 'nd',
+        status: run.status,
+        routerLink: target.routerLink,
+        queryParams: target.queryParams ?? {},
+      });
+    }
 
     // Prefer compliance analyses (real seeded / saved runs) first.
     for (const a of this.seed?.recentAnalyses ?? []) {
+      if (seen.has(a.id)) continue;
       if (a.id.includes('demo')) continue;
       if (a.compliant + a.partial + a.nonCompliant === 0 && a.findings === 0) continue;
       rows.push({
@@ -410,7 +479,7 @@ export class DashboardComponent implements OnInit {
   }
 
   openRemediation(row: { item: string; severity: string }): void {
-    this.router.navigate(['/gap-analysis'], {
+    this.router.navigate(shellRouteSegments(this.router, '/gap-analysis'), {
       queryParams: {
         ...this.preferredReportQuery(),
         filter: row.severity.toLowerCase(),
@@ -420,12 +489,37 @@ export class DashboardComponent implements OnInit {
   }
 
   openBySeverity(severity: string): void {
-    this.router.navigate(['/gap-analysis'], {
+    this.router.navigate(shellRouteSegments(this.router, '/gap-analysis'), {
       queryParams: {
         ...this.preferredReportQuery(),
         ...(severity === 'all' ? {} : { filter: severity }),
       },
     });
+  }
+
+  gapAnalysisPath(): string {
+    return shellRoute(this.router, '/gap-analysis');
+  }
+
+  viewAllAnalysesPath(): string {
+    return this.inNdShell
+      ? shellRoute(this.router, '/analysis-runs')
+      : shellRoute(this.router, '/gap-analysis');
+  }
+
+  recentRowLink(row: RecentRow): string[] {
+    return row.routerLink ?? [this.gapAnalysisPath()];
+  }
+
+  recentAnalysesLoading(): boolean {
+    return (
+      (this.sessionsLoading || this.metricsLoading || this.ndRunsLoading) &&
+      this.recentRows.length === 0
+    );
+  }
+
+  preferredReportQueryParams(): Record<string, string> {
+    return this.preferredReportQuery();
   }
 
   /** Prefer the seeded / richest compliance session over partial dual-verify runs. */

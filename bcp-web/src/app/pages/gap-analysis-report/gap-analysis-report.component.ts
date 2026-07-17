@@ -17,13 +17,22 @@ import { reportItemsToGapItems } from '../../services/gap-analysis-mapper';
 import {
   clearGapDrafts,
   clearGapItems,
+  gapSeverityLabel,
   loadGapDrafts,
   loadGapItems,
+  normalizeGapSeverity,
   saveGapDrafts,
   type GapDraftOverlay,
   type GapItemData,
+  type GapSeverity,
 } from '../../services/reguliq-store';
+import { analysisPointToReportItem } from '../../../lib/nd/analysis-point-mapper';
+import type { AnalysisPoint } from '../../../lib/nd/types';
+import { NdApiService } from '../../services/nd/nd-api.service';
+import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { ToastService } from '../../services/toast.service';
+import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
+import type { ResultsData } from '../../../lib/nd/types';
 
 /** Seeded TFS × IMPTFS combined compliance session (32 points). */
 const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
@@ -31,7 +40,7 @@ const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
 @Component({
   selector: 'app-gap-analysis-report',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, NdStatusBadgeComponent],
   templateUrl: './gap-analysis-report.component.html',
   styleUrl: './gap-analysis-report.component.scss',
 })
@@ -40,6 +49,8 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly api = inject(ApiService);
+  private readonly ndApi = inject(NdApiService);
+  readonly auth = inject(NdAuthService);
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   exporting = false;
@@ -55,19 +66,22 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
   pdfPreview: { title: string; page: string; body: string } | null = null;
 
   activeFilter = 'all';
+  ndRunId: string | null = null;
+  ndRunStatus = '';
+  ndRunData: ResultsData | null = null;
+  workflowLoading = false;
 
-  readonly filters = [
+  readonly filters: { id: 'all' | GapSeverity; label: string }[] = [
     { id: 'all', label: 'All' },
-    { id: 'critical', label: 'Critical' },
-    { id: 'high', label: 'High' },
-    { id: 'medium', label: 'Medium' },
-    { id: 'low', label: 'Low' },
-    { id: 'compliant', label: 'Compliant' },
+    { id: 'compliant', label: 'Compliance' },
+    { id: 'partial_compliant', label: 'Partial compliance' },
+    { id: 'non_compliant', label: 'Non-compliance' },
   ];
 
   items: GapItemData[] = [];
 
   ngOnInit(): void {
+    void this.auth.refreshProfile();
     // Drop old localStorage demo gaps (§2.1 / §2.3 placeholders).
     const loaded = loadGapItems();
     const looksLikeDemo = loaded.some(
@@ -80,22 +94,26 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
 
     this.route.queryParamMap.subscribe((params) => {
       const filter = params.get('filter');
-      if (filter && this.filters.some((f) => f.id === filter)) {
-        this.activeFilter = filter;
+      if (filter) {
+        const normalized =
+          filter === 'all' ? 'all' : normalizeGapSeverity(filter);
+        if (this.filters.some((f) => f.id === normalized)) {
+          this.activeFilter = normalized;
+        }
       }
 
       const session = params.get('session');
       const saved = params.get('saved');
-      this.loadFromQuery(session, saved, params.get('section'), params.get('focus'));
+      const runId = params.get('run');
+      this.loadFromQuery(session, saved, params.get('section'), params.get('focus'), runId);
     });
   }
 
   get summary() {
     return {
-      critical: this.items.filter((i) => i.severity === 'critical').length,
-      high: this.items.filter((i) => i.severity === 'high').length,
-      medium: this.items.filter((i) => i.severity === 'medium').length,
       compliant: this.items.filter((i) => i.severity === 'compliant').length,
+      partialCompliant: this.items.filter((i) => i.severity === 'partial_compliant').length,
+      nonCompliant: this.items.filter((i) => i.severity === 'non_compliant').length,
     };
   }
 
@@ -103,6 +121,8 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
     if (this.activeFilter === 'all') return this.items;
     return this.items.filter((i) => i.severity === this.activeFilter);
   }
+
+  severityLabel = gapSeverityLabel;
 
   get subtitle(): string {
     if (this.loading) return 'Loading analysis results…';
@@ -154,12 +174,68 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
     });
   }
 
+  get canSubmitNdReview(): boolean {
+    if (!this.ndRunData) return false;
+    const role = this.auth.getRole();
+    if (role !== 'maker' && role !== 'super_admin') return false;
+    return ['completed', 'dual_verify_failed', 'landing_ai_complete', 'pulled_back'].includes(
+      this.ndRunData.run.status,
+    );
+  }
+
+  get ndWorkflowHint(): string {
+    const status = this.ndRunData?.run.status ?? '';
+    if (status === 'submitted_for_review') return 'Submitted to checker — awaiting review.';
+    if (status === 'checker_approved') return 'Checker approved — with reviewer for final sign-off.';
+    if (status === 'reviewer_approved') return 'Final review complete.';
+    if (status === 'pulled_back') return 'Pulled back by checker — edit action plans and resubmit.';
+    return '';
+  }
+
+  async submitNdReview(): Promise<void> {
+    if (!this.ndRunId || !this.ndRunData) return;
+    this.workflowLoading = true;
+    const res =
+      this.ndRunData.run.status === 'pulled_back'
+        ? await this.ndApi.resubmitForReview(this.ndRunId)
+        : await this.ndApi.submitForReview(this.ndRunId);
+    this.workflowLoading = false;
+    if (res.success) {
+      this.toast.show('Sent to checker for review', 'success');
+      await this.loadNdRun(this.ndRunId, null, null);
+    } else {
+      this.toast.show(res.message ?? 'Could not submit for review', 'error');
+    }
+  }
+
+  openNdResultsEditor(): void {
+    if (this.ndRunId) void this.router.navigate(['/nd/results', this.ndRunId]);
+  }
+
+  openCheckerQueue(): void {
+    void this.router.navigate(['/nd/checker']);
+  }
+
+  openReviewerQueue(): void {
+    void this.router.navigate(['/nd/reviewer']);
+  }
+
   setFilter(id: string): void {
     this.activeFilter = id;
   }
 
   toggleItem(item: GapItemData): void {
     item.expanded = !item.expanded;
+    this.persistSoon();
+  }
+
+  collapseAllItems(): void {
+    for (const item of this.items) item.expanded = false;
+    this.persistSoon();
+  }
+
+  expandAllItems(): void {
+    for (const item of this.items) item.expanded = true;
     this.persistSoon();
   }
 
@@ -202,7 +278,7 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
         i.id,
         i.section,
         i.title,
-        i.severity,
+        gapSeverityLabel(i.severity),
         i.regulatoryText,
         i.policyText,
         i.gaps,
@@ -238,6 +314,7 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
     saved: string | null,
     section: string | null,
     focus: string | null,
+    runId: string | null,
   ): void {
     this.loading = true;
     this.loadError = null;
@@ -245,6 +322,17 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
     this.pointIds = [];
     this.deletableSessionId = null;
     this.deletableSessionKind = null;
+
+    if (runId) {
+      this.ndRunId = runId;
+      this.sessionKey = `nd-run:${runId}`;
+      void this.loadNdRun(runId, section, focus);
+      return;
+    }
+
+    this.ndRunId = null;
+    this.ndRunData = null;
+    this.ndRunStatus = '';
 
     if (session) {
       this.sessionKey = `session:${session}`;
@@ -441,6 +529,29 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
     });
   }
 
+  private async loadNdRun(
+    runId: string,
+    section: string | null,
+    focus: string | null,
+  ): Promise<void> {
+    const res = await this.ndApi.getResults(runId);
+    if (!res.success || !res.data) {
+      this.loading = false;
+      this.loadError = res.message ?? 'Could not load analysis results.';
+      this.toast.show(this.loadError, 'error');
+      return;
+    }
+
+    const data = res.data as ResultsData;
+    this.ndRunData = data;
+    this.ndRunStatus = data.run.status;
+    this.sourceLabel = data.run.name || 'Analysis run';
+    const report = data.points
+      .map((p) => analysisPointToReportItem(p))
+      .filter((item): item is DualVerifyReportItem => item !== null);
+    this.applyReport(report, section, focus);
+  }
+
   private applyReport(
     report: DualVerifyReportItem[],
     section: string | null,
@@ -457,7 +568,10 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
       )
       .map((i) => i.pointId);
 
-    let items = reportItemsToGapItems(report, overlays);
+    let items = reportItemsToGapItems(report, overlays).map((item) => ({
+      ...item,
+      severity: normalizeGapSeverity(item.severity),
+    }));
 
     if (section) {
       items = items.map((i) => ({ ...i, expanded: i.section === section }));

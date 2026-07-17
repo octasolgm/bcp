@@ -1,0 +1,77 @@
+<div class="page-header lib-page-header">
+  <div class="lib-header-main">
+    <div class="lib-title-row">
+      <a routerLink="/nd/libraries" class="nd-link lib-back-link">← Back</a>
+      @if (!isNew && libraryId) {
+        <a [routerLink]="['/nd/libraries']" [queryParams]="{ view: libraryId }" class="nd-link lib-view-link">View points</a>
+      }
+      <h1>{{ pageTitle }}</h1>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span class="nd-muted lib-points-count">
+      {{ points.length }} point{{ points.length === 1 ? '' : 's' }} selected
+    </span>
+    <button
+      type="submit"
+      form="lib-builder-form"
+      class="nd-btn-primary"
+      [disabled]="saving || (loading && !isNew)"
+    >
+      {{ saveLabel }}
+    </button>
+  </div>
+</div>
+
+<div class="nd-page lib-builder-page">
+  <form id="lib-builder-form" class="lib-builder-form" (ngSubmit)="handleSave()">
+    @if (loading && !isNew && !name) {
+      <p class="nd-muted lib-meta-loading">Loading regulation points library…</p>
+    }
+    <div class="lib-meta-row nd-card">
+      <label class="lib-field">
+        <span class="lib-field-label">Name</span>
+        <input
+          class="nd-input"
+          [(ngModel)]="name"
+          name="name"
+          placeholder="Regulation points library name"
+          [disabled]="loading && !isNew && !name"
+          required
+        />
+      </label>
+        <label class="lib-field lib-field-grow">
+          <span class="lib-field-label">Description</span>
+          <input
+          class="nd-input"
+          [(ngModel)]="description"
+          name="description"
+          placeholder="Optional description"
+          [disabled]="loading && !isNew && !name"
+        />
+        </label>
+      </div>
+
+      <section class="lib-columns-section nd-card">
+        <header class="lib-columns-head">
+          <h2>Regulation points</h2>
+        </header>
+        @if (!loading) {
+          <app-nd-library-points-picker
+            [initialPoints]="initialPoints"
+            [revision]="pickerRevision"
+            (pointsChange)="onPointsChange($event)"
+          />
+        } @else {
+          <p class="nd-muted lib-meta-loading">Loading regulation points…</p>
+        }
+      </section>
+
+      @if (success) {
+        <p class="nd-success">{{ success }}</p>
+      }
+      @if (error) {
+        <p class="nd-error">{{ error }}</p>
+      }
+    </form>
+</div>

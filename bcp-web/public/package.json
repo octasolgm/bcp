@@ -1,0 +1,8 @@
+{
+  "name": "bcp-web-static",
+  "private": true,
+  "description": "Minimal static host for Azure App Service (reads App Settings for Supabase config)",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

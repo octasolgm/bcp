@@ -1,0 +1,262 @@
+.manual-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: 100%;
+  min-height: 0;
+}
+
+.manual-intro {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.tree-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.tree-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tree-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.hint-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.tree-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.tree-node.selected-parent > .tree-node-row {
+  background: var(--accent-tint);
+  border-radius: var(--radius-md);
+}
+
+.tree-node-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.tree-node-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.tree-text,
+.tree-ref {
+  margin: 0.15rem 0 0.35rem;
+}
+
+.add-context {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.875rem;
+}
+
+.muted-small {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tree-edit,
+.tree-delete {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+.manual-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+  flex-shrink: 0;
+}
+
+.manual-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  > span {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.parent-hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.hint-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.hint-btn {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-card);
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.manual-success {
+  margin: 0;
+  color: var(--low);
+  font-size: 0.8125rem;
+}
+
+.manual-error {
+  margin: 0;
+  color: var(--critical);
+  font-size: 0.8125rem;
+}
+
+.manual-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.manual-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+
+  &.depth-2 {
+    margin-left: 0.75rem;
+  }
+
+  &.depth-3 {
+    margin-left: 1.5rem;
+  }
+}
+
+.manual-row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.depth-badge {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.625rem;
+  font-weight: 600;
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.point-num {
+  font-size: 0.875rem;
+}
+
+.point-title {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.point-text {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+}
+
+.point-ref {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+
+  span {
+    font-weight: 600;
+  }
+}
+
+.manual-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.manual-delete,
+.manual-edit {
+  flex-shrink: 0;
+}
+
+.empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 720px) {
+  .manual-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

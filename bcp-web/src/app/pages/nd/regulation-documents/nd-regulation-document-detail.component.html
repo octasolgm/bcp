@@ -1,0 +1,61 @@
+<div class="page-header">
+  <div>
+    <h1>{{ doc?.name ?? 'Regulation Document' }}</h1>
+    @if (doc) {
+      <p class="subtitle">Extracted regulation points</p>
+    }
+  </div>
+  @if (canExtract && doc) {
+    <div class="header-actions">
+      <button type="button" class="nd-btn-primary" [disabled]="extracting" (click)="handleExtract()">
+        {{ extracting ? 'Extracting…' : 'Run extraction' }}
+      </button>
+    </div>
+  }
+</div>
+
+<div class="nd-page-body">
+<div class="nd-page reg-detail-page">
+  <a routerLink="/nd/regulation-documents" class="nd-link nd-shrink">← Back to regulation docs library</a>
+
+  @if (loading) {
+    <p class="nd-muted">Loading…</p>
+  } @else if (doc) {
+    <div class="reg-detail-layout">
+      <div class="reg-detail-main">
+        <div class="nd-card reg-detail-meta">
+          <app-nd-status-badge [status]="doc.extractionStatus" />
+          <span class="nd-muted">{{ doc.pointCount ?? points.length }} pts</span>
+          @if (doc.departmentName) {
+            <span class="nd-muted">· {{ doc.departmentName }}</span>
+          }
+          @if (doc.source === 'legacy') {
+            <span class="type-badge">Legacy</span>
+          }
+        </div>
+
+        @if (error) {
+          <p class="nd-error">{{ error }}</p>
+        }
+
+        <div class="nd-card reg-detail-help">
+          <strong>Extraction</strong>
+          <p class="nd-muted">
+            Run extraction uses the same Landing AI pipeline as legacy dual-verify — numbered leaf points
+            (e.g. 2.1.1) are saved to the database for this regulation.
+          </p>
+        </div>
+      </div>
+
+      <aside class="reg-detail-points">
+        <app-nd-regulation-points-panel
+          [docName]="doc.name"
+          [points]="points"
+          [source]="pointsSource"
+          [loading]="loading"
+        />
+      </aside>
+    </div>
+  }
+</div>
+</div>

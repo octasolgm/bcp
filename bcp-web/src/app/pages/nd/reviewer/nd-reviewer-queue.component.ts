@@ -1,0 +1,101 @@
+import { Component, OnInit, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { NdApiService } from '../../../services/nd/nd-api.service';
+import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { formatDate } from '../../../../lib/nd/utils';
+import {
+  compareDateIso,
+  compareText,
+  hasListFilters,
+  matchesSearch,
+  nextSortState,
+  sortIndicator,
+  type SortDir,
+} from '../../../../lib/nd/list-utils';
+import type { AnalysisRunSummary } from '../../../../lib/nd/types';
+
+type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
+
+@Component({
+  selector: 'app-nd-reviewer-queue',
+  standalone: true,
+  imports: [CommonModule, FormsModule, RouterLink],
+  templateUrl: './nd-reviewer-queue.component.html',
+  styleUrls: ['./nd-reviewer-queue.component.scss', '../run-analysis/nd-run-analysis.component.scss', '../nd-shared.scss'],
+})
+export class NdReviewerQueueComponent implements OnInit {
+  private readonly api = inject(NdApiService);
+  private readonly auth = inject(NdAuthService);
+  private readonly route = inject(ActivatedRoute);
+
+  showHistory = false;
+  allRuns: AnalysisRunSummary[] = [];
+  loading = true;
+  searchQuery = '';
+  statusFilter = '';
+  sortColumn: QueueSortColumn = 'date';
+  sortDir: SortDir = 'desc';
+
+  async ngOnInit(): Promise<void> {
+    await this.auth.refreshProfile();
+    this.route.queryParamMap.subscribe((params) => {
+      this.showHistory = params.get('history') === '1';
+      void this.load();
+    });
+  }
+
+  async load(): Promise<void> {
+    this.loading = true;
+    const res = this.showHistory
+      ? await this.api.getReviewerHistory()
+      : await this.api.getReviewerQueue();
+    if (res.success && res.data) this.allRuns = res.data as AnalysisRunSummary[];
+    else this.allRuns = [];
+    this.loading = false;
+  }
+
+  get visibleRuns(): AnalysisRunSummary[] {
+    let list = this.allRuns.filter((run) => {
+      if (!matchesSearch(this.searchQuery, [run.name, run.makerName])) return false;
+      if (this.statusFilter && run.status !== this.statusFilter) return false;
+      return true;
+    });
+
+    return [...list].sort((a, b) => {
+      switch (this.sortColumn) {
+        case 'name':
+          return compareText(a.name, b.name, this.sortDir);
+        case 'maker':
+          return compareText(a.makerName ?? '', b.makerName ?? '', this.sortDir);
+        case 'status':
+          return compareText(a.status, b.status, this.sortDir);
+        case 'date':
+        default:
+          return compareDateIso(a.submittedAt ?? a.createdAt, b.submittedAt ?? b.createdAt, this.sortDir);
+      }
+    });
+  }
+
+  get hasActiveFilters(): boolean {
+    return hasListFilters(this.searchQuery, this.statusFilter);
+  }
+
+  toggleSort(column: QueueSortColumn): void {
+    const next = nextSortState(this.sortColumn, column, this.sortDir, 'date');
+    this.sortColumn = next.column;
+    this.sortDir = next.dir;
+  }
+
+  sortMark(column: QueueSortColumn): string {
+    return sortIndicator(this.sortColumn, column, this.sortDir);
+  }
+
+  clearFilters(): void {
+    this.searchQuery = '';
+    this.statusFilter = '';
+  }
+
+  formatDate = formatDate;
+}

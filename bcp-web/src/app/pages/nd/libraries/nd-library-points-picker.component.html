@@ -1,0 +1,396 @@
+<div class="lib-picker-grid">
+  <section class="lib-picker-col nd-card">
+    <header class="lib-picker-header">
+      <h3>Regulation documents</h3>
+      <div class="lib-picker-actions">
+        @if (docs.length > 0) {
+          <button type="button" class="nd-btn-secondary lib-btn-sm" (click)="selectAllDocs()">
+            Select all
+          </button>
+          @if (selectedDocIds.size > 0) {
+            <button type="button" class="nd-btn-secondary lib-btn-sm" (click)="clearAllDocs()">
+              Clear
+            </button>
+          }
+        }
+      </div>
+    </header>
+    <div class="lib-picker-body">
+      @if (loading) {
+        <p class="nd-muted lib-picker-empty">Loading documents…</p>
+      } @else if (docs.length === 0) {
+        <p class="nd-muted lib-picker-empty">No regulation documents. Upload and extract a regulation first.</p>
+      } @else {
+        @for (doc of docs; track doc.id) {
+          <div
+            class="lib-doc-row"
+            [class.active]="isDocSelected(doc.id)"
+            role="button"
+            tabindex="0"
+            (click)="onDocRowClick(doc)"
+            (keydown.enter)="onDocRowClick(doc)"
+            (keydown.space)="$event.preventDefault(); onDocRowClick(doc)"
+          >
+            <input
+              type="checkbox"
+              class="lib-doc-check"
+              [checked]="isDocSelected(doc.id)"
+              tabindex="-1"
+              aria-hidden="true"
+            />
+            <span class="lib-doc-text">
+              <span class="lib-doc-name">{{ doc.name }}</span>
+              <span class="lib-doc-meta">
+                {{ docPointMeta(doc) }}
+              </span>
+            </span>
+          </div>
+        }
+      }
+    </div>
+  </section>
+
+  <section class="lib-picker-col nd-card">
+    <header class="lib-picker-header">
+      <h3>
+        Extracted points
+        @if (selectedDocIds.size > 0) {
+          <span class="nd-muted">({{ totalLoadedPoints }})</span>
+        }
+      </h3>
+      @if (selectedDocIds.size > 0) {
+        <div class="lib-picker-actions">
+          @if (hasImportableInSelection && !isAnySelectedDocLoading) {
+            <button type="button" class="nd-btn-secondary lib-btn-sm" (click)="importAllFromAllDocs()">
+              Import all
+            </button>
+          }
+          @if (totalCheckedCount > 0) {
+            <button type="button" class="nd-btn-primary lib-btn-sm" (click)="addAllCheckedPoints()">
+              Add selected ({{ totalCheckedCount }})
+            </button>
+            <button type="button" class="nd-btn-secondary lib-btn-sm" (click)="clearAllChecked()">
+              Clear selection
+            </button>
+          }
+          @if (docGroups.length > 0) {
+            <button type="button" class="nd-btn-secondary lib-btn-sm" (click)="collapseAllDocs()">
+              Collapse all
+            </button>
+            <button type="button" class="nd-btn-secondary lib-btn-sm" (click)="expandAllDocs()">
+              Expand all
+            </button>
+          }
+        </div>
+      }
+    </header>
+    <div class="lib-picker-body">
+      @if (selectedDocIds.size === 0) {
+        <p class="nd-muted lib-picker-empty">Select one or more regulation documents</p>
+      } @else {
+        @for (docId of selectedDocIdsList; track docId) {
+          @if (groupForDoc(docId); as group) {
+            <div class="lib-doc-points-group">
+              <div class="lib-doc-points-head" (click)="toggleDocExpanded(docId)">
+                <span class="chevron" [class.open]="group.expanded">›</span>
+                <strong>{{ group.docName }}</strong>
+                <span class="nd-muted">({{ docPointCountLabel(docId) }})</span>
+                <span class="lib-doc-points-actions" (click)="$event.stopPropagation()">
+                  @if (!group.loading && group.points.length > 0) {
+                    <label class="lib-header-check" title="Select all points in this document">
+                      <input
+                        type="checkbox"
+                        [checked]="isDocPointsAllChecked(docId)"
+                        [class.partial]="isDocPointsPartiallyChecked(docId)"
+                        (change)="toggleDocPointsSelection(docId, $any($event.target).checked)"
+                      />
+                      <span>Select all</span>
+                    </label>
+                    <button type="button" class="nd-btn-secondary lib-btn-sm" (click)="importAllFromDoc(docId)">
+                      Import all
+                    </button>
+                  }
+                </span>
+              </div>
+              @if (group.expanded) {
+                <div class="lib-doc-points-body">
+                  @if (group.loading) {
+                    <p class="nd-muted lib-picker-empty">Loading points…</p>
+                  } @else if (group.points.length === 0) {
+                    <p class="nd-muted lib-picker-empty">No points found — run extraction on this regulation</p>
+                  } @else if (group.chapterGroups.length === 0) {
+                    @for (pt of group.points; track pt.id) {
+                      <div class="lib-point-row" [class.in-library]="isInLibrary(pt.id, pt)">
+                        <label class="lib-point-check">
+                          <input
+                            type="checkbox"
+                            [checked]="isChecked(pt.id)"
+                            [disabled]="isInLibrary(pt.id, pt)"
+                            (change)="toggleChecked(pt.id, $any($event.target).checked)"
+                          />
+                        </label>
+                        <div class="lib-point-text">
+                          <div class="lib-point-title">
+                            {{ formatRegulationPointLabel(pt) }}
+                            @if (pt.pageReference) {
+                              <span class="lib-point-tag lib-point-tag-ref" title="Option ref">{{ pt.pageReference }}</span>
+                            }
+                            @if (isDuplicateContent(pt)) {
+                              <span class="lib-point-tag lib-point-tag-dup">Duplicate</span>
+                            }
+                          </div>
+                          <p class="nd-muted lib-point-content">{{ truncate(pt.pointContent, 120) }}</p>
+                          @if (duplicateOfLabel(pt); as dupLabel) {
+                            <p class="lib-dup-hint">Already added as {{ dupLabel }}</p>
+                          }
+                        </div>
+                        <button
+                          type="button"
+                          class="nd-btn-secondary lib-btn-sm"
+                          [disabled]="isInLibrary(pt.id, pt)"
+                          (click)="addPoint(pt, docId)"
+                        >
+                          {{ isInLibrary(pt.id, pt) ? 'Added' : 'Add' }}
+                        </button>
+                      </div>
+                    }
+                  } @else {
+                    @for (ch of group.chapterGroups; track ch.chapter) {
+                      <div class="lib-chapter-group">
+                        <div
+                          class="lib-chapter-head"
+                          (click)="toggleChapter(docId, ch.chapter)"
+                        >
+                          <label class="lib-header-check" (click)="$event.stopPropagation()">
+                            <input
+                              type="checkbox"
+                              [checked]="isChapterAllChecked(docId, ch.chapter)"
+                              [class.partial]="isChapterPartiallyChecked(docId, ch.chapter)"
+                              (change)="toggleChapterSelection(docId, ch.chapter, $any($event.target).checked)"
+                            />
+                          </label>
+                          <span class="chevron" [class.open]="isChapterExpanded(docId, ch.chapter)">›</span>
+                          <span>{{ formatChapterLabel(ch.chapter) }}</span>
+                          <span class="nd-muted">({{ ch.points.length }})</span>
+                          @if (checkedCountForChapter(docId, ch.chapter) > 0) {
+                            <span class="lib-selection-count">
+                              {{ checkedCountForChapter(docId, ch.chapter) }} selected
+                            </span>
+                          }
+                          <span class="lib-chapter-actions" (click)="$event.stopPropagation()">
+                            <button
+                              type="button"
+                              class="nd-btn-secondary lib-btn-sm"
+                              (click)="selectAllInChapter(docId, ch.chapter)"
+                            >
+                              Select all
+                            </button>
+                          </span>
+                        </div>
+                        @if (isChapterExpanded(docId, ch.chapter)) {
+                          <div class="lib-chapter-body">
+                            @for (sec of ch.sections; track sec.key) {
+                              @if (showSectionBar(ch.sections, sec.key, ch.chapter)) {
+                                <div class="lib-sec-head">
+                                  <label class="lib-header-check">
+                                    <input
+                                      type="checkbox"
+                                      [checked]="isSectionAllChecked(docId, sec.key)"
+                                      [class.partial]="isSectionPartiallyChecked(docId, sec.key)"
+                                      (change)="toggleSectionSelection(docId, sec.key, $any($event.target).checked)"
+                                    />
+                                    <span>{{ formatSectionGroupLabel(sec.key) }}</span>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    class="nd-btn-secondary lib-btn-sm"
+                                    (click)="selectAllInSection(docId, sec.key)"
+                                  >
+                                    Select all
+                                  </button>
+                                </div>
+                              }
+                              @for (gov of sec.points; track gov.point_id) {
+                                @if (pointForGov(group, gov); as pt) {
+                                  <div class="lib-point-row" [class.in-library]="isInLibrary(pt.id, pt)">
+                                    <label class="lib-point-check">
+                                      <input
+                                        type="checkbox"
+                                        [checked]="isChecked(pt.id)"
+                                        [disabled]="isInLibrary(pt.id, pt)"
+                                        (change)="toggleChecked(pt.id, $any($event.target).checked)"
+                                      />
+                                    </label>
+                                    <div class="lib-point-text">
+                                    <div class="lib-point-title">
+                                      {{ formatRegulationPointLabel(pt) }}
+                                      @if (pt.pageReference) {
+                                        <span class="lib-point-tag lib-point-tag-ref" title="Option ref">{{ pt.pageReference }}</span>
+                                      }
+                                      @if (pt.isIntroductionPoint) {
+                                        <span class="lib-point-tag">Intro</span>
+                                      }
+                                      @if (pt.isAnnexPoint) {
+                                        <span class="lib-point-tag lib-point-tag-annex">Annex</span>
+                                      }
+                                      @if (isDuplicateContent(pt)) {
+                                        <span class="lib-point-tag lib-point-tag-dup">Duplicate</span>
+                                      }
+                                    </div>
+                                      <p class="nd-muted lib-point-content">{{ truncate(gov.text, 120) }}</p>
+                                      @if (duplicateOfLabel(pt); as dupLabel) {
+                                        <p class="lib-dup-hint">Already added as {{ dupLabel }}</p>
+                                      }
+                                    </div>
+                                    <button
+                                      type="button"
+                                      class="nd-btn-secondary lib-btn-sm"
+                                      [disabled]="isInLibrary(pt.id, pt)"
+                                      (click)="addPoint(pt, docId)"
+                                    >
+                                      {{ isInLibrary(pt.id, pt) ? 'Added' : 'Add' }}
+                                    </button>
+                                  </div>
+                                }
+                              }
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  }
+                </div>
+              }
+            </div>
+          }
+        }
+      }
+    </div>
+  </section>
+
+  <section class="lib-picker-col nd-card">
+    <header class="lib-picker-header">
+      <h3>
+        Regulation points library selection
+        <span class="nd-muted">({{ selected.length }} stored · {{ selectedUniqueCount }} unique)</span>
+      </h3>
+      @if (selected.length > 0) {
+        <div class="lib-picker-actions">
+          <label class="lib-header-check" title="Select all library points">
+            <input
+              type="checkbox"
+              [checked]="isAllLibraryPointsChecked()"
+              [class.partial]="isPartialLibraryPointsChecked()"
+              (change)="toggleAllLibraryPoints($any($event.target).checked)"
+            />
+            <span>Select all</span>
+          </label>
+          @if (selectedLibraryCount > 0) {
+            <button type="button" class="nd-btn-secondary lib-btn-sm nd-danger" (click)="removeSelectedLibraryPoints()">
+              Delete selected ({{ selectedLibraryCount }})
+            </button>
+            <button type="button" class="nd-btn-secondary lib-btn-sm" (click)="clearLibraryPointSelection()">
+              Clear selection
+            </button>
+          }
+          <button type="button" class="nd-btn-secondary lib-btn-sm nd-danger" (click)="clearAll()">
+            Clear all
+          </button>
+        </div>
+      }
+    </header>
+    <div class="lib-picker-body">
+      @if (addSummary) {
+        <div class="lib-add-summary">
+          <p>
+            @if (addSummary.newlyAdded) {
+              <strong>{{ addSummary.newlyAdded }}</strong> point{{ addSummary.newlyAdded === 1 ? '' : 's' }} added.
+            }
+            @if (addSummary.alreadyAdded) {
+              @if (addSummary.newlyAdded) { }
+              <strong>{{ addSummary.alreadyAdded }}</strong> already in library (duplicate{{ addSummary.alreadyAdded === 1 ? '' : 's' }} skipped).
+            }
+          </p>
+          @if (addSummary.duplicates.length) {
+            <ul class="lib-add-dup-list">
+              @for (d of addSummary.duplicates; track d.label + d.existingLabel) {
+                <li><span>{{ d.label }}</span> → already added as <em>{{ d.existingLabel }}</em></li>
+              }
+            </ul>
+          }
+          <button type="button" class="nd-btn-secondary lib-btn-sm" (click)="dismissAddSummary()">Dismiss</button>
+        </div>
+      }
+
+      @if (selected.length === 0) {
+        <p class="nd-muted lib-picker-empty">No points in regulation points library yet</p>
+      } @else {
+        @if (selectedDuplicateGroups.length) {
+          <div class="lib-selected-dup-acc">
+            <button type="button" class="lib-selected-dup-head" (click)="toggleSelectedDuplicates()">
+              <span class="chevron" [class.open]="selectedDuplicatesExpanded">›</span>
+              Duplicate points in library ({{ selectedDuplicateGroups.length }} groups)
+            </button>
+            @if (selectedDuplicatesExpanded) {
+              <div class="lib-selected-dup-body">
+                @for (grp of selectedDuplicateGroups; track grp.fingerprint) {
+                  <div class="lib-selected-dup-group">
+                    <div class="lib-selected-dup-title">{{ grp.label }}</div>
+                    @for (item of grp.items; track item.regulationPointId) {
+                      <div class="lib-selected-dup-item nd-muted">{{ item.label }}</div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        @for (pt of selected; track pt.regulationPointId; let i = $index) {
+          <div class="lib-selected-row" [class.lib-selected-row-checked]="isLibraryPointChecked(pt.regulationPointId)">
+            <label class="lib-selected-check">
+              <input
+                type="checkbox"
+                [checked]="isLibraryPointChecked(pt.regulationPointId)"
+                (change)="toggleLibraryPointChecked(pt.regulationPointId, $any($event.target).checked)"
+                [attr.aria-label]="'Select ' + pt.label"
+              />
+            </label>
+            <span class="lib-selected-label">{{ pt.label }}</span>
+            <div class="lib-selected-actions">
+              <button
+                type="button"
+                class="nd-btn-secondary lib-btn-sm"
+                [disabled]="i === 0"
+                (click)="movePoint(i, -1)"
+                title="Move up"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                class="nd-btn-secondary lib-btn-sm"
+                [disabled]="i === selected.length - 1"
+                (click)="movePoint(i, 1)"
+                title="Move down"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                class="nd-btn-secondary lib-btn-sm nd-danger"
+                (click)="removePoint(pt.regulationPointId)"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        }
+      }
+    </div>
+  </section>
+</div>
+
+@if (error) {
+  <p class="nd-error lib-picker-error">{{ error }}</p>
+}

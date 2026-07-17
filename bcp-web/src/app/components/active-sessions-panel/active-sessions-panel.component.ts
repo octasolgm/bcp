@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { ActiveAnalysisSessionsService } from '../../services/active-analysis-sessions.service';
 import { ApiService, type DualVerifySessionSummary, type SessionProgress } from '../../services/api.service';
 import { ToastService } from '../../services/toast.service';
+import { shellRoute } from '../../services/app-route-prefix';
 
 type PointRow = SessionProgress['points'][number];
 
@@ -129,7 +130,7 @@ export class ActiveSessionsPanelComponent implements OnDestroy {
   }
 
   openSession(s: DualVerifySessionSummary): void {
-    const path = this.resumePath ?? '/analyse-v8';
+    const path = this.resumePath ?? shellRoute(this.router, '/analyse-v8');
     this.router.navigate([path], { queryParams: { session: s.id } });
   }
 

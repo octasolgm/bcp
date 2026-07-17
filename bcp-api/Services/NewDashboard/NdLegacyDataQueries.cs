@@ -1,0 +1,127 @@
+using Microsoft.EntityFrameworkCore;
+using Reguliq.Api.Data;
+using Reguliq.Api.Data.Entities;
+using Reguliq.Api.Data.NewDashboard.Entities;
+
+namespace Reguliq.Api.Services.NewDashboard;
+
+/// <summary>Merges legacy stored_documents / analysis tables into ND API responses.</summary>
+public static class NdLegacyDataQueries
+{
+    public static async Task<HashSet<string>> GetExtractCachedHashesAsync(
+        AppDbContext db,
+        IEnumerable<string?> hashes,
+        CancellationToken ct)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var list = hashes.Where(h => !string.IsNullOrWhiteSpace(h)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (list.Count == 0) return set;
+
+        try
+        {
+            foreach (var batch in list.Chunk(100))
+            {
+                var rows = await db.Database.SqlQueryRaw<HashRow>(
+                        "SELECT file_hash AS \"Hash\" FROM landing_ai_extract_cache WHERE file_hash = ANY({0})",
+                        batch.ToArray())
+                    .ToListAsync(ct);
+                foreach (var r in rows)
+                    if (!string.IsNullOrWhiteSpace(r.Hash)) set.Add(r.Hash);
+            }
+        }
+        catch
+        {
+            // cache table may not exist in some environments
+        }
+
+        return set;
+    }
+
+    private sealed record HashRow(string Hash);
+
+    public static string LegacyRegulationExtractionStatus(
+        StoredDocument doc,
+        IReadOnlySet<string> cachedHashes)
+    {
+        if (doc.PointCount is > 0) return "completed";
+        if (!string.IsNullOrWhiteSpace(doc.FileHash) && cachedHashes.Contains(doc.FileHash))
+            return "completed";
+        return "pending";
+    }
+
+    public static string MapLegacyAnalysisStatus(string status) => status switch
+    {
+        "completed" => "completed",
+        "failed" => "failed",
+        "cancelled" => "failed",
+        "running" or "queued" or "processing" => "running",
+        _ => "draft",
+    };
+
+    public static string MapDualVerifyStatus(string status) => status switch
+    {
+        "completed" => "completed",
+        "failed" => "failed",
+        "running" or "queued" => "running",
+        _ => "draft",
+    };
+
+    public static object MapLegacyAnalysisRun(DocumentAnalysisRun run) => new
+    {
+        id = run.Id,
+        source = "legacy_analysis",
+        name = string.IsNullOrWhiteSpace(run.Label)
+            ? $"{run.RegulationFileName ?? "Regulation"} × {run.InternalFileName ?? "Compliance"}"
+            : run.Label,
+        status = MapLegacyAnalysisStatus(run.Status),
+        totalPointsCount = run.PointCount,
+        processedPointsCount = run.CompletedPoints,
+        dualVerifyFailedCount = 0,
+        departmentId = (Guid?)null,
+        createdBy = (Guid?)null,
+        createdAt = run.CreatedAt,
+        submittedToCheckerAt = (DateTimeOffset?)null,
+        legacySessionId = run.DualVerifySessionId,
+        legacyHref = run.DualVerifySessionId.HasValue
+            ? $"/nd/analyse-v8?session={run.DualVerifySessionId}"
+            : run.ComplianceSessionId.HasValue
+                ? $"/nd/gap-analysis?saved=compliance:{run.ComplianceSessionId}"
+                : run.Status is "failed" or "cancelled"
+                    ? $"/nd/in-progress"
+                    : null,
+    };
+
+    public static object MapLegacyDualVerifySession(DualVerifySession session) => new
+    {
+        id = session.Id,
+        source = "legacy_dual_verify",
+        name = $"{session.GovFileName ?? session.GovDocId} × {session.InternalFileName ?? session.InternalDocId}",
+        status = MapDualVerifyStatus(session.Status),
+        totalPointsCount = session.TotalPoints,
+        processedPointsCount = session.CompletedPoints,
+        dualVerifyFailedCount = session.FailedPoints,
+        departmentId = (Guid?)null,
+        createdBy = (Guid?)null,
+        createdAt = new DateTimeOffset(DateTime.SpecifyKind(session.CreatedAt, DateTimeKind.Utc)),
+        submittedToCheckerAt = (DateTimeOffset?)null,
+        legacySessionId = session.Id,
+        legacyHref = $"/nd/analyse-v8?session={session.Id}",
+    };
+
+    public static object MapNdRunSummary(NdAnalysisRun r) => new
+    {
+        id = r.Id,
+        source = "nd_analysis",
+        name = r.Name,
+        status = r.Status,
+        totalPointsCount = r.TotalPointsCount,
+        processedPointsCount = r.ProcessedPointsCount,
+        dualVerifyFailedCount = r.DualVerifyFailedCount,
+        departmentId = r.DepartmentId,
+        createdBy = r.CreatedBy,
+        createdAt = r.CreatedAt,
+        submittedToCheckerAt = r.SubmittedToCheckerAt,
+        legacySessionId = (Guid?)null,
+        legacyHref = (string?)null,
+    };
+}

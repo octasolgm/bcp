@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { ActiveAnalysisSessionsService } from '../../services/active-analysis-sessions.service';
+import { shellRoute } from '../../services/app-route-prefix';
 
 @Component({
   selector: 'app-in-progress-nav-button',
@@ -18,6 +19,6 @@ export class InProgressNavButtonComponent {
   readonly loading = this.sessionsService.loading;
 
   openInProgressPage(): void {
-    this.router.navigate(['/in-progress']);
+    this.router.navigate([shellRoute(this.router, '/in-progress')]);
   }
 }

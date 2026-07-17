@@ -1,0 +1,122 @@
+<div class="page-header">
+  <div>
+    <h1>Regulation Points Libraries</h1>
+    <p class="subtitle">Curated regulation points · view shows full structure (2 → 2.1 → 2.1.1); gap analysis compares leaf points only</p>
+  </div>
+  @if (canEdit) {
+    <div class="header-actions">
+      <button type="button" class="btn-secondary" (click)="loadLibraries()" [disabled]="loading">Refresh</button>
+      <a routerLink="/nd/libraries/new" class="btn-primary">+ New library</a>
+    </div>
+  }
+</div>
+
+<div class="nd-page-body nd-fill-panel libs-fill">
+@if (loading && libraries.length === 0) {
+  <p class="muted-loading">Loading libraries…</p>
+} @else if (!libraries.length) {
+  <div class="card-surface empty-state">
+    <strong>No regulation points libraries yet</strong>
+    <p>Create a library to group requirement points from one or more regulations.</p>
+    @if (canEdit) {
+      <a routerLink="/nd/libraries/new" class="btn-primary">+ New library</a>
+    }
+  </div>
+} @else {
+  <div class="filter-pills nd-list-toolbar nd-shrink">
+    <input
+      type="search"
+      class="filter-search"
+      [(ngModel)]="searchQuery"
+      placeholder="Search libraries…"
+      aria-label="Search libraries"
+    />
+    <span class="filter-count">{{ visibleLibraries.length }} of {{ libraries.length }}</span>
+    @if (hasActiveFilters) {
+      <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+    }
+  </div>
+
+  <div class="library-layout" [class.with-panel]="showPointsPanel">
+    <div class="library-main">
+      @if (!visibleLibraries.length) {
+        <div class="card-surface empty-state">
+          <strong>No libraries match your search</strong>
+          <p>Try a different term or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
+        </div>
+      } @else {
+        <div class="card-surface table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="sortable" (click)="toggleSort('name')">Name <span class="sort-indicator">{{ sortMark('name') }}</span></th>
+                <th class="sortable" (click)="toggleSort('description')">Description <span class="sort-indicator">{{ sortMark('description') }}</span></th>
+                <th class="sortable" (click)="toggleSort('points')">Stored pts <span class="sort-indicator">{{ sortMark('points') }}</span></th>
+                <th class="sortable" (click)="toggleSort('docs')">Docs <span class="sort-indicator">{{ sortMark('docs') }}</span></th>
+                <th class="sortable" (click)="toggleSort('created')">Created <span class="sort-indicator">{{ sortMark('created') }}</span></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (lib of visibleLibraries; track lib.id) {
+                <tr
+                  class="clickable-row"
+                  [class.selected-row]="isSelected(lib)"
+                  (click)="viewLibrary(lib)"
+                >
+                  <td class="name-cell">
+                    <strong>{{ lib.name }}</strong>
+                  </td>
+                  <td class="desc-cell muted">{{ lib.description || '—' }}</td>
+                  <td>{{ formatStoredAnalyseMeta(lib.pointCount) }}</td>
+                  <td>{{ lib.documentCount ?? 0 }}</td>
+                  <td class="muted">{{ formatDate(lib.createdAt) }}</td>
+                  <td class="actions-cell" (click)="$event.stopPropagation()">
+                    <button type="button" class="btn-use" (click)="viewLibrary(lib, $event)">View points</button>
+                    @if (canEdit) {
+                      <button type="button" class="btn-secondary btn-sm" (click)="editLibrary(lib, $event)">Edit</button>
+                      <button
+                        type="button"
+                        class="btn-secondary btn-sm btn-danger"
+                        [disabled]="deletingId === lib.id"
+                        (click)="handleDelete(lib.id)"
+                      >
+                        {{ deletingId === lib.id ? '…' : 'Delete' }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
+    @if (showPointsPanel && selectedLibrary) {
+      <aside class="library-points-panel card-surface">
+        <div class="panel-top">
+          <div>
+            <strong>{{ selectedLibrary.name }}</strong>
+            @if (selectedLibrary.description) {
+              <span class="muted panel-sub">{{ selectedLibrary.description }}</span>
+            } @else {
+              <span class="muted panel-sub">
+                {{ formatStoredAnalyseMeta(selectedLibrary.pointCount) }} · {{ selectedLibrary.documentCount ?? 0 }} docs
+              </span>
+            }
+          </div>
+          <button type="button" class="btn-close" (click)="closePointsPanel()" aria-label="Close points panel">
+            ×
+          </button>
+        </div>
+        <app-nd-library-points-panel
+          [libraryId]="selectedLibrary.id"
+          [libraryName]="selectedLibrary.name"
+          [libraryDescription]="selectedLibrary.description ?? ''"
+        />
+      </aside>
+    }
+  </div>
+}
+</div>

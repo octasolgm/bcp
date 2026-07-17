@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Reguliq.Api.Data.Entities;
+using Reguliq.Api.Data.NewDashboard.Entities;
 
 namespace Reguliq.Api.Data;
 
@@ -11,6 +12,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ComplianceSession> ComplianceSessions => Set<ComplianceSession>();
     public DbSet<StoredDocument> StoredDocuments => Set<StoredDocument>();
     public DbSet<DocumentAnalysisRun> DocumentAnalysisRuns => Set<DocumentAnalysisRun>();
+
+    public DbSet<NdProfile> NdProfiles => Set<NdProfile>();
+    public DbSet<NdDepartment> NdDepartments => Set<NdDepartment>();
+    public DbSet<NdRegulationDocument> NdRegulationDocuments => Set<NdRegulationDocument>();
+    public DbSet<NdRegulationPoint> NdRegulationPoints => Set<NdRegulationPoint>();
+    public DbSet<NdLibrary> NdLibraries => Set<NdLibrary>();
+    public DbSet<NdLibraryPoint> NdLibraryPoints => Set<NdLibraryPoint>();
+    public DbSet<NdAnalysisRun> NdAnalysisRuns => Set<NdAnalysisRun>();
+    public DbSet<NdAnalysisPoint> NdAnalysisPoints => Set<NdAnalysisPoint>();
+    public DbSet<NdActionPlanHistory> NdActionPlanHistories => Set<NdActionPlanHistory>();
+    public DbSet<NdAnalysisReview> NdAnalysisReviews => Set<NdAnalysisReview>();
+    public DbSet<NdAnalysisPointComment> NdAnalysisPointComments => Set<NdAnalysisPointComment>();
+    public DbSet<NdAnalysisStatusHistory> NdAnalysisStatusHistories => Set<NdAnalysisStatusHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -105,6 +119,69 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.InternalDocumentId);
             e.HasIndex(x => x.DualVerifySessionId);
             e.HasIndex(x => x.InternalFileHash);
+        });
+
+        modelBuilder.Entity<NdRegulationDocument>()
+            .Property(e => e.ExtractionResult).HasColumnType("jsonb");
+        modelBuilder.Entity<NdRegulationPoint>(e =>
+        {
+            e.HasOne<NdRegulationDocument>()
+                .WithMany(d => d.Points)
+                .HasForeignKey(p => p.RegulationDocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdLibraryPoint>(e =>
+        {
+            e.Property(p => p.PointSnapshot).HasColumnType("jsonb");
+            e.HasOne<NdLibrary>()
+                .WithMany(l => l.LibraryPoints)
+                .HasForeignKey(p => p.LibraryId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<NdRegulationPoint>()
+                .WithMany()
+                .HasForeignKey(p => p.RegulationPointId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<NdRegulationDocument>()
+                .WithMany()
+                .HasForeignKey(p => p.RegulationDocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdAnalysisRun>()
+            .Property(e => e.SelectedPointsSnapshot).HasColumnType("jsonb");
+        modelBuilder.Entity<NdAnalysisRun>()
+            .Property(e => e.SelectedInternalDocIds).HasColumnType("jsonb");
+        modelBuilder.Entity<NdAnalysisRun>()
+            .Property(e => e.SelectedRegulationDocIds).HasColumnType("jsonb");
+        modelBuilder.Entity<NdAnalysisPoint>(e =>
+        {
+            e.Property(p => p.PointSnapshot).HasColumnType("jsonb");
+            e.Property(p => p.LandingAiResult).HasColumnType("jsonb");
+            e.Property(p => p.GoogleAiResult).HasColumnType("jsonb");
+            e.HasOne<NdAnalysisRun>()
+                .WithMany(r => r.Points)
+                .HasForeignKey(p => p.AnalysisRunId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdAnalysisReview>(e =>
+        {
+            e.HasOne<NdAnalysisRun>()
+                .WithMany()
+                .HasForeignKey(r => r.AnalysisRunId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdAnalysisStatusHistory>(e =>
+        {
+            e.HasOne<NdAnalysisRun>()
+                .WithMany()
+                .HasForeignKey(h => h.AnalysisRunId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdActionPlanHistory>(e =>
+        {
+            e.HasOne<NdAnalysisPoint>()
+                .WithMany()
+                .HasForeignKey(h => h.AnalysisPointId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         ConfigureUtcDateTimes(modelBuilder);

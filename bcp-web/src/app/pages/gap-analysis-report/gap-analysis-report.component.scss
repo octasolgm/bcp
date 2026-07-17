@@ -4,6 +4,52 @@
   flex-wrap: wrap;
 }
 
+.workflow-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.workflow-bar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.workflow-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.workflow-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.workflow-link,
+.workflow-link-btn {
+  font-size: 0.8125rem;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .btn-delete-session {
   color: var(--critical);
   border-color: color-mix(in srgb, var(--critical) 35%, var(--border));
@@ -16,12 +62,12 @@
 
 .summary-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0.75rem;
   margin-bottom: 1rem;
 
   @media (max-width: 768px) {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 }
 
@@ -53,10 +99,9 @@
     color: var(--text-muted);
   }
 
-  &.critical strong { color: var(--critical); }
-  &.high strong { color: var(--high); }
-  &.medium strong { color: var(--medium); }
   &.compliant strong { color: var(--compliant); }
+  &.partial_compliant strong { color: var(--medium); }
+  &.non_compliant strong { color: var(--critical); }
 }
 
 .ai-banner {
