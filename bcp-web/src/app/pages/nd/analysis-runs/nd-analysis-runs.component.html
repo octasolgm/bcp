@@ -11,6 +11,12 @@
 </div>
 
 <div class="nd-page-body">
+@if (deleteMessage) {
+  <p class="nd-success page-flash">{{ deleteMessage }}</p>
+}
+@if (deleteError) {
+  <p class="nd-error page-flash">{{ deleteError }}</p>
+}
 @if (loading) {
   <p class="muted-loading">Loading analysis runs…</p>
 } @else if (!allRuns.length) {
@@ -37,6 +43,7 @@
       <option value="running">Running</option>
       <option value="failed">Failed</option>
       <option value="review">In review</option>
+      <option value="submit_pending">Submit for review pending</option>
       <option value="completed">Completed</option>
     </select>
     <select class="filter-select" [(ngModel)]="sourceFilter" aria-label="Filter by source">
@@ -101,18 +108,37 @@
               </span>
             </td>
             <td>
-              <span class="severity-badge" [class]="statusClass(run.status)">{{ run.status }}</span>
+              <div class="status-stack">
+                @if (workflowStatusLabel(run)) {
+                  <span class="workflow-badge">{{ workflowStatusLabel(run) }}</span>
+                }
+                <span class="severity-badge" [class]="statusClass(run.status)">{{ analysisStatusLabel(run.status) }}</span>
+              </div>
             </td>
             <td class="row-actions" (click)="$event.stopPropagation()">
-              <a class="row-action-link" [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null">View</a>
-              @if (canSubmitRun(run)) {
-                <button type="button" class="row-action-btn" (click)="submitRunForChecker(run, $event)">Submit</button>
+              @if (needsExecutionView(run)) {
+                <a class="row-action-link" [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null">Continue</a>
+              } @else {
+                <a class="row-action-link" [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null">View</a>
+              }
+              @if (canSendForReview(run)) {
+                <a class="row-action-link" [routerLink]="['/nd/gap-analysis']" [queryParams]="{ run: run.id }">Send for review</a>
               }
               @if (canReviewRun(run)) {
                 <a class="row-action-link" [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null">Review</a>
               }
               @if (canEditPlans(run)) {
-                <a class="row-action-link" [routerLink]="['/nd/results', run.id]">Edit plans</a>
+                <a class="row-action-link" [routerLink]="['/nd/gap-analysis']" [queryParams]="{ run: run.id }">Edit plans</a>
+              }
+              @if (canDelete(run)) {
+                <button
+                  type="button"
+                  class="row-action-link danger-link"
+                  [disabled]="deletingId === run.id"
+                  (click)="deleteRun(run, $event)"
+                >
+                  {{ deletingId === run.id ? 'Deleting…' : 'Delete' }}
+                </button>
               }
             </td>
           </tr>

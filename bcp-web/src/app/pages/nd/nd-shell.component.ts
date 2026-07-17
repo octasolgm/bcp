@@ -13,7 +13,7 @@ import type { AnalysisRunSummary } from '../../../lib/nd/types';
 type NavItem = {
   path: string;
   label: string;
-  icon: 'grid' | 'file' | 'library' | 'clock' | 'plus' | 'users' | 'building' | 'check' | 'list';
+  icon: 'grid' | 'file' | 'library' | 'clock' | 'plus' | 'users' | 'building' | 'check' | 'list' | 'trash';
   cta?: boolean;
   secondary?: boolean;
   queryParams?: Record<string, string>;
@@ -213,6 +213,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
           ...this.workspaceNav(role),
           { path: '/nd/admin/users', label: 'User Management', icon: 'users' },
           { path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
+          { path: '/nd/admin/deleted-runs', label: 'Deleted analyses', icon: 'trash' },
           { path: '/nd/checker', label: 'Pending Review', icon: 'check' },
           { path: '/nd/reviewer', label: 'Pending Final Review', icon: 'check' },
         ];

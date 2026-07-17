@@ -251,10 +251,11 @@ export class NdApiService {
     return this.request<unknown>('DELETE', `/nd/libraries/${id}`);
   }
 
-  getAnalysisRuns(params?: { status?: string; mineOnly?: boolean }) {
+  getAnalysisRuns(params?: { status?: string; mineOnly?: boolean; deletedOnly?: boolean }) {
     const q = new URLSearchParams();
     if (params?.status) q.set('status', params.status);
     if (params?.mineOnly) q.set('mineOnly', 'true');
+    if (params?.deletedOnly) q.set('deletedOnly', 'true');
     const suffix = q.toString() ? `?${q}` : '';
     return this.request<unknown[]>('GET', `/nd/analysis-runs${suffix}`);
   }
@@ -321,6 +322,14 @@ export class NdApiService {
 
   resubmitForReview(runId: string) {
     return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/resubmit-for-review`);
+  }
+
+  softDeleteAnalysisRun(runId: string) {
+    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/soft-delete`);
+  }
+
+  restoreAnalysisRun(runId: string) {
+    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/restore`);
   }
 
   getResults(runId: string) {

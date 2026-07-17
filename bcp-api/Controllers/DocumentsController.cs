@@ -244,6 +244,19 @@ public class DocumentsController(
             return StatusCode(503, new { success = false, message = "Supabase Storage not configured." });
 
         var doc = await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (doc == null)
+        {
+            // ND regulation documents reference a stored document (or carry their
+            // own storage path) — resolve so ND pages can open PDFs by their id.
+            var ndReg = await db.NdRegulationDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+            if (ndReg?.StoredDocumentId is Guid storedId)
+                doc = await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == storedId, ct);
+            if (doc == null && !string.IsNullOrWhiteSpace(ndReg?.FilePath))
+            {
+                var ndUrl = await storage.CreateSignedUrlAsync(ndReg.FilePath, 3600, ct);
+                return Ok(new { success = true, url = ndUrl, expiresIn = 3600, path = ndReg.FilePath });
+            }
+        }
         if (doc == null) return NotFound(new { success = false, message = "Document not found." });
 
         var url = await storage.CreateSignedUrlAsync(doc.StoragePath, 3600, ct);

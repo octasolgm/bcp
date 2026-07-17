@@ -1,4 +1,18 @@
-<div class="gap-point-detail">
+<article class="gap-point-report">
+  @if (!hideReportHeader) {
+    <header class="report-header">
+      <h3>{{ pointHeading || 'Regulation point' }}</h3>
+      <span class="compliance-pill" [ngClass]="compliancePillClass">{{ displayComplianceStatus }}</span>
+      @if (agreement) {
+        <span class="agreement" [ngClass]="agreementClass(agreement.status)">{{ agreement.label }}</span>
+      }
+    </header>
+
+    @if (agreement?.summary; as summary) {
+      <p class="agreement-summary">{{ summary }}</p>
+    }
+  }
+
   <div class="compare-columns">
     <section class="compare-col compare-col-reg">
       <p class="col-label col-label-reg">
@@ -21,22 +35,53 @@
       }
       <blockquote class="policy-quote">&ldquo;{{ policyExtract }}&rdquo;</blockquote>
       @if (policyDocId) {
-        <button type="button" class="pdf-link" (click)="onViewPolicyPdf()">
-          View PDF@if (policyPage) { p.{{ policyPage }} }
-        </button>
+        <div class="pdf-links">
+          @if (policyRefs.length) {
+            @for (ref of policyRefs; track ref.page) {
+              <button type="button" class="pdf-link" (click)="onViewPolicyPage(ref.page)">
+                View PDF p.{{ ref.page }}
+              </button>
+            }
+          } @else {
+            <button type="button" class="pdf-link" (click)="onViewPolicyPdf()">View PDF</button>
+          }
+        </div>
       }
     </section>
   </div>
 
-  @if (showGapsSection) {
+  @if (showFulfilled) {
+    <div class="fulfilled-block">
+      <p class="section-label">What this reference fulfills</p>
+      <ol class="fulfilled-list">
+        @for (line of fulfilledLines; track $index) {
+          <li><span class="check">✓</span>{{ line }}</li>
+        }
+      </ol>
+    </div>
+  }
+
+  <div class="stats-block">
+    <p class="section-label">Status &amp; confidence</p>
+    <dl class="stat-grid">
+      <div class="stat stat-yellow">
+        <dt>Status</dt>
+        <dd>{{ primaryBlock.status || displayComplianceStatus || '—' }}</dd>
+      </div>
+      <div class="stat stat-yellow">
+        <dt>Compliance confidence %</dt>
+        <dd>{{ primaryBlock.confidence || '—' }}</dd>
+      </div>
+    </dl>
+  </div>
+
+  @if (showCapSection) {
     <section class="cap-section">
       <div class="cap-toolbar">
-        <div class="cap-toolbar-title">
-          <span class="gaps-label">Gaps identified</span>
-          @if (!showHistoryPanel && !editing) {
-            <span class="draft-badge">AI draft</span>
-          }
-        </div>
+        <p class="cap-title">
+          Corrective Action Plan
+          <span class="ai-tag">AI draft — review &amp; edit</span>
+        </p>
         <div class="cap-toolbar-actions">
           @if (showHistoryPanel) {
             <button type="button" class="toolbar-btn" (click)="onCloseHistory()">Close history</button>
@@ -54,7 +99,13 @@
       </div>
 
       @if (showHistoryPanel) {
-        <div class="history-panel">
+        <div class="history-backdrop" (click)="onCloseHistory()"></div>
+        <aside class="history-panel" role="dialog" aria-label="Action plan history">
+          <header class="history-panel-head">
+            <h4>Action plan history</h4>
+            <button type="button" class="history-close" (click)="onCloseHistory()" aria-label="Close history">✕</button>
+          </header>
+          <p class="history-sub">Every edit is versioned — who changed it and when. Set any version as current to restore it.</p>
           @if (!history.length) {
             <p class="muted">No history recorded yet.</p>
           } @else {
@@ -76,9 +127,6 @@
                         <li class="history-action-item">
                           <strong>Action {{ gap.index }}</strong>
                           <p>{{ gap.fix || gap.missing }}</p>
-                          @if (gap.fix && gap.missing) {
-                            <p class="history-missing">Gap: {{ gap.missing }}</p>
-                          }
                         </li>
                       }
                     </ul>
@@ -87,31 +135,27 @@
                   }
                   @if (canEdit && !h.isCurrent) {
                     <button type="button" class="toolbar-btn subtle" (click)="restoreVersion.emit(h)">
-                      Restore this version
+                      Set as current
                     </button>
                   }
                 </li>
               }
             </ol>
           }
-        </div>
-      } @else if (editing) {
+        </aside>
+      }
+      @if (editing) {
         <p class="cap-hint">Add one or more corrective actions for this point.</p>
         <div class="action-edit-list">
           @for (gap of editGaps; track gap.index) {
-            <div class="action-edit-card">
-              <div class="action-edit-head">
-                <span class="action-num">Action {{ gap.index }}</span>
-                @if (editGaps.length > 1) {
-                  <button type="button" class="toolbar-btn subtle danger" (click)="removeActionItem(gap.index)">
-                    Remove
-                  </button>
-                }
-              </div>
-              <label class="field-label">What is missing</label>
+            <div class="cap-gap">
+              <p class="gap-label">Gap {{ gap.index }} — Missing</p>
               <textarea class="nd-input gap-field" rows="2" [(ngModel)]="gap.missing" placeholder="Describe the gap…"></textarea>
-              <label class="field-label">Corrective action</label>
-              <textarea class="nd-input gap-field" rows="3" [(ngModel)]="gap.fix" placeholder="What will you do to fix it…"></textarea>
+              <p class="fix-label">Fix:</p>
+              <textarea class="nd-input gap-field" rows="3" [(ngModel)]="gap.fix" placeholder="Corrective action…"></textarea>
+              @if (editGaps.length > 1) {
+                <button type="button" class="toolbar-btn subtle danger" (click)="removeActionItem(gap.index)">Remove</button>
+              }
             </div>
           }
         </div>
@@ -123,25 +167,46 @@
         </div>
       } @else {
         @if (capGaps.length) {
-          <ol class="action-read-list">
-            @for (gap of capGaps; track gap.index) {
-              <li class="action-read-card">
-                <span class="action-num">Action {{ gap.index }}</span>
-                @if (gap.missing) {
-                  <p class="action-gap">{{ gap.missing }}</p>
-                }
-                @if (gap.fix) {
-                  <p class="action-fix">{{ gap.fix }}</p>
-                }
-              </li>
-            }
-          </ol>
+          @for (gap of capGaps; track gap.index) {
+            <div class="cap-gap">
+              <p class="gap-label">Gap {{ gap.index }} — Missing</p>
+              <p>{{ gap.missing }}</p>
+              @if (gap.fix) {
+                <p class="fix-label">Fix:</p>
+                <p>{{ gap.fix }}</p>
+              }
+            </div>
+          }
         } @else if (currentPlan) {
-          <p class="gap-plain">{{ currentPlan }}</p>
+          <p class="cap-plain">{{ currentPlan }}</p>
         } @else {
-          <p class="gap-plain muted">No corrective actions yet.</p>
+          <p class="cap-plain muted">No corrective actions yet.</p>
         }
       }
     </section>
   }
-</div>
+
+  @if (responsibility) {
+    <p class="resp-line"><strong>Responsibility:</strong> {{ responsibility }}</p>
+  }
+
+  @if (landingMessage || llmMessage) {
+    <details class="pass-details" [attr.open]="phaseOutputDefaultOpen ? '' : null">
+      <summary>Full phase 1 &amp; 2 AI output</summary>
+      <div class="passes">
+        @if (landingMessage) {
+          <div class="pass">
+            <p class="pass-label p1">Pass 1 — Landing AI</p>
+            <app-reference-compliance-card [message]="landingMessage" [hideCapSection]="true" />
+          </div>
+        }
+        @if (llmMessage) {
+          <div class="pass">
+            <p class="pass-label p2">Pass 2 — LLM verify</p>
+            <app-reference-compliance-card [message]="llmMessage" [hideCapSection]="true" />
+          </div>
+        }
+      </div>
+    </details>
+  }
+</article>

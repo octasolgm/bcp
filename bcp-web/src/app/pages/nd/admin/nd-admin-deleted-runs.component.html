@@ -1,0 +1,74 @@
+<div class="page-header">
+  <div>
+    <h1>Deleted analysis runs</h1>
+    <p class="subtitle">Soft-deleted runs are hidden from the portal but kept in the database. Super admins can restore them.</p>
+  </div>
+  <a routerLink="/nd/analysis-runs" class="btn-secondary">Back to all runs</a>
+</div>
+
+<div class="nd-page-body">
+@if (!isSuperAdmin) {
+  <p class="nd-error">Access denied</p>
+} @else if (loading) {
+  <p class="muted-loading">Loading deleted runs…</p>
+} @else {
+  @if (message) {
+    <p class="nd-success">{{ message }}</p>
+  }
+  @if (error) {
+    <p class="nd-error">{{ error }}</p>
+  }
+
+  <div class="filter-pills nd-list-toolbar nd-shrink">
+    <input
+      type="search"
+      class="filter-search"
+      [(ngModel)]="searchQuery"
+      placeholder="Search deleted runs…"
+      aria-label="Search deleted runs"
+    />
+    <span class="filter-count">{{ visibleRuns.length }} deleted</span>
+  </div>
+
+  @if (!visibleRuns.length) {
+    <div class="card-surface empty-state">
+      <strong>No deleted analysis runs</strong>
+      <p>When users delete a run from the analysis list, it will appear here.</p>
+    </div>
+  } @else {
+    <div class="card-surface table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Run</th>
+            <th>Points</th>
+            <th>Previous status</th>
+            <th>Deleted</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (run of visibleRuns; track run.id) {
+            <tr>
+              <td><strong>{{ run.name }}</strong></td>
+              <td class="muted">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
+              <td><span class="severity-badge running">{{ previousStatusLabel(run) }}</span></td>
+              <td class="muted">{{ formatDate(run.deletedAt ?? run.createdAt) }}</td>
+              <td class="row-actions">
+                <button
+                  type="button"
+                  class="row-action-link"
+                  [disabled]="restoringId === run.id"
+                  (click)="restore(run)"
+                >
+                  {{ restoringId === run.id ? 'Restoring…' : 'Restore' }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
+</div>

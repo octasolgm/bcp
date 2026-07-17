@@ -863,13 +863,10 @@
 
 @if (analysisState === 'complete' && activeNdRunId) {
   <section #gapReportEl class="v8-embedded-results">
-    <app-nd-results
+    <app-nd-gap-analysis
       [embedMode]="true"
       [embedRunId]="activeNdRunId"
-      [policyDocId]="policyPdfDocId"
-      [regulationDocId]="regulationPdfDocId"
       (runStatusChange)="onEmbeddedRunStatusChange($event)"
-      (openPdf)="openPdfDocument($event.docId, $event.page)"
     />
   </section>
 } @else if (showInlineGapReport && inlineGapItems.length) {

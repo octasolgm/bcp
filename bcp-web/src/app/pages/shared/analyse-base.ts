@@ -50,7 +50,8 @@ import {
   type NdGovPoint,
 } from '../../../lib/regulation-catalog-utils';
 import { parsePointSnapshot } from '../../../lib/nd/utils';
-import type { AnalysisPoint, RegulationDocument } from '../../../lib/nd/types';
+import type { AnalysisPoint, AnalysisRunSummary, RegulationDocument } from '../../../lib/nd/types';
+import { analysisRunNeedsExecutionView } from '../../../lib/nd/run-links';
 import {
   needsPhase2Rerun,
   normalizeSessionPointStatus,
@@ -837,14 +838,14 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
 
   openDemoWorkflow(): void {
     if (this.demoNdRunId) {
-      void this.router.navigate(['/nd/results', this.demoNdRunId]);
+      void this.router.navigate(['/nd/gap-analysis'], { queryParams: { run: this.demoNdRunId } });
       return;
     }
     void this.ndApi.createDemoAnalysisFromSeed().then((res) => {
       if (res.success && res.data?.id) {
         this.demoNdRunId = res.data.id;
         this.ndRunId = res.data.id;
-        void this.router.navigate(['/nd/results', res.data.id]);
+        void this.router.navigate(['/nd/gap-analysis'], { queryParams: { run: res.data.id } });
       } else {
         this.toast.show(res.message ?? 'Could not open workflow', 'error');
       }
@@ -854,7 +855,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   openNdWorkflow(): void {
     const runId = this.activeNdRunId;
     if (runId) {
-      void this.router.navigate(['/nd/results', runId]);
+      void this.router.navigate(['/nd/gap-analysis'], { queryParams: { run: runId } });
       return;
     }
     this.openDemoWorkflow();
@@ -2946,6 +2947,7 @@ ${this.findingsPreview
         selectedRegulationDocIds: string;
         totalPointsCount: number;
         processedPointsCount: number;
+        dualVerifyFailedCount?: number;
       };
       points: AnalysisPoint[];
     };
@@ -3020,19 +3022,22 @@ ${this.findingsPreview
     this.pointsCollapsed = true;
 
     const runStatus = (status?.status ?? detail.run.status ?? '').toLowerCase();
-    const stillRunning =
-      runStatus === 'running' ||
-      runStatus === 'processing' ||
-      runStatus === 'draft' ||
-      (this.progressTotal > 0 && this.progressDone < this.progressTotal);
+    const activelyProcessing = this.applyNdRunState(
+      runId,
+      detail.run,
+      points,
+      status,
+      isDemoRun,
+    );
 
-    if (!stillRunning) {
+    if (activelyProcessing) {
+      this.pollNdRun(runId);
+      this.onRunResumeAttached();
+    } else if (this.analysisState === 'running') {
+      this.onRunResumeAttached();
+    } else {
       this.ndRunWorkflowStatus = runStatus;
-      this.onAnalysisComplete();
     }
-
-    this.pollNdRun(runId);
-    if (stillRunning) this.onRunResumeAttached();
   }
 
   /** Hook for shells (e.g. analyse-v8) to scroll/focus when resuming an in-progress run. */
@@ -3044,11 +3049,16 @@ ${this.findingsPreview
 
   private applyNdRunState(
     runId: string,
-    run: { status: string; totalPointsCount: number; processedPointsCount: number },
+    run: {
+      status: string;
+      totalPointsCount: number;
+      processedPointsCount: number;
+      dualVerifyFailedCount?: number;
+    },
     points: AnalysisPoint[],
     status: { status: string; totalPointsCount: number; processedPointsCount: number } | null,
     isDemoRun = false,
-  ): void {
+  ): boolean {
     this.sessionId = null;
     this.progressTotal = status?.totalPointsCount ?? run.totalPointsCount ?? points.length;
     this.progressDone = status?.processedPointsCount ?? run.processedPointsCount ?? 0;
@@ -3077,32 +3087,56 @@ ${this.findingsPreview
     }
 
     const runStatus = (status?.status ?? run.status ?? '').toLowerCase();
-    const stillRunning =
-      runStatus === 'running' ||
-      runStatus === 'processing' ||
-      runStatus === 'draft' ||
-      (this.progressTotal > 0 && this.progressDone < this.progressTotal);
+    const runSummary: AnalysisRunSummary = {
+      id: runId,
+      name: '',
+      status: runStatus,
+      totalPointsCount: this.progressTotal,
+      processedPointsCount: this.progressDone,
+      dualVerifyFailedCount: run.dualVerifyFailedCount ?? 0,
+      createdAt: '',
+    };
+    const needsExecutionView =
+      analysisRunNeedsExecutionView(runSummary) ||
+      points.some(
+        (p) =>
+          p.landingAiStatus === 'failed' ||
+          p.dualVerifyStatus === 'failed' ||
+          p.googleAiStatus === 'failed',
+      );
+    const activelyProcessing =
+      runStatus === 'running' || runStatus === 'processing' || runStatus === 'draft';
 
-    if (stillRunning) {
+    if (needsExecutionView) {
       this.analysisState = 'running';
+      this.showInlineGapReport = false;
+      this.analysisCompleteUiDone = false;
       this.progress =
         this.progressTotal > 0
-          ? Math.min(95, Math.max(10, Math.round((this.progressDone / this.progressTotal) * 100)))
+          ? Math.min(
+              activelyProcessing ? 95 : 100,
+              Math.max(10, Math.round((this.progressDone / this.progressTotal) * 100)),
+            )
           : 10;
       this.resetSteps();
       if (this.progressDone > 0) {
         this.markStep(0, true);
         this.markStep(1, true);
       }
-    } else {
-      this.analysisState = 'complete';
-      this.progress = 100;
-      if (isDemoRun) this.demoNdRunId = runId;
       this.ndRunWorkflowStatus = runStatus;
-      this.stopNdRunPolling();
-      this.onAnalysisComplete();
+      if (!activelyProcessing) this.stopNdRunPolling();
+      this.syncSelectionToGovPoints();
+      return activelyProcessing;
     }
+
+    this.analysisState = 'complete';
+    this.progress = 100;
+    if (isDemoRun) this.demoNdRunId = runId;
+    this.ndRunWorkflowStatus = runStatus;
+    this.stopNdRunPolling();
+    this.onAnalysisComplete();
     this.syncSelectionToGovPoints();
+    return false;
   }
 
   private mapNdAnalysisPoint(p: AnalysisPoint): SessionPoint {

@@ -57,6 +57,9 @@
         @if (data.run.status === 'pulled_back') {
           <p class="workflow-hint">Pulled back — edit action plans and resubmit for review.</p>
         }
+        @if (['completed', 'dual_verify_failed', 'landing_ai_complete'].includes(data.run.status)) {
+          <p class="workflow-hint">Submit for review pending — edit gaps below, then submit for checker review.</p>
+        }
       </div>
       <div class="nd-actions">
         @if (canSubmitReview && !embedMode) {
@@ -89,6 +92,10 @@
     }
 
     <div class="nd-list-toolbar nd-shrink">
+      <div class="view-toggle" role="tablist" aria-label="View mode">
+        <button type="button" [class.active]="viewMode === 'cards'" (click)="setViewMode('cards')">All cards</button>
+        <button type="button" [class.active]="viewMode === 'list'" (click)="setViewMode('list')">List view</button>
+      </div>
       <input type="search" class="nd-input" [(ngModel)]="search" placeholder="Search points…" />
       <select class="nd-input" [(ngModel)]="statusFilter">
         <option value="all">All statuses</option>
@@ -97,9 +104,88 @@
         <option value="non_compliant">Non-compliance</option>
         <option value="dual_verify_failed">Dual verify failed</option>
       </select>
+      @if (embedMode && viewMode === 'cards') {
+        <button type="button" class="nd-btn-secondary nd-btn-sm" (click)="collapseAllPoints()">Close all</button>
+        <button type="button" class="nd-btn-secondary nd-btn-sm" (click)="expandAllPoints()">Expand all</button>
+      }
       <span class="nd-muted">{{ filteredPoints.length }} of {{ data.points.length }} points</span>
     </div>
 
+    @if (showPointsRail) {
+      <div class="results-split" [class.history-open]="!!historyPointId">
+        <aside class="results-points-rail" aria-label="Regulation points">
+          <p class="rail-title">Points</p>
+          @for (p of filteredPoints; track p.id) {
+            @let snap = parsePointSnapshot(p.pointSnapshot);
+            <button
+              type="button"
+              class="rail-point"
+              [class.active]="isPointSelected(p.id)"
+              [class.has-history]="historyPointId === p.id"
+              (click)="selectPoint(p.id)"
+            >
+              <span class="rail-point-num">§{{ snap.pointNumber }}</span>
+              @if (snap.pointTitle) {
+                <span class="rail-point-title">{{ snap.pointTitle }}</span>
+              }
+              @if (p.finalStatus) {
+                <span class="status-pill rail-status" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
+              }
+            </button>
+          }
+        </aside>
+
+        <div class="results-main">
+          @if (selectedPoint; as p) {
+            @let snap = parsePointSnapshot(p.pointSnapshot);
+            <div class="nd-card nd-point-card nd-point-detail-card">
+              <div class="nd-point-row">
+                <span class="nd-list-title">
+                  §{{ snap.pointNumber }}
+                  @if (snap.pointTitle) { — {{ snap.pointTitle }} }
+                </span>
+                @if (p.finalStatus) {
+                  <span class="status-pill" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
+                }
+              </div>
+              <p class="phase-line">{{ phaseSummary(p) }}</p>
+              @if (isMaker && p.landingAiStatus === 'failed') {
+                <button type="button" class="nd-btn-secondary nd-btn-sm rerun-btn" (click)="rerunPoint(p.id)">Rerun gap analysis (phase 1)</button>
+              }
+              @if (isMaker && p.landingAiStatus !== 'failed' && (p.dualVerifyStatus === 'failed' || p.googleAiStatus === 'failed')) {
+                <button type="button" class="nd-btn-secondary nd-btn-sm rerun-btn" (click)="rerunDualOnly(p.id)">Rerun phase 2 (optional)</button>
+              }
+              @if (showCap(p)) {
+                <app-nd-gap-point-detail
+                  [point]="p"
+                  [snapshot]="snap"
+                  [canEdit]="canEditCap"
+                  [editing]="editingPointId === p.id"
+                  [saving]="capSavingPointId === p.id"
+                  [history]="historyPointId === p.id ? history : []"
+                  [showHistoryPanel]="historyPointId === p.id"
+                  [hideReportHeader]="true"
+                  [policyDocId]="policyDocId"
+                  [regulationDocId]="regDocIdForPoint(p)"
+                  (startEdit)="startEditCap(p)"
+                  (cancelEdit)="cancelEditCap()"
+                  (save)="saveCap(p.id, $event)"
+                  (openHistory)="openHistory(p.id)"
+                  (closeHistory)="closeHistory()"
+                  (restoreVersion)="revertToVersion($event)"
+                  (openPdf)="onOpenPdf($event)"
+                />
+              }
+            </div>
+          } @else {
+            <div class="nd-card empty-point-detail">
+              <strong>Select a point</strong>
+              <p class="nd-muted">Choose a regulation point on the left to review gaps and corrective actions.</p>
+            </div>
+          }
+        </div>
+      </div>
+    } @else {
     <div class="nd-points" [class.nd-points-embedded]="embedMode">
       @for (p of filteredPoints; track p.id) {
         @let snap = parsePointSnapshot(p.pointSnapshot);
@@ -148,6 +234,7 @@
                 [saving]="capSavingPointId === p.id"
                 [history]="historyPointId === p.id ? history : []"
                 [showHistoryPanel]="historyPointId === p.id"
+                [hideReportHeader]="true"
                 [policyDocId]="policyDocId"
                 [regulationDocId]="regDocIdForPoint(p)"
                 (startEdit)="startEditCap(p)"
@@ -163,5 +250,6 @@
         </div>
       }
     </div>
+    }
   }
 </div>

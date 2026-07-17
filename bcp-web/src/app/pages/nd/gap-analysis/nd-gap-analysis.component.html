@@ -1,0 +1,258 @@
+<div class="page-header" [class.embed-header]="embedMode">
+  <div>
+    @if (embedMode) {
+      <h2 class="embed-title">Gap Analysis — Working Document</h2>
+    } @else {
+      <h1>Gap Analysis — Working Document</h1>
+    }
+    <p class="subtitle">{{ subtitle }}</p>
+  </div>
+  <div class="header-actions">
+    @if (!embedMode && canDeleteSession) {
+      <button
+        type="button"
+        class="btn-secondary btn-delete-session"
+        [disabled]="deletingSession"
+        (click)="confirmDeleteSession()"
+      >
+        {{ deletingSession ? 'Deleting…' : 'Delete session' }}
+      </button>
+    }
+    <button
+      type="button"
+      class="btn-secondary"
+      [disabled]="exporting || !items.length"
+      (click)="exportXlsx()"
+    >
+      {{ exporting ? 'Exporting…' : 'Export XLSX' }}
+    </button>
+    @if (!embedMode) {
+      <a [routerLink]="ndRunId ? ['/nd/analyse-v8'] : ['/analyse-v8']" [queryParams]="ndRunId ? { run: ndRunId } : null" class="btn-primary">Re-run</a>
+    }
+    @if (ndRunId && canSubmitNdReview) {
+      <button type="button" class="btn-primary" [disabled]="workflowLoading" (click)="submitNdReview()">
+        {{ workflowLoading ? 'Sending…' : (ndRunStatus === 'pulled_back' ? 'Resubmit for review' : 'Submit for review') }}
+      </button>
+    }
+  </div>
+</div>
+
+@if (ndRunId && ndRunData) {
+  <div class="workflow-bar card-surface">
+    <div class="workflow-bar-main">
+      <app-nd-status-badge [status]="ndRunData.run.status" />
+      @if (ndWorkflowHint) {
+        <p class="workflow-hint">{{ ndWorkflowHint }}</p>
+      }
+    </div>
+    <div class="workflow-bar-actions">
+      <a routerLink="/nd/analysis-runs" class="workflow-link">All analysis runs</a>
+      @if (ndRunData.run.status === 'submitted_for_review') {
+        <button type="button" class="workflow-link-btn" (click)="openCheckerQueue()">Checker queue →</button>
+      }
+      @if (ndRunData.run.status === 'checker_approved') {
+        <button type="button" class="workflow-link-btn" (click)="openReviewerQueue()">Reviewer queue →</button>
+      }
+      <button type="button" class="workflow-link-btn" (click)="openNdResultsEditor()">Refresh run</button>
+    </div>
+  </div>
+}
+
+@if (loading) {
+  <div class="card-surface empty-state">
+    <strong>Loading analysis…</strong>
+    <p>Pulling findings from the dual-verify / compliance session.</p>
+  </div>
+}
+
+@if (!loading) {
+<div class="summary-row">
+  <div class="summary-card compliant">
+    <span class="label">Compliance</span>
+    <strong>{{ summary.compliant }}</strong>
+    <span class="hint">Fully addressed</span>
+  </div>
+  <div class="summary-card partial_compliant">
+    <span class="label">Partial compliance</span>
+    <strong>{{ summary.partialCompliant }}</strong>
+    <span class="hint">Needs improvement</span>
+  </div>
+  <div class="summary-card non_compliant">
+    <span class="label">Non-compliance</span>
+    <strong>{{ summary.nonCompliant }}</strong>
+    <span class="hint">Corrective action required</span>
+  </div>
+</div>
+
+@if (items.length) {
+<div class="ai-banner card-surface">
+  <span class="tag-ai">AI draft</span>
+  <p>Data was extracted from source documents using AI. All findings require human review before sign-off. Edit gaps, management responses, and effectiveness ratings below — changes are saved automatically.</p>
+</div>
+
+<div class="filter-pills">
+  <div class="view-toggle" role="tablist" aria-label="View mode">
+    <button
+      type="button"
+      [class.active]="viewMode === 'cards'"
+      (click)="setViewMode('cards')"
+    >All cards</button>
+    <button
+      type="button"
+      [class.active]="viewMode === 'list'"
+      (click)="setViewMode('list')"
+    >List view</button>
+  </div>
+  @if (ndRunId) {
+    <input
+      type="search"
+      class="filter-search"
+      [(ngModel)]="ndSearchQuery"
+      placeholder="Search points…"
+      aria-label="Search points"
+    />
+  }
+  @for (f of filters; track f.id) {
+    <button type="button" [class.active]="activeFilter === f.id" (click)="setFilter(f.id)">
+      {{ f.id === 'all' ? 'All (' + items.length + ')' : f.label }}
+    </button>
+  }
+  @if (viewMode === 'cards') {
+    <button type="button" class="filter-util" (click)="collapseAllItems()">Close all</button>
+    <button type="button" class="filter-util" (click)="expandAllItems()">Expand all</button>
+  }
+  @if (ndRunId) {
+    <span class="filter-count">{{ filteredItems.length }} of {{ items.length }} points</span>
+  }
+</div>
+}
+}
+
+@if (!loading && !items.length) {
+  <div class="card-surface empty-state">
+    <strong>{{ loadError ? 'Could not load findings' : 'No gap findings yet' }}</strong>
+    <p>
+      @if (loadError) {
+        {{ loadError }} Open a valid session from Documents → View analysis, or start a new run on Analyse V2.
+      } @else {
+        Run an analysis on Analyse V2 (TFS Guidelines × I M P T F S), then open this page again — findings come from the real dual-verify / compliance session.
+      }
+    </p>
+    <a routerLink="/analyse-v2" class="btn-primary">Go to Analyse V2</a>
+  </div>
+}
+
+<ng-template #pointDetail let-item="item" let-showHeader="showHeader">
+  @if (ndRunId && analysisPointForGap(item); as ndPoint) {
+    @if (ndDetailError) {
+      <p class="nd-detail-error">{{ ndDetailError }}</p>
+    }
+    <app-nd-gap-point-detail
+      [point]="ndPoint"
+      [snapshot]="snapshotForPoint(ndPoint)"
+      [canEdit]="canEditNdCap"
+      [editing]="editingPointId === ndPoint.id"
+      [saving]="capSavingPointId === ndPoint.id"
+      [history]="historyPointId === ndPoint.id ? history : []"
+      [showHistoryPanel]="historyPointId === ndPoint.id"
+      [hideReportHeader]="!showHeader"
+      [policyDocId]="policyDocIdForPoint(ndPoint)"
+      [regulationDocId]="regDocIdForPoint(ndPoint)"
+      (startEdit)="startEditCap(ndPoint)"
+      (cancelEdit)="cancelEditCap()"
+      (save)="saveCap(ndPoint.id, $event)"
+      (openHistory)="openHistory(ndPoint.id)"
+      (closeHistory)="closeHistory()"
+      (restoreVersion)="revertToVersion($event)"
+      (openPdf)="openPdfFromNd($event)"
+    />
+  } @else {
+    @if (reportItemForGap(item); as reportItem) {
+      <app-dual-verify-result-card
+        class="detail-card"
+        [item]="reportItem"
+        [govText]="item.regulatoryText"
+        [complianceLabel]="severityLabel(item.severity)"
+      />
+    } @else {
+      <p class="muted-inline">No detailed AI output for this point.</p>
+    }
+  }
+</ng-template>
+
+@if (viewMode === 'list' && !loading && filteredItems.length) {
+  <div class="list-split">
+    <aside class="list-rail" aria-label="Regulation points">
+      <p class="rail-title">Points ({{ filteredItems.length }})</p>
+      @for (item of filteredItems; track item.id) {
+        <button
+          type="button"
+          class="rail-point"
+          [class.active]="selectedItemId === item.id"
+          (click)="selectGapItem(item)"
+        >
+          <span class="rail-point-head">
+            <span class="rail-point-num">{{ item.section }}</span>
+            <span class="severity-badge sm" [class]="item.severity">{{ severityLabel(item.severity) }}</span>
+          </span>
+          <span class="rail-point-title">{{ item.title }}</span>
+        </button>
+      }
+    </aside>
+    <div class="list-detail card-surface">
+      @if (selectedGapItem; as item) {
+        <ng-container
+          [ngTemplateOutlet]="pointDetail"
+          [ngTemplateOutletContext]="{ item: item, showHeader: true }"
+        />
+      } @else {
+        <p class="muted-inline">Select a point on the left to view details.</p>
+      }
+    </div>
+  </div>
+} @else {
+    <div class="items-list">
+      @for (item of filteredItems; track item.id; let i = $index) {
+    <article class="item-card card-surface" [class.expanded]="item.expanded">
+      <button type="button" class="item-header" (click)="toggleItem(item)">
+        <span class="item-index">{{ item.id }}</span>
+        <span class="item-section">{{ item.section }}</span>
+        <strong class="item-title">{{ item.title }}</strong>
+        <span class="severity-badge" [class]="item.severity">{{ severityLabel(item.severity) }}</span>
+        @if (item.signedOff) {
+          <span class="signed-off">Signed off</span>
+        }
+        <svg class="chevron" [class.open]="item.expanded" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+
+      @if (item.expanded) {
+        <div class="item-body item-body-detail">
+          <ng-container
+            [ngTemplateOutlet]="pointDetail"
+            [ngTemplateOutletContext]="{ item: item, showHeader: false }"
+          />
+        </div>
+      }
+    </article>
+  }
+</div>
+}
+
+@if (pdfPreview) {
+  <div class="pdf-backdrop" (click)="closePdf()"></div>
+  <aside class="pdf-panel" role="dialog" aria-label="Source preview">
+    <header>
+      <div>
+        <h3>{{ pdfPreview.title }}</h3>
+        <p>{{ pdfPreview.page }}</p>
+      </div>
+      <button type="button" class="btn-close" (click)="closePdf()" aria-label="Close">✕</button>
+    </header>
+    <div class="pdf-body">
+      <p>{{ pdfPreview.body }}</p>
+      <p class="pdf-note">Source excerpt preview — connect document storage for full PDF page rendering.</p>
+    </div>
+  </aside>
+}

@@ -57,6 +57,41 @@ export function isAnalysisRunInProgress(status: string): boolean {
   );
 }
 
+/** Analysis finished — maker can review gaps and submit for checker. */
+export function isAnalysisRunAwaitingReview(status: string): boolean {
+  const s = status.toLowerCase();
+  return (
+    s === 'completed' ||
+    s === 'dual_verify_failed' ||
+    s === 'landing_ai_complete' ||
+    s === 'pulled_back' ||
+    s === 'submitted_for_review' ||
+    s === 'checker_approved' ||
+    s === 'reviewer_approved'
+  );
+}
+
+/**
+ * Run still has pending points — open analyse-v8 (execution view + rerun),
+ * not gap-analysis working document. A run with all points processed opens
+ * the gap analysis even if dual verify flagged failures (maker reviews there).
+ */
+export function analysisRunNeedsExecutionView(run: AnalysisRunSummary): boolean {
+  const s = (run.status ?? '').toLowerCase();
+  if (['submitted_for_review', 'checker_approved', 'reviewer_approved', 'pulled_back'].includes(s)) {
+    return false;
+  }
+  if (isAnalysisRunInProgress(s)) return true;
+
+  const total = run.totalPointsCount ?? 0;
+  const processed = run.processedPointsCount ?? 0;
+  if (total > 0 && processed < total) return true;
+
+  if (s === 'failed') return true;
+
+  return false;
+}
+
 /** Router link segments for analysis runs opened inside ND. */
 export function ndAnalysisRunLink(
   run: AnalysisRunSummary,
@@ -65,12 +100,12 @@ export function ndAnalysisRunLink(
   if (role === 'checker') return ['/nd/checker/review', run.id];
   if (role === 'reviewer') return ['/nd/reviewer/review', run.id];
 
-  if (isAnalysisRunInProgress(run.status)) {
+  if (analysisRunNeedsExecutionView(run)) {
     return ['/nd/analyse-v8'];
   }
 
   if (!isLegacyAnalysisRun(run)) {
-    return ['/nd/analyse-v8'];
+    return ['/nd/gap-analysis'];
   }
 
   if (isLegacyAnalysisRun(run) && run.legacyHref) {
@@ -89,17 +124,21 @@ export function ndAnalysisRunQuery(
 ): Record<string, string> | undefined {
   if (role === 'checker' || role === 'reviewer') return undefined;
 
-  if (isAnalysisRunInProgress(run.status)) {
-    if (!isLegacyAnalysisRun(run)) return { run: run.id };
+  if (!isLegacyAnalysisRun(run)) {
+    if (analysisRunNeedsExecutionView(run)) {
+      return { run: run.id };
+    }
+    return { run: run.id };
+  }
+
+  if (analysisRunNeedsExecutionView(run)) {
     if (run.legacySessionId) return { session: run.legacySessionId };
     if (run.legacyHref) {
       const parsed = parseNdHref(run.legacyHref);
       if (parsed.queryParams?.['session']) return { session: parsed.queryParams['session'] };
     }
-    return undefined;
   }
 
-  if (!isLegacyAnalysisRun(run)) return { run: run.id };
   if (run.legacySessionId) return { session: run.legacySessionId };
   if (run.legacyHref) return parseNdHref(run.legacyHref).queryParams;
   return undefined;

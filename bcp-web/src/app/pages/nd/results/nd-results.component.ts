@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdGapPointDetailComponent } from '../../../components/nd/nd-gap-point-detail.component';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -22,6 +22,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
   private readonly api = inject(NdApiService);
   readonly auth = inject(NdAuthService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   @Input() embedMode = false;
   @Input() embedRunId: string | null = null;
@@ -36,16 +37,25 @@ export class NdResultsComponent implements OnInit, OnChanges {
   error = '';
   statusFilter = 'all';
   search = '';
+  viewMode: 'cards' | 'list' = 'cards';
   editingPointId: string | null = null;
   capSavingPointId: string | null = null;
   history: ActionPlanHistoryEntry[] = [];
   historyPointId: string | null = null;
   actionLoading = false;
   expandedPointIds = new Set<string>();
+  selectedPointId: string | null = null;
 
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
     this.resolveRunId();
+    if (!this.embedMode && this.runId) {
+      await this.router.navigate(['/nd/gap-analysis'], {
+        queryParams: { run: this.runId },
+        replaceUrl: true,
+      });
+      return;
+    }
     await this.load();
   }
 
@@ -79,15 +89,51 @@ export class NdResultsComponent implements OnInit, OnChanges {
     if (res.success && res.data) {
       this.data = res.data as ResultsData;
       if (this.embedMode && this.data.points.length) {
-        const first =
-          this.data.points.find((p) => p.finalStatus === 'partial_compliant' || p.finalStatus === 'non_compliant') ??
-          this.data.points[0];
-        this.expandedPointIds = new Set([first.id]);
+        this.expandedPointIds = new Set();
+      } else if (this.data.points.length) {
+        this.selectDefaultPoint();
       }
     } else {
       this.error = res.message ?? 'Failed to load results';
     }
     this.loading = false;
+  }
+
+  get selectedPoint(): AnalysisPoint | null {
+    if (!this.data || !this.selectedPointId) return null;
+    return this.data.points.find((p) => p.id === this.selectedPointId) ?? null;
+  }
+
+  get showPointsRail(): boolean {
+    return this.viewMode === 'list';
+  }
+
+  setViewMode(mode: 'cards' | 'list'): void {
+    this.viewMode = mode;
+    if (mode === 'list' && !this.selectedPointId) this.selectDefaultPoint();
+  }
+
+  private selectDefaultPoint(): void {
+    if (!this.data?.points.length) {
+      this.selectedPointId = null;
+      return;
+    }
+    const preferred =
+      this.data.points.find((p) => p.finalStatus === 'partial_compliant' || p.finalStatus === 'non_compliant') ??
+      this.data.points[0];
+    this.selectedPointId = preferred.id;
+  }
+
+  selectPoint(pointId: string): void {
+    this.selectedPointId = pointId;
+    this.editingPointId = null;
+    if (this.historyPointId && this.historyPointId !== pointId) {
+      this.closeHistory();
+    }
+  }
+
+  isPointSelected(pointId: string): boolean {
+    return this.selectedPointId === pointId;
   }
 
   get filteredPoints(): AnalysisPoint[] {
@@ -162,6 +208,15 @@ export class NdResultsComponent implements OnInit, OnChanges {
     return this.embedMode ? this.expandedPointIds.has(pointId) : true;
   }
 
+  expandAllPoints(): void {
+    if (!this.data) return;
+    this.expandedPointIds = new Set(this.data.points.map((p) => p.id));
+  }
+
+  collapseAllPoints(): void {
+    this.expandedPointIds = new Set();
+  }
+
   phaseSummary(point: AnalysisPoint): string {
     if (point.landingAiStatus === 'failed') return 'Phase 1 · Landing AI failed';
     if (point.googleAiStatus === 'failed' && point.landingAiStatus !== 'failed')
@@ -200,6 +255,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
 
   openHistory(pointId: string): void {
     this.editingPointId = null;
+    this.selectPoint(pointId);
     void this.loadHistory(pointId);
   }
 

@@ -32,7 +32,7 @@ import {
 } from '../../../lib/gov-point-filter';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
-import { NdResultsComponent } from '../nd/results/nd-results.component';
+import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
 
 type PointsSource = 'regulation' | 'library';
 
@@ -46,7 +46,7 @@ type ApiLibraryPoint = {
 @Component({
   selector: 'app-analyse-v8',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, InProgressNavButtonComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdResultsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, InProgressNavButtonComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdGapAnalysisComponent],
   templateUrl: './analyse-v8.component.html',
   styleUrl: './analyse-v8.component.scss',
 })

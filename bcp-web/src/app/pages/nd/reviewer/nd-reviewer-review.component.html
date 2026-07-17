@@ -74,7 +74,7 @@
           <button type="button" class="nd-btn-secondary" [disabled]="submitting" (click)="handlePullBack()">
             Pull back to checker
           </button>
-          <a [routerLink]="['/nd/results', runId]" class="nd-btn-secondary">Full results</a>
+          <a [routerLink]="['/nd/gap-analysis']" [queryParams]="{ run: runId }" class="nd-btn-secondary">Full results</a>
         </div>
       </div>
     </div>

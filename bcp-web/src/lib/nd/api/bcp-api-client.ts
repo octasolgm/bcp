@@ -189,10 +189,14 @@ export async function deleteLibrary(token: string, id: string) {
   return apiFetch<unknown>(`/nd/libraries/${id}`, token, { method: "DELETE" });
 }
 
-export async function getAnalysisRuns(token: string, params?: { status?: string; mineOnly?: boolean }) {
+export async function getAnalysisRuns(
+  token: string,
+  params?: { status?: string; mineOnly?: boolean; deletedOnly?: boolean },
+) {
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);
   if (params?.mineOnly) q.set("mineOnly", "true");
+  if (params?.deletedOnly) q.set("deletedOnly", "true");
   const suffix = q.toString() ? `?${q}` : "";
   return apiFetch<unknown[]>(`/nd/analysis-runs${suffix}`, token);
 }
@@ -244,6 +248,18 @@ export async function submitForReview(token: string, runId: string) {
 
 export async function resubmitForReview(token: string, runId: string) {
   return apiFetch<unknown>(`/nd/analysis-runs/${runId}/resubmit-for-review`, token, {
+    method: "POST",
+  });
+}
+
+export async function softDeleteAnalysisRun(token: string, runId: string) {
+  return apiFetch<unknown>(`/nd/analysis-runs/${runId}/soft-delete`, token, {
+    method: "POST",
+  });
+}
+
+export async function restoreAnalysisRun(token: string, runId: string) {
+  return apiFetch<unknown>(`/nd/analysis-runs/${runId}/restore`, token, {
     method: "POST",
   });
 }

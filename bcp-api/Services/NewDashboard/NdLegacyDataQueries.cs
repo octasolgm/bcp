@@ -114,6 +114,8 @@ public static class NdLegacyDataQueries
         source = "nd_analysis",
         name = r.Name,
         status = r.Status,
+        statusBeforeDelete = r.StatusBeforeDelete,
+        deletedAt = r.DeletedAt,
         totalPointsCount = r.TotalPointsCount,
         processedPointsCount = r.ProcessedPointsCount,
         dualVerifyFailedCount = r.DualVerifyFailedCount,

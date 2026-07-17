@@ -231,6 +231,12 @@ public class NdAnalysisRun
     [Column("status")]
     public string Status { get; set; } = "draft";
 
+    [Column("status_before_delete")]
+    public string? StatusBeforeDelete { get; set; }
+
+    [Column("deleted_at")]
+    public DateTimeOffset? DeletedAt { get; set; }
+
     [Column("total_points_count")]
     public int TotalPointsCount { get; set; }
 
@@ -429,6 +435,31 @@ public class NdAnalysisPointComment
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
+/// Soft-delete marker for legacy analyses (document_analysis_runs / dual_verify_sessions)
+/// shown in the ND runs list. Legacy tables stay untouched; a row here hides the run.
+/// </summary>
+[Table("hidden_legacy_runs")]
+public class NdHiddenLegacyRun
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    /// <summary>legacy_analysis | legacy_dual_verify</summary>
+    [Column("source")]
+    public string Source { get; set; } = "";
+
+    [Column("legacy_id")]
+    public Guid LegacyId { get; set; }
+
+    [Column("deleted_by")]
+    public Guid? DeletedBy { get; set; }
+
+    [Column("deleted_at")]
+    public DateTimeOffset DeletedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 [Table("analysis_status_history")]

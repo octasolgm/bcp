@@ -68,6 +68,8 @@ export type AnalysisRunSummary = {
   source?: 'nd_analysis' | 'legacy_analysis' | 'legacy_dual_verify';
   name: string;
   status: string;
+  statusBeforeDelete?: string | null;
+  deletedAt?: string | null;
   totalPointsCount: number;
   processedPointsCount: number;
   dualVerifyFailedCount?: number;

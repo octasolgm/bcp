@@ -236,8 +236,8 @@ export const routes: Routes = [
           {
             path: 'gap-analysis',
             loadComponent: () =>
-              import('./pages/gap-analysis-report/gap-analysis-report.component').then(
-                (m) => m.GapAnalysisReportComponent,
+              import('./pages/nd/gap-analysis/nd-gap-analysis.component').then(
+                (m) => m.NdGapAnalysisComponent,
               ),
           },
           {
@@ -346,6 +346,15 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./pages/nd/admin/nd-admin-departments.component').then(
                 (m) => m.NdAdminDepartmentsComponent,
+              ),
+          },
+          {
+            path: 'admin/deleted-runs',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['super_admin'] },
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-deleted-runs.component').then(
+                (m) => m.NdAdminDeletedRunsComponent,
               ),
           },
         ],

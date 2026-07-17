@@ -25,6 +25,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdAnalysisReview> NdAnalysisReviews => Set<NdAnalysisReview>();
     public DbSet<NdAnalysisPointComment> NdAnalysisPointComments => Set<NdAnalysisPointComment>();
     public DbSet<NdAnalysisStatusHistory> NdAnalysisStatusHistories => Set<NdAnalysisStatusHistory>();
+    public DbSet<NdHiddenLegacyRun> NdHiddenLegacyRuns => Set<NdHiddenLegacyRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

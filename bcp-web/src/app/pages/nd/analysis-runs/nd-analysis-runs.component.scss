@@ -83,6 +83,25 @@
   color: var(--critical);
 }
 
+.status-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+}
+
+.workflow-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  background: var(--accent-tint);
+  color: var(--accent);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .empty-state {
   padding: 2rem 1.5rem;
   text-align: center;
@@ -126,4 +145,17 @@
   &:hover {
     text-decoration: underline;
   }
+
+  &.danger-link {
+    color: var(--critical);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.page-flash {
+  margin: 0 0 1rem;
 }

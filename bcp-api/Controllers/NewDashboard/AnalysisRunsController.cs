@@ -17,6 +17,8 @@ public class AnalysisRunsController(
     DemoAnalysisSeedService demoSeed,
     IServiceScopeFactory scopeFactory) : NdControllerBase
 {
+    private const string DeletedStatus = "deleted";
+
     public record CreateRunRequest(
         string Name,
         string? Description,
@@ -30,13 +32,37 @@ public class AnalysisRunsController(
     public async Task<IActionResult> List(
         [FromQuery] string? status,
         [FromQuery] bool mineOnly = false,
+        [FromQuery] bool deletedOnly = false,
         CancellationToken ct = default)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
-        var q = db.NdAnalysisRuns.AsNoTracking().AsQueryable();
+        if (deletedOnly)
+        {
+            if (profile!.Role != "super_admin")
+                return StatusCode(403, new { success = false, message = "Forbidden" });
+
+            var deletedRuns = await db.NdAnalysisRuns.AsNoTracking()
+                .Where(r => r.Status == DeletedStatus)
+                .OrderByDescending(r => r.DeletedAt ?? r.UpdatedAt)
+                .Take(200)
+                .ToListAsync(ct);
+
+            var deletedItems = deletedRuns.Select(NdLegacyDataQueries.MapNdRunSummary).Cast<object>().ToList();
+            deletedItems.AddRange(await LoadHiddenLegacyRunsAsync(ct));
+            return Ok(new { success = true, data = deletedItems });
+        }
+
+        var hiddenLegacy = await db.NdHiddenLegacyRuns.AsNoTracking()
+            .Select(h => h.LegacyId)
+            .ToListAsync(ct);
+        var hiddenLegacySet = hiddenLegacy.ToHashSet();
+
+        var q = db.NdAnalysisRuns.AsNoTracking()
+            .Where(r => r.Status != DeletedStatus)
+            .AsQueryable();
 
         if (profile!.Role == "maker" || mineOnly)
             q = q.Where(r => r.CreatedBy == profile.Id);
@@ -61,14 +87,18 @@ public class AnalysisRunsController(
             .OrderByDescending(r => r.CreatedAt)
             .Take(100)
             .ToListAsync(ct);
-        items.AddRange(legacyRuns.Select(NdLegacyDataQueries.MapLegacyAnalysisRun));
+        items.AddRange(legacyRuns
+            .Where(r => !hiddenLegacySet.Contains(r.Id))
+            .Select(NdLegacyDataQueries.MapLegacyAnalysisRun));
 
         var standaloneDv = await db.DualVerifySessions.AsNoTracking()
             .Where(s => !linkedSet.Contains(s.Id))
             .OrderByDescending(s => s.CreatedAt)
             .Take(50)
             .ToListAsync(ct);
-        items.AddRange(standaloneDv.Select(NdLegacyDataQueries.MapLegacyDualVerifySession));
+        items.AddRange(standaloneDv
+            .Where(s => !hiddenLegacySet.Contains(s.Id))
+            .Select(NdLegacyDataQueries.MapLegacyDualVerifySession));
 
         var sorted = items
             .OrderByDescending(i =>
@@ -202,6 +232,8 @@ public class AnalysisRunsController(
             .Include(r => r.Points)
             .FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
+        if (run.Status == DeletedStatus)
+            return NotFound(new { success = false, message = "Not found" });
 
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
@@ -239,6 +271,8 @@ public class AnalysisRunsController(
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
+        if (run.Status == DeletedStatus)
+            return NotFound(new { success = false, message = "Not found" });
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
@@ -388,6 +422,148 @@ public class AnalysisRunsController(
         await db.SaveChangesAsync(ct);
         await RecordStatusChangeAsync(db, id, from, run.Status, profile.Id, "Resubmitted", ct);
         return Ok(new { success = true });
+    }
+
+    [HttpPost("{id:guid}/soft-delete")]
+    public async Task<IActionResult> SoftDelete(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return await SoftDeleteLegacyAsync(id, profile!, ct);
+        if (run.Status == DeletedStatus)
+            return BadRequest(new { success = false, message = "Analysis run is already deleted." });
+        if (profile!.Role == "maker" && run.CreatedBy != null && run.CreatedBy != profile.Id)
+            return StatusCode(403, new { success = false, message = "Forbidden" });
+
+        var from = run.Status;
+        run.StatusBeforeDelete = from;
+        run.Status = DeletedStatus;
+        run.DeletedAt = DateTimeOffset.UtcNow;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        await RecordStatusChangeAsync(db, id, from, DeletedStatus, profile.Id, "Soft deleted", ct);
+
+        return Ok(new { success = true, message = "Analysis run removed from workspace." });
+    }
+
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null)
+        {
+            var hidden = await db.NdHiddenLegacyRuns.FirstOrDefaultAsync(h => h.LegacyId == id, ct);
+            if (hidden == null) return NotFound(new { success = false, message = "Not found" });
+            db.NdHiddenLegacyRuns.Remove(hidden);
+            await db.SaveChangesAsync(ct);
+            return Ok(new { success = true, message = "Analysis run restored." });
+        }
+        if (run.Status != DeletedStatus)
+            return BadRequest(new { success = false, message = "Analysis run is not deleted." });
+
+        var from = run.Status;
+        var restored = string.IsNullOrWhiteSpace(run.StatusBeforeDelete) ? "draft" : run.StatusBeforeDelete;
+        run.Status = restored;
+        run.StatusBeforeDelete = null;
+        run.DeletedAt = null;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        await RecordStatusChangeAsync(db, id, from, restored, profile!.Id, "Restored", ct);
+
+        return Ok(new { success = true, message = "Analysis run restored.", status = restored });
+    }
+
+    /// <summary>Legacy analyses have no status column we own — hide via hidden_legacy_runs marker.</summary>
+    private async Task<IActionResult> SoftDeleteLegacyAsync(Guid id, NdProfile profile, CancellationToken ct)
+    {
+        string? source = null;
+        if (await db.DocumentAnalysisRuns.AsNoTracking().AnyAsync(r => r.Id == id, ct))
+            source = "legacy_analysis";
+        else if (await db.DualVerifySessions.AsNoTracking().AnyAsync(s => s.Id == id, ct))
+            source = "legacy_dual_verify";
+
+        if (source == null) return NotFound(new { success = false, message = "Not found" });
+
+        if (await db.NdHiddenLegacyRuns.AsNoTracking().AnyAsync(h => h.LegacyId == id, ct))
+            return BadRequest(new { success = false, message = "Analysis run is already deleted." });
+
+        db.NdHiddenLegacyRuns.Add(new NdHiddenLegacyRun
+        {
+            Source = source,
+            LegacyId = id,
+            DeletedBy = profile.Id,
+        });
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new { success = true, message = "Analysis run removed from workspace." });
+    }
+
+    private async Task<List<object>> LoadHiddenLegacyRunsAsync(CancellationToken ct)
+    {
+        var hidden = await db.NdHiddenLegacyRuns.AsNoTracking()
+            .OrderByDescending(h => h.DeletedAt)
+            .Take(200)
+            .ToListAsync(ct);
+        if (hidden.Count == 0) return [];
+
+        var analysisIds = hidden.Where(h => h.Source == "legacy_analysis").Select(h => h.LegacyId).ToList();
+        var dvIds = hidden.Where(h => h.Source == "legacy_dual_verify").Select(h => h.LegacyId).ToList();
+
+        var legacyRuns = analysisIds.Count > 0
+            ? await db.DocumentAnalysisRuns.AsNoTracking().Where(r => analysisIds.Contains(r.Id)).ToListAsync(ct)
+            : [];
+        var dvSessions = dvIds.Count > 0
+            ? await db.DualVerifySessions.AsNoTracking().Where(s => dvIds.Contains(s.Id)).ToListAsync(ct)
+            : [];
+
+        var items = new List<object>();
+        foreach (var h in hidden)
+        {
+            if (h.Source == "legacy_analysis")
+            {
+                var run = legacyRuns.FirstOrDefault(r => r.Id == h.LegacyId);
+                if (run == null) continue;
+                items.Add(new
+                {
+                    id = run.Id,
+                    source = "legacy_analysis",
+                    name = string.IsNullOrWhiteSpace(run.Label)
+                        ? $"{run.RegulationFileName ?? "Regulation"} × {run.InternalFileName ?? "Compliance"}"
+                        : run.Label,
+                    status = DeletedStatus,
+                    statusBeforeDelete = NdLegacyDataQueries.MapLegacyAnalysisStatus(run.Status),
+                    deletedAt = h.DeletedAt,
+                    totalPointsCount = run.PointCount,
+                    processedPointsCount = run.CompletedPoints,
+                    createdAt = run.CreatedAt,
+                });
+            }
+            else
+            {
+                var session = dvSessions.FirstOrDefault(s => s.Id == h.LegacyId);
+                if (session == null) continue;
+                items.Add(new
+                {
+                    id = session.Id,
+                    source = "legacy_dual_verify",
+                    name = $"{session.GovFileName ?? session.GovDocId} × {session.InternalFileName ?? session.InternalDocId}",
+                    status = DeletedStatus,
+                    statusBeforeDelete = NdLegacyDataQueries.MapDualVerifyStatus(session.Status),
+                    deletedAt = h.DeletedAt,
+                    totalPointsCount = session.TotalPoints,
+                    processedPointsCount = session.CompletedPoints,
+                    createdAt = new DateTimeOffset(DateTime.SpecifyKind(session.CreatedAt, DateTimeKind.Utc)),
+                });
+            }
+        }
+        return items;
     }
 
     private static object MapRunSummary(NdAnalysisRun r) => new

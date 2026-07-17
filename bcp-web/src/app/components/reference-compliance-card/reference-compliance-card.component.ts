@@ -23,6 +23,8 @@ import type { ColorTier } from '../../../lib/ai-lab/color-tier';
 export class ReferenceComplianceCardComponent implements OnChanges {
   @Input({ required: true }) message!: string;
   @Input() capOnly = false;
+  /** Hide corrective action + responsibility (e.g. pass 1/2 detail panels). */
+  @Input() hideCapSection = false;
 
   block!: ReferenceComplianceBlock;
   tier: ColorTier = 'neutral';

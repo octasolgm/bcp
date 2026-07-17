@@ -87,29 +87,31 @@
     </dl>
   </div>
 
-  @if (capGaps.length > 0) {
-    <div class="cap">
-      <p class="cap-title">Corrective Action Plan</p>
-      @for (gap of capGaps; track gap.index) {
-        <div class="cap-gap">
-          <p class="gap-label">Gap {{ gap.index }} — Missing</p>
-          <p>{{ gap.missing }}</p>
-          @if (gap.fix) {
-            <p class="fix-label">Fix:</p>
-            <p>{{ gap.fix }}</p>
-          }
-        </div>
-      }
-    </div>
-  } @else if (block.correctiveAction && block.correctiveAction !== 'N/A') {
-    <div class="cap">
-      <p class="cap-title">Corrective Action Plan</p>
-      <p class="cap-text">{{ block.correctiveAction }}</p>
-    </div>
-  }
+  @if (!hideCapSection) {
+    @if (capGaps.length > 0) {
+      <div class="cap">
+        <p class="cap-title">Corrective Action Plan</p>
+        @for (gap of capGaps; track gap.index) {
+          <div class="cap-gap">
+            <p class="gap-label">Gap {{ gap.index }} — Missing</p>
+            <p>{{ gap.missing }}</p>
+            @if (gap.fix) {
+              <p class="fix-label">Fix:</p>
+              <p>{{ gap.fix }}</p>
+            }
+          </div>
+        }
+      </div>
+    } @else if (block.correctiveAction && block.correctiveAction !== 'N/A') {
+      <div class="cap">
+        <p class="cap-title">Corrective Action Plan</p>
+        <p class="cap-text">{{ block.correctiveAction }}</p>
+      </div>
+    }
 
-  @if (block.responsibility && block.responsibility !== 'N/A') {
-    <p class="resp"><strong>Responsibility:</strong> {{ block.responsibility }}</p>
+    @if (block.responsibility && block.responsibility !== 'N/A') {
+      <p class="resp"><strong>Responsibility:</strong> {{ block.responsibility }}</p>
+    }
   }
 </article>
 }

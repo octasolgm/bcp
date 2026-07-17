@@ -6,7 +6,7 @@ import { filter } from 'rxjs/operators';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { formatDate } from '../../../../lib/nd/utils';
-import { isLegacyAnalysisRun, ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../../lib/nd/run-links';
+import { isLegacyAnalysisRun, ndAnalysisRunLink, ndAnalysisRunQuery, analysisRunNeedsExecutionView } from '../../../../lib/nd/run-links';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
 
 type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'status';
@@ -35,6 +35,9 @@ export class NdAnalysisRunsComponent implements OnInit {
   sourceFilter = '';
   sortColumn: RunSortColumn = 'created';
   sortDir: 'asc' | 'desc' = 'desc';
+  deletingId: string | null = null;
+  deleteMessage = '';
+  deleteError = '';
 
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
@@ -132,13 +135,11 @@ export class NdAnalysisRunsComponent implements OnInit {
       case 'running':
         return normalized === 'running' || normalized === 'processing' || normalized === 'queued';
       case 'failed':
-        return normalized === 'failed' || normalized === 'cancelled' || normalized === 'pulled_back';
+        return normalized === 'failed' || normalized === 'cancelled';
+      case 'submit_pending':
+        return ['completed', 'dual_verify_failed', 'landing_ai_complete', 'pulled_back'].includes(normalized);
       case 'completed':
-        return (
-          normalized === 'completed' ||
-          normalized === 'checker_approved' ||
-          normalized === 'reviewer_approved'
-        );
+        return normalized === 'reviewer_approved';
       case 'review':
         return normalized === 'submitted_for_review' || normalized === 'checker_approved';
       default:
@@ -169,18 +170,51 @@ export class NdAnalysisRunsComponent implements OnInit {
     return ndAnalysisRunQuery(run, this.auth.getRole());
   }
 
+  needsExecutionView(run: AnalysisRunSummary): boolean {
+    return analysisRunNeedsExecutionView(run);
+  }
+
   statusClass(status: string): string {
-    if (status === 'completed' || status === 'checker_approved' || status === 'reviewer_approved') {
-      return 'completed';
+    const s = status.toLowerCase();
+    if (s === 'reviewer_approved') return 'completed';
+    if (s === 'failed' || s === 'cancelled') return 'failed';
+    if (s === 'submitted_for_review' || s === 'checker_approved') return 'pending';
+    if (s === 'completed' || s === 'dual_verify_failed' || s === 'landing_ai_complete' || s === 'pulled_back') {
+      return 'running';
     }
-    if (status === 'failed' || status === 'pulled_back') return 'failed';
-    if (status === 'submitted_for_review') return 'pending';
     return 'running';
+  }
+
+  workflowStatusLabel(run: AnalysisRunSummary): string {
+    if (analysisRunNeedsExecutionView(run)) {
+      const total = run.totalPointsCount ?? 0;
+      const processed = run.processedPointsCount ?? 0;
+      if (total > 0 && processed < total) return 'Points pending';
+      if ((run.dualVerifyFailedCount ?? 0) > 0) return 'Rerun failed points';
+      return 'Continue analysis';
+    }
+    const s = run.status.toLowerCase();
+    if (['completed', 'dual_verify_failed', 'landing_ai_complete'].includes(s)) {
+      return 'Submit for review pending';
+    }
+    if (s === 'pulled_back') return 'Resubmit pending';
+    if (s === 'submitted_for_review') return 'With checker';
+    if (s === 'checker_approved') return 'With reviewer';
+    if (s === 'reviewer_approved') return 'Review complete';
+    return '';
+  }
+
+  analysisStatusLabel(status: string): string {
+    const s = status.toLowerCase();
+    if (s === 'dual_verify_failed') return 'Dual verify failed';
+    if (s === 'landing_ai_complete') return 'Analysis complete';
+    return status.replace(/_/g, ' ');
   }
 
   formatDate = formatDate;
 
-  canSubmitRun(run: AnalysisRunSummary): boolean {
+  canSendForReview(run: AnalysisRunSummary): boolean {
+    if (analysisRunNeedsExecutionView(run)) return false;
     if (this.isLegacy(run)) return false;
     const role = this.auth.getRole();
     if (role !== 'maker' && role !== 'super_admin') return false;
@@ -198,6 +232,7 @@ export class NdAnalysisRunsComponent implements OnInit {
   }
 
   canEditPlans(run: AnalysisRunSummary): boolean {
+    if (analysisRunNeedsExecutionView(run)) return false;
     if (this.isLegacy(run)) return false;
     return [
       'completed',
@@ -210,15 +245,29 @@ export class NdAnalysisRunsComponent implements OnInit {
     ].includes(run.status.toLowerCase());
   }
 
-  async submitRunForChecker(run: AnalysisRunSummary, event: Event): Promise<void> {
-    event.preventDefault();
+  canDelete(run: AnalysisRunSummary): boolean {
+    const role = this.auth.getRole();
+    if (role === 'super_admin') return true;
+    // Legacy runs have no owner recorded — any maker may remove them.
+    if (role === 'maker') return this.isLegacy(run) || !run.createdBy || run.createdBy === this.auth.profile()?.id;
+    return false;
+  }
+
+  async deleteRun(run: AnalysisRunSummary, event: Event): Promise<void> {
     event.stopPropagation();
-    const res =
-      run.status === 'pulled_back'
-        ? await this.api.resubmitForReview(run.id)
-        : await this.api.submitForReview(run.id);
-    if (res.success) {
-      await this.load();
+    if (!confirm(`Delete "${run.name}"? It will be hidden from the workspace but can be restored by a super admin.`)) {
+      return;
     }
+    this.deletingId = run.id;
+    this.deleteMessage = '';
+    this.deleteError = '';
+    const res = await this.api.softDeleteAnalysisRun(run.id);
+    if (res.success) {
+      this.allRuns = this.allRuns.filter((r) => r.id !== run.id);
+      this.deleteMessage = `"${run.name}" removed.`;
+    } else {
+      this.deleteError = res.message ?? 'Delete failed';
+    }
+    this.deletingId = null;
   }
 }

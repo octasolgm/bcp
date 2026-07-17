@@ -67,6 +67,7 @@ public class InternalDocumentsController(
         try
         {
             ndRuns = await appDb.NdAnalysisRuns.AsNoTracking()
+                .Where(r => r.Status != "deleted")
                 .OrderByDescending(r => r.CreatedAt)
                 .Take(200)
                 .ToListAsync(ct);

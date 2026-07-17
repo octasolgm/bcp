@@ -88,7 +88,7 @@
   </div>
 
   @if (isDone) {
-    <a [routerLink]="['/nd/results', runId]" class="nd-btn-primary">View results</a>
+    <a [routerLink]="['/nd/gap-analysis']" [queryParams]="{ run: runId }" class="nd-btn-primary">View results</a>
   }
 
   @if (error) {
