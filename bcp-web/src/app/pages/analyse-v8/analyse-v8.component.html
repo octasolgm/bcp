@@ -760,14 +760,15 @@
           <strong>No points selected</strong>
           Select regulation points above, then run analysis.
         </div>
-      } @else if (selectedDetailAnalysisPoint; as ndPoint) {
+      } @else if (selectedDetailAnalysisPoint) {
+        @let ndPoint = selectedDetailAnalysisPoint;
         <div class="result-detail-card-full">
           <header class="result-point-header">
             <div class="result-point-heading">
               <h3>
                 §{{ selectedPointSnapshot?.pointNumber ?? selectedDetailPointId }}
                 @if (selectedPointSnapshot?.pointTitle) {
-                  — {{ selectedPointSnapshot.pointTitle }}
+                  — {{ selectedPointSnapshot?.pointTitle }}
                 }
               </h3>
               @if (ndPoint.finalStatus) {
@@ -818,7 +819,7 @@
             }
           </div>
         </div>
-      } @else if (selectedPointReportItem) {
+      } @else if (selectedPointReportItem && selectedPointDetail) {
         <div class="detail-card result-detail-card">
           <div class="detail-head">
             <span class="severity-badge" [class]="selectedPointDetail.severity">{{ selectedPointDetail.severity }}</span>

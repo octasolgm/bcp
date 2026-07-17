@@ -1,6 +1,6 @@
 # End-to-End Test Checklist
 
-Manual verification flows for the BCP Dashboard enterprise platform. Check each item after testing in a running environment (`bcp-api`, `bcp-dashboard`, Supabase, and optionally `bcp-web` for `/old`).
+Manual verification flows for the BCP Dashboard enterprise platform. Check each item after testing in a running environment (`bcp-api`, `bcp-web` at `/nd`, and Supabase).
 
 ## Super Admin
 
