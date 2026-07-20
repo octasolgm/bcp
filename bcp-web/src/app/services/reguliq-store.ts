@@ -58,6 +58,8 @@ export type GapItemData = {
   overallEffectiveness: string;
   documentReference: string;
   evidence: string;
+  /** Parsed corrective-action gap items for this point (0 = none). */
+  gapCount?: number;
 };
 
 const STORAGE_KEY = 'reguliq-gap-report';

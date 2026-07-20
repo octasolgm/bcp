@@ -125,6 +125,11 @@
               (click)="selectPoint(p.id)"
             >
               <span class="rail-point-num">§{{ snap.pointNumber }}</span>
+              @if (gapCountForPoint(p); as gapCount) {
+                @if (gapCount > 0) {
+                  <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+                }
+              }
               @if (snap.pointTitle) {
                 <span class="rail-point-title">{{ snap.pointTitle }}</span>
               }
@@ -196,6 +201,11 @@
                 §{{ snap.pointNumber }}
                 @if (snap.pointTitle) { — {{ snap.pointTitle }} }
               </span>
+              @if (gapCountForPoint(p); as gapCount) {
+                @if (gapCount > 0) {
+                  <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+                }
+              }
               @if (p.finalStatus) {
                 <span class="status-pill" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
               }
@@ -207,6 +217,11 @@
                 {{ snap.pointNumber }}
                 @if (snap.pointTitle) { — {{ snap.pointTitle }} }
               </span>
+              @if (gapCountForPoint(p); as gapCount) {
+                @if (gapCount > 0) {
+                  <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+                }
+              }
               @if (p.finalStatus) {
                 <span class="status-pill" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
               }

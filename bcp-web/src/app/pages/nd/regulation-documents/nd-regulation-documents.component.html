@@ -124,7 +124,11 @@
                     <span class="severity-badge completed">{{ extractionLabel(d.extractionStatus) }}</span>
                   } @else {
                     <span class="severity-badge" [class]="extractionClass(d.extractionStatus)">
-                      {{ extractionLabel(d.extractionStatus) }}
+                      @if (isExtractingDoc(d)) {
+                        Extracting…
+                      } @else {
+                        {{ extractionLabel(d.extractionStatus) }}
+                      }
                     </span>
                   }
                 </td>

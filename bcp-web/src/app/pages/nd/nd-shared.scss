@@ -343,7 +343,33 @@
   }
 }
 .nd-review-actions { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border); }
+.nd-review-point-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.nd-review-point-head-badges,
+.nd-review-point-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
 .nd-comment-dot { margin-left: 0.5rem; color: var(--medium); }
+
+.gap-count-badge {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 .row-saving { opacity: 0.65; }
 .row-status {

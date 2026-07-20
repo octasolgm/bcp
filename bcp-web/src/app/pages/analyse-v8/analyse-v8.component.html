@@ -64,6 +64,9 @@
                   From regulation points library
                 </button>
               </div>
+              @if (isNdShell) {
+                <p class="v8-run-confirm-note">Run requires typing <strong>start</strong> to confirm (uses AI credits).</p>
+              }
             </div>
           </div>
         }
@@ -565,6 +568,25 @@
   </section>
 
   <section class="action-strip" aria-label="Analysis summary and run">
+    @if (showDualVerifyFailedBanner) {
+      <div class="dv-failed-banner" role="status">
+        <strong>Dual verify failed</strong>
+        <span>
+          Phase 1 (Landing AI) completed for all points. Some Phase 2 (Google) checks failed —
+          review results below or rerun dual verify only (no extra Landing AI credits).
+        </span>
+        @if (ndRunId && phase2RetryCount > 0) {
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            [disabled]="retryingPointId === '__batch__'"
+            (click)="rerunAllDualVerifyFailed()"
+          >
+            {{ retryingPointId === '__batch__' ? 'Rerunning…' : ('Rerun dual verify (' + phase2RetryCount + ')') }}
+          </button>
+        }
+      </div>
+    }
     <div class="metrics-row metrics-row-4">
       <div class="stat-box">
         <strong>{{ selectedCount }}</strong>
@@ -605,6 +627,9 @@
         <button type="button" class="btn-run v8-run" [disabled]="!canRun" (click)="runAnalysisAndScroll()">
           Run
         </button>
+        @if (isNdShell) {
+          <span class="run-confirm-hint">Confirm with <strong>start</strong></span>
+        }
       }
     </div>
   </section>
@@ -628,7 +653,7 @@
           Run remaining ({{ coverageCounts.notRun }})
         </button>
         <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || phase2RetryCount === 0" (click)="retryFailedOnly()">
-          Retry Phase 2 ({{ phase2RetryCount }})
+          {{ ndRunId ? ('Rerun dual verify (' + phase2RetryCount + ')') : ('Retry Phase 2 (' + phase2RetryCount + ')') }}
         </button>
       </div>
     }
@@ -680,6 +705,11 @@
               </div>
               <div class="status-badges">
                 <span class="sstatus" [class]="row.status">{{ formatCoverageStatus(row.status) }}</span>
+                @if (gapCountForPointId(row.pointId); as gapCount) {
+                  @if (gapCount > 0) {
+                    <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+                  }
+                }
                 @if (getPointGapSeverity(row.pointId); as sev) {
                   <span class="compliance-pill" [class]="sev" [title]="gapComplianceLabel(sev)">
                     {{ gapComplianceShortLabel(sev) }}
@@ -937,6 +967,11 @@
           <button type="button" class="item-header" (click)="toggleInlineGapItem(item)">
             <span class="item-section">{{ item.section }}</span>
             <strong class="item-title">{{ item.title }}</strong>
+            @if (gapCountForGapItem(item); as gapCount) {
+              @if (gapCount > 0) {
+                <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+              }
+            }
             <span class="severity-badge" [class]="item.severity">{{ gapComplianceLabel(item.severity) }}</span>
             <span class="chevron" [class.open]="item.expanded">›</span>
           </button>
@@ -969,5 +1004,32 @@
       }
     </div>
   </section>
+}
+
+@if (showNdRunConfirm) {
+  <div class="run-confirm-backdrop" (click)="cancelNdRunConfirm()"></div>
+  <dialog class="run-confirm-dialog" open aria-labelledby="run-confirm-title">
+    <h2 id="run-confirm-title">{{ ndRunConfirmTitle }}</h2>
+    <p class="run-confirm-lead">{{ ndRunConfirmHint }}</p>
+    <p class="run-confirm-label">
+      Type <code>{{ ndRunConfirmPhrase }}</code> to continue:
+    </p>
+    <input
+      type="text"
+      class="run-confirm-input"
+      [(ngModel)]="ndRunConfirmInput"
+      (keydown)="onNdRunConfirmKeydown($event)"
+      autocomplete="off"
+      spellcheck="false"
+      [attr.placeholder]="ndRunConfirmPhrase"
+      aria-label="Confirmation word"
+    />
+    <div class="run-confirm-actions">
+      <button type="button" class="btn-secondary btn-sm" (click)="cancelNdRunConfirm()">Cancel</button>
+      <button type="button" class="btn-primary btn-sm" [disabled]="!ndRunConfirmReady" (click)="confirmNdRun()">
+        Confirm &amp; run
+      </button>
+    </div>
+  </dialog>
 }
 </div>

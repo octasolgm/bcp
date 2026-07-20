@@ -47,6 +47,8 @@ import { NdGapPointDetailComponent } from '../../../components/nd/nd-gap-point-d
 import { DualVerifyResultCardComponent } from '../../../components/dual-verify-result-card/dual-verify-result-card.component';
 import type { ActionPlanHistoryEntry, ResultsData } from '../../../../lib/nd/types';
 import { parsePointSnapshot } from '../../../../lib/nd/utils';
+import { countCapGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
+import { parseReferenceComplianceBlock } from '../../../../lib/ai-lab/parse-reference-response';
 
 /** Seeded TFS × IMPTFS combined compliance session (32 points). */
 const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
@@ -195,6 +197,79 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     );
   }
 
+  gapCountForItem(item: GapItemData): number {
+    const ndPoint = this.analysisPointForGap(item);
+    if (ndPoint) return countCapGapsForAnalysisPoint(ndPoint);
+    return item.gapCount ?? 0;
+  }
+
+  listRowMeta(item: GapItemData): {
+    policySnippet: string;
+    fulfills: string;
+    actionPlan: string;
+    confidence: string;
+    status: string;
+  } {
+    const ndPoint = this.analysisPointForGap(item);
+    const report = this.reportItemForGap(item);
+    let policySnippet = item.policyText?.trim() || '—';
+    let confidence = '—';
+    let fulfills = '—';
+    let status = this.severityLabel(item.severity);
+    let actionPlan = item.gaps?.trim() || item.managementResponse?.trim() || '—';
+
+    if (ndPoint) {
+      actionPlan =
+        ndPoint.finalActionPlan?.trim() ||
+        ndPoint.originalAiActionPlan?.trim() ||
+        actionPlan;
+      status =
+        ndPoint.finalStatus === 'compliant'
+          ? 'Compliant'
+          : ndPoint.finalStatus === 'partial_compliant'
+            ? 'Partial'
+            : ndPoint.finalStatus === 'non_compliant'
+              ? 'Non-compliant'
+              : status;
+    }
+
+    if (report?.llmMessage || report?.landingMessage) {
+      const block = parseReferenceComplianceBlock((report.llmMessage || report.landingMessage || '').trim());
+      if (block.outputResponse?.trim()) {
+        policySnippet = block.outputResponse.trim().slice(0, 120);
+        if (block.outputResponse.length > 120) policySnippet += '…';
+      }
+      if (block.confidence?.trim()) confidence = block.confidence.trim();
+      if (block.fulfilledClauses?.trim()) {
+        const lines = block.fulfilledClauses.split('\n').filter((l) => l.trim());
+        fulfills = lines.length ? `${lines.length} item(s)` : '—';
+      }
+    }
+
+    return { policySnippet, fulfills, actionPlan: actionPlan.slice(0, 80), confidence, status };
+  }
+
+  async rerunAllNdDualVerify(): Promise<void> {
+    if (!this.ndRunId) return;
+    this.workflowLoading = true;
+    const res = await this.ndApi.rerunAllFailedDualVerify(this.ndRunId);
+    this.workflowLoading = false;
+    if (res.success) {
+      this.toast.show('Rerunning failed dual verify checks…', 'success');
+      await this.loadNdRun(this.ndRunId, null, null);
+    } else {
+      this.toast.show(res.message ?? 'Could not rerun dual verify', 'error');
+    }
+  }
+
+  get showDualVerifyFailedBanner(): boolean {
+    const status = this.ndRunData?.run.status ?? '';
+    return (
+      status === 'dual_verify_failed' ||
+      (this.ndRunData?.run.dualVerifyFailedCount ?? 0) > 0
+    );
+  }
+
   get canEditNdCap(): boolean {
     if (!this.ndRunData || !this.ndRunId) return false;
     const role = this.auth.getRole();
@@ -338,6 +413,12 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   get ndWorkflowHint(): string {
     const status = this.ndRunData?.run.status ?? '';
+    if (status === 'dual_verify_failed') {
+      const n = this.ndRunData?.run.dualVerifyFailedCount ?? 0;
+      return n > 0
+        ? `${n} point(s) failed dual verify — Landing AI results are kept. Rerun dual verify or edit action plans before submit.`
+        : 'Dual verify failed on one or more points — review Phase 2 output and rerun if needed.';
+    }
     if (status === 'submitted_for_review') return 'Submitted to checker — awaiting review.';
     if (status === 'checker_approved') return 'Checker approved — with reviewer for final sign-off.';
     if (status === 'reviewer_approved') return 'Final review complete.';

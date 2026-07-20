@@ -283,6 +283,32 @@
   }
 }
 
+.cap-gap-read .cap-gap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+
+  .gap-label {
+    margin: 0;
+  }
+}
+
+.cap-item-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.gap-missing-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #b45309;
+  margin: 0 0 0.25rem;
+}
+
 .gap-field {
   width: 100%;
   font-size: 0.8125rem;

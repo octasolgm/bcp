@@ -795,6 +795,10 @@ public class RegulationDocumentsController(
         if (isManual) return "manual";
         if (string.Equals(rawStatus, "completed", StringComparison.OrdinalIgnoreCase) || pointCount > 0)
             return "extracted";
+        if (string.Equals(rawStatus, "processing", StringComparison.OrdinalIgnoreCase))
+            return "processing";
+        if (string.Equals(rawStatus, "failed", StringComparison.OrdinalIgnoreCase))
+            return "failed";
         return "pending";
     }
 

@@ -25,9 +25,16 @@
             (click)="selectPoint(p.id)"
           >
             <span>{{ snap.pointNumber }}</span>
-            @if (p.finalStatus) {
-              <app-nd-status-badge [status]="p.finalStatus" />
-            }
+            <span class="nd-review-point-badges">
+              @if (gapCountForPoint(p); as gapCount) {
+                @if (gapCount > 0) {
+                  <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+                }
+              }
+              @if (p.finalStatus) {
+                <app-nd-status-badge [status]="p.finalStatus" />
+              }
+            </span>
           </button>
         }
       </div>
@@ -41,9 +48,16 @@
             {{ snap.pointNumber }}
             @if (snap.pointTitle) { — {{ snap.pointTitle }} }
           </h3>
-          @if (point.finalStatus) {
-            <app-nd-status-badge [status]="point.finalStatus" />
-          }
+          <span class="nd-review-point-head-badges">
+            @if (gapCountForPoint(point); as gapCount) {
+              @if (gapCount > 0) {
+                <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+              }
+            }
+            @if (point.finalStatus) {
+              <app-nd-status-badge [status]="point.finalStatus" />
+            }
+          </span>
         </div>
 
         @if (showCap(point)) {

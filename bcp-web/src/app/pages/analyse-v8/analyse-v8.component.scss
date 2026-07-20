@@ -54,6 +54,18 @@
   min-width: 0;
 }
 
+.v8-run-confirm-note {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+
+  strong {
+    font-family: ui-monospace, monospace;
+    color: var(--text-secondary);
+  }
+}
+
 .v8-section-label {
   font-size: 0.6875rem;
   font-weight: 700;
@@ -193,6 +205,85 @@
   margin-left: 0.35rem;
 }
 
+.run-confirm-hint {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  align-self: center;
+
+  strong {
+    font-family: ui-monospace, monospace;
+  }
+}
+
+.run-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--text-primary) 35%, transparent);
+  z-index: 1200;
+}
+
+.run-confirm-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1201;
+  margin: 0;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-card);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--text-primary) 18%, transparent);
+  width: min(22rem, calc(100vw - 2rem));
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.05rem;
+  }
+}
+
+.run-confirm-lead {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.run-confirm-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+
+  code {
+    font-size: 0.8125rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    background: var(--bg-elevated);
+  }
+}
+
+.run-confirm-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-family: ui-monospace, monospace;
+  margin-bottom: 1rem;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+}
+
+.run-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .analyse-v8-page .action-strip {
   display: flex;
   flex-direction: column;
@@ -209,6 +300,29 @@
   box-shadow:
     0 -6px 20px color-mix(in srgb, var(--bg-base) 80%, transparent),
     0 1px 2px color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+
+.dv-failed-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--border));
+  background: color-mix(in srgb, #fef3c7 55%, var(--bg-card));
+
+  strong {
+    font-size: 0.8125rem;
+    color: #92400e;
+  }
+
+  span {
+    flex: 1 1 12rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
 }
 
 .analyse-v8-page .metrics-row {

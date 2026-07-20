@@ -41,11 +41,19 @@
   <div class="workflow-bar card-surface">
     <div class="workflow-bar-main">
       <app-nd-status-badge [status]="ndRunData.run.status" />
+      @if (showDualVerifyFailedBanner) {
+        <span class="dv-failed-pill">Dual verify failed</span>
+      }
       @if (ndWorkflowHint) {
         <p class="workflow-hint">{{ ndWorkflowHint }}</p>
       }
     </div>
     <div class="workflow-bar-actions">
+      @if (showDualVerifyFailedBanner && ndRunId) {
+        <button type="button" class="workflow-link-btn" [disabled]="workflowLoading" (click)="rerunAllNdDualVerify()">
+          {{ workflowLoading ? 'Rerunning…' : 'Rerun all failed dual verify' }}
+        </button>
+      }
       <a routerLink="/nd/analysis-runs" class="workflow-link">All analysis runs</a>
       @if (ndRunData.run.status === 'submitted_for_review') {
         <button type="button" class="workflow-link-btn" (click)="openCheckerQueue()">Checker queue →</button>
@@ -185,6 +193,7 @@
     <aside class="list-rail" aria-label="Regulation points">
       <p class="rail-title">Points ({{ filteredItems.length }})</p>
       @for (item of filteredItems; track item.id) {
+        @let meta = listRowMeta(item);
         <button
           type="button"
           class="rail-point"
@@ -193,9 +202,20 @@
         >
           <span class="rail-point-head">
             <span class="rail-point-num">{{ item.section }}</span>
-            <span class="severity-badge sm" [class]="item.severity">{{ severityLabel(item.severity) }}</span>
+            @if (gapCountForItem(item); as gapCount) {
+              @if (gapCount > 0) {
+                <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+              }
+            }
+            <span class="severity-badge sm" [class]="item.severity">{{ meta.status }}</span>
           </span>
           <span class="rail-point-title">{{ item.title }}</span>
+          <span class="rail-meta-grid">
+            <span><em>Policy</em> {{ meta.policySnippet }}</span>
+            <span><em>Fulfills</em> {{ meta.fulfills }}</span>
+            <span><em>Action</em> {{ meta.actionPlan }}</span>
+            <span><em>Conf.</em> {{ meta.confidence }}</span>
+          </span>
         </button>
       }
     </aside>
@@ -218,6 +238,11 @@
         <span class="item-index">{{ item.id }}</span>
         <span class="item-section">{{ item.section }}</span>
         <strong class="item-title">{{ item.title }}</strong>
+        @if (gapCountForItem(item); as gapCount) {
+          @if (gapCount > 0) {
+            <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+          }
+        }
         <span class="severity-badge" [class]="item.severity">{{ severityLabel(item.severity) }}</span>
         @if (item.signedOff) {
           <span class="signed-off">Signed off</span>

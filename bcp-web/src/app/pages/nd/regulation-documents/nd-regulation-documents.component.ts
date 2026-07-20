@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -29,7 +29,7 @@ import { NdManualRegulationPointsPanelComponent } from './nd-manual-regulation-p
   templateUrl: './nd-regulation-documents.component.html',
   styleUrls: ['./nd-regulation-documents.component.scss', '../nd-shared.scss'],
 })
-export class NdRegulationDocumentsComponent implements OnInit {
+export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   private readonly api = inject(NdApiService);
   readonly auth = inject(NdAuthService);
 
@@ -55,11 +55,72 @@ export class NdRegulationDocumentsComponent implements OnInit {
   pointsSource = '';
   pointsLoading = false;
   showPointsPanel = false;
+  private extractPollTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly pollingExtractIds = new Set<string>();
 
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
     await this.loadDepartments();
     await this.loadDocs();
+  }
+
+  ngOnDestroy(): void {
+    this.stopExtractPolling();
+  }
+
+  private stopExtractPolling(): void {
+    if (this.extractPollTimer) {
+      clearInterval(this.extractPollTimer);
+      this.extractPollTimer = null;
+    }
+  }
+
+  private ensureExtractPolling(): void {
+    if (this.extractPollTimer || !this.pollingExtractIds.size) return;
+    this.extractPollTimer = setInterval(() => void this.pollExtractingDocs(), 2500);
+  }
+
+  private trackExtractingDoc(docId: string): void {
+    this.pollingExtractIds.add(docId);
+    this.extractingId = docId;
+    this.ensureExtractPolling();
+  }
+
+  private async pollExtractingDocs(): Promise<void> {
+    if (!this.pollingExtractIds.size) {
+      this.stopExtractPolling();
+      return;
+    }
+    for (const id of [...this.pollingExtractIds]) {
+      const res = await this.api.getRegulationDocument(id);
+      if (!res.success || !res.data) continue;
+      const doc = res.data as RegulationDocument;
+      const idx = this.docs.findIndex((d) => d.id === id);
+      if (idx >= 0) {
+        this.docs[idx] = { ...this.docs[idx], ...doc };
+        if (this.selectedDoc?.id === id) this.selectedDoc = this.docs[idx];
+      }
+      const st = (doc.extractionStatus ?? '').toLowerCase();
+      if (st === 'extracted' || st === 'completed' || st === 'failed' || (doc.pointCount ?? 0) > 0) {
+        this.pollingExtractIds.delete(id);
+        if (this.extractingId === id) this.extractingId = null;
+        if (st === 'failed') this.error = `Extraction failed for "${doc.name}"`;
+        else if (this.selectedDoc?.id === id) await this.loadPointsForDoc(id);
+      }
+    }
+    if (!this.pollingExtractIds.size) {
+      this.stopExtractPolling();
+      await this.loadDocs(true);
+    }
+  }
+
+  private syncExtractPollingFromDocs(): void {
+    for (const doc of this.docs) {
+      if ((doc.extractionStatus ?? '').toLowerCase() === 'processing') {
+        this.pollingExtractIds.add(doc.id);
+      }
+    }
+    if (this.pollingExtractIds.size) this.ensureExtractPolling();
   }
 
   get canUpload(): boolean {
@@ -85,6 +146,7 @@ export class NdRegulationDocumentsComponent implements OnInit {
     if (res.success && res.data) {
       const all = res.data as RegulationDocument[];
       this.docs = sortRegulationDocuments(dedupeRegulationDocuments(all));
+      this.syncExtractPollingFromDocs();
     } else if (!silent || this.docs.length === 0) {
       this.error = res.message ?? 'Failed to load regulation documents';
     }
@@ -154,9 +216,16 @@ export class NdRegulationDocumentsComponent implements OnInit {
     this.error = '';
     const res = await this.api.uploadRegulationDocument(this.file, this.uploadDept || undefined);
     if (res.success) {
-      this.message = 'Document uploaded and extraction started';
+      const data = res.data as { id?: string; extractionStatus?: string; pointCount?: number };
+      this.message = 'Document uploaded';
       this.file = null;
       await this.loadDocs(true);
+      if (data?.id && (data.extractionStatus === 'processing' || data.extractionStatus === 'pending')) {
+        this.trackExtractingDoc(data.id);
+        this.message = 'Document uploaded — extraction in progress…';
+      } else if (data?.id) {
+        this.message = `Document uploaded — ${data.pointCount ?? 0} points extracted`;
+      }
     } else {
       this.error = res.message ?? 'Upload failed';
     }
@@ -200,12 +269,18 @@ export class NdRegulationDocumentsComponent implements OnInit {
 
   async handleExtract(doc: RegulationDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
-    this.extractingId = doc.id;
+    this.trackExtractingDoc(doc.id);
     this.error = '';
     this.message = '';
     const res = await this.api.extractRegulationDocument(doc.id);
     if (res.success) {
       const data = res.data as { pointCount?: number; extractionStatus?: string };
+      if ((data?.extractionStatus ?? '').toLowerCase() === 'processing') {
+        this.message = `Extracting "${doc.name}"…`;
+        return;
+      }
+      this.extractingId = null;
+      this.pollingExtractIds.delete(doc.id);
       this.message = `Extraction complete — ${data?.pointCount ?? 0} points`;
       const idx = this.docs.findIndex((d) => d.id === doc.id);
       if (idx >= 0) {
@@ -224,6 +299,7 @@ export class NdRegulationDocumentsComponent implements OnInit {
       this.error = res.message ?? 'Extraction failed';
     }
     this.extractingId = null;
+    this.pollingExtractIds.delete(doc.id);
   }
 
   async viewPoints(doc: RegulationDocument, event?: Event): Promise<void> {
@@ -305,16 +381,23 @@ export class NdRegulationDocumentsComponent implements OnInit {
   formatDate = formatDate;
 
   extractionClass(status: string): string {
-    if (status === 'extracted' || status === 'manual') return 'completed';
+    if (status === 'extracted' || status === 'manual' || status === 'completed') return 'completed';
+    if (status === 'processing') return 'running';
+    if (status === 'failed') return 'failed';
     return 'pending';
   }
 
   extractionLabel(status: string): string {
     if (status === 'manual') return 'Manual';
-    if (status === 'extracted') return 'Extracted';
+    if (status === 'extracted' || status === 'completed') return 'Extracted';
+    if (status === 'processing') return 'Extracting…';
+    if (status === 'failed') return 'Failed';
     if (status === 'pending') return 'Pending';
-    if (status === 'completed') return 'Extracted';
     return status;
+  }
+
+  isExtractingDoc(doc: RegulationDocument): boolean {
+    return this.extractingId === doc.id || this.pollingExtractIds.has(doc.id);
   }
 
   isSelected(doc: RegulationDocument): boolean {

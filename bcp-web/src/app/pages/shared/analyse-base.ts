@@ -209,8 +209,11 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private ndRunPollTimer: ReturnType<typeof setInterval> | null = null;
-  private ndRunId: string | null = null;
+  protected ndRunId: string | null = null;
   ndRunWorkflowStatus = '';
+  /** Set from ND run detail when resuming — used to restore library mode in analyse-v8. */
+  protected ndRunLibraryId: string | null = null;
+  protected ndRunDualVerifyFailedCount = 0;
   showInlineGapReport = false;
   inlineGapItems: GapItemData[] = [];
   inlineGapFilter: 'all' | GapSeverity = 'all';
@@ -233,7 +236,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   private demoQueue: string[] = [];
   private demoResultsByPoint = new Map<string, DualVerifyReportItem>();
   /** Point IDs that belong to the active dual-verify session (subset of loaded gov points). */
-  private sessionSelectedPointIds: Set<string> | null = null;
+  protected sessionSelectedPointIds: Set<string> | null = null;
   private pointsLoadGen = 0;
 
   /** ND library mode: points loaded from a saved library instead of regulation file selection. */
@@ -472,6 +475,17 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   get displayProgressDone(): number {
     if (!this.hasResumableRun) return this.progressDone;
     return this.coverageCounts.completed;
+  }
+
+  get showNdDualVerifyFailedBanner(): boolean {
+    return (
+      this.ndRunDualVerifyFailedCount > 0 ||
+      this.ndRunWorkflowStatus.toLowerCase() === 'dual_verify_failed'
+    );
+  }
+
+  protected async retryAllNdDualVerifyFailed(): Promise<void> {
+    await this.retryAllNdPhase2();
   }
 
   get phase2RetryCount(): number {
@@ -1344,7 +1358,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     return this.demoNdRunId ?? this.ndRunId;
   }
 
-  private syncSelectionToGovPoints(): void {
+  protected syncSelectionToGovPoints(): void {
     if (!this.govPoints.length) return;
     const govIds = new Set(this.govPoints.map((p) => p.point_id));
     for (const id of [...this.selected]) {
@@ -2515,6 +2529,10 @@ ${this.findingsPreview
   }
 
   runRemainingPoints(): void {
+    if (this.ndRunId) {
+      void this.launchNdAnalysisRun(this.ndRunId, this.comparableSelectedIds());
+      return;
+    }
     if (!this.sessionId) return;
     const ids = this.coverageRows
       .filter((r) => r.status === 'not-run')
@@ -2568,7 +2586,7 @@ ${this.findingsPreview
     this.pollNdRun(this.ndRunId);
   }
 
-  private async retryAllNdPhase2(): Promise<void> {
+  protected async retryAllNdPhase2(): Promise<void> {
     if (!this.ndRunId) return;
     this.retryingPointId = '__batch__';
     this.analysisState = 'running';
@@ -2942,6 +2960,7 @@ ${this.findingsPreview
       run: {
         name: string;
         status: string;
+        libraryId?: string | null;
         selectedPointsSnapshot: string;
         selectedInternalDocIds: string;
         selectedRegulationDocIds: string;
@@ -2951,6 +2970,9 @@ ${this.findingsPreview
       };
       points: AnalysisPoint[];
     };
+
+    this.ndRunLibraryId = detail.run.libraryId ? String(detail.run.libraryId) : null;
+    this.ndRunDualVerifyFailedCount = detail.run.dualVerifyFailedCount ?? 0;
 
     const status = statusRes.success
       ? (statusRes.data as {
@@ -3021,7 +3043,11 @@ ${this.findingsPreview
 
     this.pointsCollapsed = true;
 
+    await this.onNdRunContextLoaded(detail);
+
     const runStatus = (status?.status ?? detail.run.status ?? '').toLowerCase();
+    const processedCount = status?.processedPointsCount ?? detail.run.processedPointsCount ?? 0;
+    const totalCount = status?.totalPointsCount ?? detail.run.totalPointsCount ?? 0;
     const activelyProcessing = this.applyNdRunState(
       runId,
       detail.run,
@@ -3031,7 +3057,9 @@ ${this.findingsPreview
     );
 
     if (activelyProcessing) {
-      this.pollNdRun(runId);
+      if (runStatus === 'running') {
+        this.pollNdRun(runId);
+      }
       this.onRunResumeAttached();
     } else if (this.analysisState === 'running') {
       this.onRunResumeAttached();
@@ -3040,8 +3068,64 @@ ${this.findingsPreview
     }
   }
 
+  /** Hook for ND shells to restore library/regulation UI when opening ?run=. */
+  protected async onNdRunContextLoaded(_detail: {
+    run: {
+      libraryId?: string | null;
+      selectedPointsSnapshot: string;
+    };
+    points: AnalysisPoint[];
+  }): Promise<void> {}
+
   /** Hook for shells (e.g. analyse-v8) to scroll/focus when resuming an in-progress run. */
   protected onRunResumeAttached(): void {}
+
+  /**
+   * ND shell only — starts NdAnalysisProcessor and polls DB status.
+   * Legacy {@link runAnalysis} (dual-verify-kafka jobs) is unchanged for /old/*.
+   */
+  protected async launchNdAnalysisRun(runId: string, selectedIds: string[]): Promise<boolean> {
+    this.stopDemoRun();
+    this.isDemoRun = false;
+    this.demoNdRunId = null;
+    this.analysisCompleteUiDone = false;
+    this.showInlineGapReport = false;
+    this.stopPolling();
+    this.sessionId = null;
+    this.ndRunId = runId;
+    this.analysisState = 'running';
+    this.pointsCollapsed = true;
+    this.sessionPointStatus.clear();
+    this.sessionPointResults.clear();
+    this.sessionSelectedPointIds = new Set(selectedIds);
+    this.selectedDetailPointId = null;
+    for (const id of selectedIds) this.sessionPointStatus.set(id, 'queued');
+    this.error = '';
+    this.progress = 8;
+    this.progressDone = 0;
+    this.progressTotal = selectedIds.length;
+    this.findingsPreview = [];
+    this.resetSteps();
+    this.markStep(0, true);
+    this.analysisSteps[1].label = `Loading regulation clauses (${this.govPoints.length} found)`;
+
+    const res = await this.ndApi.startAnalysisRun(runId);
+    if (!res.success) {
+      this.analysisState = 'idle';
+      this.pointsCollapsed = false;
+      this.error = res.message ?? 'Failed to start analysis';
+      this.toast.show(this.error, 'error', 5000);
+      return false;
+    }
+
+    this.toast.show('Analysis started', 'success', 2000);
+    this.markStep(0, false);
+    this.markStep(1, true);
+    this.progress = 25;
+    this.activeSessions.refresh();
+    this.pollNdRun(runId);
+    return true;
+  }
 
   private isNdAnalyseRoute(): boolean {
     return this.router.url.includes('/nd/analyse-v8');
@@ -3087,23 +3171,16 @@ ${this.findingsPreview
     }
 
     const runStatus = (status?.status ?? run.status ?? '').toLowerCase();
-    const runSummary: AnalysisRunSummary = {
-      id: runId,
-      name: '',
-      status: runStatus,
-      totalPointsCount: this.progressTotal,
-      processedPointsCount: this.progressDone,
-      dualVerifyFailedCount: run.dualVerifyFailedCount ?? 0,
-      createdAt: '',
-    };
-    const needsExecutionView =
-      analysisRunNeedsExecutionView(runSummary) ||
-      points.some(
-        (p) =>
-          p.landingAiStatus === 'failed' ||
-          p.dualVerifyStatus === 'failed' ||
-          p.googleAiStatus === 'failed',
-      );
+    const allPointsProcessed =
+      this.progressTotal > 0 && this.progressDone >= this.progressTotal;
+    const inFlight = runStatus === 'draft' || runStatus === 'running';
+    const hasLandingPendingOrFailed = points.some(
+      (p) => p.landingAiStatus === 'pending' || p.landingAiStatus === 'failed',
+    );
+
+    this.ndRunDualVerifyFailedCount = run.dualVerifyFailedCount ?? 0;
+
+    const needsExecutionView = inFlight || !allPointsProcessed || hasLandingPendingOrFailed;
     const activelyProcessing =
       runStatus === 'running' || runStatus === 'processing' || runStatus === 'draft';
 
@@ -3181,7 +3258,7 @@ ${this.findingsPreview
     }
   }
 
-  private parseJsonArray(value: string | undefined): unknown[] {
+  protected parseJsonArray(value: string | undefined): unknown[] {
     if (!value) return [];
     try {
       const parsed = JSON.parse(value);

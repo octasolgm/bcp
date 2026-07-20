@@ -63,6 +63,10 @@ export class NdGapPointDetailComponent implements OnChanges {
   originalPlan = '';
   currentPlan = '';
   showCapSection = false;
+  /** When set, only this action-plan item is in edit mode. */
+  editingGapIndex: number | null = null;
+  /** Filter history panel to a single action item. */
+  historyGapIndex: number | null = null;
 
   ngOnChanges(): void {
     const snap = this.snapshot;
@@ -198,20 +202,46 @@ export class NdGapPointDetailComponent implements OnChanges {
     return map[status] ?? agreementBadgeClass(status as AgreementStatus).split(' ')[0] ?? 'agreement-neutral';
   }
 
-  onStartEdit(): void {
+  onStartEdit(gapIndex?: number): void {
+    if (gapIndex != null) {
+      this.editingGapIndex = gapIndex;
+      this.editGaps = this.capGaps.length
+        ? this.capGaps.map((g) => ({ ...g }))
+        : [{ index: 1, missing: '', fix: '' }];
+    } else {
+      this.editingGapIndex = null;
+    }
     this.startEdit.emit();
   }
 
-  onCancelEdit(): void {
-    this.cancelEdit.emit();
-  }
-
-  onOpenHistory(): void {
+  onOpenHistory(gapIndex?: number): void {
+    this.historyGapIndex = gapIndex ?? null;
     this.openHistory.emit();
   }
 
   onCloseHistory(): void {
+    this.historyGapIndex = null;
     this.closeHistory.emit();
+  }
+
+  startEditSingleGap(index: number): void {
+    this.onStartEdit(index);
+  }
+
+  filteredHistory(): ActionPlanHistoryEntry[] {
+    if (this.historyGapIndex == null) return this.history;
+    return this.history.filter((h) => {
+      const gaps = this.historyGaps(h.actionPlanContent);
+      return gaps.some((g) => g.index === this.historyGapIndex);
+    });
+  }
+
+  historyGapAt(entry: ActionPlanHistoryEntry, index: number): CapGap | null {
+    return this.historyGaps(entry.actionPlanContent).find((g) => g.index === index) ?? null;
+  }
+
+  isEditingGap(index: number): boolean {
+    return this.editing && (this.editingGapIndex == null || this.editingGapIndex === index);
   }
 
   addActionItem(): void {
@@ -225,9 +255,15 @@ export class NdGapPointDetailComponent implements OnChanges {
       .map((g, i) => ({ ...g, index: i + 1 }));
   }
 
+  onCancelEdit(): void {
+    this.editingGapIndex = null;
+    this.cancelEdit.emit();
+  }
+
   onSave(): void {
     const content = serializeCapGaps(this.editGaps.filter((g) => g.missing.trim() || g.fix.trim()));
     if (!content.trim()) return;
+    this.editingGapIndex = null;
     this.save.emit(content);
   }
 

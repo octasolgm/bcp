@@ -7,6 +7,7 @@ import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.c
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { formatDate, parsePointSnapshot } from '../../../../lib/nd/utils';
+import { countCapGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
 import { exportResultsExcel } from '../../../../lib/nd/export/export-excel';
 import { exportResultsPdf } from '../../../../lib/nd/export/export-pdf';
 import type { ActionPlanHistoryEntry, AnalysisPoint, ResultsData } from '../../../../lib/nd/types';
@@ -192,6 +193,10 @@ export class NdResultsComponent implements OnInit, OnChanges {
   showCap(point: AnalysisPoint): boolean {
     if (point.finalActionPlan?.trim() || point.originalAiActionPlan?.trim()) return true;
     return point.finalStatus === 'partial_compliant' || point.finalStatus === 'non_compliant';
+  }
+
+  gapCountForPoint(point: AnalysisPoint): number {
+    return countCapGapsForAnalysisPoint(point);
   }
 
   regDocIdForPoint(point: AnalysisPoint): string | null {

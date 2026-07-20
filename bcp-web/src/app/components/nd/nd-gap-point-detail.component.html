@@ -88,9 +88,9 @@
           } @else if (editing) {
             <button type="button" class="toolbar-btn" (click)="onCancelEdit()">Cancel</button>
           } @else if (canEdit) {
-            <button type="button" class="toolbar-btn primary" (click)="onStartEdit()">Edit actions</button>
+            <button type="button" class="toolbar-btn primary" (click)="onStartEdit()">Edit all actions</button>
             @if (history.length || currentPlan) {
-              <button type="button" class="toolbar-btn" (click)="onOpenHistory()">History</button>
+              <button type="button" class="toolbar-btn" (click)="onOpenHistory()">Full history</button>
             }
           } @else if (history.length) {
             <button type="button" class="toolbar-btn" (click)="onOpenHistory()">History</button>
@@ -102,15 +102,15 @@
         <div class="history-backdrop" (click)="onCloseHistory()"></div>
         <aside class="history-panel" role="dialog" aria-label="Action plan history">
           <header class="history-panel-head">
-            <h4>Action plan history</h4>
+            <h4>Action plan history@if (historyGapIndex != null) { — Action {{ historyGapIndex }} }</h4>
             <button type="button" class="history-close" (click)="onCloseHistory()" aria-label="Close history">✕</button>
           </header>
           <p class="history-sub">Every edit is versioned — who changed it and when. Set any version as current to restore it.</p>
-          @if (!history.length) {
+          @if (!filteredHistory().length) {
             <p class="muted">No history recorded yet.</p>
           } @else {
             <ol class="history-timeline">
-              @for (h of history; track h.id) {
+              @for (h of filteredHistory(); track h.id) {
                 <li class="history-entry" [class.is-current]="h.isCurrent">
                   <div class="history-entry-head">
                     <span class="history-version">v{{ h.versionNumber }}</span>
@@ -121,7 +121,16 @@
                     @if (h.changedByName) { <span>{{ h.changedByName }}</span> · }
                     <span>{{ formatDate(h.createdAt) }}</span>
                   </p>
-                  @if (historyGaps(h.actionPlanContent).length) {
+                  @if (historyGapIndex != null) {
+                    @if (historyGapAt(h, historyGapIndex); as gap) {
+                      <ul class="history-action-list">
+                        <li class="history-action-item">
+                          <strong>Action {{ gap.index }}</strong>
+                          <p>{{ gap.fix || gap.missing }}</p>
+                        </li>
+                      </ul>
+                    }
+                  } @else if (historyGaps(h.actionPlanContent).length) {
                     <ul class="history-action-list">
                       @for (gap of historyGaps(h.actionPlanContent); track gap.index) {
                         <li class="history-action-item">
@@ -145,21 +154,25 @@
         </aside>
       }
       @if (editing) {
-        <p class="cap-hint">Add one or more corrective actions for this point.</p>
+        <p class="cap-hint">@if (editingGapIndex != null) { Edit action {{ editingGapIndex }}. } @else { Add one or more corrective actions for this point. }</p>
         <div class="action-edit-list">
           @for (gap of editGaps; track gap.index) {
+            @if (isEditingGap(gap.index)) {
             <div class="cap-gap">
               <p class="gap-label">Gap {{ gap.index }} — Missing</p>
               <textarea class="nd-input gap-field" rows="2" [(ngModel)]="gap.missing" placeholder="Describe the gap…"></textarea>
               <p class="fix-label">Fix:</p>
               <textarea class="nd-input gap-field" rows="3" [(ngModel)]="gap.fix" placeholder="Corrective action…"></textarea>
-              @if (editGaps.length > 1) {
+              @if (editGaps.length > 1 && editingGapIndex == null) {
                 <button type="button" class="toolbar-btn subtle danger" (click)="removeActionItem(gap.index)">Remove</button>
               }
             </div>
+            }
           }
         </div>
-        <button type="button" class="toolbar-btn add-row-btn" (click)="addActionItem()">+ Add action</button>
+        @if (editingGapIndex == null) {
+          <button type="button" class="toolbar-btn add-row-btn" (click)="addActionItem()">+ Add action</button>
+        }
         <div class="cap-edit-actions">
           <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="saving" (click)="onSave()">
             {{ saving ? 'Saving…' : 'Save' }}
@@ -168,8 +181,21 @@
       } @else {
         @if (capGaps.length) {
           @for (gap of capGaps; track gap.index) {
-            <div class="cap-gap">
-              <p class="gap-label">Gap {{ gap.index }} — Missing</p>
+            <div class="cap-gap cap-gap-read">
+              <div class="cap-gap-head">
+                <p class="gap-label">Action {{ gap.index }}</p>
+                @if (canEdit) {
+                  <div class="cap-item-actions">
+                    <button type="button" class="toolbar-btn subtle" (click)="startEditSingleGap(gap.index)">Edit</button>
+                    @if (history.length) {
+                      <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
+                    }
+                  </div>
+                } @else if (history.length) {
+                  <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
+                }
+              </div>
+              <p class="gap-missing-label">Missing</p>
               <p>{{ gap.missing }}</p>
               @if (gap.fix) {
                 <p class="fix-label">Fix:</p>

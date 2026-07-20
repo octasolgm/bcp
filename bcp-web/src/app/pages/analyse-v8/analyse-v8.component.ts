@@ -12,8 +12,9 @@ import { startPanelResize, type PanelResizeKind } from '../shared/panel-resize';
 import type { GovPoint } from '../../services/api.service';
 import type { LibrarySummary, RegulationDocument, ActionPlanHistoryEntry, AnalysisPoint } from '../../../lib/nd/types';
 import { parseReferenceComplianceBlock } from '../../../lib/ai-lab/parse-reference-response';
-import type { GapSeverity } from '../../services/reguliq-store';
+import type { GapSeverity, GapItemData } from '../../services/reguliq-store';
 import { parsePointSnapshot } from '../../../lib/nd/utils';
+import { countCapGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
 import {
   buildLibraryPointHierarchy,
   buildLibraryStoredPointDisplay,
@@ -352,6 +353,17 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   pointSnapshotForPointId(pointId: string) {
     const point = this.analysisPointForPointId(pointId);
     return point ? parsePointSnapshot(point.pointSnapshot) : null;
+  }
+
+  gapCountForPointId(pointId: string): number {
+    const point = this.analysisPointForPointId(pointId);
+    return point ? countCapGapsForAnalysisPoint(point) : 0;
+  }
+
+  gapCountForGapItem(item: GapItemData): number {
+    const fromPoint = this.gapCountForPointId(this.gapItemPointId(item));
+    if (fromPoint > 0) return fromPoint;
+    return item.gapCount ?? 0;
   }
 
   complianceLabelForPointId(pointId: string): string {
@@ -725,7 +737,115 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     );
   }
 
+  protected override async onNdRunContextLoaded(detail: {
+    run: {
+      libraryId?: string | null;
+      selectedPointsSnapshot: string;
+      selectedRegulationDocIds?: string;
+    };
+    points: AnalysisPoint[];
+  }): Promise<void> {
+    if (!this.isNdShell) return;
+
+    const libId = detail.run.libraryId ? String(detail.run.libraryId) : null;
+    if (libId) {
+      this.pointsSource = 'library';
+      this.useLibraryPoints = true;
+      this.selectedLibraryIds = new Set([libId]);
+      await this.ensureLibrariesLoaded();
+      await this.loadLibraryPoints();
+    } else {
+      this.pointsSource = 'regulation';
+      this.useLibraryPoints = false;
+    }
+
+    const snapshot = this.parseJsonArray(detail.run.selectedPointsSnapshot);
+    const selectedNums = new Set<string>();
+    for (const raw of snapshot) {
+      const snap = raw as Record<string, unknown>;
+      const num = String(snap['pointNumber'] ?? snap['pointId'] ?? '').trim();
+      if (num) selectedNums.add(num);
+    }
+    if (selectedNums.size && this.govPoints.length) {
+      this.selected.clear();
+      for (const p of this.govPoints) {
+        if (selectedNums.has(p.point_id)) this.selected.add(p.point_id);
+      }
+      this.sessionSelectedPointIds = new Set(selectedNums);
+      this.syncSelectionToGovPoints();
+    }
+  }
+
+  get showDualVerifyFailedBanner(): boolean {
+    return this.showNdDualVerifyFailedBanner;
+  }
+
+  rerunAllDualVerifyFailed(): void {
+    void this.retryAllNdDualVerifyFailed();
+  }
+
+  /** ND shell: type this word to confirm AI analysis (uses credits). */
+  readonly ndRunConfirmPhrase = 'start';
+  showNdRunConfirm = false;
+  ndRunConfirmInput = '';
+  ndRunConfirmTitle = 'Start analysis';
+  ndRunConfirmHint = 'This run uses Landing AI and Google Gemini credits.';
+  private pendingNdRunAction: (() => void | Promise<void>) | null = null;
+
+  get ndRunConfirmReady(): boolean {
+    return this.ndRunConfirmInput.trim().toLowerCase() === this.ndRunConfirmPhrase;
+  }
+
+  requestNdRunConfirm(
+    title: string,
+    hint: string,
+    action: () => void | Promise<void>,
+  ): void {
+    if (!this.isNdShell) {
+      void action();
+      return;
+    }
+    this.ndRunConfirmTitle = title;
+    this.ndRunConfirmHint = hint;
+    this.ndRunConfirmInput = '';
+    this.pendingNdRunAction = action;
+    this.showNdRunConfirm = true;
+  }
+
+  confirmNdRun(): void {
+    if (!this.ndRunConfirmReady) {
+      this.toast.show(`Type "${this.ndRunConfirmPhrase}" to confirm`, 'error', 3000);
+      return;
+    }
+    this.showNdRunConfirm = false;
+    const action = this.pendingNdRunAction;
+    this.pendingNdRunAction = null;
+    this.ndRunConfirmInput = '';
+    if (action) void action();
+  }
+
+  cancelNdRunConfirm(): void {
+    this.showNdRunConfirm = false;
+    this.pendingNdRunAction = null;
+    this.ndRunConfirmInput = '';
+  }
+
+  onNdRunConfirmKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && this.ndRunConfirmReady) {
+      event.preventDefault();
+      this.confirmNdRun();
+    }
+  }
+
   runAnalysisAndScroll(): void {
+    if (this.isNdShell) {
+      this.requestNdRunConfirm(
+        'Start analysis',
+        'Type start to run Landing AI + dual verify on all selected points.',
+        () => this.runNdShellAnalysis().then(() => this.scrollToWorkspace()),
+      );
+      return;
+    }
     if (this.runBlockedReason) {
       this.runAnalysis();
       return;
@@ -734,9 +854,163 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     this.scrollToWorkspace();
   }
 
+  /** ND-only: persist run in nd_analysis_runs and execute via NdAnalysisProcessor (same Landing AI + Gemini stack). */
+  private async runNdShellAnalysis(): Promise<void> {
+    const blocked = this.runBlockedReason;
+    if (blocked) {
+      this.error = blocked;
+      this.toast.show(blocked, 'error', 3000);
+      return;
+    }
+
+    const selectedIds = this.comparableSelectedIds();
+    if (!selectedIds.length) {
+      this.error = 'Select at least one comparable regulation point.';
+      this.toast.show(this.error, 'error', 3000);
+      return;
+    }
+
+    if (this.ndRunId) {
+      const statusRes = await this.ndApi.getAnalysisRunStatus(this.ndRunId);
+      if (statusRes.success && statusRes.data) {
+        const data = statusRes.data as {
+          status: string;
+          processedPointsCount: number;
+          totalPointsCount: number;
+        };
+        const st = String(data.status).toLowerCase();
+        const incomplete =
+          data.totalPointsCount > 0 && data.processedPointsCount < data.totalPointsCount;
+        if (st === 'draft' || incomplete || st === 'failed') {
+          await this.launchNdAnalysisRun(this.ndRunId, selectedIds);
+          return;
+        }
+      }
+    }
+
+    const createRes = await this.ndApi.createAnalysisRun(this.buildNdCreateRunPayload(selectedIds));
+    if (!createRes.success || !createRes.data?.id) {
+      this.error = createRes.message ?? 'Could not create analysis run';
+      this.toast.show(this.error, 'error', 5000);
+      return;
+    }
+
+    const runId = createRes.data.id;
+    this.ndRunId = runId;
+    await this.router.navigate(['/nd/analyse-v8'], {
+      queryParams: { run: runId },
+      replaceUrl: true,
+    });
+    await this.launchNdAnalysisRun(runId, selectedIds);
+  }
+
+  private buildNdCreateRunPayload(selectedIds: string[]): Record<string, unknown> {
+    const selectedSnapshot = this.buildNdPointsSnapshot(selectedIds);
+    const regIds = new Set<string>();
+    for (const doc of this.selectedRegDocs) {
+      if (doc.id) regIds.add(doc.id);
+    }
+    for (const snap of selectedSnapshot) {
+      const docId = (snap as Record<string, unknown>)['regulationDocumentId'];
+      if (typeof docId === 'string' && docId) regIds.add(docId);
+    }
+    if (!regIds.size && this.libraryPrimaryRegDocId) regIds.add(this.libraryPrimaryRegDocId);
+
+    const intIds = this.complianceDoc?.id
+      ? [this.complianceDoc.id]
+      : [...this.selectedComplianceIds];
+
+    const complianceLabel = (
+      this.complianceFileName ||
+      this.complianceDoc?.originalFileName ||
+      'Compliance'
+    ).slice(0, 48);
+    const regLabel = this.selectedRegLabel.slice(0, 120);
+    const name = `${complianceLabel} × ${regLabel}`.slice(0, 240);
+
+    const libraryId =
+      this.useLibraryPoints && this.selectedLibraryIds.size === 1
+        ? [...this.selectedLibraryIds][0]
+        : null;
+
+    return {
+      name,
+      description: null,
+      libraryId,
+      departmentId: null,
+      selectedPointsSnapshot: selectedSnapshot,
+      selectedInternalDocIds: intIds,
+      selectedRegulationDocIds: [...regIds],
+    };
+  }
+
+  private buildNdPointsSnapshot(selectedIds: string[]): unknown[] {
+    const byPointId = new Map<string, SourcedGovPoint>();
+    for (const p of this.rawGovPoints as SourcedGovPoint[]) {
+      byPointId.set(p.point_id, p);
+    }
+    for (const p of this.govPoints) {
+      if (!byPointId.has(p.point_id)) byPointId.set(p.point_id, p as SourcedGovPoint);
+    }
+
+    const docIdByPoint = new Map<string, string>();
+    if (this.regulationDisplayUseDocGroups) {
+      for (const doc of this.regulationDisplayDocs) {
+        const rows = doc.useChapters
+          ? doc.chapters.flatMap((ch) => ch.sections.flatMap((s) => s.rows))
+          : doc.flatRows;
+        for (const row of rows) {
+          docIdByPoint.set(row.point.point_id, doc.docId);
+        }
+      }
+    }
+
+    return selectedIds.map((id) => {
+      const p = byPointId.get(id) ?? (this.govPoints.find((g) => g.point_id === id) as SourcedGovPoint | undefined);
+      if (!p) return { pointNumber: id };
+      return {
+        pointNumber: p.point_id,
+        pointId: p.point_id,
+        pointTitle: p.title ?? null,
+        pointContent: p.text,
+        pageReference: p.section ?? null,
+        regulationPointId: p.regulationPointId ?? null,
+        regulationDocumentId:
+          p.docId ??
+          docIdByPoint.get(id) ??
+          this.selectedRegDocs[0]?.id ??
+          this.libraryPrimaryRegDocId ??
+          null,
+      };
+    });
+  }
+
   runDemoAnalysisAndScroll(): void {
+    if (this.isNdShell) {
+      this.requestNdRunConfirm(
+        'Start demo run',
+        'Type start to play through saved demo results (no live AI on demo path).',
+        () => {
+          this.runDemoAnalysis();
+          this.scrollToWorkspace();
+        },
+      );
+      return;
+    }
     this.runDemoAnalysis();
     this.scrollToWorkspace();
+  }
+
+  override runRemainingPoints(): void {
+    if (this.isNdShell) {
+      this.requestNdRunConfirm(
+        'Run remaining points',
+        'Type start to process points that have not finished yet.',
+        () => super.runRemainingPoints(),
+      );
+      return;
+    }
+    super.runRemainingPoints();
   }
 
   get selectedPointGovText(): string {

@@ -3,6 +3,7 @@ import {
   parseReferenceComplianceBlock,
   type ReferenceComplianceBlock,
 } from '../../lib/ai-lab/parse-reference-response';
+import { countCapGapsForReportItem } from '../../lib/nd/cap-gap-count';
 import type { DualVerifyAgreement } from '../../lib/landing-ai/dual-verify-merge';
 import type { DualVerifyReportItem } from '../../lib/dual-verify-report';
 import type { GapDraftOverlay, GapItemData, GapSeverity } from './reguliq-store';
@@ -134,12 +135,14 @@ export function reportItemToGapItem(
 
   const severity = severityFromAgreement(item.agreement, structured?.status ?? landing?.status ?? '');
   const aiGaps = buildGapsDraft(item.agreement, structured ?? landing);
+  const gapCount = countCapGapsForReportItem(item);
 
   return {
     id,
     section,
     title,
     severity,
+    gapCount,
     signedOff: overlay?.signedOff ?? false,
     expanded: overlay?.expanded ?? false,
     regulatoryText,
