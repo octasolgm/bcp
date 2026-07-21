@@ -120,6 +120,11 @@
   border-radius: 4px;
   font-size: 0.75rem;
   line-height: 1.35;
+
+  &.point-highlight {
+    background: var(--accent-tint);
+    outline: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  }
 }
 
 .point-check {

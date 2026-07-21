@@ -33,6 +33,7 @@ public class AnalysisRunsController(
         [FromQuery] string? status,
         [FromQuery] bool mineOnly = false,
         [FromQuery] bool deletedOnly = false,
+        [FromQuery] bool ndOnly = false,
         CancellationToken ct = default)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct,
@@ -66,39 +67,45 @@ public class AnalysisRunsController(
 
         if (profile!.Role == "maker" || mineOnly)
             q = q.Where(r => r.CreatedBy == profile.Id);
-        else if (profile.Role == "checker" && string.IsNullOrWhiteSpace(status))
-            q = q.Where(r => r.Status == "submitted_for_review" || r.Status == "pulled_back");
-        else if (profile.Role == "reviewer" && string.IsNullOrWhiteSpace(status))
-            q = q.Where(r => r.Status == "checker_approved");
 
         if (!string.IsNullOrWhiteSpace(status))
             q = q.Where(r => r.Status == status);
 
         var runs = await q.OrderByDescending(r => r.CreatedAt).Take(100).ToListAsync(ct);
+
+        if (ndOnly)
+        {
+            var enriched = await NdRunEnrichmentHelper.EnrichRunsAsync(db, runs, ct);
+            return Ok(new { success = true, data = enriched });
+        }
+
         var items = runs.Select(NdLegacyDataQueries.MapNdRunSummary).Cast<object>().ToList();
 
-        var linkedDvIds = await db.DocumentAnalysisRuns.AsNoTracking()
-            .Where(r => r.DualVerifySessionId != null)
-            .Select(r => r.DualVerifySessionId!.Value)
-            .ToListAsync(ct);
-        var linkedSet = linkedDvIds.ToHashSet();
+        if (!ndOnly)
+        {
+            var linkedDvIds = await db.DocumentAnalysisRuns.AsNoTracking()
+                .Where(r => r.DualVerifySessionId != null)
+                .Select(r => r.DualVerifySessionId!.Value)
+                .ToListAsync(ct);
+            var linkedSet = linkedDvIds.ToHashSet();
 
-        var legacyRuns = await db.DocumentAnalysisRuns.AsNoTracking()
-            .OrderByDescending(r => r.CreatedAt)
-            .Take(100)
-            .ToListAsync(ct);
-        items.AddRange(legacyRuns
-            .Where(r => !hiddenLegacySet.Contains(r.Id))
-            .Select(NdLegacyDataQueries.MapLegacyAnalysisRun));
+            var legacyRuns = await db.DocumentAnalysisRuns.AsNoTracking()
+                .OrderByDescending(r => r.CreatedAt)
+                .Take(100)
+                .ToListAsync(ct);
+            items.AddRange(legacyRuns
+                .Where(r => !hiddenLegacySet.Contains(r.Id))
+                .Select(NdLegacyDataQueries.MapLegacyAnalysisRun));
 
-        var standaloneDv = await db.DualVerifySessions.AsNoTracking()
-            .Where(s => !linkedSet.Contains(s.Id))
-            .OrderByDescending(s => s.CreatedAt)
-            .Take(50)
-            .ToListAsync(ct);
-        items.AddRange(standaloneDv
-            .Where(s => !hiddenLegacySet.Contains(s.Id))
-            .Select(NdLegacyDataQueries.MapLegacyDualVerifySession));
+            var standaloneDv = await db.DualVerifySessions.AsNoTracking()
+                .Where(s => !linkedSet.Contains(s.Id))
+                .OrderByDescending(s => s.CreatedAt)
+                .Take(50)
+                .ToListAsync(ct);
+            items.AddRange(standaloneDv
+                .Where(s => !hiddenLegacySet.Contains(s.Id))
+                .Select(NdLegacyDataQueries.MapLegacyDualVerifySession));
+        }
 
         var sorted = items
             .OrderByDescending(i =>
@@ -319,7 +326,12 @@ public class AnalysisRunsController(
     }
 
     [HttpPost("{id:guid}/rerun-point/{pointId:guid}")]
-    public async Task<IActionResult> RerunPoint(Guid id, Guid pointId, CancellationToken ct)
+    public async Task<IActionResult> RerunPoint(
+        Guid id,
+        Guid pointId,
+        [FromQuery] bool evidenceOnly = false,
+        [FromQuery] int? actionIndex = null,
+        CancellationToken ct = default)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
@@ -329,12 +341,17 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
 
-        await processor.ProcessPointAsync(id, pointId, dualVerifyOnly: false, ct);
+        await processor.ProcessPointAsync(id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex, ct);
         return Ok(new { success = true });
     }
 
     [HttpPost("{id:guid}/rerun-dual-verify/{pointId:guid}")]
-    public async Task<IActionResult> RerunDualVerifyPoint(Guid id, Guid pointId, CancellationToken ct)
+    public async Task<IActionResult> RerunDualVerifyPoint(
+        Guid id,
+        Guid pointId,
+        [FromQuery] bool evidenceOnly = false,
+        [FromQuery] int? actionIndex = null,
+        CancellationToken ct = default)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
@@ -344,7 +361,7 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
 
-        await processor.ProcessPointAsync(id, pointId, dualVerifyOnly: true, ct);
+        await processor.ProcessPointAsync(id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex, ct);
         return Ok(new { success = true });
     }
 

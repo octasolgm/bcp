@@ -50,6 +50,14 @@ export function severityFromAgreement(
   return 'partial_compliant';
 }
 
+export function parseConfidencePercent(raw: string | null | undefined): number | null {
+  if (!raw?.trim()) return null;
+  const m = raw.match(/(\d{1,3})/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
 function extractMessage(raw?: string | null): string {
   if (!raw?.trim()) return '';
   try {
@@ -81,21 +89,59 @@ function pickStructuredBlocks(landingMessage: string, llmMessage: string): Refer
   );
 }
 
-/** Resolve the compliance tier shown in gap analysis — prefer AI agreement over stale DB finalStatus. */
+/** Authoritative tier for all ND views — persisted finalStatus wins when set. */
 export function resolveAnalysisPointSeverity(point: AnalysisPoint): ComplianceSeverity {
-  const landingMessage = extractMessage(point.landingAiResult);
-  const llmMessage = extractMessage(point.googleAiResult);
-  const agreement = extractAgreement(point.googleAiResult);
-  const structured = pickStructuredBlocks(landingMessage, llmMessage);
-  const fromAi = severityFromAgreement(agreement, structured?.status ?? '');
-
-  if (agreement || structured?.status?.trim()) return fromAi;
-
   const fs = (point.finalStatus ?? '').toLowerCase();
   if (fs === 'compliant' || fs === 'partial_compliant' || fs === 'non_compliant') {
     return fs as ComplianceSeverity;
   }
-  return fromAi;
+
+  const landingMessage = extractMessage(point.landingAiResult);
+  const llmMessage = extractMessage(point.googleAiResult);
+  const agreement = extractAgreement(point.googleAiResult);
+  const structured = pickStructuredBlocks(landingMessage, llmMessage);
+  return severityFromAgreement(agreement, structured?.status ?? '');
+}
+
+/** Status label shown in pills, badges, and summary cards — same everywhere. */
+export function resolvePointComplianceLabel(point: AnalysisPoint): string {
+  return complianceSeverityLabel(resolveAnalysisPointSeverity(point));
+}
+
+/** Confidence % aligned with resolved severity (never show 100% when partial/non-compliant). */
+export function resolveDisplayConfidence(point: AnalysisPoint): string {
+  const severity = resolveAnalysisPointSeverity(point);
+  const landingMessage = extractMessage(point.landingAiResult);
+  const llmMessage = extractMessage(point.googleAiResult);
+  const agreement = extractAgreement(point.googleAiResult);
+  const landing = parseMaybe(landingMessage);
+  const llm = parseMaybe(llmMessage);
+  const structured = pickStructuredBlocks(landingMessage, llmMessage);
+
+  const candidates = [llm?.confidence, landing?.confidence, structured?.confidence].filter(Boolean) as string[];
+  let conf = candidates[0]?.trim() ?? '';
+  const pct = parseConfidencePercent(conf);
+
+  if (severity === 'partial_compliant') {
+    for (const c of candidates) {
+      const p = parseConfidencePercent(c);
+      if (p != null && p < 100) return c.trim();
+    }
+    if (pct === 100 || agreement?.status === 'status_mismatch' || agreement?.status === 'confidence_gap') {
+      return '< 100%';
+    }
+  }
+
+  if (severity === 'non_compliant') {
+    for (const c of candidates) {
+      if (/\bnon/i.test(parseMaybe(llmMessage)?.status ?? '') || parseConfidencePercent(c)! <= 50) {
+        return c.trim();
+      }
+    }
+    if (pct != null && pct > 69) return '≤ 69%';
+  }
+
+  return conf || '—';
 }
 
 export function complianceSeverityLabel(severity: ComplianceSeverity): string {

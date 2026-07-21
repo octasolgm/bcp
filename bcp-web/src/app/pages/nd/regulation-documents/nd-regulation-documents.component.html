@@ -24,6 +24,85 @@
 </div>
 
 <div class="nd-fill-panel reg-docs-fill">
+<div class="filter-pills nd-list-toolbar nd-shrink point-search-toolbar">
+  <input
+    type="search"
+    class="filter-search point-global-search"
+    [(ngModel)]="globalPointSearch"
+    (ngModelChange)="onGlobalPointSearch($event)"
+    placeholder="Search points across all files (e.g. 3.2.1, liquidity)…"
+    aria-label="Search regulation points across all files"
+  />
+  @if (globalPointSearch.trim().length >= 2) {
+    <button type="button" class="filter-clear" (click)="clearGlobalPointSearch()">Clear point search</button>
+  }
+</div>
+
+@if (globalPointSearch.trim().length >= 2) {
+  <div class="point-search-results nd-shrink card-surface">
+    @if (pointSearchLoading) {
+      <p class="muted-loading">Searching points in all regulation files…</p>
+    } @else if (pointSearchError) {
+      <p class="muted-loading point-search-error">{{ pointSearchError }}</p>
+    } @else if (!pointSearchResults.length) {
+      <p class="muted-loading">No points match “{{ globalPointSearch.trim() }}” in any regulation file.</p>
+    } @else {
+      <p class="search-results-head">
+        {{ pointSearchTotal }} match{{ pointSearchTotal === 1 ? '' : 'es' }} in {{ pointSearchResults.length }} file{{ pointSearchResults.length === 1 ? '' : 's' }}
+      </p>
+      @for (group of pointSearchResults; track group.documentId) {
+        <div class="search-doc-group">
+          <div class="search-doc-head">
+            <strong>{{ group.documentName }}</strong>
+            @if (group.departmentName) {
+              <span class="muted"> · {{ group.departmentName }}</span>
+            }
+            <span class="muted"> · {{ group.points.length }} point{{ group.points.length === 1 ? '' : 's' }}</span>
+          </div>
+          <ul class="search-point-list">
+            @for (hit of group.points; track hit.id) {
+              <li class="search-point-row">
+                <button
+                  type="button"
+                  class="search-point-btn"
+                  [attr.title]="searchHitTooltip(hit)"
+                  (click)="openPointFromSearch(group, hit)"
+                >
+                  <span class="pid">{{ hit.pointNumber }}</span>
+                  @if (hit.pointTitle) {
+                    <span class="ptitle">{{ hit.pointTitle }}</span>
+                  }
+                  @if (formatPointPageRef(hit.pageReference, hit.pdfPage); as pref) {
+                    <span class="pref">{{ pref }}</span>
+                  } @else if (hit.pageReference) {
+                    <span class="pref muted">{{ hit.pageReference }}</span>
+                  }
+                  @if (hit.snippet) {
+                    <span class="psnip">{{ hit.snippet }}</span>
+                  }
+                </button>
+                @if (canOpenSourceFromSearch(group)) {
+                  <button
+                    type="button"
+                    class="btn-open-source"
+                    [attr.title]="openSourceTooltip(group, hit)"
+                    (click)="openSourceFromSearch(group, hit, $event)"
+                  >
+                    Open source
+                    @if (formatPointPageRef(hit.pageReference, hit.pdfPage); as pref) {
+                      <span class="btn-open-source-page">{{ pref }}</span>
+                    }
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    }
+  </div>
+}
+
 @if (!loading && docs.length) {
 <div class="filter-pills nd-list-toolbar nd-shrink">
   <input
@@ -58,8 +137,12 @@
   <div class="alert error nd-shrink">{{ error }}</div>
 }
 
-<div class="library-layout" [class.with-panel]="showPointsPanel">
-  <div class="library-main">
+<div
+  class="library-layout"
+  [class.with-panel]="showPointsPanel"
+  [style.grid-template-columns]="panelGridColumns"
+>
+  <div class="library-main" [class.library-main-dimmed]="showPointsPanel">
     @if (loading && docs.length === 0) {
       <p class="muted-loading">Loading regulations…</p>
     } @else if (!docs.length) {
@@ -123,7 +206,7 @@
                   @if (isManualDoc(d)) {
                     <span class="severity-badge completed">{{ extractionLabel(d.extractionStatus) }}</span>
                   } @else {
-                    <span class="severity-badge" [class]="extractionClass(d.extractionStatus)">
+                    <span class="severity-badge" [ngClass]="extractionClass(d.extractionStatus)">
                       @if (isExtractingDoc(d)) {
                         Extracting…
                       } @else {
@@ -169,9 +252,19 @@
   </div>
 
   @if (showPointsPanel) {
-    <aside class="library-points-panel">
+    <div
+      class="panel-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize panels"
+      (mousedown)="startPointsPanelResize($event)"
+    ></div>
+    <aside class="library-points-panel card-surface">
       <div class="panel-top">
-        <div>
+        <button type="button" class="btn-close" (click)="closePointsPanel()" aria-label="Close points panel">
+          ×
+        </button>
+        <div class="panel-top-main">
           <strong>{{ selectedDoc?.name ?? 'Points' }}</strong>
           @if (selectedDoc) {
             <span class="muted panel-sub">
@@ -183,9 +276,6 @@
             </span>
           }
         </div>
-        <button type="button" class="btn-close" (click)="closePointsPanel()" aria-label="Close points panel">
-          ×
-        </button>
       </div>
       @if (canExtract && selectedDoc && !isManualDoc(selectedDoc)) {
         <div class="panel-extract">
@@ -213,6 +303,7 @@
           [points]="selectedPoints"
           [source]="pointsSource"
           [loading]="pointsLoading"
+          [highlightPointNumber]="highlightPointNumber"
         />
       }
     </aside>

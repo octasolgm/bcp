@@ -21,6 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdLibraryPoint> NdLibraryPoints => Set<NdLibraryPoint>();
     public DbSet<NdAnalysisRun> NdAnalysisRuns => Set<NdAnalysisRun>();
     public DbSet<NdAnalysisPoint> NdAnalysisPoints => Set<NdAnalysisPoint>();
+    public DbSet<NdAnalysisPointAttachment> NdAnalysisPointAttachments => Set<NdAnalysisPointAttachment>();
     public DbSet<NdActionPlanHistory> NdActionPlanHistories => Set<NdActionPlanHistory>();
     public DbSet<NdAnalysisReview> NdAnalysisReviews => Set<NdAnalysisReview>();
     public DbSet<NdAnalysisPointComment> NdAnalysisPointComments => Set<NdAnalysisPointComment>();
@@ -162,6 +163,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne<NdAnalysisRun>()
                 .WithMany(r => r.Points)
                 .HasForeignKey(p => p.AnalysisRunId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdAnalysisPointAttachment>(e =>
+        {
+            e.HasOne<NdAnalysisPoint>()
+                .WithMany()
+                .HasForeignKey(a => a.AnalysisPointId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<StoredDocument>()
+                .WithMany()
+                .HasForeignKey(a => a.StoredDocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
         modelBuilder.Entity<NdAnalysisReview>(e =>

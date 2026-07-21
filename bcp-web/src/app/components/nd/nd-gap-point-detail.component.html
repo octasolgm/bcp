@@ -19,10 +19,12 @@
         Regulatory requirement
         <span class="ai-tag">AI extracted</span>
       </p>
-      <p class="col-body">{{ regulatoryText }}</p>
-      @if (regulationDocId) {
-        <button type="button" class="pdf-link" (click)="onViewRegPdf()">View PDF source</button>
+      @if (hasRegulationSource) {
+        <button type="button" class="source-ref-link" [attr.title]="regSourceTooltip()" (click)="onViewRegPdf()">
+          {{ regulationPageLabel }}:
+        </button>
       }
+      <p class="col-body">{{ regulatoryText }}</p>
     </section>
 
     <section class="compare-col compare-col-policy">
@@ -30,25 +32,49 @@
         Policy extract
         <span class="ai-tag">AI extracted</span>
       </p>
-      @if (policyRefLabel) {
-        <p class="policy-ref">{{ policyRefLabel }}:</p>
-      }
-      <blockquote class="policy-quote">&ldquo;{{ policyExtract }}&rdquo;</blockquote>
-      @if (policyDocId) {
-        <div class="pdf-links">
-          @if (policyRefs.length) {
-            @for (ref of policyRefs; track ref.page) {
-              <button type="button" class="pdf-link" (click)="onViewPolicyPage(ref.page)">
-                View PDF p.{{ ref.page }}
+      @if (policyRefs.length) {
+        @for (ref of policyRefs; track ref.page + (ref.section ?? '') + (ref.docId ?? '')) {
+          <div class="policy-ref-row">
+            @if (canOpenPolicyRef(ref)) {
+              <button
+                type="button"
+                class="source-ref-link"
+                [attr.title]="policySourceTooltip(ref.page || null, ref.docLabel)"
+                (click)="onViewPolicyPage(ref.page, ref.docId)"
+              >
+                {{ formatPolicyRefLabel(ref) }}:
               </button>
+            } @else {
+              <span class="policy-ref">{{ formatPolicyRefLabel(ref) }}:</span>
             }
+            @if (ref.quote) {
+              <blockquote class="policy-quote inline">&ldquo;{{ ref.quote }}&rdquo;</blockquote>
+            }
+          </div>
+        }
+        @if (!policyRefsHaveInlineQuotes) {
+          <blockquote class="policy-quote">&ldquo;{{ policyExtract }}&rdquo;</blockquote>
+        }
+      } @else {
+        @if (policyRefLabel) {
+          @if (policyDocId || policyDocCatalog.length) {
+            <button type="button" class="source-ref-link" [attr.title]="policySourceTooltip()" (click)="onViewPolicyPdf()">
+              {{ policyRefLabel }}:
+            </button>
           } @else {
-            <button type="button" class="pdf-link" (click)="onViewPolicyPdf()">View PDF</button>
+            <p class="policy-ref">{{ policyRefLabel }}:</p>
           }
-        </div>
+        }
+        <blockquote class="policy-quote">&ldquo;{{ policyExtract }}&rdquo;</blockquote>
       }
     </section>
   </div>
+
+  @if (resolvedSeverity !== 'compliant' && displayGapCount > 0) {
+    <p class="gap-summary-line">
+      <strong>{{ displayGapCount }}</strong> gap{{ displayGapCount === 1 ? '' : 's' }} identified for this point
+    </p>
+  }
 
   @if (showFulfilled) {
     <div class="fulfilled-block">
@@ -66,11 +92,11 @@
     <dl class="stat-grid">
       <div class="stat stat-yellow">
         <dt>Status</dt>
-        <dd>{{ primaryBlock.status || displayComplianceStatus || '—' }}</dd>
+        <dd>{{ displayComplianceStatus }}</dd>
       </div>
       <div class="stat stat-yellow">
         <dt>Compliance confidence %</dt>
-        <dd>{{ primaryBlock.confidence || '—' }}</dd>
+        <dd>{{ displayConfidence }}</dd>
       </div>
     </dl>
   </div>
@@ -161,6 +187,20 @@
                 <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
                 <p class="fix-label">Fix:</p>
                 <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.fix" placeholder="Corrective action…"></textarea>
+                <p class="gap-priority-label">Priority</p>
+                <div class="gap-priority-options" role="group" aria-label="Gap priority">
+                  @for (opt of gapPriorityOptions; track opt.id) {
+                    <button
+                      type="button"
+                      class="gap-priority-btn"
+                      [class.active]="gapPriorityFor(draftGap) === opt.id"
+                      [ngClass]="gapPriorityClass(opt.id)"
+                      (click)="setDraftPriority(opt.id)"
+                    >
+                      {{ opt.label }}
+                    </button>
+                  }
+                </div>
                 <div class="cap-edit-actions">
                   <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="saving" (click)="onSave()">
                     {{ saving ? 'Saving…' : 'Save' }}
@@ -169,54 +209,239 @@
                 </div>
               </div>
             } @else {
-              <div class="cap-gap cap-gap-read">
-                <div class="cap-gap-head">
-                  <p class="gap-label">Action {{ gap.index }}</p>
-                  @if (canEdit && !editing) {
-                    <div class="cap-item-actions">
-                      <button type="button" class="toolbar-btn subtle" (click)="startEditSingleGap(gap.index)">Edit</button>
-                      @if (history.length) {
-                        <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
+              <div class="cap-gap cap-gap-read" [class.is-collapsed]="isActionCollapsed(gap.index)">
+                <button type="button" class="cap-gap-toggle" (click)="toggleActionCollapsed(gap.index)">
+                  <span class="cap-gap-toggle-main">
+                    <span class="gap-label">Action {{ gap.index }}</span>
+                    @if (gapPriorityFor(gap); as priority) {
+                      <span class="gap-priority-pill" [ngClass]="gapPriorityClass(priority)">{{ gapPriorityLabel(priority) }}</span>
+                    }
+                    @if (reviewCountForGap(gap.index); as reviewCount) {
+                      @if (reviewCount > 0) {
+                        <span class="review-count-pill">{{ reviewCount }} review{{ reviewCount === 1 ? '' : 's' }}</span>
+                      }
+                    }
+                  </span>
+                  <svg class="cap-gap-chevron" [class.open]="!isActionCollapsed(gap.index)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </button>
+
+                @if (!isActionCollapsed(gap.index)) {
+                <div class="cap-gap-body">
+                  <div class="cap-gap-head">
+                    <div class="cap-gap-head-meta">
+                      @if (canEdit && !editing) {
+                        <div class="gap-priority-inline" role="group" [attr.aria-label]="'Priority for action ' + gap.index">
+                          @for (opt of gapPriorityOptions; track opt.id) {
+                            <button
+                              type="button"
+                              class="gap-priority-btn compact"
+                              [class.active]="gapPriorityFor(gap) === opt.id"
+                              [ngClass]="gapPriorityClass(opt.id)"
+                              [disabled]="saving"
+                              (click)="onPriorityChange(gap.index, opt.id)"
+                            >
+                              {{ opt.label }}
+                            </button>
+                          }
+                        </div>
                       }
                     </div>
-                  } @else if (history.length) {
-                    <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
+                    @if (canEdit && !editing) {
+                      <div class="cap-item-actions">
+                        <button type="button" class="toolbar-btn subtle" (click)="startEditSingleGap(gap.index)">Edit</button>
+                        @if (history.length) {
+                          <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
+                        }
+                      </div>
+                    } @else if (history.length) {
+                      <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
+                    }
+                  </div>
+                  <p class="gap-missing-label">Missing</p>
+                  <p>{{ gap.missing }}</p>
+                  @if (gap.fix) {
+                    <p class="fix-label">Fix:</p>
+                    <p>{{ gap.fix }}</p>
                   }
-                </div>
-                <p class="gap-missing-label">Missing</p>
-                <p>{{ gap.missing }}</p>
-                @if (gap.fix) {
-                  <p class="fix-label">Fix:</p>
-                  <p>{{ gap.fix }}</p>
-                }
-                @if (reviewMode) {
-                  @let review = actionReviewDraft(gap.index);
-                  <div class="action-review-block">
-                    <p class="action-review-label">Review status</p>
-                    <div class="action-review-status" role="group" [attr.aria-label]="'Review status for action ' + gap.index">
-                      @for (opt of actionReviewOptions; track opt.id) {
+                  @if (showGapEvidenceForGap(gap)) {
+                    <div class="gap-evidence-inline">
+                      @if (attachmentsForGap(gap.index).length) {
+                        <ul class="gap-evidence-list compact">
+                          @for (att of attachmentsForGap(gap.index); track att.id) {
+                            <li class="gap-evidence-item">
+                              <button type="button" class="source-ref-link subtle" (click)="onViewGapEvidence(att.storedDocumentId)">
+                                {{ att.fileName }}
+                              </button>
+                              @if (canUploadEvidence) {
+                                <button type="button" class="toolbar-btn subtle" (click)="deleteGapEvidence.emit({ actionIndex: gap.index, attachmentId: att.id })">Remove</button>
+                              }
+                            </li>
+                          }
+                        </ul>
+                      }
+                      @if (canUploadEvidence) {
+                        <div class="gap-evidence-actions inline">
+                          <input
+                            #gapEvidenceInput
+                            type="file"
+                            class="hidden-input"
+                            multiple
+                            accept=".pdf,.doc,.docx,.doc"
+                            (change)="onGapFilesSelected(gap.index, $event)"
+                          />
+                          <button type="button" class="toolbar-btn primary" [disabled]="isUploadingGap(gap.index)" (click)="gapEvidenceInput.click()">
+                            {{ isUploadingGap(gap.index) ? 'Uploading…' : 'Upload gap analysis' }}
+                          </button>
+                          @if (attachmentsForGap(gap.index).length) {
+                            <button type="button" class="toolbar-btn" [disabled]="isRerunningGap(gap.index)" (click)="rerunGapEvidence.emit({ actionIndex: gap.index, mode: 'full' })">
+                              {{ isRerunningGap(gap.index) ? 'Rerunning…' : 'Rerun analysis (this gap)' }}
+                            </button>
+                          }
+                        </div>
+                        <p class="gap-evidence-hint inline">Uploaded docs are saved to this gap and used instead of internal policy docs when rerunning.</p>
+                      }
+                    </div>
+                  }
+
+                  @if (actionReviewsForGap(gap.index).length) {
+                    <div class="action-review-history">
+                      <p class="action-review-label">Saved reviews</p>
+                      <ol class="action-review-history-list">
+                        @for (rev of actionReviewsForGap(gap.index); track rev.id) {
+                          <li class="action-review-history-item">
+                            <div class="action-review-history-head">
+                              <span class="review-status-pill" [ngClass]="actionReviewStatusClass(rev.status)">{{ actionReviewStatusLabel(rev.status) }}</span>
+                              @if (savedReviewPriority(rev); as revPriority) {
+                                <span class="gap-priority-pill compact" [ngClass]="gapPriorityClass(revPriority)">{{ gapPriorityLabel(revPriority) }}</span>
+                              }
+                              <time class="action-review-date">{{ formatReviewDate(rev.createdAt) }}</time>
+                            </div>
+                            <dl class="action-review-saved-grid compact">
+                              @if (rev.responsibility) {
+                                <div>
+                                  <dt>Responsibility</dt>
+                                  <dd>{{ rev.responsibility }}</dd>
+                                </div>
+                              }
+                              @if (rev.dueDate) {
+                                <div>
+                                  <dt>Due date</dt>
+                                  <dd>{{ rev.dueDate }}</dd>
+                                </div>
+                              }
+                            </dl>
+                            @if (rev.comment) {
+                              <p class="action-review-saved-comment">{{ rev.comment }}</p>
+                            }
+                          </li>
+                        }
+                      </ol>
+                    </div>
+                  }
+
+                  @if (showReviewPanel) {
+                    @if (reviewMode && !isReviewFormOpen(gap.index)) {
+                      <button type="button" class="toolbar-btn primary add-review-btn" (click)="openReviewForm(gap.index)">+ Add review</button>
+                    }
+                    @if (reviewMode && isReviewFormOpen(gap.index)) {
+                      @let review = actionReviewDraft(gap.index);
+                      <div class="action-review-block">
+                        <div class="action-review-block-head">
+                          <p class="action-review-label">Add review</p>
+                          <button type="button" class="toolbar-btn subtle" (click)="closeReviewForm(gap.index)">Cancel</button>
+                        </div>
+                        <p class="action-review-sub">Each save creates a new review entry visible to everyone.</p>
+                        <p class="action-review-field-label">Status <span class="action-review-required">(required)</span></p>
+                        <div class="action-review-status" role="group" [attr.aria-label]="'Review status for action ' + gap.index">
+                          @for (opt of actionReviewOptions; track opt.id) {
+                            <button
+                              type="button"
+                              class="review-status-btn"
+                              [class.active]="review.status === opt.id"
+                              [ngClass]="actionReviewStatusClass(opt.id)"
+                              (click)="setActionReviewStatus(gap.index, opt.id)"
+                            >
+                              {{ opt.label }}
+                            </button>
+                          }
+                        </div>
+                        <p class="action-review-field-label">Priority</p>
+                        <div class="gap-priority-options" role="group" aria-label="Review priority">
+                          @for (opt of gapPriorityOptions; track opt.id) {
+                            <button
+                              type="button"
+                              class="gap-priority-btn"
+                              [class.active]="reviewPriorityFor(gap.index) === opt.id"
+                              [ngClass]="gapPriorityClass(opt.id)"
+                              (click)="setActionReviewPriority(gap.index, opt.id)"
+                            >
+                              {{ opt.label }}
+                            </button>
+                          }
+                        </div>
+                        <div class="action-review-meta">
+                          <label class="action-review-field">
+                            Responsibility (department)
+                            <select
+                              class="action-review-input action-review-select"
+                              [ngModel]="review.responsibility"
+                              (ngModelChange)="setActionReviewResponsibility(gap.index, $event)"
+                            >
+                              <option value="">Select department…</option>
+                              @for (dept of departments; track dept.id) {
+                                <option [value]="dept.name">{{ dept.name }}</option>
+                              }
+                            </select>
+                          </label>
+                          <div class="action-review-field due-date-field">
+                            <span class="due-date-label">Due date</span>
+                            <button type="button" class="due-date-toggle" (click)="toggleDueDateCalendar(gap.index)">
+                              {{ dueDateLabel(gap.index) }}
+                              <svg class="cap-gap-chevron sm" [class.open]="isDueDateCalendarOpen(gap.index)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M6 9l6 6 6-6"/>
+                              </svg>
+                            </button>
+                            @if (isDueDateCalendarOpen(gap.index)) {
+                              <div class="due-date-calendar-panel">
+                                <input
+                                  type="date"
+                                  class="action-review-input"
+                                  [ngModel]="review.dueDate"
+                                  (ngModelChange)="setActionReviewDueDate(gap.index, $event)"
+                                />
+                              </div>
+                            }
+                          </div>
+                        </div>
+                        <label class="action-review-comment-label">
+                          Comment <span class="action-review-optional">(optional)</span>
+                          <textarea
+                            class="action-review-comment"
+                            rows="2"
+                            [ngModel]="review.comment"
+                            (ngModelChange)="setActionReviewComment(gap.index, $event)"
+                            placeholder="Feedback for this action…"
+                          ></textarea>
+                        </label>
                         <button
                           type="button"
-                          class="review-status-btn"
-                          [class.active]="review.status === opt.id"
-                          [ngClass]="actionReviewStatusClass(opt.id)"
-                          (click)="setActionReviewStatus(gap.index, opt.id)"
+                          class="nd-btn-primary nd-btn-sm"
+                          [disabled]="!canSaveActionReview(gap.index)"
+                          (click)="onSaveActionReview(gap.index)"
                         >
-                          {{ opt.label }}
+                          {{ savingActionReviewIndex === gap.index ? 'Saving…' : 'Save review' }}
                         </button>
-                      }
-                    </div>
-                    <label class="action-review-comment-label">
-                      Comment <span class="action-review-optional">(optional)</span>
-                      <textarea
-                        class="action-review-comment"
-                        rows="2"
-                        [ngModel]="review.comment"
-                        (ngModelChange)="setActionReviewComment(gap.index, $event)"
-                        placeholder="Optional feedback for this action…"
-                      ></textarea>
-                    </label>
-                  </div>
+                      </div>
+                    } @else if (reviewDisabledHint) {
+                      <div class="action-review-block muted">
+                        <p class="action-review-label">Gap reviews</p>
+                        <p class="action-review-hint">{{ reviewDisabledHint }}</p>
+                      </div>
+                    }
+                  }
+                </div>
                 }
               </div>
             }
@@ -234,6 +459,20 @@
             <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
             <p class="fix-label">Fix:</p>
             <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.fix" placeholder="Corrective action…"></textarea>
+            <p class="gap-priority-label">Priority</p>
+            <div class="gap-priority-options" role="group" aria-label="Gap priority">
+              @for (opt of gapPriorityOptions; track opt.id) {
+                <button
+                  type="button"
+                  class="gap-priority-btn"
+                  [class.active]="gapPriorityFor(draftGap) === opt.id"
+                  [ngClass]="gapPriorityClass(opt.id)"
+                  (click)="setDraftPriority(opt.id)"
+                >
+                  {{ opt.label }}
+                </button>
+              }
+            </div>
             <div class="cap-edit-actions">
               <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="saving" (click)="onSave()">
                 {{ saving ? 'Saving…' : 'Add' }}
@@ -243,6 +482,57 @@
           </div>
         }
       </div>
+    </section>
+  }
+
+  @if (showGapEvidenceSection && runId) {
+    <section class="gap-evidence-section">
+      <div class="cap-toolbar">
+        <p class="cap-title">
+          Manual gap evidence
+          <span class="ai-tag">Upload supporting docs</span>
+        </p>
+      </div>
+      <p class="gap-evidence-hint">
+        Upload gap analysis or remediation documents for this point. They are saved to this report point and included when you rerun analysis.
+      </p>
+      @if (gapAttachments.length) {
+        <ul class="gap-evidence-list">
+          @for (att of gapAttachments; track att.id) {
+            <li class="gap-evidence-item">
+              <span class="fname">{{ att.fileName }}</span>
+              @if (canUploadEvidence) {
+                <button type="button" class="toolbar-btn subtle" (click)="deleteEvidence.emit(att.id)">Remove</button>
+              }
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="muted-inline">No manual documents uploaded yet.</p>
+      }
+      @if (canUploadEvidence) {
+        <div class="gap-evidence-actions">
+          <input
+            #evidenceInput
+            type="file"
+            class="hidden-input"
+            multiple
+            accept=".pdf,.doc,.docx,.doc"
+            (change)="onEvidenceFilesSelected($event)"
+          />
+          <button type="button" class="toolbar-btn primary" [disabled]="evidenceUploading" (click)="evidenceInput.click()">
+            {{ evidenceUploading ? 'Uploading…' : 'Upload gap analysis' }}
+          </button>
+          @if (gapAttachments.length) {
+            <button type="button" class="toolbar-btn" [disabled]="evidenceRerunning" (click)="rerunWithEvidence.emit('full')">
+              {{ evidenceRerunning ? 'Rerunning…' : 'Rerun analysis (this point)' }}
+            </button>
+            <button type="button" class="toolbar-btn" [disabled]="evidenceRerunning" (click)="rerunWithEvidence.emit('dual')">
+              Rerun dual verify only
+            </button>
+          }
+        </div>
+      }
     </section>
   }
 

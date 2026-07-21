@@ -14,14 +14,16 @@ import {
   sortIndicator,
   type SortDir,
 } from '../../../../lib/nd/list-utils';
+import { NdWorkspaceTabsComponent } from '../../../components/nd/nd-workspace-tabs.component';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
+import { ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../../lib/nd/run-links';
 
 type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
 
 @Component({
   selector: 'app-nd-checker-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent],
   templateUrl: './nd-checker-queue.component.html',
   styleUrls: ['./nd-checker-queue.component.scss', '../run-analysis/nd-run-analysis.component.scss', '../nd-shared.scss'],
 })
@@ -95,6 +97,25 @@ export class NdCheckerQueueComponent implements OnInit {
   clearFilters(): void {
     this.searchQuery = '';
     this.statusFilter = '';
+  }
+
+  get canViewHistory(): boolean {
+    const role = this.auth.getRole();
+    return role === 'checker' || role === 'super_admin';
+  }
+
+  get isViewOnly(): boolean {
+    return this.auth.getRole() === 'reviewer';
+  }
+
+  runLink(run: AnalysisRunSummary): string[] {
+    if (this.isViewOnly) return ['/nd/gap-analysis'];
+    return ndAnalysisRunLink(run, this.auth.getRole());
+  }
+
+  runQuery(run: AnalysisRunSummary): Record<string, string> | undefined {
+    if (this.isViewOnly) return { run: run.id };
+    return ndAnalysisRunQuery(run, this.auth.getRole());
   }
 
   formatDate = formatDate;

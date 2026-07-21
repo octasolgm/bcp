@@ -36,6 +36,7 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   @Input() points: RegulationPoint[] = [];
   @Input() source = '';
   @Input() loading = false;
+  @Input() highlightPointNumber = '';
 
   search = '';
   expandedChapters = new Set<string>();
@@ -49,7 +50,17 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   readonly formatChapterLabel = formatChapterLabel;
 
   ngOnChanges(): void {
+    const highlight = this.highlightPointNumber.trim();
+    if (highlight) {
+      this.search = highlight;
+      this.expandedChapters.clear();
+    }
     this.rebuildGroups();
+    if (highlight) {
+      for (const ch of this.chapterGroups) {
+        this.expandedChapters.add(ch.chapter);
+      }
+    }
   }
 
   get statusLabel(): string {
@@ -104,6 +115,12 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     const t = text.trim();
     if (t.length <= max) return t;
     return `${t.slice(0, max)}…`;
+  }
+
+  isHighlighted(pointId: string): boolean {
+    const h = this.highlightPointNumber.trim();
+    if (!h) return false;
+    return pointId.trim().toLowerCase() === h.toLowerCase();
   }
 
   private rebuildGroups(): void {

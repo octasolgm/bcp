@@ -187,6 +187,28 @@ public static class NdSchemaBootstrap
               comment TEXT,
               created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             );
+            CREATE TABLE IF NOT EXISTS analysis_point_attachments (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              analysis_point_id UUID NOT NULL REFERENCES analysis_points(id) ON DELETE CASCADE,
+              stored_document_id UUID NOT NULL REFERENCES stored_documents(id) ON DELETE CASCADE,
+              file_name TEXT NOT NULL DEFAULT '',
+              uploaded_by UUID,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_analysis_point_attachments_point
+              ON analysis_point_attachments (analysis_point_id);
+
+            ALTER TABLE analysis_point_attachments
+              ADD COLUMN IF NOT EXISTS action_index INTEGER;
+
+            ALTER TABLE action_plan_item_reviews
+              ADD COLUMN IF NOT EXISTS responsibility TEXT;
+
+            ALTER TABLE action_plan_item_reviews
+              ADD COLUMN IF NOT EXISTS due_date DATE;
+
+            ALTER TABLE action_plan_item_reviews
+              ADD COLUMN IF NOT EXISTS priority TEXT;
 
             ALTER TABLE regulation_points
               ADD COLUMN IF NOT EXISTS is_introduction_point BOOLEAN NOT NULL DEFAULT false;

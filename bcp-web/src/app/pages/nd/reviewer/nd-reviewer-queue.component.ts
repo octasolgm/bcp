@@ -14,14 +14,16 @@ import {
   sortIndicator,
   type SortDir,
 } from '../../../../lib/nd/list-utils';
+import { NdWorkspaceTabsComponent } from '../../../components/nd/nd-workspace-tabs.component';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
+import { ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../../lib/nd/run-links';
 
 type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
 
 @Component({
   selector: 'app-nd-reviewer-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent],
   templateUrl: './nd-reviewer-queue.component.html',
   styleUrls: ['./nd-reviewer-queue.component.scss', '../run-analysis/nd-run-analysis.component.scss', '../nd-shared.scss'],
 })
@@ -95,6 +97,19 @@ export class NdReviewerQueueComponent implements OnInit {
   clearFilters(): void {
     this.searchQuery = '';
     this.statusFilter = '';
+  }
+
+  get canViewHistory(): boolean {
+    const role = this.auth.getRole();
+    return role === 'reviewer' || role === 'super_admin';
+  }
+
+  runLink(run: AnalysisRunSummary): string[] {
+    return ndAnalysisRunLink(run, this.auth.getRole());
+  }
+
+  runQuery(run: AnalysisRunSummary): Record<string, string> | undefined {
+    return ndAnalysisRunQuery(run, this.auth.getRole());
   }
 
   formatDate = formatDate;

@@ -169,7 +169,7 @@ export function parseReferenceComplianceText(
   );
 }
 
-export type CapGap = { index: number; missing: string; fix: string };
+export type CapGap = { index: number; missing: string; fix: string; priority?: string };
 
 export function parseBulletLines(text: string): string[] {
   const raw = text.trim();
@@ -241,6 +241,15 @@ export function requirementDisplayLines(body: string): string[] {
   return [text];
 }
 
+import { normalizeGapPriority } from '../nd/gap-priority';
+
+function splitFixAndPriority(fixRaw: string): { fix: string; priority: string } {
+  const match = fixRaw.match(/\.\s*Priority:\s*(medium|higher|high)\s*$/i);
+  if (!match) return { fix: fixRaw.trim(), priority: '' };
+  const fix = fixRaw.slice(0, match.index).trim().replace(/\.$/, '');
+  return { fix, priority: normalizeGapPriority(match[1]) };
+}
+
 export function parseCapGaps(cap: string): CapGap[] {
   const raw = cap.trim();
   if (!raw || raw === 'N/A' || raw === '—') return [];
@@ -256,13 +265,24 @@ export function parseCapGaps(cap: string): CapGap[] {
   const gaps: CapGap[] = chunks.map((chunk, i) => {
     const fixSplit = chunk.split(/\.\s*Fix:\s*/i);
     if (fixSplit.length > 1) {
+      const { fix, priority } = splitFixAndPriority(fixSplit.slice(1).join('. Fix: '));
       return {
         index: i + 1,
         missing: fixSplit[0].trim().replace(/\.$/, ''),
-        fix: fixSplit.slice(1).join('. Fix: ').trim(),
+        fix,
+        priority,
       };
     }
-    return { index: i + 1, missing: chunk.trim().replace(/\.$/, ''), fix: recommended };
+    const priorityOnly = chunk.match(/\.\s*Priority:\s*(medium|higher|high)\s*$/i);
+    const missing = priorityOnly
+      ? chunk.slice(0, priorityOnly.index).trim().replace(/\.$/, '')
+      : chunk.trim().replace(/\.$/, '');
+    return {
+      index: i + 1,
+      missing,
+      fix: recommended,
+      priority: priorityOnly ? normalizeGapPriority(priorityOnly[1]) : '',
+    };
   });
 
   if (gaps.length === 0 && body) {
@@ -278,7 +298,13 @@ export function parseCapGaps(cap: string): CapGap[] {
 export function serializeCapGaps(gaps: CapGap[]): string {
   if (!gaps.length) return '';
   const body = gaps
-    .map((g) => `(${g.index}) Missing: ${g.missing.trim()}.${g.fix?.trim() ? ` Fix: ${g.fix.trim()}` : ''}`)
+    .map((g) => {
+      const priority = normalizeGapPriority(g.priority);
+      let line = `(${g.index}) Missing: ${g.missing.trim()}.`;
+      if (g.fix?.trim()) line += ` Fix: ${g.fix.trim()}`;
+      if (priority) line += `. Priority: ${priority}`;
+      return line;
+    })
     .join('\n');
   return `Gap(s):\n${body}`;
 }

@@ -35,7 +35,6 @@ public class NdAnalysisProcessor(
         await db.SaveChangesAsync(ct);
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        var internalDocs = await ResolveInternalDocsAsync(internalDocIds, ct);
         var phase2Model = ResolvePhase2Model();
 
         var points = run.Points
@@ -51,6 +50,7 @@ public class NdAnalysisProcessor(
 
             try
             {
+                var internalDocs = await ResolveInternalDocsForPointAsync(point, internalDocIds, ct);
                 var dualOnly = IsLandingSuccess(point.LandingAiStatus) && point.DualVerifyStatus is "pending";
                 await ProcessPointPipelineAsync(
                     run, point, internalDocs, phase2Model,
@@ -74,7 +74,9 @@ public class NdAnalysisProcessor(
         Guid runId,
         Guid pointId,
         bool dualVerifyOnly,
-        CancellationToken ct)
+        bool evidenceOnly = false,
+        int? actionIndex = null,
+        CancellationToken ct = default)
     {
         var run = await db.NdAnalysisRuns
             .Include(r => r.Points)
@@ -85,7 +87,9 @@ public class NdAnalysisProcessor(
             ?? throw new InvalidOperationException("Analysis point not found.");
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        var internalDocs = await ResolveInternalDocsAsync(internalDocIds, ct);
+        var internalDocs = evidenceOnly
+            ? await ResolveGapEvidenceDocsAsync(point, actionIndex, ct)
+            : await ResolveInternalDocsForPointAsync(point, internalDocIds, ct);
         var phase2Model = ResolvePhase2Model();
 
         if (dualVerifyOnly)
@@ -121,11 +125,11 @@ public class NdAnalysisProcessor(
             ?? throw new InvalidOperationException("Analysis run not found.");
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        var internalDocs = await ResolveInternalDocsAsync(internalDocIds, ct);
         var phase2Model = ResolvePhase2Model();
 
         foreach (var point in run.Points.Where(p => p.DualVerifyStatus == "failed"))
         {
+            var internalDocs = await ResolveInternalDocsForPointAsync(point, internalDocIds, ct);
             point.DualVerifyRerunCount++;
             point.DualVerifyStatus = "pending";
             point.GoogleAiStatus = "pending";
@@ -407,13 +411,56 @@ public class NdAnalysisProcessor(
         return model;
     }
 
+    private async Task<List<InternalDocPayload>> ResolveInternalDocsForPointAsync(
+        NdAnalysisPoint point,
+        List<string> runInternalDocIds,
+        CancellationToken ct)
+    {
+        var attachmentIds = await db.NdAnalysisPointAttachments.AsNoTracking()
+            .Where(a => a.AnalysisPointId == point.Id)
+            .Select(a => a.StoredDocumentId.ToString())
+            .ToListAsync(ct);
+
+        var merged = runInternalDocIds
+            .Concat(attachmentIds)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return await ResolveInternalDocsAsync(merged, ct);
+    }
+
+    private async Task<List<InternalDocPayload>> ResolveGapEvidenceDocsAsync(
+        NdAnalysisPoint point,
+        int? actionIndex,
+        CancellationToken ct)
+    {
+        var query = db.NdAnalysisPointAttachments.AsNoTracking()
+            .Where(a => a.AnalysisPointId == point.Id);
+
+        if (actionIndex.HasValue)
+            query = query.Where(a => a.ActionIndex == actionIndex.Value);
+
+        var attachmentIds = await query
+            .Select(a => a.StoredDocumentId.ToString())
+            .ToListAsync(ct);
+
+        if (attachmentIds.Count == 0)
+            throw new InvalidOperationException(
+                actionIndex.HasValue
+                    ? "No gap evidence documents uploaded for this action item."
+                    : "No gap evidence documents uploaded for this point.");
+
+        return await ResolveInternalDocsAsync(attachmentIds, ct);
+    }
+
     private async Task<List<InternalDocPayload>> ResolveInternalDocsAsync(
         List<string> internalDocIds,
         CancellationToken ct)
     {
         var result = new List<InternalDocPayload>();
         if (internalDocIds.Count == 0)
-            return result;
+            throw new InvalidOperationException("No internal or gap-evidence documents available for this point.");
 
         foreach (var idStr in internalDocIds)
         {

@@ -4,7 +4,13 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
 
-export type NdApiResult<T> = { success: boolean; data?: T; message?: string; status?: number };
+export type NdApiResult<T> = {
+  success: boolean;
+  data?: T;
+  message?: string;
+  status?: number;
+  totalMatches?: number;
+};
 
 export type NdUserProfile = {
   id: string;
@@ -173,6 +179,14 @@ export class NdApiService {
     return this.request<unknown[]>('GET', `/nd/regulation-documents/${docId}/points`);
   }
 
+  searchRegulationPoints(query: string, limit = 80) {
+    const q = encodeURIComponent(query.trim());
+    return this.request<unknown[]>(
+      'GET',
+      `/nd/regulation-documents/points/search?q=${q}&limit=${limit}`,
+    );
+  }
+
   createManualRegulationPoint(
     docId: string,
     body: {
@@ -258,11 +272,12 @@ export class NdApiService {
     return this.request<unknown>('DELETE', `/nd/libraries/${id}`);
   }
 
-  getAnalysisRuns(params?: { status?: string; mineOnly?: boolean; deletedOnly?: boolean }) {
+  getAnalysisRuns(params?: { status?: string; mineOnly?: boolean; deletedOnly?: boolean; ndOnly?: boolean }) {
     const q = new URLSearchParams();
     if (params?.status) q.set('status', params.status);
     if (params?.mineOnly) q.set('mineOnly', 'true');
     if (params?.deletedOnly) q.set('deletedOnly', 'true');
+    if (params?.ndOnly) q.set('ndOnly', 'true');
     const suffix = q.toString() ? `?${q}` : '';
     return this.request<unknown[]>('GET', `/nd/analysis-runs${suffix}`);
   }
@@ -311,12 +326,26 @@ export class NdApiService {
     return this.request<unknown>('POST', `/nd/analysis-runs/${id}/start`);
   }
 
-  rerunPoint(runId: string, pointId: string) {
-    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/rerun-point/${pointId}`);
+  rerunPoint(runId: string, pointId: string, opts?: { evidenceOnly?: boolean; actionIndex?: number }) {
+    const params = new URLSearchParams();
+    if (opts?.evidenceOnly) params.set('evidenceOnly', 'true');
+    if (opts?.actionIndex != null) params.set('actionIndex', String(opts.actionIndex));
+    const q = params.toString();
+    return this.request<unknown>(
+      'POST',
+      `/nd/analysis-runs/${runId}/rerun-point/${pointId}${q ? `?${q}` : ''}`,
+    );
   }
 
-  rerunDualVerify(runId: string, pointId: string) {
-    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/rerun-dual-verify/${pointId}`);
+  rerunDualVerify(runId: string, pointId: string, opts?: { evidenceOnly?: boolean; actionIndex?: number }) {
+    const params = new URLSearchParams();
+    if (opts?.evidenceOnly) params.set('evidenceOnly', 'true');
+    if (opts?.actionIndex != null) params.set('actionIndex', String(opts.actionIndex));
+    const q = params.toString();
+    return this.request<unknown>(
+      'POST',
+      `/nd/analysis-runs/${runId}/rerun-dual-verify/${pointId}${q ? `?${q}` : ''}`,
+    );
   }
 
   rerunAllFailedDualVerify(runId: string) {
@@ -343,6 +372,21 @@ export class NdApiService {
     return this.request<unknown>('GET', `/nd/results/${runId}`);
   }
 
+  saveActionItemReview(
+    runId: string,
+    body: {
+      analysisPointId: string;
+      actionIndex: number;
+      status: string;
+      comment?: string;
+      responsibility?: string;
+      dueDate?: string;
+      priority?: string;
+    },
+  ) {
+    return this.request<unknown>('POST', `/nd/results/${runId}/action-item-reviews`, body);
+  }
+
   updateActionPlan(runId: string, pointId: string, content: string, revertToVersion?: number) {
     return this.request<unknown>('PUT', `/nd/results/${runId}/action-plan/${pointId}`, {
       content,
@@ -352,6 +396,41 @@ export class NdApiService {
 
   getActionPlanHistory(runId: string, pointId: string) {
     return this.request<unknown[]>('GET', `/nd/results/${runId}/action-plan-history/${pointId}`);
+  }
+
+  uploadPointGapAttachments(runId: string, pointId: string, files: File[], actionIndex?: number) {
+    return this.uploadMultipart(`/nd/results/${runId}/points/${pointId}/attachments`, files, actionIndex);
+  }
+
+  deletePointGapAttachment(runId: string, pointId: string, attachmentId: string) {
+    return this.request<unknown>(
+      'DELETE',
+      `/nd/results/${runId}/points/${pointId}/attachments/${attachmentId}`,
+    );
+  }
+
+  private async uploadMultipart<T>(path: string, files: File[], actionIndex?: number): Promise<NdApiResult<T>> {
+    const url = `${this.baseUrl()}${path}`;
+    const form = new FormData();
+    for (const file of files) form.append('files', file, file.name);
+    if (actionIndex != null) form.append('actionIndex', String(actionIndex));
+    const token = await getNdAccessToken();
+    let h = new HttpHeaders();
+    if (token) h = h.set('Authorization', `Bearer ${token}`);
+    try {
+      return await firstValueFrom(this.http.post<NdApiResult<T>>(url, form, { headers: h }));
+    } catch (err: unknown) {
+      if (err instanceof HttpErrorResponse) {
+        const body = err.error as { message?: string } | string | null;
+        const message =
+          typeof body === 'string'
+            ? body
+            : body?.message ?? err.message ?? `Request failed (${err.status})`;
+        return { success: false, message, status: err.status };
+      }
+      const e = err as { message?: string };
+      return { success: false, message: e.message ?? 'Upload failed' };
+    }
   }
 
   getCheckerQueue() {
@@ -372,6 +451,8 @@ export class NdApiService {
         actionIndex: number;
         status: string;
         comment?: string;
+        responsibility?: string;
+        dueDate?: string;
       }[];
     },
   ) {
@@ -388,6 +469,8 @@ export class NdApiService {
         actionIndex: number;
         status: string;
         comment?: string;
+        responsibility?: string;
+        dueDate?: string;
       }[];
     },
   ) {
@@ -412,6 +495,8 @@ export class NdApiService {
         actionIndex: number;
         status: string;
         comment?: string;
+        responsibility?: string;
+        dueDate?: string;
       }[];
     },
   ) {
@@ -428,9 +513,29 @@ export class NdApiService {
         actionIndex: number;
         status: string;
         comment?: string;
+        responsibility?: string;
+        dueDate?: string;
       }[];
     },
   ) {
     return this.request<unknown>('POST', `/nd/reviewer/review/${runId}/pull-back`, body);
+  }
+
+  pullBackToMaker(
+    runId: string,
+    body: {
+      overallComment?: string;
+      pointComments?: { analysisPointId: string; comment: string }[];
+      actionItemReviews?: {
+        analysisPointId: string;
+        actionIndex: number;
+        status: string;
+        comment?: string;
+        responsibility?: string;
+        dueDate?: string;
+      }[];
+    },
+  ) {
+    return this.request<unknown>('POST', `/nd/reviewer/review/${runId}/pull-back-to-maker`, body);
   }
 }

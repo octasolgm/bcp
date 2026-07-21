@@ -299,7 +299,7 @@ export const routes: Routes = [
           {
             path: 'checker',
             canActivate: [ndRoleGuard],
-            data: { ndRoles: ['checker', 'super_admin'] },
+            data: { ndRoles: ['checker', 'reviewer', 'super_admin'] },
             loadComponent: () =>
               import('./pages/nd/checker/nd-checker-queue.component').then(
                 (m) => m.NdCheckerQueueComponent,

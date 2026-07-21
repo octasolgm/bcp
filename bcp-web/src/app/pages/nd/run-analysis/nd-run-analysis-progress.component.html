@@ -76,8 +76,8 @@
         <div class="nd-actions">
           <app-nd-status-badge [status]="p.landingAiStatus" />
           <app-nd-status-badge [status]="p.dualVerifyStatus" />
-          @if (p.finalStatus) {
-            <app-nd-status-badge [status]="p.finalStatus" />
+          @if (pointComplianceSeverity(p); as severity) {
+            <app-nd-status-badge [status]="severity" />
           }
         </div>
       </div>

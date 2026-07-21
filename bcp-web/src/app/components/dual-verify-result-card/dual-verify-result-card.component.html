@@ -37,9 +37,6 @@
       <section class="compare-col">
         <p class="col-label">Regulatory requirement <span class="ai-tag">AI extracted</span></p>
         <p class="col-body">{{ regulatoryText }}</p>
-        @if (regulationDocId) {
-          <button type="button" class="pdf-link" (click)="onViewRegPdf()">View PDF source</button>
-        }
       </section>
       <section class="compare-col">
         <p class="col-label">Policy extract <span class="ai-tag">AI extracted</span></p>
@@ -50,13 +47,32 @@
           </p>
         }
         <blockquote class="policy-quote">&ldquo;{{ policyExtract }}&rdquo;</blockquote>
-        @if (policyDocId) {
-          <button type="button" class="pdf-link" (click)="onViewPolicyPdf()">
-            View PDF@if (policyPage) { p.{{ policyPage }} }
-          </button>
-        }
       </section>
     </div>
+
+    @if (hasFindingProof) {
+      <section class="finding-proof-section">
+        <p class="section-label">Finding proof</p>
+        <div class="finding-proof-actions">
+          @if (regulationDocId) {
+            <button type="button" class="finding-proof-btn" [attr.title]="regSourceTooltip()" (click)="onViewRegPdf()">
+              Regulation source
+              @if (regulationPageLabel) {
+                <span class="finding-proof-page">{{ regulationPageLabel }}</span>
+              }
+            </button>
+          }
+          @if (policyDocId) {
+            <button type="button" class="finding-proof-btn" [attr.title]="policySourceTooltip()" (click)="onViewPolicyPdf()">
+              Policy source
+              @if (policyPage) {
+                <span class="finding-proof-page">p. {{ policyPage }}</span>
+              }
+            </button>
+          }
+        </div>
+      </section>
+    }
 
   @if (showCap) {
     <div class="cap-block">

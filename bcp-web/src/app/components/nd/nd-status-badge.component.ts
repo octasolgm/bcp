@@ -1,5 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { complianceSeverityLabel, type ComplianceSeverity } from '../../../lib/nd/point-compliance-status';
 
 @Component({
   selector: 'app-nd-status-badge',
@@ -11,6 +12,10 @@ export class NdStatusBadgeComponent {
   @Input({ required: true }) status!: string;
 
   get label(): string {
+    const s = this.status as ComplianceSeverity;
+    if (s === 'compliant' || s === 'partial_compliant' || s === 'non_compliant') {
+      return complianceSeverityLabel(s);
+    }
     return this.status.replace(/_/g, ' ');
   }
 

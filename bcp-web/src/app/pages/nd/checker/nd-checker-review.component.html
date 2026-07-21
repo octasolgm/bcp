@@ -15,8 +15,15 @@
   <div class="nd-review-grid">
     <div class="nd-review-panel">
       <h3>Points</h3>
+      <div class="nd-review-sort">
+        <app-nd-point-sort-controls
+          [sort]="pointSort === 'default' ? 'number' : pointSort"
+          [dir]="pointSortDir"
+          (sortChange)="onPointSortChange($event)"
+        />
+      </div>
       <div class="nd-review-points">
-        @for (p of data.points; track p.id) {
+        @for (p of sortedPoints; track p.id) {
           @let snap = parsePointSnapshot(p.pointSnapshot);
           <button
             type="button"
@@ -72,12 +79,20 @@
           [snapshot]="snap"
           [canEdit]="false"
           [reviewMode]="true"
-          [actionItemReviews]="actionReviewsForSelected()"
+          [showReviewPanel]="true"
+          [savedActionItemReviews]="savedReviewsForSelected()"
+          [savingActionReviewIndex]="savingActionReviewIndex"
           [history]="history"
           [showHistoryPanel]="historyOpen"
+          [runId]="runId"
+          [gapAttachments]="attachmentsForPoint(point.id)"
+          [policyDocId]="policyDocId"
+          [policyDocCatalog]="policyDocCatalog"
+          [regulationDocId]="regDocIdForPoint(point)"
           (openHistory)="openHistory()"
           (closeHistory)="closeHistory()"
-          (actionItemReviewChange)="updateActionItemReview($event)"
+          (saveActionItemReview)="saveActionItemReview($event)"
+          (openPdf)="openPdfFromNd($event)"
         />
 
         <label class="nd-label nd-review-comment">
@@ -102,6 +117,14 @@
         </label>
         @if (error) {
           <p class="nd-error">{{ error }}</p>
+        }
+        @if (reviewProgress.total > 0) {
+          <p class="nd-review-progress" [class.complete]="reviewProgress.reviewed >= reviewProgress.total">
+            Action reviews: {{ reviewProgress.reviewed }}/{{ reviewProgress.total }}
+            @if (reviewProgress.reviewed < reviewProgress.total) {
+              — set status on each action before approve or pull back
+            }
+          </p>
         }
         <div class="nd-actions">
           <button type="button" class="nd-btn-primary" [disabled]="submitting" (click)="handleApprove()">

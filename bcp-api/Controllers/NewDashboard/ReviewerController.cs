@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -28,7 +29,7 @@ public class ReviewerController(
             .OrderByDescending(r => r.SubmittedToReviewerAt)
             .ToListAsync(ct);
 
-        return Ok(new { success = true, data = runs.Select(MapQueueItem) });
+        return Ok(new { success = true, data = await NdRunEnrichmentHelper.EnrichRunsAsync(db, runs, ct) });
     }
 
     [HttpGet("history")]
@@ -43,7 +44,7 @@ public class ReviewerController(
             .Take(50)
             .ToListAsync(ct);
 
-        return Ok(new { success = true, data = runs.Select(MapQueueItem) });
+        return Ok(new { success = true, data = await NdRunEnrichmentHelper.EnrichRunsAsync(db, runs, ct) });
     }
 
     [HttpPost("review/{runId:guid}/finalize")]
@@ -109,13 +110,34 @@ public class ReviewerController(
         return Ok(new { success = true });
     }
 
-    private static object MapQueueItem(NdAnalysisRun run) => new
+    [HttpPost("review/{runId:guid}/pull-back-to-maker")]
+    public async Task<IActionResult> PullBackToMaker(Guid runId, [FromBody] ReviewRequest body, CancellationToken ct)
     {
-        id = run.Id,
-        name = run.Name,
-        departmentId = run.DepartmentId,
-        status = run.Status,
-        submittedToReviewerAt = run.SubmittedToReviewerAt,
-        createdAt = run.CreatedAt,
-    };
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "reviewer");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
+        if (run == null) return NotFound();
+        if (run.Status != "checker_approved")
+            return BadRequest(new { success = false, message = "Run is not in reviewer queue." });
+
+        var from = run.Status;
+        run.Status = "pulled_back";
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var review = new NdAnalysisReview
+        {
+            AnalysisRunId = runId,
+            ReviewerId = profile!.Id,
+            ReviewerRole = "reviewer",
+            Action = "pulled_back",
+            OverallComment = body.OverallComment,
+        };
+        db.NdAnalysisReviews.Add(review);
+        await db.SaveChangesAsync(ct);
+        await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);
+        await SaveActionItemReviewsAsync(db, review.Id, body.ActionItemReviews, profile.Id, ct);
+        await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
+        return Ok(new { success = true });
+    }
 }

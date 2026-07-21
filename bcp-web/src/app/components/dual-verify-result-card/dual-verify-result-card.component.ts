@@ -7,6 +7,10 @@ import {
   parseReferenceCitation,
   parseReferenceComplianceBlock,
 } from '../../../lib/ai-lab/parse-reference-response';
+import {
+  formatPointPageRef,
+  resolveRegulationPdfPage,
+} from '../../../lib/nd/regulation-pdf-page';
 
 @Component({
   selector: 'app-dual-verify-result-card',
@@ -21,11 +25,14 @@ export class DualVerifyResultCardComponent implements OnChanges {
   @Input() complianceLabel = '';
   @Input() policyDocId: string | null = null;
   @Input() regulationDocId: string | null = null;
+  @Input() regulationPageReference: string | null = null;
   @Output() openPdf = new EventEmitter<{ docId: string; page?: string | null }>();
 
   policyExtract = '';
   policyPage: string | null = null;
   policySection: string | null = null;
+  regulationPage: number | null = null;
+  regulationPageLabel: string | null = null;
   showCap = false;
 
   ngOnChanges(): void {
@@ -44,6 +51,8 @@ export class DualVerifyResultCardComponent implements OnChanges {
       label.includes('partial') ||
       label.includes('non') ||
       /\bnon[- ]?compliant\b/.test(label);
+    this.regulationPage = resolveRegulationPdfPage(this.regulationPageReference, null);
+    this.regulationPageLabel = formatPointPageRef(this.regulationPageReference, this.regulationPage);
   }
 
   agreementClass(status?: string): string {
@@ -73,10 +82,25 @@ export class DualVerifyResultCardComponent implements OnChanges {
   }
 
   onViewRegPdf(): void {
-    if (this.regulationDocId) this.openPdf.emit({ docId: this.regulationDocId });
+    if (!this.regulationDocId) return;
+    const page = this.regulationPage != null ? String(this.regulationPage) : null;
+    this.openPdf.emit({ docId: this.regulationDocId, page });
   }
 
   onViewPolicyPdf(): void {
     if (this.policyDocId) this.openPdf.emit({ docId: this.policyDocId, page: this.policyPage });
+  }
+
+  get hasFindingProof(): boolean {
+    return Boolean(this.regulationDocId || this.policyDocId);
+  }
+
+  regSourceTooltip(): string {
+    const page = this.regulationPageLabel ?? 'start of document';
+    return `Open regulation PDF at ${page}`;
+  }
+
+  policySourceTooltip(): string {
+    return this.policyPage ? `Open policy PDF at p. ${this.policyPage}` : 'Open policy PDF';
   }
 }

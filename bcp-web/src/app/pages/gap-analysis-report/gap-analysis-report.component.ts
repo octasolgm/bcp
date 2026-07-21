@@ -28,6 +28,9 @@ import {
 } from '../../services/reguliq-store';
 import { analysisPointToReportItem } from '../../../lib/nd/analysis-point-mapper';
 import type { AnalysisPoint } from '../../../lib/nd/types';
+import { countDisplayGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
+import { resolveAnalysisPointSeverity } from '../../../lib/nd/point-compliance-status';
+import { parsePointSnapshot } from '../../../lib/nd/utils';
 import { NdApiService } from '../../services/nd/nd-api.service';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { ToastService } from '../../services/toast.service';
@@ -175,12 +178,7 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
   }
 
   get canSubmitNdReview(): boolean {
-    if (!this.ndRunData) return false;
-    const role = this.auth.getRole();
-    if (role !== 'maker' && role !== 'super_admin') return false;
-    return ['completed', 'dual_verify_failed', 'landing_ai_complete', 'pulled_back'].includes(
-      this.ndRunData.run.status,
-    );
+    return false;
   }
 
   get ndWorkflowHint(): string {
@@ -552,6 +550,17 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
     this.applyReport(report, section, focus);
   }
 
+  private analysisPointForGapItem(item: GapItemData): AnalysisPoint | null {
+    if (!this.ndRunData) return null;
+    const pointId = item.section.replace(/^§/, '');
+    return (
+      this.ndRunData.points.find((p) => {
+        const snap = parsePointSnapshot(p.pointSnapshot);
+        return snap.pointNumber === pointId || p.id === pointId;
+      }) ?? null
+    );
+  }
+
   private applyReport(
     report: DualVerifyReportItem[],
     section: string | null,
@@ -572,6 +581,23 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
       ...item,
       severity: normalizeGapSeverity(item.severity),
     }));
+
+    if (this.ndRunData) {
+      items = items.map((item) => {
+        const ndPoint = this.analysisPointForGapItem(item);
+        if (!ndPoint) return item;
+        const severity = resolveAnalysisPointSeverity(ndPoint);
+        const gapCount = countDisplayGapsForAnalysisPoint(
+          ndPoint,
+          (this.ndRunData!.pointAttachments ?? []).filter((a) => a.analysisPointId === ndPoint.id).length,
+        );
+        return {
+          ...item,
+          severity,
+          gapCount: gapCount > 0 ? gapCount : item.gapCount,
+        };
+      });
+    }
 
     if (section) {
       items = items.map((i) => ({ ...i, expanded: i.section === section }));

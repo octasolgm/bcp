@@ -8,9 +8,11 @@ import {
   ActiveAnalysisSessionsService,
   isActiveDocumentRun,
 } from '../../services/active-analysis-sessions.service';
+import { NdShellFocusService } from '../../services/nd/nd-shell-focus.service';
 import type { AnalysisRunSummary } from '../../../lib/nd/types';
 
 type NavItem = {
+  id: string;
   path: string;
   label: string;
   icon: 'grid' | 'file' | 'library' | 'clock' | 'plus' | 'users' | 'building' | 'check' | 'list' | 'trash';
@@ -32,6 +34,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private readonly api = inject(NdApiService);
   readonly theme = inject(ThemeService);
   readonly activeSessions = inject(ActiveAnalysisSessionsService);
+  readonly shellFocus = inject(NdShellFocusService);
 
   readonly profile = this.auth.profile;
   navItems: NavItem[] = [];
@@ -79,11 +82,11 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   badgeFor(item: NavItem): number | undefined {
-    if (item.path === '/nd/in-progress') {
+    if (item.id === 'in-progress') {
       const n = this.activeSessions.sessions().length + this.ndActiveRunCount;
       return n > 0 ? n : undefined;
     }
-    const n = this.navBadges[item.path];
+    const n = this.navBadges[item.id];
     return n && n > 0 ? n : undefined;
   }
 
@@ -92,8 +95,8 @@ export class NdShellComponent implements OnInit, OnDestroy {
     if (!role) return;
 
     const next: Partial<Record<string, number>> = {};
-    const set = (path: string, count: number) => {
-      if (count > 0) next[path] = count;
+    const set = (id: string, count: number) => {
+      if (count > 0) next[id] = count;
     };
 
     const tasks: Promise<void>[] = [];
@@ -101,66 +104,83 @@ export class NdShellComponent implements OnInit, OnDestroy {
     if (role === 'maker' || role === 'super_admin') {
       tasks.push(
         this.api.getInternalDocuments().then((res) => {
-          set('/nd/internal-documents', res.data?.length ?? 0);
+          set('internal-documents', res.data?.length ?? 0);
         }),
       );
       tasks.push(
         this.api.getRegulationDocuments().then((res) => {
-          set('/nd/regulation-documents', res.data?.length ?? 0);
+          set('regulation-documents', res.data?.length ?? 0);
         }),
       );
       tasks.push(
         this.api.getLibraries().then((res) => {
-          set('/nd/libraries', res.data?.length ?? 0);
+          set('libraries', res.data?.length ?? 0);
         }),
       );
     }
 
     const runsMineOnly = role === 'maker';
     tasks.push(
-      this.api.getAnalysisRuns(runsMineOnly ? { mineOnly: true } : undefined).then((res) => {
-        const runs = (res.data ?? []) as AnalysisRunSummary[];
-        set('/nd/analysis-runs', runs.length);
+      this.api
+        .getAnalysisRuns(runsMineOnly ? { mineOnly: true, ndOnly: true } : { ndOnly: true })
+        .then((res) => {
+          const runs = (res.data ?? []) as AnalysisRunSummary[];
+          set('analysis-runs-all', runs.length);
 
-        const ndActive = runs.filter(
-          (r) =>
-            r.source === 'nd_analysis' &&
-            isActiveDocumentRun({
-              status: r.status,
-              completedPoints: r.processedPointsCount,
-              pointCount: r.totalPointsCount,
-              updatedAt: r.createdAt,
-            }),
-        ).length;
-        this.ndActiveRunCount = ndActive;
-      }),
+          const ndActive = runs.filter(
+            (r) =>
+              r.source === 'nd_analysis' &&
+              isActiveDocumentRun({
+                status: r.status,
+                completedPoints: r.processedPointsCount,
+                pointCount: r.totalPointsCount,
+                updatedAt: r.createdAt,
+              }),
+          ).length;
+          this.ndActiveRunCount = ndActive;
+        }),
+    );
+
+    tasks.push(
+      this.api
+        .getAnalysisRuns({
+          ndOnly: true,
+          status: 'pulled_back',
+          ...(runsMineOnly ? { mineOnly: true } : {}),
+        })
+        .then((res) => {
+          set('analysis-runs-correction', res.data?.length ?? 0);
+        }),
     );
 
     if (role === 'super_admin') {
       tasks.push(
         this.api.getUsers().then((res) => {
-          set('/nd/admin/users', res.data?.length ?? 0);
+          set('admin-users', res.data?.length ?? 0);
         }),
         this.api.getDepartments().then((res) => {
-          set('/nd/admin/departments', res.data?.length ?? 0);
+          set('admin-departments', res.data?.length ?? 0);
         }),
         this.api.getCheckerQueue().then((res) => {
-          set('/nd/checker', res.data?.length ?? 0);
+          set('checker-queue', res.data?.length ?? 0);
         }),
         this.api.getReviewerQueue().then((res) => {
-          set('/nd/reviewer', res.data?.length ?? 0);
+          set('reviewer-queue', res.data?.length ?? 0);
         }),
       );
     } else if (role === 'checker') {
       tasks.push(
         this.api.getCheckerQueue().then((res) => {
-          set('/nd/checker', res.data?.length ?? 0);
+          set('checker-queue', res.data?.length ?? 0);
         }),
       );
     } else if (role === 'reviewer') {
       tasks.push(
+        this.api.getCheckerQueue().then((res) => {
+          set('checker-queue', res.data?.length ?? 0);
+        }),
         this.api.getReviewerQueue().then((res) => {
-          set('/nd/reviewer', res.data?.length ?? 0);
+          set('reviewer-queue', res.data?.length ?? 0);
         }),
       );
     }
@@ -189,20 +209,21 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   private workspaceNav(role: string): NavItem[] {
     const viewAll: NavItem = {
+      id: 'analysis-runs-all',
       path: '/nd/analysis-runs',
-      label: 'All analysis runs',
+      label: 'All analysis',
       icon: 'list',
       secondary: true,
       ...(role === 'maker' ? { queryParams: { mine: '1' } } : {}),
     };
     return [
-      { path: '/nd/overview', label: 'Overview', icon: 'grid' },
-      { path: '/nd/internal-documents', label: 'Documents', icon: 'file' },
-      { path: '/nd/regulation-documents', label: 'Regulation Docs Library', icon: 'library' },
-      { path: '/nd/libraries', label: 'Regulation Points Libraries', icon: 'list' },
-      { path: '/nd/in-progress', label: 'In progress', icon: 'clock' },
+      { id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' },
+      { id: 'internal-documents', path: '/nd/internal-documents', label: 'Documents', icon: 'file' },
+      { id: 'regulation-documents', path: '/nd/regulation-documents', label: 'Regulation Docs Library', icon: 'library' },
+      { id: 'libraries', path: '/nd/libraries', label: 'Regulation Points Libraries', icon: 'list' },
+      { id: 'in-progress', path: '/nd/in-progress', label: 'In progress', icon: 'clock' },
       viewAll,
-      { path: '/nd/analyse-v8', label: 'New analysis', icon: 'plus', cta: true },
+      { id: 'analyse-v8', path: '/nd/analyse-v8', label: 'New analysis', icon: 'plus', cta: true },
     ];
   }
 
@@ -211,28 +232,59 @@ export class NdShellComponent implements OnInit, OnDestroy {
       case 'super_admin':
         return [
           ...this.workspaceNav(role),
-          { path: '/nd/admin/users', label: 'User Management', icon: 'users' },
-          { path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
-          { path: '/nd/admin/deleted-runs', label: 'Deleted analyses', icon: 'trash' },
-          { path: '/nd/checker', label: 'Pending Review', icon: 'check' },
-          { path: '/nd/reviewer', label: 'Pending Final Review', icon: 'check' },
+          { id: 'admin-users', path: '/nd/admin/users', label: 'User Management', icon: 'users' },
+          { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
+          { id: 'admin-deleted-runs', path: '/nd/admin/deleted-runs', label: 'Deleted analyses', icon: 'trash' },
+          {
+            id: 'analysis-runs-correction',
+            path: '/nd/analysis-runs',
+            label: 'Pending correction',
+            icon: 'clock',
+            queryParams: { correction: '1' },
+          },
+          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check' },
+          { id: 'reviewer-queue', path: '/nd/reviewer', label: 'Pending final review', icon: 'check' },
         ];
       case 'maker':
-        return this.workspaceNav(role);
+        return [
+          ...this.workspaceNav(role),
+          {
+            id: 'analysis-runs-correction',
+            path: '/nd/analysis-runs',
+            label: 'Pending correction',
+            icon: 'clock',
+            queryParams: { mine: '1', correction: '1' },
+          },
+        ];
       case 'checker':
         return [
-          { path: '/nd/overview', label: 'Overview', icon: 'grid' },
-          { path: '/nd/checker', label: 'Pending Review', icon: 'check' },
-          { path: '/nd/analysis-runs', label: 'All analysis runs', icon: 'list', secondary: true },
+          { id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' },
+          { id: 'analysis-runs-all', path: '/nd/analysis-runs', label: 'All analysis', icon: 'list' },
+          {
+            id: 'analysis-runs-correction',
+            path: '/nd/analysis-runs',
+            label: 'Pending correction',
+            icon: 'clock',
+            queryParams: { correction: '1' },
+          },
+          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check' },
         ];
       case 'reviewer':
         return [
-          { path: '/nd/overview', label: 'Overview', icon: 'grid' },
-          { path: '/nd/reviewer', label: 'Pending Final Review', icon: 'check' },
-          { path: '/nd/analysis-runs', label: 'All analysis runs', icon: 'list', secondary: true },
+          { id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' },
+          { id: 'analysis-runs-all', path: '/nd/analysis-runs', label: 'All analysis', icon: 'list' },
+          {
+            id: 'analysis-runs-correction',
+            path: '/nd/analysis-runs',
+            label: 'Pending correction',
+            icon: 'clock',
+            queryParams: { correction: '1' },
+          },
+          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check' },
+          { id: 'reviewer-queue', path: '/nd/reviewer', label: 'Pending final review', icon: 'check' },
         ];
       default:
-        return [{ path: '/nd/overview', label: 'Overview', icon: 'grid' }];
+        return [{ id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' }];
     }
   }
 }

@@ -40,7 +40,7 @@
                   </div>
                 }
                 @for (p of sec.points; track p.point_id) {
-                  <div class="point-line" [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint">
+                  <div class="point-line" [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint" [class.point-highlight]="isHighlighted(p.point_id)">
                     <span class="point-check" aria-hidden="true">✓</span>
                     <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
                     @if (pointMeta(p.point_id)?.isIntroductionPoint) {

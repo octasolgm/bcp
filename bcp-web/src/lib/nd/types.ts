@@ -89,6 +89,10 @@ export type AnalysisRunSummary = {
   partial?: number;
   nonCompliant?: number;
   submittedAt?: string;
+  workflowHolder?: string;
+  totalGaps?: number;
+  reviewedGaps?: number;
+  totalReviews?: number;
 };
 
 export type AnalysisPoint = {
@@ -107,6 +111,17 @@ export type AnalysisPoint = {
   originalAiActionPlan?: string | null;
 };
 
+export type PointGapAttachment = {
+  id: string;
+  analysisPointId: string;
+  actionIndex?: number | null;
+  storedDocumentId: string;
+  fileName: string;
+  parseStatus?: string | null;
+  sizeBytes?: number | null;
+  createdAt: string;
+};
+
 export type ResultsData = {
   run: {
     id: string;
@@ -119,6 +134,7 @@ export type ResultsData = {
     createdAt: string;
   };
   points: AnalysisPoint[];
+  pointAttachments?: PointGapAttachment[];
   reviews: { id: string; reviewerRole: string; action: string; overallComment?: string; createdAt: string }[];
   comments: { id: string; analysisPointId: string; comment: string; createdAt: string }[];
   actionItemReviews?: ActionItemReviewEntry[];

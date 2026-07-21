@@ -5,28 +5,32 @@ import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/rout
 import { filter } from 'rxjs/operators';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { ToastService } from '../../../services/toast.service';
+import { NdWorkspaceTabsComponent } from '../../../components/nd/nd-workspace-tabs.component';
 import { formatDate } from '../../../../lib/nd/utils';
 import { isLegacyAnalysisRun, ndAnalysisRunLink, ndAnalysisRunQuery, analysisRunNeedsExecutionView } from '../../../../lib/nd/run-links';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
 
-type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'status';
+type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'status';
 
 @Component({
   selector: 'app-nd-analysis-runs',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent],
   templateUrl: './nd-analysis-runs.component.html',
   styleUrls: ['./nd-analysis-runs.component.scss', '../nd-shared.scss'],
 })
 export class NdAnalysisRunsComponent implements OnInit {
   private readonly api = inject(NdApiService);
   private readonly auth = inject(NdAuthService);
+  private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
   allRuns: AnalysisRunSummary[] = [];
   loading = true;
   mineOnly = false;
+  correctionOnly = false;
   pageTitle = 'Analysis runs';
   subtitle = 'All compliance analysis runs';
 
@@ -36,23 +40,27 @@ export class NdAnalysisRunsComponent implements OnInit {
   sortColumn: RunSortColumn = 'created';
   sortDir: 'asc' | 'desc' = 'desc';
   deletingId: string | null = null;
+  submittingRunId: string | null = null;
   deleteMessage = '';
   deleteError = '';
 
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
-    const role = this.auth.getRole();
 
     this.route.queryParamMap.subscribe((params) => {
-      this.mineOnly = params.get('mine') === '1' || role === 'maker';
-      this.pageTitle = this.mineOnly ? 'My analysis runs' : 'All analysis runs';
-      this.subtitle = this.mineOnly
-        ? 'Runs you created'
-        : role === 'checker'
-          ? 'All runs — open pending items from the review queue'
-          : role === 'reviewer'
-            ? 'All runs — open pending items from the final review queue'
-            : 'All compliance analysis runs across the workspace';
+      const role = this.auth.getRole();
+      this.mineOnly = role === 'maker' ? params.get('mine') !== '0' : params.get('mine') === '1';
+      this.correctionOnly = params.get('correction') === '1';
+      this.pageTitle = this.correctionOnly
+        ? 'Pending correction'
+        : this.mineOnly && role === 'maker'
+          ? 'All analysis'
+          : 'All analysis';
+      this.subtitle = this.correctionOnly
+        ? 'Analyses sent back to the maker by checker or reviewer — edit and resubmit when ready'
+        : this.mineOnly && role === 'maker'
+          ? 'Runs you created'
+          : 'All compliance analysis runs across the workspace';
       void this.load();
     });
 
@@ -65,7 +73,17 @@ export class NdAnalysisRunsComponent implements OnInit {
 
   async load(): Promise<void> {
     this.loading = true;
-    const res = await this.api.getAnalysisRuns(this.mineOnly ? { mineOnly: true } : undefined);
+    const res = await this.api.getAnalysisRuns(
+      this.correctionOnly
+        ? {
+            ndOnly: true,
+            status: 'pulled_back',
+            ...(this.mineOnly ? { mineOnly: true } : {}),
+          }
+        : this.mineOnly
+          ? { mineOnly: true, ndOnly: true }
+          : { ndOnly: true },
+    );
     if (res.success && res.data) {
       this.allRuns = res.data as AnalysisRunSummary[];
     } else {
@@ -74,9 +92,19 @@ export class NdAnalysisRunsComponent implements OnInit {
     this.loading = false;
   }
 
+  get workspaceTabActive(): 'all_analysis' | 'pending_correction' {
+    return this.correctionOnly ? 'pending_correction' : 'all_analysis';
+  }
+
+  get showWorkspaceTabs(): boolean {
+    const role = this.auth.getRole();
+    return role === 'maker' || role === 'checker' || role === 'reviewer' || role === 'super_admin';
+  }
+
   get visibleRuns(): AnalysisRunSummary[] {
     const query = this.searchQuery.trim().toLowerCase();
     let list = this.allRuns.filter((run) => {
+      if (this.correctionOnly && run.status.toLowerCase() !== 'pulled_back') return false;
       if (query && !run.name.toLowerCase().includes(query)) return false;
       if (this.statusFilter && !this.matchesStatusFilter(run.status)) return false;
       if (this.sourceFilter && (run.source ?? 'nd_analysis') !== this.sourceFilter) return false;
@@ -92,6 +120,10 @@ export class NdAnalysisRunsComponent implements OnInit {
           return dir * (a.processedPointsCount - b.processedPointsCount || a.totalPointsCount - b.totalPointsCount);
         case 'source':
           return dir * this.sourceLabel(a).localeCompare(this.sourceLabel(b));
+        case 'workflow':
+          return dir * (a.workflowHolder ?? this.workflowStatusLabel(a)).localeCompare(
+            b.workflowHolder ?? this.workflowStatusLabel(b),
+          );
         case 'status':
           return dir * a.status.localeCompare(b.status);
         case 'created':
@@ -223,6 +255,25 @@ export class NdAnalysisRunsComponent implements OnInit {
     );
   }
 
+  async submitRunForReview(run: AnalysisRunSummary, event: Event): Promise<void> {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!this.canSendForReview(run)) return;
+    this.submittingRunId = run.id;
+    const status = run.status.toLowerCase();
+    const res =
+      status === 'pulled_back'
+        ? await this.api.resubmitForReview(run.id)
+        : await this.api.submitForReview(run.id);
+    this.submittingRunId = null;
+    if (res.success) {
+      this.toast.show('Submitted to checker for review', 'success');
+      await this.load();
+    } else {
+      this.toast.show(res.message ?? 'Could not submit for review', 'error');
+    }
+  }
+
   canReviewRun(run: AnalysisRunSummary): boolean {
     if (this.isLegacy(run)) return false;
     const role = this.auth.getRole();
@@ -232,6 +283,8 @@ export class NdAnalysisRunsComponent implements OnInit {
   }
 
   canEditPlans(run: AnalysisRunSummary): boolean {
+    const role = this.auth.getRole();
+    if (role !== 'maker' && role !== 'super_admin') return false;
     if (analysisRunNeedsExecutionView(run)) return false;
     if (this.isLegacy(run)) return false;
     return [

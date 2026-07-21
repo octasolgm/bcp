@@ -180,6 +180,13 @@
   border: 1px solid #fcd34d;
   white-space: nowrap;
   flex-shrink: 0;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: inherit;
+
+  &:hover {
+    background: #fde68a;
+  }
 }
 
 .item-header {

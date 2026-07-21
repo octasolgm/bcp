@@ -6,6 +6,7 @@ import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { parsePointSnapshot } from '../../../../lib/nd/utils';
 import type { AnalysisPoint } from '../../../../lib/nd/types';
+import { resolveAnalysisPointSeverity } from '../../../../lib/nd/point-compliance-status';
 
 type RunStatus = {
   id: string;
@@ -122,6 +123,10 @@ export class NdRunAnalysisProgressComponent implements OnInit, OnDestroy {
   }
 
   parsePointSnapshot = parsePointSnapshot;
+
+  pointComplianceSeverity(point: AnalysisPoint): string {
+    return resolveAnalysisPointSeverity(point);
+  }
 
   private parseJsonArray(value: string | undefined): unknown[] {
     if (!value) return [];

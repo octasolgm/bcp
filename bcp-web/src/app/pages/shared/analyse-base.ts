@@ -634,8 +634,28 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     return item.section.replace(/^§\s*/, '').trim();
   }
 
+  trackInlineGapItem(item: GapItemData): string {
+    return `${item.section}|${item.expanded ? '1' : '0'}`;
+  }
+
   toggleInlineGapItem(item: GapItemData): void {
-    item.expanded = !item.expanded;
+    const idx = this.inlineGapItems.findIndex(
+      (i) => i.section.trim() === item.section.trim() || i.id === item.id,
+    );
+    if (idx < 0) return;
+    this.inlineGapItems[idx].expanded = !this.inlineGapItems[idx].expanded;
+    this.inlineGapItems = [...this.inlineGapItems];
+  }
+
+  expandInlineGapItem(event: Event, item: GapItemData): void {
+    event.stopPropagation();
+    event.preventDefault();
+    const idx = this.inlineGapItems.findIndex(
+      (i) => i.section.trim() === item.section.trim() || i.id === item.id,
+    );
+    if (idx < 0) return;
+    this.inlineGapItems[idx].expanded = true;
+    this.inlineGapItems = [...this.inlineGapItems];
   }
 
   setInlineGapFilter(id: 'all' | GapSeverity): void {
@@ -732,6 +752,9 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   get policyPdfDocId(): string | null {
+    if (this.selectedComplianceIds.size > 0) {
+      return [...this.selectedComplianceIds][0];
+    }
     return this.complianceDoc?.id ?? this.seededImptfs?.id ?? null;
   }
 
@@ -744,17 +767,30 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       this.toast.show('PDF document not linked for this run', 'warning');
       return;
     }
+    const openUrl = (url: string) => {
+      const full = page ? `${url}#page=${page}` : url;
+      window.open(full, '_blank', 'noopener');
+    };
     this.api.getDocumentSignedUrl(docId).subscribe({
       next: (r) => {
-        if (!r.url) {
-          this.toast.show('Could not open PDF', 'error');
+        if (r.url) {
+          openUrl(r.url);
           return;
         }
-        const url = page ? `${r.url}#page=${page}` : r.url;
-        window.open(url, '_blank', 'noopener');
+        void this.openRegulationFileUrl(docId, page);
       },
-      error: () => this.toast.show('Could not open PDF', 'error'),
+      error: () => void this.openRegulationFileUrl(docId, page),
     });
+  }
+
+  private async openRegulationFileUrl(docId: string, page?: string | null): Promise<void> {
+    const res = await this.ndApi.getRegulationDocumentFileUrl(docId);
+    if (res.success && res.data?.url) {
+      const url = page ? `${res.data.url}#page=${page}` : res.data.url;
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+    this.toast.show(res.message ?? 'Could not open PDF', 'error');
   }
 
   runDemoAnalysis(): void {

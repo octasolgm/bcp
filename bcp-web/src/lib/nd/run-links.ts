@@ -97,8 +97,14 @@ export function ndAnalysisRunLink(
   run: AnalysisRunSummary,
   role?: string | null,
 ): string[] {
-  if (role === 'checker') return ['/nd/checker/review', run.id];
-  if (role === 'reviewer') return ['/nd/reviewer/review', run.id];
+  if (role === 'checker') {
+    if (run.status === 'submitted_for_review') return ['/nd/checker/review', run.id];
+    return ['/nd/gap-analysis'];
+  }
+  if (role === 'reviewer') {
+    if (run.status === 'checker_approved') return ['/nd/reviewer/review', run.id];
+    return ['/nd/gap-analysis'];
+  }
 
   if (analysisRunNeedsExecutionView(run)) {
     return ['/nd/analyse-v8'];
@@ -122,7 +128,14 @@ export function ndAnalysisRunQuery(
   run: AnalysisRunSummary,
   role?: string | null,
 ): Record<string, string> | undefined {
-  if (role === 'checker' || role === 'reviewer') return undefined;
+  if (role === 'checker') {
+    if (run.status === 'submitted_for_review') return undefined;
+    return { run: run.id };
+  }
+  if (role === 'reviewer') {
+    if (run.status === 'checker_approved') return undefined;
+    return { run: run.id };
+  }
 
   if (!isLegacyAnalysisRun(run)) {
     if (analysisRunNeedsExecutionView(run)) {

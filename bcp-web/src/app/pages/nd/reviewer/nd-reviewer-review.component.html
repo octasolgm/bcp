@@ -15,8 +15,15 @@
   <div class="nd-review-grid">
     <div class="nd-review-panel">
       <h3>Points</h3>
+      <div class="nd-review-sort">
+        <app-nd-point-sort-controls
+          [sort]="pointSort === 'default' ? 'number' : pointSort"
+          [dir]="pointSortDir"
+          (sortChange)="onPointSortChange($event)"
+        />
+      </div>
       <div class="nd-review-points">
-        @for (p of data.points; track p.id) {
+        @for (p of sortedPoints; track p.id) {
           @let snap = parsePointSnapshot(p.pointSnapshot);
           <button
             type="button"
@@ -24,7 +31,12 @@
             [class.active]="p.id === selectedId"
             (click)="selectPoint(p.id)"
           >
-            <span>{{ snap.pointNumber }}</span>
+            <span>
+              {{ snap.pointNumber }}
+              @if (hasComment(p.id)) {
+                <span class="nd-comment-dot">●</span>
+              }
+            </span>
             <span class="nd-review-point-badges">
               @if (gapCountForPoint(p); as gapCount) {
                 @if (gapCount > 0) {
@@ -66,11 +78,33 @@
           [point]="point"
           [snapshot]="snap"
           [canEdit]="false"
+          [reviewMode]="true"
+          [showReviewPanel]="true"
+          [savedActionItemReviews]="savedReviewsForSelected()"
+          [savingActionReviewIndex]="savingActionReviewIndex"
           [history]="history"
           [showHistoryPanel]="historyOpen"
+          [runId]="runId"
+          [gapAttachments]="attachmentsForPoint(point.id)"
+          [policyDocId]="policyDocId"
+          [policyDocCatalog]="policyDocCatalog"
+          [regulationDocId]="regDocIdForPoint(point)"
           (openHistory)="openHistory()"
           (closeHistory)="closeHistory()"
+          (saveActionItemReview)="saveActionItemReview($event)"
+          (openPdf)="openPdfFromNd($event)"
         />
+
+        <label class="nd-label nd-review-comment">
+          Point comment <span class="nd-optional">(optional)</span>
+          <textarea
+            class="nd-input"
+            rows="3"
+            [ngModel]="selectedComment"
+            (ngModelChange)="updatePointComment($event)"
+            placeholder="Optional feedback for this point…"
+          ></textarea>
+        </label>
       } @else {
         <p class="nd-muted">Select a point</p>
       }
@@ -84,12 +118,23 @@
         @if (error) {
           <p class="nd-error">{{ error }}</p>
         }
+        @if (reviewProgress.total > 0) {
+          <p class="nd-review-progress" [class.complete]="reviewProgress.reviewed >= reviewProgress.total">
+            Action reviews: {{ reviewProgress.reviewed }}/{{ reviewProgress.total }}
+            @if (reviewProgress.reviewed < reviewProgress.total) {
+              — set status on each action before finalize or pull back
+            }
+          </p>
+        }
         <div class="nd-actions">
           <button type="button" class="nd-btn-primary" [disabled]="submitting" (click)="handleFinalize()">
             Finalize
           </button>
-          <button type="button" class="nd-btn-secondary" [disabled]="submitting" (click)="handlePullBack()">
+          <button type="button" class="nd-btn-secondary" [disabled]="submitting" (click)="handlePullBackToChecker()">
             Pull back to checker
+          </button>
+          <button type="button" class="nd-btn-secondary" [disabled]="submitting" (click)="handlePullBackToMaker()">
+            Pull back to maker
           </button>
           <a [routerLink]="['/nd/gap-analysis']" [queryParams]="{ run: runId }" class="nd-btn-secondary">Full results</a>
         </div>

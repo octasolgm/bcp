@@ -134,11 +134,15 @@ public static class GovPointsParser
             var id = p.TryGetProperty("point_id", out var pid) ? pid.GetString() : null;
             var text = p.TryGetProperty("text", out var pt) ? pt.GetString() : null;
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(text)) continue;
+            int? pageHint = null;
+            if (p.TryGetProperty("page_hint", out var ph) && ph.ValueKind == JsonValueKind.Number && ph.TryGetInt32(out var hint))
+                pageHint = hint;
             list.Add(new GovPoint(
                 id.Trim(),
                 p.TryGetProperty("title", out var t) ? t.GetString() : null,
                 text.Trim(),
-                p.TryGetProperty("section", out var s) ? s.GetString() : null));
+                p.TryGetProperty("section", out var s) ? s.GetString() : null,
+                pageHint));
         }
         return list;
     }

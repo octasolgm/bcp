@@ -1,19 +1,13 @@
+import { complianceSeverityLabel, type ComplianceSeverity } from '../../lib/nd/point-compliance-status';
+
 /** Shared local persistence for Reguliq gap-analysis working document. */
 
 /** Gap analysis uses three compliance outcomes only. */
-export type GapSeverity = 'compliant' | 'partial_compliant' | 'non_compliant';
+export type GapSeverity = ComplianceSeverity;
 
 export function gapSeverityLabel(severity: GapSeverity | string): string {
-  switch (severity) {
-    case 'compliant':
-      return 'Compliance';
-    case 'partial_compliant':
-      return 'Partial compliance';
-    case 'non_compliant':
-      return 'Non-compliance';
-    default:
-      return gapSeverityLabel(normalizeGapSeverity(severity));
-  }
+  const normalized = normalizeGapSeverity(String(severity));
+  return complianceSeverityLabel(normalized);
 }
 
 export function gapSeverityShortLabel(severity: GapSeverity | string): string {

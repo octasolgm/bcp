@@ -125,5 +125,6 @@ public static class NdLegacyDataQueries
         submittedToCheckerAt = r.SubmittedToCheckerAt,
         legacySessionId = (Guid?)null,
         legacyHref = (string?)null,
+        workflowHolder = NdRunEnrichmentHelper.WorkflowHolderLabel(r.Status),
     };
 }

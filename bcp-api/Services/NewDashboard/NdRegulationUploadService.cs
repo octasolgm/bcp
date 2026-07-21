@@ -60,24 +60,11 @@ public class NdRegulationUploadService(
             Name = title,
             FilePath = objectPath,
             DepartmentId = departmentId,
-            ExtractionStatus = "processing",
+            ExtractionStatus = "pending",
             CreatedBy = userId,
         };
         db.NdRegulationDocuments.Add(regDoc);
         await db.SaveChangesAsync(ct);
-
-        try
-        {
-            await ExtractInternalAsync(regDoc, bytes, fileName, userId, ct);
-        }
-        catch (Exception ex)
-        {
-            regDoc.ExtractionStatus = "failed";
-            regDoc.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
-            logger.LogError(ex, "Extraction failed for regulation document {Id}", regDoc.Id);
-            throw;
-        }
 
         return regDoc;
     }

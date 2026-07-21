@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -21,6 +21,28 @@ import {
 import type { Department, RegulationDocument, RegulationPoint } from '../../../../lib/nd/types';
 import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.component';
 import { NdManualRegulationPointsPanelComponent } from './nd-manual-regulation-points-panel.component';
+import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
+import { startPanelResize } from '../../shared/panel-resize';
+import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd/regulation-pdf-page';
+
+export type RegulationPointSearchHit = {
+  id: string;
+  pointNumber: string;
+  pointTitle?: string | null;
+  snippet?: string;
+  pageReference?: string | null;
+  pdfPage?: number | null;
+  storedDocumentId?: string | null;
+};
+
+export type RegulationPointSearchGroup = {
+  documentId: string;
+  documentName: string;
+  departmentName?: string | null;
+  isManual?: boolean;
+  storedDocumentId?: string | null;
+  points: RegulationPointSearchHit[];
+};
 
 @Component({
   selector: 'app-nd-regulation-documents',
@@ -30,8 +52,12 @@ import { NdManualRegulationPointsPanelComponent } from './nd-manual-regulation-p
   styleUrls: ['./nd-regulation-documents.component.scss', '../nd-shared.scss'],
 })
 export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
+  private static readonly PANEL_SPLIT_KEY = 'nd-reg-panel-split-left';
+
   private readonly api = inject(NdApiService);
+  private readonly shellFocus = inject(NdShellFocusService);
   readonly auth = inject(NdAuthService);
+  readonly formatPointPageRef = formatPointPageRef;
 
   docs: RegulationDocument[] = [];
   departments: Department[] = [];
@@ -55,17 +81,76 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   pointsSource = '';
   pointsLoading = false;
   showPointsPanel = false;
+  /** Left (table) share when points panel is open — kept small by default. */
+  leftPanelPct = 28;
+  highlightPointNumber = '';
+  globalPointSearch = '';
+  pointSearchLoading = false;
+  pointSearchResults: RegulationPointSearchGroup[] = [];
+  pointSearchTotal = 0;
+  pointSearchError = '';
+  private pointSearchTimer: ReturnType<typeof setTimeout> | null = null;
   private extractPollTimer: ReturnType<typeof setInterval> | null = null;
   private readonly pollingExtractIds = new Set<string>();
 
   async ngOnInit(): Promise<void> {
+    this.restorePanelSplit();
     await this.auth.refreshProfile();
     await this.loadDepartments();
     await this.loadDocs();
   }
 
+  get panelGridColumns(): string | null {
+    if (!this.showPointsPanel) return null;
+    const left = this.leftPanelPct;
+    const right = 100 - left;
+    return `minmax(10rem, ${left}%) 10px minmax(16rem, ${right}%)`;
+  }
+
+  startPointsPanelResize(event: MouseEvent): void {
+    const layout = (event.target as HTMLElement).closest('.library-layout');
+    const containerWidth = layout?.clientWidth ?? 1200;
+    startPanelResize(
+      {
+        kind: 'setup-split',
+        startX: event.clientX,
+        startY: event.clientY,
+        startVal: this.leftPanelPct,
+        containerWidth,
+      },
+      event,
+      (_kind, value) => {
+        this.leftPanelPct = value;
+      },
+      { 'setup-split': { min: 18, max: 55 } },
+    );
+    const onUp = () => {
+      window.removeEventListener('mouseup', onUp);
+      localStorage.setItem(
+        NdRegulationDocumentsComponent.PANEL_SPLIT_KEY,
+        String(this.leftPanelPct),
+      );
+    };
+    window.addEventListener('mouseup', onUp);
+  }
+
+  private restorePanelSplit(): void {
+    try {
+      const saved = localStorage.getItem(NdRegulationDocumentsComponent.PANEL_SPLIT_KEY);
+      if (!saved) return;
+      const pct = Number.parseFloat(saved);
+      if (Number.isFinite(pct) && pct >= 18 && pct <= 55) {
+        this.leftPanelPct = pct;
+      }
+    } catch {
+      /* ignore storage errors */
+    }
+  }
+
   ngOnDestroy(): void {
     this.stopExtractPolling();
+    this.shellFocus.setRegulationPointsPanelOpen(false);
+    if (this.pointSearchTimer) clearTimeout(this.pointSearchTimer);
   }
 
   private stopExtractPolling(): void {
@@ -221,8 +306,12 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       this.file = null;
       await this.loadDocs(true);
       if (data?.id && (data.extractionStatus === 'processing' || data.extractionStatus === 'pending')) {
-        this.trackExtractingDoc(data.id);
-        this.message = 'Document uploaded — extraction in progress…';
+        if (data.extractionStatus === 'processing') {
+          this.trackExtractingDoc(data.id);
+          this.message = 'Document uploaded — extraction in progress…';
+        } else {
+          this.message = 'Document uploaded — click Run extraction to extract regulation points.';
+        }
       } else if (data?.id) {
         this.message = `Document uploaded — ${data.pointCount ?? 0} points extracted`;
       }
@@ -302,10 +391,18 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.pollingExtractIds.delete(doc.id);
   }
 
-  async viewPoints(doc: RegulationDocument, event?: Event): Promise<void> {
+  async viewPoints(
+    doc: RegulationDocument,
+    event?: Event,
+    highlightPoint?: string,
+    options?: { keepPointSearch?: boolean },
+  ): Promise<void> {
     event?.stopPropagation();
+    if (!options?.keepPointSearch) this.clearGlobalPointSearch();
     this.selectedDoc = doc;
     this.showPointsPanel = true;
+    this.highlightPointNumber = highlightPoint?.trim() ?? '';
+    this.shellFocus.setRegulationPointsPanelOpen(true);
     await this.loadPointsForDoc(doc.id);
   }
 
@@ -318,6 +415,111 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
 
   closePointsPanel(): void {
     this.showPointsPanel = false;
+    this.highlightPointNumber = '';
+    this.shellFocus.setRegulationPointsPanelOpen(false);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.showPointsPanel) this.closePointsPanel();
+  }
+
+  onGlobalPointSearch(value: string): void {
+    this.globalPointSearch = value;
+    if (this.pointSearchTimer) clearTimeout(this.pointSearchTimer);
+    const q = value.trim();
+    if (q.length < 2) {
+      this.pointSearchResults = [];
+      this.pointSearchTotal = 0;
+      this.pointSearchLoading = false;
+      this.pointSearchError = '';
+      return;
+    }
+    this.pointSearchError = '';
+    this.pointSearchLoading = true;
+    this.pointSearchTimer = setTimeout(() => void this.runGlobalPointSearch(q), 320);
+  }
+
+  private async runGlobalPointSearch(q: string): Promise<void> {
+    const res = await this.api.searchRegulationPoints(q);
+    if (this.globalPointSearch.trim() !== q) return;
+    this.pointSearchLoading = false;
+    if (res.success && res.data) {
+      this.pointSearchResults = res.data as RegulationPointSearchGroup[];
+      this.pointSearchTotal = res.totalMatches ?? this.countSearchMatches(this.pointSearchResults);
+      this.pointSearchError = '';
+    } else {
+      this.pointSearchResults = [];
+      this.pointSearchTotal = 0;
+      this.pointSearchError = res.message ?? 'Point search failed';
+    }
+  }
+
+  private countSearchMatches(groups: RegulationPointSearchGroup[]): number {
+    return groups.reduce((sum, g) => sum + (g.points?.length ?? 0), 0);
+  }
+
+  async openPointFromSearch(group: RegulationPointSearchGroup, hit: RegulationPointSearchHit): Promise<void> {
+    const doc = this.docFromSearchGroup(group);
+    await this.viewPoints(doc, undefined, hit.pointNumber, { keepPointSearch: true });
+  }
+
+  async openSourceFromSearch(
+    group: RegulationPointSearchGroup,
+    hit: RegulationPointSearchHit,
+    event?: Event,
+  ): Promise<void> {
+    event?.stopPropagation();
+    const doc = this.docFromSearchGroup(group);
+    if (this.isManualDoc(doc)) return;
+    const page = resolveRegulationPdfPage(hit.pageReference, hit.pdfPage);
+    const fileDocId = hit.storedDocumentId ?? group.storedDocumentId ?? doc.id;
+    await this.openDocumentById(fileDocId, event, page);
+  }
+
+  canOpenSourceFromSearch(group: RegulationPointSearchGroup): boolean {
+    return !group.isManual;
+  }
+
+  private docFromSearchGroup(group: RegulationPointSearchGroup): RegulationDocument {
+    const existing = this.docs.find((d) => d.id === group.documentId);
+    return (
+      existing ??
+      ({
+        id: group.documentId,
+        name: group.documentName,
+        departmentName: group.departmentName ?? undefined,
+        extractionStatus: group.isManual ? 'manual' : 'extracted',
+        pointCount: group.points.length,
+        createdAt: new Date().toISOString(),
+        isManual: group.isManual,
+        source: group.isManual ? 'manual' : 'nd',
+      } as RegulationDocument)
+    );
+  }
+
+  openSourceTooltip(group: RegulationPointSearchGroup, hit: RegulationPointSearchHit): string {
+    const page = formatPointPageRef(hit.pageReference, hit.pdfPage);
+    return [
+      group.documentName,
+      hit.pointNumber,
+      hit.pointTitle,
+      page ?? hit.pageReference,
+    ]
+      .filter((p) => p?.trim())
+      .join(' · ');
+  }
+
+  searchHitTooltip(hit: RegulationPointSearchHit): string {
+    return [hit.pointNumber, hit.pointTitle, hit.snippet].filter((p) => p?.trim()).join('\n');
+  }
+
+  clearGlobalPointSearch(): void {
+    this.globalPointSearch = '';
+    this.pointSearchResults = [];
+    this.pointSearchTotal = 0;
+    this.pointSearchLoading = false;
+    this.pointSearchError = '';
   }
 
   private async loadPointsForDoc(docId: string): Promise<void> {
@@ -362,13 +564,21 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.hidingId = null;
   }
 
-  async openDocument(doc: RegulationDocument, event?: Event): Promise<void> {
+  async openDocument(doc: RegulationDocument, event?: Event, page?: number | null): Promise<void> {
     event?.stopPropagation();
     if (this.isManualDoc(doc)) return;
+    const fileDocId = doc.storedDocumentId ?? doc.id;
+    await this.openDocumentById(fileDocId, event, page);
+  }
+
+  async openDocumentById(docId: string, event?: Event, page?: number | null): Promise<void> {
+    event?.stopPropagation();
     this.error = '';
-    const res = await this.api.getRegulationDocumentFileUrl(doc.id);
+    const res = await this.api.getRegulationDocumentFileUrl(docId);
     if (res.success && res.data?.url) {
-      window.open(res.data.url, '_blank', 'noopener');
+      const pdfPage = page != null && page > 0 ? page : null;
+      const url = pdfPage ? `${res.data.url}#page=${pdfPage}` : res.data.url;
+      window.open(url, '_blank', 'noopener');
       return;
     }
     this.error = res.message ?? 'Could not open regulation PDF';

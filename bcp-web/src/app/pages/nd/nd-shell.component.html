@@ -1,4 +1,4 @@
-<div class="shell">
+<div class="shell" [class.sidebar-collapsed]="shellFocus.regulationPointsPanelOpen()">
   <header class="topbar">
     <a routerLink="/nd/overview" class="brand">
       <span class="logo-icon" aria-hidden="true">
@@ -32,7 +32,7 @@
     <aside class="sidebar">
       <div class="sidebar-nav">
         <p class="nav-label">Workspace</p>
-        @for (item of navItems; track item.path) {
+        @for (item of navItems; track item.id) {
           <a
             [routerLink]="item.path"
             [queryParams]="item.queryParams"
@@ -40,7 +40,11 @@
             class="nav-item"
             [class.nav-item-cta]="item.cta"
             [class.nav-item-secondary]="item.secondary"
-            [routerLinkActiveOptions]="{ exact: item.path === '/nd/overview' || item.path === '/nd/analyse-v8' }"
+            [routerLinkActiveOptions]="
+              item.queryParams
+                ? { paths: 'subset', queryParams: 'exact', matrixParams: 'ignored', fragment: 'ignored' }
+                : { exact: item.path === '/nd/overview' || item.path === '/nd/analyse-v8' }
+            "
           >
             @switch (item.icon) {
               @case ('grid') {

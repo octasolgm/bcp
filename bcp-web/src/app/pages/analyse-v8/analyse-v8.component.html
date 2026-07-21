@@ -515,7 +515,7 @@
         <div class="doc-panel doc-panel-stretch v8-compliance-panel">
           <div class="panel-header panel-header-v8">
             <div class="panel-header-top">
-              <h2>Compliance</h2>
+              <h2>Internal Documents</h2>
               <div class="header-actions">
                 <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredCompliance()">All</button>
                 <button type="button" class="toolbar-btn secondary" (click)="clearComplianceSelection()">Clear</button>
@@ -528,9 +528,9 @@
             <input
               type="search"
               class="search-field header-search"
-              placeholder="Search compliance docs…"
+              placeholder="Search Internal docs…"
               [(ngModel)]="complianceSearch"
-              aria-label="Search compliance documents"
+              aria-label="Search Internal documents"
             />
           </div>
 
@@ -550,7 +550,11 @@
                     <span class="multi-check" [class.on]="isComplianceFileSelected(doc.id)">{{ isComplianceFileSelected(doc.id) ? '✓' : '' }}</span>
                     <span class="fname">{{ fileLabel(doc) }}</span>
                     <span class="fmeta">{{ doc.category || 'Compliance' }}</span>
-                    <span class="fmeta muted">{{ doc.version }}</span>
+                    @if (isNdShell) {
+                      <span class="fmeta parse-status" [class.parsed]="complianceParseLabel(doc.id) === 'Parsed'">{{ complianceParseLabel(doc.id) }}</span>
+                    } @else {
+                      <span class="fmeta muted">{{ doc.version }}</span>
+                    }
                   </button>
                 </li>
               } @empty {
@@ -647,6 +651,15 @@
       <span class="count">{{ analysingListDone }}/{{ analysingListTotal }}</span>
     </div>
 
+    @if (selectedCoverageRows.length) {
+      <app-nd-point-sort-controls
+        class="analysing-point-sort"
+        [sort]="analysingPointSort"
+        [dir]="analysingPointSortDir"
+        (sortChange)="onAnalysingPointSortChange($event)"
+      />
+    }
+
     @if (hasResumableRun || analysisState !== 'idle') {
       <div class="coverage-actions">
         <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || coverageCounts.notRun === 0" (click)="runRemainingPoints()">
@@ -667,7 +680,7 @@
         <p class="empty-msg">Run analysis to track point-by-point status.</p>
       } @else {
         <ul class="status-list">
-          @for (row of selectedCoverageRows; track row.pointId) {
+          @for (row of sortedAnalysingRows; track row.pointId) {
             <li
               class="status-row"
               [class.detail-selected]="selectedDetailPointId === row.pointId"
@@ -801,8 +814,8 @@
                   — {{ selectedPointSnapshot?.pointTitle }}
                 }
               </h3>
-              @if (ndPoint.finalStatus) {
-                <span class="status-pill" [class]="ndPoint.finalStatus">{{ selectedPointComplianceLabel() }}</span>
+              @if (pointComplianceSeverity(ndPoint); as severity) {
+                <span class="status-pill" [class]="severity">{{ selectedPointComplianceLabel() }}</span>
               }
             </div>
           </header>
@@ -823,7 +836,20 @@
             [history]="resultHistoryPointId === ndPoint.id ? resultHistory : []"
             [showHistoryPanel]="resultHistoryPointId === ndPoint.id"
             [policyDocId]="policyPdfDocId"
+            [policyDocCatalog]="ndPolicyDocCatalog"
             [regulationDocId]="regulationPdfDocId"
+              [runId]="activeNdRunId"
+              [gapAttachments]="attachmentsForPoint(selectedDetailPointId!)"
+              [savedActionItemReviews]="savedReviewsForPoint(selectedDetailPointId!)"
+              [showReviewPanel]="canShowReviewPanel"
+              [reviewMode]="canReviewActionGaps"
+              [reviewDisabledHint]="gapReviewDisabledHint"
+              [savingActionReviewIndex]="savingActionReviewIndex"
+              [canUploadEvidence]="canEditResultCap"
+            [evidenceUploading]="evidenceUploadingPointId === ndPoint.id"
+            [evidenceRerunning]="evidenceRerunningPointId === ndPoint.id"
+            [evidenceUploadingActionIndex]="evidenceUploadingPointId === ndPoint.id ? evidenceUploadingActionIndex : null"
+            [evidenceRerunningActionIndex]="evidenceRerunningPointId === ndPoint.id ? evidenceRerunningActionIndex : null"
             (startEdit)="startResultCapEdit(ndPoint)"
             (cancelEdit)="cancelResultCapEdit()"
             (save)="saveResultCap(ndPoint.id, $event)"
@@ -831,6 +857,13 @@
             (closeHistory)="closeResultCapHistory()"
             (restoreVersion)="restoreResultCapVersion($event)"
             (openPdf)="openPdfDocument($event.docId, $event.page)"
+            (uploadEvidence)="onUploadGapEvidence(selectedDetailPointId!, $event)"
+            (uploadGapEvidence)="onUploadGapEvidence(selectedDetailPointId!, $event.files, $event.actionIndex)"
+            (deleteEvidence)="onDeleteGapEvidence(selectedDetailPointId!, $event)"
+            (deleteGapEvidence)="onDeleteGapEvidence(selectedDetailPointId!, $event.attachmentId)"
+            (rerunWithEvidence)="onRerunWithEvidence(selectedDetailPointId!, $event)"
+            (rerunGapEvidence)="onRerunGapEvidence(selectedDetailPointId!, $event)"
+            (saveActionItemReview)="saveActionItemReview(selectedDetailPointId!, $event)"
           />
           <div class="detail-actions">
             @if (hasResumableRun && selectedPointDetail) {
@@ -921,11 +954,6 @@
           <button type="button" class="btn-secondary btn-sm" (click)="retryDemoSave()">Retry save</button>
         }
         <button type="button" class="btn-secondary btn-sm" (click)="openGapReport()">Gap report</button>
-        @if (canSubmitForChecker) {
-          <button type="button" class="btn-primary btn-sm" [disabled]="workflowLoading" (click)="submitForChecker()">
-            {{ workflowLoading ? 'Submitting…' : 'Submit for review' }}
-          </button>
-        }
       </div>
     </div>
 
@@ -944,6 +972,22 @@
       </div>
     </div>
 
+    @if (activeNdRunId && nonComplianceGapPoints.length) {
+      <div class="gap-verify-panel card-surface">
+        <h3>Non-compliance &amp; partial points — gap verification</h3>
+        <p class="gap-verify-hint">These points are not fully compliant. Expand each row to review AI gaps, upload manual gap analysis, and rerun for that point only.</p>
+        <ul class="gap-verify-list">
+          @for (row of nonComplianceGapPoints; track row.pointId) {
+            <li>
+              <strong>{{ row.label }}</strong>
+              <span class="severity-badge" [class]="row.severity">{{ gapComplianceLabel(row.severity) }}</span>
+              <span class="gap-count-badge">{{ row.gapCount }} gap{{ row.gapCount === 1 ? '' : 's' }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
     <div class="filter-pills">
       <button type="button" [class.active]="inlineGapFilter === 'all'" (click)="setInlineGapFilter('all')">
         All ({{ inlineGapItems.length }})
@@ -960,23 +1004,37 @@
     </div>
 
     <div class="items-list">
-      @for (item of filteredInlineGapItems; track item.id) {
+      @for (item of filteredInlineGapItems; track trackInlineGapItem(item)) {
         @let pointId = gapItemPointId(item);
         @let ndPoint = analysisPointForPointId(pointId);
         <article class="item-card card-surface" [class.expanded]="item.expanded">
-          <button type="button" class="item-header" (click)="toggleInlineGapItem(item)">
+          <div
+            class="item-header"
+            role="button"
+            tabindex="0"
+            (click)="toggleInlineGapItem(item)"
+            (keydown.enter)="toggleInlineGapItem(item)"
+            (keydown.space)="$event.preventDefault(); toggleInlineGapItem(item)"
+          >
             <span class="item-section">{{ item.section }}</span>
             <strong class="item-title">{{ item.title }}</strong>
             @if (gapCountForGapItem(item); as gapCount) {
               @if (gapCount > 0) {
-                <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+                <button
+                  type="button"
+                  class="gap-count-badge"
+                  (click)="expandInlineGapItem($event, item)"
+                >{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</button>
               }
             }
             <span class="severity-badge" [class]="item.severity">{{ gapComplianceLabel(item.severity) }}</span>
             <span class="chevron" [class.open]="item.expanded">›</span>
-          </button>
-          @if (item.expanded && ndPoint) {
+          </div>
+          @if (item.expanded) {
             <div class="item-body item-body-detail">
+              @if (!ndPoint) {
+                <p class="muted-inline">No detailed output for this point yet.</p>
+              } @else {
               @if (!activeNdRunId && !demoSaveInProgress) {
                 <p class="result-save-hint">Save the run to edit corrective actions for this point.</p>
               }
@@ -989,7 +1047,20 @@
                 [history]="resultHistoryPointId === ndPoint.id ? resultHistory : []"
                 [showHistoryPanel]="resultHistoryPointId === ndPoint.id"
                 [policyDocId]="policyPdfDocId"
+            [policyDocCatalog]="ndPolicyDocCatalog"
                 [regulationDocId]="regulationPdfDocId"
+                [runId]="activeNdRunId"
+                [gapAttachments]="attachmentsForPoint(pointId)"
+                [savedActionItemReviews]="savedReviewsForPoint(pointId)"
+                [showReviewPanel]="canShowReviewPanel"
+                [reviewMode]="canReviewActionGaps"
+                [reviewDisabledHint]="gapReviewDisabledHint"
+                [savingActionReviewIndex]="savingActionReviewIndex"
+                [canUploadEvidence]="canEditResultCap"
+                [evidenceUploading]="evidenceUploadingPointId === ndPoint.id"
+                [evidenceRerunning]="evidenceRerunningPointId === ndPoint.id"
+                [evidenceUploadingActionIndex]="evidenceUploadingPointId === ndPoint.id ? evidenceUploadingActionIndex : null"
+                [evidenceRerunningActionIndex]="evidenceRerunningPointId === ndPoint.id ? evidenceRerunningActionIndex : null"
                 (startEdit)="startResultCapEdit(ndPoint)"
                 (cancelEdit)="cancelResultCapEdit()"
                 (save)="saveResultCap(ndPoint.id, $event)"
@@ -997,7 +1068,15 @@
                 (closeHistory)="closeResultCapHistory()"
                 (restoreVersion)="restoreResultCapVersion($event)"
                 (openPdf)="openPdfDocument($event.docId, $event.page)"
+                (uploadEvidence)="onUploadGapEvidence(pointId, $event)"
+                (uploadGapEvidence)="onUploadGapEvidence(pointId, $event.files, $event.actionIndex)"
+                (deleteEvidence)="onDeleteGapEvidence(pointId, $event)"
+                (deleteGapEvidence)="onDeleteGapEvidence(pointId, $event.attachmentId)"
+                (rerunWithEvidence)="onRerunWithEvidence(pointId, $event)"
+                (rerunGapEvidence)="onRerunGapEvidence(pointId, $event)"
+                (saveActionItemReview)="saveActionItemReview(pointId, $event)"
               />
+              }
             </div>
           }
         </article>

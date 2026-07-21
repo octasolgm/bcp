@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
@@ -228,6 +229,318 @@ public class RegulationDocumentsController(
             .ToList();
 
         return Ok(new { success = true, data = sorted });
+    }
+
+    [HttpGet("points/search")]
+    public async Task<IActionResult> SearchPoints(
+        [FromQuery] string q,
+        [FromQuery] int limit = 80,
+        CancellationToken ct = default)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var term = (q ?? "").Trim();
+        if (term.Length < 2)
+            return Ok(new { success = true, data = Array.Empty<object>(), totalMatches = 0 });
+
+        var deptNames = await LoadDepartmentNamesAsync(ct);
+        var pattern = $"%{term}%";
+        var take = Math.Clamp(limit, 1, 200);
+
+        var ndDocs = await db.NdRegulationDocuments.AsNoTracking().ToListAsync(ct);
+        var hiddenStoredIds = ndDocs
+            .Where(d => d.Status == StatusHidden && d.StoredDocumentId.HasValue)
+            .Select(d => d.StoredDocumentId!.Value)
+            .ToHashSet();
+
+        var pointCountMap = new Dictionary<Guid, int>();
+        try
+        {
+            var pointCounts = await db.NdRegulationPoints.AsNoTracking()
+                .GroupBy(p => p.RegulationDocumentId)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToListAsync(ct);
+            foreach (var c in pointCounts) pointCountMap[c.Key] = c.Count;
+        }
+        catch { /* table may not exist */ }
+
+        var ndByStoredId = ndDocs
+            .Where(d => d.Status != StatusHidden && d.StoredDocumentId.HasValue && !IsDepartmentOverlay(d))
+            .GroupBy(d => d.StoredDocumentId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(d => pointCountMap.GetValueOrDefault(d.Id))
+                    .ThenByDescending(d => d.CreatedAt)
+                    .First());
+
+        var deptByStoredId = ndDocs
+            .Where(d => d.Status != StatusHidden && d.StoredDocumentId.HasValue && IsDepartmentOverlay(d))
+            .GroupBy(d => d.StoredDocumentId!.Value)
+            .ToDictionary(g => g.Key, g => g.First().DepartmentId);
+
+        var hits = new List<PointSearchHit>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var ndRows = await db.NdRegulationPoints.AsNoTracking()
+                .Join(
+                    db.NdRegulationDocuments.AsNoTracking()
+                        .Where(d => d.Status != StatusHidden && !IsDepartmentOverlay(d)),
+                    p => p.RegulationDocumentId,
+                    d => d.Id,
+                    (p, d) => new { Point = p, Doc = d })
+                .Where(x =>
+                    EF.Functions.ILike(x.Point.PointNumber, pattern)
+                    || EF.Functions.ILike(x.Point.PointTitle ?? "", pattern)
+                    || EF.Functions.ILike(x.Point.PointContent, pattern)
+                    || EF.Functions.ILike(x.Point.PageReference ?? "", pattern))
+                .OrderBy(x => x.Doc.Name)
+                .ThenBy(x => x.Point.PointNumber)
+                .Take(take)
+                .ToListAsync(ct);
+
+            foreach (var x in ndRows)
+            {
+                var key = $"{x.Doc.Id}:{x.Point.PointNumber}";
+                if (!seen.Add(key)) continue;
+                var ndSourceStoredId = x.Doc.StoredDocumentId ?? x.Doc.Id;
+                hits.Add(new PointSearchHit(
+                    x.Doc.Id,
+                    x.Doc.Name,
+                    DeptName(deptNames, x.Doc.DepartmentId),
+                    x.Doc.IsManual,
+                    x.Point.Id,
+                    x.Point.PointNumber,
+                    x.Point.PointTitle,
+                    SnippetForSearch(x.Point.PointContent, term),
+                    x.Point.PageReference,
+                    ResolvePdfPage(x.Point.PageReference, null),
+                    ndSourceStoredId));
+            }
+        }
+        catch
+        {
+            // regulation_points table may not exist in some environments
+        }
+
+        if (hits.Count < take)
+        {
+            var legacyRows = await LoadLegacyExtractSearchRowsAsync(pattern, ct);
+            foreach (var row in legacyRows)
+            {
+                if (hiddenStoredIds.Contains(row.DocumentId)) continue;
+
+                var docId = row.DocumentId;
+                var docName = row.DocumentName;
+                Guid? deptId = deptByStoredId.GetValueOrDefault(row.DocumentId);
+                var isManual = false;
+
+                if (ndByStoredId.TryGetValue(row.DocumentId, out var overlay))
+                {
+                    docId = overlay.Id;
+                    docName = overlay.Name;
+                    deptId = overlay.DepartmentId;
+                    isManual = overlay.IsManual;
+                }
+
+                List<GovPoint> points;
+                try
+                {
+                    points = GovPointsParser.ParseFromExtractJson(row.PointsJson);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                var docPoints = points.OrderBy(pt => pt.PointId, StringComparer.Ordinal).ToList();
+                foreach (var p in docPoints)
+                {
+                    if (hits.Count >= take) break;
+                    if (!PointMatchesSearchTerm(p, term)) continue;
+
+                    var key = $"{docId}:{p.PointId}";
+                    if (!seen.Add(key)) continue;
+
+                    var isAnnex = GovPointClassifier.IsAnnexPoint(p.PointId, p.Title, p.Section);
+                    hits.Add(new PointSearchHit(
+                        docId,
+                        docName,
+                        DeptName(deptNames, deptId),
+                        isManual,
+                        LegacyPointId(docId, p.PointId, p.Title, isAnnex),
+                        p.PointId,
+                        p.Title,
+                        SnippetForSearch(p.Text, term),
+                        p.Section,
+                        ResolveSearchPage(p, docPoints),
+                        row.DocumentId));
+                }
+
+                if (hits.Count >= take) break;
+            }
+        }
+
+        var grouped = hits
+            .GroupBy(h => h.DocumentId)
+            .Select(g => new
+            {
+                documentId = g.Key,
+                documentName = g.First().DocumentName,
+                departmentName = g.First().DepartmentName,
+                isManual = g.First().IsManual,
+                storedDocumentId = g.First().SourceStoredDocumentId,
+                points = g.Select(x => new
+                {
+                    id = x.PointId,
+                    pointNumber = x.PointNumber,
+                    pointTitle = x.PointTitle,
+                    snippet = x.Snippet,
+                    pageReference = x.PageReference,
+                    pdfPage = x.PageHint,
+                    storedDocumentId = x.SourceStoredDocumentId,
+                }).ToList(),
+            })
+            .OrderBy(g => g.documentName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return Ok(new { success = true, data = grouped, totalMatches = hits.Count });
+    }
+
+    private sealed record PointSearchHit(
+        Guid DocumentId,
+        string DocumentName,
+        string? DepartmentName,
+        bool IsManual,
+        Guid PointId,
+        string PointNumber,
+        string? PointTitle,
+        string Snippet,
+        string? PageReference,
+        int? PageHint,
+        Guid SourceStoredDocumentId);
+
+    private sealed record LegacyExtractSearchRow(
+        Guid DocumentId,
+        string DocumentName,
+        string PointsJson);
+
+    private async Task<List<LegacyExtractSearchRow>> LoadLegacyExtractSearchRowsAsync(
+        string pattern,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await db.Database.SqlQueryRaw<LegacyExtractSearchRow>(
+                    """
+                    SELECT sd.id AS "DocumentId",
+                           sd.title AS "DocumentName",
+                           ec.points_json::text AS "PointsJson"
+                    FROM stored_documents sd
+                    INNER JOIN landing_ai_extract_cache ec
+                      ON ec.file_hash = sd.file_hash
+                     AND ec.schema_key = {0}
+                    WHERE sd.doc_kind = 'regulation'
+                      AND ec.points_json::text ILIKE {1}
+                    ORDER BY sd.title
+                    """,
+                    LandingAiGovExtractService.GovSchemaKey,
+                    pattern)
+                .ToListAsync(ct);
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static bool PointMatchesSearchTerm(GovPoint p, string term)
+    {
+        if (string.IsNullOrWhiteSpace(term)) return false;
+        return ContainsIgnoreCase(p.PointId, term)
+               || ContainsIgnoreCase(p.Title, term)
+               || ContainsIgnoreCase(p.Text, term)
+               || ContainsIgnoreCase(p.Section, term);
+    }
+
+    private static bool ContainsIgnoreCase(string? value, string term) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Contains(term, StringComparison.OrdinalIgnoreCase);
+
+    private static int? ResolvePdfPage(string? pageReference, int? pageHint)
+    {
+        if (pageHint is > 0) return pageHint;
+        return ParsePdfPageFromReference(pageReference);
+    }
+
+    /// <summary>
+    /// Best-effort PDF page for search hits when extract page_hint is 0.
+    /// </summary>
+    private static int? ResolveSearchPage(GovPoint point, IReadOnlyList<GovPoint> documentPoints)
+    {
+        var direct = ResolvePdfPage(point.Section, point.PageHint);
+        if (direct is > 0) return direct;
+
+        var sameSection = documentPoints
+            .Where(p => p.PageHint is > 0 && SectionMatches(p.Section, point.Section))
+            .Select(p => p.PageHint)
+            .Min();
+        if (sameSection is > 0) return sameSection;
+
+        var chapter = ChapterPrefix(point.PointId, point.Section);
+        if (string.IsNullOrEmpty(chapter)) return null;
+
+        var inChapter = documentPoints
+            .Where(p => p.PageHint is > 0 && ChapterPrefix(p.PointId, p.Section) == chapter)
+            .Select(p => p.PageHint)
+            .Min();
+        return inChapter is > 0 ? inChapter : null;
+    }
+
+    private static bool SectionMatches(string? a, string? b) =>
+        !string.IsNullOrWhiteSpace(a)
+        && !string.IsNullOrWhiteSpace(b)
+        && string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private static string? ChapterPrefix(string pointId, string? section)
+    {
+        var pid = (pointId ?? "").Trim().TrimEnd('.');
+        var match = Regex.Match(pid, @"^(\d+)");
+        if (match.Success) return match.Groups[1].Value;
+
+        if (!string.IsNullOrWhiteSpace(section))
+        {
+            match = Regex.Match(section.Trim(), @"^(\d+)");
+            if (match.Success) return match.Groups[1].Value;
+        }
+
+        return null;
+    }
+
+    private static int? ParsePdfPageFromReference(string? reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference)) return null;
+        var trimmed = reference.Trim();
+        var match = Regex.Match(trimmed, @"(?:page|p\.?|pp\.?)\s*(\d+)", RegexOptions.IgnoreCase);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var fromLabel) && fromLabel > 0)
+            return fromLabel;
+        if (int.TryParse(trimmed, out var bare) && bare > 0) return bare;
+        return null;
+    }
+
+    private static string SnippetForSearch(string content, string term, int maxLen = 120)
+    {
+        var text = (content ?? "").Trim();
+        if (string.IsNullOrEmpty(text)) return "";
+        var idx = text.IndexOf(term, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+            return text.Length <= maxLen ? text : text[..maxLen] + "…";
+        var start = Math.Max(0, idx - 40);
+        var slice = text.Substring(start, Math.Min(maxLen, text.Length - start)).Trim();
+        return start > 0 ? "…" + slice : slice + (text.Length > start + maxLen ? "…" : "");
     }
 
     [HttpGet("{id:guid}")]
@@ -519,20 +832,38 @@ public class RegulationDocumentsController(
         if (!storage.IsConfigured)
             return StatusCode(503, new { success = false, message = "Supabase Storage not configured." });
 
-        var stored = await ResolveStoredDocumentAsync(id, ct);
-        if (stored == null)
-            return NotFound(new { success = false, message = "Regulation file not found." });
+        var ndDoc = await db.NdRegulationDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id, ct);
 
-        var storagePath = stored.StoragePath;
-        if (string.IsNullOrWhiteSpace(storagePath))
+        Data.Entities.StoredDocument? stored = null;
+        string? storagePath = null;
+        string? fileName = null;
+
+        if (ndDoc != null)
         {
-            var ndDoc = await db.NdRegulationDocuments.AsNoTracking()
-                .FirstOrDefaultAsync(d => d.Id == id || d.StoredDocumentId == id, ct);
-            storagePath = ndDoc?.FilePath;
+            if (!string.IsNullOrWhiteSpace(ndDoc.FilePath))
+                storagePath = ndDoc.FilePath;
+
+            if (ndDoc.StoredDocumentId is Guid storedId)
+            {
+                stored = await db.StoredDocuments.AsNoTracking()
+                    .FirstOrDefaultAsync(d => d.Id == storedId, ct);
+                storagePath ??= stored?.StoragePath;
+            }
+
+            fileName = ndDoc.Name;
+        }
+        else
+        {
+            stored = await db.StoredDocuments.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == id && d.DocKind == "regulation", ct);
+            storagePath = stored?.StoragePath;
         }
 
         if (string.IsNullOrWhiteSpace(storagePath))
-            return BadRequest(new { success = false, message = "No PDF file available for this regulation." });
+            return NotFound(new { success = false, message = "Regulation file not found." });
+
+        fileName ??= stored?.OriginalFileName ?? stored?.Title ?? "regulation.pdf";
 
         var url = await storage.CreateSignedUrlAsync(storagePath, 3600, ct);
         return Ok(new
@@ -542,7 +873,7 @@ public class RegulationDocumentsController(
             {
                 url,
                 expiresIn = 3600,
-                fileName = stored.OriginalFileName ?? stored.Title,
+                fileName,
             },
         });
     }
@@ -595,37 +926,6 @@ public class RegulationDocumentsController(
 
         if (loaded.Source != "db-cache" && !linkedBuiltin)
         {
-            if (storage.IsConfigured
-                && !string.IsNullOrWhiteSpace(stored.StoragePath)
-                && (stored.PointCount ?? 0) > 0)
-            {
-                try
-                {
-                    var bytes = await storage.DownloadAsync(stored.StoragePath, ct);
-                    var extract = await govExtract.ExtractFromUploadAsync(bytes, stored.OriginalFileName, null, ct);
-                    stored.FileHash = extract.FileHash;
-                    stored.PointCount = extract.PointCount;
-                    stored.UpdatedAt = DateTimeOffset.UtcNow;
-                    await db.SaveChangesAsync(ct);
-
-                    var extracted = govPoints.GetAllPoints()
-                        .OrderBy(p => p.PointId, StringComparer.Ordinal)
-                        .Select(p => MapLegacyPoint(id, p))
-                        .ToList();
-
-                    return Ok(new
-                    {
-                        success = true,
-                        data = extracted,
-                        source = extract.Source,
-                    });
-                }
-                catch
-                {
-                    // fall through to empty
-                }
-            }
-
             return Ok(new { success = true, data = Array.Empty<object>(), source = "none" });
         }
 

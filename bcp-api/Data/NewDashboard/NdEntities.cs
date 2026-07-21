@@ -356,6 +356,32 @@ public class NdAnalysisPoint
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+[Table("analysis_point_attachments")]
+public class NdAnalysisPointAttachment
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("analysis_point_id")]
+    public Guid AnalysisPointId { get; set; }
+
+    [Column("stored_document_id")]
+    public Guid StoredDocumentId { get; set; }
+
+    [Column("file_name")]
+    public string FileName { get; set; } = "";
+
+    [Column("action_index")]
+    public int? ActionIndex { get; set; }
+
+    [Column("uploaded_by")]
+    public Guid? UploadedBy { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 [Table("action_plan_history")]
 public class NdActionPlanHistory
 {
@@ -459,6 +485,16 @@ public class NdActionPlanItemReview
 
     [Column("comment")]
     public string? Comment { get; set; }
+
+    [Column("responsibility")]
+    public string? Responsibility { get; set; }
+
+    [Column("due_date")]
+    public DateOnly? DueDate { get; set; }
+
+    /// <summary>medium | higher</summary>
+    [Column("priority")]
+    public string? Priority { get; set; }
 
     [Column("reviewed_by")]
     public Guid? ReviewedBy { get; set; }

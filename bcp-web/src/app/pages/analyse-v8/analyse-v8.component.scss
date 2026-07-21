@@ -533,6 +533,25 @@
     cursor: pointer;
     font: inherit;
 
+    .gap-count-badge {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fcd34d;
+      white-space: nowrap;
+      flex-shrink: 0;
+      cursor: pointer;
+      font-family: inherit;
+      line-height: inherit;
+
+      &:hover {
+        background: #fde68a;
+      }
+    }
+
     .severity-badge {
       flex-shrink: 0;
       margin-left: auto;
@@ -593,6 +612,38 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.gap-verify-panel {
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 1rem;
+
+  h3 {
+    margin: 0 0 0.35rem;
+    font-size: 0.9375rem;
+  }
+}
+
+.gap-verify-hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.gap-verify-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.55rem;
+    font-size: 0.8125rem;
+  }
 }
 
 .gap-readonly {

@@ -115,6 +115,11 @@
       <div class="results-split" [class.history-open]="!!historyPointId">
         <aside class="results-points-rail" aria-label="Regulation points">
           <p class="rail-title">Points</p>
+          <app-nd-point-sort-controls
+            [sort]="pointSort"
+            [dir]="pointSortDir"
+            (sortChange)="onPointSortChange($event)"
+          />
           @for (p of filteredPoints; track p.id) {
             @let snap = parsePointSnapshot(p.pointSnapshot);
             <button
@@ -133,8 +138,8 @@
               @if (snap.pointTitle) {
                 <span class="rail-point-title">{{ snap.pointTitle }}</span>
               }
-              @if (p.finalStatus) {
-                <span class="status-pill rail-status" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
+              @if (pointSeverity(p); as severity) {
+                <span class="status-pill rail-status" [class]="severity">{{ finalStatusLabel(p) }}</span>
               }
             </button>
           }
@@ -149,8 +154,8 @@
                   §{{ snap.pointNumber }}
                   @if (snap.pointTitle) { — {{ snap.pointTitle }} }
                 </span>
-                @if (p.finalStatus) {
-                  <span class="status-pill" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
+                @if (pointSeverity(p); as severity) {
+                  <span class="status-pill" [class]="severity">{{ finalStatusLabel(p) }}</span>
                 }
               </div>
               <p class="phase-line">{{ phaseSummary(p) }}</p>
@@ -172,6 +177,18 @@
                   [hideReportHeader]="true"
                   [policyDocId]="policyDocId"
                   [regulationDocId]="regDocIdForPoint(p)"
+                  [runId]="runId"
+                  [gapAttachments]="attachmentsForPoint(p.id)"
+                  [savedActionItemReviews]="savedReviewsForPoint(p.id)"
+                  [showReviewPanel]="canShowReviewPanel"
+                  [reviewMode]="canReviewActionGaps"
+                  [reviewDisabledHint]="gapReviewDisabledHint"
+                  [savingActionReviewIndex]="savingActionReviewIndex"
+                  [canUploadEvidence]="canUploadGapEvidence"
+                  [evidenceUploading]="evidenceUploadingPointId === p.id"
+                  [evidenceRerunning]="evidenceRerunningPointId === p.id"
+                  [evidenceUploadingActionIndex]="evidenceUploadingPointId === p.id ? evidenceUploadingActionIndex : null"
+                  [evidenceRerunningActionIndex]="evidenceRerunningPointId === p.id ? evidenceRerunningActionIndex : null"
                   (startEdit)="startEditCap(p)"
                   (cancelEdit)="cancelEditCap()"
                   (save)="saveCap(p.id, $event)"
@@ -179,6 +196,13 @@
                   (closeHistory)="closeHistory()"
                   (restoreVersion)="revertToVersion($event)"
                   (openPdf)="onOpenPdf($event)"
+                  (uploadEvidence)="onUploadGapEvidence(p.id, $event)"
+                  (uploadGapEvidence)="onUploadGapEvidence(p.id, $event.files, $event.actionIndex)"
+                  (deleteEvidence)="onDeleteGapEvidence(p.id, $event)"
+                  (deleteGapEvidence)="onDeleteGapEvidence(p.id, $event.attachmentId)"
+                  (rerunWithEvidence)="onRerunWithEvidence(p.id, $event)"
+                  (rerunGapEvidence)="onRerunGapEvidence(p.id, $event)"
+                  (saveActionItemReview)="saveActionItemReview(p.id, $event)"
                 />
               }
             </div>
@@ -206,8 +230,8 @@
                   <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
                 }
               }
-              @if (p.finalStatus) {
-                <span class="status-pill" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
+              @if (pointSeverity(p); as severity) {
+                <span class="status-pill" [class]="severity">{{ finalStatusLabel(p) }}</span>
               }
               <span class="chevron" [class.open]="isPointExpanded(p.id)">›</span>
             </button>
@@ -222,8 +246,8 @@
                   <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
                 }
               }
-              @if (p.finalStatus) {
-                <span class="status-pill" [class]="p.finalStatus">{{ finalStatusLabel(p.finalStatus) }}</span>
+              @if (pointSeverity(p); as severity) {
+                <span class="status-pill" [class]="severity">{{ finalStatusLabel(p) }}</span>
               }
             </div>
           }
@@ -252,6 +276,18 @@
                 [hideReportHeader]="true"
                 [policyDocId]="policyDocId"
                 [regulationDocId]="regDocIdForPoint(p)"
+                [runId]="runId"
+                [gapAttachments]="attachmentsForPoint(p.id)"
+                [savedActionItemReviews]="savedReviewsForPoint(p.id)"
+                [showReviewPanel]="canShowReviewPanel"
+                [reviewMode]="canReviewActionGaps"
+                [reviewDisabledHint]="gapReviewDisabledHint"
+                [savingActionReviewIndex]="savingActionReviewIndex"
+                [canUploadEvidence]="canUploadGapEvidence"
+                [evidenceUploading]="evidenceUploadingPointId === p.id"
+                [evidenceRerunning]="evidenceRerunningPointId === p.id"
+                [evidenceUploadingActionIndex]="evidenceUploadingPointId === p.id ? evidenceUploadingActionIndex : null"
+                [evidenceRerunningActionIndex]="evidenceRerunningPointId === p.id ? evidenceRerunningActionIndex : null"
                 (startEdit)="startEditCap(p)"
                 (cancelEdit)="cancelEditCap()"
                 (save)="saveCap(p.id, $event)"
@@ -259,6 +295,13 @@
                 (closeHistory)="closeHistory()"
                 (restoreVersion)="revertToVersion($event)"
                 (openPdf)="onOpenPdf($event)"
+                (uploadEvidence)="onUploadGapEvidence(p.id, $event)"
+                (uploadGapEvidence)="onUploadGapEvidence(p.id, $event.files, $event.actionIndex)"
+                (deleteEvidence)="onDeleteGapEvidence(p.id, $event)"
+                (deleteGapEvidence)="onDeleteGapEvidence(p.id, $event.attachmentId)"
+                (rerunWithEvidence)="onRerunWithEvidence(p.id, $event)"
+                (rerunGapEvidence)="onRerunGapEvidence(p.id, $event)"
+                (saveActionItemReview)="saveActionItemReview(p.id, $event)"
               />
             }
           }

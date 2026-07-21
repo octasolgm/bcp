@@ -9,11 +9,18 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public abstract class NdControllerBase : ControllerBase
 {
     public record PointCommentInput(Guid AnalysisPointId, string Comment);
-    public record ActionItemReviewInput(Guid AnalysisPointId, int ActionIndex, string Status, string? Comment);
+    public record ActionItemReviewInput(
+        Guid AnalysisPointId,
+        int ActionIndex,
+        string Status,
+        string? Comment,
+        string? Responsibility,
+        string? DueDate,
+        string? Priority);
 
     private static readonly HashSet<string> ValidActionItemReviewStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "approve", "need_modify", "uix",
+        "approve", "need_modify",
     };
 
     protected JwtUser? ValidateJwt(SupabaseJwtValidator jwt)
@@ -140,6 +147,13 @@ public abstract class NdControllerBase : ControllerBase
             var status = r.Status?.Trim().ToLowerInvariant() ?? "";
             if (!ValidActionItemReviewStatuses.Contains(status)) continue;
 
+            DateOnly? dueDate = null;
+            if (!string.IsNullOrWhiteSpace(r.DueDate)
+                && DateOnly.TryParse(r.DueDate.Trim(), out var parsedDue))
+            {
+                dueDate = parsedDue;
+            }
+
             db.NdActionPlanItemReviews.Add(new NdActionPlanItemReview
             {
                 AnalysisPointId = r.AnalysisPointId,
@@ -147,10 +161,19 @@ public abstract class NdControllerBase : ControllerBase
                 ActionIndex = r.ActionIndex,
                 Status = status,
                 Comment = string.IsNullOrWhiteSpace(r.Comment) ? null : r.Comment.Trim(),
+                Responsibility = string.IsNullOrWhiteSpace(r.Responsibility) ? null : r.Responsibility.Trim(),
+                DueDate = dueDate,
+                Priority = NormalizeReviewPriority(r.Priority),
                 ReviewedBy = userId,
             });
         }
         await db.SaveChangesAsync(ct);
+    }
+
+    private static string? NormalizeReviewPriority(string? raw)
+    {
+        var t = raw?.Trim().ToLowerInvariant() ?? "";
+        return t is "medium" or "higher" ? t : null;
     }
 
     protected static async Task RecordStatusChangeAsync(

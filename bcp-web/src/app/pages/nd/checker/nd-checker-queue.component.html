@@ -4,6 +4,8 @@
     <p class="subtitle">
       @if (showHistory) {
         Analyses you have already reviewed
+      } @else if (isViewOnly) {
+        Analyses waiting for checker review (read-only)
       } @else {
         Analyses submitted by makers and waiting for checker review
       }
@@ -12,11 +14,13 @@
 </div>
 
 <div class="nd-page-body">
-<div class="filter-pills tabs nd-shrink">
-  <a routerLink="/nd/checker" class="tab" [class.active]="!showHistory">Pending</a>
-  <a routerLink="/nd/checker" [queryParams]="{ history: '1' }" class="tab" [class.active]="showHistory">History</a>
-  <a routerLink="/nd/analysis-runs" class="tab muted-tab">All analyses</a>
-</div>
+<app-nd-workspace-tabs
+  active="pending_review"
+  [extraTabLabel]="canViewHistory ? 'History' : null"
+  [extraTabLink]="['/nd/checker']"
+  [extraTabQueryParams]="{ history: '1' }"
+  [extraTabActive]="showHistory"
+/>
 
 @if (!loading && allRuns.length) {
   <div class="filter-pills nd-list-toolbar nd-shrink">
@@ -68,7 +72,7 @@
     <ul class="run-list">
       @for (run of visibleRuns; track run.id) {
         <li>
-          <a [routerLink]="['/nd/checker/review', run.id]" class="run-item">
+          <a [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null" class="run-item">
             <div class="run-body">
               <strong>{{ run.name }}</strong>
               <span class="run-meta">
@@ -79,8 +83,24 @@
                   {{ run.compliant }} compliant · {{ run.partial }} partial · {{ run.nonCompliant }} non-compliant
                 </span>
               }
+              @if (run.totalGaps !== undefined && run.totalGaps > 0) {
+                <span class="run-meta">
+                  {{ run.totalGaps }} gap{{ run.totalGaps === 1 ? '' : 's' }}
+                  @if (run.totalReviews !== undefined && run.totalReviews > 0) {
+                    · {{ run.totalReviews }} review{{ run.totalReviews === 1 ? '' : 's' }}
+                  }
+                  @if (run.reviewedGaps !== undefined) {
+                    · {{ run.reviewedGaps }}/{{ run.totalGaps }} actions reviewed
+                  }
+                </span>
+              }
             </div>
-            <span class="severity-badge pending">{{ run.status }}</span>
+            <div class="run-badges">
+              @if (run.workflowHolder) {
+                <span class="workflow-badge">{{ run.workflowHolder }}</span>
+              }
+              <span class="severity-badge pending">{{ run.status }}</span>
+            </div>
           </a>
         </li>
       }

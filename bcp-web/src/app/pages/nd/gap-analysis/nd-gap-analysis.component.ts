@@ -1,4 +1,5 @@
 import {
+  ChangeDetectorRef,
   Component,
   EventEmitter,
   inject,
@@ -44,12 +45,23 @@ import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
 import { NdGapPointDetailComponent } from '../../../components/nd/nd-gap-point-detail.component';
+import { NdPointSortControlsComponent } from '../../../components/nd/nd-point-sort-controls.component';
 import { DualVerifyResultCardComponent } from '../../../components/dual-verify-result-card/dual-verify-result-card.component';
-import type { ActionPlanHistoryEntry, ResultsData } from '../../../../lib/nd/types';
+import type { ActionPlanHistoryEntry, InternalDocument, ResultsData } from '../../../../lib/nd/types';
 import { parsePointSnapshot } from '../../../../lib/nd/utils';
-import { countCapGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
-import { resolveAnalysisPointSeverity } from '../../../../lib/nd/point-compliance-status';
+import { countCapGapsForAnalysisPoint, countDisplayGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
+import { compareText, type SortDir } from '../../../../lib/nd/list-utils';
+import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sort';
+import {
+  complianceSeverityLabel,
+  resolveAnalysisPointSeverity,
+  resolveDisplayConfidence,
+} from '../../../../lib/nd/point-compliance-status';
 import { parseReferenceComplianceBlock } from '../../../../lib/ai-lab/parse-reference-response';
+import { internalDocCatalogFromRunDetail } from '../../../../lib/nd/run-internal-docs';
+import type { PolicyDocCatalogEntry } from '../../../../lib/nd/policy-doc-resolve';
+import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus } from '../../../../lib/nd/action-item-review';
+import { canAddActionItemReviews, isReviewRole, reviewDisabledHint, reviewWorkspaceLink } from '../../../../lib/nd/nd-review-run-helpers';
 
 /** Seeded TFS × IMPTFS combined compliance session (32 points). */
 const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
@@ -57,7 +69,7 @@ const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
 @Component({
   selector: 'app-nd-gap-analysis',
   standalone: true,
-  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent],
+  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent],
   templateUrl: './nd-gap-analysis.component.html',
   styleUrl: './nd-gap-analysis.component.scss',
 })
@@ -67,6 +79,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   private readonly router = inject(Router);
   private readonly api = inject(ApiService);
   private readonly ndApi = inject(NdApiService);
+  private readonly cdr = inject(ChangeDetectorRef);
   readonly auth = inject(NdAuthService);
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -87,13 +100,16 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   pointIds: string[] = [];
   pdfPreview: { title: string; page: string; body: string } | null = null;
 
-  activeFilter = 'all';
+  activeFilter: 'all' | GapSeverity | 'with_gaps' = 'all';
+  pointSort: PointSortMode = 'number';
+  pointSortDir: SortDir = 'asc';
   viewMode: 'cards' | 'list' = 'cards';
   selectedItemId: string | null = null;
   ndRunId: string | null = null;
   ndRunStatus = '';
   ndRunData: ResultsData | null = null;
   ndPolicyDocId: string | null = null;
+  ndPolicyDocCatalog: PolicyDocCatalogEntry[] = [];
   ndRegulationDocId: string | null = null;
   ndSearchQuery = '';
   workflowLoading = false;
@@ -102,9 +118,15 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   history: ActionPlanHistoryEntry[] = [];
   historyPointId: string | null = null;
   ndDetailError = '';
+  evidenceUploadingPointId: string | null = null;
+  evidenceRerunningPointId: string | null = null;
+  evidenceUploadingActionIndex: number | null = null;
+  evidenceRerunningActionIndex: number | null = null;
+  savingActionReviewIndex: number | null = null;
 
-  readonly filters: { id: 'all' | GapSeverity; label: string }[] = [
+  readonly filters: { id: 'all' | GapSeverity | 'with_gaps'; label: string }[] = [
     { id: 'all', label: 'All' },
+    { id: 'with_gaps', label: 'With gaps' },
     { id: 'compliant', label: 'Compliance' },
     { id: 'partial_compliant', label: 'Partial compliance' },
     { id: 'non_compliant', label: 'Non-compliance' },
@@ -135,7 +157,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       const filter = params.get('filter');
       if (filter) {
         const normalized =
-          filter === 'all' ? 'all' : normalizeGapSeverity(filter);
+          filter === 'all'
+            ? 'all'
+            : filter === 'with_gaps'
+              ? 'with_gaps'
+              : normalizeGapSeverity(filter);
         if (this.filters.some((f) => f.id === normalized)) {
           this.activeFilter = normalized;
         }
@@ -166,17 +192,37 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   get filteredItems(): GapItemData[] {
     let list = this.items;
-    if (this.activeFilter !== 'all') {
+    if (this.activeFilter === 'with_gaps') {
+      list = list.filter(
+        (i) =>
+          this.gapCountForItem(i) > 0 ||
+          i.severity === 'partial_compliant' ||
+          i.severity === 'non_compliant',
+      );
+    } else if (this.activeFilter !== 'all') {
       list = list.filter((i) => i.severity === this.activeFilter);
     }
     const q = this.ndSearchQuery.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter(
-      (i) =>
-        i.title.toLowerCase().includes(q) ||
-        i.section.toLowerCase().includes(q) ||
-        i.regulatoryText.toLowerCase().includes(q),
+    if (q) {
+      list = list.filter(
+        (i) =>
+          i.title.toLowerCase().includes(q) ||
+          i.section.toLowerCase().includes(q) ||
+          i.regulatoryText.toLowerCase().includes(q),
+      );
+    }
+    return sortByPointKey(
+      list,
+      this.pointSort,
+      this.pointSortDir,
+      (i) => i.section,
+      (i) => i.severity,
     );
+  }
+
+  onPointSortChange(event: { sort: 'number' | 'status'; dir: SortDir }): void {
+    this.pointSort = event.sort;
+    this.pointSortDir = event.dir;
   }
 
   severityLabel = gapSeverityLabel;
@@ -188,20 +234,209 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   analysisPointForGap(item: GapItemData): AnalysisPoint | null {
     if (!this.ndRunData) return null;
-    const key = item.section.replace(/^§/, '');
-    return (
-      this.ndRunData.points.find((p) => {
+    const key = item.section.replace(/^§/, '').trim();
+    const report = this.reportByPointId.get(key);
+
+    const matched = this.ndRunData.points.find((p) => {
+      const snap = parsePointSnapshot(p.pointSnapshot);
+      const pid = (snap.pointNumber || p.regulationPointId || p.id || '').trim();
+      if (pid === key || p.id === key) return true;
+      if (report && pid === report.pointId) return true;
+      if (item.id.trim() === pid) return true;
+      return false;
+    });
+    if (matched) return matched;
+
+    const titleNorm = item.title.trim().toLowerCase();
+    if (titleNorm) {
+      const byTitle = this.ndRunData.points.find((p) => {
         const snap = parsePointSnapshot(p.pointSnapshot);
-        const pid = snap.pointNumber || p.regulationPointId || p.id;
-        return pid === key || p.id === key;
-      }) ?? null
-    );
+        return (snap.pointTitle ?? '').trim().toLowerCase() === titleNorm;
+      });
+      if (byTitle) return byTitle;
+    }
+
+    return null;
+  }
+
+  private itemIndex(item: GapItemData): number {
+    const section = item.section.trim();
+    const bySection = this.items.findIndex((i) => i.section.trim() === section);
+    if (bySection >= 0) return bySection;
+    return this.items.findIndex((i) => i.id === item.id);
+  }
+
+  /** Stable @for track key — include expanded so the row body re-renders on toggle. */
+  trackGapItem(item: GapItemData): string {
+    return `${item.section}|${item.expanded ? '1' : '0'}`;
+  }
+
+  private setExpandedAt(idx: number, expanded: boolean): void {
+    this.items[idx].expanded = expanded;
+    this.items = [...this.items];
+    this.cdr.markForCheck();
+  }
+
+  private setItemExpanded(item: GapItemData, expanded: boolean): void {
+    const idx = this.itemIndex(item);
+    if (idx < 0) return;
+    this.setExpandedAt(idx, expanded);
+    this.persistSoon();
+  }
+
+  expandGapItem(event: Event, item: GapItemData): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.setItemExpanded(item, true);
+  }
+
+  toggleItem(item: GapItemData): void {
+    const idx = this.itemIndex(item);
+    if (idx < 0) return;
+    this.setExpandedAt(idx, !this.items[idx].expanded);
+    this.persistSoon();
   }
 
   gapCountForItem(item: GapItemData): number {
     const ndPoint = this.analysisPointForGap(item);
-    if (ndPoint) return countCapGapsForAnalysisPoint(ndPoint);
+    if (ndPoint) {
+      return countDisplayGapsForAnalysisPoint(
+        ndPoint,
+        this.attachmentsForPoint(ndPoint.id).length,
+      );
+    }
     return item.gapCount ?? 0;
+  }
+
+  attachmentsForPoint(pointId: string) {
+    return (this.ndRunData?.pointAttachments ?? []).filter((a) => a.analysisPointId === pointId);
+  }
+
+  savedReviewsForPoint(pointId: string): ActionItemReviewEntry[] {
+    return reviewsForPoint(this.ndRunData?.actionItemReviews, pointId);
+  }
+
+  get canReviewActionGaps(): boolean {
+    return canAddActionItemReviews(this.auth.getRole(), this.ndRunData?.run.status);
+  }
+
+  get canShowReviewPanel(): boolean {
+    return isReviewRole(this.auth.getRole());
+  }
+
+  get gapReviewDisabledHint(): string {
+    return reviewDisabledHint(this.auth.getRole(), this.ndRunData?.run.status);
+  }
+
+  get reviewWorkspaceRoute(): string[] | null {
+    if (!this.ndRunId) return null;
+    return reviewWorkspaceLink(this.auth.getRole(), this.ndRunId, this.ndRunData?.run.status);
+  }
+
+  async saveActionItemReview(
+    pointId: string,
+    event: {
+      actionIndex: number;
+      status: ActionItemReviewStatus;
+      comment: string;
+      responsibility: string;
+      dueDate: string;
+      priority: string;
+    },
+  ): Promise<void> {
+    if (!this.ndRunId) return;
+    this.savingActionReviewIndex = event.actionIndex;
+    this.ndDetailError = '';
+    const res = await this.ndApi.saveActionItemReview(this.ndRunId, {
+      analysisPointId: pointId,
+      actionIndex: event.actionIndex,
+      status: event.status,
+      comment: event.comment.trim() || undefined,
+      responsibility: event.responsibility.trim() || undefined,
+      dueDate: event.dueDate.trim() || undefined,
+      priority: event.priority || undefined,
+    });
+    this.savingActionReviewIndex = null;
+    if (res.success) {
+      this.toast.show('Review saved', 'success');
+      await this.loadNdRun(this.ndRunId, null, null);
+    } else {
+      this.ndDetailError = res.message ?? 'Could not save review';
+      this.toast.show(this.ndDetailError, 'error');
+    }
+  }
+
+  get canUploadGapEvidence(): boolean {
+    return this.canEditNdCap;
+  }
+
+  async onUploadGapEvidence(pointId: string, fileList: FileList, actionIndex?: number): Promise<void> {
+    if (!this.ndRunId || !fileList.length) return;
+    this.evidenceUploadingPointId = pointId;
+    this.evidenceUploadingActionIndex = actionIndex ?? null;
+    this.ndDetailError = '';
+    const files = Array.from(fileList);
+    const res = await this.ndApi.uploadPointGapAttachments(
+      this.ndRunId,
+      pointId,
+      files,
+      actionIndex,
+    );
+    this.evidenceUploadingPointId = null;
+    this.evidenceUploadingActionIndex = null;
+    if (res.success) {
+      this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
+      await this.loadNdRun(this.ndRunId, null, null);
+    } else {
+      this.ndDetailError = res.message ?? 'Upload failed';
+      this.toast.show(this.ndDetailError, 'error');
+    }
+  }
+
+  async onDeleteGapEvidence(pointId: string, attachmentId: string): Promise<void> {
+    if (!this.ndRunId) return;
+    const res = await this.ndApi.deletePointGapAttachment(this.ndRunId, pointId, attachmentId);
+    if (res.success) {
+      await this.loadNdRun(this.ndRunId, null, null);
+    } else {
+      this.toast.show(res.message ?? 'Could not remove file', 'error');
+    }
+  }
+
+  async onRerunWithEvidence(pointId: string, mode: 'full' | 'dual'): Promise<void> {
+    await this.rerunGapEvidenceInternal(pointId, mode);
+  }
+
+  async onRerunGapEvidence(
+    pointId: string,
+    payload: { actionIndex: number; mode: 'full' | 'dual' },
+  ): Promise<void> {
+    await this.rerunGapEvidenceInternal(pointId, payload.mode, payload.actionIndex);
+  }
+
+  private async rerunGapEvidenceInternal(
+    pointId: string,
+    mode: 'full' | 'dual',
+    actionIndex?: number,
+  ): Promise<void> {
+    if (!this.ndRunId) return;
+    this.evidenceRerunningPointId = pointId;
+    this.evidenceRerunningActionIndex = actionIndex ?? null;
+    this.ndDetailError = '';
+    const opts = { evidenceOnly: true, actionIndex };
+    const res =
+      mode === 'dual'
+        ? await this.ndApi.rerunDualVerify(this.ndRunId, pointId, opts)
+        : await this.ndApi.rerunPoint(this.ndRunId, pointId, opts);
+    this.evidenceRerunningPointId = null;
+    this.evidenceRerunningActionIndex = null;
+    if (res.success) {
+      this.toast.show('Rerunning analysis for this gap…', 'success');
+      await this.loadNdRun(this.ndRunId, null, null);
+    } else {
+      this.ndDetailError = res.message ?? 'Rerun failed';
+      this.toast.show(this.ndDetailError, 'error');
+    }
   }
 
   listRowMeta(item: GapItemData): {
@@ -224,15 +459,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         ndPoint.finalActionPlan?.trim() ||
         ndPoint.originalAiActionPlan?.trim() ||
         actionPlan;
-      const severity = resolveAnalysisPointSeverity(ndPoint);
-      status =
-        severity === 'compliant'
-          ? 'Compliant'
-          : severity === 'partial_compliant'
-            ? 'Partial'
-            : severity === 'non_compliant'
-              ? 'Non-compliant'
-              : status;
+      status = complianceSeverityLabel(resolveAnalysisPointSeverity(ndPoint));
+      confidence = resolveDisplayConfidence(ndPoint);
     }
 
     if (report?.llmMessage || report?.landingMessage) {
@@ -405,12 +633,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   get canSubmitNdReview(): boolean {
-    if (!this.ndRunData) return false;
-    const role = this.auth.getRole();
-    if (role !== 'maker' && role !== 'super_admin') return false;
-    return ['completed', 'dual_verify_failed', 'landing_ai_complete', 'pulled_back'].includes(
-      this.ndRunData.run.status,
-    );
+    return false;
   }
 
   get ndWorkflowHint(): string {
@@ -424,7 +647,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     if (status === 'submitted_for_review') return 'Submitted to checker — awaiting review.';
     if (status === 'checker_approved') return 'Checker approved — with reviewer for final sign-off.';
     if (status === 'reviewer_approved') return 'Final review complete.';
-    if (status === 'pulled_back') return 'Pulled back by checker — edit action plans and resubmit.';
+    if (status === 'pulled_back') return 'Returned to maker for correction — edit action plans and resubmit.';
     return '';
   }
 
@@ -456,7 +679,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     void this.router.navigate(['/nd/reviewer']);
   }
 
-  setFilter(id: string): void {
+  setFilter(id: 'all' | GapSeverity | 'with_gaps'): void {
     this.activeFilter = id;
     this.ensureListSelection();
   }
@@ -488,18 +711,21 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return this.filteredItems.find((i) => i.id === this.selectedItemId) ?? null;
   }
 
-  toggleItem(item: GapItemData): void {
-    item.expanded = !item.expanded;
-    this.persistSoon();
-  }
-
   collapseAllItems(): void {
-    for (const item of this.items) item.expanded = false;
+    this.items.forEach((item) => {
+      item.expanded = false;
+    });
+    this.items = [...this.items];
+    this.cdr.markForCheck();
     this.persistSoon();
   }
 
   expandAllItems(): void {
-    for (const item of this.items) item.expanded = true;
+    this.items.forEach((item) => {
+      item.expanded = true;
+    });
+    this.items = [...this.items];
+    this.cdr.markForCheck();
     this.persistSoon();
   }
 
@@ -520,17 +746,30 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   openPdfFromNd(event: { docId: string; page?: string | null }): void {
+    const openUrl = (url: string) => {
+      const full = event.page ? `${url}#page=${event.page}` : url;
+      window.open(full, '_blank', 'noopener');
+    };
     this.api.getDocumentSignedUrl(event.docId).subscribe({
       next: (r) => {
-        if (!r.url) {
-          this.toast.show('Could not open PDF', 'error');
+        if (r.url) {
+          openUrl(r.url);
           return;
         }
-        const url = event.page ? `${r.url}#page=${event.page}` : r.url;
-        window.open(url, '_blank', 'noopener');
+        void this.openRegulationFileUrl(event.docId, event.page);
       },
-      error: () => this.toast.show('Could not open PDF', 'error'),
+      error: () => void this.openRegulationFileUrl(event.docId, event.page),
     });
+  }
+
+  private async openRegulationFileUrl(docId: string, page?: string | null): Promise<void> {
+    const res = await this.ndApi.getRegulationDocumentFileUrl(docId);
+    if (res.success && res.data?.url) {
+      const url = page ? `${res.data.url}#page=${page}` : res.data.url;
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
+    this.toast.show(res.message ?? 'Could not open PDF', 'error');
   }
 
   async exportXlsx(): Promise<void> {
@@ -813,9 +1052,10 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     section: string | null,
     focus: string | null,
   ): Promise<void> {
-    const [res, runRes] = await Promise.all([
+    const [res, runRes, internalRes] = await Promise.all([
       this.ndApi.getResults(runId),
       this.ndApi.getAnalysisRun(runId),
+      this.ndApi.getInternalDocuments(),
     ]);
     if (!res.success || !res.data) {
       this.loading = false;
@@ -827,12 +1067,26 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     const data = res.data as ResultsData;
     this.ndRunData = data;
     this.ndRunStatus = data.run.status;
+
+    if (!this.embedMode) {
+      const role = this.auth.getRole();
+      const reviewRoute = reviewWorkspaceLink(role, runId, data.run.status);
+      if (reviewRoute && (role === 'checker' || role === 'reviewer')) {
+        void this.router.navigate(reviewRoute);
+        return;
+      }
+    }
+
     this.runStatusChange.emit(data.run.status);
     this.sourceLabel = data.run.name || 'Analysis run';
     this.ndPolicyDocId =
       runRes.success && runRes.data
         ? this.firstDocIdFromRunDetail(runRes.data, 'selectedInternalDocIds')
         : null;
+    this.ndPolicyDocCatalog =
+      runRes.success && runRes.data
+        ? internalDocCatalogFromRunDetail(runRes.data, (internalRes.data ?? []) as InternalDocument[])
+        : [];
     this.ndRegulationDocId =
       runRes.success && runRes.data
         ? this.firstDocIdFromRunDetail(runRes.data, 'selectedRegulationDocIds')
@@ -891,6 +1145,23 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       ...item,
       severity: normalizeGapSeverity(item.severity),
     }));
+
+    if (this.ndRunData) {
+      items = items.map((item) => {
+        const ndPoint = this.analysisPointForGap(item);
+        if (!ndPoint) return item;
+        const severity = resolveAnalysisPointSeverity(ndPoint);
+        const gapCount = countDisplayGapsForAnalysisPoint(
+          ndPoint,
+          this.attachmentsForPoint(ndPoint.id).length,
+        );
+        return {
+          ...item,
+          severity,
+          gapCount: gapCount > 0 ? gapCount : item.gapCount,
+        };
+      });
+    }
 
     if (section) {
       items = items.map((i) => ({ ...i, expanded: i.section === section }));

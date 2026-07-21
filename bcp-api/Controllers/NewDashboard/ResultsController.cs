@@ -54,6 +54,11 @@ public class ResultsController(
             .OrderBy(h => h.CreatedAt)
             .ToListAsync(ct);
 
+        var attachments = await db.NdAnalysisPointAttachments.AsNoTracking()
+            .Where(a => pointIds.Contains(a.AnalysisPointId))
+            .OrderBy(a => a.CreatedAt)
+            .ToListAsync(ct);
+
         return Ok(new
         {
             success = true,
@@ -71,6 +76,15 @@ public class ResultsController(
                     run.CreatedAt,
                 },
                 points = run.Points,
+                pointAttachments = attachments.Select(a => new
+                {
+                    id = a.Id,
+                    analysisPointId = a.AnalysisPointId,
+                    actionIndex = a.ActionIndex,
+                    storedDocumentId = a.StoredDocumentId,
+                    fileName = a.FileName,
+                    createdAt = a.CreatedAt,
+                }),
                 reviews,
                 comments,
                 actionItemReviews = actionItemReviews.Select(r => new
@@ -81,6 +95,9 @@ public class ResultsController(
                     actionIndex = r.ActionIndex,
                     status = r.Status,
                     comment = r.Comment,
+                    responsibility = r.Responsibility,
+                    dueDate = r.DueDate.HasValue ? r.DueDate.Value.ToString("yyyy-MM-dd") : null,
+                    priority = r.Priority,
                     r.CreatedAt,
                 }),
                 statusHistory = history,
