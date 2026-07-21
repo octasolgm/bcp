@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Observable, of } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 export interface ApiResponse<T> {
@@ -94,16 +95,23 @@ export interface SessionProgress {
     llmMessage?: string;
     agreementJson?: { status: string; label: string; summary?: string };
     errorMessage?: string;
+    runningStage?: string;
   }>;
 }
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
+  /** Reguliq .NET API — all primary calls go here (:5100 local, Azure in prod) */
   private base = environment.apiUrl;
-  /** Optional — load Kafka sessions created via Next.js / Nest */
-  private nest = environment.nestjsApiUrl;
+  /** Optional NestJS — legacy Kafka sessions only; empty = no :4000 requests */
+  private nest = environment.nestjsApiUrl?.trim() ?? '';
 
   constructor(private http: HttpClient) {}
+
+  /** True when nestjsApiUrl is set (e.g. local Nest for old sessions) */
+  get nestJsEnabled(): boolean {
+    return this.nest.length > 0;
+  }
 
   getDashboard() {
     return this.http.get<ApiResponse<DashboardMetrics>>(`${this.base}/bcpweb/dashboard`);
@@ -117,8 +125,11 @@ export class ApiService {
     return this.http.get<ApiResponse<DualVerifySessionSummary[]>>(`${this.base}/dual-verify-kafka/sessions`);
   }
 
-  /** Kafka sessions from Nest (runs started via Next.js / Nest) */
-  listNestDualVerifySessions() {
+  /** Kafka sessions from Nest (optional — skipped when nestjsApiUrl is empty) */
+  listNestDualVerifySessions(): Observable<ApiResponse<DualVerifySessionSummary[]>> {
+    if (!this.nestJsEnabled) {
+      return of({ success: true, data: [] });
+    }
     return this.http.get<ApiResponse<DualVerifySessionSummary[]>>(`${this.nest}/dual-verify-kafka/sessions`);
   }
 
@@ -150,7 +161,10 @@ export class ApiService {
     return this.http.post(`${this.base}/landing-ai/seed/builtin`, {});
   }
 
-  getNestJob(sessionId: string) {
+  getNestJob(sessionId: string): Observable<ApiResponse<SessionProgress>> {
+    if (!this.nestJsEnabled) {
+      return of({ success: false, data: {} as SessionProgress });
+    }
     return this.http.get<ApiResponse<SessionProgress>>(`${this.nest}/dual-verify-kafka/jobs/${sessionId}`);
   }
 
@@ -162,7 +176,15 @@ export class ApiService {
     return this.http.post<ApiResponse<{ id: string }>>(`${this.base}/dual-verify-kafka/jobs`, form);
   }
 
-  retryFailed(sessionId: string) {
+  retryFailed(sessionId: string, internalFile?: File | null) {
+    if (internalFile) {
+      const form = new FormData();
+      form.append('internalFile', internalFile);
+      return this.http.post(
+        `${this.base}/dual-verify-kafka/jobs/${sessionId}/retry-failed`,
+        form,
+      );
+    }
     return this.http.post(`${this.base}/dual-verify-kafka/jobs/${sessionId}/retry-failed`, {});
   }
 }

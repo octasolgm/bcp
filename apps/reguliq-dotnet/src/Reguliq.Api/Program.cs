@@ -30,8 +30,12 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins("http://localhost:4200", "http://localhost:4201", "http://localhost:3002")
-        .AllowAnyHeader().AllowAnyMethod()));
+{
+    var raw = Environment.GetEnvironmentVariable("REGULIQ_CORS_ORIGINS")
+        ?? "http://localhost:3002,http://localhost:4200,http://localhost:4201";
+    var origins = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
+}));
 
 var pgRaw = Environment.GetEnvironmentVariable("REGULIQ_DATABASE_URL")
     ?? Environment.GetEnvironmentVariable("DIRECT_URL")
@@ -95,7 +99,10 @@ app.MapControllers();
 
 app.MapGet("/", () => Results.Ok(new { name = "Reguliq .NET API", version = "1.0.0" }));
 
-var port = Environment.GetEnvironmentVariable("REGULIQ_API_PORT") ?? "5100";
-app.Urls.Add($"http://localhost:{port}");
+var port = Environment.GetEnvironmentVariable("PORT")
+    ?? Environment.GetEnvironmentVariable("WEBSITES_PORT")
+    ?? Environment.GetEnvironmentVariable("REGULIQ_API_PORT")
+    ?? "5100";
+app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();

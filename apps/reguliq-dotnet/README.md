@@ -37,8 +37,8 @@ npm run dev:api
 # Terminal 2 — .NET API
 cd apps/reguliq-dotnet/src/Reguliq.Api && dotnet run
 
-# Terminal 3 — Angular
-cd apps/reguliq-dotnet/client/reguliq-web && npm install && npm start
+# Terminal 3 — Angular (standalone app)
+cd apps/reguliq-web && npm install && npm start
 ```
 
 ### Verify
@@ -46,7 +46,7 @@ cd apps/reguliq-dotnet/client/reguliq-web && npm install && npm start
 ```bash
 curl http://localhost:5100/dual-verify-kafka/health
 dotnet build apps/reguliq-dotnet/src/Reguliq.Api
-cd apps/reguliq-dotnet/client/reguliq-web && npm run build
+cd apps/reguliq-web && npm run build
 dotnet test apps/reguliq-dotnet/tests/Reguliq.Api.Tests
 ```
 
@@ -72,7 +72,7 @@ Copy `apps/reguliq-dotnet/.env.example` values into the **repo root** `.env` (lo
 | `KAFKA_BROKERS`, `KAFKA_*_CONNECTION_STRING` | Azure Event Hubs |
 | `DUAL_VERIFY_INTERNAL_PDF_PATH` | Default IMPTFS PDF for Phase 2 |
 
-Angular API URL: `client/reguliq-web/src/environments/environment.ts` → `apiUrl: 'http://localhost:5100'`
+Angular API URL: `apps/reguliq-web/src/environments/environment.ts` → `apiUrl: 'http://localhost:5100'` (local) or `environment.production.ts` for Azure.
 
 ## API endpoints (NestJS parity)
 

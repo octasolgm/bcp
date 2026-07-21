@@ -1,4 +1,3 @@
-export const API_BASE = 'http://localhost:4000';
 export const DEFAULT_PDF_URL = '/default-docs/imptfs.pdf';
 export const DEFAULT_PDF_NAME = 'I M P T F S.pdf';
 

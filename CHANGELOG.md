@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- **`apps/reguliq-web`** — standalone Angular 19 app (moved out of `apps/reguliq-dotnet/client/`)
+- `environment.production.ts` for Azure builds; `npm run dev:reguliq-web` and `npm run dev:reguliq-api` scripts
+- `REGULIQ_CORS_ORIGINS` for local + hosted Angular origins
+
+### Changed
+- Reguliq Angular calls **.NET API on 5100 only** by default; NestJS `:4000` is optional via `nestjsApiUrl`
+- .NET API binds `0.0.0.0` with `PORT` / `WEBSITES_PORT` for Azure App Service
+
+### Added
 - **Reguliq .NET Kafka parity** — Confluent.Kafka producer/consumer (jobs/retry/dlq/results), transient retry with backoff, `GET /jobs/{id}/results`, Postgres URI builder for `@` in passwords, agreement unit tests
 - **Reguliq Angular workbench** — App shell with sidebar, combined report bag, saved session load (DB/Kafka/recent), chapter-grouped gov points, live progress, PDF/Excel export (jspdf + exceljs)
 - `apps/reguliq-dotnet/.env.example`, `appsettings.Development.json` placeholders, expanded README

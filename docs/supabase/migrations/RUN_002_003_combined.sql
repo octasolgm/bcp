@@ -101,3 +101,10 @@ DROP TRIGGER IF EXISTS trg_dual_verify_point_jobs_updated ON dual_verify_point_j
 CREATE TRIGGER trg_dual_verify_point_jobs_updated
   BEFORE UPDATE ON dual_verify_point_jobs
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- === 004 bcp-api extra columns ===
+ALTER TABLE dual_verify_sessions
+  ADD COLUMN IF NOT EXISTS queued_points INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE dual_verify_sessions
+  ADD COLUMN IF NOT EXISTS transport TEXT NOT NULL DEFAULT 'local';

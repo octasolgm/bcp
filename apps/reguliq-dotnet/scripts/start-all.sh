@@ -22,7 +22,7 @@ DOTNET_PID=$!
 sleep 4
 
 # Angular
-cd "$ROOT/apps/reguliq-dotnet/client/reguliq-web"
+cd "$ROOT/apps/reguliq-web"
 if [ ! -d node_modules ]; then npm install; fi
 npx ng serve --port 3002 --host localhost &
 ANG_PID=$!

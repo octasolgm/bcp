@@ -8,6 +8,9 @@ export const DUAL_VERIFY_COPY = {
   internalPolicyHint:
     'Required for Pass 2 (Gemini). Compare selected gov points against your bank internal TFS/AML policy document.',
   internalPolicyMissing: 'Attach internal policy PDF for Pass 2 (Gemini).',
+  clearAllTitle: 'Clear loaded session, combined report, and live progress',
+  removeReportItemTitle: 'Remove this point from the loaded session report',
+  removeReportItemBlocked: 'Cannot remove a point while it is running or queued.',
   govPointsTitle: 'Gov points to verify',
   govPointsHint:
     'Select regulatory requirement points (SNB TFS guidelines). Each selected point is compared to your internal policy.',

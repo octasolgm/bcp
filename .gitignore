@@ -67,8 +67,9 @@ docs/client-documents/sample-output-templates/*
 !docs/client-documents/sample-excel-sheets/.gitkeep
 !docs/client-documents/sample-output-templates/.gitkeep
 
-# Reguliq .NET / Angular local artifacts
-apps/reguliq-dotnet/client/reguliq-web/.angular/
+# Reguliq Angular / .NET local artifacts
+apps/reguliq-web/.angular/
+apps/reguliq-dotnet/client/reguliq-web/
 apps/reguliq-dotnet/src/Reguliq.Api/data/
 **/data/reguliq.db
 apps/api/dist/

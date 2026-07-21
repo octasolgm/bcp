@@ -11,6 +11,8 @@
     "dev:api": "npm run start:dev --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:bcpweb": "npm run dev --workspace=apps/bcpweb",
+    "dev:reguliq-web": "npm run start --workspace=apps/reguliq-web",
+    "dev:reguliq-api": "dotnet run --project apps/reguliq-dotnet/src/Reguliq.Api",
     "dev:reguliq-dotnet": "bash apps/reguliq-dotnet/scripts/start-all.sh",
     "dev:mobile": "npm run dev --workspace=apps/mobile",
     "db:migrate": "npm run db:migrate --workspace=apps/api",

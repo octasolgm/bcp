@@ -81,6 +81,16 @@ export function mergeReportItems(
   return next;
 }
 
+/** Remove one point from the combined report bag (returns a new map). */
+export function removeReportItemFromBag(
+  bag: Map<string, DualVerifyReportItem>,
+  pointId: string,
+): Map<string, DualVerifyReportItem> {
+  const next = new Map(bag);
+  next.delete(pointId);
+  return next;
+}
+
 export function reportItemsToSortedArray(
   map: Map<string, DualVerifyReportItem>,
 ): DualVerifyReportItem[] {

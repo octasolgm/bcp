@@ -36,6 +36,7 @@ import {
   mergeReportItems,
   parsedResultsFromReport,
   progressPointToReportItem,
+  removeReportItemFromBag,
   reportItemsToSortedArray,
   savedResultToReportItem,
   type DualVerifyReportItem,
@@ -205,6 +206,35 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
   get progressRemaining(): number {
     if (!this.progress?.session?.totalPoints) return 0;
     return Math.max(0, this.progress.session.totalPoints - this.progressDone);
+  }
+
+  /** Failed Kafka jobs — from live progress or loaded report rows. */
+  get failedJobCount(): number {
+    const fromProgress = this.progress?.session?.failedPoints ?? 0;
+    const fromReport = this.reportItems.filter((i) => i.status === 'failed').length;
+    return Math.max(fromProgress, fromReport);
+  }
+
+  get canRetryFailed(): boolean {
+    return Boolean(this.sessionId) && this.failedJobCount > 0 && !this.running;
+  }
+
+  /** True when a session or combined report is loaded — show Clear all. */
+  get canClearAll(): boolean {
+    return (
+      this.reportBag.size > 0
+      || Boolean(this.sessionId)
+      || Boolean(this.manualSessionId.trim())
+      || Boolean(this.selectedSavedSession)
+      || Boolean(this.progress)
+      || Boolean(this.loadedKafkaSessionId)
+      || Boolean(this.combinedComplianceSessionId)
+    );
+  }
+
+  get activeRunningStage(): string | null {
+    const running = this.progress?.points.find((p) => p.status === 'running');
+    return running?.runningStage ?? null;
   }
 
   reportPointStatus(pointId: string): DualVerifyReportItem['status'] | null {
@@ -470,6 +500,36 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
     this.reportListCollapsed = true;
   }
 
+  canRemoveReportItem(item: DualVerifyReportItem): boolean {
+    return item.status !== 'running' && item.status !== 'queued';
+  }
+
+  confirmRemoveReportItem(pointId: string, event?: Event): void {
+    event?.stopPropagation();
+    const item = this.reportBag.get(pointId);
+    if (!item) return;
+    if (!this.canRemoveReportItem(item)) {
+      this.reportNote = this.copy.removeReportItemBlocked;
+      return;
+    }
+    const label = item.pointTitle ? `${pointId} — ${item.pointTitle}` : pointId;
+    const ok = window.confirm(
+      `Remove point ${label} from this session report?\n\nExports and summaries will no longer include it.`,
+    );
+    if (!ok) return;
+    this.removeReportItem(pointId);
+  }
+
+  private removeReportItem(pointId: string): void {
+    this.reportBag = removeReportItemFromBag(this.reportBag, pointId);
+    if (this.progress?.points?.length) {
+      const points = this.progress.points.filter((p) => p.pointId !== pointId);
+      this.progress = { ...this.progress, points };
+    }
+    this.updateReportMeta();
+    this.reportNote = `Removed ${pointId} from session report.`;
+  }
+
   toggleGovPanel(): void {
     this.govPanelCollapsed = !this.govPanelCollapsed;
   }
@@ -596,44 +656,83 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
 
   private finishKafkaLoad(data: SessionProgress, id: string): void {
     const normalized = this.normalizeProgress(data);
-    const incoming = normalized.points
-      .filter((p) => p.status === 'completed')
-      .map((p) =>
-        this.enrichReportItem(
-          progressPointToReportItem({
-            pointId: p.pointId,
-            pointTitle: p.pointTitle,
-            status: p.status,
-            landingMessage: p.landingMessage,
-            llmMessage: p.llmMessage,
-            agreementJson: p.agreementJson as DualVerifyReportItem['agreement'],
-            errorMessage: p.errorMessage,
-          }),
-        ),
-      );
+    const reportable = normalized.points.filter(
+      (p) => p.status === 'completed' || p.status === 'failed',
+    );
+    const incoming = reportable.map((p) =>
+      this.enrichReportItem(
+        progressPointToReportItem({
+          pointId: p.pointId,
+          pointTitle: p.pointTitle,
+          status: p.status,
+          landingMessage: p.landingMessage,
+          llmMessage: p.llmMessage,
+          agreementJson: p.agreementJson as DualVerifyReportItem['agreement'],
+          errorMessage: p.errorMessage,
+        }),
+      ),
+    );
+
+    this.sessionId = id;
+    this.loadedKafkaSessionId = id;
+    this.progress = normalized;
+
     if (!incoming.length) {
       this.loadingAnalysis = false;
-      this.error = 'No completed results in this Kafka session yet.';
+      const pending = normalized.points.filter(
+        (p) => p.status === 'running' || p.status === 'queued',
+      ).length;
+      if (pending > 0) {
+        this.error = '';
+        this.reportNote = `Session still running — ${pending} point(s) in progress. Retry polling or wait.`;
+        this.running = true;
+        this.poll(id);
+      } else {
+        this.error = 'No results in this Kafka session yet.';
+      }
       return;
     }
+
     this.reportBag = mergeReportItems(this.reportBag, incoming);
-    this.loadedKafkaSessionId = id;
-    this.sessionId = id;
-    this.progress = normalized;
     this.updateReportMeta();
-    this.reportNote = `Loaded ${incoming.length} point(s) into combined report (${this.exportItems.length} exportable).`;
+    const failed = normalized.points.filter((p) => p.status === 'failed').length;
+    const completed = normalized.points.filter((p) => p.status === 'completed').length;
+    this.reportNote =
+      failed > 0
+        ? `Loaded ${completed} completed and ${failed} failed point(s). Use Retry failed to re-run errors.`
+        : `Loaded ${incoming.length} point(s) into combined report (${this.exportItems.length} exportable).`;
     this.loadingAnalysis = false;
   }
 
   clearReport(): void {
+    this.clearAll();
+  }
+
+  /** Reset loaded session, combined report, progress, and load fields. */
+  clearAll(): void {
+    this.resetWorkspace('Cleared — combined report and session fields reset.');
+  }
+
+  private resetWorkspace(note: string): void {
+    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.pollTimer = null;
+    this.running = false;
+    this.progress = null;
+    this.sessionId = null;
+    this.manualSessionId = '';
+    this.selectedSavedSession = '';
+    this.loadingAnalysis = false;
     this.reportBag = new Map();
     this.reportSummary = null;
     this.executiveSummary = '';
     this.activeReportPointId = null;
     this.loadedKafkaSessionId = null;
     this.combinedComplianceSessionId = null;
+    this.complianceFilter = null;
+    this.showAllReportCards = false;
+    this.exportsExpanded = false;
     clearReportBagStorage();
-    this.reportNote = 'Combined report cleared.';
+    this.reportNote = note;
   }
 
   startPipeline(): void {
@@ -825,10 +924,20 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
   }
 
   retryFailed(): void {
-    if (!this.sessionId) return;
-    this.api.retryFailed(this.sessionId).subscribe(() => {
-      this.running = true;
-      this.poll(this.sessionId!);
+    if (!this.sessionId || !this.canRetryFailed) return;
+    this.error = '';
+    this.api.retryFailed(this.sessionId, this.internalFile).subscribe({
+      next: (r) => {
+        const body = r as { requeued?: number; data?: { requeued?: number } };
+        const n = body.requeued ?? body.data?.requeued ?? this.failedJobCount;
+        this.reportNote = `Retrying ${n} failed point(s)…`;
+        this.running = true;
+        this.poll(this.sessionId!);
+      },
+      error: (e) => {
+        this.error =
+          e?.error?.message ?? e?.message ?? 'Retry failed — check API is running and session ID is valid.';
+      },
     });
   }
 
