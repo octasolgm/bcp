@@ -437,6 +437,36 @@ public class NdAnalysisPointComment
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+[Table("action_plan_item_reviews")]
+public class NdActionPlanItemReview
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("analysis_point_id")]
+    public Guid AnalysisPointId { get; set; }
+
+    [Column("analysis_review_id")]
+    public Guid? AnalysisReviewId { get; set; }
+
+    [Column("action_index")]
+    public int ActionIndex { get; set; }
+
+    /// <summary>approve | need_modify | uix</summary>
+    [Column("status")]
+    public string Status { get; set; } = "";
+
+    [Column("comment")]
+    public string? Comment { get; set; }
+
+    [Column("reviewed_by")]
+    public Guid? ReviewedBy { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 /// <summary>
 /// Soft-delete marker for legacy analyses (document_analysis_runs / dual_verify_sessions)
 /// shown in the ND runs list. Legacy tables stay untouched; a row here hides the run.

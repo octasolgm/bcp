@@ -12,7 +12,7 @@ import type { AnalysisRunSummary } from '../../../../lib/nd/types';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './nd-admin-deleted-runs.component.html',
-  styleUrls: ['../nd-shared.scss'],
+  styleUrls: ['./nd-admin-deleted-runs.component.scss', '../nd-shared.scss'],
 })
 export class NdAdminDeletedRunsComponent implements OnInit {
   private readonly api = inject(NdApiService);
@@ -75,5 +75,13 @@ export class NdAdminDeletedRunsComponent implements OnInit {
   previousStatusLabel(run: AnalysisRunSummary): string {
     const s = (run.statusBeforeDelete ?? 'draft').replace(/_/g, ' ');
     return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  previousStatusClass(run: AnalysisRunSummary): string {
+    const s = (run.statusBeforeDelete ?? 'draft').toLowerCase();
+    if (s === 'completed') return 'completed';
+    if (s === 'failed' || s === 'dual_verify_failed') return 'failed';
+    if (s === 'running' || s === 'landing_ai_complete') return 'running';
+    return 'pending';
   }
 }

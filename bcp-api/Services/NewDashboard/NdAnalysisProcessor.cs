@@ -11,6 +11,7 @@ namespace Reguliq.Api.Services.NewDashboard;
 public class NdAnalysisProcessor(
     AppDbContext db,
     LandingAiCompareService landingAi,
+    NdInternalParseService internalParse,
     GeminiService gemini,
     SupabaseStorageService storage,
     IConfiguration config,
@@ -34,7 +35,7 @@ public class NdAnalysisProcessor(
         await db.SaveChangesAsync(ct);
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        var (pdfBytes, fileName, fileHash) = await ResolveInternalPdfAsync(internalDocIds, ct);
+        var internalDocs = await ResolveInternalDocsAsync(internalDocIds, ct);
         var phase2Model = ResolvePhase2Model();
 
         var points = run.Points
@@ -52,7 +53,7 @@ public class NdAnalysisProcessor(
             {
                 var dualOnly = IsLandingSuccess(point.LandingAiStatus) && point.DualVerifyStatus is "pending";
                 await ProcessPointPipelineAsync(
-                    run, point, pdfBytes, fileName, fileHash, phase2Model,
+                    run, point, internalDocs, phase2Model,
                     fullRerun: false, dualVerifyOnly: dualOnly, ct);
             }
             catch (Exception ex)
@@ -84,7 +85,7 @@ public class NdAnalysisProcessor(
             ?? throw new InvalidOperationException("Analysis point not found.");
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        var (pdfBytes, fileName, fileHash) = await ResolveInternalPdfAsync(internalDocIds, ct);
+        var internalDocs = await ResolveInternalDocsAsync(internalDocIds, ct);
         var phase2Model = ResolvePhase2Model();
 
         if (dualVerifyOnly)
@@ -93,7 +94,7 @@ public class NdAnalysisProcessor(
             point.DualVerifyStatus = "pending";
             point.GoogleAiStatus = "pending";
             await db.SaveChangesAsync(ct);
-            await RunDualVerifyOnlyAsync(run, point, pdfBytes, fileName, phase2Model, ct);
+            await RunDualVerifyOnlyAsync(run, point, internalDocs, phase2Model, ct);
         }
         else
         {
@@ -105,7 +106,7 @@ public class NdAnalysisProcessor(
             point.GoogleAiError = null;
             await db.SaveChangesAsync(ct);
             await ProcessPointPipelineAsync(
-                run, point, pdfBytes, fileName, fileHash, phase2Model,
+                run, point, internalDocs, phase2Model,
                 fullRerun: true, dualVerifyOnly: false, ct);
         }
 
@@ -120,7 +121,7 @@ public class NdAnalysisProcessor(
             ?? throw new InvalidOperationException("Analysis run not found.");
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        var (pdfBytes, fileName, _) = await ResolveInternalPdfAsync(internalDocIds, ct);
+        var internalDocs = await ResolveInternalDocsAsync(internalDocIds, ct);
         var phase2Model = ResolvePhase2Model();
 
         foreach (var point in run.Points.Where(p => p.DualVerifyStatus == "failed"))
@@ -129,7 +130,7 @@ public class NdAnalysisProcessor(
             point.DualVerifyStatus = "pending";
             point.GoogleAiStatus = "pending";
             await db.SaveChangesAsync(ct);
-            await RunDualVerifyOnlyAsync(run, point, pdfBytes, fileName, phase2Model, ct);
+            await RunDualVerifyOnlyAsync(run, point, internalDocs, phase2Model, ct);
         }
 
         await FinalizeRunStatusAsync(run, ct);
@@ -138,9 +139,7 @@ public class NdAnalysisProcessor(
     private async Task ProcessPointPipelineAsync(
         NdAnalysisRun run,
         NdAnalysisPoint point,
-        byte[]? pdfBytes,
-        string fileName,
-        string fileHash,
+        IReadOnlyList<InternalDocPayload> internalDocs,
         string phase2Model,
         bool fullRerun,
         bool dualVerifyOnly,
@@ -148,7 +147,7 @@ public class NdAnalysisProcessor(
     {
         if (dualVerifyOnly)
         {
-            await RunDualVerifyOnlyAsync(run, point, pdfBytes, fileName, phase2Model, ct);
+            await RunDualVerifyOnlyAsync(run, point, internalDocs, phase2Model, ct);
             return;
         }
 
@@ -170,7 +169,7 @@ public class NdAnalysisProcessor(
             {
                 var forceRefresh = fullRerun && point.LandingAiRerunCount > 0;
                 var landingMessage = await landingAi.ComparePointAsync(
-                    govPoint, fileHash, fileName, pdfBytes, forceRefresh, ct);
+                    govPoint, internalDocs.ToList(), forceRefresh, ct);
 
                 point.LandingAiStatus = NdComplianceParser.ExtractStatusFromMessage(landingMessage);
                 point.LandingAiResult = JsonSerializer.Serialize(new { message = landingMessage });
@@ -199,7 +198,7 @@ public class NdAnalysisProcessor(
         }
 
         if (!IsDualDone(point.DualVerifyStatus) || fullRerun)
-            await RunDualVerifyPhaseAsync(run, point, govPoint, pdfBytes, fileName, phase2Model, ct);
+            await RunDualVerifyPhaseAsync(run, point, govPoint, internalDocs, phase2Model, ct);
         else
             await UpdateRunCountsAsync(run, ct);
     }
@@ -207,8 +206,7 @@ public class NdAnalysisProcessor(
     private async Task RunDualVerifyOnlyAsync(
         NdAnalysisRun run,
         NdAnalysisPoint point,
-        byte[]? pdfBytes,
-        string fileName,
+        IReadOnlyList<InternalDocPayload> internalDocs,
         string phase2Model,
         CancellationToken ct)
     {
@@ -234,13 +232,7 @@ public class NdAnalysisProcessor(
 
         try
         {
-            var prompt = DualVerifyPromptBuilder.Build(govPoint, landingMessage);
-            string phase2;
-            if (pdfBytes is { Length: > 0 })
-                phase2 = await gemini.AnalyzeWithPdfAsync(pdfBytes, fileName, prompt, phase2Model, ct);
-            else
-                phase2 = await gemini.AnalyzeTextAsync(prompt, phase2Model, ct);
-
+            var phase2 = await RunGeminiPhase2Async(govPoint, landingMessage, internalDocs, phase2Model, ct);
             ApplyDualVerifyResult(run, point, landingMessage, phase2);
         }
         catch (Exception ex)
@@ -259,8 +251,7 @@ public class NdAnalysisProcessor(
         NdAnalysisRun run,
         NdAnalysisPoint point,
         GovPoint govPoint,
-        byte[]? pdfBytes,
-        string fileName,
+        IReadOnlyList<InternalDocPayload> internalDocs,
         string phase2Model,
         CancellationToken ct)
     {
@@ -275,13 +266,7 @@ public class NdAnalysisProcessor(
                 ? m.GetString() ?? ""
                 : "";
 
-            var prompt = DualVerifyPromptBuilder.Build(govPoint, landingMessage);
-            string phase2;
-            if (pdfBytes is { Length: > 0 })
-                phase2 = await gemini.AnalyzeWithPdfAsync(pdfBytes, fileName, prompt, phase2Model, ct);
-            else
-                phase2 = await gemini.AnalyzeTextAsync(prompt, phase2Model, ct);
-
+            var phase2 = await RunGeminiPhase2Async(govPoint, landingMessage, internalDocs, phase2Model, ct);
             ApplyDualVerifyResult(run, point, landingMessage, phase2);
         }
         catch (Exception ex)
@@ -296,6 +281,40 @@ public class NdAnalysisProcessor(
         await UpdateRunCountsAsync(run, ct);
     }
 
+    private async Task<string> RunGeminiPhase2Async(
+        GovPoint govPoint,
+        string landingMessage,
+        IReadOnlyList<InternalDocPayload> internalDocs,
+        string phase2Model,
+        CancellationToken ct)
+    {
+        var markdownSupplement = BuildInternalMarkdownSupplement(internalDocs);
+        var attachedNames = internalDocs.Select(d => d.FileName).ToList();
+        var prompt = DualVerifyPromptBuilder.Build(
+            govPoint, landingMessage, markdownSupplement, attachedNames);
+
+        var pdfs = internalDocs
+            .Where(d => d.Pdf is { Length: > 0 })
+            .Select(d => (d.Pdf!, d.FileName))
+            .ToList();
+
+        if (pdfs.Count > 0)
+            return await gemini.AnalyzeWithPdfsAsync(pdfs, prompt, phase2Model, ct);
+
+        return await gemini.AnalyzeTextAsync(prompt, phase2Model, ct);
+    }
+
+    private static string BuildInternalMarkdownSupplement(IReadOnlyList<InternalDocPayload> internalDocs)
+    {
+        if (internalDocs.Count == 0) return "";
+        if (internalDocs.Count == 1)
+            return internalDocs[0].Markdown;
+
+        return string.Join(
+            "\n\n",
+            internalDocs.Select((d, i) => $"--- INTERNAL DOCUMENT {i + 1}: {d.FileName} ---\n{d.Markdown}"));
+    }
+
     private void ApplyDualVerifyResult(NdAnalysisRun run, NdAnalysisPoint point, string landingMessage, string phase2)
     {
         var agreement = NdComplianceParser.ComparePasses(landingMessage, phase2);
@@ -305,7 +324,16 @@ public class NdAnalysisProcessor(
         point.GoogleAiError = null;
         point.DualVerifyRunAt = DateTimeOffset.UtcNow;
         point.DualVerifyStatus = agreement.Status == "aligned" ? "passed" : "failed";
-        point.FinalStatus = NdComplianceParser.NormalizeStatus(agreement.LandingStatus);
+        point.FinalStatus = ResolveFinalStatusFromAgreement(agreement);
+    }
+
+    private static string ResolveFinalStatusFromAgreement(DualVerifyAgreementDto agreement)
+    {
+        if (agreement.Status == "both_non_compliant")
+            return "non_compliant";
+        if (agreement.Status is "status_mismatch" or "confidence_gap")
+            return "partial_compliant";
+        return NdComplianceParser.NormalizeStatus(agreement.LandingStatus);
     }
 
     private async Task SaveInitialActionPlanIfNeededAsync(
@@ -379,26 +407,38 @@ public class NdAnalysisProcessor(
         return model;
     }
 
-    private async Task<(byte[]? Pdf, string FileName, string FileHash)> ResolveInternalPdfAsync(
+    private async Task<List<InternalDocPayload>> ResolveInternalDocsAsync(
         List<string> internalDocIds,
         CancellationToken ct)
     {
+        var result = new List<InternalDocPayload>();
         if (internalDocIds.Count == 0)
-            return (null, "internal.pdf", "");
+            return result;
 
-        if (!Guid.TryParse(internalDocIds[0], out var docId))
-            return (null, "internal.pdf", "");
+        foreach (var idStr in internalDocIds)
+        {
+            if (!Guid.TryParse(idStr, out var docId))
+                continue;
 
-        var doc = await db.StoredDocuments.AsNoTracking()
-            .FirstOrDefaultAsync(d => d.Id == docId, ct);
-        if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath))
-            return (null, doc?.OriginalFileName ?? "internal.pdf", doc?.FileHash ?? "");
+            var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == docId, ct);
+            if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath))
+            {
+                logger.LogWarning("Internal document {DocId} not found or missing storage path", docId);
+                continue;
+            }
 
-        if (!storage.IsConfigured)
-            return (null, doc.OriginalFileName, doc.FileHash ?? "");
+            if (!storage.IsConfigured)
+                throw new InvalidOperationException("Supabase Storage not configured.");
 
-        var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
-        return (bytes, doc.OriginalFileName, doc.FileHash ?? LandingAiCacheRepository.HashBuffer(bytes));
+            var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
+            var payload = await internalParse.EnsureParsedAsync(doc, bytes, ct);
+            result.Add(payload);
+        }
+
+        if (result.Count == 0)
+            throw new InvalidOperationException("No internal documents could be loaded for this run.");
+
+        return result;
     }
 }
 

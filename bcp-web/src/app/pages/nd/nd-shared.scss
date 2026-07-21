@@ -109,7 +109,8 @@
 .nd-fill-panel--viewport {
   display: flex;
   flex-direction: column;
-  min-height: min(68vh, 40rem);
+  min-height: 0;
+  max-height: calc(100vh - 10rem);
   overflow: hidden;
 
   > .nd-scroll-panel,
@@ -289,7 +290,7 @@
 }
 
 .nd-review-back { padding: 0.5rem 1.5rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.nd-review-page { min-height: min(68vh, 40rem); }
+.nd-review-page { min-height: 0; }
 .nd-review-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -297,58 +298,104 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  @media (min-width: 1024px) { grid-template-columns: 1fr 1fr; }
+  @media (min-width: 1024px) { grid-template-columns: minmax(14rem, 22rem) minmax(0, 1fr); }
 }
 .nd-review-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding: 1rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);
-  @media (min-width: 1024px) { border-bottom: none; border-right: 1px solid var(--border); &:last-child { border-right: none; } }
+  @media (min-width: 1024px) {
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+    &:last-child { border-right: none; }
+  }
 }
-.nd-review-panel h3 { margin: 0 0 0.75rem; font-size: 0.875rem; font-weight: 500; flex-shrink: 0; }
+.nd-review-panel h3 { margin: 0 0 0.5rem; font-size: 0.875rem; font-weight: 500; flex-shrink: 0; }
 .nd-review-points {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
+  max-height: min(40vh, 20rem);
+  @media (min-width: 1024px) { max-height: none; }
 }
 .nd-review-point {
-  width: 100%; text-align: left; padding: 0.75rem; border-radius: var(--radius-lg);
-  border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; font-size: 0.875rem;
+  width: 100%; text-align: left; padding: 0.5rem 0.65rem; border-radius: var(--radius-lg);
+  border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; font-size: 0.8125rem;
   display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
   &.active { border-color: var(--accent); background: var(--bg-card); }
 }
-.nd-review-detail { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.nd-review-detail > div:first-child,
-.nd-review-detail > h3,
-.nd-review-detail > p,
-.nd-review-detail > .nd-result-block {
-  flex-shrink: 0;
-}
-.nd-review-detail .nd-label {
-  flex: 1;
-  min-height: 0;
+.nd-review-detail {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
-  textarea.nd-input {
-    flex: 1;
-    min-height: 6rem;
-    resize: none;
-  }
 }
-.nd-review-actions { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border); }
+.nd-review-detail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-right: 0.15rem;
+}
 .nd-review-point-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.5rem;
+  flex-shrink: 0;
+
+  h3 {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.35;
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+}
+.nd-review-point-body {
+  display: block;
+  flex-shrink: 0;
+}
+.nd-review-comment {
+  flex-shrink: 0;
+
+  textarea.nd-input {
+    min-height: 4.5rem;
+    max-height: 8rem;
+    resize: vertical;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+
+    &::placeholder {
+      color: var(--text-muted);
+    }
+  }
+}
+
+.nd-optional {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.nd-review-actions {
+  flex-shrink: 0;
+  margin-top: 0;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 .nd-review-point-head-badges,
 .nd-review-point-badges {
@@ -356,6 +403,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
+  flex-shrink: 0;
 }
 .nd-comment-dot { margin-left: 0.5rem; color: var(--medium); }
 

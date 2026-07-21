@@ -58,12 +58,15 @@ export class NdInternalDocumentsComponent implements OnInit {
   file: File | null = null;
   loading = true;
   uploading = false;
+  parsingId: string | null = null;
   error = '';
+  message = '';
   historyFor: InternalDocument | null = null;
   analysisFor: InternalDocument | null = null;
   analysisRuns: InternalDocAnalysisRun[] = [];
   loadingAnalysisRuns = false;
   searchQuery = '';
+  parseFilter = '';
   sourceFilter = '';
   sortColumn: DocSortColumn = 'uploaded';
   sortDir: SortDir = 'desc';
@@ -75,6 +78,53 @@ export class NdInternalDocumentsComponent implements OnInit {
   get canUpload(): boolean {
     const role = this.auth.getRole();
     return role === 'maker' || role === 'super_admin';
+  }
+
+  get canParse(): boolean {
+    return this.canUpload;
+  }
+
+  parseClass(status?: string): string {
+    if (status === 'parsed') return 'completed';
+    if (status === 'processing') return 'running';
+    if (status === 'failed') return 'failed';
+    return 'pending';
+  }
+
+  parseLabel(status?: string): string {
+    if (status === 'parsed') return 'Parsed';
+    if (status === 'processing') return 'Parsing…';
+    if (status === 'failed') return 'Failed';
+    return 'Pending parse';
+  }
+
+  isParsingDoc(doc: InternalDocument): boolean {
+    return this.parsingId === doc.id || doc.parseStatus === 'processing';
+  }
+
+  async handleParse(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.parsingId = doc.id;
+    this.error = '';
+    this.message = '';
+    const res = await this.api.parseInternalDocument(doc.id);
+    this.parsingId = null;
+    if (res.success) {
+      this.message = `Parse complete — "${doc.title}"`;
+      const data = res.data as { parseStatus?: string; parsedAt?: string };
+      const idx = this.docs.findIndex((d) => d.id === doc.id);
+      if (idx >= 0) {
+        this.docs[idx] = {
+          ...this.docs[idx],
+          parseStatus: data?.parseStatus ?? 'parsed',
+          parsedAt: data?.parsedAt ?? this.docs[idx].parsedAt,
+          parseError: null,
+        };
+      }
+      await this.load(true);
+    } else {
+      this.error = res.message ?? 'Parse failed';
+    }
   }
 
   async load(silent = false): Promise<void> {
@@ -95,6 +145,7 @@ export class NdInternalDocumentsComponent implements OnInit {
         return false;
       }
       if (this.sourceFilter && (doc.source ?? 'nd') !== this.sourceFilter) return false;
+      if (this.parseFilter && (doc.parseStatus ?? 'pending') !== this.parseFilter) return false;
       return true;
     });
 
@@ -114,7 +165,13 @@ export class NdInternalDocumentsComponent implements OnInit {
   }
 
   get hasActiveFilters(): boolean {
-    return hasListFilters(this.searchQuery, this.sourceFilter);
+    return hasListFilters(this.searchQuery, this.sourceFilter) || !!this.parseFilter;
+  }
+
+  parseButtonLabel(doc: InternalDocument): string {
+    if (this.parsingId === doc.id) return 'Parsing…';
+    if (doc.parseStatus === 'failed') return 'Retry parse';
+    return 'Run parse';
   }
 
   toggleSort(column: DocSortColumn): void {
@@ -130,6 +187,7 @@ export class NdInternalDocumentsComponent implements OnInit {
   clearFilters(): void {
     this.searchQuery = '';
     this.sourceFilter = '';
+    this.parseFilter = '';
   }
 
   onFileChange(event: Event): void {
@@ -144,6 +202,8 @@ export class NdInternalDocumentsComponent implements OnInit {
     const res = await this.api.uploadInternalDocument(this.file);
     if (res.success) {
       this.file = null;
+      this.message = 'Uploaded — status is Pending parse. Click Run parse when ready.';
+      this.error = '';
       await this.load(true);
     } else {
       this.error = res.message ?? 'Upload failed';

@@ -12,7 +12,10 @@ public class ReviewerController(
     AppDbContext db,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
-    public record ReviewRequest(string? OverallComment, List<PointCommentInput>? PointComments);
+    public record ReviewRequest(
+        string? OverallComment,
+        List<PointCommentInput>? PointComments,
+        List<ActionItemReviewInput>? ActionItemReviews);
 
     [HttpGet("queue")]
     public async Task<IActionResult> Queue(CancellationToken ct)
@@ -70,6 +73,7 @@ public class ReviewerController(
         db.NdAnalysisReviews.Add(review);
         await db.SaveChangesAsync(ct);
         await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);
+        await SaveActionItemReviewsAsync(db, review.Id, body.ActionItemReviews, profile.Id, ct);
         await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
         return Ok(new { success = true });
     }
@@ -79,9 +83,6 @@ public class ReviewerController(
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "reviewer");
         if (error != null) return error;
-
-        if (string.IsNullOrWhiteSpace(body.OverallComment))
-            return BadRequest(new { success = false, message = "Comment required." });
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
         if (run == null) return NotFound();
@@ -103,6 +104,7 @@ public class ReviewerController(
         db.NdAnalysisReviews.Add(review);
         await db.SaveChangesAsync(ct);
         await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);
+        await SaveActionItemReviewsAsync(db, review.Id, body.ActionItemReviews, profile.Id, ct);
         await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
         return Ok(new { success = true });
     }

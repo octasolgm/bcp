@@ -168,6 +168,16 @@ public static class NdSchemaBootstrap
               commented_by UUID,
               created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             );
+            CREATE TABLE IF NOT EXISTS action_plan_item_reviews (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              analysis_point_id UUID NOT NULL REFERENCES analysis_points(id) ON DELETE CASCADE,
+              analysis_review_id UUID REFERENCES analysis_reviews(id) ON DELETE SET NULL,
+              action_index INTEGER NOT NULL,
+              status TEXT NOT NULL,
+              comment TEXT,
+              reviewed_by UUID,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
             CREATE TABLE IF NOT EXISTS analysis_status_history (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               analysis_run_id UUID NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,

@@ -14,6 +14,16 @@ import {
 import { agreementBadgeClass, type AgreementStatus, type DualVerifyAgreement } from '../../../lib/landing-ai/dual-verify-merge';
 import { ReferenceComplianceCardComponent } from '../reference-compliance-card/reference-compliance-card.component';
 import type { ActionPlanHistoryEntry, AnalysisPoint, PointSnapshot } from '../../../lib/nd/types';
+import {
+  complianceSeverityLabel,
+  resolveAnalysisPointSeverity,
+  type ComplianceSeverity,
+} from '../../../lib/nd/point-compliance-status';
+import {
+  ACTION_ITEM_REVIEW_OPTIONS,
+  type ActionItemReviewDraft,
+  type ActionItemReviewStatus,
+} from '../../../lib/nd/action-item-review';
 import { formatDate } from '../../../lib/nd/utils';
 
 @Component({
@@ -35,6 +45,9 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Input() regulationDocId: string | null = null;
   @Input() hideReportHeader = false;
   @Input() phaseOutputDefaultOpen = false;
+  /** Checker/reviewer: per-action status + comment controls. */
+  @Input() reviewMode = false;
+  @Input() actionItemReviews: Record<number, ActionItemReviewDraft> = {};
 
   @Output() startEdit = new EventEmitter<void>();
   @Output() cancelEdit = new EventEmitter<void>();
@@ -43,6 +56,13 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Output() closeHistory = new EventEmitter<void>();
   @Output() restoreVersion = new EventEmitter<ActionPlanHistoryEntry>();
   @Output() openPdf = new EventEmitter<{ docId: string; page?: string | null }>();
+  @Output() actionItemReviewChange = new EventEmitter<{
+    actionIndex: number;
+    status?: ActionItemReviewStatus;
+    comment: string;
+  }>();
+
+  readonly actionReviewOptions = ACTION_ITEM_REVIEW_OPTIONS;
 
   pointHeading = '';
   regulatoryText = '';
@@ -59,14 +79,18 @@ export class NdGapPointDetailComponent implements OnChanges {
   fulfilledLines: string[] = [];
   responsibility = '';
   capGaps: CapGap[] = [];
-  editGaps: CapGap[] = [];
   originalPlan = '';
   currentPlan = '';
   showCapSection = false;
-  /** When set, only this action-plan item is in edit mode. */
+  /** When set, only this action-plan item is in inline edit mode. */
   editingGapIndex: number | null = null;
+  /** True while adding a new action at the bottom of the list. */
+  addingNewAction = false;
+  /** Draft fields for the action being edited or added. */
+  draftGap: CapGap = { index: 1, missing: '', fix: '' };
   /** Filter history panel to a single action item. */
   historyGapIndex: number | null = null;
+  resolvedSeverity: ComplianceSeverity = 'partial_compliant';
 
   ngOnChanges(): void {
     const snap = this.snapshot;
@@ -141,33 +165,27 @@ export class NdGapPointDetailComponent implements OnChanges {
     if (!this.currentPlan) this.currentPlan = aiCap;
     this.capGaps = capSource ? parseCapGaps(capSource) : [];
 
-    const status = (this.point.finalStatus ?? '').toLowerCase();
+    this.resolvedSeverity = resolveAnalysisPointSeverity(this.point);
     this.showCapSection =
       this.capGaps.length > 0 ||
       Boolean(capSource) ||
-      status === 'partial_compliant' ||
-      status === 'non_compliant';
+      this.resolvedSeverity === 'partial_compliant' ||
+      this.resolvedSeverity === 'non_compliant';
 
-    if (this.editing) {
-      this.editGaps = this.capGaps.length
-        ? this.capGaps.map((g) => ({ ...g }))
-        : [{ index: 1, missing: '', fix: '' }];
+    if (!this.editing) {
+      this.resetEditState();
     }
   }
 
   get displayComplianceStatus(): string {
-    const fs = this.point.finalStatus;
-    if (fs === 'compliant') return 'Fully Compliant';
-    if (fs === 'partial_compliant') return 'Partial Compliant';
-    if (fs === 'non_compliant') return 'Non-Compliant';
-    return this.primaryBlock.status?.trim() || '—';
+    return complianceSeverityLabel(this.resolvedSeverity);
   }
 
   get compliancePillClass(): string {
-    const s = (this.point.finalStatus ?? this.primaryBlock.status ?? '').toLowerCase();
-    if (s.includes('non')) return 'pill-red';
-    if (s.includes('partial')) return 'pill-yellow';
-    if (s.includes('compliant')) return 'pill-green';
+    const s = this.resolvedSeverity;
+    if (s === 'non_compliant') return 'pill-red';
+    if (s === 'partial_compliant') return 'pill-yellow';
+    if (s === 'compliant') return 'pill-green';
     return 'pill-neutral';
   }
 
@@ -202,15 +220,11 @@ export class NdGapPointDetailComponent implements OnChanges {
     return map[status] ?? agreementBadgeClass(status as AgreementStatus).split(' ')[0] ?? 'agreement-neutral';
   }
 
-  onStartEdit(gapIndex?: number): void {
-    if (gapIndex != null) {
-      this.editingGapIndex = gapIndex;
-      this.editGaps = this.capGaps.length
-        ? this.capGaps.map((g) => ({ ...g }))
-        : [{ index: 1, missing: '', fix: '' }];
-    } else {
-      this.editingGapIndex = null;
-    }
+  startAddAction(): void {
+    this.addingNewAction = true;
+    this.editingGapIndex = null;
+    const next = this.capGaps.length ? Math.max(...this.capGaps.map((g) => g.index)) + 1 : 1;
+    this.draftGap = { index: next, missing: '', fix: '' };
     this.startEdit.emit();
   }
 
@@ -225,7 +239,11 @@ export class NdGapPointDetailComponent implements OnChanges {
   }
 
   startEditSingleGap(index: number): void {
-    this.onStartEdit(index);
+    this.addingNewAction = false;
+    this.editingGapIndex = index;
+    const gap = this.capGaps.find((g) => g.index === index);
+    this.draftGap = gap ? { ...gap } : { index, missing: '', fix: '' };
+    this.startEdit.emit();
   }
 
   filteredHistory(): ActionPlanHistoryEntry[] {
@@ -241,30 +259,43 @@ export class NdGapPointDetailComponent implements OnChanges {
   }
 
   isEditingGap(index: number): boolean {
-    return this.editing && (this.editingGapIndex == null || this.editingGapIndex === index);
-  }
-
-  addActionItem(): void {
-    const next = this.editGaps.length ? Math.max(...this.editGaps.map((g) => g.index)) + 1 : 1;
-    this.editGaps = [...this.editGaps, { index: next, missing: '', fix: '' }];
-  }
-
-  removeActionItem(index: number): void {
-    this.editGaps = this.editGaps
-      .filter((g) => g.index !== index)
-      .map((g, i) => ({ ...g, index: i + 1 }));
+    return this.editing && this.editingGapIndex === index;
   }
 
   onCancelEdit(): void {
-    this.editingGapIndex = null;
+    this.resetEditState();
     this.cancelEdit.emit();
   }
 
   onSave(): void {
-    const content = serializeCapGaps(this.editGaps.filter((g) => g.missing.trim() || g.fix.trim()));
+    if (!this.draftGap.missing.trim() && !this.draftGap.fix.trim()) return;
+
+    let gaps: CapGap[];
+    if (this.addingNewAction) {
+      gaps = [...this.capGaps, { ...this.draftGap }];
+    } else if (this.editingGapIndex != null) {
+      gaps = this.capGaps.map((g) =>
+        g.index === this.editingGapIndex ? { ...this.draftGap, index: g.index } : g,
+      );
+    } else {
+      return;
+    }
+
+    gaps = gaps
+      .filter((g) => g.missing.trim() || g.fix.trim())
+      .map((g, i) => ({ ...g, index: i + 1 }));
+
+    const content = serializeCapGaps(gaps);
     if (!content.trim()) return;
-    this.editingGapIndex = null;
+
+    this.resetEditState();
     this.save.emit(content);
+  }
+
+  private resetEditState(): void {
+    this.editingGapIndex = null;
+    this.addingNewAction = false;
+    this.draftGap = { index: 1, missing: '', fix: '' };
   }
 
   onViewRegPdf(): void {
@@ -288,6 +319,35 @@ export class NdGapPointDetailComponent implements OnChanges {
 
   historyGaps(content: string): CapGap[] {
     return content?.trim() ? parseCapGaps(content) : [];
+  }
+
+  actionReviewDraft(index: number): ActionItemReviewDraft {
+    return this.actionItemReviews[index] ?? { status: '', comment: '' };
+  }
+
+  setActionReviewStatus(index: number, status: ActionItemReviewStatus): void {
+    const draft = this.actionReviewDraft(index);
+    this.actionItemReviewChange.emit({
+      actionIndex: index,
+      status,
+      comment: draft.comment,
+    });
+  }
+
+  setActionReviewComment(index: number, comment: string): void {
+    const draft = this.actionReviewDraft(index);
+    this.actionItemReviewChange.emit({
+      actionIndex: index,
+      status: draft.status || undefined,
+      comment,
+    });
+  }
+
+  actionReviewStatusClass(status: ActionItemReviewStatus | ''): string {
+    if (status === 'approve') return 'review-status-approve';
+    if (status === 'need_modify') return 'review-status-modify';
+    if (status === 'uix') return 'review-status-uix';
+    return '';
   }
 
   formatDate = formatDate;

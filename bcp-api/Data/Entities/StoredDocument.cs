@@ -62,6 +62,16 @@ public class StoredDocument
     [Column("point_count")]
     public int? PointCount { get; set; }
 
+    /// <summary>Internal PDF parse state: pending | processing | parsed | failed</summary>
+    [Column("parse_status")]
+    public string ParseStatus { get; set; } = "pending";
+
+    [Column("parsed_at")]
+    public DateTimeOffset? ParsedAt { get; set; }
+
+    [Column("parse_error")]
+    public string? ParseError { get; set; }
+
     [Column("workspace_id")]
     public string WorkspaceId { get; set; } = "snb-uae-difc";
 

@@ -1,7 +1,7 @@
 <div class="page-header">
   <div>
     <h1>Document Library</h1>
-    <p class="subtitle">Internal compliance documents — includes existing uploads from storage</p>
+    <p class="subtitle">Upload PDFs here. Use <strong>Run parse</strong> to generate markdown before analysis.</p>
   </div>
   @if (canUpload) {
     <div class="header-actions">
@@ -15,6 +15,9 @@
 </div>
 
 <div class="nd-page-body">
+@if (message) {
+  <div class="alert success nd-shrink">{{ message }}</div>
+}
 @if (error) {
   <div class="alert error nd-shrink">{{ error }}</div>
 }
@@ -35,6 +38,12 @@
       placeholder="Search documents…"
       aria-label="Search documents"
     />
+    <select class="filter-select" [(ngModel)]="parseFilter" aria-label="Filter by parse status">
+      <option value="">All parse statuses</option>
+      <option value="pending">Pending parse</option>
+      <option value="parsed">Parsed</option>
+      <option value="failed">Failed</option>
+    </select>
     <select class="filter-select" [(ngModel)]="sourceFilter" aria-label="Filter by source">
       <option value="">All sources</option>
       <option value="nd">ND</option>
@@ -62,32 +71,55 @@
       <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
     </div>
   } @else {
-  <div class="card-surface doc-list">
-    @for (d of visibleDocs; track d.id) {
-      <div class="doc-row">
-        <span class="file-type pdf">PDF</span>
-        <div class="doc-info">
-          <strong>{{ d.title }}</strong>
-          <span class="doc-meta">
-            {{ d.originalFileName }}
-            @if (d.department) {
-              · {{ d.department }}
-            }
-            · {{ formatBytes(d.sizeBytes) }} · Uploaded {{ formatDate(d.uploaded) }}
-            @if (d.source === 'legacy') {
-              · Legacy
-            }
-          </span>
-        </div>
-        <div class="doc-right">
-          @if (d.version) {
-            <span class="version-tag">v{{ d.version }}</span>
-          }
-          <button type="button" class="doc-action btn-link" (click)="viewAnalysis(d)">View analysis</button>
-          <button type="button" class="doc-action btn-link" (click)="openHistory(d)">History</button>
-        </div>
-      </div>
-    }
+  <div class="card-surface table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Document</th>
+          <th>Uploaded</th>
+          <th>Size</th>
+          <th>Parse status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (d of visibleDocs; track d.id) {
+          <tr>
+            <td class="doc-cell">
+              <strong>{{ d.title }}</strong>
+              <span class="doc-meta" [title]="d.originalFileName">{{ d.originalFileName }}</span>
+            </td>
+            <td class="muted">{{ formatDate(d.uploaded) }}</td>
+            <td class="muted">{{ formatBytes(d.sizeBytes) }}</td>
+            <td>
+              <span class="severity-badge" [ngClass]="parseClass(d.parseStatus)">
+                @if (isParsingDoc(d)) {
+                  Parsing…
+                } @else {
+                  {{ parseLabel(d.parseStatus) }}
+                }
+              </span>
+            </td>
+            <td>
+              <div class="row-actions">
+                @if (canParse && d.parseStatus !== 'parsed') {
+                  <button
+                    type="button"
+                    class="btn-use"
+                    [disabled]="parsingId === d.id || d.parseStatus === 'processing'"
+                    (click)="handleParse(d, $event)"
+                  >
+                    {{ parseButtonLabel(d) }}
+                  </button>
+                }
+                <button type="button" class="row-action-link" (click)="viewAnalysis(d)">View analysis</button>
+                <button type="button" class="row-action-link" (click)="openHistory(d)">History</button>
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
   </div>
   }
 }

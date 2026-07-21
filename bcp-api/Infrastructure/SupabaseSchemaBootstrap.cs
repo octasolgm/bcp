@@ -59,6 +59,27 @@ public static class SupabaseSchemaBootstrap
           ADD COLUMN IF NOT EXISTS point_count INTEGER NULL;
         """,
         """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS parse_status TEXT NOT NULL DEFAULT 'pending';
+        """,
+        """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS parsed_at TIMESTAMPTZ NULL;
+        """,
+        """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS parse_error TEXT NULL;
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS landing_ai_parse_cache (
+          file_hash TEXT PRIMARY KEY,
+          file_name TEXT NULL,
+          markdown TEXT NOT NULL,
+          parse_model TEXT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
         CREATE TABLE IF NOT EXISTS landing_ai_extract_cache (
           file_hash TEXT NOT NULL,
           schema_key TEXT NOT NULL,

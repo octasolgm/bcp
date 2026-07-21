@@ -3,6 +3,7 @@ import {
   parseReferenceComplianceBlock,
   type ReferenceComplianceBlock,
 } from '../../lib/ai-lab/parse-reference-response';
+import { severityFromAgreement } from '../../lib/nd/point-compliance-status';
 import { countCapGapsForReportItem } from '../../lib/nd/cap-gap-count';
 import type { DualVerifyAgreement } from '../../lib/landing-ai/dual-verify-merge';
 import type { DualVerifyReportItem } from '../../lib/dual-verify-report';
@@ -40,36 +41,6 @@ function pickStructuredBlocks(item: DualVerifyReportItem): {
     landing ??
     llm;
   return { landing, llm, structured };
-}
-
-function normalizeStatusPhrase(raw: string): string {
-  return raw
-    .replace(/\*+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-function severityFromAgreement(
-  agreement: DualVerifyAgreement | undefined,
-  structuredStatus: string,
-): GapSeverity {
-  const llm = normalizeStatusPhrase(agreement?.llmStatus ?? '');
-  const landing = normalizeStatusPhrase(agreement?.landingStatus ?? '');
-  const structured = normalizeStatusPhrase(structuredStatus);
-  const agree = (agreement?.status ?? '').toLowerCase();
-
-  const anyStatus = `${llm} ${landing} ${structured}`;
-  const isNon =
-    /\bnon[- ]?compliant\b/.test(anyStatus) || (/\bnon\b/.test(llm) && /compliant/.test(llm));
-  const isPartial = /\bpartial\b/.test(anyStatus);
-  const isCompliant =
-    /\bcompliant\b/.test(anyStatus) && !isNon && !isPartial;
-
-  if (isNon || agree === 'both_non_compliant') return 'non_compliant';
-  if (isPartial || agree === 'status_mismatch' || agree === 'confidence_gap') return 'partial_compliant';
-  if (isCompliant || agree === 'aligned') return 'compliant';
-  return 'partial_compliant';
 }
 
 function pageLabel(citationPage: string | null, fallbackLabel: string): string {

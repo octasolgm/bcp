@@ -170,4 +170,16 @@ public class LandingAiCacheRepository(AppDbContext db, ILogger<LandingAiCacheRep
         var input = $"{internalFileHash}:{pointId}:{revision}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
     }
+
+    public static string CompositeFileHash(IEnumerable<string> fileHashes)
+    {
+        var sorted = fileHashes
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .Select(h => h.Trim())
+            .OrderBy(h => h, StringComparer.Ordinal)
+            .ToArray();
+        if (sorted.Length == 0) return "";
+        if (sorted.Length == 1) return sorted[0];
+        return HashBuffer(Encoding.UTF8.GetBytes(string.Join("|", sorted)));
+    }
 }

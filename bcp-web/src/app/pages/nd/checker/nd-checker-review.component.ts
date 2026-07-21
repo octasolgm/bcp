@@ -8,6 +8,13 @@ import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { parsePointSnapshot } from '../../../../lib/nd/utils';
 import { countCapGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
+import { resolveAnalysisPointSeverity } from '../../../../lib/nd/point-compliance-status';
+import {
+  flattenActionItemReviews,
+  pointHasActionReviewFlag,
+  type ActionItemReviewDraft,
+  type ActionItemReviewStatus,
+} from '../../../../lib/nd/action-item-review';
 import type { ActionPlanHistoryEntry, AnalysisPoint, ResultsData } from '../../../../lib/nd/types';
 
 @Component({
@@ -28,6 +35,7 @@ export class NdCheckerReviewComponent implements OnInit {
   selectedId: string | null = null;
   overallComment = '';
   pointComments: Record<string, string> = {};
+  actionItemReviews: Record<string, Record<number, ActionItemReviewDraft>> = {};
   loading = true;
   submitting = false;
   error = '';
@@ -69,18 +77,36 @@ export class NdCheckerReviewComponent implements OnInit {
     this.history = [];
   }
 
-  async toggleHistory(): Promise<void> {
-    if (this.historyOpen) this.closeHistory();
-    else await this.openHistory();
+  showCap(point: AnalysisPoint): boolean {
+    return true;
   }
 
-  showCap(point: AnalysisPoint): boolean {
-    if (point.finalActionPlan?.trim() || point.originalAiActionPlan?.trim()) return true;
-    return point.finalStatus === 'partial_compliant' || point.finalStatus === 'non_compliant';
+  pointSeverity(point: AnalysisPoint): string {
+    return resolveAnalysisPointSeverity(point);
   }
 
   gapCountForPoint(point: AnalysisPoint): number {
     return countCapGapsForAnalysisPoint(point);
+  }
+
+  actionReviewsForSelected(): Record<number, ActionItemReviewDraft> {
+    if (!this.selectedId) return {};
+    return this.actionItemReviews[this.selectedId] ?? {};
+  }
+
+  updateActionItemReview(event: {
+    actionIndex: number;
+    status?: ActionItemReviewStatus;
+    comment: string;
+  }): void {
+    if (!this.selectedId) return;
+    const current = { ...(this.actionItemReviews[this.selectedId] ?? {}) };
+    const prev = current[event.actionIndex] ?? { status: '' as const, comment: '' };
+    current[event.actionIndex] = {
+      status: event.status ?? prev.status,
+      comment: event.comment,
+    };
+    this.actionItemReviews = { ...this.actionItemReviews, [this.selectedId]: current };
   }
 
   updatePointComment(value: string): void {
@@ -93,7 +119,7 @@ export class NdCheckerReviewComponent implements OnInit {
   }
 
   hasComment(pointId: string): boolean {
-    return !!this.pointComments[pointId]?.trim();
+    return !!this.pointComments[pointId]?.trim() || pointHasActionReviewFlag(pointId, this.actionItemReviews);
   }
 
   async handleApprove(): Promise<void> {
@@ -110,9 +136,11 @@ export class NdCheckerReviewComponent implements OnInit {
     const comments = Object.entries(this.pointComments)
       .filter(([, c]) => c.trim())
       .map(([analysisPointId, comment]) => ({ analysisPointId, comment }));
+    const actionItemReviews = flattenActionItemReviews(this.actionItemReviews);
     const body = {
       overallComment: this.overallComment.trim() || undefined,
       pointComments: comments,
+      actionItemReviews: actionItemReviews.length ? actionItemReviews : undefined,
     };
     const res =
       action === 'approve'

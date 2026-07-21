@@ -48,6 +48,7 @@ import { DualVerifyResultCardComponent } from '../../../components/dual-verify-r
 import type { ActionPlanHistoryEntry, ResultsData } from '../../../../lib/nd/types';
 import { parsePointSnapshot } from '../../../../lib/nd/utils';
 import { countCapGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
+import { resolveAnalysisPointSeverity } from '../../../../lib/nd/point-compliance-status';
 import { parseReferenceComplianceBlock } from '../../../../lib/ai-lab/parse-reference-response';
 
 /** Seeded TFS × IMPTFS combined compliance session (32 points). */
@@ -223,12 +224,13 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         ndPoint.finalActionPlan?.trim() ||
         ndPoint.originalAiActionPlan?.trim() ||
         actionPlan;
+      const severity = resolveAnalysisPointSeverity(ndPoint);
       status =
-        ndPoint.finalStatus === 'compliant'
+        severity === 'compliant'
           ? 'Compliant'
-          : ndPoint.finalStatus === 'partial_compliant'
+          : severity === 'partial_compliant'
             ? 'Partial'
-            : ndPoint.finalStatus === 'non_compliant'
+            : severity === 'non_compliant'
               ? 'Non-compliant'
               : status;
     }

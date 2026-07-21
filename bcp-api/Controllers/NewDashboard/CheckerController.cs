@@ -12,7 +12,10 @@ public class CheckerController(
     AppDbContext db,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
-    public record ReviewRequest(string? OverallComment, List<PointCommentInput>? PointComments);
+    public record ReviewRequest(
+        string? OverallComment,
+        List<PointCommentInput>? PointComments,
+        List<ActionItemReviewInput>? ActionItemReviews);
 
     [HttpGet("queue")]
     public async Task<IActionResult> Queue(CancellationToken ct)
@@ -72,6 +75,7 @@ public class CheckerController(
         await db.SaveChangesAsync(ct);
 
         await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);
+        await SaveActionItemReviewsAsync(db, review.Id, body.ActionItemReviews, profile.Id, ct);
         await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
         return Ok(new { success = true });
     }
@@ -81,10 +85,6 @@ public class CheckerController(
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "checker");
         if (error != null) return error;
-
-        if (string.IsNullOrWhiteSpace(body.OverallComment)
-            && (body.PointComments == null || !body.PointComments.Any(c => !string.IsNullOrWhiteSpace(c.Comment))))
-            return BadRequest(new { success = false, message = "Comment required to pull back." });
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
         if (run == null) return NotFound();
@@ -108,6 +108,7 @@ public class CheckerController(
         await db.SaveChangesAsync(ct);
 
         await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);
+        await SaveActionItemReviewsAsync(db, review.Id, body.ActionItemReviews, profile.Id, ct);
         await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
         return Ok(new { success = true });
     }

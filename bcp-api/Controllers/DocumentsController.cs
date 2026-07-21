@@ -605,6 +605,12 @@ public class DocumentsController(
             existing.FileHash = fileHash;
             existing.HistoryJson = JsonSerializer.Serialize(history);
             existing.UpdatedAt = DateTimeOffset.UtcNow;
+            if (kind is "document" or "internal")
+            {
+                existing.ParseStatus = "pending";
+                existing.ParsedAt = null;
+                existing.ParseError = null;
+            }
             row = existing;
         }
         else
@@ -629,6 +635,7 @@ public class DocumentsController(
                 FileHash = fileHash,
                 WorkspaceId = ws,
                 HistoryJson = JsonSerializer.Serialize(history),
+                ParseStatus = "pending",
             };
             db.StoredDocuments.Add(row);
         }

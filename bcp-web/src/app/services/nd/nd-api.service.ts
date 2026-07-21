@@ -218,6 +218,13 @@ export class NdApiService {
     return this.request<unknown[]>('GET', `/nd/internal-documents/${docId}/analysis-runs`);
   }
 
+  parseInternalDocument(docId: string) {
+    return this.request<{ parseStatus?: string; parsedAt?: string }>(
+      'POST',
+      `/nd/internal-documents/${docId}/parse`,
+    );
+  }
+
   async uploadInternalDocument(file: File) {
     const form = new FormData();
     form.append('file', file);
@@ -357,14 +364,32 @@ export class NdApiService {
 
   approveAnalysis(
     runId: string,
-    body: { overallComment?: string; pointComments?: { analysisPointId: string; comment: string }[] },
+    body: {
+      overallComment?: string;
+      pointComments?: { analysisPointId: string; comment: string }[];
+      actionItemReviews?: {
+        analysisPointId: string;
+        actionIndex: number;
+        status: string;
+        comment?: string;
+      }[];
+    },
   ) {
     return this.request<unknown>('POST', `/nd/checker/review/${runId}/approve`, body);
   }
 
   pullBackAnalysis(
     runId: string,
-    body: { overallComment?: string; pointComments?: { analysisPointId: string; comment: string }[] },
+    body: {
+      overallComment?: string;
+      pointComments?: { analysisPointId: string; comment: string }[];
+      actionItemReviews?: {
+        analysisPointId: string;
+        actionIndex: number;
+        status: string;
+        comment?: string;
+      }[];
+    },
   ) {
     return this.request<unknown>('POST', `/nd/checker/review/${runId}/pull-back`, body);
   }
@@ -377,11 +402,35 @@ export class NdApiService {
     return this.request<unknown[]>('GET', '/nd/reviewer/history');
   }
 
-  finalizeAnalysis(runId: string, body: { overallComment?: string }) {
+  finalizeAnalysis(
+    runId: string,
+    body: {
+      overallComment?: string;
+      pointComments?: { analysisPointId: string; comment: string }[];
+      actionItemReviews?: {
+        analysisPointId: string;
+        actionIndex: number;
+        status: string;
+        comment?: string;
+      }[];
+    },
+  ) {
     return this.request<unknown>('POST', `/nd/reviewer/review/${runId}/finalize`, body);
   }
 
-  pullBackToChecker(runId: string, body: { overallComment?: string }) {
+  pullBackToChecker(
+    runId: string,
+    body: {
+      overallComment?: string;
+      pointComments?: { analysisPointId: string; comment: string }[];
+      actionItemReviews?: {
+        analysisPointId: string;
+        actionIndex: number;
+        status: string;
+        comment?: string;
+      }[];
+    },
+  ) {
     return this.request<unknown>('POST', `/nd/reviewer/review/${runId}/pull-back`, body);
   }
 }

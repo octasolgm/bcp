@@ -1,3 +1,5 @@
+import type { ActionItemReviewEntry } from './action-item-review';
+
 export type Department = {
   id: string;
   name: string;
@@ -43,6 +45,9 @@ export type InternalDocument = {
   uploadedAt?: string;
   sizeBytes?: number;
   department?: string;
+  parseStatus?: 'pending' | 'processing' | 'parsed' | 'failed' | string;
+  parsedAt?: string | null;
+  parseError?: string | null;
 };
 
 export type LibrarySummary = {
@@ -116,6 +121,7 @@ export type ResultsData = {
   points: AnalysisPoint[];
   reviews: { id: string; reviewerRole: string; action: string; overallComment?: string; createdAt: string }[];
   comments: { id: string; analysisPointId: string; comment: string; createdAt: string }[];
+  actionItemReviews?: ActionItemReviewEntry[];
 };
 
 export type ActionPlanHistoryEntry = {

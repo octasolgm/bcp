@@ -44,6 +44,11 @@ public class ResultsController(
             .Where(c => pointIds.Contains(c.AnalysisPointId))
             .ToListAsync(ct);
 
+        var actionItemReviews = await db.NdActionPlanItemReviews.AsNoTracking()
+            .Where(r => pointIds.Contains(r.AnalysisPointId))
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync(ct);
+
         var history = await db.NdAnalysisStatusHistories.AsNoTracking()
             .Where(h => h.AnalysisRunId == runId)
             .OrderBy(h => h.CreatedAt)
@@ -68,6 +73,16 @@ public class ResultsController(
                 points = run.Points,
                 reviews,
                 comments,
+                actionItemReviews = actionItemReviews.Select(r => new
+                {
+                    r.Id,
+                    analysisPointId = r.AnalysisPointId,
+                    analysisReviewId = r.AnalysisReviewId,
+                    actionIndex = r.ActionIndex,
+                    status = r.Status,
+                    comment = r.Comment,
+                    r.CreatedAt,
+                }),
                 statusHistory = history,
             },
         });

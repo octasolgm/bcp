@@ -1,0 +1,123 @@
+.table-wrap {
+  padding: 0;
+  overflow-x: auto;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+
+  th,
+  td {
+    padding: 0.85rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  tbody tr:hover {
+    background: var(--bg-muted);
+  }
+
+  .muted {
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+}
+
+.run-cell {
+  max-width: 28rem;
+
+  strong {
+    display: block;
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.severity-badge.completed {
+  background: var(--low-bg);
+  color: var(--low);
+}
+
+.severity-badge.pending,
+.severity-badge.draft {
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+
+.severity-badge.running,
+.severity-badge.processing {
+  background: var(--medium-bg);
+  color: var(--medium);
+}
+
+.severity-badge.failed {
+  background: var(--critical-bg);
+  color: var(--critical);
+}
+
+.row-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.btn-restore {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  background: var(--bg-elevated);
+  color: var(--accent);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--accent-tint);
+    border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.empty-state {
+  padding: 2rem 1.5rem;
+  text-align: center;
+
+  strong {
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+
+  p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+}
+
+.page-flash {
+  margin: 0 0 1rem;
+}
+
+.muted-loading {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}

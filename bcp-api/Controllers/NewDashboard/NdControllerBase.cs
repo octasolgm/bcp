@@ -9,6 +9,12 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public abstract class NdControllerBase : ControllerBase
 {
     public record PointCommentInput(Guid AnalysisPointId, string Comment);
+    public record ActionItemReviewInput(Guid AnalysisPointId, int ActionIndex, string Status, string? Comment);
+
+    private static readonly HashSet<string> ValidActionItemReviewStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "approve", "need_modify", "uix",
+    };
 
     protected JwtUser? ValidateJwt(SupabaseJwtValidator jwt)
     {
@@ -116,6 +122,32 @@ public abstract class NdControllerBase : ControllerBase
                 AnalysisReviewId = reviewId,
                 Comment = c.Comment.Trim(),
                 CommentedBy = userId,
+            });
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
+    protected static async Task SaveActionItemReviewsAsync(
+        AppDbContext db,
+        Guid reviewId,
+        List<ActionItemReviewInput>? reviews,
+        Guid userId,
+        CancellationToken ct)
+    {
+        if (reviews == null) return;
+        foreach (var r in reviews)
+        {
+            var status = r.Status?.Trim().ToLowerInvariant() ?? "";
+            if (!ValidActionItemReviewStatuses.Contains(status)) continue;
+
+            db.NdActionPlanItemReviews.Add(new NdActionPlanItemReview
+            {
+                AnalysisPointId = r.AnalysisPointId,
+                AnalysisReviewId = reviewId,
+                ActionIndex = r.ActionIndex,
+                Status = status,
+                Comment = string.IsNullOrWhiteSpace(r.Comment) ? null : r.Comment.Trim(),
+                ReviewedBy = userId,
             });
         }
         await db.SaveChangesAsync(ct);

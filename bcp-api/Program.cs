@@ -157,6 +157,7 @@ builder.Services.AddHttpClient(nameof(Reguliq.Api.Infrastructure.NewDashboard.Su
     c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 });
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationUploadService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdInternalParseService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisProcessor>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.DemoAnalysisSeedService>();
 builder.Services.AddHttpClient();

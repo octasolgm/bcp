@@ -4,6 +4,19 @@
   gap: 0.75rem;
 }
 
+:host-context(.nd-review-detail) .gap-point-report {
+  gap: 0.5rem;
+}
+
+:host-context(.nd-review-detail) .compare-columns {
+  gap: 0.5rem;
+}
+
+:host-context(.nd-review-detail) .cap-section {
+  margin-top: 0;
+  padding-top: 0.5rem;
+}
+
 .report-header {
   display: flex;
   flex-wrap: wrap;
@@ -108,6 +121,19 @@
   white-space: pre-wrap;
 }
 
+.cap-plain.muted {
+  color: var(--text-muted);
+}
+
+.cap-gap .cap-plain,
+.cap-gap .cap-plain.muted {
+  color: var(--cap-ink, #1e293b);
+}
+
+.cap-gap .cap-plain.muted {
+  color: #78716c;
+}
+
 .policy-ref {
   margin: 0 0 0.35rem;
   font-size: 0.75rem;
@@ -181,18 +207,20 @@
   border-radius: 8px;
   border: 2px solid #fcd34d;
   background: #fffbeb;
+  color: #1e293b;
 
   dt {
     font-size: 0.625rem;
     font-weight: 700;
     text-transform: uppercase;
-    color: var(--text-muted);
+    color: #92400e;
   }
 
   dd {
     margin: 0.25rem 0 0;
     font-weight: 700;
     font-size: 0.875rem;
+    color: #1e293b;
   }
 }
 
@@ -255,14 +283,22 @@
   margin-bottom: 0.75rem;
   padding: 0.75rem 0.9rem;
   border-radius: 10px;
+  /* Always a light alert surface — ink stays dark for contrast in dark UI theme */
+  --cap-ink: #1e293b;
+  --cap-ink-muted: #92400e;
+  --cap-input-bg: #ffffff;
+  --cap-input-border: #cbd5e1;
+  --cap-input-ink: #0f172a;
+  --cap-input-placeholder: #64748b;
   border: 1px solid #fcd34d;
   background: #fffbeb;
+  color: var(--cap-ink);
 
   p {
     margin: 0.3rem 0 0;
     line-height: 1.5;
     font-size: 0.875rem;
-    color: var(--text-primary);
+    color: var(--cap-ink);
   }
 
   .gap-label,
@@ -271,7 +307,7 @@
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
-    color: #b45309;
+    color: var(--cap-ink-muted);
   }
 
   .gap-label {
@@ -305,7 +341,7 @@
   font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: #b45309;
+  color: var(--cap-ink-muted, #b45309);
   margin: 0 0 0.25rem;
 }
 
@@ -315,19 +351,122 @@
   margin-top: 0.25rem;
 }
 
-.cap-hint {
-  margin: 0 0 0.5rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.add-row-btn {
-  margin-bottom: 0.5rem;
-}
-
-.cap-edit-actions {
+.cap-action-list {
   display: flex;
+  flex-direction: column;
   gap: 0.5rem;
+}
+
+.cap-gap-edit {
+  .cap-edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.65rem;
+  }
+}
+
+.cap-gap-new {
+  border-style: dashed;
+}
+
+.action-review-block {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid #fcd34d;
+  background: rgba(255, 255, 255, 0.72);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.action-review-label {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #92400e;
+}
+
+.action-review-optional {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #78716c;
+}
+
+.action-review-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.review-status-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.28rem 0.6rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+
+  &:hover:not(.active) {
+    background: #f8fafc;
+    border-color: #94a3b8;
+  }
+
+  &.active.review-status-approve {
+    background: #d1fae5;
+    border-color: #059669;
+    color: #065f46;
+  }
+
+  &.active.review-status-modify {
+    background: #fef3c7;
+    border-color: #d97706;
+    color: #92400e;
+  }
+
+  &.active.review-status-uix {
+    background: #fee2e2;
+    border-color: #dc2626;
+    color: #991b1b;
+  }
+}
+
+.action-review-comment-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #57534e;
+}
+
+.action-review-comment {
+  width: 100%;
+  margin-top: 0.3rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  font-family: inherit;
+  border-radius: 6px;
+  border: 1px solid var(--cap-input-border, #cbd5e1);
+  background: var(--cap-input-bg, #ffffff);
+  color: var(--cap-input-ink, #0f172a);
+  resize: vertical;
+  min-height: 2.75rem;
+
+  &::placeholder {
+    color: var(--cap-input-placeholder, #64748b);
+  }
+
+  &:focus {
+    outline: 2px solid rgba(217, 119, 6, 0.35);
+    outline-offset: 1px;
+    border-color: #d97706;
+  }
 }
 
 .nd-btn-sm {

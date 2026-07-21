@@ -85,14 +85,12 @@
         <div class="cap-toolbar-actions">
           @if (showHistoryPanel) {
             <button type="button" class="toolbar-btn" (click)="onCloseHistory()">Close history</button>
-          } @else if (editing) {
-            <button type="button" class="toolbar-btn" (click)="onCancelEdit()">Cancel</button>
-          } @else if (canEdit) {
-            <button type="button" class="toolbar-btn primary" (click)="onStartEdit()">Edit all actions</button>
-            @if (history.length || currentPlan) {
+          } @else if (canEdit && !editing) {
+            <button type="button" class="toolbar-btn primary" (click)="startAddAction()">+ Add action</button>
+            @if (history.length || currentPlan || capGaps.length) {
               <button type="button" class="toolbar-btn" (click)="onOpenHistory()">Full history</button>
             }
-          } @else if (history.length) {
+          } @else if (history.length && !canEdit) {
             <button type="button" class="toolbar-btn" (click)="onOpenHistory()">History</button>
           }
         </div>
@@ -153,62 +151,98 @@
           }
         </aside>
       }
-      @if (editing) {
-        <p class="cap-hint">@if (editingGapIndex != null) { Edit action {{ editingGapIndex }}. } @else { Add one or more corrective actions for this point. }</p>
-        <div class="action-edit-list">
-          @for (gap of editGaps; track gap.index) {
-            @if (isEditingGap(gap.index)) {
-            <div class="cap-gap">
-              <p class="gap-label">Gap {{ gap.index }} — Missing</p>
-              <textarea class="nd-input gap-field" rows="2" [(ngModel)]="gap.missing" placeholder="Describe the gap…"></textarea>
-              <p class="fix-label">Fix:</p>
-              <textarea class="nd-input gap-field" rows="3" [(ngModel)]="gap.fix" placeholder="Corrective action…"></textarea>
-              @if (editGaps.length > 1 && editingGapIndex == null) {
-                <button type="button" class="toolbar-btn subtle danger" (click)="removeActionItem(gap.index)">Remove</button>
-              }
-            </div>
-            }
-          }
-        </div>
-        @if (editingGapIndex == null) {
-          <button type="button" class="toolbar-btn add-row-btn" (click)="addActionItem()">+ Add action</button>
-        }
-        <div class="cap-edit-actions">
-          <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="saving" (click)="onSave()">
-            {{ saving ? 'Saving…' : 'Save' }}
-          </button>
-        </div>
-      } @else {
+      <div class="cap-action-list">
         @if (capGaps.length) {
           @for (gap of capGaps; track gap.index) {
-            <div class="cap-gap cap-gap-read">
-              <div class="cap-gap-head">
+            @if (isEditingGap(gap.index)) {
+              <div class="cap-gap cap-gap-edit">
                 <p class="gap-label">Action {{ gap.index }}</p>
-                @if (canEdit) {
-                  <div class="cap-item-actions">
-                    <button type="button" class="toolbar-btn subtle" (click)="startEditSingleGap(gap.index)">Edit</button>
-                    @if (history.length) {
-                      <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
-                    }
+                <p class="gap-missing-label">Missing</p>
+                <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
+                <p class="fix-label">Fix:</p>
+                <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.fix" placeholder="Corrective action…"></textarea>
+                <div class="cap-edit-actions">
+                  <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="saving" (click)="onSave()">
+                    {{ saving ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button type="button" class="toolbar-btn" [disabled]="saving" (click)="onCancelEdit()">Cancel</button>
+                </div>
+              </div>
+            } @else {
+              <div class="cap-gap cap-gap-read">
+                <div class="cap-gap-head">
+                  <p class="gap-label">Action {{ gap.index }}</p>
+                  @if (canEdit && !editing) {
+                    <div class="cap-item-actions">
+                      <button type="button" class="toolbar-btn subtle" (click)="startEditSingleGap(gap.index)">Edit</button>
+                      @if (history.length) {
+                        <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
+                      }
+                    </div>
+                  } @else if (history.length) {
+                    <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
+                  }
+                </div>
+                <p class="gap-missing-label">Missing</p>
+                <p>{{ gap.missing }}</p>
+                @if (gap.fix) {
+                  <p class="fix-label">Fix:</p>
+                  <p>{{ gap.fix }}</p>
+                }
+                @if (reviewMode) {
+                  @let review = actionReviewDraft(gap.index);
+                  <div class="action-review-block">
+                    <p class="action-review-label">Review status</p>
+                    <div class="action-review-status" role="group" [attr.aria-label]="'Review status for action ' + gap.index">
+                      @for (opt of actionReviewOptions; track opt.id) {
+                        <button
+                          type="button"
+                          class="review-status-btn"
+                          [class.active]="review.status === opt.id"
+                          [ngClass]="actionReviewStatusClass(opt.id)"
+                          (click)="setActionReviewStatus(gap.index, opt.id)"
+                        >
+                          {{ opt.label }}
+                        </button>
+                      }
+                    </div>
+                    <label class="action-review-comment-label">
+                      Comment <span class="action-review-optional">(optional)</span>
+                      <textarea
+                        class="action-review-comment"
+                        rows="2"
+                        [ngModel]="review.comment"
+                        (ngModelChange)="setActionReviewComment(gap.index, $event)"
+                        placeholder="Optional feedback for this action…"
+                      ></textarea>
+                    </label>
                   </div>
-                } @else if (history.length) {
-                  <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
                 }
               </div>
-              <p class="gap-missing-label">Missing</p>
-              <p>{{ gap.missing }}</p>
-              @if (gap.fix) {
-                <p class="fix-label">Fix:</p>
-                <p>{{ gap.fix }}</p>
-              }
-            </div>
+            }
           }
-        } @else if (currentPlan) {
+        } @else if (currentPlan && !addingNewAction) {
           <p class="cap-plain">{{ currentPlan }}</p>
-        } @else {
-          <p class="cap-plain muted">No corrective actions yet.</p>
+        } @else if (!addingNewAction) {
+          <p class="cap-plain muted">No corrective actions yet.@if (canEdit) { Use <strong>Add action</strong> to create one. }</p>
         }
-      }
+
+        @if (addingNewAction) {
+          <div class="cap-gap cap-gap-edit cap-gap-new">
+            <p class="gap-label">New action</p>
+            <p class="gap-missing-label">Missing</p>
+            <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
+            <p class="fix-label">Fix:</p>
+            <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.fix" placeholder="Corrective action…"></textarea>
+            <div class="cap-edit-actions">
+              <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="saving" (click)="onSave()">
+                {{ saving ? 'Saving…' : 'Add' }}
+              </button>
+              <button type="button" class="toolbar-btn" [disabled]="saving" (click)="onCancelEdit()">Cancel</button>
+            </div>
+          </div>
+        }
+      </div>
     </section>
   }
 

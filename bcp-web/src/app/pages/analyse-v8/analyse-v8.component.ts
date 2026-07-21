@@ -916,9 +916,12 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     }
     if (!regIds.size && this.libraryPrimaryRegDocId) regIds.add(this.libraryPrimaryRegDocId);
 
-    const intIds = this.complianceDoc?.id
-      ? [this.complianceDoc.id]
-      : [...this.selectedComplianceIds];
+    const intIds =
+      this.selectedComplianceIds.size > 0
+        ? [...this.selectedComplianceIds]
+        : this.complianceDoc?.id
+          ? [this.complianceDoc.id]
+          : [];
 
     const complianceLabel = (
       this.complianceFileName ||

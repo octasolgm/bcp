@@ -243,12 +243,22 @@ public class GovPointsService(IWebHostEnvironment env, ILogger<GovPointsService>
 
 public static class DualVerifyPromptBuilder
 {
-    public static string Build(GovPoint point, string landingMessage, string? markdownSupplement = null)
+    public static string Build(
+        GovPoint point,
+        string landingMessage,
+        string? markdownSupplement = null,
+        IReadOnlyList<string>? attachedFileNames = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("DUAL VERIFICATION PIPELINE — PASS 2 (INDEPENDENT)");
         sb.AppendLine("You are the second verifier. Landing AI (Pass 1) already analyzed this requirement.");
         sb.AppendLine("Re-read the attached internal PDF(s) and produce your own assessment.");
+        if (attachedFileNames is { Count: > 0 })
+        {
+            sb.AppendLine(attachedFileNames.Count == 1
+                ? $"Attached PDF: {attachedFileNames[0]}"
+                : $"Attached PDFs ({attachedFileNames.Count}): {string.Join(", ", attachedFileNames)}");
+        }
         sb.AppendLine();
         sb.AppendLine("LANDING AI PASS 1 (reference only):");
         sb.AppendLine("---");
@@ -260,7 +270,7 @@ public static class DualVerifyPromptBuilder
         if (!string.IsNullOrWhiteSpace(markdownSupplement))
         {
             sb.AppendLine();
-            sb.AppendLine("ADDITIONAL INTERNAL DOCUMENT:");
+            sb.AppendLine("INTERNAL DOCUMENT MARKDOWN (parsed text — use with attached PDF(s) for accuracy):");
             sb.AppendLine("---");
             sb.AppendLine(markdownSupplement.Trim());
             sb.AppendLine("---");

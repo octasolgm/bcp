@@ -26,28 +26,32 @@ public class GeminiService(HttpClient http, IOptions<GeminiOptions> options, ILo
         string prompt,
         string model,
         CancellationToken ct = default)
+        => await AnalyzeWithPdfsAsync([(pdfBytes, fileName)], prompt, model, ct);
+
+    public async Task<string> AnalyzeWithPdfsAsync(
+        IReadOnlyList<(byte[] Pdf, string FileName)> pdfs,
+        string prompt,
+        string model,
+        CancellationToken ct = default)
     {
         EnsureApiKey();
+        var parts = new List<object> { new { text = prompt } };
+        foreach (var (pdf, _) in pdfs)
+        {
+            if (pdf is not { Length: > 0 }) continue;
+            parts.Add(new
+            {
+                inline_data = new
+                {
+                    mime_type = "application/pdf",
+                    data = Convert.ToBase64String(pdf)
+                }
+            });
+        }
+
         var body = new
         {
-            contents = new[]
-            {
-                new
-                {
-                    parts = new object[]
-                    {
-                        new { text = prompt },
-                        new
-                        {
-                            inline_data = new
-                            {
-                                mime_type = "application/pdf",
-                                data = Convert.ToBase64String(pdfBytes)
-                            }
-                        }
-                    }
-                }
-            },
+            contents = new[] { new { parts = parts.ToArray() } },
             generationConfig = new { temperature = 0.1, maxOutputTokens = 8192 }
         };
 

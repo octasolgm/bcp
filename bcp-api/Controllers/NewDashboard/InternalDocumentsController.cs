@@ -17,6 +17,7 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class InternalDocumentsController(
     AppDbContext appDb,
     SupabaseStorageService storage,
+    NdInternalParseService parseService,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
     [HttpGet]
@@ -31,10 +32,11 @@ public class InternalDocumentsController(
             .OrderByDescending(d => d.UpdatedAt)
             .ToListAsync(ct);
 
-        return Ok(new
+        var items = new List<object>();
+        foreach (var d in docs)
         {
-            success = true,
-            data = docs.Select(d => new
+            var parseStatus = await parseService.ResolveDisplayParseStatusAsync(d, ct);
+            items.Add(new
             {
                 id = d.Id,
                 source = "legacy",
@@ -46,8 +48,13 @@ public class InternalDocumentsController(
                 uploadedAt = d.UpdatedAt,
                 sizeBytes = d.SizeBytes,
                 department = d.Category,
-            }),
-        });
+                parseStatus,
+                parsedAt = d.ParsedAt,
+                parseError = d.ParseError,
+            });
+        }
+
+        return Ok(new { success = true, data = items });
     }
 
     [HttpGet("{id:guid}/analysis-runs")]
@@ -233,6 +240,7 @@ public class InternalDocumentsController(
             FileHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
             SizeBytes = bytes.Length,
             ContentType = file.ContentType ?? "application/pdf",
+            ParseStatus = "pending",
         };
         appDb.StoredDocuments.Add(row);
         await appDb.SaveChangesAsync(ct);
@@ -240,8 +248,45 @@ public class InternalDocumentsController(
         return Ok(new
         {
             success = true,
-            data = new { id = row.Id, title = row.Title, originalFileName = row.OriginalFileName },
+            data = new
+            {
+                id = row.Id,
+                title = row.Title,
+                originalFileName = row.OriginalFileName,
+                parseStatus = row.ParseStatus,
+            },
         });
+    }
+
+    [HttpPost("{id:guid}/parse")]
+    public async Task<IActionResult> Parse(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        try
+        {
+            await parseService.ParseByIdAsync(id, ct);
+            var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+            return Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    id,
+                    parseStatus = doc?.ParseStatus ?? "parsed",
+                    parsedAt = doc?.ParsedAt,
+                },
+            });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
     }
 
     private static string NormalizeKey(string title)

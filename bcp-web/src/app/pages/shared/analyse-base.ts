@@ -917,7 +917,12 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
 
     const regIds = this.selectedRegDocs.map((d) => d.id).filter(Boolean) as string[];
     if (!regIds.length && this.libraryPrimaryRegDocId) regIds.push(this.libraryPrimaryRegDocId);
-    const intIds = this.complianceDoc?.id ? [this.complianceDoc.id] : [];
+    const intIds =
+      this.selectedComplianceIds.size > 0
+        ? [...this.selectedComplianceIds]
+        : this.complianceDoc?.id
+          ? [this.complianceDoc.id]
+          : [];
 
     const complianceLabel = (this.complianceFileName || this.complianceDoc?.originalFileName || 'Compliance').slice(0, 48);
     const regLabel = this.selectedRegLabel.slice(0, 120);

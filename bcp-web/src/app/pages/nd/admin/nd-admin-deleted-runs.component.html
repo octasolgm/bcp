@@ -13,10 +13,10 @@
   <p class="muted-loading">Loading deleted runs…</p>
 } @else {
   @if (message) {
-    <p class="nd-success">{{ message }}</p>
+    <p class="nd-success page-flash">{{ message }}</p>
   }
   @if (error) {
-    <p class="nd-error">{{ error }}</p>
+    <p class="nd-error page-flash">{{ error }}</p>
   }
 
   <div class="filter-pills nd-list-toolbar nd-shrink">
@@ -50,14 +50,20 @@
         <tbody>
           @for (run of visibleRuns; track run.id) {
             <tr>
-              <td><strong>{{ run.name }}</strong></td>
+              <td class="run-cell">
+                <strong [title]="run.name">{{ run.name }}</strong>
+              </td>
               <td class="muted">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
-              <td><span class="severity-badge running">{{ previousStatusLabel(run) }}</span></td>
+              <td>
+                <span class="severity-badge" [ngClass]="previousStatusClass(run)">
+                  {{ previousStatusLabel(run) }}
+                </span>
+              </td>
               <td class="muted">{{ formatDate(run.deletedAt ?? run.createdAt) }}</td>
               <td class="row-actions">
                 <button
                   type="button"
-                  class="row-action-link"
+                  class="btn-restore"
                   [disabled]="restoringId === run.id"
                   (click)="restore(run)"
                 >
