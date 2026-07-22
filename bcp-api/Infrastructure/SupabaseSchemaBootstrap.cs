@@ -71,6 +71,26 @@ public static class SupabaseSchemaBootstrap
           ADD COLUMN IF NOT EXISTS parse_error TEXT NULL;
         """,
         """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS uploaded_by UUID NULL;
+        """,
+        """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS parsed_by UUID NULL;
+        """,
+        """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT false;
+        """,
+        """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS hidden_at TIMESTAMPTZ NULL;
+        """,
+        """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS hidden_by UUID NULL;
+        """,
+        """
         CREATE TABLE IF NOT EXISTS landing_ai_parse_cache (
           file_hash TEXT PRIMARY KEY,
           file_name TEXT NULL,

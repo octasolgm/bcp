@@ -20,9 +20,17 @@ export type RegulationDocument = {
   pointCount: number;
   extractedAt?: string | null;
   createdAt: string;
+  updatedAt?: string | null;
   storedDocumentId?: string | null;
   legacyHref?: string | null;
   isManual?: boolean;
+  originalFileName?: string | null;
+  uploadedBy?: string | null;
+  uploadedByName?: string | null;
+  extractedBy?: string | null;
+  extractedByName?: string | null;
+  isHidden?: boolean;
+  hiddenAt?: string | null;
 };
 
 export type RegulationPoint = {
@@ -48,6 +56,12 @@ export type InternalDocument = {
   parseStatus?: 'pending' | 'processing' | 'parsed' | 'failed' | string;
   parsedAt?: string | null;
   parseError?: string | null;
+  uploadedBy?: string | null;
+  uploadedByName?: string | null;
+  parsedBy?: string | null;
+  parsedByName?: string | null;
+  isHidden?: boolean;
+  hiddenAt?: string | null;
 };
 
 export type LibrarySummary = {

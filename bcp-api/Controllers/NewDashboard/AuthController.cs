@@ -24,7 +24,7 @@ public class AuthController(
     [HttpGet("me")]
     public async Task<IActionResult> Me(CancellationToken ct)
     {
-        var user = ValidateJwt(jwt);
+        var user = await jwt.ValidateTokenAsync(Request.Headers.Authorization.FirstOrDefault(), ct);
         if (user == null)
             return Unauthorized(new { success = false, message = "Unauthorized" });
 

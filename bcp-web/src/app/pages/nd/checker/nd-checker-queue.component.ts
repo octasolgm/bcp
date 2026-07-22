@@ -15,7 +15,19 @@ import {
   type SortDir,
 } from '../../../../lib/nd/list-utils';
 import { NdWorkspaceTabsComponent } from '../../../components/nd/nd-workspace-tabs.component';
+import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
+import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badge.component';
+import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
+import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-actions.component';
+import {
+  analysisRunWorkflowLabel,
+  analysisRunComplianceSummary,
+  analysisRunGapsSummary,
+  analysisRunSubmittedByLabel,
+  analysisRunSubmittedByCaption,
+} from '../../../../lib/nd/analysis-run-status';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
+import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 import { ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../../lib/nd/run-links';
 
 type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
@@ -23,7 +35,7 @@ type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
 @Component({
   selector: 'app-nd-checker-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent],
   templateUrl: './nd-checker-queue.component.html',
   styleUrls: ['./nd-checker-queue.component.scss', '../run-analysis/nd-run-analysis.component.scss', '../nd-shared.scss'],
 })
@@ -39,6 +51,10 @@ export class NdCheckerQueueComponent implements OnInit {
   statusFilter = '';
   sortColumn: QueueSortColumn = 'date';
   sortDir: SortDir = 'desc';
+  historyOpen = false;
+  historyRunId: string | null = null;
+  historyRunName = '';
+  historyRunStats: RunGapStatsSummary | null = null;
 
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
@@ -119,4 +135,24 @@ export class NdCheckerQueueComponent implements OnInit {
   }
 
   formatDate = formatDate;
+  workflowStatusLabel = analysisRunWorkflowLabel;
+  complianceSummary = analysisRunComplianceSummary;
+  gapsSummary = analysisRunGapsSummary;
+  submittedByLabel = analysisRunSubmittedByLabel;
+  submittedByCaption = analysisRunSubmittedByCaption;
+
+  openHistory(run: AnalysisRunSummary, event?: Event): void {
+    event?.stopPropagation();
+    this.historyRunId = run.id;
+    this.historyRunName = run.name;
+    this.historyRunStats = runGapStatsFromSummary(run);
+    this.historyOpen = true;
+  }
+
+  closeHistory(): void {
+    this.historyOpen = false;
+    this.historyRunId = null;
+    this.historyRunName = '';
+    this.historyRunStats = null;
+  }
 }

@@ -36,7 +36,10 @@ public class NdInternalParseService(
         };
     }
 
-    public async Task<InternalDocPayload> ParseByIdAsync(Guid documentId, CancellationToken ct = default)
+    public async Task<InternalDocPayload> ParseByIdAsync(
+        Guid documentId,
+        Guid? parsedBy = null,
+        CancellationToken ct = default)
     {
         if (!client.IsConfigured)
             throw new InvalidOperationException(
@@ -52,13 +55,14 @@ public class NdInternalParseService(
             throw new InvalidOperationException("Supabase Storage not configured.");
 
         var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
-        return await EnsureParsedAsync(doc, bytes, ct);
+        return await EnsureParsedAsync(doc, bytes, ct, parsedBy);
     }
 
     public async Task<InternalDocPayload> EnsureParsedAsync(
         StoredDocument doc,
         byte[] pdfBytes,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Guid? parsedBy = null)
     {
         if (!client.IsConfigured)
             throw new InvalidOperationException(
@@ -71,7 +75,7 @@ public class NdInternalParseService(
         var cached = await cache.GetParseCacheAsync(hash, ct);
         if (!string.IsNullOrWhiteSpace(cached?.Markdown))
         {
-            await MarkParsedAsync(doc, hash, ct);
+            await MarkParsedAsync(doc, hash, parsedBy, ct);
             return new InternalDocPayload(
                 hash,
                 doc.OriginalFileName,
@@ -93,7 +97,7 @@ public class NdInternalParseService(
 
             var markdown = await client.ParseDocumentAsync(pdfBytes, doc.OriginalFileName, ct);
             await cache.SaveParseCacheAsync(hash, doc.OriginalFileName, markdown, _opts.ParseModel, ct);
-            await MarkParsedAsync(doc, hash, ct);
+            await MarkParsedAsync(doc, hash, parsedBy, ct);
             return new InternalDocPayload(hash, doc.OriginalFileName, markdown, pdfBytes);
         }
         catch (Exception ex)
@@ -106,16 +110,23 @@ public class NdInternalParseService(
         }
     }
 
-    private async Task MarkParsedAsync(StoredDocument doc, string hash, CancellationToken ct)
+    private async Task MarkParsedAsync(
+        StoredDocument doc,
+        string hash,
+        Guid? parsedBy,
+        CancellationToken ct)
     {
         var changed = doc.ParseStatus != "parsed"
             || doc.FileHash != hash
-            || doc.ParseError != null;
+            || doc.ParseError != null
+            || (parsedBy.HasValue && doc.ParsedBy != parsedBy);
 
         doc.ParseStatus = "parsed";
         doc.FileHash = hash;
         doc.ParseError = null;
         doc.ParsedAt ??= DateTimeOffset.UtcNow;
+        if (parsedBy.HasValue)
+            doc.ParsedBy = parsedBy;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
 
         if (changed)

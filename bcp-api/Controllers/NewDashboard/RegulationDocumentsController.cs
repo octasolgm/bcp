@@ -24,7 +24,8 @@ public class RegulationDocumentsController(
     NdRegulationUploadService uploadService,
     LandingAiGovExtractService govExtract,
     GovPointsService govPoints,
-    SupabaseStorageService storage) : NdControllerBase
+    SupabaseStorageService storage,
+    LandingAiCacheRepository landingCache) : NdControllerBase
 {
     public record UpdateRegulationRequest(string? DepartmentId);
 
@@ -54,11 +55,15 @@ public class RegulationDocumentsController(
     public async Task<IActionResult> List(
         [FromQuery] Guid? departmentId,
         [FromQuery] string? status,
-        CancellationToken ct)
+        [FromQuery] bool hiddenOnly = false,
+        CancellationToken ct = default)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct,
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
+
+        if (hiddenOnly && profile!.Role != "super_admin")
+            return StatusCode(403, new { success = false, message = "Forbidden" });
 
         var deptNames = await LoadDepartmentNamesAsync(ct);
 
@@ -98,9 +103,19 @@ public class RegulationDocumentsController(
             .ToHashSet();
 
         var legacyDocs = await db.StoredDocuments.AsNoTracking()
-            .Where(d => d.DocKind == "regulation")
+            .Where(d => d.DocKind == "regulation" && !d.IsHidden)
             .OrderByDescending(d => d.UpdatedAt)
             .ToListAsync(ct);
+
+        var profileNames = await LoadProfileNamesAsync(
+            db,
+            ndDocs.SelectMany(d => new Guid?[] { d.CreatedBy, d.ExtractedBy })
+                .Concat(legacyDocs.SelectMany(d => new Guid?[] { d.UploadedBy })),
+            ct);
+
+        var allRegStored = await db.StoredDocuments.AsNoTracking()
+            .Where(d => d.DocKind == "regulation")
+            .ToDictionaryAsync(d => d.Id, ct);
 
         var storedById = legacyDocs.ToDictionary(d => d.Id);
 
@@ -109,12 +124,47 @@ public class RegulationDocumentsController(
 
         var items = new List<object>();
 
-        foreach (var leg in legacyDocs)
+        if (hiddenOnly)
+        {
+            var hiddenLegacyDocs = await db.StoredDocuments.AsNoTracking()
+                .Where(d => d.DocKind == "regulation" && d.IsHidden)
+                .OrderByDescending(d => d.HiddenAt ?? d.UpdatedAt)
+                .ToListAsync(ct);
+            var hiddenLegacyNames = await LoadProfileNamesAsync(
+                db,
+                hiddenLegacyDocs.SelectMany(d => new Guid?[] { d.UploadedBy, d.HiddenBy }),
+                ct);
+            profileNames = profileNames
+                .Concat(hiddenLegacyNames)
+                .GroupBy(kv => kv.Key)
+                .ToDictionary(g => g.Key, g => g.First().Value);
+
+            foreach (var d in ndDocs.Where(d => d.Status == StatusHidden && !IsDepartmentOverlay(d)).OrderByDescending(d => d.UpdatedAt))
+            {
+                allRegStored.TryGetValue(d.StoredDocumentId ?? Guid.Empty, out var stored);
+                items.Add(BuildRegulationListItem(
+                    d, stored, deptNames, pointCountMap, profileNames, isHidden: true));
+            }
+
+            foreach (var leg in hiddenLegacyDocs)
+            {
+                if (hiddenStoredIds.Contains(leg.Id)) continue;
+                items.Add(BuildLegacyRegulationListItem(
+                    leg, ndDocs, deptNames, cachedHashes, pointCountMap, profileNames, isHidden: true));
+            }
+
+            var sortedHidden = items
+                .OrderByDescending(i => (DateTimeOffset?)i.GetType().GetProperty("updatedAt")?.GetValue(i)
+                    ?? (DateTimeOffset)i.GetType().GetProperty("createdAt")!.GetValue(i)!)
+                .ToList();
+            return Ok(new { success = true, data = sortedHidden });
+        }
+
+        foreach (var leg in legacyDocs.Where(d => !d.IsHidden))
         {
             if (hiddenStoredIds.Contains(leg.Id)) continue;
 
             ndByStoredId.TryGetValue(leg.Id, out var overlay);
-            // One row per file: skip legacy when an active ND upload exists for this stored doc.
             if (overlay != null) continue;
 
             var deptOverlay = ndDocs.FirstOrDefault(d =>
@@ -129,26 +179,12 @@ public class RegulationDocumentsController(
                 ? pointCountMap.GetValueOrDefault(ndForLegacy.Id)
                 : (leg.PointCount ?? 0);
             var displayStatus = MapDisplayExtractionStatus(extractionStatus, pointCount, isManual: false);
-            if (!MatchesStatusFilter(displayStatus, status))
-                continue;
+            if (!MatchesStatusFilter(displayStatus, status)) continue;
 
-            items.Add(new
-            {
-                id = leg.Id,
-                source = "legacy",
-                name = leg.Title,
-                departmentId = deptId,
-                departmentName = DeptName(deptNames, deptId),
-                extractionStatus = displayStatus,
-                pointCount,
-                extractedAt = (DateTimeOffset?)null,
-                createdAt = leg.CreatedAt,
-                storedDocumentId = leg.Id,
-                legacyHref = $"/nd/regulation-documents/{leg.Id}",
-            });
+            items.Add(BuildLegacyRegulationListItem(
+                leg, ndDocs, deptNames, cachedHashes, pointCountMap, profileNames, isHidden: false));
         }
 
-        var listedStoredIds = new HashSet<Guid>();
         foreach (var d in ndDocs)
         {
             if (d.Status == StatusHidden) continue;
@@ -168,34 +204,31 @@ public class RegulationDocumentsController(
                     pointCount = manualCount,
                     extractedAt = d.ExtractedAt,
                     createdAt = d.CreatedAt,
+                    updatedAt = d.UpdatedAt,
                     storedDocumentId = (Guid?)null,
                     legacyHref = (string?)null,
                     isManual = true,
+                    uploadedBy = d.CreatedBy,
+                    uploadedByName = ProfileName(profileNames, d.CreatedBy),
+                    extractedBy = d.ExtractedBy,
+                    extractedByName = ProfileName(profileNames, d.ExtractedBy),
+                    originalFileName = (string?)null,
+                    isHidden = false,
                 });
                 continue;
             }
-            if (d.StoredDocumentId is Guid storedId && !listedStoredIds.Add(storedId)) continue;
             if (departmentId.HasValue && d.DepartmentId != departmentId) continue;
 
             var resolvedCount = pointCountMap.GetValueOrDefault(d.Id);
             var displayStatus = MapDisplayExtractionStatus(d.ExtractionStatus, resolvedCount, isManual: false);
-            if (!MatchesStatusFilter(displayStatus, status))
-                continue;
+            if (!MatchesStatusFilter(displayStatus, status)) continue;
 
-            items.Add(new
-            {
-                id = d.Id,
-                source = "nd",
-                name = d.Name,
-                departmentId = d.DepartmentId,
-                departmentName = DeptName(deptNames, d.DepartmentId),
-                extractionStatus = displayStatus,
-                pointCount = resolvedCount,
-                extractedAt = d.ExtractedAt,
-                createdAt = d.CreatedAt,
-                storedDocumentId = d.StoredDocumentId,
-                legacyHref = (string?)null,
-            });
+            storedById.TryGetValue(d.StoredDocumentId ?? Guid.Empty, out var storedDoc);
+            if (storedDoc == null && d.StoredDocumentId is Guid sid)
+                allRegStored.TryGetValue(sid, out storedDoc);
+
+            items.Add(BuildRegulationListItem(
+                d, storedDoc, deptNames, pointCountMap, profileNames, isHidden: false));
         }
 
         var manualDoc = await EnsureManualDocumentAsync(ct);
@@ -215,9 +248,16 @@ public class RegulationDocumentsController(
                     pointCount = manualCount,
                     extractedAt = manualDoc.ExtractedAt,
                     createdAt = manualDoc.CreatedAt,
+                    updatedAt = manualDoc.UpdatedAt,
                     storedDocumentId = (Guid?)null,
                     legacyHref = (string?)null,
                     isManual = true,
+                    uploadedBy = manualDoc.CreatedBy,
+                    uploadedByName = ProfileName(profileNames, manualDoc.CreatedBy),
+                    extractedBy = manualDoc.ExtractedBy,
+                    extractedByName = ProfileName(profileNames, manualDoc.ExtractedBy),
+                    originalFileName = (string?)null,
+                    isHidden = false,
                 });
             }
         }
@@ -282,6 +322,7 @@ public class RegulationDocumentsController(
 
         var hits = new List<PointSearchHit>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var markdownByStoredId = new Dictionary<Guid, string?>();
 
         try
         {
@@ -307,6 +348,7 @@ public class RegulationDocumentsController(
                 var key = $"{x.Doc.Id}:{x.Point.PointNumber}";
                 if (!seen.Add(key)) continue;
                 var ndSourceStoredId = x.Doc.StoredDocumentId ?? x.Doc.Id;
+                var (pointSection, storedPageHint) = ParsePointPageReference(x.Point.PageReference);
                 hits.Add(new PointSearchHit(
                     x.Doc.Id,
                     x.Doc.Name,
@@ -317,7 +359,15 @@ public class RegulationDocumentsController(
                     x.Point.PointTitle,
                     SnippetForSearch(x.Point.PointContent, term),
                     x.Point.PageReference,
-                    ResolvePdfPage(x.Point.PageReference, null),
+                    await ResolveStoredPointPdfPageAsync(
+                        ndSourceStoredId,
+                        x.Point.PointNumber,
+                        pointSection ?? x.Point.PointNumber,
+                        x.Point.PointTitle,
+                        x.Point.PointContent,
+                        storedPageHint,
+                        markdownByStoredId,
+                        ct),
                     ndSourceStoredId));
             }
         }
@@ -376,7 +426,15 @@ public class RegulationDocumentsController(
                         p.Title,
                         SnippetForSearch(p.Text, term),
                         p.Section,
-                        ResolveSearchPage(p, docPoints),
+                        await ResolveStoredPointPdfPageAsync(
+                            row.DocumentId,
+                            p.PointId,
+                            p.Section,
+                            p.Title,
+                            p.Text,
+                            p.PageHint,
+                            markdownByStoredId,
+                            ct),
                         row.DocumentId));
                 }
 
@@ -472,8 +530,58 @@ public class RegulationDocumentsController(
 
     private static int? ResolvePdfPage(string? pageReference, int? pageHint)
     {
-        if (pageHint is > 0) return pageHint;
-        return ParsePdfPageFromReference(pageReference);
+        var fromRef = ParsePdfPageFromReference(pageReference);
+        if (fromRef is > 0) return fromRef;
+        return pageHint is > 0 ? pageHint : null;
+    }
+
+    private async Task<string?> LoadParsedMarkdownAsync(Guid storedDocumentId, CancellationToken ct)
+    {
+        var stored = await db.StoredDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == storedDocumentId, ct);
+        if (stored == null || string.IsNullOrWhiteSpace(stored.FileHash)) return null;
+
+        var row = await landingCache.GetParseCacheAsync(stored.FileHash, ct);
+        return row?.Markdown;
+    }
+
+    private async Task<int?> LoadStoredDocumentPageCountAsync(Guid storedDocumentId, CancellationToken ct)
+    {
+        var stored = await db.StoredDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == storedDocumentId, ct);
+        return stored is { Pages: > 0 } ? stored.Pages : null;
+    }
+
+    private async Task<int?> ResolveStoredPointPdfPageAsync(
+        Guid storedDocumentId,
+        string pointId,
+        string? section,
+        string? title,
+        string content,
+        int? pageHint,
+        Dictionary<Guid, string?> markdownCache,
+        CancellationToken ct)
+    {
+        if (!markdownCache.TryGetValue(storedDocumentId, out var markdown))
+        {
+            markdown = await LoadParsedMarkdownAsync(storedDocumentId, ct);
+            markdownCache[storedDocumentId] = markdown;
+        }
+
+        var maxPages = PolicyPageResolver.EstimatePageCount(markdown)
+            ?? await LoadStoredDocumentPageCountAsync(storedDocumentId, ct);
+
+        if (!string.IsNullOrWhiteSpace(markdown))
+        {
+            var resolved = PolicyPageResolver.ResolveGovPointPage(
+                markdown, pointId, section, title, content, pageHint, maxPages);
+            if (resolved is > 0) return resolved;
+        }
+
+        var trustedHint = pageHint is > 0 && (maxPages is null or <= 0 || pageHint <= maxPages)
+            ? pageHint
+            : null;
+        return ResolvePdfPage(section, trustedHint);
     }
 
     /// <summary>
@@ -518,6 +626,21 @@ public class RegulationDocumentsController(
         }
 
         return null;
+    }
+
+    private static (string? Section, int? PageHint) ParsePointPageReference(string? pageReference)
+    {
+        if (string.IsNullOrWhiteSpace(pageReference)) return (null, null);
+
+        var hint = ParsePdfPageFromReference(pageReference);
+        var section = pageReference.Trim();
+        var sep = section.IndexOf(" · p.", StringComparison.OrdinalIgnoreCase);
+        if (sep >= 0)
+            section = section[..sep].Trim();
+        else if (hint is > 0 && Regex.IsMatch(section, @"^p\.?\s*\d+$", RegexOptions.IgnoreCase))
+            section = null;
+
+        return (section, hint);
     }
 
     private static int? ParsePdfPageFromReference(string? reference)
@@ -627,6 +750,17 @@ public class RegulationDocumentsController(
 
             ndDoc.Status = StatusHidden;
             ndDoc.UpdatedAt = DateTimeOffset.UtcNow;
+            if (ndDoc.StoredDocumentId is Guid storedId)
+            {
+                var storedRow = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct);
+                if (storedRow != null)
+                {
+                    storedRow.IsHidden = true;
+                    storedRow.HiddenAt = DateTimeOffset.UtcNow;
+                    storedRow.HiddenBy = profile!.Id;
+                    storedRow.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+            }
             await db.SaveChangesAsync(ct);
             return Ok(new { success = true, message = "Regulation hidden from library (data kept in database)." });
         }
@@ -657,8 +791,64 @@ public class RegulationDocumentsController(
             overlay.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
+        stored.IsHidden = true;
+        stored.HiddenAt = DateTimeOffset.UtcNow;
+        stored.HiddenBy = profile!.Id;
+        stored.UpdatedAt = DateTimeOffset.UtcNow;
+
         await db.SaveChangesAsync(ct);
         return Ok(new { success = true, message = "Regulation hidden from library (data kept in database)." });
+    }
+
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        var ndDoc = await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (ndDoc != null)
+        {
+            if (ndDoc.Status != StatusHidden)
+                return Ok(new { success = true, message = "Regulation is already active." });
+
+            ndDoc.Status = StatusActive;
+            ndDoc.UpdatedAt = DateTimeOffset.UtcNow;
+            if (ndDoc.StoredDocumentId is Guid storedId)
+            {
+                var stored = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct);
+                if (stored != null)
+                {
+                    stored.IsHidden = false;
+                    stored.HiddenAt = null;
+                    stored.HiddenBy = null;
+                    stored.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+            return Ok(new { success = true, message = "Regulation restored." });
+        }
+
+        var legacyStored = await db.StoredDocuments.FirstOrDefaultAsync(
+            d => d.Id == id && d.DocKind == "regulation", ct);
+        if (legacyStored == null)
+            return NotFound(new { success = false, message = "Not found" });
+
+        legacyStored.IsHidden = false;
+        legacyStored.HiddenAt = null;
+        legacyStored.HiddenBy = null;
+        legacyStored.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var overlay = await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.StoredDocumentId == id, ct);
+        if (overlay != null && overlay.Status == StatusHidden)
+        {
+            overlay.Status = StatusActive;
+            overlay.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Ok(new { success = true, message = "Regulation restored." });
     }
 
     [HttpPut("{id:guid}")]
@@ -1082,6 +1272,84 @@ public class RegulationDocumentsController(
     {
         var doc = await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == id && d.IsManual, ct);
         return doc;
+    }
+
+    private static object BuildRegulationListItem(
+        NdRegulationDocument d,
+        StoredDocument? stored,
+        IReadOnlyDictionary<Guid, string> deptNames,
+        IReadOnlyDictionary<Guid, int> pointCountMap,
+        IReadOnlyDictionary<Guid, string> profileNames,
+        bool isHidden)
+    {
+        var resolvedCount = pointCountMap.GetValueOrDefault(d.Id);
+        var displayStatus = MapDisplayExtractionStatus(d.ExtractionStatus, resolvedCount, isManual: false);
+        var uploadedBy = d.CreatedBy ?? stored?.UploadedBy;
+        return new
+        {
+            id = d.Id,
+            source = "nd",
+            name = d.Name,
+            departmentId = d.DepartmentId,
+            departmentName = DeptName(deptNames, d.DepartmentId),
+            extractionStatus = displayStatus,
+            pointCount = resolvedCount,
+            extractedAt = d.ExtractedAt,
+            createdAt = d.CreatedAt,
+            updatedAt = d.UpdatedAt,
+            storedDocumentId = d.StoredDocumentId,
+            legacyHref = (string?)null,
+            uploadedBy,
+            uploadedByName = ProfileName(profileNames, uploadedBy),
+            extractedBy = d.ExtractedBy,
+            extractedByName = ProfileName(profileNames, d.ExtractedBy),
+            originalFileName = stored?.OriginalFileName,
+            isHidden,
+            hiddenAt = isHidden ? stored?.HiddenAt ?? d.UpdatedAt : null,
+        };
+    }
+
+    private static object BuildLegacyRegulationListItem(
+        StoredDocument leg,
+        IReadOnlyList<NdRegulationDocument> ndDocs,
+        IReadOnlyDictionary<Guid, string> deptNames,
+        IReadOnlySet<string> cachedHashes,
+        IReadOnlyDictionary<Guid, int> pointCountMap,
+        IReadOnlyDictionary<Guid, string> profileNames,
+        bool isHidden)
+    {
+        var deptOverlay = ndDocs.FirstOrDefault(d =>
+            d.StoredDocumentId == leg.Id && d.Status != StatusHidden && IsDepartmentOverlay(d));
+        var deptId = deptOverlay?.DepartmentId;
+        var extractionStatus = NdLegacyDataQueries.LegacyRegulationExtractionStatus(leg, cachedHashes);
+        var ndForLegacy = ndDocs.FirstOrDefault(d =>
+            d.StoredDocumentId == leg.Id && d.Status != StatusHidden && !IsDepartmentOverlay(d) && !d.IsManual);
+        var pointCount = ndForLegacy != null
+            ? pointCountMap.GetValueOrDefault(ndForLegacy.Id)
+            : (leg.PointCount ?? 0);
+        var displayStatus = MapDisplayExtractionStatus(extractionStatus, pointCount, isManual: false);
+        return new
+        {
+            id = leg.Id,
+            source = "legacy",
+            name = leg.Title,
+            departmentId = deptId,
+            departmentName = DeptName(deptNames, deptId),
+            extractionStatus = displayStatus,
+            pointCount,
+            extractedAt = ndForLegacy?.ExtractedAt,
+            createdAt = leg.CreatedAt,
+            updatedAt = leg.UpdatedAt,
+            storedDocumentId = leg.Id,
+            legacyHref = $"/nd/regulation-documents/{leg.Id}",
+            uploadedBy = leg.UploadedBy ?? ndForLegacy?.CreatedBy,
+            uploadedByName = ProfileName(profileNames, leg.UploadedBy ?? ndForLegacy?.CreatedBy),
+            extractedBy = ndForLegacy?.ExtractedBy,
+            extractedByName = ProfileName(profileNames, ndForLegacy?.ExtractedBy),
+            originalFileName = leg.OriginalFileName,
+            isHidden,
+            hiddenAt = isHidden ? leg.HiddenAt ?? leg.UpdatedAt : null,
+        };
     }
 
     private static bool MatchesStatusFilter(string displayStatus, string? filter)

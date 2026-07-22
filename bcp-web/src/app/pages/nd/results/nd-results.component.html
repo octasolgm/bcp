@@ -184,6 +184,7 @@
                   [reviewMode]="canReviewActionGaps"
                   [reviewDisabledHint]="gapReviewDisabledHint"
                   [savingActionReviewIndex]="savingActionReviewIndex"
+                  [savingReviewId]="savingReviewId"
                   [canUploadEvidence]="canUploadGapEvidence"
                   [evidenceUploading]="evidenceUploadingPointId === p.id"
                   [evidenceRerunning]="evidenceRerunningPointId === p.id"
@@ -203,6 +204,8 @@
                   (rerunWithEvidence)="onRerunWithEvidence(p.id, $event)"
                   (rerunGapEvidence)="onRerunGapEvidence(p.id, $event)"
                   (saveActionItemReview)="saveActionItemReview(p.id, $event)"
+                  (deleteActionItemReview)="deleteActionItemReview(p.id, $event)"
+                  (reorderActionItemReview)="reorderActionItemReview(p.id, $event)"
                 />
               }
             </div>
@@ -283,6 +286,7 @@
                 [reviewMode]="canReviewActionGaps"
                 [reviewDisabledHint]="gapReviewDisabledHint"
                 [savingActionReviewIndex]="savingActionReviewIndex"
+                [savingReviewId]="savingReviewId"
                 [canUploadEvidence]="canUploadGapEvidence"
                 [evidenceUploading]="evidenceUploadingPointId === p.id"
                 [evidenceRerunning]="evidenceRerunningPointId === p.id"
@@ -302,6 +306,8 @@
                 (rerunWithEvidence)="onRerunWithEvidence(p.id, $event)"
                 (rerunGapEvidence)="onRerunGapEvidence(p.id, $event)"
                 (saveActionItemReview)="saveActionItemReview(p.id, $event)"
+                (deleteActionItemReview)="deleteActionItemReview(p.id, $event)"
+                (reorderActionItemReview)="reorderActionItemReview(p.id, $event)"
               />
             }
           }

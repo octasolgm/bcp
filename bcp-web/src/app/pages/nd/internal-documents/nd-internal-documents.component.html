@@ -1,20 +1,34 @@
 <div class="page-header">
   <div>
-    <h1>Document Library</h1>
-    <p class="subtitle">Upload PDFs here. Use <strong>Run parse</strong> to generate markdown before analysis.</p>
+    <h1>{{ showDeleted ? 'Deleted documents' : 'Document Library' }}</h1>
+    <p class="subtitle">
+      @if (showDeleted) {
+        Soft-deleted documents are hidden from the library but kept in the database — parse credits and file data are preserved. Restore to make them visible again.
+      } @else {
+        Upload PDFs here. Use <strong>Run parse</strong> to generate markdown before analysis.
+      }
+    </p>
   </div>
-  @if (canUpload) {
+  @if (canUpload || canViewDeleted) {
     <div class="header-actions">
       <button type="button" class="btn-secondary" (click)="load()" [disabled]="loading">Refresh</button>
-      <button type="button" class="btn-primary" [disabled]="uploading" (click)="fileInput.click()">
-        {{ uploading ? 'Uploading…' : '+ Upload' }}
-      </button>
-      <input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
+      @if (canUpload && !showDeleted) {
+        <button type="button" class="btn-primary" [disabled]="uploading" (click)="fileInput.click()">
+          {{ uploading ? 'Uploading…' : '+ Upload' }}
+        </button>
+        <input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
+      }
     </div>
   }
 </div>
 
 <div class="nd-page-body">
+@if (canViewDeleted) {
+  <div class="filter-pills tabs nd-shrink">
+    <a routerLink="/nd/internal-documents" class="tab" [class.active]="!showDeleted">Active</a>
+    <a routerLink="/nd/internal-documents" class="tab" [class.active]="showDeleted" [queryParams]="{ deleted: '1' }">Deleted</a>
+  </div>
+}
 @if (message) {
   <div class="alert success nd-shrink">{{ message }}</div>
 }
@@ -26,8 +40,13 @@
   <p class="muted-loading">Loading documents…</p>
 } @else if (docs.length === 0) {
   <div class="card-surface empty-state">
-    <strong>No documents yet</strong>
-    <p>Upload a PDF to add internal compliance documents.</p>
+    @if (showDeleted) {
+      <strong>No deleted documents</strong>
+      <p>When a document is deleted it stays in the database and appears here for super admins.</p>
+    } @else {
+      <strong>No documents yet</strong>
+      <p>Upload a PDF to add internal compliance documents.</p>
+    }
   </div>
 } @else {
   <div class="filter-pills nd-list-toolbar nd-shrink">
@@ -77,6 +96,11 @@
         <tr>
           <th>Document</th>
           <th>Uploaded</th>
+          @if (showDeleted) {
+            <th>Deleted</th>
+          }
+          <th>Uploaded by</th>
+          <th>Extracted by</th>
           <th>Size</th>
           <th>Parse status</th>
           <th>Actions</th>
@@ -90,6 +114,11 @@
               <span class="doc-meta" [title]="d.originalFileName">{{ d.originalFileName }}</span>
             </td>
             <td class="muted">{{ formatDate(d.uploaded) }}</td>
+            @if (showDeleted) {
+              <td class="muted">{{ d.hiddenAt ? formatDate(d.hiddenAt) : '—' }}</td>
+            }
+            <td class="muted">{{ actorLabel(d.uploadedByName) }}</td>
+            <td class="muted">{{ actorLabel(d.parsedByName) }}</td>
             <td class="muted">{{ formatBytes(d.sizeBytes) }}</td>
             <td>
               <span class="severity-badge" [ngClass]="parseClass(d.parseStatus)">
@@ -102,18 +131,39 @@
             </td>
             <td>
               <div class="row-actions">
-                @if (canParse && d.parseStatus !== 'parsed') {
+                @if (!showDeleted) {
+                  @if (canParse && d.parseStatus !== 'parsed') {
+                    <button
+                      type="button"
+                      class="btn-use"
+                      [disabled]="parsingId === d.id || d.parseStatus === 'processing'"
+                      (click)="handleParse(d, $event)"
+                    >
+                      {{ parseButtonLabel(d) }}
+                    </button>
+                  }
+                  <button type="button" class="row-action-link" (click)="viewAnalysis(d)">View analysis</button>
+                  <button type="button" class="row-action-link" (click)="openHistory(d)">History</button>
+                  @if (canDelete) {
+                    <button
+                      type="button"
+                      class="row-action-link btn-hide"
+                      [disabled]="deletingId === d.id"
+                      (click)="handleDelete(d, $event)"
+                    >
+                      {{ deletingId === d.id ? 'Deleting…' : 'Delete' }}
+                    </button>
+                  }
+                } @else if (canViewDeleted) {
                   <button
                     type="button"
                     class="btn-use"
-                    [disabled]="parsingId === d.id || d.parseStatus === 'processing'"
-                    (click)="handleParse(d, $event)"
+                    [disabled]="deletingId === d.id"
+                    (click)="handleRestore(d, $event)"
                   >
-                    {{ parseButtonLabel(d) }}
+                    {{ deletingId === d.id ? 'Restoring…' : 'Restore' }}
                   </button>
                 }
-                <button type="button" class="row-action-link" (click)="viewAnalysis(d)">View analysis</button>
-                <button type="button" class="row-action-link" (click)="openHistory(d)">History</button>
               </div>
             </td>
           </tr>

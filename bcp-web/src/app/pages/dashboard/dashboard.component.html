@@ -9,21 +9,26 @@
   <div class="alert error">{{ healthError }}</div>
 }
 
-<div class="stats-row">
-  <button type="button" class="stat-card critical" (click)="openBySeverity('critical')">
-    <span class="stat-label">Critical Gaps</span>
-    <strong class="stat-value">{{ criticalCount }}</strong>
-    <span class="stat-hint">Immediate action required</span>
+<div class="stats-row gap-risk-row">
+  <button type="button" class="stat-card critical" (click)="openByRiskTier('critical')">
+    <span class="stat-label">Critical gaps</span>
+    <strong class="stat-value">{{ criticalGapCount }}</strong>
+    <span class="stat-hint">Score 67–100</span>
   </button>
-  <button type="button" class="stat-card high" (click)="openBySeverity('high')">
-    <span class="stat-label">High Risk</span>
-    <strong class="stat-value">{{ highCount }}</strong>
-    <span class="stat-hint">Significant exposure</span>
+  <button type="button" class="stat-card medium" (click)="openByRiskTier('medium')">
+    <span class="stat-label">Medium risk gaps</span>
+    <strong class="stat-value">{{ mediumGapCount }}</strong>
+    <span class="stat-hint">Score 34–66</span>
+  </button>
+  <button type="button" class="stat-card low" (click)="openByRiskTier('low')">
+    <span class="stat-label">Low risk gaps</span>
+    <strong class="stat-value">{{ lowGapCount }}</strong>
+    <span class="stat-hint">Score 0–33</span>
   </button>
   <button type="button" class="stat-card neutral" (click)="openBySeverity('all')">
     <span class="stat-label">Total Findings</span>
     <strong class="stat-value">{{ totalFindings }}</strong>
-    <span class="stat-hint">Across 1 analysis</span>
+    <span class="stat-hint">Across {{ analysisCountLabel }} analysis</span>
   </button>
   <button type="button" class="stat-card compliant" (click)="openBySeverity('compliant')">
     <span class="stat-label">Compliant Items</span>
@@ -31,36 +36,35 @@
     <span class="stat-hint">Fully addressed</span>
   </button>
 </div>
+<p class="risk-standard-note">{{ riskStandardLabel }}</p>
 
 <div class="charts-row">
   <section class="card-surface chart-card">
-    <h2>Risk Breakdown</h2>
+    <h2>Compliance Breakdown</h2>
     <div class="donut-wrap">
       <div class="donut-chart">
         <svg viewBox="0 0 36 36" class="donut-svg">
-          @for (seg of donutSegments; track seg.color) {
+          @for (seg of complianceDonutSegments; track seg.color) {
             <circle
               class="donut-segment"
               cx="18" cy="18" r="15.915"
               fill="none"
               [attr.stroke]="seg.color"
               stroke-width="3.5"
-              [attr.stroke-dasharray]="(seg.value / totalFindings) * 100 + ' ' + (100 - (seg.value / totalFindings) * 100)"
+              [attr.stroke-dasharray]="(seg.value / complianceDonutTotal) * 100 + ' ' + (100 - (seg.value / complianceDonutTotal) * 100)"
               [attr.stroke-dashoffset]="25 - seg.offset"
             />
           }
         </svg>
         <div class="donut-center">
-          <strong>{{ riskPercent }}%</strong>
-          <span>critical/high</span>
+          <strong>{{ compliantPercent }}%</strong>
+          <span>compliant</span>
         </div>
       </div>
       <ul class="legend">
-        <li><span class="dot" style="background:#ef4444"></span> Critical <strong>{{ criticalCount }}</strong></li>
-        <li><span class="dot" style="background:#f97316"></span> High <strong>{{ highCount }}</strong></li>
-        <li><span class="dot" style="background:#eab308"></span> Medium <strong>{{ mediumCount }}</strong></li>
-        <li><span class="dot" style="background:#22c55e"></span> Low <strong>1</strong></li>
         <li><span class="dot" style="background:#3b82f6"></span> Compliant <strong>{{ compliantCount }}</strong></li>
+        <li><span class="dot" style="background:#f97316"></span> Partial <strong>{{ partialCount }}</strong></li>
+        <li><span class="dot" style="background:#ef4444"></span> Non-compliant <strong>{{ nonCompliantCount }}</strong></li>
       </ul>
     </div>
   </section>
@@ -92,16 +96,48 @@
 
 <section class="card-surface recent-section">
   <div class="section-head">
-    <h2>Recent analyses</h2>
+    <h2>{{ inNdShell ? 'Recent analysis runs' : 'Recent analyses' }}</h2>
     <a
       [routerLink]="viewAllAnalysesPath()"
       [queryParams]="inNdShell ? null : preferredReportQueryParams()"
       class="view-all"
-    >View all →</a>
+    >{{ inNdShell ? 'All analysis →' : 'View all →' }}</a>
   </div>
 
   @if (recentAnalysesLoading()) {
     <p class="loading">Loading analyses…</p>
+  } @else if (inNdShell && recentNdRuns.length > 0) {
+    <ul class="recent-list nd-run-list">
+      @for (run of recentNdRuns; track run.id) {
+        <li class="recent-row">
+          <a [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null" class="recent-item">
+            <span class="file-icon run-icon">RUN</span>
+            <div class="recent-body">
+              <span class="recent-title">{{ run.name }}</span>
+              <span class="recent-meta">
+                {{ formatDate(run.createdAt) }}
+                @if (run.makerName) {
+                  · {{ run.makerName }}
+                }
+                @if (isLegacy(run)) {
+                  · Legacy
+                }
+              </span>
+              @if (workflowLabel(run); as workflow) {
+                <span class="recent-workflow">{{ workflow }}</span>
+              }
+            </div>
+            <app-nd-run-role-badge [status]="run.status" />
+            <app-nd-status-badge [status]="run.status" />
+          </a>
+          <div class="recent-actions">
+            <app-nd-run-table-actions [run]="run" [hideLabeledActions]="true" (historyClick)="openHistory($event)" />
+          </div>
+        </li>
+      }
+    </ul>
+  } @else if (inNdShell) {
+    <p class="loading muted-empty">No analysis runs yet.</p>
   } @else {
     <ul class="recent-list">
       @for (a of recentRows.slice(0, 4); track a.id) {
@@ -125,3 +161,13 @@
     </ul>
   }
 </section>
+
+@if (inNdShell) {
+  <app-nd-run-history-panel
+    [open]="historyOpen"
+    [runId]="historyRunId"
+    [runName]="historyRunName"
+    [runStats]="historyRunStats"
+    (closed)="closeHistory()"
+  />
+}

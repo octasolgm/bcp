@@ -91,27 +91,9 @@ export function regulationDocPointLabel(
   return `${stored ?? 0} pts`;
 }
 
-/** One row per underlying file — prefer ND upload with more points over legacy stub. Manual docs are never merged. */
+/** Keep every upload as its own row (no merge by stored file id). Manual docs are unchanged. */
 export function dedupeRegulationDocuments(docs: RegulationDocument[]): RegulationDocument[] {
-  const byKey = new Map<string, RegulationDocument>();
-  for (const doc of docs) {
-    if (doc.isManual || doc.source === 'manual') {
-      byKey.set(`manual:${doc.id}`, doc);
-      continue;
-    }
-    const key = doc.storedDocumentId ?? doc.id;
-    const existing = byKey.get(key);
-    if (!existing || preferRegulationDocument(doc, existing)) {
-      byKey.set(key, doc);
-    }
-  }
-  return [...byKey.values()];
-}
-
-function preferRegulationDocument(candidate: RegulationDocument, current: RegulationDocument): boolean {
-  if (candidate.source === 'nd' && current.source !== 'nd') return true;
-  if (candidate.source !== 'nd' && current.source === 'nd') return false;
-  return (candidate.pointCount ?? 0) > (current.pointCount ?? 0);
+  return docs;
 }
 
 export function sortRegulationDocuments(docs: RegulationDocument[]): RegulationDocument[] {
@@ -119,6 +101,6 @@ export function sortRegulationDocuments(docs: RegulationDocument[]): RegulationD
     const am = a.isManual || a.source === 'manual' ? 0 : 1;
     const bm = b.isManual || b.source === 'manual' ? 0 : 1;
     if (am !== bm) return am - bm;
-    return a.name.localeCompare(b.name);
+    return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
   });
 }

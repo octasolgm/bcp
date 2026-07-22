@@ -2,6 +2,12 @@
   <div>
     @if (embedMode) {
       <h2 class="embed-title">Gap Analysis — Working Document</h2>
+    } @else if (reviewWorkspaceMode === 'maker') {
+      <h1>Pending correction</h1>
+    } @else if (reviewWorkspaceMode === 'checker') {
+      <h1>Pending review</h1>
+    } @else if (reviewWorkspaceMode === 'reviewer') {
+      <h1>Pending final review</h1>
     } @else {
       <h1>Gap Analysis — Working Document</h1>
     }
@@ -26,10 +32,13 @@
     >
       {{ exporting ? 'Exporting…' : 'Export XLSX' }}
     </button>
+    @if (ndRunId) {
+      <button type="button" class="btn-secondary" (click)="openRunHistory()">History</button>
+    }
     @if (!embedMode) {
       <a [routerLink]="ndRunId ? ['/nd/analyse-v8'] : ['/analyse-v8']" [queryParams]="ndRunId ? { run: ndRunId } : null" class="btn-primary">Re-run</a>
     }
-    @if (ndRunId && canSubmitNdReview) {
+    @if (ndRunId && canSubmitNdReview && !hideHeaderSubmitForReview) {
       <button type="button" class="btn-primary" [disabled]="workflowLoading" (click)="submitNdReview()">
         {{ workflowLoading ? 'Sending…' : (ndRunStatus === 'pulled_back' ? 'Resubmit for review' : 'Submit for review') }}
       </button>
@@ -50,7 +59,9 @@
     </div>
     <div class="workflow-bar-actions">
       @if (reviewWorkspaceRoute; as reviewRoute) {
-        <a [routerLink]="reviewRoute" class="workflow-link-btn primary">Open review workspace →</a>
+        @if (reviewWorkspaceMode === 'none') {
+          <a [routerLink]="reviewRoute" class="workflow-link-btn primary">Open review workspace →</a>
+        }
       }
       @if (showDualVerifyFailedBanner && ndRunId) {
         <button type="button" class="workflow-link-btn" [disabled]="workflowLoading" (click)="rerunAllNdDualVerify()">
@@ -67,6 +78,16 @@
       <button type="button" class="workflow-link-btn" (click)="openNdResultsEditor()">Refresh run</button>
     </div>
   </div>
+}
+
+@if (reviewWorkspaceBackLink; as backLink) {
+  <div class="review-back-link">
+    <a [routerLink]="backLink" [queryParams]="reviewWorkspaceBackQueryParams" class="workflow-link">← Back to queue</a>
+  </div>
+}
+
+@if (showReviewWorkspaceTabs) {
+  <app-nd-workspace-tabs [active]="reviewWorkspaceTabActive" />
 }
 
 @if (loading) {
@@ -101,47 +122,69 @@
   <p>Data was extracted from source documents using AI. All findings require human review before sign-off. Edit gaps, management responses, and effectiveness ratings below — changes are saved automatically.</p>
 </div>
 
-<div class="filter-pills">
-  <div class="view-toggle" role="tablist" aria-label="View mode">
-    <button
-      type="button"
-      [class.active]="viewMode === 'cards'"
-      (click)="setViewMode('cards')"
-    >All cards</button>
-    <button
-      type="button"
-      [class.active]="viewMode === 'list'"
-      (click)="setViewMode('list')"
-    >List view</button>
+@if (showRunReviewPanel) {
+  <app-nd-run-review-panel
+    [mode]="effectiveReviewMode"
+    [submitting]="runReviewSubmitting"
+    [error]="runReviewError"
+    [reviewProgress]="reviewProgress"
+    [resubmitLabel]="ndRunData?.run?.status === 'pulled_back'"
+    (submitReview)="onRunReviewSubmit($event)"
+  />
+}
+
+<div class="points-toolbar card-surface">
+  <div class="toolbar-row toolbar-row-main">
+    <div class="toolbar-group">
+      <div class="view-toggle" role="tablist" aria-label="View mode">
+        <button
+          type="button"
+          [class.active]="viewMode === 'cards'"
+          (click)="setViewMode('cards')"
+        >All cards</button>
+        <button
+          type="button"
+          [class.active]="viewMode === 'list'"
+          (click)="setViewMode('list')"
+        >List view</button>
+      </div>
+      @if (ndRunId) {
+        <input
+          type="search"
+          class="filter-search"
+          [(ngModel)]="ndSearchQuery"
+          (ngModelChange)="onSearchQueryChange()"
+          placeholder="Search points…"
+          aria-label="Search points"
+        />
+      }
+    </div>
+    <div class="toolbar-group toolbar-filters">
+      @for (f of filters; track f.id) {
+        <button type="button" class="filter-pill" [class.active]="activeFilter === f.id" (click)="setFilter(f.id)">
+          {{ f.id === 'all' ? 'All (' + items.length + ')' : f.label }}
+        </button>
+      }
+    </div>
   </div>
-  @if (ndRunId) {
-    <input
-      type="search"
-      class="filter-search"
-      [(ngModel)]="ndSearchQuery"
-      placeholder="Search points…"
-      aria-label="Search points"
-    />
-  }
-  @for (f of filters; track f.id) {
-    <button type="button" [class.active]="activeFilter === f.id" (click)="setFilter(f.id)">
-      {{ f.id === 'all' ? 'All (' + items.length + ')' : f.label }}
-    </button>
-  }
-  @if (ndRunId) {
-    <app-nd-point-sort-controls
-      [sort]="pointSort"
-      [dir]="pointSortDir"
-      (sortChange)="onPointSortChange($event)"
-    />
-  }
-  @if (viewMode === 'cards') {
-    <button type="button" class="filter-util" (click)="collapseAllItems()">Close all</button>
-    <button type="button" class="filter-util" (click)="expandAllItems()">Expand all</button>
-  }
-  @if (ndRunId) {
-    <span class="filter-count">{{ filteredItems.length }} of {{ items.length }} points</span>
-  }
+  <div class="toolbar-row toolbar-row-actions">
+    <div class="toolbar-group">
+      @if (ndRunId) {
+        <app-nd-point-sort-controls
+          [sort]="pointSort"
+          [dir]="pointSortDir"
+          (sortChange)="onPointSortChange($event)"
+        />
+      }
+      @if (viewMode === 'cards') {
+        <button type="button" class="filter-util" (click)="collapseAllItems()">Close all</button>
+        <button type="button" class="filter-util" (click)="expandAllItems()">Expand all</button>
+      }
+    </div>
+    @if (ndRunId) {
+      <span class="filter-count">{{ filteredItems.length }} of {{ items.length }} points</span>
+    }
+  </div>
 </div>
 }
 }
@@ -182,8 +225,10 @@
       [savedActionItemReviews]="savedReviewsForPoint(ndPoint.id)"
       [showReviewPanel]="canShowReviewPanel"
       [reviewMode]="canReviewActionGaps"
+      [dockPointReview]="canShowReviewPanel && viewMode === 'list'"
       [reviewDisabledHint]="gapReviewDisabledHint"
       [savingActionReviewIndex]="savingActionReviewIndex"
+      [savingReviewId]="savingReviewId"
       [canUploadEvidence]="canUploadGapEvidence"
       [evidenceUploading]="evidenceUploadingPointId === ndPoint.id"
       [evidenceRerunning]="evidenceRerunningPointId === ndPoint.id"
@@ -203,6 +248,8 @@
       (rerunWithEvidence)="onRerunWithEvidence(ndPoint.id, $event)"
       (rerunGapEvidence)="onRerunGapEvidence(ndPoint.id, $event)"
       (saveActionItemReview)="saveActionItemReview(ndPoint.id, $event)"
+      (deleteActionItemReview)="deleteActionItemReview(ndPoint.id, $event)"
+      (reorderActionItemReview)="reorderActionItemReview(ndPoint.id, $event)"
     />
   } @else {
     @if (reportItemForGap(item); as reportItem) {
@@ -243,10 +290,8 @@
         >
           <span class="rail-point-head">
             <span class="rail-point-num">{{ item.section }}</span>
-            @if (gapCountForItem(item); as gapCount) {
-              @if (gapCount > 0) {
-                <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
-              }
+            @if ((item.gapCount ?? 0) > 0) {
+                <span class="gap-count-badge">{{ item.gapCount }} gap{{ item.gapCount === 1 ? '' : 's' }}</span>
             }
             <span class="severity-badge sm" [class]="item.severity">{{ meta.status }}</span>
           </span>
@@ -262,19 +307,23 @@
     </aside>
     <div class="list-detail card-surface">
       @if (selectedGapItem; as item) {
-        <ng-container
-          [ngTemplateOutlet]="pointDetail"
-          [ngTemplateOutletContext]="{ item: item, showHeader: true }"
-        />
+        @defer (when selectedGapItem) {
+          <ng-container
+            [ngTemplateOutlet]="pointDetail"
+            [ngTemplateOutletContext]="{ item: item, showHeader: true }"
+          />
+        } @placeholder {
+          <p class="muted-inline">Loading detail…</p>
+        }
       } @else {
         <p class="muted-inline">Select a point on the left to view details.</p>
       }
     </div>
   </div>
-} @else {
+} @else if (!loading && filteredItems.length) {
     <div class="items-list">
       @for (item of filteredItems; track trackGapItem(item); let i = $index) {
-    <article class="item-card card-surface" [class.expanded]="item.expanded">
+    <article class="item-card card-surface" [class.expanded]="isRowExpanded(item)">
       <div
         class="item-header"
         role="button"
@@ -286,30 +335,32 @@
         <span class="item-index">{{ item.id }}</span>
         <span class="item-section">{{ item.section }}</span>
         <strong class="item-title">{{ item.title }}</strong>
-        @if (gapCountForItem(item); as gapCount) {
-          @if (gapCount > 0) {
+        @if ((item.gapCount ?? 0) > 0) {
             <button
               type="button"
               class="gap-count-badge"
               (click)="expandGapItem($event, item)"
-            >{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</button>
-          }
+            >{{ item.gapCount }} gap{{ item.gapCount === 1 ? '' : 's' }}</button>
         }
         <span class="severity-badge" [class]="item.severity">{{ severityLabel(item.severity) }}</span>
         @if (item.signedOff) {
           <span class="signed-off">Signed off</span>
         }
-        <svg class="chevron" [class.open]="item.expanded" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <svg class="chevron" [class.open]="isRowExpanded(item)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M6 9l6 6 6-6"/>
         </svg>
       </div>
 
-      @if (item.expanded) {
+      @if (isRowExpanded(item)) {
         <div class="item-body item-body-detail">
-          <ng-container
-            [ngTemplateOutlet]="pointDetail"
-            [ngTemplateOutletContext]="{ item: item, showHeader: false }"
-          />
+          @defer (when isRowExpanded(item)) {
+            <ng-container
+              [ngTemplateOutlet]="pointDetail"
+              [ngTemplateOutletContext]="{ item: item, showHeader: false }"
+            />
+          } @placeholder {
+            <p class="muted-inline">Loading detail…</p>
+          }
         </div>
       }
     </article>
@@ -332,4 +383,14 @@
       <p class="pdf-note">Source excerpt preview — connect document storage for full PDF page rendering.</p>
     </div>
   </aside>
+}
+
+@if (ndRunId) {
+  <app-nd-run-history-panel
+    [open]="runHistoryOpen"
+    [runId]="ndRunId"
+    [runName]="runHistoryName"
+    [runStats]="runHistoryStats"
+    (closed)="closeRunHistory()"
+  />
 }

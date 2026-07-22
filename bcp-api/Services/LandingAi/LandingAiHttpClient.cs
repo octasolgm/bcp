@@ -31,7 +31,10 @@ public class LandingAiHttpClient(HttpClient http, IOptions<LandingAiOptions> opt
 
         using var doc = JsonDocument.Parse(body);
         if (doc.RootElement.TryGetProperty("markdown", out var md))
-            return md.GetString() ?? throw new InvalidOperationException("Landing AI parse returned empty markdown");
+        {
+            var markdown = md.GetString() ?? throw new InvalidOperationException("Landing AI parse returned empty markdown");
+            return PolicyPageResolver.InjectPageMarkersFromParseJson(body, markdown);
+        }
         throw new InvalidOperationException("Landing AI parse response missing markdown");
     }
 

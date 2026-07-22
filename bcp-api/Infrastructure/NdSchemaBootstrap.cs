@@ -205,10 +205,57 @@ public static class NdSchemaBootstrap
               ADD COLUMN IF NOT EXISTS responsibility TEXT;
 
             ALTER TABLE action_plan_item_reviews
-              ADD COLUMN IF NOT EXISTS due_date DATE;
+              ADD COLUMN IF NOT EXISTS due_date TIMESTAMPTZ;
+
+            DO $$
+            BEGIN
+              IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'action_plan_item_reviews'
+                  AND column_name = 'due_date'
+                  AND data_type = 'date'
+              ) THEN
+                ALTER TABLE action_plan_item_reviews
+                  ALTER COLUMN due_date TYPE TIMESTAMPTZ USING due_date::timestamptz;
+              END IF;
+            END $$;
 
             ALTER TABLE action_plan_item_reviews
               ADD COLUMN IF NOT EXISTS priority TEXT;
+
+            ALTER TABLE action_plan_item_reviews
+              ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+
+            DO $$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM action_plan_item_reviews WHERE sort_order > 0 LIMIT 1) THEN
+                WITH ranked AS (
+                  SELECT id,
+                         ROW_NUMBER() OVER (
+                           PARTITION BY analysis_point_id, action_index
+                           ORDER BY created_at ASC
+                         ) - 1 AS rn
+                  FROM action_plan_item_reviews
+                )
+                UPDATE action_plan_item_reviews r
+                SET sort_order = ranked.rn
+                FROM ranked
+                WHERE r.id = ranked.id;
+              END IF;
+            END $$;
+
+            ALTER TABLE analysis_reviews
+              ADD COLUMN IF NOT EXISTS review_status TEXT;
+
+            ALTER TABLE analysis_reviews
+              ADD COLUMN IF NOT EXISTS priority INTEGER;
+
+            ALTER TABLE analysis_reviews
+              ADD COLUMN IF NOT EXISTS responsibility TEXT;
+
+            ALTER TABLE analysis_reviews
+              ADD COLUMN IF NOT EXISTS due_date TIMESTAMPTZ;
 
             ALTER TABLE regulation_points
               ADD COLUMN IF NOT EXISTS is_introduction_point BOOLEAN NOT NULL DEFAULT false;

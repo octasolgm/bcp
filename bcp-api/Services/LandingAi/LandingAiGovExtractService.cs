@@ -49,6 +49,7 @@ public class LandingAiGovExtractService(
         if (!string.IsNullOrWhiteSpace(cachedJson))
         {
             var cachedPoints = GovPointsParser.ParseFromExtractJson(cachedJson);
+            cachedPoints = await ResolvePointPagesAsync(fileHash, cachedPoints, ct);
             govPoints.SetPoints(cachedPoints, "db-cache");
             return new GovExtractResponse(
                 true, true, fileName, fileHash, GovSchemaKey,
@@ -60,6 +61,8 @@ public class LandingAiGovExtractService(
         var points = GovPointsParser.ParseFromExtraction(extraction);
         if (points.Count == 0)
             throw new InvalidOperationException("No requirement points found in document.");
+
+        points = await ResolvePointPagesAsync(fileHash, points, ct, markdown);
 
         var pointsJson = JsonSerializer.Serialize(new { points = ToApiPoints(points) });
         await cache.SaveExtractPointsCacheAsync(fileHash, GovSchemaKey, pointsJson, _opts.ExtractModel, ct);
@@ -80,6 +83,7 @@ public class LandingAiGovExtractService(
         if (!string.IsNullOrWhiteSpace(cachedJson))
         {
             var points = GovPointsParser.ParseFromExtractJson(cachedJson);
+            points = await ResolvePointPagesAsync(fileHash, points, ct);
             govPoints.SetPoints(points, "db-cache");
             logger.LogInformation("Loaded {Count} gov points from DB extract cache", points.Count);
             return new GovLoadResponse(true, "db-cache", points.Count, govPoints.Source);
@@ -98,8 +102,33 @@ public class LandingAiGovExtractService(
             title = p.Title,
             text = p.Text,
             section = p.Section,
+            page_hint = p.PageHint is > 0 ? p.PageHint : 0,
             point_type = "mandatory",
         }).ToList();
+
+    private async Task<List<GovPoint>> ResolvePointPagesAsync(
+        string fileHash,
+        List<GovPoint> points,
+        CancellationToken ct,
+        string? markdownOverride = null)
+    {
+        var markdown = markdownOverride;
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            var row = await cache.GetParseCacheAsync(fileHash, ct);
+            markdown = row?.Markdown;
+        }
+
+        if (string.IsNullOrWhiteSpace(markdown)) return points;
+
+        return points.Select(p =>
+        {
+            var resolved = PolicyPageResolver.ResolveGovPointPage(
+                markdown, p.PointId, p.Section, p.Title, p.Text, p.PageHint,
+                PolicyPageResolver.EstimatePageCount(markdown));
+            return resolved is > 0 ? p with { PageHint = resolved } : p;
+        }).ToList();
+    }
 }
 
 public sealed record GovExtractResponse(

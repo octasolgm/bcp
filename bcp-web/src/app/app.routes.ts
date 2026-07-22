@@ -315,6 +315,23 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'correction/review',
+            pathMatch: 'full',
+            redirectTo: (snap) => {
+              const runId = snap.queryParams['run'];
+              return runId ? `correction/review/${runId}` : 'analysis-runs';
+            },
+          },
+          {
+            path: 'correction/review/:runId',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['maker', 'checker', 'reviewer', 'super_admin'] },
+            loadComponent: () =>
+              import('./pages/nd/correction/nd-correction-review.component').then(
+                (m) => m.NdCorrectionReviewComponent,
+              ),
+          },
+          {
             path: 'reviewer',
             canActivate: [ndRoleGuard],
             data: { ndRoles: ['reviewer', 'super_admin'] },

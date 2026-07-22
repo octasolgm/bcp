@@ -17,6 +17,7 @@ import type {
   ActionPlanHistoryEntry,
   AnalysisPoint,
   PointGapAttachment,
+  PointSnapshot,
   InternalDocument,
 } from '../../../lib/nd/types';
 import { parseReferenceComplianceBlock } from '../../../lib/ai-lab/parse-reference-response';
@@ -60,6 +61,9 @@ type ApiLibraryPoint = {
   pointSnapshot?: string | Record<string, unknown>;
 };
 
+const EMPTY_POINT_ATTACHMENTS: PointGapAttachment[] = [];
+const EMPTY_POINT_REVIEWS: ActionItemReviewEntry[] = [];
+
 @Component({
   selector: 'app-analyse-v8',
   standalone: true,
@@ -90,9 +94,14 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   ndActionItemReviews: ActionItemReviewEntry[] = [];
   evidenceUploadingPointId: string | null = null;
   savingActionReviewIndex: number | null = null;
+  savingReviewId: string | null = null;
   evidenceRerunningPointId: string | null = null;
   evidenceUploadingActionIndex: number | null = null;
   evidenceRerunningActionIndex: number | null = null;
+  private sessionPointCache = new Map<string, AnalysisPoint>();
+  private snapshotByPointId = new Map<string, PointSnapshot>();
+  private attachmentsByPointId = new Map<string, PointGapAttachment[]>();
+  private reviewsByPointId = new Map<string, ActionItemReviewEntry[]>();
 
   setupRegSourcesPct = 58;
   setupRegInnerPct = 42;
@@ -374,12 +383,21 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   analysisPointForPointId(pointId: string): AnalysisPoint | null {
     const saved = this.ndRunPointsByNumber.get(pointId);
     if (saved) return saved;
-    return this.buildSessionAnalysisPoint(pointId);
+    const cached = this.sessionPointCache.get(pointId);
+    if (cached) return cached;
+    const built = this.buildSessionAnalysisPoint(pointId);
+    if (built) this.sessionPointCache.set(pointId, built);
+    return built;
   }
 
-  pointSnapshotForPointId(pointId: string) {
+  pointSnapshotForPointId(pointId: string): PointSnapshot | null {
     const point = this.analysisPointForPointId(pointId);
-    return point ? parsePointSnapshot(point.pointSnapshot) : null;
+    if (!point) return null;
+    const cached = this.snapshotByPointId.get(point.id);
+    if (cached) return cached;
+    const snap = parsePointSnapshot(point.pointSnapshot);
+    this.snapshotByPointId.set(point.id, snap);
+    return snap;
   }
 
   gapCountForPointId(pointId: string): number {
@@ -427,8 +445,8 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   }
 
   get selectedPointSnapshot() {
-    const point = this.selectedDetailAnalysisPoint;
-    return point ? parsePointSnapshot(point.pointSnapshot) : null;
+    if (!this.selectedDetailPointId) return null;
+    return this.pointSnapshotForPointId(this.selectedDetailPointId);
   }
 
   get canEditResultCap(): boolean {
@@ -453,6 +471,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   async saveActionItemReview(
     pointId: string,
     event: {
+      reviewId?: string;
       actionIndex: number;
       status: ActionItemReviewStatus;
       comment: string;
@@ -465,24 +484,68 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     const ndPoint = this.analysisPointForPointId(pointId);
     if (!runId || !ndPoint) return;
     this.savingActionReviewIndex = event.actionIndex;
+    this.savingReviewId = event.reviewId ?? null;
     this.resultDetailError = '';
-    const res = await this.ndApi.saveActionItemReview(runId, {
-      analysisPointId: ndPoint.id,
-      actionIndex: event.actionIndex,
+    const body = {
       status: event.status,
       comment: event.comment.trim() || undefined,
       responsibility: event.responsibility.trim() || undefined,
       dueDate: event.dueDate.trim() || undefined,
       priority: event.priority || undefined,
-    });
+    };
+    const res = event.reviewId
+      ? await this.ndApi.updateActionItemReview(runId, event.reviewId, body)
+      : await this.ndApi.saveActionItemReview(runId, {
+          analysisPointId: ndPoint.id,
+          actionIndex: event.actionIndex,
+          ...body,
+        });
     this.savingActionReviewIndex = null;
+    this.savingReviewId = null;
     if (res.success) {
-      this.toast.show('Review saved', 'success');
+      this.toast.show(event.reviewId ? 'Review updated' : 'Review saved', 'success');
       await this.loadNdRunPoints(runId);
     } else {
       this.resultDetailError = res.message ?? 'Could not save review';
       this.toast.show(this.resultDetailError, 'error');
     }
+  }
+
+  async deleteActionItemReview(pointId: string, reviewId: string): Promise<void> {
+    const runId = this.activeNdRunId;
+    if (!runId) return;
+    this.savingReviewId = reviewId;
+    const res = await this.ndApi.deleteActionItemReview(runId, reviewId);
+    this.savingReviewId = null;
+    if (res.success) {
+      this.toast.show('Review deleted', 'success');
+      await this.loadNdRunPoints(runId);
+    } else {
+      this.resultDetailError = res.message ?? 'Could not delete review';
+      this.toast.show(this.resultDetailError, 'error');
+    }
+    void pointId;
+  }
+
+  async reorderActionItemReview(
+    pointId: string,
+    event: { reviewId: string; actionIndex: number; direction: 'up' | 'down' },
+  ): Promise<void> {
+    const runId = this.activeNdRunId;
+    if (!runId) return;
+    this.savingReviewId = event.reviewId;
+    this.savingActionReviewIndex = event.actionIndex;
+    this.resultDetailError = '';
+    const res = await this.ndApi.reorderActionItemReview(runId, event.reviewId, event.direction);
+    this.savingReviewId = null;
+    this.savingActionReviewIndex = null;
+    if (res.success) {
+      await this.loadNdRunPoints(runId);
+    } else {
+      this.resultDetailError = res.message ?? 'Could not reorder review';
+      this.toast.show(this.resultDetailError, 'error');
+    }
+    void pointId;
   }
 
   selectedPointComplianceLabel(): string {
@@ -508,34 +571,51 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     this.ndPointAttachments = data.pointAttachments ?? [];
     this.ndActionItemReviews = data.actionItemReviews ?? [];
     this.ndRunPointsByNumber.clear();
+    this.sessionPointCache.clear();
+    this.snapshotByPointId.clear();
+    this.attachmentsByPointId.clear();
+    this.reviewsByPointId.clear();
+
+    for (const attachment of this.ndPointAttachments) {
+      const list = this.attachmentsByPointId.get(attachment.analysisPointId);
+      if (list) list.push(attachment);
+      else this.attachmentsByPointId.set(attachment.analysisPointId, [attachment]);
+    }
+
     for (const p of data.points) {
       const snap = parsePointSnapshot(p.pointSnapshot);
       const num = snap.pointNumber?.trim();
       if (num) this.ndRunPointsByNumber.set(num, p);
+      if (p.id) {
+        this.snapshotByPointId.set(p.id, snap);
+        this.reviewsByPointId.set(p.id, reviewsForPoint(this.ndActionItemReviews, p.id));
+      }
     }
     this.syncInlineGapSeveritiesFromNdRun();
   }
 
   private syncInlineGapSeveritiesFromNdRun(): void {
-    if (!this.ndRunPointsByNumber.size || !this.inlineGapItems.length) return;
-    this.inlineGapItems = this.inlineGapItems.map((item) => {
+    if (!this.inlineGapItems.length) return;
+    for (const item of this.inlineGapItems) {
       const pointId = this.gapItemPointId(item);
-      const saved = this.ndRunPointsByNumber.get(pointId);
-      if (!saved) return item;
-      return { ...item, severity: resolveAnalysisPointSeverity(saved) };
-    });
+      const saved = this.ndRunPointsByNumber.get(pointId) ?? this.analysisPointForPointId(pointId);
+      if (!saved) continue;
+      const attachmentCount = this.attachmentsByPointId.get(saved.id)?.length ?? 0;
+      item.severity = resolveAnalysisPointSeverity(saved);
+      item.gapCount = countDisplayGapsForAnalysisPoint(saved, attachmentCount);
+    }
   }
 
   attachmentsForPoint(pointId: string): PointGapAttachment[] {
     const ndPoint = this.analysisPointForPointId(pointId);
-    if (!ndPoint) return [];
-    return this.ndPointAttachments.filter((a) => a.analysisPointId === ndPoint.id);
+    if (!ndPoint) return EMPTY_POINT_ATTACHMENTS;
+    return this.attachmentsByPointId.get(ndPoint.id) ?? EMPTY_POINT_ATTACHMENTS;
   }
 
   savedReviewsForPoint(pointId: string): ActionItemReviewEntry[] {
     const ndPoint = this.analysisPointForPointId(pointId);
-    if (!ndPoint) return [];
-    return reviewsForPoint(this.ndActionItemReviews, ndPoint.id);
+    if (!ndPoint) return EMPTY_POINT_REVIEWS;
+    return this.reviewsByPointId.get(ndPoint.id) ?? EMPTY_POINT_REVIEWS;
   }
 
   get nonComplianceGapPoints(): { pointId: string; label: string; gapCount: number; severity: GapSeverity }[] {

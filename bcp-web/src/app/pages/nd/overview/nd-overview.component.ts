@@ -1,31 +1,51 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
+import { filter } from 'rxjs/operators';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
+import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
+import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-actions.component';
+import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badge.component';
 import { formatDate } from '../../../../lib/nd/utils';
 import { isLegacyAnalysisRun, ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../../lib/nd/run-links';
+import { analysisRunWorkflowLabel, sortAnalysisRunsByRecent } from '../../../../lib/nd/analysis-run-status';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
-
-type StatCard = { label: string; value: number | string; href?: string };
+import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 
 @Component({
   selector: 'app-nd-overview',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, NdStatusBadgeComponent, NdRunHistoryPanelComponent, NdRunRoleBadgeComponent, NdRunTableActionsComponent],
   templateUrl: './nd-overview.component.html',
-  styleUrls: ['./nd-overview.component.scss'],
+  styleUrls: ['./nd-overview.component.scss', '../nd-shared.scss'],
 })
 export class NdOverviewComponent implements OnInit {
   private readonly api = inject(NdApiService);
+  private readonly router = inject(Router);
   readonly auth = inject(NdAuthService);
 
   loading = true;
-  stats: StatCard[] = [];
   recentRuns: AnalysisRunSummary[] = [];
   welcome = '';
+  historyOpen = false;
+  historyRunId: string | null = null;
+  historyRunName = '';
+  historyRunStats: RunGapStatsSummary | null = null;
 
   async ngOnInit(): Promise<void> {
+    this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe((e) => {
+        if (e.urlAfterRedirects.startsWith('/nd/overview')) void this.load();
+      });
+
+    await this.load();
+  }
+
+  private async load(): Promise<void> {
+    this.loading = true;
     const profile = this.auth.profile() ?? (await this.auth.refreshProfile());
     if (!profile) {
       this.loading = false;
@@ -41,73 +61,17 @@ export class NdOverviewComponent implements OnInit {
           : 'Manage regulation documents, regulation points libraries, and compliance analysis.';
 
     if (role === 'super_admin') {
-      const [depts, users, regs, libs, runs, checkerQ, reviewerQ, correctionRuns] = await Promise.all([
-        this.api.getDepartments(),
-        this.api.getUsers(),
-        this.api.getRegulationDocuments(),
-        this.api.getLibraries(),
-        this.api.getAnalysisRuns({ ndOnly: true }),
-        this.api.getCheckerQueue(),
-        this.api.getReviewerQueue(),
-        this.api.getAnalysisRuns({ ndOnly: true, status: 'pulled_back' }),
-      ]);
-      this.stats = [
-        { label: 'Departments', value: depts.data?.length ?? 0, href: '/nd/admin/departments' },
-        { label: 'Users', value: users.data?.length ?? 0, href: '/nd/admin/users' },
-        { label: 'Regulation docs', value: regs.data?.length ?? 0, href: '/nd/regulation-documents' },
-        { label: 'Regulation points libraries', value: libs.data?.length ?? 0, href: '/nd/libraries' },
-        { label: 'All analysis', value: runs.data?.length ?? 0, href: '/nd/analysis-runs' },
-        { label: 'Pending correction', value: correctionRuns.data?.length ?? 0, href: '/nd/analysis-runs?correction=1' },
-        { label: 'Pending review', value: checkerQ.data?.length ?? 0, href: '/nd/checker' },
-        { label: 'Pending final review', value: reviewerQ.data?.length ?? 0, href: '/nd/reviewer' },
-      ];
-      this.recentRuns = (runs.data as AnalysisRunSummary[]) ?? [];
+      const runs = await this.api.getAnalysisRuns({ ndOnly: true });
+      this.recentRuns = sortAnalysisRunsByRecent((runs.data as AnalysisRunSummary[]) ?? []);
     } else if (role === 'maker') {
-      const [regs, libs, internal, runs, correctionRuns] = await Promise.all([
-        this.api.getRegulationDocuments(),
-        this.api.getLibraries(),
-        this.api.getInternalDocuments(),
-        this.api.getAnalysisRuns({ mineOnly: true, ndOnly: true }),
-        this.api.getAnalysisRuns({ mineOnly: true, ndOnly: true, status: 'pulled_back' }),
-      ]);
-      this.stats = [
-        { label: 'Regulation docs', value: regs.data?.length ?? 0, href: '/nd/regulation-documents' },
-        { label: 'Internal docs', value: internal.data?.length ?? 0, href: '/nd/internal-documents' },
-        { label: 'Regulation points libraries', value: libs.data?.length ?? 0, href: '/nd/libraries' },
-        { label: 'All analysis', value: runs.data?.length ?? 0, href: '/nd/analysis-runs?mine=1' },
-        { label: 'Pending correction', value: correctionRuns.data?.length ?? 0, href: '/nd/analysis-runs?mine=1&correction=1' },
-      ];
-      this.recentRuns = (runs.data as AnalysisRunSummary[]) ?? [];
+      const runs = await this.api.getAnalysisRuns({ mineOnly: true, ndOnly: true });
+      this.recentRuns = sortAnalysisRunsByRecent((runs.data as AnalysisRunSummary[]) ?? []);
     } else if (role === 'checker') {
-      const [queue, history, allRuns, correctionRuns] = await Promise.all([
-        this.api.getCheckerQueue(),
-        this.api.getCheckerHistory(),
-        this.api.getAnalysisRuns({ ndOnly: true }),
-        this.api.getAnalysisRuns({ ndOnly: true, status: 'pulled_back' }),
-      ]);
-      this.stats = [
-        { label: 'All analysis', value: allRuns.data?.length ?? 0, href: '/nd/analysis-runs' },
-        { label: 'Pending correction', value: correctionRuns.data?.length ?? 0, href: '/nd/analysis-runs?correction=1' },
-        { label: 'Pending review', value: queue.data?.length ?? 0, href: '/nd/checker' },
-        { label: 'Review history', value: history.data?.length ?? 0, href: '/nd/checker?history=1' },
-      ];
-      this.recentRuns = (queue.data as AnalysisRunSummary[]) ?? [];
+      const queue = await this.api.getCheckerQueue();
+      this.recentRuns = sortAnalysisRunsByRecent((queue.data as AnalysisRunSummary[]) ?? []);
     } else if (role === 'reviewer') {
-      const [queue, history, checkerQueue, allRuns, correctionRuns] = await Promise.all([
-        this.api.getReviewerQueue(),
-        this.api.getReviewerHistory(),
-        this.api.getCheckerQueue(),
-        this.api.getAnalysisRuns({ ndOnly: true }),
-        this.api.getAnalysisRuns({ ndOnly: true, status: 'pulled_back' }),
-      ]);
-      this.stats = [
-        { label: 'All analysis', value: allRuns.data?.length ?? 0, href: '/nd/analysis-runs' },
-        { label: 'Pending correction', value: correctionRuns.data?.length ?? 0, href: '/nd/analysis-runs?correction=1' },
-        { label: 'Pending review', value: checkerQueue.data?.length ?? 0, href: '/nd/checker' },
-        { label: 'Pending final review', value: queue.data?.length ?? 0, href: '/nd/reviewer' },
-        { label: 'Final review history', value: history.data?.length ?? 0, href: '/nd/reviewer?history=1' },
-      ];
-      this.recentRuns = (queue.data as AnalysisRunSummary[]) ?? [];
+      const queue = await this.api.getReviewerQueue();
+      this.recentRuns = sortAnalysisRunsByRecent((queue.data as AnalysisRunSummary[]) ?? []);
     }
 
     this.loading = false;
@@ -125,21 +89,14 @@ export class NdOverviewComponent implements OnInit {
     return isLegacyAnalysisRun(run);
   }
 
-  statusClass(status: string): string {
-    if (status === 'completed' || status === 'checker_approved' || status === 'reviewer_approved') {
-      return 'completed';
-    }
-    if (status === 'failed') return 'failed';
-    if (status === 'running' || status === 'processing' || status === 'draft') return 'running';
-    return 'medium';
-  }
-
+  workflowLabel = analysisRunWorkflowLabel;
   formatDate = formatDate;
 
   get viewAllLink(): string[] {
     const role = this.auth.getRole();
     if (role === 'checker') return ['/nd/checker'];
     if (role === 'reviewer') return ['/nd/reviewer'];
+    if (role === 'maker') return ['/nd/analysis-runs'];
     return ['/nd/analysis-runs'];
   }
 
@@ -148,5 +105,22 @@ export class NdOverviewComponent implements OnInit {
     if (role === 'checker') return 'Pending review →';
     if (role === 'reviewer') return 'Pending final review →';
     return 'All analysis →';
+  }
+
+  openHistory(run: AnalysisRunSummary, event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (this.isLegacy(run)) return;
+    this.historyRunId = run.id;
+    this.historyRunName = run.name;
+    this.historyRunStats = runGapStatsFromSummary(run);
+    this.historyOpen = true;
+  }
+
+  closeHistory(): void {
+    this.historyOpen = false;
+    this.historyRunId = null;
+    this.historyRunName = '';
+    this.historyRunStats = null;
   }
 }

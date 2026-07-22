@@ -7,16 +7,34 @@ import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
 import { NdWorkspaceTabsComponent } from '../../../components/nd/nd-workspace-tabs.component';
+import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
+import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badge.component';
+import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
+import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-actions.component';
 import { formatDate } from '../../../../lib/nd/utils';
+import {
+  canDeleteRun,
+  canEditRunPlans,
+  canReviewRun as canReviewAnalysisRun,
+  canSendRunForReview,
+} from '../../../../lib/nd/analysis-run-actions';
 import { isLegacyAnalysisRun, ndAnalysisRunLink, ndAnalysisRunQuery, analysisRunNeedsExecutionView } from '../../../../lib/nd/run-links';
+import {
+  analysisRunDisplayStatusLabel,
+  analysisRunWorkflowLabel,
+  analysisRunSubmittedByLabel,
+  analysisRunSubmittedByCaption,
+  analysisRunSubmittedDate,
+} from '../../../../lib/nd/analysis-run-status';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
+import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 
-type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'status';
+type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'status' | 'maker';
 
 @Component({
   selector: 'app-nd-analysis-runs',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent],
   templateUrl: './nd-analysis-runs.component.html',
   styleUrls: ['./nd-analysis-runs.component.scss', '../nd-shared.scss'],
 })
@@ -41,6 +59,10 @@ export class NdAnalysisRunsComponent implements OnInit {
   sortDir: 'asc' | 'desc' = 'desc';
   deletingId: string | null = null;
   submittingRunId: string | null = null;
+  historyOpen = false;
+  historyRunId: string | null = null;
+  historyRunName = '';
+  historyRunStats: RunGapStatsSummary | null = null;
   deleteMessage = '';
   deleteError = '';
 
@@ -105,7 +127,9 @@ export class NdAnalysisRunsComponent implements OnInit {
     const query = this.searchQuery.trim().toLowerCase();
     let list = this.allRuns.filter((run) => {
       if (this.correctionOnly && run.status.toLowerCase() !== 'pulled_back') return false;
-      if (query && !run.name.toLowerCase().includes(query)) return false;
+      if (query && !run.name.toLowerCase().includes(query) && !(run.makerName ?? '').toLowerCase().includes(query)) {
+        return false;
+      }
       if (this.statusFilter && !this.matchesStatusFilter(run.status)) return false;
       if (this.sourceFilter && (run.source ?? 'nd_analysis') !== this.sourceFilter) return false;
       return true;
@@ -114,6 +138,8 @@ export class NdAnalysisRunsComponent implements OnInit {
     const dir = this.sortDir === 'asc' ? 1 : -1;
     list = [...list].sort((a, b) => {
       switch (this.sortColumn) {
+        case 'maker':
+          return dir * (a.makerName ?? '').localeCompare(b.makerName ?? '');
         case 'name':
           return dir * a.name.localeCompare(b.name);
         case 'points':
@@ -121,11 +147,13 @@ export class NdAnalysisRunsComponent implements OnInit {
         case 'source':
           return dir * this.sourceLabel(a).localeCompare(this.sourceLabel(b));
         case 'workflow':
-          return dir * (a.workflowHolder ?? this.workflowStatusLabel(a)).localeCompare(
-            b.workflowHolder ?? this.workflowStatusLabel(b),
+          return dir * (a.workflowHolder ?? analysisRunWorkflowLabel(a)).localeCompare(
+            b.workflowHolder ?? analysisRunWorkflowLabel(b),
           );
         case 'status':
-          return dir * a.status.localeCompare(b.status);
+          return dir * analysisRunDisplayStatusLabel(a.status).localeCompare(
+            analysisRunDisplayStatusLabel(b.status),
+          );
         case 'created':
         default:
           return dir * (Date.parse(a.createdAt) - Date.parse(b.createdAt));
@@ -206,58 +234,49 @@ export class NdAnalysisRunsComponent implements OnInit {
     return analysisRunNeedsExecutionView(run);
   }
 
-  statusClass(status: string): string {
-    const s = status.toLowerCase();
-    if (s === 'reviewer_approved') return 'completed';
-    if (s === 'failed' || s === 'cancelled') return 'failed';
-    if (s === 'submitted_for_review' || s === 'checker_approved') return 'pending';
-    if (s === 'completed' || s === 'dual_verify_failed' || s === 'landing_ai_complete' || s === 'pulled_back') {
-      return 'running';
-    }
-    return 'running';
+  workflowStatusLabel = analysisRunWorkflowLabel;
+  submittedByLabel = analysisRunSubmittedByLabel;
+  submittedByCaption = analysisRunSubmittedByCaption;
+  submittedDate = analysisRunSubmittedDate;
+
+  openHistory(run: AnalysisRunSummary, event?: Event): void {
+    event?.stopPropagation();
+    event?.preventDefault();
+    if (this.isLegacy(run)) return;
+    this.historyRunId = run.id;
+    this.historyRunName = run.name;
+    this.historyRunStats = runGapStatsFromSummary(run);
+    this.historyOpen = true;
   }
 
-  workflowStatusLabel(run: AnalysisRunSummary): string {
-    if (analysisRunNeedsExecutionView(run)) {
-      const total = run.totalPointsCount ?? 0;
-      const processed = run.processedPointsCount ?? 0;
-      if (total > 0 && processed < total) return 'Points pending';
-      if ((run.dualVerifyFailedCount ?? 0) > 0) return 'Rerun failed points';
-      return 'Continue analysis';
-    }
-    const s = run.status.toLowerCase();
-    if (['completed', 'dual_verify_failed', 'landing_ai_complete'].includes(s)) {
-      return 'Submit for review pending';
-    }
-    if (s === 'pulled_back') return 'Resubmit pending';
-    if (s === 'submitted_for_review') return 'With checker';
-    if (s === 'checker_approved') return 'With reviewer';
-    if (s === 'reviewer_approved') return 'Review complete';
-    return '';
-  }
-
-  analysisStatusLabel(status: string): string {
-    const s = status.toLowerCase();
-    if (s === 'dual_verify_failed') return 'Dual verify failed';
-    if (s === 'landing_ai_complete') return 'Analysis complete';
-    return status.replace(/_/g, ' ');
+  closeHistory(): void {
+    this.historyOpen = false;
+    this.historyRunId = null;
+    this.historyRunName = '';
+    this.historyRunStats = null;
   }
 
   formatDate = formatDate;
 
   canSendForReview(run: AnalysisRunSummary): boolean {
-    if (analysisRunNeedsExecutionView(run)) return false;
-    if (this.isLegacy(run)) return false;
-    const role = this.auth.getRole();
-    if (role !== 'maker' && role !== 'super_admin') return false;
-    return ['completed', 'dual_verify_failed', 'landing_ai_complete', 'pulled_back'].includes(
-      run.status.toLowerCase(),
-    );
+    return canSendRunForReview(run, this.auth.getRole());
   }
 
-  async submitRunForReview(run: AnalysisRunSummary, event: Event): Promise<void> {
-    event.stopPropagation();
-    event.preventDefault();
+  canReviewRun(run: AnalysisRunSummary): boolean {
+    return canReviewAnalysisRun(run, this.auth.getRole());
+  }
+
+  canEditPlans(run: AnalysisRunSummary): boolean {
+    return canEditRunPlans(run, this.auth.getRole());
+  }
+
+  canDelete(run: AnalysisRunSummary): boolean {
+    return canDeleteRun(run, this.auth.getRole(), this.auth.profile()?.id);
+  }
+
+  async submitRunForReview(run: AnalysisRunSummary, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    event?.preventDefault();
     if (!this.canSendForReview(run)) return;
     this.submittingRunId = run.id;
     const status = run.status.toLowerCase();
@@ -274,40 +293,8 @@ export class NdAnalysisRunsComponent implements OnInit {
     }
   }
 
-  canReviewRun(run: AnalysisRunSummary): boolean {
-    if (this.isLegacy(run)) return false;
-    const role = this.auth.getRole();
-    if (role === 'checker' && run.status === 'submitted_for_review') return true;
-    if (role === 'reviewer' && run.status === 'checker_approved') return true;
-    return false;
-  }
-
-  canEditPlans(run: AnalysisRunSummary): boolean {
-    const role = this.auth.getRole();
-    if (role !== 'maker' && role !== 'super_admin') return false;
-    if (analysisRunNeedsExecutionView(run)) return false;
-    if (this.isLegacy(run)) return false;
-    return [
-      'completed',
-      'submitted_for_review',
-      'checker_approved',
-      'reviewer_approved',
-      'pulled_back',
-      'dual_verify_failed',
-      'landing_ai_complete',
-    ].includes(run.status.toLowerCase());
-  }
-
-  canDelete(run: AnalysisRunSummary): boolean {
-    const role = this.auth.getRole();
-    if (role === 'super_admin') return true;
-    // Legacy runs have no owner recorded — any maker may remove them.
-    if (role === 'maker') return this.isLegacy(run) || !run.createdBy || run.createdBy === this.auth.profile()?.id;
-    return false;
-  }
-
-  async deleteRun(run: AnalysisRunSummary, event: Event): Promise<void> {
-    event.stopPropagation();
+  async deleteRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
+    event?.stopPropagation();
     if (!confirm(`Delete "${run.name}"? It will be hidden from the workspace but can be restored by a super admin.`)) {
       return;
     }

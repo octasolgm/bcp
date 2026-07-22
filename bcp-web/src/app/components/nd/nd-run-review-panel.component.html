@@ -1,0 +1,121 @@
+<section class="run-review-panel card-surface" aria-labelledby="run-review-heading">
+  <header class="run-review-head">
+    <h2 id="run-review-heading">Overall analysis report review</h2>
+    <p class="run-review-sub">Report-level review applies to the whole analysis — not individual points.</p>
+  </header>
+
+  <div class="run-review-row run-review-row-fields">
+    <label class="run-review-field">
+      <span class="field-label">Status</span>
+      <select class="run-review-input" [(ngModel)]="draft.status">
+        @for (opt of statusOptions; track opt.id) {
+          <option [ngValue]="opt.id">{{ opt.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="run-review-field">
+      <span class="field-label">Due date</span>
+      <input type="datetime-local" class="run-review-input" [(ngModel)]="draft.dueDate" />
+    </label>
+
+    <label class="run-review-field">
+      <span class="field-label">Responsibility</span>
+      @if (departments.length) {
+        <select class="run-review-input" [(ngModel)]="draft.responsibility">
+          <option value="">Select department…</option>
+          @for (dept of departments; track dept.id) {
+            <option [value]="dept.name">{{ dept.name }}</option>
+          }
+        </select>
+      } @else {
+        <input type="text" class="run-review-input" [(ngModel)]="draft.responsibility" placeholder="Owner or department" />
+      }
+    </label>
+  </div>
+
+  <div class="run-review-row run-review-row-priority">
+    <div class="run-review-field run-review-field-wide">
+      <div class="priority-head">
+        <span class="field-label">Priority score</span>
+        <span class="priority-value" [ngClass]="priorityTierClass">{{ priorityScoreLabel }}</span>
+      </div>
+      <div class="priority-slider-wrap">
+        <div class="priority-track" aria-hidden="true"></div>
+        <input
+          type="range"
+          class="priority-slider"
+          min="0"
+          max="100"
+          step="1"
+          [ngModel]="draft.priority"
+          (ngModelChange)="setPriority($event)"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          [attr.aria-valuenow]="draft.priority"
+          [attr.aria-valuetext]="priorityScoreLabel"
+        />
+      </div>
+      <div class="priority-scale" aria-hidden="true">
+        <span>0 Low</span>
+        <span>50 Medium</span>
+        <span>100 Critical</span>
+      </div>
+      <p class="priority-standard">{{ riskStandardLabel }}</p>
+    </div>
+  </div>
+
+  <div class="run-review-row run-review-row-comment">
+    <label class="run-review-field run-review-field-wide">
+      <span class="field-label">Comment / review</span>
+      <textarea
+        class="run-review-input run-review-textarea"
+        rows="4"
+        [(ngModel)]="draft.comment"
+        placeholder="Overall notes for this analysis report…"
+      ></textarea>
+    </label>
+  </div>
+
+  @if (error) {
+    <p class="run-review-error">{{ error }}</p>
+  }
+
+  @if (reviewProgress && reviewProgress.total > 0) {
+    <p class="run-review-progress" [class.complete]="reviewProgressComplete">
+      Action reviews: {{ reviewProgress.reviewed }}/{{ reviewProgress.total }}
+      @if (!reviewProgressComplete) {
+        — set status on each action before submitting the report
+      }
+    </p>
+  }
+
+  <footer class="run-review-actions">
+    @if (showMakerActions) {
+      <button type="button" class="btn-primary" [disabled]="submitting" (click)="emit('submit')">
+        {{ submitting ? 'Sending…' : (resubmitLabel ? 'Resubmit for review' : 'Submit for review') }}
+      </button>
+    }
+
+    @if (showCheckerActions) {
+      <button type="button" class="btn-primary" [disabled]="submitting || !reviewProgressComplete" (click)="emit('approve')">
+        Approve
+      </button>
+      <button type="button" class="btn-secondary" [disabled]="submitting" (click)="emit('pullback')">
+        Pull back to maker
+      </button>
+    }
+
+    @if (showReviewerActions) {
+      <button type="button" class="btn-primary" [disabled]="submitting || !reviewProgressComplete" (click)="emit('finalize')">
+        Final review
+      </button>
+      <button type="button" class="btn-secondary" [disabled]="submitting" (click)="emit('pullback_to_checker')">
+        Pull back to checker
+      </button>
+      <button type="button" class="btn-secondary" [disabled]="submitting" (click)="emit('pullback_to_maker')">
+        Pull back to maker
+      </button>
+    }
+  </footer>
+</section>

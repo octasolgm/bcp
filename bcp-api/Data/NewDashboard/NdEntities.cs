@@ -436,6 +436,18 @@ public class NdAnalysisReview
     [Column("overall_comment")]
     public string? OverallComment { get; set; }
 
+    [Column("review_status")]
+    public string? ReviewStatus { get; set; }
+
+    [Column("priority")]
+    public int? Priority { get; set; }
+
+    [Column("responsibility")]
+    public string? Responsibility { get; set; }
+
+    [Column("due_date")]
+    public DateTimeOffset? DueDate { get; set; }
+
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
@@ -490,7 +502,7 @@ public class NdActionPlanItemReview
     public string? Responsibility { get; set; }
 
     [Column("due_date")]
-    public DateOnly? DueDate { get; set; }
+    public DateTimeOffset? DueDate { get; set; }
 
     /// <summary>medium | higher</summary>
     [Column("priority")]
@@ -498,6 +510,9 @@ public class NdActionPlanItemReview
 
     [Column("reviewed_by")]
     public Guid? ReviewedBy { get; set; }
+
+    [Column("sort_order")]
+    public int SortOrder { get; set; }
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

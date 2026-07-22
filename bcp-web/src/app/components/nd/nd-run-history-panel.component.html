@@ -1,0 +1,121 @@
+@if (open) {
+  <div class="history-backdrop" (click)="close()" aria-hidden="true"></div>
+  <aside class="history-panel" role="dialog" aria-labelledby="run-history-title" aria-modal="true">
+    <header class="history-panel-head">
+      <div class="history-head-copy">
+        <p class="history-eyebrow">Workflow timeline</p>
+        <h2 id="run-history-title">Analysis history</h2>
+        <p class="history-run-name" [title]="timeline?.runName || runName">
+          {{ timeline?.runName || runName }}
+        </p>
+      </div>
+      <button type="button" class="history-close" (click)="close()" aria-label="Close history">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+          <path d="M5 5l10 10M15 5L5 15"/>
+        </svg>
+      </button>
+    </header>
+
+    @if (loading) {
+      <div class="history-state-wrap">
+        <p class="history-state">Loading history…</p>
+      </div>
+    } @else if (error) {
+      <div class="history-state-wrap">
+        <p class="history-state error">{{ error }}</p>
+      </div>
+    } @else if (timeline) {
+      @if (displayStats; as stats) {
+      <div class="history-summary">
+        <app-nd-status-badge [status]="timeline.currentStatus" />
+        @if (stats.totalGaps > 0) {
+          <span class="history-stat">
+            <strong>{{ stats.totalGaps }}</strong>
+            gap{{ stats.totalGaps === 1 ? '' : 's' }}
+          </span>
+        }
+        @if (stats.totalReviews > 0) {
+          <span class="history-stat">
+            <strong>{{ stats.totalReviews }}</strong>
+            review{{ stats.totalReviews === 1 ? '' : 's' }}
+          </span>
+        }
+        @if (stats.totalGaps > 0) {
+          <span class="history-stat review-stat">
+            <strong>{{ stats.reviewedActions }}/{{ stats.totalGaps }}</strong>
+            reviewed
+          </span>
+        }
+      </div>
+      } @else {
+      <div class="history-summary">
+        <app-nd-status-badge [status]="timeline.currentStatus" />
+      </div>
+      }
+
+      <div class="history-scroll">
+        <ol class="history-timeline">
+          @for (event of timeline.events; track event.id; let last = $last) {
+            <li class="timeline-item" [ngClass]="eventKindClass(event)">
+              <div class="timeline-rail" aria-hidden="true">
+                <span class="timeline-dot"></span>
+                @if (!last) {
+                  <span class="timeline-line"></span>
+                }
+              </div>
+
+              <article class="timeline-card">
+                <div class="timeline-card-head">
+                  <div class="timeline-title-wrap">
+                    <span class="timeline-kind-icon" aria-hidden="true">{{ eventKindIcon(event) }}</span>
+                    <strong>{{ event.title }}</strong>
+                  </div>
+                  <time>{{ formatWhen(event.timestamp) }}</time>
+                </div>
+
+                @if (hasActor(event)) {
+                  <div class="timeline-actor">
+                    <span class="timeline-avatar" aria-hidden="true">{{ actorInitials(actorDisplayName(event)) }}</span>
+                    <div class="timeline-actor-copy">
+                      <span class="timeline-actor-name">{{ actorDisplayName(event) }}</span>
+                      @if (event.actorRole) {
+                        <span class="timeline-role-pill" [ngClass]="rolePillClass(event.actorRole)">
+                          {{ roleLabel(event.actorRole) }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (formatDueDate(event.dueDate); as due) {
+                  <p class="timeline-due">
+                    <span class="timeline-due-label">Due</span>
+                    {{ due }}
+                  </p>
+                }
+
+                @if (eventMetaChips(event); as chips) {
+                  @if (chips.length) {
+                    <div class="timeline-meta">
+                      @for (chip of chips; track chip) {
+                        <span class="timeline-chip" [ngClass]="eventChipClass(chip)">{{ chip }}</span>
+                      }
+                    </div>
+                  }
+                }
+
+                @if (event.overallComment) {
+                  <blockquote class="timeline-comment">{{ event.overallComment }}</blockquote>
+                }
+              </article>
+            </li>
+          }
+        </ol>
+      </div>
+    } @else {
+      <div class="history-state-wrap">
+        <p class="history-state">No history yet.</p>
+      </div>
+    }
+  </aside>
+}

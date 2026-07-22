@@ -42,6 +42,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   navBadges: Partial<Record<string, number>> = {};
   ndActiveRunCount = 0;
   private navSub: Subscription | null = null;
+  private badgeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   get profileInitial(): string {
     const name = this.profile()?.fullName?.trim();
@@ -59,7 +60,9 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    await this.auth.refreshProfile();
+    if (!this.auth.profile()) {
+      await this.auth.refreshProfile();
+    }
     const role = this.auth.getRole();
     if (!role) {
       await this.router.navigate(['/nd/auth/login']);
@@ -67,18 +70,27 @@ export class NdShellComponent implements OnInit, OnDestroy {
     }
     this.navItems = this.navForRole(role);
     this.activeSessions.watch();
-    void this.refreshNavBadges();
+    this.scheduleNavBadgeRefresh();
     this.navSub = this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => {
-        void this.refreshNavBadges();
+        this.scheduleNavBadgeRefresh();
         this.activeSessions.refresh();
       });
   }
 
   ngOnDestroy(): void {
     this.navSub?.unsubscribe();
+    if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
     this.activeSessions.unwatch();
+  }
+
+  private scheduleNavBadgeRefresh(): void {
+    if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
+    this.badgeRefreshTimer = setTimeout(() => {
+      this.badgeRefreshTimer = null;
+      void this.refreshNavBadges();
+    }, 300);
   }
 
   badgeFor(item: NavItem): number | undefined {

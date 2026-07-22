@@ -72,6 +72,22 @@ public class StoredDocument
     [Column("parse_error")]
     public string? ParseError { get; set; }
 
+    [Column("uploaded_by")]
+    public Guid? UploadedBy { get; set; }
+
+    [Column("parsed_by")]
+    public Guid? ParsedBy { get; set; }
+
+    /// <summary>Soft-deleted from ND document library (row kept in DB).</summary>
+    [Column("is_hidden")]
+    public bool IsHidden { get; set; }
+
+    [Column("hidden_at")]
+    public DateTimeOffset? HiddenAt { get; set; }
+
+    [Column("hidden_by")]
+    public Guid? HiddenBy { get; set; }
+
     [Column("workspace_id")]
     public string WorkspaceId { get; set; } = "snb-uae-difc";
 

@@ -1,49 +1,3 @@
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.stat-card {
-  padding: 1rem 1.15rem;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  text-align: left;
-  text-decoration: none;
-  color: inherit;
-  transition: border-color 0.15s, transform 0.1s;
-
-  &:hover {
-    border-color: var(--border-strong);
-    transform: translateY(-1px);
-  }
-
-  .stat-label {
-    display: block;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-muted);
-    margin-bottom: 0.35rem;
-  }
-
-  .stat-value {
-    display: block;
-    font-size: 2rem;
-    font-weight: 700;
-    line-height: 1.1;
-    margin-bottom: 0.25rem;
-  }
-
-  .stat-hint {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-  }
-}
-
 .recent-section {
   padding: 1.25rem;
 
@@ -51,6 +5,10 @@
     margin: 0;
     font-size: 0.9375rem;
     font-weight: 600;
+  }
+
+  .nd-table-wrap {
+    margin-top: 0.5rem;
   }
 }
 
@@ -74,26 +32,63 @@
   padding: 0;
 }
 
-.recent-item {
+.recent-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.75rem 0;
+  gap: 0.65rem;
+  padding: 0.35rem 0;
   border-bottom: 1px solid var(--border);
-  text-decoration: none;
-  color: inherit;
-  transition: background 0.15s;
 
   &:last-child {
     border-bottom: none;
   }
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex: 1 1 16rem;
+  min-width: 0;
+  padding: 0.55rem 0;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+  border-radius: var(--radius-md);
 
   &:hover {
     background: var(--bg-muted);
-    margin: 0 -0.5rem;
     padding-left: 0.5rem;
     padding-right: 0.5rem;
-    border-radius: var(--radius-md);
+  }
+
+  app-nd-status-badge,
+  app-nd-run-role-badge {
+    flex-shrink: 0;
+  }
+}
+
+.recent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .recent-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .recent-actions {
+    margin-left: 0;
+    justify-content: flex-start;
+    padding-bottom: 0.35rem;
   }
 }
 
@@ -127,6 +122,31 @@
 .recent-meta {
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+.recent-workflow {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.empty-state {
+  padding: 2rem 1.5rem;
+  text-align: center;
+
+  strong {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    margin: 0 0 1rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+  }
 }
 
 .muted-loading {

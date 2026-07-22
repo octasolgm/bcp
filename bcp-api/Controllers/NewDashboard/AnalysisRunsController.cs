@@ -300,6 +300,27 @@ public class AnalysisRunsController(
         });
     }
 
+    [HttpGet("{id:guid}/history")]
+    public async Task<IActionResult> History(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns
+            .Include(r => r.Points)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound(new { success = false, message = "Not found" });
+        if (run.Status == DeletedStatus)
+            return NotFound(new { success = false, message = "Not found" });
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+            return StatusCode(403, new { success = false, message = "Forbidden" });
+
+        var timeline = await NdRunHistoryHelper.BuildTimelineAsync(db, run, ct);
+        return Ok(new { success = true, data = timeline });
+    }
+
     [HttpPost("{id:guid}/start")]
     public async Task<IActionResult> Start(Guid id, CancellationToken ct)
     {
@@ -403,7 +424,7 @@ public class AnalysisRunsController(
         {
             AnalysisRunId = id,
             ReviewerId = profile.Id,
-            ReviewerRole = "checker",
+            ReviewerRole = "maker",
             Action = "submitted",
         });
 
@@ -432,7 +453,7 @@ public class AnalysisRunsController(
         {
             AnalysisRunId = id,
             ReviewerId = profile!.Id,
-            ReviewerRole = "checker",
+            ReviewerRole = "maker",
             Action = "submitted",
         });
 

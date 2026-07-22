@@ -65,43 +65,82 @@
     <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
   </div>
 } @else {
-  <div class="card-surface run-list-wrap">
-    <ul class="run-list">
-      @for (run of visibleRuns; track run.id) {
-        <li>
-          <a [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null" class="run-item">
-            <div class="run-body">
-              <strong>{{ run.name }}</strong>
-              <span class="run-meta">
-                {{ run.makerName ?? 'Maker' }} · {{ formatDate(run.submittedAt ?? run.createdAt) }}
-              </span>
-              @if (run.compliant !== undefined) {
-                <span class="run-meta">
-                  {{ run.compliant }} compliant · {{ run.partial }} partial · {{ run.nonCompliant }} non-compliant
-                </span>
-              }
-              @if (run.totalGaps !== undefined && run.totalGaps > 0) {
-                <span class="run-meta">
-                  {{ run.totalGaps }} gap{{ run.totalGaps === 1 ? '' : 's' }}
-                  @if (run.totalReviews !== undefined && run.totalReviews > 0) {
-                    · {{ run.totalReviews }} review{{ run.totalReviews === 1 ? '' : 's' }}
+  <div class="card-surface nd-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Run</th>
+          <th>Submitted by</th>
+          <th>With</th>
+          <th>Submitted</th>
+          <th>Summary</th>
+          <th>Workflow</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (run of visibleRuns; track run.id) {
+          <tr
+            class="clickable-row"
+            [routerLink]="runLink(run)"
+            [queryParams]="runQuery(run) || null"
+          >
+            <td>
+              <span class="cell-title">{{ run.name }}</span>
+            </td>
+            <td>
+              <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
+              <span class="submitted-by-name">{{ submittedByLabel(run) }}</span>
+            </td>
+            <td>
+              <app-nd-run-role-badge [status]="run.status" />
+            </td>
+            <td class="muted">{{ formatDate(run.submittedAt ?? run.createdAt) }}</td>
+            <td>
+              @if (complianceSummary(run) || gapsSummary(run)) {
+                <div class="stat-chips">
+                  @if (complianceSummary(run); as compliance) {
+                    <span class="stat-chip">{{ compliance }}</span>
                   }
-                  @if (run.reviewedGaps !== undefined) {
-                    · {{ run.reviewedGaps }}/{{ run.totalGaps }} actions reviewed
+                  @if (gapsSummary(run); as gaps) {
+                    <span class="stat-chip">{{ gaps }}</span>
                   }
-                </span>
+                </div>
+              } @else {
+                <span class="muted">—</span>
               }
-            </div>
-            <div class="run-badges">
-              @if (run.workflowHolder) {
-                <span class="workflow-badge">{{ run.workflowHolder }}</span>
+            </td>
+            <td>
+              @if (workflowStatusLabel(run); as workflow) {
+                <span class="workflow-badge">{{ workflow }}</span>
+              } @else {
+                <span class="muted">—</span>
               }
-              <span class="severity-badge pending">{{ run.status }}</span>
-            </div>
-          </a>
-        </li>
-      }
-    </ul>
+            </td>
+            <td>
+              <app-nd-status-badge [status]="run.status" />
+            </td>
+            <td class="row-actions" (click)="$event.stopPropagation()">
+              <app-nd-run-table-actions
+                [run]="run"
+                [queueReview]="!showHistory"
+                reviewLabel="Final review"
+                (historyClick)="openHistory($event)"
+              />
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
   </div>
 }
 </div>
+
+<app-nd-run-history-panel
+  [open]="historyOpen"
+  [runId]="historyRunId"
+  [runName]="historyRunName"
+  [runStats]="historyRunStats"
+  (closed)="closeHistory()"
+/>

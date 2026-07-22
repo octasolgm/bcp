@@ -1,7 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.service';
@@ -44,13 +44,14 @@ type InternalDocAnalysisRun = {
 @Component({
   selector: 'app-nd-internal-documents',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './nd-internal-documents.component.html',
   styleUrls: ['./nd-internal-documents.component.scss', '../nd-shared.scss'],
 })
 export class NdInternalDocumentsComponent implements OnInit {
   private readonly api = inject(NdApiService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
   readonly auth = inject(NdAuthService);
 
@@ -59,6 +60,8 @@ export class NdInternalDocumentsComponent implements OnInit {
   loading = true;
   uploading = false;
   parsingId: string | null = null;
+  deletingId: string | null = null;
+  showDeleted = false;
   error = '';
   message = '';
   historyFor: InternalDocument | null = null;
@@ -72,7 +75,10 @@ export class NdInternalDocumentsComponent implements OnInit {
   sortDir: SortDir = 'desc';
 
   async ngOnInit(): Promise<void> {
-    await this.load();
+    this.route.queryParamMap.subscribe((params) => {
+      this.showDeleted = params.get('deleted') === '1';
+      void this.load();
+    });
   }
 
   get canUpload(): boolean {
@@ -82,6 +88,14 @@ export class NdInternalDocumentsComponent implements OnInit {
 
   get canParse(): boolean {
     return this.canUpload;
+  }
+
+  get canViewDeleted(): boolean {
+    return this.auth.getRole() === 'super_admin';
+  }
+
+  get canDelete(): boolean {
+    return this.canUpload && !this.showDeleted;
   }
 
   parseClass(status?: string): string {
@@ -111,13 +125,14 @@ export class NdInternalDocumentsComponent implements OnInit {
     this.parsingId = null;
     if (res.success) {
       this.message = `Parse complete — "${doc.title}"`;
-      const data = res.data as { parseStatus?: string; parsedAt?: string };
+      const data = res.data as { parseStatus?: string; parsedAt?: string; parsedByName?: string };
       const idx = this.docs.findIndex((d) => d.id === doc.id);
       if (idx >= 0) {
         this.docs[idx] = {
           ...this.docs[idx],
           parseStatus: data?.parseStatus ?? 'parsed',
           parsedAt: data?.parsedAt ?? this.docs[idx].parsedAt,
+          parsedByName: data?.parsedByName ?? this.docs[idx].parsedByName,
           parseError: null,
         };
       }
@@ -130,13 +145,53 @@ export class NdInternalDocumentsComponent implements OnInit {
   async load(silent = false): Promise<void> {
     if (!silent) this.loading = true;
     this.error = '';
-    const res = await this.api.getInternalDocuments();
+    const res = await this.api.getInternalDocuments(this.showDeleted);
     if (res.success && res.data) {
       this.docs = res.data as InternalDocument[];
     } else if (!silent || this.docs.length === 0) {
       this.error = res.message ?? 'Failed to load documents';
     }
     this.loading = false;
+  }
+
+  async handleDelete(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (
+      !confirm(
+        `Remove "${doc.title}" from the library?\n\nNothing is deleted from the database — parse credits and file data are kept. A super admin can restore it from the Deleted tab.`,
+      )
+    ) {
+      return;
+    }
+    this.deletingId = doc.id;
+    this.error = '';
+    const res = await this.api.hideInternalDocument(doc.id);
+    if (res.success) {
+      this.message = res.message ?? 'Document removed from library';
+      await this.load(true);
+    } else {
+      this.error = res.message ?? 'Failed to delete document';
+    }
+    this.deletingId = null;
+  }
+
+  async handleRestore(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.deletingId = doc.id;
+    this.error = '';
+    const res = await this.api.restoreInternalDocument(doc.id);
+    if (res.success) {
+      this.message = res.message ?? 'Document restored';
+      await this.load(true);
+    } else {
+      this.error = res.message ?? 'Failed to restore document';
+    }
+    this.deletingId = null;
+  }
+
+  actorLabel(name?: string | null): string {
+    const trimmed = (name ?? '').trim();
+    return trimmed || '—';
   }
 
   get visibleDocs(): InternalDocument[] {

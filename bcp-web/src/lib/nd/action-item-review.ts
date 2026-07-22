@@ -1,15 +1,19 @@
 import type { AnalysisPoint } from './types';
 import { countDisplayGapsForAnalysisPoint } from './cap-gap-count';
-import type { GapPriority } from './gap-priority';
+import { riskScoreFromRaw } from './risk-priority-score';
 
 export type ActionItemReviewStatus = 'approve' | 'need_modify';
+
+/** actionIndex 0 = whole compliance point review (not tied to a CAP action). */
+export const POINT_REVIEW_ACTION_INDEX = 0;
 
 export type ActionItemReviewDraft = {
   status: ActionItemReviewStatus | '';
   comment: string;
   responsibility: string;
   dueDate: string;
-  priority: GapPriority | '';
+  /** 0–100 priority score (same scale as report-level review). */
+  priority: number;
 };
 
 export type ActionItemReviewEntry = {
@@ -21,7 +25,8 @@ export type ActionItemReviewEntry = {
   comment?: string | null;
   responsibility?: string | null;
   dueDate?: string | null;
-  priority?: GapPriority | string | null;
+  priority?: string | number | null;
+  sortOrder?: number | null;
   createdAt: string;
 };
 
@@ -31,7 +36,7 @@ export const ACTION_ITEM_REVIEW_OPTIONS: { id: ActionItemReviewStatus; label: st
 ];
 
 export function emptyActionItemReviewDraft(): ActionItemReviewDraft {
-  return { status: '', comment: '', responsibility: '', dueDate: '', priority: '' };
+  return { status: '', comment: '', responsibility: '', dueDate: '', priority: 50 };
 }
 
 export function actionItemReviewKey(pointId: string, actionIndex: number): string {
@@ -64,7 +69,7 @@ export function flattenActionItemReviews(
       const comment = draft.comment.trim();
       const responsibility = draft.responsibility.trim();
       const dueDate = draft.dueDate.trim();
-      const priority = draft.priority.trim();
+      const priority = draft.priority;
       rows.push({
         analysisPointId,
         actionIndex: Number(indexRaw),
@@ -72,7 +77,7 @@ export function flattenActionItemReviews(
         comment: comment || undefined,
         responsibility: responsibility || undefined,
         dueDate: dueDate || undefined,
-        priority: priority || undefined,
+        priority: String(priority),
       });
     }
   }
@@ -110,7 +115,7 @@ export function actionItemReviewsToDrafts(
         comment: entry.comment?.trim() ?? '',
         responsibility: entry.responsibility?.trim() ?? '',
         dueDate: entry.dueDate?.trim() ?? '',
-        priority: (entry.priority as GapPriority) ?? '',
+        priority: riskScoreFromRaw(entry.priority),
       };
     }
   }
@@ -129,7 +134,7 @@ export function pointHasActionReviewFlag(
       !!d.comment.trim() ||
       !!d.responsibility.trim() ||
       !!d.dueDate.trim() ||
-      !!d.priority,
+      d.priority !== 50,
   );
 }
 
@@ -165,7 +170,20 @@ export function reviewsForAction(
   if (!entries?.length) return [];
   return entries
     .filter((e) => e.actionIndex === actionIndex)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => compareActionItemReviews(a, b));
+}
+
+export function compareActionItemReviews(a: ActionItemReviewEntry, b: ActionItemReviewEntry): number {
+  const ao = a.sortOrder ?? 0;
+  const bo = b.sortOrder ?? 0;
+  if (bo !== ao) return bo - ao;
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+}
+
+export function reviewsForPointLevel(
+  entries: ActionItemReviewEntry[] | undefined,
+): ActionItemReviewEntry[] {
+  return reviewsForAction(entries, POINT_REVIEW_ACTION_INDEX);
 }
 
 export function validateSavedActionReviewsComplete(
@@ -177,7 +195,7 @@ export function validateSavedActionReviewsComplete(
   let reviewed = 0;
   const reviewedKeys = new Set<string>();
   for (const e of entries ?? []) {
-    if (e.status) reviewedKeys.add(`${e.analysisPointId}:${e.actionIndex}`);
+    if (e.status && e.actionIndex >= 1) reviewedKeys.add(`${e.analysisPointId}:${e.actionIndex}`);
   }
   for (const point of points) {
     const manualCount = attachmentCounts?.[point.id] ?? 0;
@@ -202,7 +220,7 @@ export function countSavedReviewProgress(
 ): ActionReviewProgress {
   const reviewedKeys = new Set<string>();
   for (const e of entries ?? []) {
-    if (e.status) reviewedKeys.add(`${e.analysisPointId}:${e.actionIndex}`);
+    if (e.status && e.actionIndex >= 1) reviewedKeys.add(`${e.analysisPointId}:${e.actionIndex}`);
   }
   let total = 0;
   let reviewed = 0;
@@ -228,7 +246,7 @@ export function reviewsForPoint(
   if (!entries?.length) return [];
   return entries
     .filter((e) => e.analysisPointId === pointId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => compareActionItemReviews(a, b));
 }
 
 export function validateActionReviewsComplete(

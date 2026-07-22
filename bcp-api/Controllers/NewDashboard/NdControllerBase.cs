@@ -18,6 +18,40 @@ public abstract class NdControllerBase : ControllerBase
         string? DueDate,
         string? Priority);
 
+    public record ReviewRequest(
+        string? OverallComment,
+        string? ReviewStatus,
+        int? Priority,
+        string? Responsibility,
+        string? DueDate,
+        List<PointCommentInput>? PointComments,
+        List<ActionItemReviewInput>? ActionItemReviews);
+
+    protected static DateTimeOffset? ParseOptionalDueDate(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var t = raw.Trim();
+        if (DateTimeOffset.TryParse(t, out var dto)) return dto;
+        if (DateTime.TryParse(t, out var dt))
+            return new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Local));
+        if (DateOnly.TryParse(t, out var dateOnly))
+            return new DateTimeOffset(dateOnly.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        return null;
+    }
+
+    protected static string? FormatDueDateResponse(DateTimeOffset? dueDate) =>
+        dueDate?.ToString("o");
+
+    protected static void ApplyReviewMetadata(NdAnalysisReview review, ReviewRequest body)
+    {
+        review.OverallComment = string.IsNullOrWhiteSpace(body.OverallComment) ? null : body.OverallComment.Trim();
+        review.ReviewStatus = string.IsNullOrWhiteSpace(body.ReviewStatus) ? null : body.ReviewStatus.Trim();
+        review.Priority = body.Priority is >= 0 and <= 100 ? body.Priority : null;
+        review.Responsibility = string.IsNullOrWhiteSpace(body.Responsibility) ? null : body.Responsibility.Trim();
+        if (!string.IsNullOrWhiteSpace(body.DueDate) && DateTimeOffset.TryParse(body.DueDate.Trim(), out var parsedDue))
+            review.DueDate = parsedDue;
+    }
+
     private static readonly HashSet<string> ValidActionItemReviewStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
         "approve", "need_modify",
@@ -54,6 +88,22 @@ public abstract class NdControllerBase : ControllerBase
 
         return (profile, null);
     }
+
+    protected static async Task<Dictionary<Guid, string>> LoadProfileNamesAsync(
+        AppDbContext db,
+        IEnumerable<Guid?> profileIds,
+        CancellationToken ct)
+    {
+        var ids = profileIds.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<Guid, string>();
+
+        return await db.NdProfiles.AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.FullName, ct);
+    }
+
+    protected static string? ProfileName(IReadOnlyDictionary<Guid, string> names, Guid? id) =>
+        id is Guid g && names.TryGetValue(g, out var name) ? name : null;
 
     protected async Task<NdProfile> GetOrCreateProfileAsync(
         AppDbContext db,
@@ -147,12 +197,7 @@ public abstract class NdControllerBase : ControllerBase
             var status = r.Status?.Trim().ToLowerInvariant() ?? "";
             if (!ValidActionItemReviewStatuses.Contains(status)) continue;
 
-            DateOnly? dueDate = null;
-            if (!string.IsNullOrWhiteSpace(r.DueDate)
-                && DateOnly.TryParse(r.DueDate.Trim(), out var parsedDue))
-            {
-                dueDate = parsedDue;
-            }
+            DateTimeOffset? dueDate = ParseOptionalDueDate(r.DueDate);
 
             db.NdActionPlanItemReviews.Add(new NdActionPlanItemReview
             {

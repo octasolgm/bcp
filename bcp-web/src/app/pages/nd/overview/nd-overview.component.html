@@ -11,23 +11,6 @@
 @if (loading) {
   <p class="muted-loading">Loading…</p>
 } @else {
-  <div class="stats-row">
-    @for (s of stats; track s.label) {
-      @if (s.href) {
-        <a [routerLink]="s.href" class="stat-card neutral">
-          <span class="stat-label">{{ s.label }}</span>
-          <strong class="stat-value">{{ s.value }}</strong>
-          <span class="stat-hint">View all →</span>
-        </a>
-      } @else {
-        <div class="stat-card neutral">
-          <span class="stat-label">{{ s.label }}</span>
-          <strong class="stat-value">{{ s.value }}</strong>
-        </div>
-      }
-    }
-  </div>
-
   @if (recentRuns.length > 0) {
     <section class="card-surface recent-section">
       <div class="section-head">
@@ -42,24 +25,50 @@
       </div>
       <ul class="recent-list">
         @for (run of recentRuns.slice(0, 5); track run.id) {
-          <li>
+          <li class="recent-row">
             <a [routerLink]="runLink(run)" [queryParams]="runQuery(run) || null" class="recent-item">
               <span class="file-icon">RUN</span>
               <div class="recent-body">
                 <span class="recent-title">{{ run.name }}</span>
                 <span class="recent-meta">
                   {{ formatDate(run.createdAt) }}
+                  @if (run.makerName) {
+                    · {{ run.makerName }}
+                  }
                   @if (isLegacy(run)) {
                     · Legacy
                   }
                 </span>
+                @if (workflowLabel(run); as workflow) {
+                  <span class="recent-workflow">{{ workflow }}</span>
+                }
               </div>
-              <span class="severity-badge" [class]="statusClass(run.status)">{{ run.status }}</span>
+              <app-nd-run-role-badge [status]="run.status" />
+              <app-nd-status-badge [status]="run.status" />
             </a>
+            <div class="recent-actions">
+              <app-nd-run-table-actions [run]="run" [hideLabeledActions]="true" (historyClick)="openHistory($event)" />
+            </div>
           </li>
         }
       </ul>
     </section>
+  } @else {
+    <div class="card-surface empty-state">
+      <strong>No analysis runs yet</strong>
+      <p>Compliance analysis runs will appear here once created.</p>
+      @if (auth.getRole() === 'maker' || auth.getRole() === 'super_admin') {
+        <a routerLink="/nd/analyse-v8" class="btn-primary">New analysis</a>
+      }
+    </div>
   }
 }
 </div>
+
+<app-nd-run-history-panel
+  [open]="historyOpen"
+  [runId]="historyRunId"
+  [runName]="historyRunName"
+  [runStats]="historyRunStats"
+  (closed)="closeHistory()"
+/>

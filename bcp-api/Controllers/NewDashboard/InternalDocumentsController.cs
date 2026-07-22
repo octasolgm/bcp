@@ -21,16 +21,24 @@ public class InternalDocumentsController(
     SupabaseJwtValidator jwt) : NdControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken ct)
+    public async Task<IActionResult> List([FromQuery] bool hiddenOnly = false, CancellationToken ct = default)
     {
-        var (_, error) = await RequireAuthAsync(appDb, jwt, ct,
+        var (profile, error) = await RequireAuthAsync(appDb, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
+        if (hiddenOnly && profile!.Role != "super_admin")
+            return StatusCode(403, new { success = false, message = "Forbidden" });
+
         var docs = await appDb.StoredDocuments.AsNoTracking()
-            .Where(d => d.DocKind == "document" || d.DocKind == "internal")
-            .OrderByDescending(d => d.UpdatedAt)
+            .Where(d => (d.DocKind == "document" || d.DocKind == "internal") && d.IsHidden == hiddenOnly)
+            .OrderByDescending(d => hiddenOnly ? d.HiddenAt ?? d.UpdatedAt : d.CreatedAt)
             .ToListAsync(ct);
+
+        var profileNames = await LoadProfileNamesAsync(
+            appDb,
+            docs.SelectMany(d => new Guid?[] { d.UploadedBy, d.ParsedBy, d.HiddenBy }),
+            ct);
 
         var items = new List<object>();
         foreach (var d in docs)
@@ -44,13 +52,19 @@ public class InternalDocumentsController(
                 name = d.Title,
                 originalFileName = d.OriginalFileName,
                 version = d.VersionNumber,
-                uploaded = d.UpdatedAt,
-                uploadedAt = d.UpdatedAt,
+                uploaded = d.CreatedAt,
+                uploadedAt = d.CreatedAt,
                 sizeBytes = d.SizeBytes,
                 department = d.Category,
                 parseStatus,
                 parsedAt = d.ParsedAt,
                 parseError = d.ParseError,
+                uploadedBy = d.UploadedBy,
+                uploadedByName = ProfileName(profileNames, d.UploadedBy),
+                parsedBy = d.ParsedBy,
+                parsedByName = ProfileName(profileNames, d.ParsedBy),
+                isHidden = d.IsHidden,
+                hiddenAt = d.HiddenAt,
             });
         }
 
@@ -211,7 +225,7 @@ public class InternalDocumentsController(
     [RequestSizeLimit(52_428_800)]
     public async Task<IActionResult> Upload(IFormFile file, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
+        var (profile, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
 
         if (!storage.IsConfigured)
@@ -241,6 +255,7 @@ public class InternalDocumentsController(
             SizeBytes = bytes.Length,
             ContentType = file.ContentType ?? "application/pdf",
             ParseStatus = "pending",
+            UploadedBy = profile!.Id,
         };
         appDb.StoredDocuments.Add(row);
         await appDb.SaveChangesAsync(ct);
@@ -258,15 +273,59 @@ public class InternalDocumentsController(
         });
     }
 
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> SoftDelete(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var doc = await appDb.StoredDocuments.FirstOrDefaultAsync(
+            d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+        if (doc == null)
+            return NotFound(new { success = false, message = "Document not found." });
+        if (doc.IsHidden)
+            return Ok(new { success = true, message = "Already deleted." });
+
+        doc.IsHidden = true;
+        doc.HiddenAt = DateTimeOffset.UtcNow;
+        doc.HiddenBy = profile!.Id;
+        doc.UpdatedAt = DateTimeOffset.UtcNow;
+        await appDb.SaveChangesAsync(ct);
+
+        return Ok(new { success = true, message = "Document removed from library (data kept in database)." });
+    }
+
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        var doc = await appDb.StoredDocuments.FirstOrDefaultAsync(
+            d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+        if (doc == null)
+            return NotFound(new { success = false, message = "Document not found." });
+        if (!doc.IsHidden)
+            return Ok(new { success = true, message = "Document is already active." });
+
+        doc.IsHidden = false;
+        doc.HiddenAt = null;
+        doc.HiddenBy = null;
+        doc.UpdatedAt = DateTimeOffset.UtcNow;
+        await appDb.SaveChangesAsync(ct);
+
+        return Ok(new { success = true, message = "Document restored." });
+    }
+
     [HttpPost("{id:guid}/parse")]
     public async Task<IActionResult> Parse(Guid id, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
+        var (profile, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
 
         try
         {
-            await parseService.ParseByIdAsync(id, ct);
+            await parseService.ParseByIdAsync(id, profile!.Id, ct);
             var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
             return Ok(new
             {
@@ -276,6 +335,11 @@ public class InternalDocumentsController(
                     id,
                     parseStatus = doc?.ParseStatus ?? "parsed",
                     parsedAt = doc?.ParsedAt,
+                    parsedByName = doc?.ParsedBy != null
+                        ? ProfileName(
+                            await LoadProfileNamesAsync(appDb, [doc.ParsedBy], ct),
+                            doc.ParsedBy)
+                        : null,
                 },
             });
         }

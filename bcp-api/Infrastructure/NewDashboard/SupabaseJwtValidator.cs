@@ -17,6 +17,11 @@ public class SupabaseJwtValidator(
 
     public JwtUser? ValidateToken(string? bearerToken)
     {
+        return ValidateTokenAsync(bearerToken, CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    public async Task<JwtUser?> ValidateTokenAsync(string? bearerToken, CancellationToken ct = default)
+    {
         LogConfigOnFirstValidation();
 
         if (string.IsNullOrWhiteSpace(bearerToken))
@@ -29,7 +34,7 @@ public class SupabaseJwtValidator(
         {
             logger.LogWarning(
                 "[ND JWT] Supabase:JwtSecret is not configured — falling back to Supabase Auth API validation");
-            return ValidateViaSupabaseAuthApi(bearerToken);
+            return await ValidateViaSupabaseAuthApiAsync(bearerToken, ct);
         }
 
         return ValidateLocally(bearerToken);
@@ -135,7 +140,7 @@ public class SupabaseJwtValidator(
         }
     }
 
-    private JwtUser? ValidateViaSupabaseAuthApi(string bearerToken)
+    private async Task<JwtUser?> ValidateViaSupabaseAuthApiAsync(string bearerToken, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_opts.Url) || string.IsNullOrWhiteSpace(_opts.ServiceRoleKey))
         {
@@ -157,8 +162,8 @@ public class SupabaseJwtValidator(
             request.Headers.Add("apikey", _opts.ServiceRoleKey);
             request.Headers.TryAddWithoutValidation("Authorization", authValue);
 
-            using var response = client.Send(request);
-            var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            using var response = await client.SendAsync(request, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning(

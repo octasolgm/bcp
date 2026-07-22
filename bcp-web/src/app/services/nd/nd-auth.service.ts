@@ -4,10 +4,13 @@ import { environment } from '../../../environments/environment';
 import { NdApiService, type NdUserProfile } from './nd-api.service';
 import { getNdSupabaseClient } from './nd-supabase-client';
 
+const PROFILE_CACHE_KEY = 'reguliq-nd-profile-cache';
+
 @Injectable({ providedIn: 'root' })
 export class NdAuthService {
   private readonly api = inject(NdApiService);
-  private readonly profileSignal = signal<NdUserProfile | null>(null);
+  private readonly profileSignal = signal<NdUserProfile | null>(this.readCachedProfile());
+  private refreshInFlight: Promise<NdUserProfile | null> | null = null;
 
   readonly profile = this.profileSignal.asReadonly();
 
@@ -25,7 +28,23 @@ export class NdAuthService {
     return this.profileSignal()?.role ?? null;
   }
 
-  async refreshProfile(): Promise<NdUserProfile | null> {
+  async refreshProfile(force = false): Promise<NdUserProfile | null> {
+    if (!force && this.profileSignal()) {
+      return this.profileSignal();
+    }
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+
+    this.refreshInFlight = this.doRefreshProfile();
+    try {
+      return await this.refreshInFlight;
+    } finally {
+      this.refreshInFlight = null;
+    }
+  }
+
+  private async doRefreshProfile(): Promise<NdUserProfile | null> {
     const profile = await this.loadProfile();
     if (profile) return profile;
 
@@ -40,13 +59,39 @@ export class NdAuthService {
     return null;
   }
 
+  private readCachedProfile(): NdUserProfile | null {
+    if (typeof sessionStorage === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(PROFILE_CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as NdUserProfile;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeCachedProfile(profile: NdUserProfile | null): void {
+    if (typeof sessionStorage === 'undefined') return;
+    try {
+      if (!profile) {
+        sessionStorage.removeItem(PROFILE_CACHE_KEY);
+        return;
+      }
+      sessionStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+    } catch {
+      // ignore quota errors
+    }
+  }
+
   private async loadProfile(): Promise<NdUserProfile | null> {
     const res = await this.api.getProfile();
     if (res.success && res.data) {
       this.profileSignal.set(res.data);
+      this.writeCachedProfile(res.data);
       return res.data;
     }
     this.profileSignal.set(null);
+    this.writeCachedProfile(null);
     return null;
   }
 
@@ -73,6 +118,7 @@ export class NdAuthService {
   async signOut(): Promise<void> {
     await getNdSupabaseClient().auth.signOut();
     this.profileSignal.set(null);
+    this.writeCachedProfile(null);
   }
 
   async forgotPassword(email: string): Promise<{ error: string | null; resetLink?: string }> {

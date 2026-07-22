@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
@@ -7,14 +6,6 @@ namespace Reguliq.Api.Services.NewDashboard;
 
 public static class NdRunEnrichmentHelper
 {
-    private static readonly Regex CapGapChunkRegex = new(
-        @"\(\d+\)\s*Missing:\s*",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    private static readonly Regex PlaceholderRegex = new(
-        @"^\s*(n/a|—|-|none|not applicable|\*+\s*)+\s*$",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
     public static string WorkflowHolderLabel(string status) => status switch
     {
         "submitted_for_review" => "With checker",
@@ -56,7 +47,7 @@ public static class NdRunEnrichmentHelper
                 r => r.AnalysisPointId,
                 p => p.Id,
                 (r, p) => new { p.AnalysisRunId, PointId = p.Id, r.ActionIndex, r.Status })
-            .Where(x => !string.IsNullOrWhiteSpace(x.Status))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Status) && x.ActionIndex >= 1)
             .ToListAsync(ct);
 
         var reviewedByRun = reviewRows
@@ -100,12 +91,10 @@ public static class NdRunEnrichmentHelper
             var compliant = runPoints.Count(p => p.FinalStatus == "compliant");
             var partial = runPoints.Count(p => p.FinalStatus == "partial_compliant");
             var nonCompliant = runPoints.Count(p => p.FinalStatus == "non_compliant");
-            var totalGaps = runPoints.Sum(p =>
-            {
-                manualEvidenceByRun.TryGetValue(run.Id, out var byPoint);
-                var manual = byPoint != null && byPoint.TryGetValue(p.Id, out var c) ? c : 0;
-                return CountCapGapsForPoint(p, manual);
-            });
+
+            manualEvidenceByRun.TryGetValue(run.Id, out var byPoint);
+            var totalGaps = NdCapGapCounter.CountForPoints(runPoints, byPoint);
+
             reviewedByRun.TryGetValue(run.Id, out var reviewedGaps);
             totalReviewsByRun.TryGetValue(run.Id, out var totalReviews);
 
@@ -138,21 +127,4 @@ public static class NdRunEnrichmentHelper
 
         return result;
     }
-
-    private static int CountCapGapsForPoint(NdAnalysisPoint point, int manualEvidenceCount = 0)
-    {
-        if (string.Equals(point.FinalStatus, "compliant", StringComparison.OrdinalIgnoreCase))
-            return manualEvidenceCount > 0 ? manualEvidenceCount : 0;
-
-        var plan = point.FinalActionPlan?.Trim();
-        if (string.IsNullOrEmpty(plan)) plan = point.OriginalAiActionPlan?.Trim();
-        if (string.IsNullOrEmpty(plan) || IsPlaceholderCap(plan)) return manualEvidenceCount;
-
-        var count = CapGapChunkRegex.Matches(plan).Count;
-        if (count == 0 && !IsPlaceholderCap(plan)) count = 1;
-        return Math.Max(count, manualEvidenceCount);
-    }
-
-    private static bool IsPlaceholderCap(string plan) =>
-        PlaceholderRegex.IsMatch(plan.Replace("*", "").Trim());
 }

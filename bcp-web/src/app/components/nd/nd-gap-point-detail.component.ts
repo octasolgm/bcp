@@ -1,4 +1,14 @@
-import { Component, EventEmitter, Input, OnChanges, Output, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  Input,
+  OnChanges,
+  Output,
+  SimpleChanges,
+  inject,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -30,11 +40,10 @@ import {
   type ComplianceSeverity,
 } from '../../../lib/nd/point-compliance-status';
 import {
-  ACTION_ITEM_REVIEW_OPTIONS,
   actionReviewStatusLabel,
-  emptyActionItemReviewDraft,
+  POINT_REVIEW_ACTION_INDEX,
   reviewsForAction,
-  type ActionItemReviewDraft,
+  reviewsForPointLevel,
   type ActionItemReviewEntry,
   type ActionItemReviewStatus,
 } from '../../../lib/nd/action-item-review';
@@ -51,23 +60,25 @@ import {
   type PolicyDocCatalogEntry,
   type PolicyRefProof,
 } from '../../../lib/nd/policy-doc-resolve';
+import { NdItemReviewSectionComponent, type ItemReviewSaveEvent } from './nd-item-review-section.component';
 
 @Component({
   selector: 'app-nd-gap-point-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReferenceComplianceCardComponent],
+  imports: [CommonModule, FormsModule, ReferenceComplianceCardComponent, NdItemReviewSectionComponent],
   templateUrl: './nd-gap-point-detail.component.html',
   styleUrl: './nd-gap-point-detail.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NdGapPointDetailComponent implements OnChanges {
   private readonly ndApi = inject(NdApiService);
+  private readonly cdr = inject(ChangeDetectorRef);
   private lastPointId: string | null = null;
+  private contentKey = '';
   private collapsedActionsInit = false;
   private departmentsLoaded = false;
 
   collapsedActionIndexes = new Set<number>();
-  openReviewFormIndexes = new Set<number>();
-  openDueDateCalendarIndexes = new Set<number>();
   departments: Department[] = [];
   @Input({ required: true }) point!: AnalysisPoint;
   @Input() snapshot: PointSnapshot | null = null;
@@ -88,6 +99,7 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Input() reviewDisabledHint = '';
   /** In-progress drafts for adding a new review (review mode). */
   @Input() savingActionReviewIndex: number | null = null;
+  @Input() savingReviewId: string | null = null;
   /** All saved reviews for this point (newest first per action in template). */
   @Input() savedActionItemReviews: ActionItemReviewEntry[] = [];
   @Input() runId: string | null = null;
@@ -97,6 +109,8 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Input() evidenceRerunning = false;
   @Input() evidenceUploadingActionIndex: number | null = null;
   @Input() evidenceRerunningActionIndex: number | null = null;
+  /** Pin point-level review to bottom with scrollable detail above (list / review workspace). */
+  @Input() dockPointReview = false;
 
   @Output() startEdit = new EventEmitter<void>();
   @Output() cancelEdit = new EventEmitter<void>();
@@ -105,13 +119,12 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Output() closeHistory = new EventEmitter<void>();
   @Output() restoreVersion = new EventEmitter<ActionPlanHistoryEntry>();
   @Output() openPdf = new EventEmitter<{ docId: string; page?: string | null }>();
-  @Output() saveActionItemReview = new EventEmitter<{
+  @Output() saveActionItemReview = new EventEmitter<ItemReviewSaveEvent>();
+  @Output() deleteActionItemReview = new EventEmitter<string>();
+  @Output() reorderActionItemReview = new EventEmitter<{
+    reviewId: string;
     actionIndex: number;
-    status: ActionItemReviewStatus;
-    comment: string;
-    responsibility: string;
-    dueDate: string;
-    priority: GapPriority | '';
+    direction: 'up' | 'down';
   }>();
   @Output() uploadEvidence = new EventEmitter<FileList>();
   @Output() uploadGapEvidence = new EventEmitter<{ actionIndex: number; files: FileList }>();
@@ -120,8 +133,8 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Output() rerunWithEvidence = new EventEmitter<'full' | 'dual'>();
   @Output() rerunGapEvidence = new EventEmitter<{ actionIndex: number; mode: 'full' | 'dual' }>();
 
-  readonly actionReviewOptions = ACTION_ITEM_REVIEW_OPTIONS;
   readonly actionReviewStatusLabel = actionReviewStatusLabel;
+  readonly pointReviewActionIndex = POINT_REVIEW_ACTION_INDEX;
   readonly gapPriorityOptions = GAP_PRIORITY_OPTIONS;
   readonly gapPriorityLabel = gapPriorityLabel;
   readonly gapPriorityClass = gapPriorityClass;
@@ -155,17 +168,36 @@ export class NdGapPointDetailComponent implements OnChanges {
   /** Filter history panel to a single action item. */
   historyGapIndex: number | null = null;
   resolvedSeverity: ComplianceSeverity = 'partial_compliant';
-  /** Local drafts for new reviews before Save. */
-  newReviewDrafts: Record<number, ActionItemReviewDraft> = {};
 
-  ngOnChanges(): void {
+  get pointLevelReviews(): ActionItemReviewEntry[] {
+    return reviewsForPointLevel(this.savedActionItemReviews);
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    const nextKey = [
+      this.point?.id ?? '',
+      this.point?.pointSnapshot ?? '',
+      this.point?.finalActionPlan ?? '',
+      this.point?.originalAiActionPlan ?? '',
+      this.point?.landingAiResult ?? '',
+      this.point?.googleAiResult ?? '',
+    ].join('\u001f');
+
+    if (nextKey !== this.contentKey) {
+      this.contentKey = nextKey;
+      queueMicrotask(() => this.rebuildContent());
+    }
+
+    if (this.showReviewPanel && !this.departmentsLoaded && (changes['showReviewPanel'] || changes['point'])) {
+      void this.loadDepartments();
+    }
+  }
+
+  private rebuildContent(): void {
     if (this.point?.id !== this.lastPointId) {
       this.lastPointId = this.point?.id ?? null;
       this.collapsedActionsInit = false;
       this.collapsedActionIndexes = new Set();
-      this.openReviewFormIndexes = new Set();
-      this.openDueDateCalendarIndexes = new Set();
-      this.newReviewDrafts = {};
     }
 
     const snap = this.snapshot;
@@ -273,7 +305,7 @@ export class NdGapPointDetailComponent implements OnChanges {
     }
 
     this.initActionCollapseState();
-    if (this.showReviewPanel && !this.departmentsLoaded) void this.loadDepartments();
+    this.cdr.markForCheck();
   }
 
   private initActionCollapseState(): void {
@@ -288,6 +320,7 @@ export class NdGapPointDetailComponent implements OnChanges {
       this.departments = (res.data as Department[]).filter((d) => d.isActive !== false);
     }
     this.departmentsLoaded = true;
+    this.cdr.markForCheck();
   }
 
   isActionCollapsed(index: number): boolean {
@@ -301,48 +334,12 @@ export class NdGapPointDetailComponent implements OnChanges {
     this.collapsedActionIndexes = next;
   }
 
-  isReviewFormOpen(index: number): boolean {
-    return this.openReviewFormIndexes.has(index);
-  }
-
-  openReviewForm(index: number): void {
-    this.openReviewFormIndexes = new Set(this.openReviewFormIndexes).add(index);
-    if (!this.newReviewDrafts[index]) {
-      this.newReviewDrafts = { ...this.newReviewDrafts, [index]: emptyActionItemReviewDraft() };
-    }
-  }
-
-  closeReviewForm(index: number): void {
-    this.clearReviewDraft(index);
-  }
-
-  isDueDateCalendarOpen(index: number): boolean {
-    return this.openDueDateCalendarIndexes.has(index);
-  }
-
-  toggleDueDateCalendar(index: number): void {
-    const next = new Set(this.openDueDateCalendarIndexes);
-    if (next.has(index)) next.delete(index);
-    else next.add(index);
-    this.openDueDateCalendarIndexes = next;
-  }
-
-  dueDateLabel(index: number): string {
-    const value = this.actionReviewDraft(index).dueDate;
-    if (!value) return 'Select due date';
-    try {
-      return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    } catch {
-      return value;
-    }
-  }
-
   reviewCountForGap(index: number): number {
     return this.actionReviewsForGap(index).length;
+  }
+
+  onItemReviewSave(event: ItemReviewSaveEvent): void {
+    this.saveActionItemReview.emit(event);
   }
 
   get displayComplianceStatus(): string {
@@ -590,72 +587,6 @@ export class NdGapPointDetailComponent implements OnChanges {
     return reviewsForAction(this.savedActionItemReviews, index);
   }
 
-  actionReviewDraft(index: number): ActionItemReviewDraft {
-    return this.newReviewDrafts[index] ?? emptyActionItemReviewDraft();
-  }
-
-  setActionReviewStatus(index: number, status: ActionItemReviewStatus): void {
-    const draft = this.actionReviewDraft(index);
-    this.newReviewDrafts = { ...this.newReviewDrafts, [index]: { ...draft, status } };
-  }
-
-  setActionReviewComment(index: number, comment: string): void {
-    const draft = this.actionReviewDraft(index);
-    this.newReviewDrafts = { ...this.newReviewDrafts, [index]: { ...draft, comment } };
-  }
-
-  setActionReviewResponsibility(index: number, responsibility: string): void {
-    const draft = this.actionReviewDraft(index);
-    this.newReviewDrafts = { ...this.newReviewDrafts, [index]: { ...draft, responsibility } };
-  }
-
-  setActionReviewDueDate(index: number, dueDate: string): void {
-    const draft = this.actionReviewDraft(index);
-    this.newReviewDrafts = { ...this.newReviewDrafts, [index]: { ...draft, dueDate } };
-  }
-
-  setActionReviewPriority(index: number, priority: GapPriority | ''): void {
-    const draft = this.actionReviewDraft(index);
-    this.newReviewDrafts = { ...this.newReviewDrafts, [index]: { ...draft, priority } };
-  }
-
-  reviewPriorityFor(index: number): GapPriority | '' {
-    return normalizeGapPriority(this.actionReviewDraft(index).priority);
-  }
-
-  savedReviewPriority(rev: ActionItemReviewEntry): GapPriority | '' {
-    return normalizeGapPriority(rev.priority ?? '');
-  }
-
-  canSaveActionReview(index: number): boolean {
-    return !!this.actionReviewDraft(index).status && this.savingActionReviewIndex !== index;
-  }
-
-  onSaveActionReview(index: number): void {
-    const draft = this.actionReviewDraft(index);
-    if (!draft.status) return;
-    this.saveActionItemReview.emit({
-      actionIndex: index,
-      status: draft.status,
-      comment: draft.comment,
-      responsibility: draft.responsibility,
-      dueDate: draft.dueDate,
-      priority: draft.priority,
-    });
-  }
-
-  clearReviewDraft(index: number): void {
-    const next = { ...this.newReviewDrafts };
-    delete next[index];
-    this.newReviewDrafts = next;
-    const nextForms = new Set(this.openReviewFormIndexes);
-    nextForms.delete(index);
-    this.openReviewFormIndexes = nextForms;
-    const nextCal = new Set(this.openDueDateCalendarIndexes);
-    nextCal.delete(index);
-    this.openDueDateCalendarIndexes = nextCal;
-  }
-
   formatReviewDate(iso: string): string {
     return formatDate(iso);
   }
@@ -668,12 +599,6 @@ export class NdGapPointDetailComponent implements OnChanges {
     const input = event.target as HTMLInputElement;
     if (input.files?.length) this.uploadEvidence.emit(input.files);
     input.value = '';
-  }
-
-  actionReviewStatusClass(status: ActionItemReviewStatus | ''): string {
-    if (status === 'approve') return 'review-status-approve';
-    if (status === 'need_modify') return 'review-status-modify';
-    return '';
   }
 
   formatDate = formatDate;

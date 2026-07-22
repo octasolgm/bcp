@@ -216,6 +216,8 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   protected ndRunDualVerifyFailedCount = 0;
   showInlineGapReport = false;
   inlineGapItems: GapItemData[] = [];
+  /** At most one inline gap card expanded (avoids mounting many detail panels). */
+  expandedInlineGapItemId: string | null = null;
   inlineGapFilter: 'all' | GapSeverity = 'all';
   private analysisCompleteUiDone = false;
   private sessionParamSub: Subscription | null = null;
@@ -593,7 +595,12 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     this.inlineGapItems = reportItemsToGapItems(reports);
     const first =
       this.inlineGapItems.find((i) => i.severity !== 'compliant') ?? this.inlineGapItems[0];
-    if (first) first.expanded = true;
+    if (first) {
+      this.expandedInlineGapItemId = this.inlineGapItemKey(first);
+      this.syncInlineGapExpandedFlags();
+    } else {
+      this.expandedInlineGapItemId = null;
+    }
   }
 
   protected onAnalysisComplete(): void {
@@ -635,27 +642,35 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   trackInlineGapItem(item: GapItemData): string {
-    return `${item.section}|${item.expanded ? '1' : '0'}`;
+    return item.id || item.section;
   }
 
   toggleInlineGapItem(item: GapItemData): void {
-    const idx = this.inlineGapItems.findIndex(
-      (i) => i.section.trim() === item.section.trim() || i.id === item.id,
-    );
-    if (idx < 0) return;
-    this.inlineGapItems[idx].expanded = !this.inlineGapItems[idx].expanded;
-    this.inlineGapItems = [...this.inlineGapItems];
+    const id = this.inlineGapItemKey(item);
+    this.expandedInlineGapItemId = this.expandedInlineGapItemId === id ? null : id;
+    this.syncInlineGapExpandedFlags();
   }
 
   expandInlineGapItem(event: Event, item: GapItemData): void {
     event.stopPropagation();
     event.preventDefault();
-    const idx = this.inlineGapItems.findIndex(
-      (i) => i.section.trim() === item.section.trim() || i.id === item.id,
-    );
-    if (idx < 0) return;
-    this.inlineGapItems[idx].expanded = true;
-    this.inlineGapItems = [...this.inlineGapItems];
+    this.expandedInlineGapItemId = this.inlineGapItemKey(item);
+    this.syncInlineGapExpandedFlags();
+  }
+
+  isInlineGapExpanded(item: GapItemData): boolean {
+    return this.expandedInlineGapItemId === this.inlineGapItemKey(item);
+  }
+
+  private inlineGapItemKey(item: GapItemData): string {
+    return item.id || item.section.trim();
+  }
+
+  private syncInlineGapExpandedFlags(): void {
+    const openId = this.expandedInlineGapItemId;
+    for (const row of this.inlineGapItems) {
+      row.expanded = openId != null && this.inlineGapItemKey(row) === openId;
+    }
   }
 
   setInlineGapFilter(id: 'all' | GapSeverity): void {
@@ -808,6 +823,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     this.analysisCompleteUiDone = false;
     this.showInlineGapReport = false;
     this.inlineGapItems = [];
+    this.expandedInlineGapItemId = null;
     this.stopPolling();
     this.sessionId = `demo:${SEEDED_DEMO_COMPLIANCE_SESSION}`;
     this.analysisState = 'running';
@@ -2392,6 +2408,7 @@ ${this.findingsPreview
     this.analysisCompleteUiDone = false;
     this.showInlineGapReport = false;
     this.inlineGapItems = [];
+    this.expandedInlineGapItemId = null;
     const blocked = this.runBlockedReason;
     if (blocked) {
       this.error = blocked;
@@ -3184,6 +3201,7 @@ ${this.findingsPreview
     status: { status: string; totalPointsCount: number; processedPointsCount: number } | null,
     isDemoRun = false,
   ): boolean {
+    const previousSelection = this.selectedDetailPointId;
     this.sessionId = null;
     this.progressTotal = status?.totalPointsCount ?? run.totalPointsCount ?? points.length;
     this.progressDone = status?.processedPointsCount ?? run.processedPointsCount ?? 0;
@@ -3208,7 +3226,15 @@ ${this.findingsPreview
       }) ?? points[0];
     if (first) {
       const snap = parsePointSnapshot(first.pointSnapshot);
-      this.selectedDetailPointId = snap.pointNumber || first.regulationPointId || first.id;
+      const defaultId = snap.pointNumber || first.regulationPointId || first.id;
+      const selectionStillValid =
+        !!previousSelection &&
+        (this.sessionPointResults.has(previousSelection) ||
+          points.some((point) => {
+            const pointSnap = parsePointSnapshot(point.pointSnapshot);
+            return (pointSnap.pointNumber || point.regulationPointId || point.id) === previousSelection;
+          }));
+      this.selectedDetailPointId = selectionStillValid ? previousSelection : defaultId;
     }
 
     const runStatus = (status?.status ?? run.status ?? '').toLowerCase();

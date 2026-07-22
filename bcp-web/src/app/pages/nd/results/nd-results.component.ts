@@ -65,6 +65,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
   evidenceUploadingActionIndex: number | null = null;
   evidenceRerunningActionIndex: number | null = null;
   savingActionReviewIndex: number | null = null;
+  savingReviewId: string | null = null;
 
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
@@ -259,6 +260,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
   async saveActionItemReview(
     pointId: string,
     event: {
+      reviewId?: string;
       actionIndex: number;
       status: ActionItemReviewStatus;
       comment: string;
@@ -269,24 +271,66 @@ export class NdResultsComponent implements OnInit, OnChanges {
   ): Promise<void> {
     if (!this.runId) return;
     this.savingActionReviewIndex = event.actionIndex;
+    this.savingReviewId = event.reviewId ?? null;
     this.error = '';
-    const res = await this.api.saveActionItemReview(this.runId, {
-      analysisPointId: pointId,
-      actionIndex: event.actionIndex,
+    const body = {
       status: event.status,
       comment: event.comment.trim() || undefined,
       responsibility: event.responsibility.trim() || undefined,
       dueDate: event.dueDate.trim() || undefined,
       priority: event.priority || undefined,
-    });
+    };
+    const res = event.reviewId
+      ? await this.api.updateActionItemReview(this.runId, event.reviewId, body)
+      : await this.api.saveActionItemReview(this.runId, {
+          analysisPointId: pointId,
+          actionIndex: event.actionIndex,
+          ...body,
+        });
     this.savingActionReviewIndex = null;
+    this.savingReviewId = null;
     if (res.success) {
-      this.toast.show('Review saved', 'success');
+      this.toast.show(event.reviewId ? 'Review updated' : 'Review saved', 'success');
       await this.load();
     } else {
       this.error = res.message ?? 'Could not save review';
       this.toast.show(this.error, 'error');
     }
+  }
+
+  async deleteActionItemReview(pointId: string, reviewId: string): Promise<void> {
+    if (!this.runId) return;
+    this.savingReviewId = reviewId;
+    const res = await this.api.deleteActionItemReview(this.runId, reviewId);
+    this.savingReviewId = null;
+    if (res.success) {
+      this.toast.show('Review deleted', 'success');
+      await this.load();
+    } else {
+      this.error = res.message ?? 'Could not delete review';
+      this.toast.show(this.error, 'error');
+    }
+    void pointId;
+  }
+
+  async reorderActionItemReview(
+    pointId: string,
+    event: { reviewId: string; actionIndex: number; direction: 'up' | 'down' },
+  ): Promise<void> {
+    if (!this.runId) return;
+    this.savingReviewId = event.reviewId;
+    this.savingActionReviewIndex = event.actionIndex;
+    this.error = '';
+    const res = await this.api.reorderActionItemReview(this.runId, event.reviewId, event.direction);
+    this.savingReviewId = null;
+    this.savingActionReviewIndex = null;
+    if (res.success) {
+      await this.load();
+    } else {
+      this.error = res.message ?? 'Could not reorder review';
+      this.toast.show(this.error, 'error');
+    }
+    void pointId;
   }
 
   async onUploadGapEvidence(pointId: string, fileList: FileList, actionIndex?: number): Promise<void> {

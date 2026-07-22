@@ -13,8 +13,34 @@ import { NdApiService } from '../../services/nd/nd-api.service';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { environment } from '../../../environments/environment';
 import { shellRoute, shellRouteSegments } from '../../services/app-route-prefix';
-import { ndAnalysisRunTarget } from '../../../lib/nd/run-links';
-import type { AnalysisRunSummary } from '../../../lib/nd/types';
+import {
+  isLegacyAnalysisRun,
+  ndAnalysisRunLink,
+  ndAnalysisRunQuery,
+  ndAnalysisRunTarget,
+} from '../../../lib/nd/run-links';
+import {
+  analysisRunWorkflowLabel,
+  sortAnalysisRunsByRecent,
+} from '../../../lib/nd/analysis-run-status';
+import { formatDate } from '../../../lib/nd/utils';
+import type { AnalysisRunSummary, AnalysisPoint } from '../../../lib/nd/types';
+import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../lib/nd/run-gap-stats';
+import {
+  aggregateGapRiskCounts,
+  mergeGapRiskCounts,
+  type ActionItemReviewRow,
+} from '../../../lib/nd/dashboard-gap-risk';
+import {
+  emptyGapRiskCounts,
+  RISK_STANDARD_SUMMARY,
+  type GapRiskCounts,
+  type RiskTier,
+} from '../../../lib/nd/risk-priority-score';
+import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
+import { NdRunHistoryPanelComponent } from '../../components/nd/nd-run-history-panel.component';
+import { NdRunTableActionsComponent } from '../../components/nd/nd-run-table-actions.component';
+import { NdRunRoleBadgeComponent } from '../../components/nd/nd-run-role-badge.component';
 import {
   buildReportStats,
   type ReportStats,
@@ -76,9 +102,16 @@ type RecentRow = {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [
+    CommonModule,
+    RouterLink,
+    NdStatusBadgeComponent,
+    NdRunHistoryPanelComponent,
+    NdRunRoleBadgeComponent,
+    NdRunTableActionsComponent,
+  ],
   templateUrl: './dashboard.component.html',
-  styleUrl: './dashboard.component.scss',
+  styleUrls: ['./dashboard.component.scss', '../nd/nd-shared.scss'],
 })
 export class DashboardComponent implements OnInit {
   readonly apiUrl = environment.apiUrl;
@@ -100,6 +133,15 @@ export class DashboardComponent implements OnInit {
   remediationItems: Array<{ item: string; severity: string; target: string; status: string }> = [];
   ndRuns: AnalysisRunSummary[] = [];
   ndRunsLoading = false;
+  gapRiskCounts: GapRiskCounts = emptyGapRiskCounts();
+  gapRiskLoading = false;
+  historyOpen = false;
+  historyRunId: string | null = null;
+  historyRunName = '';
+  historyRunStats: RunGapStatsSummary | null = null;
+
+  workflowLabel = analysisRunWorkflowLabel;
+  formatDate = formatDate;
 
   private readonly seededComplianceId = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
   private readonly sessionRequestTimeoutMs = 12_000;
@@ -116,9 +158,14 @@ export class DashboardComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    if (this.inNdShell) {
+      this.ndRunsLoading = true;
+    }
     this.loadHealth();
     this.loadMetrics();
-    this.loadSessions();
+    if (!this.inNdShell) {
+      this.loadSessions();
+    }
     this.loadRemediationFromCompliance();
     if (this.inNdShell) {
       void this.loadNdRuns();
@@ -161,15 +208,46 @@ export class DashboardComponent implements OnInit {
       });
   }
 
+  /** Runs with at least one scored compliance point. */
+  private get ndRunsWithMetrics(): AnalysisRunSummary[] {
+    return this.ndRuns.filter((r) => {
+      const total = (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0);
+      return total > 0;
+    });
+  }
+
+  /** Sum compliant / partial / non-compliant across all ND analysis runs. */
+  private get aggregatedNdMetrics(): { compliant: number; partial: number; nonCompliant: number } {
+    let compliant = 0;
+    let partial = 0;
+    let nonCompliant = 0;
+    for (const run of this.ndRunsWithMetrics) {
+      compliant += run.compliant ?? 0;
+      partial += run.partial ?? 0;
+      nonCompliant += run.nonCompliant ?? 0;
+    }
+    return { compliant, partial, nonCompliant };
+  }
+
+  /** Latest ND run with compliance breakdown (for links / last analysis date). */
+  private get primaryNdRun(): AnalysisRunSummary | null {
+    const withMetrics = this.ndRunsWithMetrics;
+    if (!this.inNdShell || !withMetrics.length) return null;
+    return [...withMetrics].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )[0];
+  }
+
   private async loadNdRuns(): Promise<void> {
     this.ndRunsLoading = true;
     try {
       const role = this.ndAuth.getRole();
       const res = await this.ndApi.getAnalysisRuns(
-        role === 'maker' ? { mineOnly: true } : undefined,
+        role === 'maker' ? { mineOnly: true, ndOnly: true } : { ndOnly: true },
       );
       if (res.success && res.data) {
-        this.ndRuns = res.data as AnalysisRunSummary[];
+        this.ndRuns = sortAnalysisRunsByRecent(res.data as AnalysisRunSummary[]);
+        void this.loadNdGapRiskCounts();
       }
     } catch {
       this.ndRuns = [];
@@ -177,6 +255,41 @@ export class DashboardComponent implements OnInit {
       this.ndRunsLoading = false;
     }
   }
+
+  private async loadNdGapRiskCounts(): Promise<void> {
+    if (!this.inNdShell || !this.ndRuns.length) {
+      this.gapRiskCounts = emptyGapRiskCounts();
+      return;
+    }
+    this.gapRiskLoading = true;
+    try {
+      const targets = this.ndRuns.filter((r) => (r.totalGaps ?? 0) > 0);
+      const runs = targets.length ? targets : this.ndRuns;
+      let merged = emptyGapRiskCounts();
+      await Promise.all(
+        runs.map(async (run) => {
+          const res = await this.ndApi.getResults(run.id);
+          if (!res.success || !res.data) return;
+          const data = res.data as {
+            points?: AnalysisPoint[];
+            actionItemReviews?: ActionItemReviewRow[];
+          };
+          const counts = aggregateGapRiskCounts(
+            (data.points ?? []) as AnalysisPoint[],
+            data.actionItemReviews ?? [],
+          );
+          merged = mergeGapRiskCounts(merged, counts);
+        }),
+      );
+      this.gapRiskCounts = merged;
+    } catch {
+      this.gapRiskCounts = emptyGapRiskCounts();
+    } finally {
+      this.gapRiskLoading = false;
+    }
+  }
+
+  readonly riskStandardLabel = RISK_STANDARD_SUMMARY;
 
   private withSessionTimeout<T>(obs: Observable<T>, fallback: T) {
     return obs.pipe(
@@ -236,55 +349,145 @@ export class DashboardComponent implements OnInit {
       });
   }
 
+  get criticalGapCount(): number {
+    if (this.inNdShell) {
+      if (this.ndRunsLoading || this.gapRiskLoading) return 0;
+      return this.gapRiskCounts.critical;
+    }
+    return this.criticalCount;
+  }
+
+  get mediumGapCount(): number {
+    if (this.inNdShell) {
+      if (this.ndRunsLoading || this.gapRiskLoading) return 0;
+      return this.gapRiskCounts.medium;
+    }
+    return this.highCount;
+  }
+
+  get lowGapCount(): number {
+    if (this.inNdShell) {
+      if (this.ndRunsLoading || this.gapRiskLoading) return 0;
+      return this.gapRiskCounts.low;
+    }
+    return 0;
+  }
+
   get criticalCount(): number {
+    if (this.inNdShell) {
+      if (this.ndRunsLoading) return 0;
+      return this.aggregatedNdMetrics.nonCompliant;
+    }
+    const nd = this.primaryNdRun;
+    if (nd) return nd.nonCompliant ?? 0;
     return this.nonCompliantCount > 0 ? Math.min(2, this.nonCompliantCount) : 2;
   }
 
   get highCount(): number {
+    if (this.inNdShell) {
+      if (this.ndRunsLoading) return 0;
+      return this.aggregatedNdMetrics.partial;
+    }
+    const nd = this.primaryNdRun;
+    if (nd) return nd.partial ?? 0;
     return this.partialCount > 0 ? Math.min(3, this.partialCount) : 3;
   }
 
   get mediumCount(): number {
+    if (this.primaryNdRun) return 0;
     return 2;
   }
 
+  get lowCount(): number {
+    if (this.primaryNdRun) return 0;
+    return 1;
+  }
+
   get compliantCount(): number {
+    if (this.inNdShell) {
+      if (this.ndRunsLoading) return 0;
+      return this.aggregatedNdMetrics.compliant;
+    }
+    const nd = this.primaryNdRun;
+    if (nd) return nd.compliant ?? 0;
     return this.sessionStats?.compliant ?? this.seed?.compliant ?? 3;
   }
 
   get partialCount(): number {
+    if (this.inNdShell) {
+      if (this.ndRunsLoading) return 0;
+      return this.aggregatedNdMetrics.partial;
+    }
+    const nd = this.primaryNdRun;
+    if (nd) return nd.partial ?? 0;
     return this.sessionStats?.partial ?? this.seed?.partial ?? 0;
   }
 
   get nonCompliantCount(): number {
+    if (this.inNdShell) {
+      if (this.ndRunsLoading) return 0;
+      return this.aggregatedNdMetrics.nonCompliant;
+    }
+    const nd = this.primaryNdRun;
+    if (nd) return nd.nonCompliant ?? 0;
     return this.sessionStats?.nonCompliant ?? this.seed?.nonCompliant ?? 0;
   }
 
   get totalFindings(): number {
+    if (this.inNdShell) {
+      if (this.ndRunsLoading) return 0;
+      const m = this.aggregatedNdMetrics;
+      return m.compliant + m.partial + m.nonCompliant;
+    }
+    const nd = this.primaryNdRun;
+    if (nd) {
+      return (nd.compliant ?? 0) + (nd.partial ?? 0) + (nd.nonCompliant ?? 0);
+    }
     const fromStats = this.sessionStats?.total ?? 0;
     const fromSeed = this.seed?.totalFindings ?? 0;
-    const sum = this.criticalCount + this.highCount + this.mediumCount + this.compliantCount;
+    const sum = this.criticalCount + this.highCount + this.mediumCount + this.lowCount + this.compliantCount;
     return Math.max(fromStats, fromSeed, sum, 11);
   }
 
+  get analysisCountLabel(): string {
+    if (this.inNdShell && this.ndRunsLoading) return '…';
+    if (this.inNdShell) return String(this.ndRuns.length);
+    const ndCount = this.ndRuns.filter(
+      (r) => (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0) > 0,
+    ).length;
+    if (ndCount > 0) return String(ndCount);
+    return '1';
+  }
+
   get lastAnalysisLabel(): string {
+    if (this.inNdShell && this.ndRunsLoading) return 'Loading…';
+    const nd = this.primaryNdRun;
+    if (nd?.createdAt) {
+      return new Date(nd.createdAt).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    }
+    if (this.inNdShell) return '—';
     if (this.metricsLoading) return 'Loading…';
     return this.seed?.lastAnalysisDate || 'June 22, 2026';
   }
 
-  get riskPercent(): number {
-    const total = this.totalFindings || 11;
-    const risky = this.criticalCount + this.highCount;
-    return Math.round((risky / total) * 100);
+  get compliantPercent(): number {
+    const total = this.complianceDonutTotal || 1;
+    return Math.round((this.compliantCount / total) * 100);
   }
 
-  get donutSegments(): { color: string; value: number; offset: number }[] {
+  get complianceDonutTotal(): number {
+    return Math.max(this.compliantCount + this.partialCount + this.nonCompliantCount, 1);
+  }
+
+  get complianceDonutSegments(): { color: string; value: number; offset: number }[] {
     const items = [
-      { color: '#ef4444', value: this.criticalCount },
-      { color: '#f97316', value: this.highCount },
-      { color: '#eab308', value: this.mediumCount },
-      { color: '#22c55e', value: 1 },
       { color: '#3b82f6', value: this.compliantCount },
+      { color: '#f97316', value: this.partialCount },
+      { color: '#ef4444', value: this.nonCompliantCount },
     ];
     const total = items.reduce((s, i) => s + i.value, 0) || 1;
     let offset = 0;
@@ -293,6 +496,39 @@ export class DashboardComponent implements OnInit {
       offset += (item.value / total) * 100;
       return seg;
     });
+  }
+
+  get recentNdRuns(): AnalysisRunSummary[] {
+    return this.ndRuns.slice(0, 5);
+  }
+
+  runLink(run: AnalysisRunSummary): string[] {
+    return ndAnalysisRunLink(run, this.ndAuth.getRole());
+  }
+
+  runQuery(run: AnalysisRunSummary): Record<string, string> | undefined {
+    return ndAnalysisRunQuery(run, this.ndAuth.getRole());
+  }
+
+  isLegacy(run: AnalysisRunSummary): boolean {
+    return isLegacyAnalysisRun(run);
+  }
+
+  openHistory(run: AnalysisRunSummary, event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (this.isLegacy(run)) return;
+    this.historyRunId = run.id;
+    this.historyRunName = run.name;
+    this.historyRunStats = runGapStatsFromSummary(run);
+    this.historyOpen = true;
+  }
+
+  closeHistory(): void {
+    this.historyOpen = false;
+    this.historyRunId = null;
+    this.historyRunName = '';
+    this.historyRunStats = null;
   }
 
   get recentRows(): RecentRow[] {
@@ -488,6 +724,15 @@ export class DashboardComponent implements OnInit {
     });
   }
 
+  openByRiskTier(tier: RiskTier): void {
+    this.router.navigate(shellRouteSegments(this.router, '/gap-analysis'), {
+      queryParams: {
+        ...this.preferredReportQuery(),
+        riskTier: tier,
+      },
+    });
+  }
+
   openBySeverity(severity: string): void {
     this.router.navigate(shellRouteSegments(this.router, '/gap-analysis'), {
       queryParams: {
@@ -512,18 +757,21 @@ export class DashboardComponent implements OnInit {
   }
 
   recentAnalysesLoading(): boolean {
-    return (
-      (this.sessionsLoading || this.metricsLoading || this.ndRunsLoading) &&
-      this.recentRows.length === 0
-    );
+    if (this.inNdShell) {
+      return this.ndRunsLoading;
+    }
+    return (this.sessionsLoading || this.metricsLoading) && this.recentRows.length === 0;
   }
 
   preferredReportQueryParams(): Record<string, string> {
     return this.preferredReportQuery();
   }
 
-  /** Prefer the seeded / richest compliance session over partial dual-verify runs. */
+  /** Prefer live ND run, then seeded / richest compliance session. */
   private preferredReportQuery(): Record<string, string> {
+    const nd = this.primaryNdRun;
+    if (this.inNdShell && nd) return { run: nd.id };
+
     const seededId = this.seededComplianceId;
     const fromSeed = this.seed?.recentAnalyses?.find((a) => a.id === seededId);
     if (fromSeed) return { saved: `compliance:${seededId}` };

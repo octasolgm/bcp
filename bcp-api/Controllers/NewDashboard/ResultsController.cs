@@ -46,7 +46,8 @@ public class ResultsController(
 
         var actionItemReviews = await db.NdActionPlanItemReviews.AsNoTracking()
             .Where(r => pointIds.Contains(r.AnalysisPointId))
-            .OrderByDescending(r => r.CreatedAt)
+            .OrderByDescending(r => r.SortOrder)
+            .ThenByDescending(r => r.CreatedAt)
             .ToListAsync(ct);
 
         var history = await db.NdAnalysisStatusHistories.AsNoTracking()
@@ -96,8 +97,9 @@ public class ResultsController(
                     status = r.Status,
                     comment = r.Comment,
                     responsibility = r.Responsibility,
-                    dueDate = r.DueDate.HasValue ? r.DueDate.Value.ToString("yyyy-MM-dd") : null,
+                    dueDate = FormatDueDateResponse(r.DueDate),
                     priority = r.Priority,
+                    sortOrder = r.SortOrder,
                     r.CreatedAt,
                 }),
                 statusHistory = history,

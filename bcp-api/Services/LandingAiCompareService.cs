@@ -62,6 +62,7 @@ public class LandingAiCompareService(
             {
                 var fromCache = LandingAiComparisonNormalizer.Normalize(hit, point.Text);
                 fromCache = LandingAiComparisonNormalizer.Reapply(fromCache, point.Text);
+                fromCache = ResolvePolicyPages(fromCache, internalDocs);
                 logger.LogInformation("Landing AI compare cache hit for {Point}", point.PointId);
                 return LandingAiComparisonFormatter.FormatMessage(point, displayName, fromCache);
             }
@@ -82,7 +83,31 @@ public class LandingAiCompareService(
         var comparison = LandingAiComparisonNormalizer.Normalize(extraction, point.Text);
         await cache.SaveCompareCacheAsync(compareKey, extraction, _opts.ExtractModel, ct);
 
+        comparison = ResolvePolicyPages(comparison, internalDocs);
         return LandingAiComparisonFormatter.FormatMessage(point, displayName, comparison);
+    }
+
+    private static ComplianceComparisonResult ResolvePolicyPages(
+        ComplianceComparisonResult comparison,
+        IReadOnlyList<InternalDocPayload> internalDocs)
+    {
+        if (string.IsNullOrWhiteSpace(comparison.OutputResponse)) return comparison;
+
+        int? resolved = null;
+        foreach (var doc in internalDocs)
+        {
+            resolved = PolicyPageResolver.Resolve(doc.Markdown, comparison.OutputResponse);
+            if (resolved.HasValue) break;
+        }
+
+        if (resolved is > 0)
+        {
+            comparison.OutputResponse = PolicyPageResolver.RewriteCitationPage(
+                comparison.OutputResponse,
+                resolved.Value);
+        }
+
+        return comparison;
     }
 
     public async Task<string?> GetStoredParseAsync(string fileHash, CancellationToken ct = default)

@@ -8,6 +8,9 @@ export const ndAuthGuard: CanActivateFn = async () => {
   if (!(await auth.isAuthenticated())) {
     return router.createUrlTree(['/nd/auth/login']);
   }
+  if (auth.profile()) {
+    return true;
+  }
   const profile = await auth.refreshProfile();
   if (!profile) {
     return router.createUrlTree(['/nd/auth/login']);

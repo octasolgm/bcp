@@ -8,9 +8,16 @@ export const ndRoleGuard: CanActivateFn = async (route) => {
   const roles = route.data['ndRoles'] as string[] | undefined;
   if (!roles?.length) return true;
 
-  await auth.refreshProfile();
+  if (!auth.profile()) {
+    await auth.refreshProfile();
+  }
   const role = auth.getRole();
   if (role && (roles.includes(role) || role === 'super_admin')) return true;
+
+  const runId = route.paramMap.get('runId');
+  if (runId) {
+    return router.createUrlTree(['/nd/gap-analysis'], { queryParams: { run: runId } });
+  }
 
   return router.createUrlTree(['/nd/overview']);
 };

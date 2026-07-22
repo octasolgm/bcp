@@ -827,6 +827,7 @@
           @if (resultDetailError) {
             <p class="result-detail-error">{{ resultDetailError }}</p>
           }
+          @defer (when selectedDetailAnalysisPoint) {
           <app-nd-gap-point-detail
             [point]="ndPoint"
             [snapshot]="selectedPointSnapshot"
@@ -845,6 +846,7 @@
               [reviewMode]="canReviewActionGaps"
               [reviewDisabledHint]="gapReviewDisabledHint"
               [savingActionReviewIndex]="savingActionReviewIndex"
+              [savingReviewId]="savingReviewId"
               [canUploadEvidence]="canEditResultCap"
             [evidenceUploading]="evidenceUploadingPointId === ndPoint.id"
             [evidenceRerunning]="evidenceRerunningPointId === ndPoint.id"
@@ -864,6 +866,8 @@
             (rerunWithEvidence)="onRerunWithEvidence(selectedDetailPointId!, $event)"
             (rerunGapEvidence)="onRerunGapEvidence(selectedDetailPointId!, $event)"
             (saveActionItemReview)="saveActionItemReview(selectedDetailPointId!, $event)"
+            (deleteActionItemReview)="deleteActionItemReview(selectedDetailPointId!, $event)"
+            (reorderActionItemReview)="reorderActionItemReview(selectedDetailPointId!, $event)"
           />
           <div class="detail-actions">
             @if (hasResumableRun && selectedPointDetail) {
@@ -881,6 +885,9 @@
               </button>
             }
           </div>
+          } @placeholder {
+            <p class="muted-inline">Loading detail…</p>
+          }
         </div>
       } @else if (selectedPointReportItem && selectedPointDetail) {
         <div class="detail-card result-detail-card">
@@ -1006,8 +1013,7 @@
     <div class="items-list">
       @for (item of filteredInlineGapItems; track trackInlineGapItem(item)) {
         @let pointId = gapItemPointId(item);
-        @let ndPoint = analysisPointForPointId(pointId);
-        <article class="item-card card-surface" [class.expanded]="item.expanded">
+        <article class="item-card card-surface" [class.expanded]="isInlineGapExpanded(item)">
           <div
             class="item-header"
             role="button"
@@ -1018,23 +1024,20 @@
           >
             <span class="item-section">{{ item.section }}</span>
             <strong class="item-title">{{ item.title }}</strong>
-            @if (gapCountForGapItem(item); as gapCount) {
-              @if (gapCount > 0) {
-                <button
-                  type="button"
-                  class="gap-count-badge"
-                  (click)="expandInlineGapItem($event, item)"
-                >{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</button>
-              }
+            @if ((item.gapCount ?? 0) > 0) {
+              <button
+                type="button"
+                class="gap-count-badge"
+                (click)="expandInlineGapItem($event, item)"
+              >{{ item.gapCount }} gap{{ item.gapCount === 1 ? '' : 's' }}</button>
             }
             <span class="severity-badge" [class]="item.severity">{{ gapComplianceLabel(item.severity) }}</span>
-            <span class="chevron" [class.open]="item.expanded">›</span>
+            <span class="chevron" [class.open]="isInlineGapExpanded(item)">›</span>
           </div>
-          @if (item.expanded) {
+          @if (isInlineGapExpanded(item)) {
             <div class="item-body item-body-detail">
-              @if (!ndPoint) {
-                <p class="muted-inline">No detailed output for this point yet.</p>
-              } @else {
+              @defer (when isInlineGapExpanded(item)) {
+              @if (analysisPointForPointId(pointId); as ndPoint) {
               @if (!activeNdRunId && !demoSaveInProgress) {
                 <p class="result-save-hint">Save the run to edit corrective actions for this point.</p>
               }
@@ -1056,6 +1059,7 @@
                 [reviewMode]="canReviewActionGaps"
                 [reviewDisabledHint]="gapReviewDisabledHint"
                 [savingActionReviewIndex]="savingActionReviewIndex"
+              [savingReviewId]="savingReviewId"
                 [canUploadEvidence]="canEditResultCap"
                 [evidenceUploading]="evidenceUploadingPointId === ndPoint.id"
                 [evidenceRerunning]="evidenceRerunningPointId === ndPoint.id"
@@ -1075,7 +1079,14 @@
                 (rerunWithEvidence)="onRerunWithEvidence(pointId, $event)"
                 (rerunGapEvidence)="onRerunGapEvidence(pointId, $event)"
                 (saveActionItemReview)="saveActionItemReview(pointId, $event)"
+                (deleteActionItemReview)="deleteActionItemReview(pointId, $event)"
+                (reorderActionItemReview)="reorderActionItemReview(pointId, $event)"
               />
+              } @else {
+                <p class="muted-inline">No detailed output for this point yet.</p>
+              }
+              } @placeholder {
+                <p class="muted-inline">Loading detail…</p>
               }
             </div>
           }

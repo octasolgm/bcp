@@ -244,7 +244,7 @@ export function requirementDisplayLines(body: string): string[] {
 import { normalizeGapPriority } from '../nd/gap-priority';
 
 function splitFixAndPriority(fixRaw: string): { fix: string; priority: string } {
-  const match = fixRaw.match(/\.\s*Priority:\s*(medium|higher|high)\s*$/i);
+  const match = fixRaw.match(/\.\s*Priority:\s*(low|medium|higher|high|critical)\s*$/i);
   if (!match) return { fix: fixRaw.trim(), priority: '' };
   const fix = fixRaw.slice(0, match.index).trim().replace(/\.$/, '');
   return { fix, priority: normalizeGapPriority(match[1]) };
@@ -273,7 +273,7 @@ export function parseCapGaps(cap: string): CapGap[] {
         priority,
       };
     }
-    const priorityOnly = chunk.match(/\.\s*Priority:\s*(medium|higher|high)\s*$/i);
+    const priorityOnly = chunk.match(/\.\s*Priority:\s*(low|medium|higher|high|critical)\s*$/i);
     const missing = priorityOnly
       ? chunk.slice(0, priorityOnly.index).trim().replace(/\.$/, '')
       : chunk.trim().replace(/\.$/, '');

@@ -13,11 +13,6 @@ public class CheckerController(
     AppDbContext db,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
-    public record ReviewRequest(
-        string? OverallComment,
-        List<PointCommentInput>? PointComments,
-        List<ActionItemReviewInput>? ActionItemReviews);
-
     [HttpGet("queue")]
     public async Task<IActionResult> Queue(CancellationToken ct)
     {
@@ -70,8 +65,8 @@ public class CheckerController(
             ReviewerId = profile!.Id,
             ReviewerRole = "checker",
             Action = "approved",
-            OverallComment = body.OverallComment,
         };
+        ApplyReviewMetadata(review, body);
         db.NdAnalysisReviews.Add(review);
         await db.SaveChangesAsync(ct);
 
@@ -103,8 +98,8 @@ public class CheckerController(
             ReviewerId = profile!.Id,
             ReviewerRole = "checker",
             Action = "pulled_back",
-            OverallComment = body.OverallComment,
         };
+        ApplyReviewMetadata(review, body);
         db.NdAnalysisReviews.Add(review);
         await db.SaveChangesAsync(ct);
 

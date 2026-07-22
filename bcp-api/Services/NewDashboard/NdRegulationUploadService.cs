@@ -50,6 +50,7 @@ public class NdRegulationUploadService(
             FileHash = fileHash,
             SizeBytes = bytes.Length,
             Pages = Math.Max(1, (int)Math.Round(bytes.Length / 45000.0)),
+            UploadedBy = userId,
         };
         db.StoredDocuments.Add(stored);
         await db.SaveChangesAsync(ct);
@@ -164,6 +165,9 @@ public class NdRegulationUploadService(
             var text = root.TryGetProperty("text", out var tx) ? tx.GetString() ?? "" : "";
             var section = root.TryGetProperty("section", out var s) ? s.GetString() : null;
             var pointType = root.TryGetProperty("point_type", out var pt) ? pt.GetString() : null;
+            int? pageHint = null;
+            if (root.TryGetProperty("page_hint", out var ph) && ph.ValueKind == JsonValueKind.Number && ph.TryGetInt32(out var hint) && hint > 0)
+                pageHint = hint;
 
             var isAnnex = GovPointClassifier.IsAnnexPoint(pointId, title, section);
             var isIntro = GovPointClassifier.IsIntroductionPoint(pointId, title, text, section, pointType);
@@ -174,7 +178,7 @@ public class NdRegulationUploadService(
                 PointNumber = pointId,
                 PointTitle = title,
                 PointContent = text,
-                PageReference = section,
+                PageReference = FormatPointPageReference(section, pageHint),
                 IsIntroductionPoint = isIntro,
                 IsAnnexPoint = isAnnex,
             });
@@ -193,6 +197,14 @@ public class NdRegulationUploadService(
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    private static string? FormatPointPageReference(string? section, int? pdfPage)
+    {
+        var sec = section?.Trim();
+        if (pdfPage is > 0)
+            return string.IsNullOrWhiteSpace(sec) ? $"p. {pdfPage}" : $"{sec} · p. {pdfPage}";
+        return sec;
     }
 
     private static string NormalizeKey(string title)

@@ -1,8 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, timeout, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
+
+const API_TIMEOUT_MS = 25_000;
 
 export type NdApiResult<T> = {
   success: boolean;
@@ -20,6 +22,24 @@ export type NdUserProfile = {
   departmentName?: string | null;
   isActive: boolean;
   createdAt?: string;
+};
+
+export type NdRunReviewBody = {
+  overallComment?: string;
+  reviewStatus?: string;
+  priority?: number;
+  responsibility?: string;
+  dueDate?: string;
+  pointComments?: { analysisPointId: string; comment: string }[];
+  actionItemReviews?: {
+    analysisPointId: string;
+    actionIndex: number;
+    status: string;
+    comment?: string;
+    responsibility?: string;
+    dueDate?: string;
+    priority?: string;
+  }[];
 };
 
 @Injectable({ providedIn: 'root' })
@@ -57,7 +77,17 @@ export class NdApiService {
             : method === 'PUT'
               ? this.http.put<NdApiResult<T>>(url, body, { headers: options.headers })
               : this.http.delete<NdApiResult<T>>(url, { headers: options.headers });
-      return await firstValueFrom(obs);
+      return await firstValueFrom(
+        obs.pipe(
+          timeout(API_TIMEOUT_MS),
+          catchError((err: unknown) => {
+            if (err && typeof err === 'object' && 'name' in err && err.name === 'TimeoutError') {
+              return throwError(() => new Error('Request timed out — API may be overloaded or offline'));
+            }
+            return throwError(() => err);
+          }),
+        ),
+      );
     } catch (err: unknown) {
       if (err instanceof HttpErrorResponse) {
         const body = err.error as { message?: string } | string | null;
@@ -131,10 +161,11 @@ export class NdApiService {
     return this.request<unknown>('POST', '/nd/users/invite', body);
   }
 
-  getRegulationDocuments(params?: { departmentId?: string; status?: string }) {
+  getRegulationDocuments(params?: { departmentId?: string; status?: string; hiddenOnly?: boolean }) {
     const q = new URLSearchParams();
     if (params?.departmentId) q.set('departmentId', params.departmentId);
     if (params?.status) q.set('status', params.status);
+    if (params?.hiddenOnly) q.set('hiddenOnly', 'true');
     const suffix = q.toString() ? `?${q}` : '';
     return this.request<unknown[]>('GET', `/nd/regulation-documents${suffix}`);
   }
@@ -156,6 +187,10 @@ export class NdApiService {
 
   hideRegulationDocument(id: string) {
     return this.request<unknown>('DELETE', `/nd/regulation-documents/${id}`);
+  }
+
+  restoreRegulationDocument(id: string) {
+    return this.request<unknown>('POST', `/nd/regulation-documents/${id}/restore`);
   }
 
   async uploadRegulationDocument(file: File, departmentId?: string) {
@@ -224,8 +259,17 @@ export class NdApiService {
     );
   }
 
-  getInternalDocuments() {
-    return this.request<unknown[]>('GET', '/nd/internal-documents');
+  getInternalDocuments(hiddenOnly = false) {
+    const suffix = hiddenOnly ? '?hiddenOnly=true' : '';
+    return this.request<unknown[]>('GET', `/nd/internal-documents${suffix}`);
+  }
+
+  hideInternalDocument(id: string) {
+    return this.request<unknown>('DELETE', `/nd/internal-documents/${id}`);
+  }
+
+  restoreInternalDocument(id: string) {
+    return this.request<unknown>('POST', `/nd/internal-documents/${id}/restore`);
   }
 
   getInternalDocumentAnalysisRuns(docId: string) {
@@ -322,6 +366,10 @@ export class NdApiService {
     return this.request<unknown>('GET', `/nd/analysis-runs/${id}/status`);
   }
 
+  getAnalysisRunHistory(id: string) {
+    return this.request<unknown>('GET', `/nd/analysis-runs/${id}/history`);
+  }
+
   startAnalysisRun(id: string) {
     return this.request<unknown>('POST', `/nd/analysis-runs/${id}/start`);
   }
@@ -387,6 +435,30 @@ export class NdApiService {
     return this.request<unknown>('POST', `/nd/results/${runId}/action-item-reviews`, body);
   }
 
+  updateActionItemReview(
+    runId: string,
+    reviewId: string,
+    body: {
+      status: string;
+      comment?: string;
+      responsibility?: string;
+      dueDate?: string;
+      priority?: string;
+    },
+  ) {
+    return this.request<unknown>('PUT', `/nd/results/${runId}/action-item-reviews/${reviewId}`, body);
+  }
+
+  reorderActionItemReview(runId: string, reviewId: string, direction: 'up' | 'down') {
+    return this.request<unknown>('POST', `/nd/results/${runId}/action-item-reviews/${reviewId}/reorder`, {
+      direction,
+    });
+  }
+
+  deleteActionItemReview(runId: string, reviewId: string) {
+    return this.request<unknown>('DELETE', `/nd/results/${runId}/action-item-reviews/${reviewId}`);
+  }
+
   updateActionPlan(runId: string, pointId: string, content: string, revertToVersion?: number) {
     return this.request<unknown>('PUT', `/nd/results/${runId}/action-plan/${pointId}`, {
       content,
@@ -441,39 +513,11 @@ export class NdApiService {
     return this.request<unknown[]>('GET', '/nd/checker/history');
   }
 
-  approveAnalysis(
-    runId: string,
-    body: {
-      overallComment?: string;
-      pointComments?: { analysisPointId: string; comment: string }[];
-      actionItemReviews?: {
-        analysisPointId: string;
-        actionIndex: number;
-        status: string;
-        comment?: string;
-        responsibility?: string;
-        dueDate?: string;
-      }[];
-    },
-  ) {
+  approveAnalysis(runId: string, body: NdRunReviewBody) {
     return this.request<unknown>('POST', `/nd/checker/review/${runId}/approve`, body);
   }
 
-  pullBackAnalysis(
-    runId: string,
-    body: {
-      overallComment?: string;
-      pointComments?: { analysisPointId: string; comment: string }[];
-      actionItemReviews?: {
-        analysisPointId: string;
-        actionIndex: number;
-        status: string;
-        comment?: string;
-        responsibility?: string;
-        dueDate?: string;
-      }[];
-    },
-  ) {
+  pullBackAnalysis(runId: string, body: NdRunReviewBody) {
     return this.request<unknown>('POST', `/nd/checker/review/${runId}/pull-back`, body);
   }
 
@@ -485,57 +529,15 @@ export class NdApiService {
     return this.request<unknown[]>('GET', '/nd/reviewer/history');
   }
 
-  finalizeAnalysis(
-    runId: string,
-    body: {
-      overallComment?: string;
-      pointComments?: { analysisPointId: string; comment: string }[];
-      actionItemReviews?: {
-        analysisPointId: string;
-        actionIndex: number;
-        status: string;
-        comment?: string;
-        responsibility?: string;
-        dueDate?: string;
-      }[];
-    },
-  ) {
+  finalizeAnalysis(runId: string, body: NdRunReviewBody) {
     return this.request<unknown>('POST', `/nd/reviewer/review/${runId}/finalize`, body);
   }
 
-  pullBackToChecker(
-    runId: string,
-    body: {
-      overallComment?: string;
-      pointComments?: { analysisPointId: string; comment: string }[];
-      actionItemReviews?: {
-        analysisPointId: string;
-        actionIndex: number;
-        status: string;
-        comment?: string;
-        responsibility?: string;
-        dueDate?: string;
-      }[];
-    },
-  ) {
+  pullBackToChecker(runId: string, body: NdRunReviewBody) {
     return this.request<unknown>('POST', `/nd/reviewer/review/${runId}/pull-back`, body);
   }
 
-  pullBackToMaker(
-    runId: string,
-    body: {
-      overallComment?: string;
-      pointComments?: { analysisPointId: string; comment: string }[];
-      actionItemReviews?: {
-        analysisPointId: string;
-        actionIndex: number;
-        status: string;
-        comment?: string;
-        responsibility?: string;
-        dueDate?: string;
-      }[];
-    },
-  ) {
+  pullBackToMaker(runId: string, body: NdRunReviewBody) {
     return this.request<unknown>('POST', `/nd/reviewer/review/${runId}/pull-back-to-maker`, body);
   }
 }

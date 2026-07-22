@@ -25,7 +25,7 @@
           },
           "page_hint": {
             "type": "integer",
-            "description": "Approximate page number in source document if visible"
+            "description": "1-based PDF viewer page index where this requirement appears (not printed/footer page numbers). Use 0 if unknown."
           },
           "point_type": {
             "type": "string",

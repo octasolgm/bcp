@@ -13,11 +13,6 @@ public class ReviewerController(
     AppDbContext db,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
-    public record ReviewRequest(
-        string? OverallComment,
-        List<PointCommentInput>? PointComments,
-        List<ActionItemReviewInput>? ActionItemReviews);
-
     [HttpGet("queue")]
     public async Task<IActionResult> Queue(CancellationToken ct)
     {
@@ -69,8 +64,8 @@ public class ReviewerController(
             ReviewerId = profile!.Id,
             ReviewerRole = "reviewer",
             Action = "finalized",
-            OverallComment = body.OverallComment,
         };
+        ApplyReviewMetadata(review, body);
         db.NdAnalysisReviews.Add(review);
         await db.SaveChangesAsync(ct);
         await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);
@@ -100,8 +95,8 @@ public class ReviewerController(
             ReviewerId = profile!.Id,
             ReviewerRole = "reviewer",
             Action = "pulled_back",
-            OverallComment = body.OverallComment,
         };
+        ApplyReviewMetadata(review, body);
         db.NdAnalysisReviews.Add(review);
         await db.SaveChangesAsync(ct);
         await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);
@@ -131,8 +126,8 @@ public class ReviewerController(
             ReviewerId = profile!.Id,
             ReviewerRole = "reviewer",
             Action = "pulled_back",
-            OverallComment = body.OverallComment,
         };
+        ApplyReviewMetadata(review, body);
         db.NdAnalysisReviews.Add(review);
         await db.SaveChangesAsync(ct);
         await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);

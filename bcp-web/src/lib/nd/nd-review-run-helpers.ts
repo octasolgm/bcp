@@ -1,5 +1,6 @@
 import { actionItemReviewsToDrafts } from './action-item-review';
 import type { ResultsData } from './types';
+import { isPulledBackRun, normalizeRunStatus } from './run-status';
 
 /** Checker/reviewer/super_admin can add saved reviews during active review stages. */
 export function canAddActionItemReviews(
@@ -7,11 +8,12 @@ export function canAddActionItemReviews(
   runStatus: string | null | undefined,
 ): boolean {
   if (!role || !runStatus) return false;
+  const status = normalizeRunStatus(runStatus);
   if (role === 'super_admin') {
-    return runStatus === 'submitted_for_review' || runStatus === 'checker_approved' || runStatus === 'pulled_back';
+    return status === 'submitted_for_review' || status === 'checker_approved' || isPulledBackRun(status);
   }
-  if (role === 'checker') return runStatus === 'submitted_for_review' || runStatus === 'pulled_back';
-  if (role === 'reviewer') return runStatus === 'checker_approved' || runStatus === 'pulled_back';
+  if (role === 'checker') return status === 'submitted_for_review' || isPulledBackRun(status);
+  if (role === 'reviewer') return status === 'checker_approved' || isPulledBackRun(status);
   return false;
 }
 
@@ -21,19 +23,38 @@ export function reviewWorkspaceLink(
   runStatus: string | null | undefined,
 ): string[] | null {
   if (!runId || !runStatus) return null;
+  const status = normalizeRunStatus(runStatus);
+  if (isPulledBackRun(status)) {
+    return ['/nd/correction/review', runId];
+  }
   if (
     (role === 'checker' || role === 'super_admin') &&
-    runStatus === 'submitted_for_review'
+    status === 'submitted_for_review'
   ) {
     return ['/nd/checker/review', runId];
   }
   if (
     (role === 'reviewer' || role === 'super_admin') &&
-    runStatus === 'checker_approved'
+    status === 'checker_approved'
   ) {
     return ['/nd/reviewer/review', runId];
   }
   return null;
+}
+
+export function reviewWorkspaceModeForStatus(
+  runStatus: string | null | undefined,
+): 'none' | 'maker' | 'checker' | 'reviewer' {
+  switch (runStatus) {
+    case 'pulled_back':
+      return 'maker';
+    case 'submitted_for_review':
+      return 'checker';
+    case 'checker_approved':
+      return 'reviewer';
+    default:
+      return 'none';
+  }
 }
 
 export function isReviewRole(role: string | null | undefined): boolean {

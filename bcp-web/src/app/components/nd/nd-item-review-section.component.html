@@ -1,0 +1,230 @@
+@if (showPanel) {
+  <section class="item-review-section" [class.compact]="!title" [class.light-surface]="lightSurface">
+    @if (title) {
+      <header class="item-review-head">
+        <h4>{{ title }}</h4>
+        @if (subtitle) {
+          <p class="item-review-sub">{{ subtitle }}</p>
+        }
+      </header>
+    }
+
+    @if (sortedReviews.length) {
+      <div class="item-review-rows" role="list">
+        @for (rev of sortedReviews; track rev.id) {
+          <article class="item-review-row" [class.expanded]="isExpanded(rev.id)" role="listitem">
+            <div class="item-review-row-shell">
+              <button
+                type="button"
+                class="item-review-row-toggle"
+                [attr.aria-expanded]="isExpanded(rev.id)"
+                (click)="toggleExpanded(rev.id)"
+              >
+                <span class="review-status-pill" [ngClass]="reviewStatusClass(rev.status)">
+                  {{ actionReviewStatusLabel(rev.status) }}
+                </span>
+                <span class="priority-value" [ngClass]="reviewPriorityTierClass(rev)">
+                  {{ reviewPriorityLabel(rev) }}
+                </span>
+                <span class="item-review-meta">{{ formatReviewDate(rev.createdAt) }}</span>
+                @if (rev.responsibility) {
+                  <span class="item-review-meta truncate">{{ rev.responsibility }}</span>
+                }
+                <span class="item-review-preview truncate">{{ commentPreview(rev.comment) }}</span>
+                <svg
+                  class="item-review-chevron"
+                  [class.open]="isExpanded(rev.id)"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path d="M6 9l6 6 6-6"/>
+                </svg>
+              </button>
+
+              @if (reviewMode) {
+                <div class="item-review-row-actions" (click)="$event.stopPropagation()">
+                  <button
+                    type="button"
+                    class="item-review-action-btn"
+                    title="Move up"
+                    aria-label="Move review up"
+                    [disabled]="!canMoveUp(rev.id) || isReviewBusy(rev.id)"
+                    (click)="onReorder(rev.id, 'up', $event)"
+                  >
+                    <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+                      <path fill="none" stroke="currentColor" stroke-width="1.8" d="M10 5l-4 4h8l-4-4z"/>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="item-review-action-btn"
+                    title="Move down"
+                    aria-label="Move review down"
+                    [disabled]="!canMoveDown(rev.id) || isReviewBusy(rev.id)"
+                    (click)="onReorder(rev.id, 'down', $event)"
+                  >
+                    <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+                      <path fill="none" stroke="currentColor" stroke-width="1.8" d="M10 15l4-4H6l4 4z"/>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="item-review-action-btn"
+                    title="Edit review"
+                    aria-label="Edit review"
+                    [disabled]="isReviewBusy(rev.id)"
+                    (click)="openEditForm(rev, $event)"
+                  >
+                    <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+                      <path
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        d="M13.5 3.5l3 3L7 16H4v-3l9.5-9.5z"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="item-review-action-btn danger"
+                    title="Delete review"
+                    aria-label="Delete review"
+                    [disabled]="isReviewBusy(rev.id)"
+                    (click)="onDelete(rev.id, $event)"
+                  >
+                    <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+                      <path
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        d="M5 6h10M8 6V4.5h4V6M7.5 6l.5 9h4l.5-9"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              }
+            </div>
+
+            @if (isExpanded(rev.id)) {
+              <div class="item-review-row-detail">
+                <dl class="item-review-detail-grid">
+                  <div>
+                    <dt>Due date</dt>
+                    <dd>{{ formatDueDate(rev.dueDate) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Responsibility</dt>
+                    <dd>{{ rev.responsibility?.trim() || '—' }}</dd>
+                  </div>
+                  <div class="wide">
+                    <dt>Comment</dt>
+                    <dd>{{ rev.comment?.trim() || '—' }}</dd>
+                  </div>
+                </dl>
+              </div>
+            }
+          </article>
+        }
+      </div>
+    }
+
+    @if (reviewMode) {
+      @if (!formOpen) {
+        <button type="button" class="toolbar-btn primary add-review-btn" (click)="openForm()">+ Add review</button>
+      } @else {
+        <div class="item-review-form card-surface">
+          <div class="item-review-form-head">
+            <p class="form-label">{{ formTitle }}</p>
+            <button type="button" class="toolbar-btn subtle" (click)="closeForm()">Cancel</button>
+          </div>
+          <p class="item-review-sub">{{ formHint }}</p>
+
+          <div class="item-review-row-fields">
+            <label class="item-review-field">
+              <span class="field-label">Status</span>
+              <select class="item-review-input" [(ngModel)]="draft.status">
+                <option value="">Select status…</option>
+                @for (opt of statusOptions; track opt.id) {
+                  <option [ngValue]="opt.id">{{ opt.label }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="item-review-field">
+              <span class="field-label">Due date</span>
+              <input type="date" class="item-review-input item-review-date" [(ngModel)]="draftDate" />
+            </label>
+
+            <label class="item-review-field">
+              <span class="field-label">Due time</span>
+              <input type="time" class="item-review-input item-review-time" [(ngModel)]="draftTime" />
+            </label>
+
+            <label class="item-review-field">
+              <span class="field-label">Responsibility</span>
+              <select class="item-review-input" [(ngModel)]="draft.responsibility">
+                <option value="">Select department…</option>
+                @for (dept of departments; track dept.id) {
+                  <option [value]="dept.name">{{ dept.name }}</option>
+                }
+              </select>
+            </label>
+          </div>
+
+          <div class="item-review-priority">
+            <div class="priority-head">
+              <span class="field-label">Priority score</span>
+              <span class="priority-value" [ngClass]="priorityTierClass">{{ priorityScoreLabel }}</span>
+            </div>
+            <div class="priority-slider-wrap">
+              <div class="priority-track" aria-hidden="true"></div>
+              <input
+                type="range"
+                class="priority-slider"
+                min="0"
+                max="100"
+                step="1"
+                [ngModel]="draft.priority"
+                (ngModelChange)="setPriority($event)"
+                [attr.aria-valuenow]="draft.priority"
+                [attr.aria-valuetext]="priorityScoreLabel"
+              />
+            </div>
+            <div class="priority-scale" aria-hidden="true">
+              <span>0 Low</span>
+              <span>50 Medium</span>
+              <span>100 Critical</span>
+            </div>
+            <p class="priority-standard">{{ riskStandardLabel }}</p>
+          </div>
+
+          <label class="item-review-field wide">
+            <span class="field-label">Comment / review</span>
+            <textarea
+              class="item-review-input item-review-textarea"
+              rows="2"
+              [(ngModel)]="draft.comment"
+              placeholder="Feedback…"
+            ></textarea>
+          </label>
+
+          <button
+            type="button"
+            class="nd-btn-primary nd-btn-sm"
+            [disabled]="!canSave()"
+            (click)="onSave()"
+          >
+            {{ isSaving ? 'Saving…' : (editingReviewId ? 'Update review' : 'Save review') }}
+          </button>
+        </div>
+      }
+    } @else if (disabledHint) {
+      <p class="item-review-hint muted">{{ disabledHint }}</p>
+    }
+  </section>
+}

@@ -1,6 +1,7 @@
 import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import {
@@ -47,7 +48,7 @@ export type RegulationPointSearchGroup = {
 @Component({
   selector: 'app-nd-regulation-documents',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent],
   templateUrl: './nd-regulation-documents.component.html',
   styleUrls: ['./nd-regulation-documents.component.scss', '../nd-shared.scss'],
 })
@@ -56,6 +57,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
 
   private readonly api = inject(NdApiService);
   private readonly shellFocus = inject(NdShellFocusService);
+  private readonly route = inject(ActivatedRoute);
   readonly auth = inject(NdAuthService);
   readonly formatPointPageRef = formatPointPageRef;
 
@@ -72,6 +74,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   uploading = false;
   extractingId: string | null = null;
   hidingId: string | null = null;
+  showDeleted = false;
   savingDeptId: string | null = null;
   error = '';
   message = '';
@@ -97,7 +100,12 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.restorePanelSplit();
     await this.auth.refreshProfile();
     await this.loadDepartments();
-    await this.loadDocs();
+    this.route.queryParamMap.subscribe((params) => {
+      const wasDeleted = this.showDeleted;
+      this.showDeleted = params.get('deleted') === '1';
+      if (wasDeleted && !this.showDeleted) this.closePointsPanel();
+      void this.loadDocs();
+    });
   }
 
   get panelGridColumns(): string | null {
@@ -217,6 +225,10 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     return this.canUpload;
   }
 
+  get canViewDeleted(): boolean {
+    return this.auth.getRole() === 'super_admin';
+  }
+
   async loadDepartments(): Promise<void> {
     const res = await this.api.getDepartments();
     if (res.success && res.data) this.departments = res.data as Department[];
@@ -227,6 +239,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     const res = await this.api.getRegulationDocuments({
       departmentId: this.deptFilter || undefined,
       status: this.statusFilter || undefined,
+      hiddenOnly: this.showDeleted,
     });
     if (res.success && res.data) {
       const all = res.data as RegulationDocument[];
@@ -546,7 +559,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     event?.stopPropagation();
     if (this.isManualDoc(doc)) return;
     const confirmed = confirm(
-      `Hide "${doc.name}" from the library?\n\nNothing is deleted from the database — it is only hidden (status -1). An admin can restore it later.`,
+      `Delete "${doc.name}" from the library?\n\nNothing is deleted from the database — extraction credits and points are kept. A super admin can restore it from the Deleted tab.`,
     );
     if (!confirmed) return;
 
@@ -555,13 +568,34 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.message = '';
     const res = await this.api.hideRegulationDocument(doc.id);
     if (res.success) {
-      this.message = res.message ?? 'Regulation hidden from library';
+      this.message = res.message ?? 'Regulation removed from library';
       if (this.selectedDoc?.id === doc.id) this.closePointsPanel();
       await this.loadDocs(true);
     } else {
-      this.error = res.message ?? 'Failed to hide regulation';
+      this.error = res.message ?? 'Failed to delete regulation';
     }
     this.hidingId = null;
+  }
+
+  async handleRestore(doc: RegulationDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.hidingId = doc.id;
+    this.error = '';
+    this.message = '';
+    const res = await this.api.restoreRegulationDocument(doc.id);
+    if (res.success) {
+      this.message = res.message ?? 'Regulation restored';
+      if (this.selectedDoc?.id === doc.id) this.closePointsPanel();
+      await this.loadDocs(true);
+    } else {
+      this.error = res.message ?? 'Failed to restore regulation';
+    }
+    this.hidingId = null;
+  }
+
+  actorLabel(name?: string | null): string {
+    const trimmed = (name ?? '').trim();
+    return trimmed || '—';
   }
 
   async openDocument(doc: RegulationDocument, event?: Event, page?: number | null): Promise<void> {

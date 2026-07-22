@@ -1,10 +1,17 @@
 <div class="page-header">
   <div>
-    <h1>Regulation Docs Library</h1>
-    <p class="subtitle">Regulation documents and custom manual points grouped by department</p>
+    <h1>{{ showDeleted ? 'Deleted regulations' : 'Regulation Docs Library' }}</h1>
+    <p class="subtitle">
+      @if (showDeleted) {
+        Soft-deleted regulations are hidden from the library but kept in the database — extraction credits and points are preserved. Restore to make them visible again.
+      } @else {
+        Regulation documents and custom manual points grouped by department
+      }
+    </p>
   </div>
-  @if (canUpload) {
-    <div class="header-actions">
+  @if (canUpload || canViewDeleted) {
+  <div class="header-actions">
+    @if (canUpload && !showDeleted) {
       <label class="upload-dept field">
         <span>Department</span>
         <select [(ngModel)]="uploadDept" name="uploadDept">
@@ -19,11 +26,22 @@
         {{ uploading ? 'Uploading…' : '+ Upload regulation' }}
       </button>
       <input #uploadInput type="file" accept=".pdf" hidden (change)="onFileChange($event); handleUpload()" />
-    </div>
+    } @else {
+      <button type="button" class="btn-secondary" (click)="loadDocs()" [disabled]="loading">Refresh</button>
+    }
+  </div>
   }
 </div>
 
 <div class="nd-fill-panel reg-docs-fill">
+@if (canViewDeleted) {
+  <div class="filter-pills tabs nd-shrink">
+    <a routerLink="/nd/regulation-documents" class="tab" [class.active]="!showDeleted">Active</a>
+    <a routerLink="/nd/regulation-documents" class="tab" [class.active]="showDeleted" [queryParams]="{ deleted: '1' }">Deleted</a>
+  </div>
+}
+
+@if (!showDeleted) {
 <div class="filter-pills nd-list-toolbar nd-shrink point-search-toolbar">
   <input
     type="search"
@@ -102,6 +120,7 @@
     }
   </div>
 }
+}
 
 @if (!loading && docs.length) {
 <div class="filter-pills nd-list-toolbar nd-shrink">
@@ -147,8 +166,13 @@
       <p class="muted-loading">Loading regulations…</p>
     } @else if (!docs.length) {
       <div class="card-surface empty-state">
-        <strong>No regulations uploaded yet</strong>
-        <p>Upload a regulation PDF or add custom points in the manual entry row.</p>
+        @if (showDeleted) {
+          <strong>No deleted regulations</strong>
+          <p>When a regulation is deleted it stays in the database and appears here for super admins.</p>
+        } @else {
+          <strong>No regulations uploaded yet</strong>
+          <p>Upload a regulation PDF or add custom points in the manual entry row.</p>
+        }
       </div>
     } @else if (!visibleDocs.length) {
       <div class="card-surface empty-state">
@@ -164,6 +188,11 @@
               <th class="sortable" (click)="toggleSort('department')">Department <span class="sort-indicator">{{ sortMark('department') }}</span></th>
               <th class="sortable" (click)="toggleSort('points')">Stored pts <span class="sort-indicator">{{ sortMark('points') }}</span></th>
               <th class="sortable" (click)="toggleSort('created')">Uploaded <span class="sort-indicator">{{ sortMark('created') }}</span></th>
+              @if (showDeleted) {
+                <th>Deleted</th>
+              }
+              <th>Uploaded by</th>
+              <th>Extracted by</th>
               <th class="sortable" (click)="toggleSort('status')">Status <span class="sort-indicator">{{ sortMark('status') }}</span></th>
               <th></th>
             </tr>
@@ -179,6 +208,9 @@
               >
                 <td class="reg-cell">
                   <strong>{{ d.name }}</strong>
+                  @if (d.originalFileName && d.originalFileName !== d.name) {
+                    <span class="manual-hint" [title]="d.originalFileName">{{ d.originalFileName }}</span>
+                  }
                   @if (isManualDoc(d)) {
                     <span class="manual-hint">Custom points you enter manually</span>
                   }
@@ -202,6 +234,11 @@
                 </td>
                 <td>{{ docPointMeta(d) }}</td>
                 <td class="muted">{{ isManualDoc(d) ? '—' : formatDate(d.createdAt) }}</td>
+                @if (showDeleted) {
+                  <td class="muted">{{ d.hiddenAt ? formatDate(d.hiddenAt) : '—' }}</td>
+                }
+                <td class="muted">{{ actorLabel(d.uploadedByName) }}</td>
+                <td class="muted">{{ isManualDoc(d) ? '—' : actorLabel(d.extractedByName) }}</td>
                 <td>
                   @if (isManualDoc(d)) {
                     <span class="severity-badge completed">{{ extractionLabel(d.extractionStatus) }}</span>
@@ -232,14 +269,24 @@
                   @if (!isManualDoc(d)) {
                     <button type="button" class="btn-link" (click)="openDocument(d, $event)">Open PDF</button>
                   }
-                  @if (canUpload && !isManualDoc(d)) {
+                  @if (canUpload && !isManualDoc(d) && !showDeleted) {
                     <button
                       type="button"
                       class="btn-link btn-hide"
                       [disabled]="hidingId === d.id"
                       (click)="handleHide(d, $event)"
                     >
-                      {{ hidingId === d.id ? 'Hiding…' : 'Hide' }}
+                      {{ hidingId === d.id ? 'Deleting…' : 'Delete' }}
+                    </button>
+                  }
+                  @if (showDeleted && canViewDeleted && !isManualDoc(d)) {
+                    <button
+                      type="button"
+                      class="btn-use btn-sm"
+                      [disabled]="hidingId === d.id"
+                      (click)="handleRestore(d, $event)"
+                    >
+                      {{ hidingId === d.id ? 'Restoring…' : 'Restore' }}
                     </button>
                   }
                 </td>

@@ -12,7 +12,7 @@
     },
     "uae_response_compliance_level": {
       "type": "string",
-      "description": "Page [Number], Section [Header Code]: '[Verbatim internal document quote that operationally satisfies the regulatory intent]'. Judgment must be semantic (intent match), not literal word match to gov text. If Non-Compliant, output exactly: No corresponding procedure found."
+      "description": "Page [Number] is the 1-based PDF viewer page index (not printed footer page). Section [Header Code]: '[Verbatim internal document quote that operationally satisfies the regulatory intent]'. Judgment must be semantic (intent match), not literal word match to gov text. If Non-Compliant, output exactly: No corresponding procedure found."
     },
     "comply_status": {
       "type": "string",
