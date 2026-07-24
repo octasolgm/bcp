@@ -33,9 +33,9 @@ export type BrandLogoVariant = 'header' | 'primary' | 'mark';
       }
 
       .brand-logo-header {
-        height: 28px;
+        height: 36px;
         width: auto;
-        max-width: min(220px, 42vw);
+        max-width: min(320px, 52vw);
       }
 
       .brand-logo-primary {
@@ -63,7 +63,7 @@ export class BrandLogoComponent {
       case 'mark':
         return BRAND.logoMark;
       default:
-        return BRAND.logoHeader;
+        return BRAND.logoPrimary;
     }
   }
 }

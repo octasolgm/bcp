@@ -55,6 +55,10 @@ public class StoredDocument
     [Column("storage_path")]
     public string StoragePath { get; set; } = "";
 
+    /// <summary>Original Word upload path when StoragePath holds converted PDF for Landing AI.</summary>
+    [Column("source_storage_path")]
+    public string? SourceStoragePath { get; set; }
+
     /// <summary>SHA-256 of file bytes — key into Landing AI extract cache.</summary>
     [Column("file_hash")]
     public string? FileHash { get; set; }

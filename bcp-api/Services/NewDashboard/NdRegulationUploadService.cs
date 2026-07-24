@@ -12,6 +12,7 @@ namespace Reguliq.Api.Services.NewDashboard;
 public class NdRegulationUploadService(
     AppDbContext db,
     SupabaseStorageService storage,
+    NdStoredDocumentUploadService uploadPrep,
     LandingAiGovExtractService govExtract,
     ILogger<NdRegulationUploadService> logger)
 {
@@ -27,29 +28,27 @@ public class NdRegulationUploadService(
             throw new InvalidOperationException("Supabase Storage not configured.");
 
         var title = Path.GetFileNameWithoutExtension(fileName).Trim();
-        var safeName = SanitizeFileName(fileName);
-        var titleKey = NormalizeKey(title);
-        var objectPath = $"regulations/nd/{titleKey}/{Guid.NewGuid():N}/{safeName}";
-
-        await using (var stream = new MemoryStream(bytes))
-            await storage.UploadAsync(objectPath, stream, contentType, upsert: true, ct);
-
-        var fileHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        var prepared = await uploadPrep.PrepareAsync(
+            bytes,
+            fileName,
+            contentType,
+            "regulations/nd",
+            ct);
 
         var stored = new Data.Entities.StoredDocument
         {
             Title = title,
-            OriginalFileName = fileName,
-            FileType = "PDF",
+            OriginalFileName = prepared.OriginalFileName,
+            FileType = prepared.FileType,
             Category = "Regulation",
             FilterKey = "regulation",
             DocKind = "regulation",
-            ContentType = contentType,
+            ContentType = prepared.ContentType,
             StorageBucket = storage.Bucket,
-            StoragePath = objectPath,
-            FileHash = fileHash,
-            SizeBytes = bytes.Length,
-            Pages = Math.Max(1, (int)Math.Round(bytes.Length / 45000.0)),
+            StoragePath = prepared.StoragePath,
+            FileHash = prepared.FileHash,
+            SizeBytes = prepared.SizeBytes,
+            Pages = Math.Max(1, (int)Math.Round(prepared.SizeBytes / 45000.0)),
             UploadedBy = userId,
         };
         db.StoredDocuments.Add(stored);
@@ -59,7 +58,7 @@ public class NdRegulationUploadService(
         {
             StoredDocumentId = stored.Id,
             Name = title,
-            FilePath = objectPath,
+            FilePath = prepared.StoragePath,
             DepartmentId = departmentId,
             ExtractionStatus = "pending",
             CreatedBy = userId,
@@ -116,7 +115,7 @@ public class NdRegulationUploadService(
             var stored = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct)
                 ?? throw new InvalidOperationException("Stored document not found.");
             bytes = await storage.DownloadAsync(stored.StoragePath, ct);
-            fileName = stored.OriginalFileName;
+            fileName = stored.OriginalFileName ?? Path.GetFileName(stored.StoragePath);
         }
         else if (!string.IsNullOrWhiteSpace(regDoc.FilePath))
         {

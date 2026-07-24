@@ -26,6 +26,12 @@ export type DualVerifyLlmSettings = {
   updatedBy?: string | null;
 };
 
+export type ActiveDualVerifyLlm = {
+  provider: string;
+  model: string;
+  providerLabel: string;
+};
+
 export type RegulationDocument = {
   id: string;
   source?: 'legacy' | 'nd' | 'manual';
@@ -47,6 +53,9 @@ export type RegulationDocument = {
   extractedByName?: string | null;
   isHidden?: boolean;
   hiddenAt?: string | null;
+  convertedFromWord?: boolean;
+  sourceOriginalFileName?: string | null;
+  landingAiFileName?: string | null;
 };
 
 export type RegulationPoint = {
@@ -78,6 +87,9 @@ export type InternalDocument = {
   parsedByName?: string | null;
   isHidden?: boolean;
   hiddenAt?: string | null;
+  convertedFromWord?: boolean;
+  sourceOriginalFileName?: string | null;
+  landingAiFileName?: string | null;
 };
 
 export type LibrarySummary = {

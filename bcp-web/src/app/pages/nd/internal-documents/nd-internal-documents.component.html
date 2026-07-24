@@ -5,7 +5,7 @@
       @if (showDeleted) {
         Soft-deleted documents are hidden from the library but kept in the database — parse credits and file data are preserved. Restore to make them visible again.
       } @else {
-        Upload PDFs here. Use <strong>Run parse</strong> to generate markdown before analysis.
+        Upload PDF or Word (.doc, .docx). Landing AI ADE parses these formats directly. Use <strong>Run parse</strong> before analysis.
       }
     </p>
   </div>
@@ -39,7 +39,7 @@
       <p>When a document is deleted it stays in the database and appears here for super admins.</p>
     } @else {
       <strong>No documents yet</strong>
-      <p>Upload a PDF to add internal compliance documents.</p>
+      <p>Upload a PDF or Word (.docx) to add internal compliance documents.</p>
     }
   </div>
 } @else {
@@ -105,7 +105,14 @@
           <tr>
             <td class="doc-cell">
               <strong>{{ d.title }}</strong>
-              <span class="doc-meta" [title]="d.originalFileName">{{ d.originalFileName }}</span>
+              @if (d.convertedFromWord && d.sourceOriginalFileName) {
+                <span class="doc-meta original-source-label">Original: {{ d.sourceOriginalFileName }}</span>
+                <span class="doc-meta muted" [title]="d.landingAiFileName ?? ''">
+                  PDF copy: {{ d.landingAiFileName ?? 'converted.pdf' }}
+                </span>
+              } @else {
+                <span class="doc-meta" [title]="d.originalFileName">{{ d.originalFileName }}</span>
+              }
             </td>
             <td class="muted">{{ formatDate(d.uploaded) }}</td>
             @if (showDeleted) {

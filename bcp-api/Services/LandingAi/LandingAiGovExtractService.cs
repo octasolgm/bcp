@@ -7,6 +7,7 @@ namespace Reguliq.Api.Services.LandingAi;
 /// <summary>Extract numbered gov requirement points via Landing AI (parse + schema extract).</summary>
 public class LandingAiGovExtractService(
     LandingAiHttpClient client,
+    LandingAiDocumentParseService documentParse,
     LandingAiCacheRepository cache,
     GovPointsService govPoints,
     IOptions<LandingAiOptions> options,
@@ -38,7 +39,7 @@ public class LandingAiGovExtractService(
         if (string.IsNullOrWhiteSpace(markdown) && fileBytes is { Length: > 0 })
         {
             logger.LogInformation("Landing AI parse for gov extract ({File}, {Kb} KB)", fileName, fileBytes.Length / 1024);
-            markdown = await client.ParseDocumentAsync(fileBytes, fileName, ct);
+            markdown = await documentParse.ParseToMarkdownAsync(fileBytes, fileName, ct);
             await cache.SaveParseCacheAsync(fileHash, fileName, markdown, _opts.ParseModel, ct);
         }
 

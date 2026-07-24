@@ -11,6 +11,7 @@ namespace Reguliq.Api.Services.NewDashboard;
 /// <summary>Parse internal PDFs to markdown (manual or on-demand during analysis).</summary>
 public class NdInternalParseService(
     AppDbContext db,
+    LandingAiDocumentParseService documentParse,
     LandingAiHttpClient client,
     LandingAiCacheRepository cache,
     SupabaseStorageService storage,
@@ -41,12 +42,12 @@ public class NdInternalParseService(
         Guid? parsedBy = null,
         CancellationToken ct = default)
     {
+        var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == documentId, ct)
+            ?? throw new InvalidOperationException("Internal document not found.");
+
         if (!client.IsConfigured)
             throw new InvalidOperationException(
                 "Landing AI is not configured. Set LandingAi:ApiKey in appsettings.");
-
-        var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == documentId, ct)
-            ?? throw new InvalidOperationException("Internal document not found.");
 
         if (string.IsNullOrWhiteSpace(doc.StoragePath))
             throw new InvalidOperationException("Document has no storage path.");
@@ -91,14 +92,18 @@ public class NdInternalParseService(
         try
         {
             logger.LogInformation(
-                "Landing AI internal parse ({File}, {Kb} KB)",
+                "Internal document parse ({File}, {Kb} KB)",
                 doc.OriginalFileName,
                 pdfBytes.Length / 1024);
 
-            var markdown = await client.ParseDocumentAsync(pdfBytes, doc.OriginalFileName, ct);
-            await cache.SaveParseCacheAsync(hash, doc.OriginalFileName, markdown, _opts.ParseModel, ct);
+            var fileName = doc.OriginalFileName
+                ?? Path.GetFileName(doc.StoragePath)
+                ?? doc.Title
+                ?? "document";
+            var markdown = await documentParse.ParseToMarkdownAsync(pdfBytes, fileName, ct);
+            await cache.SaveParseCacheAsync(hash, fileName, markdown, _opts.ParseModel, ct);
             await MarkParsedAsync(doc, hash, parsedBy, ct);
-            return new InternalDocPayload(hash, doc.OriginalFileName, markdown, pdfBytes);
+            return new InternalDocPayload(hash, doc.OriginalFileName ?? fileName, markdown, pdfBytes);
         }
         catch (Exception ex)
         {

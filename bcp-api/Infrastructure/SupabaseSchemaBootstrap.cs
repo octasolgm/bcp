@@ -9,6 +9,14 @@ public static class SupabaseSchemaBootstrap
     private static readonly string[] PatchSql =
     [
         """
+        CREATE TABLE IF NOT EXISTS nd_system_settings (
+          key TEXT PRIMARY KEY,
+          value_json JSONB NOT NULL DEFAULT jsonb_build_object(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_by UUID NULL
+        );
+        """,
+        """
         ALTER TABLE dual_verify_sessions
           ADD COLUMN IF NOT EXISTS queued_points INTEGER NOT NULL DEFAULT 0;
         """,
@@ -91,6 +99,10 @@ public static class SupabaseSchemaBootstrap
           ADD COLUMN IF NOT EXISTS hidden_by UUID NULL;
         """,
         """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS source_storage_path TEXT NULL;
+        """,
+        """
         CREATE TABLE IF NOT EXISTS landing_ai_parse_cache (
           file_hash TEXT PRIMARY KEY,
           file_name TEXT NULL,
@@ -103,7 +115,7 @@ public static class SupabaseSchemaBootstrap
         CREATE TABLE IF NOT EXISTS landing_ai_extract_cache (
           file_hash TEXT NOT NULL,
           schema_key TEXT NOT NULL,
-          points_json JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+          points_json JSONB NOT NULL DEFAULT jsonb_build_object(),
           extract_model TEXT NULL,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           PRIMARY KEY (file_hash, schema_key)
@@ -141,14 +153,6 @@ public static class SupabaseSchemaBootstrap
         """
         CREATE INDEX IF NOT EXISTS ix_document_analysis_runs_session
           ON document_analysis_runs (dual_verify_session_id);
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS nd_system_settings (
-          key TEXT PRIMARY KEY,
-          value_json JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          updated_by UUID NULL
-        );
         """,
     ];
 

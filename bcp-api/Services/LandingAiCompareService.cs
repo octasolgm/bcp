@@ -7,6 +7,7 @@ namespace Reguliq.Api.Services.LandingAi;
 /// <summary>Phase 1 dual-verify — Landing AI parse + compare (standalone, no NestJS :4000).</summary>
 public class LandingAiCompareService(
     LandingAiHttpClient client,
+    LandingAiDocumentParseService documentParse,
     LandingAiCacheRepository cache,
     IOptions<LandingAiOptions> options,
     ILogger<LandingAiCompareService> logger)
@@ -142,8 +143,8 @@ public class LandingAiCompareService(
             throw new InvalidOperationException(
                 "Internal markdown not found. Parse the document first or provide PDF bytes.");
 
-        logger.LogInformation("Landing AI PDF parse starting ({File}, {Kb} KB)", internalFileName, internalPdf.Length / 1024);
-        var markdown = await client.ParseDocumentAsync(internalPdf, internalFileName, ct);
+        logger.LogInformation("Internal document parse for compare ({File}, {Kb} KB)", internalFileName, internalPdf.Length / 1024);
+        var markdown = await documentParse.ParseToMarkdownAsync(internalPdf, internalFileName, ct);
         await cache.SaveParseCacheAsync(fileHash, internalFileName, markdown, _opts.ParseModel, ct);
         return markdown;
     }

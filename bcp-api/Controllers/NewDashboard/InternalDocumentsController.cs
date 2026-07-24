@@ -17,6 +17,7 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class InternalDocumentsController(
     AppDbContext appDb,
     SupabaseStorageService storage,
+    NdStoredDocumentUploadService uploadPrep,
     NdInternalParseService parseService,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
@@ -65,6 +66,11 @@ public class InternalDocumentsController(
                 parsedByName = ProfileName(profileNames, d.ParsedBy),
                 isHidden = d.IsHidden,
                 hiddenAt = d.HiddenAt,
+                convertedFromWord = !string.IsNullOrWhiteSpace(d.SourceStoragePath),
+                sourceOriginalFileName = !string.IsNullOrWhiteSpace(d.SourceStoragePath)
+                    ? d.OriginalFileName
+                    : null,
+                landingAiFileName = Path.GetFileName(d.StoragePath),
             });
         }
 
@@ -223,7 +229,7 @@ public class InternalDocumentsController(
 
     [HttpPost("upload")]
     [RequestSizeLimit(52_428_800)]
-    public async Task<IActionResult> Upload(IFormFile file, CancellationToken ct)
+    public async Task<IActionResult> Upload(IFormFile file, CancellationToken ct = default)
     {
         var (profile, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
@@ -237,40 +243,50 @@ public class InternalDocumentsController(
         await file.CopyToAsync(ms, ct);
         var bytes = ms.ToArray();
         var title = Path.GetFileNameWithoutExtension(file.FileName).Trim();
-        var safeName = SanitizeFileName(file.FileName);
-        var objectPath = $"documents/nd/{NormalizeKey(title)}/{Guid.NewGuid():N}/{safeName}";
 
-        await using (var stream = new MemoryStream(bytes))
-            await storage.UploadAsync(objectPath, stream, file.ContentType ?? "application/pdf", true, ct);
-
-        var row = new StoredDocument
+        try
         {
-            Title = title,
-            OriginalFileName = file.FileName,
-            FileType = "PDF",
-            DocKind = "document",
-            StorageBucket = storage.Bucket,
-            StoragePath = objectPath,
-            FileHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
-            SizeBytes = bytes.Length,
-            ContentType = file.ContentType ?? "application/pdf",
-            ParseStatus = "pending",
-            UploadedBy = profile!.Id,
-        };
-        appDb.StoredDocuments.Add(row);
-        await appDb.SaveChangesAsync(ct);
+            var prepared = await uploadPrep.PrepareAsync(
+                bytes,
+                file.FileName,
+                file.ContentType,
+                "documents/nd",
+                ct);
 
-        return Ok(new
-        {
-            success = true,
-            data = new
+            var row = new StoredDocument
             {
-                id = row.Id,
-                title = row.Title,
-                originalFileName = row.OriginalFileName,
-                parseStatus = row.ParseStatus,
-            },
-        });
+                Title = title,
+                OriginalFileName = prepared.OriginalFileName,
+                FileType = prepared.FileType,
+                DocKind = "document",
+                StorageBucket = storage.Bucket,
+                StoragePath = prepared.StoragePath,
+                FileHash = prepared.FileHash,
+                SizeBytes = prepared.SizeBytes,
+                ContentType = prepared.ContentType,
+                ParseStatus = "pending",
+                UploadedBy = profile!.Id,
+            };
+            appDb.StoredDocuments.Add(row);
+            await appDb.SaveChangesAsync(ct);
+
+            return Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    id = row.Id,
+                    title = row.Title,
+                    originalFileName = row.OriginalFileName,
+                    parseStatus = row.ParseStatus,
+                    fileType = row.FileType,
+                },
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
     }
 
     [HttpGet("{id:guid}/file-url")]
@@ -295,7 +311,35 @@ public class InternalDocumentsController(
             data = new
             {
                 url,
-                fileName = doc.OriginalFileName ?? doc.Title,
+                fileName = doc.OriginalFileName ?? Path.GetFileName(doc.StoragePath),
+                expiresIn = 3600,
+            },
+        });
+    }
+
+    [HttpGet("{id:guid}/source-file-url")]
+    public async Task<IActionResult> SourceFileUrl(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(appDb, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var doc = await appDb.StoredDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+        if (doc == null || string.IsNullOrWhiteSpace(doc.SourceStoragePath))
+            return NotFound(new { success = false, message = "Legacy converted upload has no separate source file." });
+
+        if (!storage.IsConfigured)
+            return StatusCode(503, new { success = false, message = "Supabase Storage not configured." });
+
+        var url = await storage.CreateSignedUrlAsync(doc.SourceStoragePath, 3600, ct);
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                url,
+                fileName = doc.OriginalFileName ?? Path.GetFileName(doc.SourceStoragePath),
                 expiresIn = 3600,
             },
         });
@@ -396,4 +440,23 @@ public class InternalDocumentsController(
             baseName = baseName.Replace(c, '_');
         return baseName;
     }
+
+    private static string DetectFileType(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => "PDF",
+            ".doc" or ".docx" => "DOC",
+            _ => "DOC",
+        };
+    }
+
+    private static string DefaultContentType(string fileType) =>
+        fileType switch
+        {
+            "PDF" => "application/pdf",
+            "DOC" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            _ => "application/octet-stream",
+        };
 }

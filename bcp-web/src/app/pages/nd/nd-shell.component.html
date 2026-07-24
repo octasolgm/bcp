@@ -102,7 +102,12 @@
                 </svg>
               }
             }
-            <span class="nav-label-text">{{ item.label }}</span>
+            <span class="nav-label-wrap">
+              <span class="nav-label-text">{{ item.label }}</span>
+              @if (item.id === 'analyse-v8' && pass2LlmSummary) {
+                <span class="nav-pass2-llm">Pass 2: {{ pass2LlmSummary }}</span>
+              }
+            </span>
             @if (badgeFor(item); as badge) {
               <span class="nav-badge">{{ badge }}</span>
             }

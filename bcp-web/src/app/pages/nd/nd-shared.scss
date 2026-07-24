@@ -544,6 +544,14 @@
 .nd-point-content { margin-top: 0.5rem; font-size: 0.875rem; white-space: pre-wrap; }
 .nd-point-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.75rem; font-size: 0.875rem; }
 .nd-doc-meta { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-top: 1rem; }
+
+.original-source-label {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: 500;
+}
 .nd-pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1.5rem; }
 
 .nd-progress-header { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-shrink: 0; }

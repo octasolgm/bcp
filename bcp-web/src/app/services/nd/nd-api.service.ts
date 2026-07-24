@@ -12,6 +12,9 @@ export type NdApiResult<T> = {
   message?: string;
   status?: number;
   totalMatches?: number;
+  requiresConversion?: boolean;
+  originalFileName?: string;
+  code?: string;
 };
 
 export type NdUserProfile = {
@@ -156,6 +159,13 @@ export class NdApiService {
     );
   }
 
+  getActiveDualVerifyLlm() {
+    return this.request<import('../../../lib/nd/types').ActiveDualVerifyLlm>(
+      'GET',
+      '/nd/settings/dual-verify-llm',
+    );
+  }
+
   updateUser(id: string, body: Record<string, unknown>) {
     return this.request<unknown>('PUT', `/nd/users/${id}`, body);
   }
@@ -212,13 +222,7 @@ export class NdApiService {
     const form = new FormData();
     form.append('file', file);
     if (departmentId) form.append('departmentId', departmentId);
-    const token = await getNdAccessToken();
-    const url = `${this.baseUrl()}/nd/regulation-documents/upload`;
-    return firstValueFrom(
-      this.http.post<NdApiResult<unknown>>(url, form, {
-        headers: new HttpHeaders({ Authorization: `Bearer ${token ?? ''}` }),
-      }),
-    );
+    return this.postMultipart<unknown>('/nd/regulation-documents/upload', form);
   }
 
   extractRegulationDocument(docId: string) {
@@ -308,13 +312,33 @@ export class NdApiService {
   async uploadInternalDocument(file: File) {
     const form = new FormData();
     form.append('file', file);
+    return this.postMultipart<unknown>('/nd/internal-documents/upload', form);
+  }
+
+  private async postMultipart<T>(path: string, form: FormData): Promise<NdApiResult<T>> {
     const token = await getNdAccessToken();
-    const url = `${this.baseUrl()}/nd/internal-documents/upload`;
-    return firstValueFrom(
-      this.http.post<NdApiResult<unknown>>(url, form, {
-        headers: new HttpHeaders({ Authorization: `Bearer ${token ?? ''}` }),
-      }),
-    );
+    const url = `${this.baseUrl()}${path}`;
+    try {
+      return await firstValueFrom(
+        this.http.post<NdApiResult<T>>(url, form, {
+          headers: new HttpHeaders({ Authorization: `Bearer ${token ?? ''}` }),
+        }).pipe(timeout(API_TIMEOUT_MS)),
+      );
+    } catch (err) {
+      if (err instanceof HttpErrorResponse && err.status === 409) {
+        const body = err.error as Record<string, unknown> | null;
+        if (body?.['requiresConversion']) {
+          return {
+            success: false,
+            requiresConversion: true,
+            message: String(body['message'] ?? 'Convert to PDF and continue?'),
+            originalFileName: body['originalFileName'] as string | undefined,
+            code: body['code'] as string | undefined,
+          };
+        }
+      }
+      throw err;
+    }
   }
 
   getLibraries(departmentId?: string) {

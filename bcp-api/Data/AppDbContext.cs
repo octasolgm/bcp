@@ -199,6 +199,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<NdSystemSetting>(e =>
+        {
+            e.ToTable("nd_system_settings");
+            e.HasKey(x => x.Key);
+            e.Property(x => x.Key).HasColumnName("key");
+            e.Property(x => x.ValueJson).HasColumnName("value_json").HasColumnType("jsonb");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+            e.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+        });
+
         ConfigureUtcDateTimes(modelBuilder);
     }
 

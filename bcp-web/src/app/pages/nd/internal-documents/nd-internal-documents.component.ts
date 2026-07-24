@@ -272,10 +272,12 @@ export class NdInternalDocumentsComponent implements OnInit {
     if (!this.file) return;
     this.uploading = true;
     this.error = '';
-    const res = await this.api.uploadInternalDocument(this.file);
+    const file = this.file;
+    const res = await this.api.uploadInternalDocument(file);
     if (res.success) {
       this.file = null;
-      this.message = 'Uploaded — status is Pending parse. Click Run parse when ready.';
+      this.message =
+        'Uploaded — status is Pending parse. Click Run parse when ready (Landing AI supports PDF and Word).';
       this.error = '';
       await this.load(true);
     } else {

@@ -120,7 +120,7 @@ public static class NdSchemaBootstrap
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
               analysis_run_id UUID NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
               regulation_point_id UUID,
-              point_snapshot JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+              point_snapshot JSONB NOT NULL DEFAULT jsonb_build_object(),
               landing_ai_status TEXT NOT NULL DEFAULT 'pending',
               landing_ai_result JSONB,
               landing_ai_action_plan TEXT,

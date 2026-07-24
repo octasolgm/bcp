@@ -44,5 +44,9 @@ public class SystemSettingsController(
         {
             return BadRequest(new { success = false, message = ex.Message });
         }
+        catch (Exception)
+        {
+            return BadRequest(new { success = false, message = "Could not save settings. Please try again." });
+        }
     }
 }

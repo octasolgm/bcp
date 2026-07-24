@@ -25,7 +25,7 @@
       <button type="button" class="btn-primary" [disabled]="uploading" (click)="uploadInput.click()">
         {{ uploading ? 'Uploading…' : '+ Upload regulation' }}
       </button>
-      <input #uploadInput type="file" accept=".pdf" hidden (change)="onFileChange($event); handleUpload()" />
+      <input #uploadInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
     } @else {
       <button type="button" class="btn-secondary" (click)="loadDocs()" [disabled]="loading">Refresh</button>
     }
@@ -201,7 +201,12 @@
               >
                 <td class="reg-cell">
                   <strong>{{ d.name }}</strong>
-                  @if (d.originalFileName && d.originalFileName !== d.name) {
+                  @if (d.convertedFromWord && d.sourceOriginalFileName) {
+                    <span class="original-source-label">Original: {{ d.sourceOriginalFileName }}</span>
+                    @if (d.landingAiFileName) {
+                      <span class="manual-hint">PDF: {{ d.landingAiFileName }}</span>
+                    }
+                  } @else if (d.originalFileName && d.originalFileName !== d.name) {
                     <span class="manual-hint" [title]="d.originalFileName">{{ d.originalFileName }}</span>
                   }
                   @if (isManualDoc(d)) {

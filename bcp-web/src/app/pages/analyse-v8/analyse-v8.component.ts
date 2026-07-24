@@ -1377,7 +1377,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
         this.ndInternalParseStatus.set(row.id, String(row.parseStatus ?? 'pending'));
         this.refreshComplianceDocs(() => {
           this.selectedComplianceIds.add(row.id);
-          this.toast.show(`Uploaded ${file.name} — parse from Documents or at analysis time`, 'success', 3500);
+          this.toast.show(`Uploaded ${file.name} — run parse from Documents or at analysis time`, 'success', 3500);
         });
         return;
       }

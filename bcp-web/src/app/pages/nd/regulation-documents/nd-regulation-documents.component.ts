@@ -320,7 +320,8 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     if (!this.file) return;
     this.uploading = true;
     this.error = '';
-    const res = await this.api.uploadRegulationDocument(this.file, this.uploadDept || undefined);
+    const file = this.file;
+    const res = await this.api.uploadRegulationDocument(file, this.uploadDept || undefined);
     if (res.success) {
       const data = res.data as { id?: string; extractionStatus?: string; pointCount?: number };
       this.message = 'Document uploaded';

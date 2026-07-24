@@ -82,12 +82,22 @@ export class NdAdminSettingsComponent implements OnInit {
     });
     this.saving = false;
     if (!res.success || !res.data) {
-      this.error = res.message ?? 'Failed to save settings';
+      this.error = this.friendlyError(res.message ?? 'Failed to save settings');
       return;
     }
     this.settings = res.data;
     this.selectedProvider = res.data.provider;
     this.selectedModel = res.data.model;
-    this.message = 'Dual verify model saved. New Analysis v8 runs will use this provider.';
+    this.message = 'Your choice was saved. New analyses will use this model for Pass 2.';
+  }
+
+  private friendlyError(raw: string): string {
+    if (raw.includes('DbUpdateException') || raw.includes('PostgresException') || raw.includes('42804')) {
+      return 'Could not save settings. Please try again or contact your administrator.';
+    }
+    if (raw.length > 280) {
+      return 'Could not save settings. Please try again.';
+    }
+    return raw;
   }
 }

@@ -941,7 +941,7 @@ public class RegulationDocumentsController(
     public async Task<IActionResult> Upload(
         IFormFile file,
         [FromForm] Guid? departmentId,
-        CancellationToken ct)
+        CancellationToken ct = default)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
@@ -1306,6 +1306,9 @@ public class RegulationDocumentsController(
             extractedBy = d.ExtractedBy,
             extractedByName = ProfileName(profileNames, d.ExtractedBy),
             originalFileName = stored?.OriginalFileName,
+            convertedFromWord = stored != null && !string.IsNullOrWhiteSpace(stored.SourceStoragePath),
+            sourceOriginalFileName = stored?.SourceStoragePath != null ? stored.OriginalFileName : null,
+            landingAiFileName = stored != null ? Path.GetFileName(stored.StoragePath) : null,
             isHidden,
             hiddenAt = isHidden ? (DateTimeOffset?)(stored?.HiddenAt ?? d.UpdatedAt) : null,
         };
@@ -1349,6 +1352,9 @@ public class RegulationDocumentsController(
             extractedBy = ndForLegacy?.ExtractedBy,
             extractedByName = ProfileName(profileNames, ndForLegacy?.ExtractedBy),
             originalFileName = leg.OriginalFileName,
+            convertedFromWord = !string.IsNullOrWhiteSpace(leg.SourceStoragePath),
+            sourceOriginalFileName = !string.IsNullOrWhiteSpace(leg.SourceStoragePath) ? leg.OriginalFileName : null,
+            landingAiFileName = Path.GetFileName(leg.StoragePath),
             isHidden,
             hiddenAt = isHidden ? (DateTimeOffset?)(leg.HiddenAt ?? leg.UpdatedAt) : null,
         };

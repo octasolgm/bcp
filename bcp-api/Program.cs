@@ -79,7 +79,11 @@ builder.Services.Configure<LandingAiOptions>(o =>
         ?? "dpt-2-latest";
     o.ExtractModel = BcpConfiguration.GetString(builder.Configuration, "LandingAi:ExtractModel", "LANDING_AI_EXTRACT_MODEL")
         ?? "extract-latest";
+    o.MaxParsePagesPerRequest = BcpConfiguration.GetInt(
+        builder.Configuration, 99, "LandingAi:MaxParsePagesPerRequest", "LANDING_AI_MAX_PARSE_PAGES");
 });
+builder.Services.AddScoped<LandingAiDocumentParseService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdStoredDocumentUploadService>();
 builder.Services.AddScoped<LandingAiCacheRepository>();
 builder.Services.AddScoped<LandingAiCompareService>();
 builder.Services.AddScoped<LandingAiGovExtractService>();

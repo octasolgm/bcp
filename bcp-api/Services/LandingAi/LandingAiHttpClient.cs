@@ -12,13 +12,26 @@ public class LandingAiHttpClient(HttpClient http, IOptions<LandingAiOptions> opt
 
     public bool IsConfigured => _opts.IsConfigured;
 
-    public async Task<string> ParseDocumentAsync(byte[] pdf, string fileName, CancellationToken ct = default)
+    public async Task<string> ParseDocumentAsync(byte[] documentBytes, string fileName, CancellationToken ct = default)
+    {
+        var body = await ParseDocumentRawAsync(documentBytes, fileName, ct);
+        using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("markdown", out var md))
+        {
+            var markdown = md.GetString() ?? throw new InvalidOperationException("Landing AI parse returned empty markdown");
+            return PolicyPageResolver.InjectPageMarkersFromParseJson(body, markdown);
+        }
+        throw new InvalidOperationException("Landing AI parse response missing markdown");
+    }
+
+    public async Task<string> ParseDocumentRawAsync(byte[] documentBytes, string fileName, CancellationToken ct = default)
     {
         EnsureConfigured();
         using var form = new MultipartFormDataContent();
-        var file = new ByteArrayContent(pdf);
-        file.Headers.ContentType = MediaTypeHeaderValue.Parse("application/pdf");
-        form.Add(file, "document", fileName);
+        var file = new ByteArrayContent(documentBytes);
+        file.Headers.ContentType = MediaTypeHeaderValue.Parse(
+            LandingAiDocumentFormats.ContentTypeForFileName(fileName));
+        form.Add(file, "document", SanitizeUploadFileName(fileName));
         form.Add(new StringContent(_opts.ParseModel), "model");
 
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{_opts.ApiBase.TrimEnd('/')}/v1/ade/parse") { Content = form };
@@ -28,14 +41,7 @@ public class LandingAiHttpClient(HttpClient http, IOptions<LandingAiOptions> opt
         var body = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
             throw new InvalidOperationException($"Landing AI parse failed ({(int)res.StatusCode}): {Trim(body)}");
-
-        using var doc = JsonDocument.Parse(body);
-        if (doc.RootElement.TryGetProperty("markdown", out var md))
-        {
-            var markdown = md.GetString() ?? throw new InvalidOperationException("Landing AI parse returned empty markdown");
-            return PolicyPageResolver.InjectPageMarkersFromParseJson(body, markdown);
-        }
-        throw new InvalidOperationException("Landing AI parse response missing markdown");
+        return body;
     }
 
     public async Task<JsonElement> ExtractComparisonAsync(string markdown, CancellationToken ct = default)
@@ -102,4 +108,7 @@ public class LandingAiHttpClient(HttpClient http, IOptions<LandingAiOptions> opt
 
     private static string Trim(string body) =>
         body.Length <= 300 ? body : body[..300];
+
+    private static string SanitizeUploadFileName(string name) =>
+        string.IsNullOrWhiteSpace(name) ? "document.pdf" : Path.GetFileName(name);
 }

@@ -54,7 +54,9 @@ public class CompliancePdfResolver(
                 hash,
                 doc.Id.ToString(),
                 bytes,
-                doc.OriginalFileName ?? fileName ?? "compliance.pdf");
+                !string.IsNullOrWhiteSpace(doc.StoragePath)
+                    ? Path.GetFileName(doc.StoragePath)
+                    : doc.OriginalFileName ?? fileName ?? "compliance.pdf");
         }
 
         return new CompliancePdfContext(

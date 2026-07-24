@@ -9,5 +9,11 @@ public sealed class LandingAiOptions
     public string ExtractModel { get; set; } = "extract-latest";
     public string ComparePromptVersion { get; set; } = "v2";
 
+    /// <summary>
+    /// Max PDF pages per Landing AI <c>/v1/ade/parse</c> request (API cap ~100).
+    /// Larger PDFs are split automatically; total document size is not capped.
+    /// </summary>
+    public int MaxParsePagesPerRequest { get; set; } = 99;
+
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
 }

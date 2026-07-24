@@ -42,6 +42,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   settingsOpen = false;
   navBadges: Partial<Record<string, number>> = {};
   ndActiveRunCount = 0;
+  pass2LlmSummary = '';
   private navSub: Subscription | null = null;
   private badgeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -70,12 +71,14 @@ export class NdShellComponent implements OnInit, OnDestroy {
       return;
     }
     this.navItems = this.navForRole(role);
+    void this.refreshPass2LlmSummary();
     this.activeSessions.watch();
     this.scheduleNavBadgeRefresh();
     this.navSub = this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => {
         this.scheduleNavBadgeRefresh();
+        void this.refreshPass2LlmSummary();
         this.activeSessions.refresh();
       });
   }
@@ -101,6 +104,16 @@ export class NdShellComponent implements OnInit, OnDestroy {
     }
     const n = this.navBadges[item.id];
     return n && n > 0 ? n : undefined;
+  }
+
+  private async refreshPass2LlmSummary(): Promise<void> {
+    const res = await this.api.getActiveDualVerifyLlm();
+    if (!res.success || !res.data) {
+      this.pass2LlmSummary = '';
+      return;
+    }
+    const { providerLabel, model } = res.data;
+    this.pass2LlmSummary = `${providerLabel} · ${model}`;
   }
 
   private async refreshNavBadges(): Promise<void> {

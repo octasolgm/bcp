@@ -1,7 +1,9 @@
 <div class="page-header">
   <div>
     <h1>Platform settings</h1>
-    <p class="subtitle">Configure dual-verify LLM used by Analysis v8 and legacy dual verify Pass 2.</p>
+    <p class="subtitle">
+      Choose which AI model runs Pass 2 of compliance analysis. Pass 1 always uses document parsing (Landing AI).
+    </p>
   </div>
 </div>
 
@@ -50,23 +52,24 @@
           </label>
         </div>
 
-        <div class="provider-status-grid">
-          @for (p of providerOptions; track p.id) {
-            <div
-              class="provider-pill"
-              [class.provider-pill-active]="p.id === selectedProvider"
-              [class.provider-pill-ready]="p.apiKeyConfigured"
-            >
-              <strong>{{ p.label }}</strong>
-              <span>{{ p.apiKeyConfigured ? 'API key configured' : 'API key missing' }}</span>
-            </div>
-          }
-        </div>
-
-        <p class="nd-muted settings-note">
-          API keys are configured on the server (appsettings / Azure App Settings):
-          <code>GEMINI_API_KEY</code>, <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>XAI_API_KEY</code>.
-        </p>
+        @if (selectedProviderMeta; as provider) {
+          <div
+            class="provider-status"
+            [class.provider-status-ready]="provider.apiKeyConfigured"
+            [class.provider-status-missing]="!provider.apiKeyConfigured"
+          >
+            <strong>{{ provider.label }}</strong>
+            @if (provider.apiKeyConfigured) {
+              <span class="provider-status-label">Ready — you can use this provider for Pass 2 analysis.</span>
+            } @else {
+              <span class="provider-status-label">Not available yet for this environment.</span>
+              <p class="nd-muted settings-note">
+                {{ provider.label }} has not been connected by your organization. Contact your platform administrator
+                or IT support to enable it, or choose another provider that shows as ready.
+              </p>
+            }
+          </div>
+        }
 
         @if (error) {
           <p class="nd-error">{{ error }}</p>
@@ -85,7 +88,7 @@
             {{ saving ? 'Saving…' : 'Save dual verify model' }}
           </button>
           @if (!selectedProviderConfigured) {
-            <span class="nd-muted">Configure the API key for this provider before saving.</span>
+            <span class="nd-muted">Select a provider that is ready, or ask your administrator to enable this one.</span>
           }
         </div>
       </section>
