@@ -470,6 +470,16 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     return this.pointSnapshotForPointId(this.selectedDetailPointId);
   }
 
+  regDocIdForPointId(pointId: string): string | null {
+    const snap = this.pointSnapshotForPointId(pointId);
+    return snap?.regulationDocumentId ?? this.regulationPdfDocId;
+  }
+
+  get selectedRegulationDocId(): string | null {
+    if (!this.selectedDetailPointId) return this.regulationPdfDocId;
+    return this.regDocIdForPointId(this.selectedDetailPointId);
+  }
+
   get canEditResultCap(): boolean {
     if (!this.activeNdRunId) return false;
     const role = this.ndAuth.getRole();

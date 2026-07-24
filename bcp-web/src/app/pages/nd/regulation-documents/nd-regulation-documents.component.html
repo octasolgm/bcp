@@ -414,6 +414,17 @@
       </div>
       @if (canExtract && selectedDoc && !isManualDoc(selectedDoc)) {
         <div class="panel-extract">
+          @if (hasExtractedPoints(selectedDoc)) {
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              [disabled]="refreshingPagesId === selectedDoc.id"
+              (click)="handleRefreshPageReferences(selectedDoc)"
+              title="Recompute PDF pages from cached parse — does not call Landing AI"
+            >
+              {{ refreshingPagesId === selectedDoc.id ? 'Refreshing…' : 'Refresh PDF pages' }}
+            </button>
+          }
           <button
             type="button"
             class="btn-primary btn-sm"

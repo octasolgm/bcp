@@ -40,6 +40,7 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
 
   search = '';
   expandedChapters = new Set<string>();
+  expandedSections = new Set<string>();
   chapterGroups: GovPointChapterGroup[] = [];
   storedCount = 0;
   analyseCount = 0;
@@ -59,6 +60,11 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     if (highlight) {
       for (const ch of this.chapterGroups) {
         this.expandedChapters.add(ch.chapter);
+        for (const sec of ch.sections) {
+          if (this.showSectionBar(ch.sections, sec.key, ch.chapter)) {
+            this.expandedSections.add(this.sectionId(ch.chapter, sec.key));
+          }
+        }
       }
     }
   }
@@ -103,19 +109,45 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   }
 
   toggleChapter(chapter: string): void {
-    if (this.expandedChapters.has(chapter)) this.expandedChapters.delete(chapter);
-    else this.expandedChapters.add(chapter);
+    if (this.expandedChapters.has(chapter)) {
+      this.expandedChapters.delete(chapter);
+    } else {
+      this.expandedChapters.add(chapter);
+      this.defaultExpandSectionsForChapter(chapter);
+    }
   }
 
   expandAll(): void {
     for (const ch of this.chapterGroups) {
       this.expandedChapters.add(ch.chapter);
+      for (const sec of ch.sections) {
+        if (this.showSectionBar(ch.sections, sec.key, ch.chapter)) {
+          this.expandedSections.add(this.sectionId(ch.chapter, sec.key));
+        }
+      }
     }
   }
 
   collapseAll(): void {
     this.search = '';
     this.expandedChapters.clear();
+    this.expandedSections.clear();
+  }
+
+  sectionId(chapter: string, sectionKey: string): string {
+    return `${chapter}::${sectionKey}`;
+  }
+
+  isSectionExpanded(chapter: string, sectionKey: string): boolean {
+    if (this.search.trim()) return true;
+    return this.expandedSections.has(this.sectionId(chapter, sectionKey));
+  }
+
+  toggleSection(chapter: string, sectionKey: string, event?: Event): void {
+    event?.stopPropagation();
+    const id = this.sectionId(chapter, sectionKey);
+    if (this.expandedSections.has(id)) this.expandedSections.delete(id);
+    else this.expandedSections.add(id);
   }
 
   get canExpandCollapse(): boolean {
@@ -146,8 +178,25 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     this.skippedCount = analyzed.skippedCount;
     this.chapterGroups = groupGovPointsByChapter(analyzed.comparable);
     this.expandedChapters.clear();
+    this.expandedSections.clear();
     if (this.chapterGroups.length) {
-      this.expandedChapters.add(this.chapterGroups[0].chapter);
+      const first = this.chapterGroups[0];
+      this.expandedChapters.add(first.chapter);
+      for (const sec of first.sections) {
+        if (this.showSectionBar(first.sections, sec.key, first.chapter)) {
+          this.expandedSections.add(this.sectionId(first.chapter, sec.key));
+        }
+      }
+    }
+  }
+
+  private defaultExpandSectionsForChapter(chapter: string): void {
+    const ch = this.chapterGroups.find((g) => g.chapter === chapter);
+    if (!ch) return;
+    for (const sec of ch.sections) {
+      if (this.showSectionBar(ch.sections, sec.key, ch.chapter)) {
+        this.expandedSections.add(this.sectionId(chapter, sec.key));
+      }
     }
   }
 

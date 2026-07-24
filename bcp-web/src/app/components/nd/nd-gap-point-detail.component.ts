@@ -214,7 +214,7 @@ export class NdGapPointDetailComponent implements OnChanges {
       snap?.pointNumber?.trim() ||
       '—';
 
-    this.regulationPage = resolveRegulationPdfPage(snap?.pageReference, null);
+    this.regulationPage = resolveRegulationPdfPage(snap?.pageReference, snap?.pdfPage ?? null);
     this.regulationPageLabel = formatPointPageRef(snap?.pageReference, this.regulationPage);
 
     this.landingMessage = this.extractMessage(this.point.landingAiResult);

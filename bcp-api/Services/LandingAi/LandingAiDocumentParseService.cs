@@ -199,6 +199,8 @@ public sealed class LandingAiDocumentParseService(
                     $"Landing AI returned no markdown for {fileName} pages {startPage}-{endPage}.");
 
             chunkMd = ShiftPageMarkers(chunkMd, startPage - 1);
+            if (!chunkMd.Contains(PolicyPageResolver.PageMarkerPrefix, StringComparison.Ordinal))
+                chunkMd = $"{PolicyPageResolver.PageMarkerPrefix}{startPage} -->\n{chunkMd}";
             if (merged.Length > 0) merged.AppendLine();
             merged.AppendLine(chunkMd);
 

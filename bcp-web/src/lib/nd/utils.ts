@@ -14,7 +14,12 @@ export function formatBytes(bytes?: number): string {
 
 export function parsePointSnapshot(raw: string): PointSnapshot {
   try {
-    return JSON.parse(raw) as PointSnapshot;
+    const parsed = JSON.parse(raw) as PointSnapshot & { pdfPage?: number | string | null };
+    if (typeof parsed.pdfPage === 'string') {
+      const n = Number.parseInt(parsed.pdfPage, 10);
+      parsed.pdfPage = Number.isFinite(n) && n > 0 ? n : null;
+    }
+    return parsed;
   } catch {
     return {};
   }

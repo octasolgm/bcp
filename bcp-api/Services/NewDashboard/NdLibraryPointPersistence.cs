@@ -27,17 +27,30 @@ public static class NdLibraryPointPersistence
         IEnumerable<LibraryPointSyncInput> points,
         CancellationToken ct)
     {
-        var prepared = new List<PreparedLibraryPoint>();
-        var docIdCache = new Dictionary<Guid, Guid>();
-        var assignedInBatch = new HashSet<Guid>();
+        var pointList = points.ToList();
+        var ctx = new PrepareContext();
 
-        foreach (var point in points)
+        foreach (var point in pointList)
         {
-            var regDocId = await ResolveRegulationDocumentIdCachedAsync(
-                db, point.RegulationDocumentId, userId, docIdCache, ct);
-            var resolvedPointId = await EnsureRegulationPointAsync(
-                db, regDocId, point, assignedInBatch, ct);
-            assignedInBatch.Add(resolvedPointId);
+            await ResolveRegulationDocumentIdCachedAsync(
+                db, point.RegulationDocumentId, userId, ctx.DocIdCache, ct);
+        }
+
+        var regDocIds = ctx.DocIdCache.Values.Distinct().ToList();
+        if (regDocIds.Count > 0)
+        {
+            var existing = await db.NdRegulationPoints.AsNoTracking()
+                .Where(p => regDocIds.Contains(p.RegulationDocumentId))
+                .ToListAsync(ct);
+            ctx.LoadExistingPoints(existing);
+        }
+
+        var prepared = new List<PreparedLibraryPoint>();
+        foreach (var point in pointList)
+        {
+            var regDocId = ctx.DocIdCache[point.RegulationDocumentId];
+            var resolvedPointId = EnsureRegulationPoint(db, ctx, regDocId, point);
+            ctx.AssignedInBatch.Add(resolvedPointId);
             prepared.Add(new PreparedLibraryPoint(
                 resolvedPointId,
                 regDocId,
@@ -46,6 +59,30 @@ public static class NdLibraryPointPersistence
         }
 
         return prepared;
+    }
+
+    private sealed class PrepareContext
+    {
+        public Dictionary<Guid, Guid> DocIdCache { get; } = new();
+        public Dictionary<Guid, NdRegulationPoint> PointsById { get; } = new();
+        public Dictionary<(Guid DocId, string Number), List<NdRegulationPoint>> ByDocNumber { get; } = new();
+        public HashSet<Guid> AssignedInBatch { get; } = new();
+
+        public void LoadExistingPoints(IEnumerable<NdRegulationPoint> existing)
+        {
+            foreach (var p in existing)
+            {
+                PointsById[p.Id] = p;
+                var key = (p.RegulationDocumentId, p.PointNumber.Trim());
+                if (!ByDocNumber.TryGetValue(key, out var list))
+                {
+                    list = new List<NdRegulationPoint>();
+                    ByDocNumber[key] = list;
+                }
+
+                list.Add(p);
+            }
+        }
     }
 
     private static async Task<Guid> ResolveRegulationDocumentIdCachedAsync(
@@ -95,12 +132,11 @@ public static class NdLibraryPointPersistence
         return overlay.Id;
     }
 
-    private static async Task<Guid> EnsureRegulationPointAsync(
+    private static Guid EnsureRegulationPoint(
         AppDbContext db,
+        PrepareContext ctx,
         Guid regulationDocumentId,
-        LibraryPointSyncInput point,
-        HashSet<Guid> assignedInBatch,
-        CancellationToken ct)
+        LibraryPointSyncInput point)
     {
         ParseSnapshot(point.PointSnapshot, out var pointNumber, out var title, out var content, out var section, out var isIntro, out var isAnnex);
         if (string.IsNullOrWhiteSpace(pointNumber) && string.IsNullOrWhiteSpace(content))
@@ -108,55 +144,38 @@ public static class NdLibraryPointPersistence
 
         var pointId = point.RegulationPointId;
 
-        var contentMatch = await FindContentMatchAsync(
-            db, regulationDocumentId, pointNumber, title, content, ct);
+        var contentMatch = FindContentMatch(ctx, regulationDocumentId, pointNumber, title, content);
         if (contentMatch != null)
         {
             pointId = contentMatch.Value;
         }
         else
         {
-            if (assignedInBatch.Contains(pointId))
+            if (ctx.AssignedInBatch.Contains(pointId))
                 pointId = Guid.NewGuid();
 
             if (db.NdRegulationPoints.Local.Any(p => p.Id == pointId))
                 pointId = Guid.NewGuid();
 
-            var existingById = await db.NdRegulationPoints.AsNoTracking()
-                .FirstOrDefaultAsync(p => p.Id == pointId, ct);
-            if (existingById != null)
+            if (ctx.PointsById.TryGetValue(pointId, out var existingById))
             {
                 if (PointContentMatches(existingById, pointNumber, title, content, regulationDocumentId))
-                {
                     pointId = existingById.Id;
-                }
                 else
-                {
                     pointId = Guid.NewGuid();
-                }
             }
 
             if (db.NdRegulationPoints.Local.Any(p => p.Id == pointId))
                 pointId = Guid.NewGuid();
         }
 
-        await UpsertRegulationPointAsync(
-            db,
-            pointId,
-            regulationDocumentId,
-            pointNumber,
-            title,
-            content,
-            section,
-            isIntro,
-            isAnnex,
-            ct);
-
+        UpsertRegulationPoint(db, ctx, pointId, regulationDocumentId, pointNumber, title, content, section, isIntro, isAnnex);
         return pointId;
     }
 
-    private static async Task UpsertRegulationPointAsync(
+    private static void UpsertRegulationPoint(
         AppDbContext db,
+        PrepareContext ctx,
         Guid pointId,
         Guid regulationDocumentId,
         string pointNumber,
@@ -164,28 +183,23 @@ public static class NdLibraryPointPersistence
         string content,
         string? section,
         bool isIntroductionPoint,
-        bool isAnnexPoint,
-        CancellationToken ct)
+        bool isAnnexPoint)
     {
         if (db.NdRegulationPoints.Local.Any(p => p.Id == pointId))
             return;
 
-        var existing = await db.NdRegulationPoints.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == pointId, ct);
-        if (existing != null)
+        if (ctx.PointsById.TryGetValue(pointId, out var existing))
         {
             if (existing.RegulationDocumentId != regulationDocumentId)
             {
-                await db.NdRegulationPoints
-                    .Where(p => p.Id == pointId)
-                    .ExecuteUpdateAsync(
-                        s => s.SetProperty(p => p.RegulationDocumentId, regulationDocumentId),
-                        ct);
+                db.NdRegulationPoints.Attach(existing);
+                existing.RegulationDocumentId = regulationDocumentId;
             }
+
             return;
         }
 
-        db.NdRegulationPoints.Add(new NdRegulationPoint
+        var entity = new NdRegulationPoint
         {
             Id = pointId,
             RegulationDocumentId = regulationDocumentId,
@@ -195,20 +209,29 @@ public static class NdLibraryPointPersistence
             PageReference = section,
             IsIntroductionPoint = isIntroductionPoint,
             IsAnnexPoint = isAnnexPoint,
-        });
+        };
+        db.NdRegulationPoints.Add(entity);
+        ctx.PointsById[pointId] = entity;
+        var key = (regulationDocumentId, pointNumber.Trim());
+        if (!ctx.ByDocNumber.TryGetValue(key, out var list))
+        {
+            list = new List<NdRegulationPoint>();
+            ctx.ByDocNumber[key] = list;
+        }
+
+        list.Add(entity);
     }
 
-    private static async Task<Guid?> FindContentMatchAsync(
-        AppDbContext db,
+    private static Guid? FindContentMatch(
+        PrepareContext ctx,
         Guid regulationDocumentId,
         string pointNumber,
         string? title,
-        string content,
-        CancellationToken ct)
+        string content)
     {
-        var candidates = await db.NdRegulationPoints.AsNoTracking()
-            .Where(p => p.RegulationDocumentId == regulationDocumentId && p.PointNumber == pointNumber)
-            .ToListAsync(ct);
+        var key = (regulationDocumentId, pointNumber.Trim());
+        if (!ctx.ByDocNumber.TryGetValue(key, out var candidates))
+            return null;
 
         foreach (var candidate in candidates)
         {

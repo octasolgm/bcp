@@ -74,6 +74,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   loading = true;
   uploading = false;
   extractingId: string | null = null;
+  refreshingPagesId: string | null = null;
   hidingId: string | null = null;
   showDeleted = false;
   savingDeptId: string | null = null;
@@ -384,6 +385,31 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       this.selectedDoc = this.docs[idx];
     }
     this.savingDeptId = null;
+  }
+
+  hasExtractedPoints(doc: RegulationDocument): boolean {
+    const st = (doc.extractionStatus ?? '').toLowerCase();
+    return st === 'extracted' || st === 'completed' || (doc.pointCount ?? 0) > 0;
+  }
+
+  async handleRefreshPageReferences(doc: RegulationDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.refreshingPagesId = doc.id;
+    this.error = '';
+    try {
+      const res = await this.api.refreshRegulationPageReferences(doc.id);
+      if (res.success) {
+        const n = res.data?.pointsUpdated ?? 0;
+        this.message = `Updated PDF page numbers for ${n} points (no Landing AI credits used).`;
+        if (this.selectedDoc?.id === doc.id || this.showPointsPanel) {
+          await this.loadPointsForDoc(doc.id);
+        }
+      } else {
+        this.error = res.message ?? 'Could not refresh page numbers';
+      }
+    } finally {
+      this.refreshingPagesId = null;
+    }
   }
 
   async handleExtract(doc: RegulationDocument, event?: Event): Promise<void> {

@@ -201,6 +201,7 @@ export type PointSnapshot = {
   pointTitle?: string;
   pointContent?: string;
   pageReference?: string;
+  pdfPage?: number | null;
   regulationDocumentId?: string;
   regulationPointId?: string;
 };

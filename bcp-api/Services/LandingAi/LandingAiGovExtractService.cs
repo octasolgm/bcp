@@ -56,10 +56,25 @@ public class LandingAiGovExtractService(
 
         if (string.IsNullOrWhiteSpace(markdown) && fileBytes is { Length: > 0 })
         {
-            logger.LogInformation("Landing AI parse for gov extract ({File}, {Kb} KB)", fileName, fileBytes.Length / 1024);
-            markdown = await documentParse.ParseToMarkdownAsync(
-                fileBytes, fileName, reportProgress, parseCheckpoint, ct);
-            await cache.SaveParseCacheAsync(fileHash, fileName, markdown, _opts.ParseModel, ct);
+            var cachedParse = await cache.GetParseCacheAsync(fileHash, ct);
+            if (!string.IsNullOrWhiteSpace(cachedParse?.Markdown)
+                && IsParseCacheComplete(cachedParse.Markdown, fileBytes, fileName))
+            {
+                logger.LogInformation(
+                    "Using cached Landing AI parse for gov extract ({File}, hash {HashPrefix}…)",
+                    fileName,
+                    fileHash.Length >= 12 ? fileHash[..12] : fileHash);
+                if (reportProgress != null)
+                    await reportProgress(new ExtractionProgressUpdate("Using cached document parse…", 58));
+                markdown = cachedParse!.Markdown;
+            }
+            else
+            {
+                logger.LogInformation("Landing AI parse for gov extract ({File}, {Kb} KB)", fileName, fileBytes.Length / 1024);
+                markdown = await documentParse.ParseToMarkdownAsync(
+                    fileBytes, fileName, reportProgress, parseCheckpoint, ct);
+                await cache.SaveParseCacheAsync(fileHash, fileName, markdown, _opts.ParseModel, ct);
+            }
         }
 
         if (string.IsNullOrWhiteSpace(markdown))
@@ -129,6 +144,30 @@ public class LandingAiGovExtractService(
             page_hint = p.PageHint is > 0 ? p.PageHint : 0,
             point_type = "mandatory",
         }).ToList();
+
+    private static bool IsParseCacheComplete(string markdown, byte[] fileBytes, string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(markdown)) return false;
+
+        if (LandingAiDocumentFormats.IsPdf(fileName, fileBytes))
+        {
+            try
+            {
+                var pdfPages = LandingAiDocumentParseService.GetPdfPageCount(fileBytes);
+                if (pdfPages <= 1) return markdown.Length > 500;
+                var markerPages = PolicyPageResolver.EstimatePageCount(markdown);
+                if (markerPages >= pdfPages) return true;
+                if (markerPages >= (int)Math.Round(pdfPages * 0.85)) return true;
+                return markdown.Length >= pdfPages * 600;
+            }
+            catch
+            {
+                return markdown.Length > 80_000;
+            }
+        }
+
+        return markdown.Length > 2000;
+    }
 
     private async Task<List<GovPoint>> ResolvePointPagesAsync(
         string fileHash,

@@ -528,6 +528,9 @@ public class RegulationDocumentsController(
         !string.IsNullOrWhiteSpace(value)
         && value.Contains(term, StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsNumberedClausePoint(string pointId) =>
+        Regex.IsMatch(pointId.Trim().TrimEnd('.'), @"^\d+(\.\d+)+$");
+
     private static int? ResolvePdfPage(string? pageReference, int? pageHint)
     {
         var fromRef = ParsePdfPageFromReference(pageReference);
@@ -549,7 +552,11 @@ public class RegulationDocumentsController(
     {
         var stored = await db.StoredDocuments.AsNoTracking()
             .FirstOrDefaultAsync(d => d.Id == storedDocumentId, ct);
-        return stored is { Pages: > 0 } ? stored.Pages : null;
+        if (stored == null) return null;
+        if (stored.Pages is > 1) return stored.Pages;
+        if (stored.SizeBytes is > 80_000)
+            return Math.Clamp((int)Math.Round(stored.SizeBytes / 45000.0), 30, 500);
+        return stored.Pages is > 0 ? stored.Pages : null;
     }
 
     private async Task<int?> ResolveStoredPointPdfPageAsync(
@@ -568,20 +575,40 @@ public class RegulationDocumentsController(
             markdownCache[storedDocumentId] = markdown;
         }
 
-        var maxPages = PolicyPageResolver.EstimatePageCount(markdown)
-            ?? await LoadStoredDocumentPageCountAsync(storedDocumentId, ct);
+        var markerPages = PolicyPageResolver.EstimatePageCount(markdown);
+        var storedPages = await LoadStoredDocumentPageCountAsync(storedDocumentId, ct);
+        if ((storedPages is null or < 15) && markdown is { Length: > 40_000 })
+        {
+            storedPages = Math.Clamp((int)Math.Round(markdown.Length / 4000.0), 20, 500);
+        }
+        int? maxPages = markerPages is > 0 && storedPages is > 0
+            ? Math.Max(markerPages.Value, storedPages.Value)
+            : markerPages ?? storedPages;
 
         if (!string.IsNullOrWhiteSpace(markdown))
         {
+            var hintForResolve = IsNumberedClausePoint(pointId) ? null : pageHint;
             var resolved = PolicyPageResolver.ResolveGovPointPage(
-                markdown, pointId, section, title, content, pageHint, maxPages);
-            if (resolved is > 0) return resolved;
+                markdown, pointId, section, title, content, hintForResolve, maxPages);
+            var refined = PolicyPageResolver.RefinePageGuess(resolved, pointId, maxPages);
+            if (refined is > 0) return refined;
+        }
+
+        if (maxPages is > 10)
+        {
+            var byPoint = PolicyPageResolver.EstimatePageFromPointNumber(pointId, maxPages.Value);
+            if (byPoint is > 0) return byPoint;
         }
 
         var trustedHint = pageHint is > 0 && (maxPages is null or <= 0 || pageHint <= maxPages)
             ? pageHint
             : null;
-        return ResolvePdfPage(section, trustedHint);
+        if (trustedHint == 1 && maxPages is > 10)
+            trustedHint = null;
+        return PolicyPageResolver.RefinePageGuess(
+            ResolvePdfPage(section, trustedHint),
+            pointId,
+            maxPages);
     }
 
     /// <summary>
@@ -1016,6 +1043,28 @@ public class RegulationDocumentsController(
         catch (Exception ex)
         {
             return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
+    /// <summary>Update stored point page references from parse cache only — no Landing AI credits.</summary>
+    [HttpPost("{id:guid}/refresh-page-references")]
+    public async Task<IActionResult> RefreshPageReferences(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        try
+        {
+            var updated = await uploadService.RefreshPointPageReferencesAsync(id, ct);
+            return Ok(new { success = true, data = new { pointsUpdated = updated } });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to refresh PDF page numbers" });
         }
     }
 

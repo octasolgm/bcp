@@ -15,7 +15,8 @@ public class AnalysisRunsController(
     SupabaseJwtValidator jwt,
     NdAnalysisProcessor processor,
     DemoAnalysisSeedService demoSeed,
-    IServiceScopeFactory scopeFactory) : NdControllerBase
+    IServiceScopeFactory scopeFactory,
+    NdRegulationPointPageService pointPages) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
 
@@ -254,13 +255,22 @@ public class AnalysisRunsController(
             .OrderBy(h => h.CreatedAt)
             .ToListAsync(ct);
 
+        var runRegDocIds = ParseSelectedRegulationDocIds(run.SelectedRegulationDocIds);
+        var enrichedPoints = new List<object>();
+        foreach (var p in run.Points.OrderBy(x => x.CreatedAt))
+        {
+            var snapshot = await pointPages.EnrichAnalysisPointSnapshotAsync(
+                p.PointSnapshot, p.RegulationPointId, runRegDocIds, ct);
+            enrichedPoints.Add(MapPoint(p, snapshot));
+        }
+
         return Ok(new
         {
             success = true,
             data = new
             {
                 run = MapRunDetail(run, creator?.FullName),
-                points = run.Points.OrderBy(p => p.CreatedAt).Select(MapPoint),
+                points = enrichedPoints,
                 history,
             },
         });
@@ -283,6 +293,15 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
+        var runRegDocIds = ParseSelectedRegulationDocIds(run.SelectedRegulationDocIds);
+        var enrichedPoints = new List<object>();
+        foreach (var p in run.Points)
+        {
+            var snapshot = await pointPages.EnrichAnalysisPointSnapshotAsync(
+                p.PointSnapshot, p.RegulationPointId, runRegDocIds, ct);
+            enrichedPoints.Add(MapPoint(p, snapshot));
+        }
+
         return Ok(new
         {
             success = true,
@@ -295,7 +314,7 @@ public class AnalysisRunsController(
                 landingAiCompletedCount = run.LandingAiCompletedCount,
                 dualVerifyCompletedCount = run.DualVerifyCompletedCount,
                 dualVerifyFailedCount = run.DualVerifyFailedCount,
-                points = run.Points.Select(MapPoint),
+                points = enrichedPoints,
             },
         });
     }
@@ -639,11 +658,11 @@ public class AnalysisRunsController(
         createdAt = r.CreatedAt,
     };
 
-    private static object MapPoint(NdAnalysisPoint p) => new
+    private static object MapPoint(NdAnalysisPoint p, string? pointSnapshotOverride = null) => new
     {
         id = p.Id,
         regulationPointId = p.RegulationPointId,
-        pointSnapshot = p.PointSnapshot,
+        pointSnapshot = pointSnapshotOverride ?? p.PointSnapshot,
         landingAiStatus = p.LandingAiStatus,
         landingAiResult = p.LandingAiResult,
         landingAiError = p.LandingAiError,

@@ -37,13 +37,15 @@ public class NdRegulationUploadService(
         if (!storage.IsConfigured)
             throw new InvalidOperationException("Supabase Storage not configured.");
 
-        var title = Path.GetFileNameWithoutExtension(fileName).Trim();
+        var baseTitle = Path.GetFileNameWithoutExtension(fileName).Trim();
         var prepared = await uploadPrep.PrepareAsync(
             bytes,
             fileName,
             contentType,
             "regulations/nd",
             ct);
+
+        var title = await AllocateRegulationDisplayNameAsync(baseTitle, prepared.FileHash, ct);
 
         var stored = new Data.Entities.StoredDocument
         {
@@ -77,6 +79,129 @@ public class NdRegulationUploadService(
         await db.SaveChangesAsync(ct);
 
         return regDoc;
+    }
+
+    /// <summary>
+    /// Recompute stored PDF page references from cached parse markdown — no Landing AI calls.
+    /// </summary>
+    public async Task<int> RefreshPointPageReferencesAsync(Guid regulationId, CancellationToken ct)
+    {
+        var regDoc = await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regulationId, ct)
+            ?? await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.StoredDocumentId == regulationId, ct)
+            ?? throw new InvalidOperationException("Regulation document not found.");
+
+        if (regDoc.StoredDocumentId is not Guid storedId)
+            throw new InvalidOperationException("This regulation has no stored file.");
+
+        var stored = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct)
+            ?? throw new InvalidOperationException("Stored document not found.");
+
+        var fileHash = (stored.FileHash ?? "").Trim();
+        if (string.IsNullOrEmpty(fileHash))
+        {
+            var bytes = await storage.DownloadAsync(stored.StoragePath, ct);
+            fileHash = LandingAiCacheRepository.HashBuffer(bytes);
+        }
+
+        var parseMarkdown = (await parseCache.GetParseCacheAsync(fileHash, ct))?.Markdown;
+        if (string.IsNullOrWhiteSpace(parseMarkdown))
+            throw new InvalidOperationException(
+                "No cached document parse found. Run extract once (same file bytes reuse parse cache without extra parse credits).");
+
+        int? pdfPageCount = stored.Pages is > 1 ? stored.Pages : null;
+        if (pdfPageCount is null or <= 1)
+        {
+            try
+            {
+                var bytes = await storage.DownloadAsync(stored.StoragePath, ct);
+                var fileName = stored.OriginalFileName ?? Path.GetFileName(stored.StoragePath);
+                if (LandingAiDocumentFormats.IsPdf(fileName, bytes))
+                    pdfPageCount = LandingAiDocumentParseService.GetPdfPageCount(bytes);
+            }
+            catch
+            {
+                // optional
+            }
+        }
+
+        var points = await db.NdRegulationPoints
+            .Where(p => p.RegulationDocumentId == regDoc.Id)
+            .ToListAsync(ct);
+        if (points.Count == 0)
+            return 0;
+
+        foreach (var p in points)
+        {
+            int? pageHint = ParsePdfPageFromReference(p.PageReference);
+            var resolved = PolicyPageResolver.ResolveGovPointPage(
+                parseMarkdown,
+                p.PointNumber,
+                p.PointNumber,
+                p.PointTitle,
+                p.PointContent,
+                pageHint,
+                pdfPageCount);
+            resolved = PolicyPageResolver.RefinePageGuess(resolved, p.PointNumber, pdfPageCount);
+            p.PageReference = FormatPointPageReference(p.PointNumber, resolved);
+        }
+
+        regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return points.Count;
+    }
+
+    private async Task<string> AllocateRegulationDisplayNameAsync(
+        string baseTitle,
+        string fileHash,
+        CancellationToken ct)
+    {
+        var sameHashCount = await db.StoredDocuments.CountAsync(
+            s => s.DocKind == "regulation" && s.FileHash == fileHash,
+            ct);
+        if (sameHashCount > 0)
+            return $"{baseTitle} (v{sameHashCount + 1})";
+
+        var hasVisibleSameName = await db.NdRegulationDocuments.AnyAsync(
+            d => d.Status == 1 && d.Name == baseTitle,
+            ct);
+        if (!hasVisibleSameName)
+            return baseTitle;
+
+        return await NextVersionedDisplayNameAsync(baseTitle, ct);
+    }
+
+    private async Task<string> NextVersionedDisplayNameAsync(string baseTitle, CancellationToken ct)
+    {
+        var prefix = baseTitle + " (v";
+        var names = await db.NdRegulationDocuments.AsNoTracking()
+            .Where(d => d.Status == 1 && (d.Name == baseTitle || d.Name.StartsWith(prefix)))
+            .Select(d => d.Name)
+            .ToListAsync(ct);
+
+        var maxVersion = 1;
+        foreach (var name in names)
+        {
+            if (string.Equals(name, baseTitle, StringComparison.Ordinal))
+                maxVersion = Math.Max(maxVersion, 1);
+            else if (name.StartsWith(prefix, StringComparison.Ordinal) && name.EndsWith(')'))
+            {
+                var inner = name.Substring(prefix.Length, name.Length - prefix.Length - 1);
+                if (int.TryParse(inner, out var v))
+                    maxVersion = Math.Max(maxVersion, v);
+            }
+        }
+
+        return $"{baseTitle} (v{maxVersion + 1})";
+    }
+
+    private static int? ParsePdfPageFromReference(string? pageReference)
+    {
+        if (string.IsNullOrWhiteSpace(pageReference)) return null;
+        var match = System.Text.RegularExpressions.Regex.Match(
+            pageReference,
+            @"\bp\.?\s*(\d+)\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return match.Success && int.TryParse(match.Groups[1].Value, out var page) && page > 0 ? page : null;
     }
 
     /// <summary>Clear stuck <c>processing</c> when no background job is running (e.g. after API restart).</summary>
@@ -380,6 +505,19 @@ public class NdRegulationUploadService(
         var result = await gov.ExtractFromUploadAsync(
             bytes, fileName, null, ReportProgress, checkpoint, ct);
 
+        int? pdfPageCount = null;
+        try
+        {
+            if (LandingAiDocumentFormats.IsPdf(fileName, bytes))
+                pdfPageCount = LandingAiDocumentParseService.GetPdfPageCount(bytes);
+        }
+        catch
+        {
+            // optional
+        }
+
+        var parseMarkdown = (await cache.GetParseCacheAsync(fileHash, ct))?.Markdown;
+
         await ReportProgress(new ExtractionProgressUpdate($"Saving {result.Points.Count} regulation points…", 92));
 
         var existingPoints = await dbCtx.NdRegulationPoints
@@ -413,6 +551,21 @@ public class NdRegulationUploadService(
             if (root.TryGetProperty("page_hint", out var ph) && ph.ValueKind == JsonValueKind.Number && ph.TryGetInt32(out var hint) && hint > 0)
                 pageHint = hint;
 
+            int? resolvedPage = pageHint;
+            if (!string.IsNullOrWhiteSpace(parseMarkdown))
+            {
+                resolvedPage = PolicyPageResolver.ResolveGovPointPage(
+                    parseMarkdown,
+                    pointId,
+                    section,
+                    title,
+                    text,
+                    pageHint,
+                    pdfPageCount);
+            }
+
+            resolvedPage = PolicyPageResolver.RefinePageGuess(resolvedPage, pointId, pdfPageCount);
+
             var isAnnex = GovPointClassifier.IsAnnexPoint(pointId, title, section);
             var isIntro = GovPointClassifier.IsIntroductionPoint(pointId, title, text, section, pointType);
 
@@ -422,7 +575,7 @@ public class NdRegulationUploadService(
                 PointNumber = pointId,
                 PointTitle = title,
                 PointContent = text,
-                PageReference = FormatPointPageReference(section, pageHint),
+                PageReference = FormatPointPageReference(section ?? pointId, resolvedPage),
                 IsIntroductionPoint = isIntro,
                 IsAnnexPoint = isAnnex,
             });
@@ -436,6 +589,8 @@ public class NdRegulationUploadService(
             {
                 stored.FileHash = result.FileHash;
                 stored.PointCount = result.Points.Count;
+                if (pdfPageCount is > 0)
+                    stored.Pages = pdfPageCount.Value;
                 stored.UpdatedAt = DateTimeOffset.UtcNow;
             }
         }

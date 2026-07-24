@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -10,7 +11,8 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 [Route("nd/results")]
 public class ResultsController(
     AppDbContext db,
-    SupabaseJwtValidator jwt) : NdControllerBase
+    SupabaseJwtValidator jwt,
+    NdRegulationPointPageService pointPages) : NdControllerBase
 {
     public record UpdateActionPlanRequest(string Content, int? RevertToVersion);
 
@@ -60,6 +62,30 @@ public class ResultsController(
             .OrderBy(a => a.CreatedAt)
             .ToListAsync(ct);
 
+        var runRegDocIds = ParseSelectedRegulationDocIds(run.SelectedRegulationDocIds);
+        var enrichedPoints = new List<object>();
+        foreach (var p in run.Points)
+        {
+            var snapshot = await pointPages.EnrichAnalysisPointSnapshotAsync(
+                p.PointSnapshot, p.RegulationPointId, runRegDocIds, ct);
+            enrichedPoints.Add(new
+            {
+                p.Id,
+                regulationPointId = p.RegulationPointId,
+                pointSnapshot = snapshot,
+                landingAiStatus = p.LandingAiStatus,
+                landingAiResult = p.LandingAiResult,
+                landingAiError = p.LandingAiError,
+                googleAiStatus = p.GoogleAiStatus,
+                googleAiResult = p.GoogleAiResult,
+                googleAiError = p.GoogleAiError,
+                dualVerifyStatus = p.DualVerifyStatus,
+                finalStatus = p.FinalStatus,
+                finalActionPlan = p.FinalActionPlan,
+                originalAiActionPlan = p.OriginalAiActionPlan,
+            });
+        }
+
         return Ok(new
         {
             success = true,
@@ -76,7 +102,7 @@ public class ResultsController(
                     createdByName = creator?.FullName,
                     run.CreatedAt,
                 },
-                points = run.Points,
+                points = enrichedPoints,
                 pointAttachments = attachments.Select(a => new
                 {
                     id = a.Id,

@@ -549,6 +549,9 @@ tr.manual-row {
 .panel-extract {
   margin-bottom: 0.5rem;
   flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 tr.selected-row {

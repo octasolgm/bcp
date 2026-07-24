@@ -5,6 +5,8 @@ import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
 
 const API_TIMEOUT_MS = 25_000;
+/** Library create/update can persist many regulation points in one request. */
+const LIBRARY_WRITE_TIMEOUT_MS = 120_000;
 
 export type NdApiResult<T> = {
   success: boolean;
@@ -68,6 +70,7 @@ export class NdApiService {
     path: string,
     body?: unknown,
     json = true,
+    timeoutMs = API_TIMEOUT_MS,
   ): Promise<NdApiResult<T>> {
     const url = `${this.baseUrl()}${path}`;
     const options = { headers: await this.headers(json), body };
@@ -82,7 +85,7 @@ export class NdApiService {
               : this.http.delete<NdApiResult<T>>(url, { headers: options.headers });
       return await firstValueFrom(
         obs.pipe(
-          timeout(API_TIMEOUT_MS),
+          timeout(timeoutMs),
           catchError((err: unknown) => {
             if (err && typeof err === 'object' && 'name' in err && err.name === 'TimeoutError') {
               return throwError(() => new Error('Request timed out — API may be overloaded or offline'));
@@ -233,6 +236,13 @@ export class NdApiService {
     return this.request<unknown>('POST', `/nd/regulation-documents/${docId}/extract/stop`);
   }
 
+  refreshRegulationPageReferences(docId: string) {
+    return this.request<{ pointsUpdated: number }>(
+      'POST',
+      `/nd/regulation-documents/${docId}/refresh-page-references`,
+    );
+  }
+
   getDocumentPoints(docId: string) {
     return this.request<unknown[]>('GET', `/nd/regulation-documents/${docId}/points`);
   }
@@ -355,11 +365,11 @@ export class NdApiService {
   }
 
   createLibrary(body: unknown) {
-    return this.request<{ id: string }>('POST', '/nd/libraries', body);
+    return this.request<{ id: string }>('POST', '/nd/libraries', body, true, LIBRARY_WRITE_TIMEOUT_MS);
   }
 
   updateLibrary(id: string, body: unknown) {
-    return this.request<unknown>('PUT', `/nd/libraries/${id}`, body);
+    return this.request<unknown>('PUT', `/nd/libraries/${id}`, body, true, LIBRARY_WRITE_TIMEOUT_MS);
   }
 
   deleteLibrary(id: string) {

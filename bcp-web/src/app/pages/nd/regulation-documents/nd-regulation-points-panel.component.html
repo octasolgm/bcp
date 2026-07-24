@@ -44,22 +44,30 @@
             <div class="acc-body">
               @for (sec of ch.sections; track sec.key) {
                 @if (showSectionBar(ch.sections, sec.key, ch.chapter)) {
-                  <div class="sec-head">
+                  <button
+                    type="button"
+                    class="sec-head sec-head-btn"
+                    (click)="toggleSection(ch.chapter, sec.key, $event)"
+                  >
+                    <span class="chevron sec-chevron" [class.open]="isSectionExpanded(ch.chapter, sec.key)">›</span>
                     <span>{{ formatSectionGroupLabel(sec.key) }}</span>
-                  </div>
+                    <span class="acc-meta sec-meta">{{ sec.points.length }}</span>
+                  </button>
                 }
-                @for (p of sec.points; track p.point_id) {
-                  <div class="point-line" [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint" [class.point-highlight]="isHighlighted(p.point_id)">
-                    <span class="point-check" aria-hidden="true">✓</span>
-                    <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
-                    @if (pointMeta(p.point_id)?.isIntroductionPoint) {
-                      <span class="point-tag">Intro</span>
-                    }
-                    @if (pointMeta(p.point_id)?.isAnnexPoint) {
-                      <span class="point-tag point-tag-annex">Annex</span>
-                    }
-                    <span class="ptxt">{{ truncate(p.title || p.text, 52) }}</span>
-                  </div>
+                @if (!showSectionBar(ch.sections, sec.key, ch.chapter) || isSectionExpanded(ch.chapter, sec.key)) {
+                  @for (p of sec.points; track p.point_id) {
+                    <div class="point-line" [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint" [class.point-highlight]="isHighlighted(p.point_id)">
+                      <span class="point-check" aria-hidden="true">✓</span>
+                      <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
+                      @if (pointMeta(p.point_id)?.isIntroductionPoint) {
+                        <span class="point-tag">Intro</span>
+                      }
+                      @if (pointMeta(p.point_id)?.isAnnexPoint) {
+                        <span class="point-tag point-tag-annex">Annex</span>
+                      }
+                      <span class="ptxt">{{ truncate(p.title || p.text, 52) }}</span>
+                    </div>
+                  }
                 }
               }
             </div>

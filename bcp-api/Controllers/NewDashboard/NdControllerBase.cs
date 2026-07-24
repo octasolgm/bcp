@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
@@ -26,6 +27,26 @@ public abstract class NdControllerBase : ControllerBase
         string? DueDate,
         List<PointCommentInput>? PointComments,
         List<ActionItemReviewInput>? ActionItemReviews);
+
+    protected static List<Guid> ParseSelectedRegulationDocIds(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            var ids = JsonSerializer.Deserialize<List<string>>(json) ?? [];
+            var list = new List<Guid>(ids.Count);
+            foreach (var s in ids)
+            {
+                if (Guid.TryParse(s, out var g)) list.Add(g);
+            }
+
+            return list;
+        }
+        catch
+        {
+            return [];
+        }
+    }
 
     protected static DateTimeOffset? ParseOptionalDueDate(string? raw)
     {
