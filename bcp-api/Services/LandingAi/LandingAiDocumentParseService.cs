@@ -3,6 +3,8 @@ using Microsoft.Extensions.Options;
 using PdfSharpCore.Pdf;
 using PdfSharpCore.Pdf.IO;
 
+using Reguliq.Api.Services.NewDashboard;
+
 namespace Reguliq.Api.Services.LandingAi;
 
 /// <summary>
@@ -16,27 +18,68 @@ public sealed class LandingAiDocumentParseService(
 {
     private readonly LandingAiOptions _opts = options.Value;
 
-    public async Task<string> ParseToMarkdownAsync(byte[] bytes, string fileName, CancellationToken ct = default)
+    public Task<string> ParseToMarkdownAsync(
+        byte[] bytes,
+        string fileName,
+        CancellationToken ct = default)
+        => ParseToMarkdownAsync(bytes, fileName, reportProgress: null, ct);
+
+    public Task<string> ParseToMarkdownAsync(
+        byte[] bytes,
+        string fileName,
+        Func<ExtractionProgressUpdate, Task>? reportProgress,
+        RegulationParseCheckpoint? parseCheckpoint,
+        CancellationToken ct = default)
     {
         if (bytes.Length == 0)
             throw new InvalidOperationException("Empty file.");
 
         if (LandingAiDocumentFormats.IsWordDocument(fileName))
         {
-            logger.LogInformation(
-                "Landing AI Word parse ({File}, {Kb} KB)",
-                fileName,
-                bytes.Length / 1024);
-            return await client.ParseDocumentAsync(bytes, fileName, ct);
+            return ParseWordAsync(bytes, fileName, reportProgress, ct);
         }
 
         if (LandingAiDocumentFormats.IsPdf(fileName, bytes))
-            return await ParsePdfToMarkdownAsync(bytes, fileName, ct);
+            return ParsePdfToMarkdownAsync(bytes, fileName, reportProgress, parseCheckpoint, ct);
 
         throw new InvalidOperationException("Unsupported file type. Upload PDF or Word (.doc, .docx).");
     }
 
-    public async Task<string> ParsePdfToMarkdownAsync(byte[] pdfBytes, string fileName, CancellationToken ct = default)
+    public Task<string> ParseToMarkdownAsync(
+        byte[] bytes,
+        string fileName,
+        Func<ExtractionProgressUpdate, Task>? reportProgress,
+        CancellationToken ct = default)
+        => ParseToMarkdownAsync(bytes, fileName, reportProgress, parseCheckpoint: null, ct);
+
+    private async Task<string> ParseWordAsync(
+        byte[] bytes,
+        string fileName,
+        Func<ExtractionProgressUpdate, Task>? reportProgress,
+        CancellationToken ct)
+    {
+            await ReportAsync(reportProgress, "Parsing Word document…", 15);
+            logger.LogInformation(
+                "Landing AI Word parse ({File}, {Kb} KB)",
+                fileName,
+                bytes.Length / 1024);
+            var md = await client.ParseDocumentAsync(bytes, fileName, ct);
+            await ReportAsync(reportProgress, "Document parsed", 55);
+            return md;
+    }
+
+    public Task<string> ParsePdfToMarkdownAsync(
+        byte[] pdfBytes,
+        string fileName,
+        CancellationToken ct = default)
+        => ParsePdfToMarkdownAsync(pdfBytes, fileName, reportProgress: null, parseCheckpoint: null, ct);
+
+    private async Task<string> ParsePdfToMarkdownAsync(
+        byte[] pdfBytes,
+        string fileName,
+        Func<ExtractionProgressUpdate, Task>? reportProgress,
+        RegulationParseCheckpoint? parseCheckpoint,
+        CancellationToken ct)
     {
         var maxPages = Math.Clamp(_opts.MaxParsePagesPerRequest, 1, 99);
 
@@ -45,18 +88,20 @@ public sealed class LandingAiDocumentParseService(
         if (pageCount.HasValue && pageCount.Value > maxPages)
         {
             return await ParsePdfInChunksAsync(
-                pdfBytes, fileName, maxPages, pageCount.Value, ct);
+                pdfBytes, fileName, maxPages, pageCount.Value, reportProgress, parseCheckpoint, ct);
         }
 
         if (pageCount.HasValue && pageCount.Value <= maxPages)
         {
             try
             {
+                await ReportAsync(reportProgress, $"Parsing PDF ({pageCount} pages)…", 20);
                 logger.LogInformation(
                     "Landing AI PDF parse ({File}, {Pages} pages, {Kb} KB)",
                     fileName,
                     pageCount,
                     pdfBytes.Length / 1024);
+                ct.ThrowIfCancellationRequested();
                 return await client.ParseDocumentAsync(pdfBytes, fileName, ct);
             }
             catch (InvalidOperationException ex) when (IsLandingAiPageLimitError(ex))
@@ -66,24 +111,37 @@ public sealed class LandingAiDocumentParseService(
                     fileName,
                     pageCount);
                 var total = pageCount > 0 ? pageCount.Value : RequirePdfPageCount(pdfBytes, fileName);
-                return await ParsePdfInChunksAsync(pdfBytes, fileName, maxPages, total, ct);
+                return await ParsePdfInChunksAsync(
+                    pdfBytes, fileName, maxPages, total, reportProgress, parseCheckpoint, ct);
             }
         }
 
         // Could not count pages locally — try once, then chunk if ADE returns 422.
         try
         {
+            await ReportAsync(reportProgress, "Parsing PDF…", 20);
             logger.LogInformation(
                 "Landing AI PDF parse ({File}, page count unknown, {Kb} KB)",
                 fileName,
                 pdfBytes.Length / 1024);
+            ct.ThrowIfCancellationRequested();
             return await client.ParseDocumentAsync(pdfBytes, fileName, ct);
         }
         catch (InvalidOperationException ex) when (IsLandingAiPageLimitError(ex))
         {
             var total = RequirePdfPageCount(pdfBytes, fileName);
-            return await ParsePdfInChunksAsync(pdfBytes, fileName, maxPages, total, ct);
+            return await ParsePdfInChunksAsync(
+                pdfBytes, fileName, maxPages, total, reportProgress, parseCheckpoint, ct);
         }
+    }
+
+    private static async Task ReportAsync(
+        Func<ExtractionProgressUpdate, Task>? reportProgress,
+        string label,
+        int? percent)
+    {
+        if (reportProgress == null) return;
+        await reportProgress(new ExtractionProgressUpdate(label, percent));
     }
 
     private async Task<string> ParsePdfInChunksAsync(
@@ -91,6 +149,8 @@ public sealed class LandingAiDocumentParseService(
         string fileName,
         int maxPagesPerChunk,
         int totalPages,
+        Func<ExtractionProgressUpdate, Task>? reportProgress,
+        RegulationParseCheckpoint? parseCheckpoint,
         CancellationToken ct)
     {
         logger.LogInformation(
@@ -100,11 +160,22 @@ public sealed class LandingAiDocumentParseService(
             maxPagesPerChunk);
 
         var chunks = SplitPdf(pdfBytes, maxPagesPerChunk);
-        var merged = new System.Text.StringBuilder();
-        for (var i = 0; i < chunks.Count; i++)
+        var startChunk = Math.Clamp(parseCheckpoint?.ResumeFromChunkIndex ?? 0, 0, Math.Max(0, chunks.Count - 1));
+        var merged = new System.Text.StringBuilder(parseCheckpoint?.PartialMarkdown?.Trim() ?? "");
+        if (merged.Length > 0 && startChunk > 0)
+            merged.AppendLine();
+
+        for (var i = startChunk; i < chunks.Count; i++)
         {
+            ct.ThrowIfCancellationRequested();
+
             var startPage = i * maxPagesPerChunk + 1;
             var endPage = Math.Min(startPage + maxPagesPerChunk - 1, totalPages);
+            var pct = (int)Math.Round(((i + 0.15) / chunks.Count) * 55.0);
+            await ReportAsync(
+                reportProgress,
+                $"Parsing pages {startPage}–{endPage} of {totalPages} (part {i + 1}/{chunks.Count})",
+                pct);
             logger.LogInformation(
                 "Landing AI PDF chunk {Index}/{Total} for {File} (pages {Start}-{End})",
                 i + 1,
@@ -130,8 +201,12 @@ public sealed class LandingAiDocumentParseService(
             chunkMd = ShiftPageMarkers(chunkMd, startPage - 1);
             if (merged.Length > 0) merged.AppendLine();
             merged.AppendLine(chunkMd);
+
+            if (parseCheckpoint?.OnChunkParsedAsync != null)
+                await parseCheckpoint.OnChunkParsedAsync(i, merged.ToString().Trim());
         }
 
+        await ReportAsync(reportProgress, "Document parsed", 58);
         return merged.ToString().Trim();
     }
 

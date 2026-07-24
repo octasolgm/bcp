@@ -675,7 +675,9 @@ public class RegulationDocumentsController(
 
         var deptNames = await LoadDepartmentNamesAsync(ct);
 
-        var doc = await db.NdRegulationDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+        var refreshed = await uploadService.TryRefreshExtractionStatusAsync(id, ct);
+        var doc = refreshed
+            ?? await db.NdRegulationDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
         if (doc != null && !IsDepartmentOverlay(doc))
         {
             if (doc.Status == StatusHidden)
@@ -693,6 +695,8 @@ public class RegulationDocumentsController(
                     departmentId = doc.DepartmentId,
                     departmentName = DeptName(deptNames, doc.DepartmentId),
                     extractionStatus = doc.IsManual ? "completed" : doc.ExtractionStatus,
+                    extractionProgressLabel = doc.ExtractionProgressLabel,
+                    extractionProgressPct = doc.ExtractionProgressPct,
                     pointCount,
                     extractedAt = doc.ExtractedAt,
                     createdAt = doc.CreatedAt,
@@ -990,14 +994,17 @@ public class RegulationDocumentsController(
             var doc = await uploadService.ExtractByRegulationIdAsync(id, profile!.Id, ct);
             var pointCount = await db.NdRegulationPoints.CountAsync(p => p.RegulationDocumentId == doc.Id, ct);
             var responseId = doc.StoredDocumentId ?? doc.Id;
-            return Ok(new
+            return Accepted(new
             {
                 success = true,
-                cached = false,
+                message = "Extraction started.",
                 data = new
                 {
                     id = responseId,
+                    regulationDocumentId = doc.Id,
                     extractionStatus = doc.ExtractionStatus,
+                    extractionProgressLabel = doc.ExtractionProgressLabel,
+                    extractionProgressPct = doc.ExtractionProgressPct,
                     pointCount,
                 },
             });
@@ -1010,6 +1017,39 @@ public class RegulationDocumentsController(
         {
             return BadRequest(new { success = false, message = ex.Message });
         }
+    }
+
+    [HttpPost("{id:guid}/extract/stop")]
+    public async Task<IActionResult> StopExtract(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var stopped = await uploadService.StopExtractAsync(id, ct);
+        if (!stopped)
+            return BadRequest(new { success = false, message = "No extraction is running for this document." });
+
+        var doc = await uploadService.TryRefreshExtractionStatusAsync(id, ct)
+            ?? await db.NdRegulationDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (doc == null)
+            return NotFound(new { success = false, message = "Not found" });
+
+        var pointCount = await db.NdRegulationPoints.CountAsync(p => p.RegulationDocumentId == doc.Id, ct);
+        return Ok(new
+        {
+            success = true,
+            message = "Extraction stopped. Saved progress can be resumed with Extract.",
+            data = new
+            {
+                id = doc.StoredDocumentId ?? doc.Id,
+                regulationDocumentId = doc.Id,
+                extractionStatus = doc.ExtractionStatus,
+                extractionProgressLabel = doc.ExtractionProgressLabel,
+                extractionProgressPct = doc.ExtractionProgressPct,
+                extractionParseChunkCompleted = doc.ExtractionParseChunkCompleted,
+                pointCount,
+            },
+        });
     }
 
     [HttpGet("{id:guid}/file-url")]
@@ -1295,6 +1335,15 @@ public class RegulationDocumentsController(
             departmentId = d.DepartmentId,
             departmentName = DeptName(deptNames, d.DepartmentId),
             extractionStatus = displayStatus,
+            extractionProgressLabel = ShowsExtractionProgress(displayStatus)
+                ? d.ExtractionProgressLabel
+                : null,
+            extractionProgressPct = ShowsExtractionProgress(displayStatus)
+                ? d.ExtractionProgressPct
+                : null,
+            extractionParseChunkCompleted = string.Equals(d.ExtractionStatus, "paused", StringComparison.OrdinalIgnoreCase)
+                ? d.ExtractionParseChunkCompleted
+                : null,
             pointCount = resolvedCount,
             extractedAt = d.ExtractedAt,
             createdAt = d.CreatedAt,
@@ -1373,10 +1422,16 @@ public class RegulationDocumentsController(
             return "extracted";
         if (string.Equals(rawStatus, "processing", StringComparison.OrdinalIgnoreCase))
             return "processing";
+        if (string.Equals(rawStatus, "paused", StringComparison.OrdinalIgnoreCase))
+            return "paused";
         if (string.Equals(rawStatus, "failed", StringComparison.OrdinalIgnoreCase))
             return "failed";
         return "pending";
     }
+
+    private static bool ShowsExtractionProgress(string displayStatus) =>
+        string.Equals(displayStatus, "processing", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(displayStatus, "paused", StringComparison.OrdinalIgnoreCase);
 
     private static int ResolvePointCount(
         NdRegulationDocument doc,

@@ -269,6 +269,14 @@ public static class NdSchemaBootstrap
             ALTER TABLE regulation_documents
               ADD COLUMN IF NOT EXISTS status INTEGER NOT NULL DEFAULT 1;
 
+            ALTER TABLE regulation_documents
+              ADD COLUMN IF NOT EXISTS extraction_progress_label TEXT NULL;
+
+            ALTER TABLE regulation_documents
+              ADD COLUMN IF NOT EXISTS extraction_progress_pct INTEGER NULL;
+            ALTER TABLE regulation_documents
+              ADD COLUMN IF NOT EXISTS extraction_parse_chunk_completed INTEGER NULL;
+
             CREATE UNIQUE INDEX IF NOT EXISTS idx_regulation_documents_manual_singleton
               ON regulation_documents (is_manual) WHERE is_manual = true;
             """,

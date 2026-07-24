@@ -563,8 +563,24 @@
             </ul>
           }
 
-          @if (filteredComplianceDocs.length) {
-            <p class="panel-foot">{{ selectedComplianceIds.size }}/{{ filteredComplianceDocs.length }} selected</p>
+          @if (filteredComplianceDocs.length || isNdShell) {
+            <div class="v8-compliance-foot">
+              <p
+                class="v8-compliance-foot-left"
+                [class.is-selection-hint]="
+                  isNdShell && needsComplianceDocumentSelection && !uploadingCompliance && !attachingCompliance
+                "
+              >
+                @if (isNdShell && needsComplianceDocumentSelection && !uploadingCompliance && !attachingCompliance) {
+                  Select or upload at least one internal (policy) document.
+                } @else if (filteredComplianceDocs.length) {
+                  {{ selectedComplianceIds.size }}/{{ filteredComplianceDocs.length }} selected
+                }
+              </p>
+              @if (isNdShell && pass2LlmSummary) {
+                <p class="pass2-llm-foot">Pass 2: {{ pass2LlmSummary }}</p>
+              }
+            </div>
           }
         </div>
       </div>
@@ -638,8 +654,17 @@
     </div>
   </section>
 
-  @if (!isSessionActive && !canRun && runBlockedReason) {
-    <p class="run-hint">{{ runBlockedReason }}</p>
+  @if (!isSessionActive && !canRun && (runBlockedReason || (isNdShell && pass2LlmSummary))) {
+    <div class="run-hint-row">
+      @if (runBlockedReason) {
+        <p class="run-hint">{{ runBlockedReason }}</p>
+      } @else {
+        <span></span>
+      }
+      @if (isNdShell && pass2LlmSummary) {
+        <p class="run-hint run-hint-llm">Pass 2 dual verify: {{ pass2LlmSummary }}</p>
+      }
+    </div>
   }
 </div>
 

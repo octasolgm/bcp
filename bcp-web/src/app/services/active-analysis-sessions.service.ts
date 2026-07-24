@@ -96,7 +96,7 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
     this.watchers++;
     if (this.watchers === 1) {
       this.refresh();
-      this.timer = setInterval(() => this.refresh(), 3000);
+      this.timer = setInterval(() => this.refresh(), 10000);
     }
   }
 

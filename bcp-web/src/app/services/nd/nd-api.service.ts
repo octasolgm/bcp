@@ -229,6 +229,10 @@ export class NdApiService {
     return this.request<unknown>('POST', `/nd/regulation-documents/${docId}/extract`);
   }
 
+  stopRegulationExtract(docId: string) {
+    return this.request<unknown>('POST', `/nd/regulation-documents/${docId}/extract/stop`);
+  }
+
   getDocumentPoints(docId: string) {
     return this.request<unknown[]>('GET', `/nd/regulation-documents/${docId}/points`);
   }

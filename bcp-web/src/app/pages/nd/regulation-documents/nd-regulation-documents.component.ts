@@ -202,11 +202,18 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
         if (this.selectedDoc?.id === id) this.selectedDoc = this.docs[idx];
       }
       const st = (doc.extractionStatus ?? '').toLowerCase();
-      if (st === 'extracted' || st === 'completed' || st === 'failed' || (doc.pointCount ?? 0) > 0) {
+      if (st === 'processing' && doc.extractionProgressLabel) {
+        this.message = doc.extractionProgressLabel;
+      }
+      if (st === 'extracted' || st === 'completed' || st === 'failed' || st === 'paused') {
         this.pollingExtractIds.delete(id);
         if (this.extractingId === id) this.extractingId = null;
         if (st === 'failed') this.error = `Extraction failed for "${doc.name}"`;
-        else if (this.selectedDoc?.id === id) await this.loadPointsForDoc(id);
+        else if (st === 'paused') {
+          this.message = doc.extractionProgressLabel ?? `Extraction paused for "${doc.name}"`;
+        } else if (this.selectedDoc?.id === id) {
+          await this.loadPointsForDoc(id);
+        }
       }
     }
     if (!this.pollingExtractIds.size) {
@@ -217,7 +224,8 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
 
   private syncExtractPollingFromDocs(): void {
     for (const doc of this.docs) {
-      if ((doc.extractionStatus ?? '').toLowerCase() === 'processing') {
+      const st = (doc.extractionStatus ?? '').toLowerCase();
+      if (st === 'processing') {
         this.pollingExtractIds.add(doc.id);
       }
     }
@@ -385,15 +393,31 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.message = '';
     const res = await this.api.extractRegulationDocument(doc.id);
     if (res.success) {
-      const data = res.data as { pointCount?: number; extractionStatus?: string };
+      const data = res.data as {
+        pointCount?: number;
+        extractionStatus?: string;
+        extractionProgressLabel?: string | null;
+        extractionProgressPct?: number | null;
+      };
+      const idx = this.docs.findIndex((d) => d.id === doc.id);
+      if (idx >= 0) {
+        this.docs[idx] = {
+          ...this.docs[idx],
+          extractionStatus: data?.extractionStatus ?? this.docs[idx].extractionStatus,
+          extractionProgressLabel: data?.extractionProgressLabel ?? this.docs[idx].extractionProgressLabel,
+          extractionProgressPct: data?.extractionProgressPct ?? this.docs[idx].extractionProgressPct,
+        };
+        if (this.selectedDoc?.id === doc.id) this.selectedDoc = this.docs[idx];
+      }
       if ((data?.extractionStatus ?? '').toLowerCase() === 'processing') {
-        this.message = `Extracting "${doc.name}"…`;
+        this.message =
+          data?.extractionProgressLabel?.trim() || `Extracting "${doc.name}"… open Progress to follow along.`;
+        this.extractingId = null;
         return;
       }
-      this.extractingId = null;
       this.pollingExtractIds.delete(doc.id);
+      this.extractingId = null;
       this.message = `Extraction complete — ${data?.pointCount ?? 0} points`;
-      const idx = this.docs.findIndex((d) => d.id === doc.id);
       if (idx >= 0) {
         this.docs[idx] = {
           ...this.docs[idx],
@@ -408,9 +432,38 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       await this.loadDocs(true);
     } else {
       this.error = res.message ?? 'Extraction failed';
+      this.extractingId = null;
+      this.pollingExtractIds.delete(doc.id);
     }
-    this.extractingId = null;
+  }
+
+  viewExtractionProgress(doc: RegulationDocument, event?: Event): void {
+    event?.stopPropagation();
+    this.trackExtractingDoc(doc.id);
+    void this.viewPoints(doc, event);
+    this.message = doc.extractionProgressLabel?.trim() || `Extracting "${doc.name}"…`;
+  }
+
+  async handleStopExtract(doc: RegulationDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.error = '';
+    const res = await this.api.stopRegulationExtract(doc.id);
+    if (!res.success) {
+      this.error = res.message ?? 'Could not stop extraction';
+      return;
+    }
+    const data = res.data as RegulationDocument | undefined;
+    const idx = this.docs.findIndex((d) => d.id === doc.id);
+    if (idx >= 0 && data) {
+      this.docs[idx] = { ...this.docs[idx], ...data, extractionStatus: 'paused' };
+      if (this.selectedDoc?.id === doc.id) this.selectedDoc = this.docs[idx];
+    }
     this.pollingExtractIds.delete(doc.id);
+    this.extractingId = null;
+    this.message =
+      (data as RegulationDocument | undefined)?.extractionProgressLabel ??
+      'Extraction stopped — click Extract to resume from saved progress.';
+    await this.loadDocs(true);
   }
 
   async viewPoints(
@@ -628,7 +681,35 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   }
 
   docPointMeta(doc: RegulationDocument): string {
-    return `${doc.pointCount ?? 0} pts`;
+    const n = doc.pointCount ?? 0;
+    const part = this.extractionPartLabel(doc);
+    if (this.isExtractingDoc(doc)) {
+      const saving = this.extractionSavingPointsLabel(doc);
+      if (saving) return `${n} pts · ${saving}`;
+      if (part) return `${n} pts · ${part}`;
+      const pct = this.extractionProgressPct(doc);
+      if (pct != null) return `${n} pts · ${pct}%`;
+    }
+    if ((doc.extractionStatus ?? '').toLowerCase() === 'paused' && part) {
+      return `${n} pts · saved ${part}`;
+    }
+    return `${n} pts`;
+  }
+
+  private extractionPartLabel(doc: RegulationDocument): string | null {
+    const label = doc.extractionProgressLabel ?? '';
+    const m = /part\s+(\d+)\s*\/\s*(\d+)/i.exec(label);
+    if (m) return `part ${m[1]}/${m[2]}`;
+    if (doc.extractionParseChunkCompleted != null && doc.extractionParseChunkCompleted >= 0) {
+      return `part ${doc.extractionParseChunkCompleted + 1} saved`;
+    }
+    return null;
+  }
+
+  private extractionSavingPointsLabel(doc: RegulationDocument): string | null {
+    const label = doc.extractionProgressLabel ?? '';
+    const m = /Saving\s+(\d+)\s+regulation points/i.exec(label);
+    return m ? `${m[1]} pts found` : null;
   }
 
   formatDate = formatDate;
@@ -636,6 +717,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   extractionClass(status: string): string {
     if (status === 'extracted' || status === 'manual' || status === 'completed') return 'completed';
     if (status === 'processing') return 'running';
+    if (status === 'paused') return 'pending';
     if (status === 'failed') return 'failed';
     return 'pending';
   }
@@ -644,13 +726,45 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     if (status === 'manual') return 'Manual';
     if (status === 'extracted' || status === 'completed') return 'Extracted';
     if (status === 'processing') return 'Extracting…';
+    if (status === 'paused') return 'Paused';
     if (status === 'failed') return 'Failed';
     if (status === 'pending') return 'Pending';
     return status;
   }
 
+  isPausedDoc(doc: RegulationDocument): boolean {
+    return (doc.extractionStatus ?? '').toLowerCase() === 'paused';
+  }
+
+  canResumeExtract(doc: RegulationDocument): boolean {
+    return this.isPausedDoc(doc) || (doc.extractionStatus ?? '').toLowerCase() === 'pending';
+  }
+
   isExtractingDoc(doc: RegulationDocument): boolean {
-    return this.extractingId === doc.id || this.pollingExtractIds.has(doc.id);
+    const st = (doc.extractionStatus ?? '').toLowerCase();
+    return (
+      this.extractingId === doc.id ||
+      this.pollingExtractIds.has(doc.id) ||
+      st === 'processing'
+    );
+  }
+
+  showExtractProgressActions(doc: RegulationDocument): boolean {
+    return this.isExtractingDoc(doc) || this.isPausedDoc(doc);
+  }
+
+  extractionStatusText(doc: RegulationDocument): string {
+    if (this.isExtractingDoc(doc) || this.isPausedDoc(doc)) {
+      return doc.extractionProgressLabel?.trim() || this.extractionLabel(doc.extractionStatus);
+    }
+    return this.extractionLabel(doc.extractionStatus);
+  }
+
+  extractionProgressPct(doc: RegulationDocument): number | null {
+    if (!this.isExtractingDoc(doc)) return null;
+    const pct = doc.extractionProgressPct;
+    if (pct == null || Number.isNaN(pct)) return null;
+    return Math.max(0, Math.min(100, pct));
   }
 
   isSelected(doc: RegulationDocument): boolean {

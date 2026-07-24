@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Reguliq.Api.Models;
+using Reguliq.Api.Services.NewDashboard;
 
 namespace Reguliq.Api.Services.LandingAi;
 
@@ -20,10 +21,27 @@ public class LandingAiGovExtractService(
 
     private readonly LandingAiOptions _opts = options.Value;
 
+    public Task<GovExtractResponse> ExtractFromUploadAsync(
+        byte[]? fileBytes,
+        string fileName,
+        string? markdownOverride,
+        CancellationToken ct = default)
+        => ExtractFromUploadAsync(fileBytes, fileName, markdownOverride, reportProgress: null, ct);
+
+    public Task<GovExtractResponse> ExtractFromUploadAsync(
+        byte[]? fileBytes,
+        string fileName,
+        string? markdownOverride,
+        Func<ExtractionProgressUpdate, Task>? reportProgress,
+        CancellationToken ct = default)
+        => ExtractFromUploadAsync(fileBytes, fileName, markdownOverride, reportProgress, parseCheckpoint: null, ct);
+
     public async Task<GovExtractResponse> ExtractFromUploadAsync(
         byte[]? fileBytes,
         string fileName,
         string? markdownOverride,
+        Func<ExtractionProgressUpdate, Task>? reportProgress,
+        RegulationParseCheckpoint? parseCheckpoint,
         CancellationToken ct = default)
     {
         if (!client.IsConfigured)
@@ -39,7 +57,8 @@ public class LandingAiGovExtractService(
         if (string.IsNullOrWhiteSpace(markdown) && fileBytes is { Length: > 0 })
         {
             logger.LogInformation("Landing AI parse for gov extract ({File}, {Kb} KB)", fileName, fileBytes.Length / 1024);
-            markdown = await documentParse.ParseToMarkdownAsync(fileBytes, fileName, ct);
+            markdown = await documentParse.ParseToMarkdownAsync(
+                fileBytes, fileName, reportProgress, parseCheckpoint, ct);
             await cache.SaveParseCacheAsync(fileHash, fileName, markdown, _opts.ParseModel, ct);
         }
 
@@ -49,6 +68,8 @@ public class LandingAiGovExtractService(
         var cachedJson = await cache.GetExtractPointsJsonAsync(fileHash, GovSchemaKey, ct);
         if (!string.IsNullOrWhiteSpace(cachedJson))
         {
+            if (reportProgress != null)
+                await reportProgress(new ExtractionProgressUpdate("Loading cached regulation points…", 85));
             var cachedPoints = GovPointsParser.ParseFromExtractJson(cachedJson);
             cachedPoints = await ResolvePointPagesAsync(fileHash, cachedPoints, ct);
             govPoints.SetPoints(cachedPoints, "db-cache");
@@ -58,6 +79,8 @@ public class LandingAiGovExtractService(
         }
 
         logger.LogInformation("Landing AI gov extract ({Model})", _opts.ExtractModel);
+        if (reportProgress != null)
+            await reportProgress(new ExtractionProgressUpdate("Extracting regulation points…", 72));
         var extraction = await client.ExtractGovRequirementPointsAsync(markdown, ct);
         var points = GovPointsParser.ParseFromExtraction(extraction);
         if (points.Count == 0)

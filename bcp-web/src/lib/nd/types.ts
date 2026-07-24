@@ -39,6 +39,9 @@ export type RegulationDocument = {
   departmentId?: string | null;
   departmentName?: string | null;
   extractionStatus: string;
+  extractionProgressLabel?: string | null;
+  extractionProgressPct?: number | null;
+  extractionParseChunkCompleted?: number | null;
   pointCount: number;
   extractedAt?: string | null;
   createdAt: string;

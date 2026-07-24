@@ -110,6 +110,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   colMidWidth = 280;
 
   isNdShell = false;
+  pass2LlmSummary = '';
   pointsSource: PointsSource = 'regulation';
   libraries: LibrarySummary[] = [];
   selectedLibraryIds = new Set<string>();
@@ -147,7 +148,10 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     this.refreshNdShellState();
     super.ngOnInit();
     this.canonicalizeNdAnalysisUrl();
-    if (this.isNdShell) void this.ensureLibrariesLoaded();
+    if (this.isNdShell) {
+      void this.ensureLibrariesLoaded();
+      void this.refreshPass2LlmSummary();
+    }
     if (this.activeNdRunId) void this.loadNdRunPoints(this.activeNdRunId);
 
     this.navSub = this.router.events
@@ -156,6 +160,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
         const hadNdCatalog = this.useNdRegulationCatalog;
         this.refreshNdShellState();
         if (this.isNdShell) void this.ensureLibrariesLoaded();
+        if (this.isNdShell) void this.refreshPass2LlmSummary();
         if (this.useNdRegulationCatalog !== hadNdCatalog) this.refreshRegulations();
       });
   }
@@ -163,6 +168,19 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   private refreshNdShellState(): void {
     this.isNdShell = this.isUnderNdRoute() || this.currentPathname().startsWith('/nd/');
     this.useNdRegulationCatalog = this.isNdShell;
+  }
+
+  private async refreshPass2LlmSummary(): Promise<void> {
+    const res = await this.ndApi.getActiveDualVerifyLlm();
+    if (!res.success || !res.data) {
+      this.pass2LlmSummary = '';
+      return;
+    }
+    this.pass2LlmSummary = `${res.data.providerLabel} · ${res.data.model}`;
+  }
+
+  get needsComplianceDocumentSelection(): boolean {
+    return this.selectedComplianceIds.size === 0 && !this.complianceFile;
   }
 
   private isUnderNdRoute(): boolean {

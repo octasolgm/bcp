@@ -86,6 +86,16 @@ public class NdRegulationDocument
     [Column("extraction_status")]
     public string ExtractionStatus { get; set; } = "pending";
 
+    [Column("extraction_progress_label")]
+    public string? ExtractionProgressLabel { get; set; }
+
+    [Column("extraction_progress_pct")]
+    public int? ExtractionProgressPct { get; set; }
+
+    /// <summary>Last fully parsed PDF chunk index (0-based), for resume after pause.</summary>
+    [Column("extraction_parse_chunk_completed")]
+    public int? ExtractionParseChunkCompleted { get; set; }
+
     [Column("extraction_result")]
     public string? ExtractionResult { get; set; }
 

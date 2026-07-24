@@ -107,6 +107,21 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     else this.expandedChapters.add(chapter);
   }
 
+  expandAll(): void {
+    for (const ch of this.chapterGroups) {
+      this.expandedChapters.add(ch.chapter);
+    }
+  }
+
+  collapseAll(): void {
+    this.search = '';
+    this.expandedChapters.clear();
+  }
+
+  get canExpandCollapse(): boolean {
+    return !this.loading && this.chapterGroups.length > 0;
+  }
+
   showSectionBar(sections: GovPointChapterGroup['sections'], key: string, chapter: string): boolean {
     return sections.length > 1 || key !== chapter;
   }

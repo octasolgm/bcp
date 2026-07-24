@@ -241,9 +241,27 @@
                   @if (isManualDoc(d)) {
                     <span class="severity-badge completed">{{ extractionLabel(d.extractionStatus) }}</span>
                   } @else {
-                    <span class="severity-badge" [ngClass]="extractionClass(d.extractionStatus)">
+                    <span class="severity-badge extract-status-cell" [ngClass]="extractionClass(d.extractionStatus)">
                       @if (isExtractingDoc(d)) {
-                        Extracting…
+                        <span class="extract-status-stack">
+                          <span class="extract-status-label">{{ extractionStatusText(d) }}</span>
+                          @if (extractionProgressPct(d); as pct) {
+                            <span
+                              class="extract-progress-track"
+                              role="progressbar"
+                              [attr.aria-valuenow]="pct"
+                              aria-valuemin="0"
+                              aria-valuemax="100"
+                              [attr.aria-label]="extractionStatusText(d)"
+                            >
+                              <span class="extract-progress-fill" [style.width.%]="pct"></span>
+                            </span>
+                          }
+                        </span>
+                      } @else if (isPausedDoc(d)) {
+                        <span class="extract-status-stack">
+                          <span class="extract-status-label">{{ extractionStatusText(d) }}</span>
+                        </span>
                       } @else {
                         {{ extractionLabel(d.extractionStatus) }}
                       }
@@ -260,15 +278,41 @@
                     >
                       {{ isManualDoc(d) ? 'Manage' : 'View' }}
                     </button>
+                    @if (showExtractProgressActions(d)) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact"
+                        title="View extraction progress"
+                        (click)="viewExtractionProgress(d, $event)"
+                      >
+                        Progress
+                      </button>
+                    }
+                    @if (isExtractingDoc(d) && canExtract) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact danger"
+                        title="Stop and save progress"
+                        (click)="handleStopExtract(d, $event)"
+                      >
+                        Stop
+                      </button>
+                    }
                     @if (canExtract && !isManualDoc(d)) {
                       <button
                         type="button"
                         class="row-action-btn compact"
-                        title="Run extraction"
-                        [disabled]="extractingId === d.id"
+                        [title]="isPausedDoc(d) ? 'Resume extraction' : 'Run extraction'"
+                        [disabled]="extractingId === d.id || isExtractingDoc(d)"
                         (click)="handleExtract(d, $event)"
                       >
-                        {{ extractingId === d.id ? '…' : 'Extract' }}
+                        @if (extractingId === d.id) {
+                          …
+                        } @else if (isPausedDoc(d)) {
+                          Resume
+                        } @else {
+                          Extract
+                        }
                       </button>
                     }
                     @if (!isManualDoc(d)) {
@@ -347,10 +391,24 @@
             <span class="muted panel-sub">
               @if (isManualDoc(selectedDoc)) {
                 Manual entry · {{ docPointMeta(selectedDoc) }}
+              } @else if (isExtractingDoc(selectedDoc)) {
+                {{ extractionStatusText(selectedDoc) }} · {{ docPointMeta(selectedDoc) }}
               } @else {
                 {{ extractionLabel(selectedDoc.extractionStatus) }} · {{ docPointMeta(selectedDoc) }}
               }
             </span>
+            @if (selectedDoc && isExtractingDoc(selectedDoc) && extractionProgressPct(selectedDoc); as pct) {
+              <span
+                class="extract-progress-track panel-progress"
+                role="progressbar"
+                [attr.aria-valuenow]="pct"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                [attr.aria-label]="extractionStatusText(selectedDoc)"
+              >
+                <span class="extract-progress-fill" [style.width.%]="pct"></span>
+              </span>
+            }
           }
         </div>
       </div>

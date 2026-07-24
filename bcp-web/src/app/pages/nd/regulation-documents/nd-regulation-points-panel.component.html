@@ -2,13 +2,22 @@
   <div class="panel-head">
     <p class="panel-status">{{ statusLabel }}</p>
     @if (points.length > 0) {
-      <input
-        type="search"
-        class="panel-search"
-        placeholder="Search points…"
-        [(ngModel)]="search"
-        aria-label="Search points"
-      />
+      <div class="panel-toolbar">
+        <input
+          type="search"
+          class="panel-search"
+          placeholder="Search points…"
+          [(ngModel)]="search"
+          aria-label="Search points"
+        />
+        @if (canExpandCollapse) {
+          <div class="panel-expand-actions">
+            <button type="button" class="panel-link-btn" (click)="expandAll()">Expand all</button>
+            <span class="panel-expand-sep" aria-hidden="true">·</span>
+            <button type="button" class="panel-link-btn" (click)="collapseAll()">Collapse all</button>
+          </div>
+        }
+      </div>
     }
   </div>
 
