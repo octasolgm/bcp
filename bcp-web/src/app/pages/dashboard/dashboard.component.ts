@@ -133,6 +133,7 @@ export class DashboardComponent implements OnInit {
   remediationItems: Array<{ item: string; severity: string; target: string; status: string }> = [];
   ndRuns: AnalysisRunSummary[] = [];
   ndRunsLoading = false;
+  ndRunsLoadError = '';
   gapRiskCounts: GapRiskCounts = emptyGapRiskCounts();
   gapRiskLoading = false;
   historyOpen = false;
@@ -240,17 +241,25 @@ export class DashboardComponent implements OnInit {
 
   private async loadNdRuns(): Promise<void> {
     this.ndRunsLoading = true;
+    this.ndRunsLoadError = '';
     try {
+      await this.ndAuth.refreshProfile();
       const role = this.ndAuth.getRole();
       const res = await this.ndApi.getAnalysisRuns(
-        role === 'maker' ? { mineOnly: true, ndOnly: true } : { ndOnly: true },
+        role === 'maker'
+          ? { mineOnly: true, ndOnly: true, summaryOnly: true }
+          : { ndOnly: true, summaryOnly: true },
       );
       if (res.success && res.data) {
         this.ndRuns = sortAnalysisRunsByRecent(res.data as AnalysisRunSummary[]);
         void this.loadNdGapRiskCounts();
+      } else {
+        this.ndRuns = [];
+        this.ndRunsLoadError = res.message ?? 'Could not load analysis runs from the API.';
       }
     } catch {
       this.ndRuns = [];
+      this.ndRunsLoadError = 'Could not load analysis runs from the API.';
     } finally {
       this.ndRunsLoading = false;
     }
@@ -263,24 +272,27 @@ export class DashboardComponent implements OnInit {
     }
     this.gapRiskLoading = true;
     try {
-      const targets = this.ndRuns.filter((r) => (r.totalGaps ?? 0) > 0);
-      const runs = targets.length ? targets : this.ndRuns;
-      let merged = emptyGapRiskCounts();
-      await Promise.all(
-        runs.map(async (run) => {
-          const res = await this.ndApi.getResults(run.id);
-          if (!res.success || !res.data) return;
-          const data = res.data as {
-            points?: AnalysisPoint[];
-            actionItemReviews?: ActionItemReviewRow[];
-          };
-          const counts = aggregateGapRiskCounts(
-            (data.points ?? []) as AnalysisPoint[],
-            data.actionItemReviews ?? [],
-          );
-          merged = mergeGapRiskCounts(merged, counts);
-        }),
+      const scored = this.ndRuns.filter(
+        (r) =>
+          (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0) > 0 ||
+          (r.totalGaps ?? 0) > 0 ||
+          (r.processedPointsCount ?? 0) > 0,
       );
+      const runs = (scored.length ? scored : this.ndRuns).slice(0, 3);
+      let merged = emptyGapRiskCounts();
+      for (const run of runs) {
+        const res = await this.ndApi.getResults(run.id);
+        if (!res.success || !res.data) continue;
+        const data = res.data as {
+          points?: AnalysisPoint[];
+          actionItemReviews?: ActionItemReviewRow[];
+        };
+        const counts = aggregateGapRiskCounts(
+          (data.points ?? []) as AnalysisPoint[],
+          data.actionItemReviews ?? [],
+        );
+        merged = mergeGapRiskCounts(merged, counts);
+      }
       this.gapRiskCounts = merged;
     } catch {
       this.gapRiskCounts = emptyGapRiskCounts();
@@ -461,7 +473,7 @@ export class DashboardComponent implements OnInit {
 
   get lastAnalysisLabel(): string {
     if (this.inNdShell && this.ndRunsLoading) return 'Loading…';
-    const nd = this.primaryNdRun;
+    const nd = this.primaryNdRun ?? this.ndRuns[0];
     if (nd?.createdAt) {
       return new Date(nd.createdAt).toLocaleDateString(undefined, {
         year: 'numeric',
@@ -500,6 +512,13 @@ export class DashboardComponent implements OnInit {
 
   get recentNdRuns(): AnalysisRunSummary[] {
     return this.ndRuns.slice(0, 5);
+  }
+
+  /** Runs with compliance breakdown on the summary row. */
+  get ndRunsWithMetricsCount(): number {
+    return this.ndRuns.filter(
+      (r) => (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0) > 0,
+    ).length;
   }
 
   runLink(run: AnalysisRunSummary): string[] {

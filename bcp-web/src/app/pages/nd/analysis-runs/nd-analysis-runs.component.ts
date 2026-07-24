@@ -47,6 +47,7 @@ export class NdAnalysisRunsComponent implements OnInit {
 
   allRuns: AnalysisRunSummary[] = [];
   loading = true;
+  loadError = '';
   mineOnly = false;
   correctionOnly = false;
   pageTitle = 'Analysis runs';
@@ -95,21 +96,25 @@ export class NdAnalysisRunsComponent implements OnInit {
 
   async load(): Promise<void> {
     this.loading = true;
+    this.loadError = '';
     const res = await this.api.getAnalysisRuns(
       this.correctionOnly
         ? {
             ndOnly: true,
+            summaryOnly: true,
             status: 'pulled_back',
             ...(this.mineOnly ? { mineOnly: true } : {}),
           }
         : this.mineOnly
-          ? { mineOnly: true, ndOnly: true }
-          : { ndOnly: true },
+          ? { mineOnly: true, ndOnly: true, summaryOnly: true }
+          : { ndOnly: true, summaryOnly: true },
     );
     if (res.success && res.data) {
       this.allRuns = res.data as AnalysisRunSummary[];
     } else {
       this.allRuns = [];
+      this.loadError = res.message ?? 'Could not load analysis runs from the API.';
+      this.toast.show(this.loadError, 'error', 6000);
     }
     this.loading = false;
   }

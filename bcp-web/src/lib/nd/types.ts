@@ -126,6 +126,7 @@ export type AnalysisRunSummary = {
   departmentId?: string | null;
   createdBy?: string | null;
   createdAt: string;
+  updatedAt?: string;
   submittedToCheckerAt?: string | null;
   legacySessionId?: string | null;
   legacyHref?: string | null;

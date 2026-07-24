@@ -256,6 +256,16 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     return this.selectedLibraryIds.has(libId);
   }
 
+  get allFilteredLibrariesSelected(): boolean {
+    const libs = this.filteredLibraries;
+    return libs.length > 0 && libs.every((l) => this.selectedLibraryIds.has(l.id));
+  }
+
+  toggleAllFilteredLibraries(checked: boolean): void {
+    if (checked) this.selectAllFilteredLibraries();
+    else this.clearLibrarySelection();
+  }
+
   selectAllFilteredLibraries(): void {
     this.selectedLibraryIds = new Set(this.filteredLibraries.map((l) => l.id));
     void this.loadLibraryPoints();
@@ -266,12 +276,47 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     this.rawGovPoints = [];
     this.govPoints = [];
     this.chapterGroups = [];
-    this.selected.clear();
+    this.selected = new Set();
     this.govSourceLabel = '';
     this.libraryPrimaryRegDocId = null;
     this.librarySourceLabel = '';
     this.resetLibraryPointMeta();
     this.error = '';
+  }
+
+  get allPointsSelected(): boolean {
+    return this.govPoints.length > 0 && this.govPoints.every((p) => this.selected.has(p.point_id));
+  }
+
+  toggleAllPoints(checked: boolean): void {
+    if (checked) this.selectAll();
+    else this.clearSelection();
+  }
+
+  override selectAll(): void {
+    this.selected = new Set(this.govPoints.map((p) => p.point_id));
+  }
+
+  override clearSelection(): void {
+    this.selected = new Set();
+  }
+
+  override toggle(id: string): void {
+    const next = new Set(this.selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    this.selected = next;
+  }
+
+  override togglePointIds(ids: string[]): void {
+    if (!ids.length) return;
+    const next = new Set(this.selected);
+    const all = ids.every((id) => next.has(id));
+    for (const id of ids) {
+      if (all) next.delete(id);
+      else next.add(id);
+    }
+    this.selected = next;
   }
 
   private resetLibraryPointMeta(): void {
@@ -353,11 +398,19 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
 
   selectableLibraryPointId(row: LibraryPointDisplayRow): string | null {
     if (!row.forAnalysis) return null;
-    const regId = row.point.regulationPointId ?? row.point.point_id;
-    const match = this.govPoints.find(
-      (g) => g.point_id === regId || (g as SourcedGovPoint).regulationPointId === regId,
-    );
-    return match?.point_id ?? regId;
+    const regId = row.point.regulationPointId?.trim() || '';
+    const num = (row.point.pointNumber ?? row.displayId ?? row.point.point_id)
+      .trim()
+      .replace(/\.$/, '');
+
+    const match = this.govPoints.find((g) => {
+      const sg = g as SourcedGovPoint;
+      if (regId && (g.point_id === regId || sg.regulationPointId === regId)) return true;
+      const gNum = (sg.pointNumber ?? g.section ?? '').trim().replace(/\.$/, '');
+      return Boolean(num && gNum && gNum === num);
+    });
+
+    return match?.point_id ?? (regId || num || null);
   }
 
   libraryCountSummary(): string {
@@ -1002,8 +1055,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
         }
       }
 
-      this.selected.clear();
-      prepared.unique.forEach((p) => this.selected.add(p.point_id));
+      this.selected = new Set(prepared.unique.map((p) => p.point_id));
 
       this.libraryPrimaryRegDocId = [...regDocIds][0] ?? null;
       this.librarySourceLabel =

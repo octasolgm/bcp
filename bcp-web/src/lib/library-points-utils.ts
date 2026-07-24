@@ -351,11 +351,10 @@ function govPointsForGrouping(points: GovPoint[]): GovPoint[] {
   return points.map((p) => {
     const sourced = p as SourcedGovPoint;
     if (sourced.pointNumber) {
+      // Keep regulationPointId / library metadata — only remap point_id for § grouping.
       return {
+        ...sourced,
         point_id: sourced.pointNumber,
-        title: p.title,
-        text: p.text,
-        section: p.section,
       };
     }
     return p;

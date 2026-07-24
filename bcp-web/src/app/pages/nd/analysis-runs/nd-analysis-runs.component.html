@@ -1,4 +1,4 @@
-<div class="page-header">
+<div class="page-header nd-shrink">
   <div>
     <h1>{{ pageTitle }}</h1>
     <p class="subtitle">{{ subtitle }}</p>
@@ -10,22 +10,28 @@
   }
 </div>
 
-<div class="nd-page-body">
+<div class="nd-page-body nd-page-body--fill">
 @if (deleteMessage) {
-  <p class="nd-success page-flash">{{ deleteMessage }}</p>
+  <p class="nd-success page-flash nd-shrink">{{ deleteMessage }}</p>
 }
 @if (deleteError) {
-  <p class="nd-error page-flash">{{ deleteError }}</p>
+  <p class="nd-error page-flash nd-shrink">{{ deleteError }}</p>
 }
 
 @if (showWorkspaceTabs) {
-  <app-nd-workspace-tabs [active]="workspaceTabActive" />
+  <div class="nd-shrink">
+    <app-nd-workspace-tabs [active]="workspaceTabActive" />
+  </div>
+}
+
+@if (loadError && !loading) {
+  <p class="nd-error page-flash nd-shrink">{{ loadError }}</p>
 }
 
 @if (loading) {
-  <p class="muted-loading">Loading analysis runs…</p>
+  <p class="muted-loading nd-shrink">Loading analysis runs…</p>
 } @else if (!allRuns.length) {
-  <div class="card-surface empty-state">
+  <div class="card-surface empty-state nd-shrink">
     <strong>{{ correctionOnly ? 'No analyses pending correction' : 'No analysis runs yet' }}</strong>
     @if (correctionOnly) {
       <p>Only analyses rolled back directly to the maker appear here (status: pulled back).</p>
@@ -68,39 +74,39 @@
   </div>
 
   @if (!visibleRuns.length) {
-    <div class="card-surface empty-state">
+    <div class="card-surface empty-state nd-shrink">
       <strong>No runs match your filters</strong>
       <p>Try a different search or <button type="button" class="btn-link" (click)="clearFilters()">clear filters</button>.</p>
     </div>
   } @else {
-  <div class="card-surface nd-table-wrap">
+  <div class="card-surface nd-table-wrap nd-table-wrap--scroll nd-table-wrap--fit">
     <table>
       <thead>
         <tr>
-          <th class="sortable" (click)="toggleSort('name')">
+          <th class="sortable col-run" (click)="toggleSort('name')">
             Run <span class="sort-indicator">{{ sortIndicator('name') }}</span>
           </th>
-          <th class="sortable" (click)="toggleSort('maker')">
+          <th class="sortable col-maker" (click)="toggleSort('maker')">
             Submitted by <span class="sort-indicator">{{ sortIndicator('maker') }}</span>
           </th>
-          <th>With</th>
-          <th class="sortable" (click)="toggleSort('points')">
+          <th class="col-with">With</th>
+          <th class="sortable col-points" (click)="toggleSort('points')">
             Points <span class="sort-indicator">{{ sortIndicator('points') }}</span>
           </th>
-          <th class="sortable" (click)="toggleSort('created')">
+          <th class="sortable col-date" (click)="toggleSort('created')">
             Date <span class="sort-indicator">{{ sortIndicator('created') }}</span>
           </th>
-          <th class="sortable" (click)="toggleSort('source')">
+          <th class="sortable col-source" (click)="toggleSort('source')">
             Source <span class="sort-indicator">{{ sortIndicator('source') }}</span>
           </th>
-          <th class="sortable" (click)="toggleSort('workflow')">
+          <th class="sortable col-workflow" (click)="toggleSort('workflow')">
             Workflow <span class="sort-indicator">{{ sortIndicator('workflow') }}</span>
           </th>
-          <th>Gaps / reviews</th>
-          <th class="sortable" (click)="toggleSort('status')">
+          <th class="col-gaps">Gaps</th>
+          <th class="sortable col-status" (click)="toggleSort('status')">
             Status <span class="sort-indicator">{{ sortIndicator('status') }}</span>
           </th>
-          <th></th>
+          <th class="col-actions"></th>
         </tr>
       </thead>
       <tbody>
@@ -110,17 +116,17 @@
             [routerLink]="runLink(run)"
             [queryParams]="runQuery(run) || null"
           >
-            <td><strong>{{ run.name }}</strong></td>
-            <td>
+            <td class="col-run" [title]="run.name"><strong>{{ run.name }}</strong></td>
+            <td class="col-maker">
               <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
-              <span class="submitted-by-name">{{ submittedByLabel(run) }}</span>
+              <span class="submitted-by-name" [title]="submittedByLabel(run)">{{ submittedByLabel(run) }}</span>
             </td>
-            <td>
+            <td class="col-with">
               <app-nd-run-role-badge [status]="run.status" />
             </td>
-            <td class="muted">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
-            <td class="muted">{{ formatDate(submittedDate(run)) }}</td>
-            <td>
+            <td class="muted col-points">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
+            <td class="muted col-date">{{ formatDate(submittedDate(run)) }}</td>
+            <td class="col-source">
               <span class="type-badge">
                 @if (run.source === 'legacy_dual_verify') {
                   Legacy DV
@@ -131,32 +137,29 @@
                 }
               </span>
             </td>
-            <td>
+            <td class="col-workflow">
               @if (workflowStatusLabel(run); as workflow) {
-                <span class="workflow-badge">{{ workflow }}</span>
+                <span class="workflow-badge" [title]="workflow">{{ workflow }}</span>
               } @else if (run.workflowHolder) {
-                <span class="workflow-badge">{{ run.workflowHolder }}</span>
+                <span class="workflow-badge" [title]="run.workflowHolder">{{ run.workflowHolder }}</span>
               } @else {
                 <span class="muted">—</span>
               }
             </td>
-            <td class="muted">
+            <td class="muted col-gaps">
               @if (run.totalGaps !== undefined && run.totalGaps > 0) {
-                {{ run.totalGaps }} gap{{ run.totalGaps === 1 ? '' : 's' }}
+                {{ run.totalGaps }}
                 @if (run.totalReviews !== undefined && run.totalReviews > 0) {
-                  · {{ run.totalReviews }} review{{ run.totalReviews === 1 ? '' : 's' }}
-                }
-                @if (run.reviewedGaps !== undefined) {
-                  · {{ run.reviewedGaps }}/{{ run.totalGaps }} actions reviewed
+                  / {{ run.totalReviews }}
                 }
               } @else {
                 —
               }
             </td>
-            <td>
+            <td class="col-status">
               <app-nd-status-badge [status]="run.status" />
             </td>
-            <td class="row-actions" (click)="$event.stopPropagation()">
+            <td class="row-actions col-actions" (click)="$event.stopPropagation()">
               <app-nd-run-table-actions
                 [run]="run"
                 [submittingRunId]="submittingRunId"

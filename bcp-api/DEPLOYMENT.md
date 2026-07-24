@@ -21,11 +21,13 @@ Configuration → Application settings → **New application setting**:
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
 | `WEBSITES_PORT` | `8080` |
 | `Bcp__UsePostgres` | `true` |
-| `ConnectionStrings__PostgreSQL` | **Supabase Session pooler URI** (same as local dev) |
+| `ConnectionStrings__PostgreSQL` | **Supabase transaction pooler URI (port 6543)** — see below |
+| `Bcp__PostgresMaxPoolSize` | `5` (cap Npgsql connections per API instance) |
 
 **Or** use separate Supabase keys (easier if password contains `@`):
 
 | `Supabase__DbHost` | `aws-1-ap-northeast-2.pooler.supabase.com` |
+| `Supabase__DbPort` | `6543` |
 | `Supabase__DbUser` | `postgres.YOUR_PROJECT_REF` |
 | `Supabase__DbPassword` | your DB password |
 | `Supabase__DbName` | `postgres` |
@@ -52,9 +54,26 @@ cd bcp-api/scripts
 
 2. **Manual:** Set Azure Application settings (see table below).
 
-Example pooler URI (replace password):
+Example **transaction** pooler URI (replace password; prefer **6543** for App Service):
 
-`postgresql://postgres.YOUR_PROJECT_REF:YOUR_PASSWORD@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres`
+`postgresql://postgres.YOUR_PROJECT_REF:YOUR_PASSWORD@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres`
+
+Do **not** use session pooler port **5432** for production API unless you have very low concurrency — Supabase caps session mode at ~15 clients **shared** by Azure API, local dev, workers, and SQL tools.
+
+### Supabase connection pool exhaustion (live)
+
+Symptoms: HTTP **500**, `EMAXCONNSESSION`, empty ND lists, wrong sidebar counts.
+
+| Cause | Mitigation |
+|--------|------------|
+| Port **5432** (session pool) | Switch to **6543** (transaction pooler) in Azure settings + republish secrets |
+| **Local dev + Azure** same DB | Both consume the same pool — use 6543 or pause local API when testing live |
+| Old **bcp-web** bundle | Redeploy web so sidebar uses **`GET /nd/workspace/nav-counts`** (one call) not 8+ parallel list APIs |
+| **Polling** (analysis status every 3.5s, dual-verify sessions every 15s per open tab) | Normal if status endpoints stay lightweight; many users × many tabs adds load — pooler 6543 handles this better |
+| Npgsql default pool (100) | Set `Bcp__PostgresMaxPoolSize` = `5` per API instance |
+| Kafka worker + HTTP on same App Service | Each job uses DB; keep concurrency at 2 or scale Supabase plan |
+
+After changing DB port, **restart** the App Service and redeploy **both** API and web.
 
 Optional first deploy:
 

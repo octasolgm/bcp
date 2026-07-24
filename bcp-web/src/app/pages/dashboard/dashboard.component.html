@@ -8,6 +8,12 @@
 @if (healthError) {
   <div class="alert error">{{ healthError }}</div>
 }
+@if (inNdShell && ndRunsLoadError) {
+  <div class="alert error">{{ ndRunsLoadError }}</div>
+}
+@if (inNdShell && ndRunsLoading) {
+  <p class="loading page-flash">Loading workspace analysis runs…</p>
+}
 
 <div class="stats-row gap-risk-row">
   <button type="button" class="stat-card critical" (click)="openByRiskTier('critical')">
@@ -37,6 +43,11 @@
   </button>
 </div>
 <p class="risk-standard-note">{{ riskStandardLabel }}</p>
+@if (inNdShell && !ndRunsLoading && ndRuns.length && !ndRunsWithMetricsCount) {
+  <p class="risk-standard-note muted-empty">
+    Gap and compliance cards stay at 0 until a run has scored points. Open <a [routerLink]="['/nd/analysis-runs']">All analysis</a> or an in-progress run.
+  </p>
+}
 
 <div class="charts-row">
   <section class="card-surface chart-card">
@@ -137,7 +148,13 @@
       }
     </ul>
   } @else if (inNdShell) {
-    <p class="loading muted-empty">No analysis runs yet.</p>
+    <p class="loading muted-empty">
+      @if (ndRunsLoadError) {
+        Fix the API error above, then refresh the page.
+      } @else {
+        No analysis runs yet.
+      }
+    </p>
   } @else {
     <ul class="recent-list">
       @for (a of recentRows.slice(0, 4); track a.id) {

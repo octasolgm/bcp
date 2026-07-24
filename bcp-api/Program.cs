@@ -41,7 +41,7 @@ static void LogDatabaseUrlHint(string connectionString)
     try
     {
         var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
-        Console.WriteLine($"PostgreSQL host={builder.Host} port={builder.Port} user={builder.Username}");
+        Console.WriteLine($"PostgreSQL host={builder.Host} port={builder.Port} user={builder.Username} maxPool={builder.MaxPoolSize}");
         if (builder.Host?.StartsWith("db.", StringComparison.OrdinalIgnoreCase) == true)
         {
             Console.WriteLine(
@@ -65,7 +65,18 @@ CorsPolicySetup.AddBcpCors(builder.Services, builder.Configuration);
 builder.Services.AddDbContext<AppDbContext>(opt =>
 {
     if (dbConfig.UsePostgres)
-        opt.UseNpgsql(dbConfig.PostgresConnection);
+    {
+        opt.UseNpgsql(
+            dbConfig.PostgresConnection,
+            npgsql =>
+            {
+                npgsql.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
+                npgsql.CommandTimeout(60);
+            });
+    }
     else
         opt.UseSqlite($"Data Source={dbConfig.SqlitePath}");
 });

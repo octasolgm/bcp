@@ -161,7 +161,45 @@
 
   .header-actions {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
   }
+}
+
+.analyse-v8-page .header-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.15rem 0.35rem;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border);
+  background: var(--bg-input, transparent);
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  user-select: none;
+
+  input[type='checkbox'] {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+}
+
+.analyse-v8-page .file-row .row-check {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  pointer-events: none;
 }
 
 .analyse-v8-page .panel-header-v8 .header-search {

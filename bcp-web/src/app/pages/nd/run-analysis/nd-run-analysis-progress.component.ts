@@ -62,7 +62,7 @@ export class NdRunAnalysisProgressComponent implements OnInit, OnDestroy {
       this.error = runRes.message ?? 'Failed to load analysis run';
     }
     void this.pollStatus();
-    this.pollTimer = setInterval(() => void this.pollStatus(), 2000);
+    this.pollTimer = setInterval(() => void this.pollStatus(), 3500);
   }
 
   ngOnDestroy(): void {

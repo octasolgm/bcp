@@ -5,6 +5,8 @@ const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'archived', 'unava
 const ACTIVE_STATUS = new Set(['queued', 'processing', 'running', 'in_progress', 'in-progress']);
 const STALE_QUEUED_MS = 30 * 60 * 1000;
 const STALE_RUNNING_MS = 2 * 60 * 60 * 1000;
+/** Background poll while ND shell is open — keep modest for Supabase pool headroom. */
+const SESSION_POLL_MS = 15_000;
 
 /** Shared rule for nav badge, in-progress page, and document analysis runs. */
 export function isAnalysisStillActive(opts: {
@@ -88,6 +90,7 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
   private readonly api = inject(ApiService);
   private timer: ReturnType<typeof setInterval> | null = null;
   private watchers = 0;
+  private visibilityBound = false;
 
   readonly sessions = signal<DualVerifySessionSummary[]>([]);
   readonly loading = signal(false);
@@ -95,17 +98,22 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
   watch(): void {
     this.watchers++;
     if (this.watchers === 1) {
+      this.bindVisibility();
       this.refresh();
-      this.timer = setInterval(() => this.refresh(), 10000);
+      this.timer = setInterval(() => this.refresh(), SESSION_POLL_MS);
     }
   }
 
   unwatch(): void {
     this.watchers = Math.max(0, this.watchers - 1);
-    if (this.watchers === 0) this.stopTimer();
+    if (this.watchers === 0) {
+      this.stopTimer();
+      this.unbindVisibility();
+    }
   }
 
   refresh(): void {
+    if (typeof document !== 'undefined' && document.hidden) return;
     this.loading.set(true);
     this.api.listActiveDualVerifySessions().subscribe({
       next: (r) => {
@@ -123,6 +131,7 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
 
   ngOnDestroy(): void {
     this.stopTimer();
+    this.unbindVisibility();
   }
 
   private stopTimer(): void {
@@ -131,4 +140,20 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
       this.timer = null;
     }
   }
+
+  private bindVisibility(): void {
+    if (this.visibilityBound || typeof document === 'undefined') return;
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.visibilityBound = true;
+  }
+
+  private unbindVisibility(): void {
+    if (!this.visibilityBound || typeof document === 'undefined') return;
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    this.visibilityBound = false;
+  }
+
+  private readonly onVisibilityChange = (): void => {
+    if (!document.hidden && this.watchers > 0) this.refresh();
+  };
 }

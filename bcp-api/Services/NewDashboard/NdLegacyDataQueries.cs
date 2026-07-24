@@ -108,11 +108,12 @@ public static class NdLegacyDataQueries
         legacyHref = $"/nd/analyse-v8?session={session.Id}",
     };
 
-    public static object MapNdRunSummary(NdAnalysisRun r) => new
+    public static object MapNdRunSummary(NdAnalysisRun r, string? makerName = null) => new
     {
         id = r.Id,
         source = "nd_analysis",
         name = r.Name,
+        makerName,
         status = r.Status,
         statusBeforeDelete = r.StatusBeforeDelete,
         deletedAt = r.DeletedAt,
@@ -122,6 +123,7 @@ public static class NdLegacyDataQueries
         departmentId = r.DepartmentId,
         createdBy = r.CreatedBy,
         createdAt = r.CreatedAt,
+        updatedAt = r.UpdatedAt,
         submittedToCheckerAt = r.SubmittedToCheckerAt,
         legacySessionId = (Guid?)null,
         legacyHref = (string?)null,

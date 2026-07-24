@@ -14,7 +14,9 @@ public class KafkaConfig(IConfiguration config)
     public bool IsEnabled()
     {
         var flag = config["KAFKA_ENABLED"];
-        if (flag is "false" or "0") return false;
+        if (string.Equals(flag, "false", StringComparison.OrdinalIgnoreCase)
+            || flag is "0")
+            return false;
         return IsKafkaConfigured();
     }
 

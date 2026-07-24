@@ -18,7 +18,9 @@ $settings = @(
     @{ Name = "Bcp__UsePostgres"; Value = "true" },
     @{ Name = "Bcp__MigrateLocalDataToSupabase"; Value = "false" },
     @{ Name = "KAFKA_ENABLED"; Value = "true" },
-    @{ Name = "ConnectionStrings__PostgreSQL"; Value = $dev.ConnectionStrings.PostgreSQL },
+    @{ Name = "Bcp__PostgresMaxPoolSize"; Value = "5" },
+    @{ Name = "Supabase__DbPort"; Value = "6543" },
+    @{ Name = "ConnectionStrings__PostgreSQL"; Value = ($dev.ConnectionStrings.PostgreSQL -replace ':5432/', ':6543/') },
     @{ Name = "Gemini__ApiKey"; Value = $dev.Gemini.ApiKey },
     @{ Name = "LandingAi__ApiKey"; Value = $dev.LandingAi.ApiKey },
     @{ Name = "Bcp__CorsOrigins"; Value = "https://YOUR-bcp-web.azurewebsites.net,http://localhost:3002" }
@@ -33,6 +35,7 @@ Kafka connection strings are deployed via appsettings.Secrets.json (run sync-sec
 Do NOT disable KAFKA_ENABLED unless you want local in-process queue instead of Event Hubs.
 
 Alternative (avoids URL-encoding issues with @ in password):
+  Supabase__DbPort     = 6543
   Supabase__DbHost     = $($dev.Supabase.DbHost)
   Supabase__DbUser     = $($dev.Supabase.DbUser)
   Supabase__DbPassword = $($dev.Supabase.DbPassword)

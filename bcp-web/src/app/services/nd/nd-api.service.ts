@@ -5,8 +5,29 @@ import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
 
 const API_TIMEOUT_MS = 25_000;
+/** Login / profile — allow slow first hit when DB pool or Supabase Auth API is busy. */
+const AUTH_API_TIMEOUT_MS = 60_000;
 /** Library create/update can persist many regulation points in one request. */
 const LIBRARY_WRITE_TIMEOUT_MS = 120_000;
+
+function friendlyNdApiError(raw: string, status?: number): string {
+  if (
+    raw.includes('EMAXCONNSESSION') ||
+    raw.includes('max clients reached in session mode')
+  ) {
+    return (
+      'Database connection limit reached (Supabase session pool is full). ' +
+      'Stop extra API instances and browser tabs, wait ~1 minute, restart the API once. ' +
+      'For local dev, set Supabase:DbPort to 6543 (transaction pooler) in appsettings.Development.json.'
+    );
+  }
+  if (raw.includes('Npgsql.PostgresException') || raw.length > 320) {
+    return status === 500
+      ? 'Server error — the API could not reach the database. Restart the API and try again.'
+      : raw.slice(0, 280);
+  }
+  return raw;
+}
 
 export type NdApiResult<T> = {
   success: boolean;
@@ -45,6 +66,21 @@ export type NdRunReviewBody = {
     dueDate?: string;
     priority?: string;
   }[];
+};
+
+export type NdWorkspaceNavCounts = {
+  analysisRunsAll: number;
+  analysisRunsCorrection: number;
+  analysisRunsInProgress: number;
+  internalDocuments: number;
+  regulationDocuments: number;
+  libraries: number;
+  internalDocumentsDeleted: number;
+  regulationDocumentsDeleted: number;
+  adminUsers: number;
+  adminDepartments: number;
+  checkerQueue: number;
+  reviewerQueue: number;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -88,7 +124,13 @@ export class NdApiService {
           timeout(timeoutMs),
           catchError((err: unknown) => {
             if (err && typeof err === 'object' && 'name' in err && err.name === 'TimeoutError') {
-              return throwError(() => new Error('Request timed out — API may be overloaded or offline'));
+              return throwError(
+                () =>
+                  new Error(
+                    'Request timed out — is bcp-api running on http://localhost:5100? ' +
+                      'Use one API instance, Supabase DbPort 6543, and set Supabase:JwtSecret locally for fast login.',
+                  ),
+              );
             }
             return throwError(() => err);
           }),
@@ -97,10 +139,11 @@ export class NdApiService {
     } catch (err: unknown) {
       if (err instanceof HttpErrorResponse) {
         const body = err.error as { message?: string } | string | null;
-        const message =
+        const raw =
           typeof body === 'string'
             ? body
             : body?.message ?? err.message ?? `Request failed (${err.status})`;
+        const message = friendlyNdApiError(raw, err.status);
         return { success: false, message, status: err.status };
       }
       const e = err as { error?: { message?: string }; message?: string };
@@ -109,7 +152,7 @@ export class NdApiService {
   }
 
   getProfile() {
-    return this.request<NdUserProfile>('GET', '/nd/auth/me');
+    return this.request<NdUserProfile>('GET', '/nd/auth/me', undefined, true, AUTH_API_TIMEOUT_MS);
   }
 
   upsertProfile(body: { fullName?: string; role?: string; departmentId?: string }) {
@@ -376,12 +419,24 @@ export class NdApiService {
     return this.request<unknown>('DELETE', `/nd/libraries/${id}`);
   }
 
-  getAnalysisRuns(params?: { status?: string; mineOnly?: boolean; deletedOnly?: boolean; ndOnly?: boolean }) {
+  getWorkspaceNavCounts() {
+    return this.request<NdWorkspaceNavCounts>('GET', '/nd/workspace/nav-counts');
+  }
+
+  getAnalysisRuns(params?: {
+    status?: string;
+    mineOnly?: boolean;
+    deletedOnly?: boolean;
+    ndOnly?: boolean;
+    /** Skip heavy gap/review aggregation (nav badges, dashboard list). */
+    summaryOnly?: boolean;
+  }) {
     const q = new URLSearchParams();
     if (params?.status) q.set('status', params.status);
     if (params?.mineOnly) q.set('mineOnly', 'true');
     if (params?.deletedOnly) q.set('deletedOnly', 'true');
     if (params?.ndOnly) q.set('ndOnly', 'true');
+    if (params?.summaryOnly) q.set('summaryOnly', 'true');
     const suffix = q.toString() ? `?${q}` : '';
     return this.request<unknown[]>('GET', `/nd/analysis-runs${suffix}`);
   }
@@ -554,10 +609,11 @@ export class NdApiService {
     } catch (err: unknown) {
       if (err instanceof HttpErrorResponse) {
         const body = err.error as { message?: string } | string | null;
-        const message =
+        const raw =
           typeof body === 'string'
             ? body
             : body?.message ?? err.message ?? `Request failed (${err.status})`;
+        const message = friendlyNdApiError(raw, err.status);
         return { success: false, message, status: err.status };
       }
       const e = err as { message?: string };

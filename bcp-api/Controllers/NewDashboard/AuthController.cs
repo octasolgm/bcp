@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -28,11 +29,23 @@ public class AuthController(
         if (user == null)
             return Unauthorized(new { success = false, message = "Unauthorized" });
 
-        var profile = await GetOrCreateProfileAsync(db, user, user.Email?.Split('@')[0], null, null, ct);
-        if (!profile.IsActive)
-            return StatusCode(403, new { success = false, message = "Account deactivated" });
+        try
+        {
+            var profile = await GetOrCreateProfileAsync(db, user, user.Email?.Split('@')[0], null, null, ct);
+            if (!profile.IsActive)
+                return StatusCode(403, new { success = false, message = "Account deactivated" });
 
-        return Ok(new { success = true, data = MapProfile(profile) });
+            return Ok(new { success = true, data = MapProfile(profile) });
+        }
+        catch (Exception ex) when (ex is Npgsql.NpgsqlException or TimeoutException or SocketException
+            || ex.GetBaseException() is SocketException or TimeoutException)
+        {
+            return StatusCode(503, new
+            {
+                success = false,
+                message = "Database temporarily unreachable. Wait a moment and try signing in again.",
+            });
+        }
     }
 
     [HttpPost("profile")]

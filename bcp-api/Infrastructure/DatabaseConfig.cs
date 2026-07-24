@@ -36,6 +36,8 @@ public sealed class DatabaseConfig
         }
 
         var pgConn = DatabaseConnectionHelper.ResolvePostgresConnection(pgRaw, config);
+        if (!string.IsNullOrWhiteSpace(pgConn))
+            pgConn = DatabaseConnectionHelper.ApplySupabaseClientLimits(pgConn, config);
 
         var allowSqlite = BcpConfiguration.IsTrue(config, "Bcp:AllowSqlite", "BCP_ALLOW_SQLITE");
         var requireSupabase = IsSupabaseRequired(config);

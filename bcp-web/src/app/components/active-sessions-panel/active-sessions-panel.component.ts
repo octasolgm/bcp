@@ -21,6 +21,8 @@ export class ActiveSessionsPanelComponent implements OnDestroy {
   @Input() currentSessionId: string | null = null;
   @Input() compact = false;
   @Input() mode: 'inline' | 'page' = 'inline';
+  /** When false, hide the page empty-state (e.g. parent already lists ND runs). */
+  @Input() showEmpty = true;
 
   private readonly sessionsService = inject(ActiveAnalysisSessionsService);
   private readonly api = inject(ApiService);

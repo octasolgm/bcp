@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectorRef } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
@@ -6,10 +6,8 @@ import { NdApiService } from '../../services/nd/nd-api.service';
 import { ThemeService, type ThemeMode } from '../../services/theme.service';
 import {
   ActiveAnalysisSessionsService,
-  isActiveDocumentRun,
 } from '../../services/active-analysis-sessions.service';
 import { NdShellFocusService } from '../../services/nd/nd-shell-focus.service';
-import type { AnalysisRunSummary } from '../../../lib/nd/types';
 import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.component';
 
 type NavItem = {
@@ -20,6 +18,8 @@ type NavItem = {
   cta?: boolean;
   secondary?: boolean;
   queryParams?: Record<string, string>;
+  /** Show nav badge even when count is 0. */
+  badgeAlways?: boolean;
 };
 
 @Component({
@@ -36,6 +36,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   readonly theme = inject(ThemeService);
   readonly activeSessions = inject(ActiveAnalysisSessionsService);
   readonly shellFocus = inject(NdShellFocusService);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   readonly profile = this.auth.profile;
   navItems: NavItem[] = [];
@@ -45,6 +46,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   pass2LlmSummary = '';
   private navSub: Subscription | null = null;
   private badgeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private badgeRefreshInFlight = false;
 
   get profileInitial(): string {
     const name = this.profile()?.fullName?.trim();
@@ -78,8 +80,6 @@ export class NdShellComponent implements OnInit, OnDestroy {
       .pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => {
         this.scheduleNavBadgeRefresh();
-        void this.refreshPass2LlmSummary();
-        this.activeSessions.refresh();
       });
   }
 
@@ -94,16 +94,18 @@ export class NdShellComponent implements OnInit, OnDestroy {
     this.badgeRefreshTimer = setTimeout(() => {
       this.badgeRefreshTimer = null;
       void this.refreshNavBadges();
-    }, 300);
+    }, 1200);
   }
 
   badgeFor(item: NavItem): number | undefined {
     if (item.id === 'in-progress') {
-      const n = this.activeSessions.sessions().length + this.ndActiveRunCount;
+      const n = this.ndActiveRunCount + this.activeSessions.sessions().length;
+      if (item.badgeAlways) return n;
       return n > 0 ? n : undefined;
     }
-    const n = this.navBadges[item.id];
-    return n && n > 0 ? n : undefined;
+    const n = this.navBadges[item.id] ?? 0;
+    if (item.badgeAlways) return n;
+    return n > 0 ? n : undefined;
   }
 
   private async refreshPass2LlmSummary(): Promise<void> {
@@ -117,108 +119,39 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   private async refreshNavBadges(): Promise<void> {
-    const role = this.auth.getRole();
-    if (!role) return;
+    if (this.badgeRefreshInFlight) return;
+    this.badgeRefreshInFlight = true;
+    try {
+      const role = this.auth.getRole();
+      if (!role) return;
 
-    const next: Partial<Record<string, number>> = {};
-    const set = (id: string, count: number) => {
-      if (count > 0) next[id] = count;
-    };
+      const res = await this.api.getWorkspaceNavCounts();
+      if (!res.success || !res.data) {
+        this.ndActiveRunCount = 0;
+        this.cdr.markForCheck();
+        return;
+      }
 
-    const tasks: Promise<void>[] = [];
-
-    if (role === 'maker' || role === 'super_admin') {
-      tasks.push(
-        this.api.getInternalDocuments().then((res) => {
-          set('internal-documents', res.data?.length ?? 0);
-        }),
-      );
-      tasks.push(
-        this.api.getRegulationDocuments().then((res) => {
-          set('regulation-documents', res.data?.length ?? 0);
-        }),
-      );
-      tasks.push(
-        this.api.getLibraries().then((res) => {
-          set('libraries', res.data?.length ?? 0);
-        }),
-      );
+      const c = res.data;
+      const next: Partial<Record<string, number>> = {
+        'analysis-runs-all': c.analysisRunsAll,
+        'analysis-runs-correction': c.analysisRunsCorrection,
+        'internal-documents': c.internalDocuments,
+        'regulation-documents': c.regulationDocuments,
+        libraries: c.libraries,
+        'internal-documents-deleted': c.internalDocumentsDeleted,
+        'regulation-documents-deleted': c.regulationDocumentsDeleted,
+        'admin-users': c.adminUsers,
+        'admin-departments': c.adminDepartments,
+        'checker-queue': c.checkerQueue,
+        'reviewer-queue': c.reviewerQueue,
+      };
+      this.ndActiveRunCount = c.analysisRunsInProgress;
+      this.navBadges = next;
+      this.cdr.markForCheck();
+    } finally {
+      this.badgeRefreshInFlight = false;
     }
-
-    const runsMineOnly = role === 'maker';
-    tasks.push(
-      this.api
-        .getAnalysisRuns(runsMineOnly ? { mineOnly: true, ndOnly: true } : { ndOnly: true })
-        .then((res) => {
-          const runs = (res.data ?? []) as AnalysisRunSummary[];
-          set('analysis-runs-all', runs.length);
-
-          const ndActive = runs.filter(
-            (r) =>
-              r.source === 'nd_analysis' &&
-              isActiveDocumentRun({
-                status: r.status,
-                completedPoints: r.processedPointsCount,
-                pointCount: r.totalPointsCount,
-                updatedAt: r.createdAt,
-              }),
-          ).length;
-          this.ndActiveRunCount = ndActive;
-        }),
-    );
-
-    tasks.push(
-      this.api
-        .getAnalysisRuns({
-          ndOnly: true,
-          status: 'pulled_back',
-          ...(runsMineOnly ? { mineOnly: true } : {}),
-        })
-        .then((res) => {
-          set('analysis-runs-correction', res.data?.length ?? 0);
-        }),
-    );
-
-    if (role === 'super_admin') {
-      tasks.push(
-        this.api.getInternalDocuments(true).then((res) => {
-          set('internal-documents-deleted', res.data?.length ?? 0);
-        }),
-        this.api.getRegulationDocuments({ hiddenOnly: true }).then((res) => {
-          set('regulation-documents-deleted', res.data?.length ?? 0);
-        }),
-        this.api.getUsers().then((res) => {
-          set('admin-users', res.data?.length ?? 0);
-        }),
-        this.api.getDepartments().then((res) => {
-          set('admin-departments', res.data?.length ?? 0);
-        }),
-        this.api.getCheckerQueue().then((res) => {
-          set('checker-queue', res.data?.length ?? 0);
-        }),
-        this.api.getReviewerQueue().then((res) => {
-          set('reviewer-queue', res.data?.length ?? 0);
-        }),
-      );
-    } else if (role === 'checker') {
-      tasks.push(
-        this.api.getCheckerQueue().then((res) => {
-          set('checker-queue', res.data?.length ?? 0);
-        }),
-      );
-    } else if (role === 'reviewer') {
-      tasks.push(
-        this.api.getCheckerQueue().then((res) => {
-          set('checker-queue', res.data?.length ?? 0);
-        }),
-        this.api.getReviewerQueue().then((res) => {
-          set('reviewer-queue', res.data?.length ?? 0);
-        }),
-      );
-    }
-
-    await Promise.all(tasks);
-    this.navBadges = next;
   }
 
   toggleSettings(): void {
@@ -246,6 +179,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
       label: 'All analysis',
       icon: 'list',
       secondary: true,
+      badgeAlways: true,
       ...(role === 'maker' ? { queryParams: { mine: '1' } } : {}),
     };
     const items: NavItem[] = [
@@ -273,7 +207,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     }
     items.push(
       { id: 'libraries', path: '/nd/libraries', label: 'Regulation Points Libraries', icon: 'list' },
-      { id: 'in-progress', path: '/nd/in-progress', label: 'In progress', icon: 'clock' },
+      { id: 'in-progress', path: '/nd/in-progress', label: 'In progress', icon: 'clock', badgeAlways: true },
       viewAll,
       { id: 'analyse-v8', path: '/nd/analyse-v8', label: 'New analysis', icon: 'plus', cta: true },
     );
@@ -294,10 +228,11 @@ export class NdShellComponent implements OnInit, OnDestroy {
             path: '/nd/analysis-runs',
             label: 'Pending correction',
             icon: 'clock',
+            badgeAlways: true,
             queryParams: { correction: '1' },
           },
-          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check' },
-          { id: 'reviewer-queue', path: '/nd/reviewer', label: 'Pending final review', icon: 'check' },
+          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check', badgeAlways: true },
+          { id: 'reviewer-queue', path: '/nd/reviewer', label: 'Pending final review', icon: 'check', badgeAlways: true },
         ];
       case 'maker':
         return [
@@ -307,35 +242,38 @@ export class NdShellComponent implements OnInit, OnDestroy {
             path: '/nd/analysis-runs',
             label: 'Pending correction',
             icon: 'clock',
+            badgeAlways: true,
             queryParams: { mine: '1', correction: '1' },
           },
         ];
       case 'checker':
         return [
           { id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' },
-          { id: 'analysis-runs-all', path: '/nd/analysis-runs', label: 'All analysis', icon: 'list' },
+          { id: 'analysis-runs-all', path: '/nd/analysis-runs', label: 'All analysis', icon: 'list', badgeAlways: true },
           {
             id: 'analysis-runs-correction',
             path: '/nd/analysis-runs',
             label: 'Pending correction',
             icon: 'clock',
+            badgeAlways: true,
             queryParams: { correction: '1' },
           },
-          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check' },
+          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check', badgeAlways: true },
         ];
       case 'reviewer':
         return [
           { id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' },
-          { id: 'analysis-runs-all', path: '/nd/analysis-runs', label: 'All analysis', icon: 'list' },
+          { id: 'analysis-runs-all', path: '/nd/analysis-runs', label: 'All analysis', icon: 'list', badgeAlways: true },
           {
             id: 'analysis-runs-correction',
             path: '/nd/analysis-runs',
             label: 'Pending correction',
             icon: 'clock',
+            badgeAlways: true,
             queryParams: { correction: '1' },
           },
-          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check' },
-          { id: 'reviewer-queue', path: '/nd/reviewer', label: 'Pending final review', icon: 'check' },
+          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check', badgeAlways: true },
+          { id: 'reviewer-queue', path: '/nd/reviewer', label: 'Pending final review', icon: 'check', badgeAlways: true },
         ];
       default:
         return [{ id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' }];

@@ -1,14 +1,73 @@
-.in-progress-header {
+:host {
+  display: block;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.page-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
-.in-progress-actions {
+.nd-page-body--fill {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: calc(100dvh - 10.5rem);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nd-table-wrap--scroll {
+  flex: 1 1 auto;
+  min-height: 14rem;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.empty-state {
+  padding: 2rem 1.5rem;
+  text-align: center;
+
+  strong {
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+
+  p {
+    margin: 0;
+    color: var(--text-muted);
+  }
+
+  a {
+    color: var(--accent);
+    font-weight: 600;
+  }
+}
+
+.muted-loading {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.page-flash {
+  margin: 0;
+}
+
+.btn-link {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
 }

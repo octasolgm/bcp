@@ -137,8 +137,14 @@
                 <div class="panel-header-top">
                   <h2>Regulation points library</h2>
                   <div class="header-actions">
-                    <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredLibraries()">All</button>
-                    <button type="button" class="toolbar-btn secondary" (click)="clearLibrarySelection()">Clear</button>
+                    <label class="header-select-all" title="Select all libraries">
+                      <input
+                        type="checkbox"
+                        [checked]="allFilteredLibrariesSelected"
+                        (change)="toggleAllFilteredLibraries($any($event.target).checked)"
+                      />
+                      <span>All</span>
+                    </label>
                   </div>
                 </div>
                 <input
@@ -162,7 +168,13 @@
                         [class.selected]="isLibrarySelected(lib.id)"
                         (click)="toggleLibrary(lib)"
                       >
-                        <span class="multi-check" [class.on]="isLibrarySelected(lib.id)">{{ isLibrarySelected(lib.id) ? '✓' : '' }}</span>
+                        <input
+                          type="checkbox"
+                          class="row-check"
+                          [checked]="isLibrarySelected(lib.id)"
+                          tabindex="-1"
+                          aria-hidden="true"
+                        />
                         <span class="fname">{{ lib.name }}</span>
                         <span class="fmeta">{{ libraryPointMeta(lib) }}</span>
                         <a
@@ -201,13 +213,25 @@
                 <h2>Reg. points</h2>
                 @if (!showNdPointSources || pointsSource === 'regulation') {
                   <div class="header-actions">
-                    <button type="button" class="toolbar-btn primary" (click)="selectAll()">All</button>
-                    <button type="button" class="toolbar-btn secondary" (click)="clearSelection()">Clear</button>
+                    <label class="header-select-all" title="Select all points">
+                      <input
+                        type="checkbox"
+                        [checked]="allPointsSelected"
+                        (change)="toggleAllPoints($any($event.target).checked)"
+                      />
+                      <span>All</span>
+                    </label>
                   </div>
                 } @else if (govPoints.length) {
                   <div class="header-actions">
-                    <button type="button" class="toolbar-btn primary" (click)="selectAll()">All</button>
-                    <button type="button" class="toolbar-btn secondary" (click)="clearSelection()">Clear</button>
+                    <label class="header-select-all" title="Select all points">
+                      <input
+                        type="checkbox"
+                        [checked]="allPointsSelected"
+                        (change)="toggleAllPoints($any($event.target).checked)"
+                      />
+                      <span>All</span>
+                    </label>
                   </div>
                 }
               </div>

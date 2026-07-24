@@ -61,11 +61,15 @@ export class NdOverviewComponent implements OnInit {
           : 'Manage regulation documents, regulation points libraries, and compliance analysis.';
 
     if (role === 'super_admin') {
-      const runs = await this.api.getAnalysisRuns({ ndOnly: true });
-      this.recentRuns = sortAnalysisRunsByRecent((runs.data as AnalysisRunSummary[]) ?? []);
+      const runs = await this.api.getAnalysisRuns({ ndOnly: true, summaryOnly: true });
+      if (runs.success && runs.data) {
+        this.recentRuns = sortAnalysisRunsByRecent(runs.data as AnalysisRunSummary[]);
+      }
     } else if (role === 'maker') {
-      const runs = await this.api.getAnalysisRuns({ mineOnly: true, ndOnly: true });
-      this.recentRuns = sortAnalysisRunsByRecent((runs.data as AnalysisRunSummary[]) ?? []);
+      const runs = await this.api.getAnalysisRuns({ mineOnly: true, ndOnly: true, summaryOnly: true });
+      if (runs.success && runs.data) {
+        this.recentRuns = sortAnalysisRunsByRecent(runs.data as AnalysisRunSummary[]);
+      }
     } else if (role === 'checker') {
       const queue = await this.api.getCheckerQueue();
       this.recentRuns = sortAnalysisRunsByRecent((queue.data as AnalysisRunSummary[]) ?? []);

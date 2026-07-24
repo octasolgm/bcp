@@ -127,4 +127,32 @@ public static class NdRunEnrichmentHelper
 
         return result;
     }
+
+    /// <summary>Fast list rows for nav and analysis-runs table (no per-point gap aggregation).</summary>
+    public static async Task<List<object>> MapSummariesLightAsync(
+        AppDbContext db,
+        IReadOnlyList<NdAnalysisRun> runs,
+        CancellationToken ct)
+    {
+        if (runs.Count == 0) return [];
+
+        var makerIds = runs.Where(r => r.CreatedBy.HasValue).Select(r => r.CreatedBy!.Value).Distinct().ToList();
+        var makers = makerIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.NdProfiles.AsNoTracking()
+                .Where(p => makerIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.FullName ?? "", ct);
+
+        var list = new List<object>(runs.Count);
+        foreach (var run in runs)
+        {
+            string? makerName = null;
+            if (run.CreatedBy is Guid mid && makers.TryGetValue(mid, out var name))
+                makerName = name;
+
+            list.Add(NdLegacyDataQueries.MapNdRunSummary(run, makerName));
+        }
+
+        return list;
+    }
 }

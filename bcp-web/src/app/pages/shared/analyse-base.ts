@@ -3353,7 +3353,7 @@ ${this.findingsPreview
         };
         this.applyNdRunState(runId, data, data.points, data);
       });
-    }, 2000);
+    }, 3500);
   }
 
   private apiErrorMessage(e: HttpErrorResponse, fallback = 'Request failed'): string {

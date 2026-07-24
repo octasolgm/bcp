@@ -35,6 +35,7 @@ public class AnalysisRunsController(
         [FromQuery] bool mineOnly = false,
         [FromQuery] bool deletedOnly = false,
         [FromQuery] bool ndOnly = false,
+        [FromQuery] bool summaryOnly = false,
         CancellationToken ct = default)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct,
@@ -52,7 +53,7 @@ public class AnalysisRunsController(
                 .Take(200)
                 .ToListAsync(ct);
 
-            var deletedItems = deletedRuns.Select(NdLegacyDataQueries.MapNdRunSummary).Cast<object>().ToList();
+            var deletedItems = deletedRuns.Select(r => NdLegacyDataQueries.MapNdRunSummary(r)).Cast<object>().ToList();
             deletedItems.AddRange(await LoadHiddenLegacyRunsAsync(ct));
             return Ok(new { success = true, data = deletedItems });
         }
@@ -76,11 +77,17 @@ public class AnalysisRunsController(
 
         if (ndOnly)
         {
+            if (summaryOnly)
+            {
+                var summaries = await NdRunEnrichmentHelper.MapSummariesLightAsync(db, runs, ct);
+                return Ok(new { success = true, data = summaries });
+            }
+
             var enriched = await NdRunEnrichmentHelper.EnrichRunsAsync(db, runs, ct);
             return Ok(new { success = true, data = enriched });
         }
 
-        var items = runs.Select(NdLegacyDataQueries.MapNdRunSummary).Cast<object>().ToList();
+        var items = runs.Select(r => NdLegacyDataQueries.MapNdRunSummary(r)).Cast<object>().ToList();
 
         if (!ndOnly)
         {
@@ -293,14 +300,8 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
-        var runRegDocIds = ParseSelectedRegulationDocIds(run.SelectedRegulationDocIds);
-        var enrichedPoints = new List<object>();
-        foreach (var p in run.Points)
-        {
-            var snapshot = await pointPages.EnrichAnalysisPointSnapshotAsync(
-                p.PointSnapshot, p.RegulationPointId, runRegDocIds, ct);
-            enrichedPoints.Add(MapPoint(p, snapshot));
-        }
+        // Lightweight poll payload — do not enrich pdfPage here (141× DB/cache per poll exhausts Supabase session pool).
+        var points = run.Points.Select(p => MapPoint(p)).ToList();
 
         return Ok(new
         {
@@ -314,7 +315,7 @@ public class AnalysisRunsController(
                 landingAiCompletedCount = run.LandingAiCompletedCount,
                 dualVerifyCompletedCount = run.DualVerifyCompletedCount,
                 dualVerifyFailedCount = run.DualVerifyFailedCount,
-                points = enrichedPoints,
+                points,
             },
         });
     }

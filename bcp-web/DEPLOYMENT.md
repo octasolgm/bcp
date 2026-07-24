@@ -101,4 +101,5 @@ Republish **bcp-api** after changing CORS.
 | Deploying whole `dist/` folder | Deploy **`dist/reguliq-web/browser/`** contents only |
 | Wrong API URL | Rebuild after editing `environment.production.ts` |
 | CORS error | Add web URL to API `CorsOrigins` and republish API |
+| ND pages 500 / empty lists on live | API DB pool full — see `bcp-api/DEPLOYMENT.md` (use Supabase port **6543**). Redeploy **web** so ND shell uses `/nd/workspace/nav-counts` |
 | 404 on refresh | Ensure `web.config` (Windows) or `serve -s` (Linux) is set |
