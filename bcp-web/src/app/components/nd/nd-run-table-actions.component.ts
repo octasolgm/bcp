@@ -4,12 +4,16 @@ import { NdAuthService } from '../../services/nd/nd-auth.service';
 import {
   canDeleteRun,
   canEditRunPlans,
-  canReviewRun,
   canSendRunForReview,
   runViewActionLabel,
   submitRunActionLabel,
 } from '../../../lib/nd/analysis-run-actions';
-import { isLegacyAnalysisRun, ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../lib/nd/run-links';
+import {
+  analysisRunNeedsExecutionView,
+  isLegacyAnalysisRun,
+  ndAnalysisRunLink,
+  ndAnalysisRunQuery,
+} from '../../../lib/nd/run-links';
 import type { AnalysisRunSummary } from '../../../lib/nd/types';
 
 @Component({
@@ -34,6 +38,21 @@ import type { AnalysisRunSummary } from '../../../lib/nd/types';
                 stroke-width="1.6"
                 d="M10 4.5v5.25l3 1.75M10 18a8 8 0 100-16 8 8 0 000 16z"
               />
+            </svg>
+          </button>
+        }
+
+        @if (showStop) {
+          <button
+            type="button"
+            class="row-action-btn icon-only danger"
+            title="Stop analysis"
+            aria-label="Stop analysis"
+            [disabled]="stoppingId === run.id"
+            (click)="onStop($event)"
+          >
+            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+              <rect x="5.5" y="5.5" width="9" height="9" rx="1.2" fill="currentColor" stroke="none" />
             </svg>
           </button>
         }
@@ -133,6 +152,7 @@ export class NdRunTableActionsComponent {
   @Input({ required: true }) run!: AnalysisRunSummary;
   @Input() submittingRunId: string | null = null;
   @Input() deletingId: string | null = null;
+  @Input() stoppingId: string | null = null;
   /** Checker/reviewer queue: Review vs View only in icon row. */
   @Input() queueReview = false;
   @Input() viewOnly = false;
@@ -143,6 +163,7 @@ export class NdRunTableActionsComponent {
   @Output() historyClick = new EventEmitter<AnalysisRunSummary>();
   @Output() submitClick = new EventEmitter<AnalysisRunSummary>();
   @Output() deleteClick = new EventEmitter<AnalysisRunSummary>();
+  @Output() stopClick = new EventEmitter<AnalysisRunSummary>();
 
   get legacy(): boolean {
     return isLegacyAnalysisRun(this.run);
@@ -150,6 +171,13 @@ export class NdRunTableActionsComponent {
 
   get role(): string | null {
     return this.auth.getRole();
+  }
+
+  get showStop(): boolean {
+    if (this.legacy || this.queueReview || this.viewOnly) return false;
+    const role = this.role;
+    if (role !== 'maker' && role !== 'super_admin') return false;
+    return analysisRunNeedsExecutionView(this.run);
   }
 
   get showSubmit(): boolean {
@@ -204,5 +232,11 @@ export class NdRunTableActionsComponent {
     event.stopPropagation();
     event.preventDefault();
     this.deleteClick.emit(this.run);
+  }
+
+  onStop(event: Event): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.stopClick.emit(this.run);
   }
 }

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
+using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.Storage;
@@ -16,15 +17,36 @@ public class NdAnalysisProcessor(
     DualVerifyLlmService dualVerifyLlm,
     SupabaseStorageService storage,
     IConfiguration configuration,
+    NdAnalysisRunCancellationTracker runCancellation,
     ILogger<NdAnalysisProcessor> logger)
 {
     private readonly ComparePromptVersion _comparePromptVersion =
         NdAnalysisPromptDefaults.Resolve(configuration);
+
+    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
     private static bool IsLandingSuccess(string status) =>
         status is "compliant" or "partial_compliant" or "non_compliant";
 
     private static bool IsDualDone(string status) =>
         status is "passed" or "failed" or "skipped";
+
+    private static PointSnapshotDto ParsePointSnapshot(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return new PointSnapshotDto();
+        try
+        {
+            return JsonSerializer.Deserialize<PointSnapshotDto>(raw, SnapshotJsonOptions)
+                   ?? new PointSnapshotDto();
+        }
+        catch
+        {
+            return new PointSnapshotDto();
+        }
+    }
 
     public async Task ProcessRunAsync(Guid runId, CancellationToken ct)
     {
@@ -32,6 +54,12 @@ public class NdAnalysisProcessor(
             .Include(r => r.Points)
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
+
+        if (run.Status == "cancelled" || runCancellation.IsStopRequested(runId))
+        {
+            await MarkRunCancelledAsync(run, ct);
+            return;
+        }
 
         run.Status = "running";
         run.UpdatedAt = DateTimeOffset.UtcNow;
@@ -48,7 +76,21 @@ public class NdAnalysisProcessor(
 
         foreach (var point in points)
         {
-            if (ct.IsCancellationRequested) break;
+            if (ct.IsCancellationRequested || runCancellation.IsStopRequested(runId))
+            {
+                await MarkRunCancelledAsync(run, CancellationToken.None);
+                return;
+            }
+
+            // Re-read status in case Stop endpoint already marked points cancelled.
+            await db.Entry(point).ReloadAsync(CancellationToken.None);
+            if (point.LandingAiStatus is "cancelled"
+                || point.DualVerifyStatus is "cancelled"
+                || run.Status == "cancelled")
+            {
+                await MarkRunCancelledAsync(run, CancellationToken.None);
+                return;
+            }
 
             try
             {
@@ -58,6 +100,11 @@ public class NdAnalysisProcessor(
                     run, point, internalDocs,
                     fullRerun: false, dualVerifyOnly: dualOnly, ct);
             }
+            catch (OperationCanceledException)
+            {
+                await MarkRunCancelledAsync(run, CancellationToken.None);
+                return;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Point {PointId} failed on run {RunId}", point.Id, runId);
@@ -65,11 +112,48 @@ public class NdAnalysisProcessor(
                 point.LandingAiError = ex.Message;
                 point.DualVerifyStatus = "skipped";
                 point.UpdatedAt = DateTimeOffset.UtcNow;
-                await UpdateRunCountsAsync(run, ct);
+                await UpdateRunCountsAsync(run, CancellationToken.None);
             }
         }
 
-        await FinalizeRunStatusAsync(run, ct);
+        if (ct.IsCancellationRequested || runCancellation.IsStopRequested(runId))
+        {
+            await MarkRunCancelledAsync(run, CancellationToken.None);
+            return;
+        }
+
+        await FinalizeRunStatusAsync(run, CancellationToken.None);
+    }
+
+    private async Task MarkRunCancelledAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        await db.Entry(run).ReloadAsync(ct);
+        await db.Entry(run).Collection(r => r.Points).LoadAsync(ct);
+
+        foreach (var point in run.Points)
+        {
+            if (point.LandingAiStatus is "pending" or "running")
+            {
+                point.LandingAiStatus = "cancelled";
+                point.LandingAiError ??= "Stopped by user";
+                point.DualVerifyStatus = "skipped";
+                point.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+            else if (point.DualVerifyStatus is "pending" or "running")
+            {
+                point.DualVerifyStatus = "cancelled";
+                if (point.GoogleAiStatus is "pending" or "running")
+                    point.GoogleAiStatus = "cancelled";
+                point.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+        }
+
+        run.Status = "cancelled";
+        run.ProcessedPointsCount = run.Points.Count(p =>
+            IsLandingSuccess(p.LandingAiStatus) || p.LandingAiStatus is "failed" or "cancelled");
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Analysis run {RunId} cancelled", run.Id);
     }
 
     public async Task ProcessPointAsync(
@@ -154,8 +238,7 @@ public class NdAnalysisProcessor(
             return;
         }
 
-        var snapshot = JsonSerializer.Deserialize<PointSnapshotDto>(point.PointSnapshot)
-            ?? new PointSnapshotDto();
+        var snapshot = ParsePointSnapshot(point.PointSnapshot);
         var govPoint = new GovPoint(
             snapshot.PointNumber ?? snapshot.PointId ?? "",
             snapshot.PointTitle,
@@ -170,7 +253,7 @@ public class NdAnalysisProcessor(
 
             try
             {
-                var forceRefresh = fullRerun && point.LandingAiRerunCount > 0;
+                var forceRefresh = fullRerun;
                 var landingMessage = await landingAi.ComparePointAsync(
                     govPoint, internalDocs.ToList(), forceRefresh, _comparePromptVersion, ct);
 
@@ -212,8 +295,7 @@ public class NdAnalysisProcessor(
         IReadOnlyList<InternalDocPayload> internalDocs,
         CancellationToken ct)
     {
-        var snapshot = JsonSerializer.Deserialize<PointSnapshotDto>(point.PointSnapshot)
-            ?? new PointSnapshotDto();
+        var snapshot = ParsePointSnapshot(point.PointSnapshot);
         var govPoint = new GovPoint(
             snapshot.PointNumber ?? snapshot.PointId ?? "",
             snapshot.PointTitle,

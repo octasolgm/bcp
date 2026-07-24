@@ -37,6 +37,7 @@ import {
   type GapRiskCounts,
   type RiskTier,
 } from '../../../lib/nd/risk-priority-score';
+import type { DashboardMetricId } from '../../../lib/nd/dashboard-metric';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdRunHistoryPanelComponent } from '../../components/nd/nd-run-history-panel.component';
 import { NdRunTableActionsComponent } from '../../components/nd/nd-run-table-actions.component';
@@ -741,6 +742,34 @@ export class DashboardComponent implements OnInit {
         focus: row.item,
       },
     });
+  }
+
+  /** Drill into analyses that contribute to this dashboard card total. */
+  openMetricBreakdown(metric: DashboardMetricId): void {
+    if (this.inNdShell) {
+      void this.router.navigate(['/nd/overview/metric'], {
+        queryParams: { metric },
+      });
+      return;
+    }
+    // Legacy shell: jump straight into the preferred report with a filter.
+    if (metric === 'critical' || metric === 'medium' || metric === 'low') {
+      this.openByRiskTier(metric);
+      return;
+    }
+    if (metric === 'findings') {
+      this.openBySeverity('all');
+      return;
+    }
+    if (metric === 'partial') {
+      this.openBySeverity('partial');
+      return;
+    }
+    if (metric === 'non_compliant') {
+      this.openBySeverity('non-compliant');
+      return;
+    }
+    this.openBySeverity('compliant');
   }
 
   openByRiskTier(tier: RiskTier): void {

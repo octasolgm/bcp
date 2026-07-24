@@ -78,6 +78,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
 
   analysingPointSort: PointSortMode = 'number';
   analysingPointSortDir: SortDir = 'asc';
+  analysingStatusFilter: 'all' | 'running' | 'queued' | 'failed' | 'completed' = 'all';
 
   @ViewChild('workspaceEl') workspaceEl?: ElementRef<HTMLElement>;
   @ViewChild('gapReportEl') gapReportEl?: ElementRef<HTMLElement>;
@@ -497,14 +498,26 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     title: string;
     status: string;
     selected: boolean;
+    displayId: string;
   }> {
+    const filtered = this.analysingListRows.filter((row) => {
+      if (this.analysingStatusFilter === 'all') return true;
+      if (this.analysingStatusFilter === 'running') {
+        return row.status === 'running' || row.status === 'processing';
+      }
+      return row.status === this.analysingStatusFilter;
+    });
     return sortByPointKey(
-      this.selectedCoverageRows,
+      filtered,
       this.analysingPointSort,
       this.analysingPointSortDir,
-      (row) => row.pointId,
+      (row) => row.displayId || row.pointId,
       (row) => this.getPointGapSeverity(row.pointId) ?? '',
     );
+  }
+
+  setAnalysingStatusFilter(filter: 'all' | 'running' | 'queued' | 'failed' | 'completed'): void {
+    this.analysingStatusFilter = filter;
   }
 
   onAnalysingPointSortChange(event: { sort: 'number' | 'status'; dir: SortDir }): void {
@@ -1157,21 +1170,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
       this.useLibraryPoints = false;
     }
 
-    const snapshot = this.parseJsonArray(detail.run.selectedPointsSnapshot);
-    const selectedNums = new Set<string>();
-    for (const raw of snapshot) {
-      const snap = raw as Record<string, unknown>;
-      const num = String(snap['pointNumber'] ?? snap['pointId'] ?? '').trim();
-      if (num) selectedNums.add(num);
-    }
-    if (selectedNums.size && this.govPoints.length) {
-      this.selected.clear();
-      for (const p of this.govPoints) {
-        if (selectedNums.has(p.point_id)) this.selected.add(p.point_id);
-      }
-      this.sessionSelectedPointIds = new Set(selectedNums);
-      this.syncSelectionToGovPoints();
-    }
+    this.restoreNdRunSelection(detail.run.selectedPointsSnapshot, detail.points ?? []);
   }
 
   get showDualVerifyFailedBanner(): boolean {

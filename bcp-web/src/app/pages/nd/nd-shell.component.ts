@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit, inject, ChangeDetectorRef } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
@@ -10,11 +11,25 @@ import {
 import { NdShellFocusService } from '../../services/nd/nd-shell-focus.service';
 import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.component';
 
+type NavIcon =
+  | 'grid'
+  | 'file'
+  | 'library'
+  | 'clock'
+  | 'plus'
+  | 'users'
+  | 'building'
+  | 'check'
+  | 'list'
+  | 'trash'
+  | 'settings'
+  | 'chevron';
+
 type NavItem = {
   id: string;
   path: string;
   label: string;
-  icon: 'grid' | 'file' | 'library' | 'clock' | 'plus' | 'users' | 'building' | 'check' | 'list' | 'trash' | 'settings';
+  icon: NavIcon;
   cta?: boolean;
   secondary?: boolean;
   queryParams?: Record<string, string>;
@@ -22,10 +37,21 @@ type NavItem = {
   badgeAlways?: boolean;
 };
 
+type NavGroup = {
+  id: string;
+  label: string;
+  icon: NavIcon;
+  children: NavItem[];
+};
+
+type NavEntry =
+  | { kind: 'link'; item: NavItem }
+  | { kind: 'group'; group: NavGroup };
+
 @Component({
   selector: 'app-nd-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, BrandLogoComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, BrandLogoComponent, NgTemplateOutlet],
   templateUrl: './nd-shell.component.html',
   styleUrl: './nd-shell.component.scss',
 })
@@ -39,7 +65,9 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private readonly cdr = inject(ChangeDetectorRef);
 
   readonly profile = this.auth.profile;
-  navItems: NavItem[] = [];
+  navEntries: NavEntry[] = [];
+  /** Group ids the user expanded/collapsed manually. */
+  expandedGroups = new Set<string>();
   settingsOpen = false;
   navBadges: Partial<Record<string, number>> = {};
   ndActiveRunCount = 0;
@@ -72,13 +100,16 @@ export class NdShellComponent implements OnInit, OnDestroy {
       await this.router.navigate(['/nd/auth/login']);
       return;
     }
-    this.navItems = this.navForRole(role);
+    this.navEntries = this.navForRole(role);
+    this.expandedGroups = new Set();
+    this.syncExpandedGroupsToRoute();
     void this.refreshPass2LlmSummary();
     this.activeSessions.watch();
     this.scheduleNavBadgeRefresh();
     this.navSub = this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => {
+        this.syncExpandedGroupsToRoute();
         this.scheduleNavBadgeRefresh();
       });
   }
@@ -87,6 +118,70 @@ export class NdShellComponent implements OnInit, OnDestroy {
     this.navSub?.unsubscribe();
     if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
     this.activeSessions.unwatch();
+  }
+
+  isGroupExpanded(groupId: string): boolean {
+    return this.expandedGroups.has(groupId);
+  }
+
+  toggleGroup(groupId: string, event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (this.expandedGroups.has(groupId)) this.expandedGroups.delete(groupId);
+    else this.expandedGroups.add(groupId);
+  }
+
+  groupBadge(group: NavGroup): number | undefined {
+    let total = 0;
+    let anyAlways = false;
+    for (const child of group.children) {
+      const n = this.badgeFor(child);
+      if (n != null) {
+        total += n;
+        anyAlways = anyAlways || !!child.badgeAlways;
+      }
+    }
+    if (anyAlways) return total;
+    return total > 0 ? total : undefined;
+  }
+
+  groupHasActiveChild(group: NavGroup): boolean {
+    return group.children.some((c) => this.isChildActive(c));
+  }
+
+  isChildActive(item: NavItem): boolean {
+    const tree = this.router.parseUrl(this.router.url);
+    const pathOnly = this.router.url.split('?')[0];
+
+    if (item.queryParams) {
+      if (pathOnly !== item.path && !pathOnly.startsWith(`${item.path}/`)) return false;
+      return Object.entries(item.queryParams).every(
+        ([k, v]) => String(tree.queryParams[k] ?? '') === v,
+      );
+    }
+
+    // Exact path for document roots so /deleted does not light up the parent leaf.
+    if (
+      item.id === 'internal-documents' ||
+      item.id === 'regulation-documents' ||
+      item.id === 'analysis-runs-all'
+    ) {
+      if (pathOnly !== item.path) return false;
+      // "All analysis" is inactive when filtering to correction queue.
+      if (item.id === 'analysis-runs-all' && tree.queryParams['correction']) return false;
+      return true;
+    }
+
+    return pathOnly === item.path || pathOnly.startsWith(`${item.path}/`);
+  }
+
+  private syncExpandedGroupsToRoute(): void {
+    for (const entry of this.navEntries) {
+      if (entry.kind !== 'group') continue;
+      if (entry.group.children.some((c) => this.isChildActive(c))) {
+        this.expandedGroups.add(entry.group.id);
+      }
+    }
   }
 
   private scheduleNavBadgeRefresh(): void {
@@ -172,27 +267,26 @@ export class NdShellComponent implements OnInit, OnDestroy {
     await this.router.navigate(['/nd/auth/login']);
   }
 
-  private workspaceNav(role: string): NavItem[] {
-    const viewAll: NavItem = {
-      id: 'analysis-runs-all',
-      path: '/nd/analysis-runs',
-      label: 'All analysis',
-      icon: 'list',
-      secondary: true,
-      badgeAlways: true,
-      ...(role === 'maker' ? { queryParams: { mine: '1' } } : {}),
-    };
-    const items: NavItem[] = [
-      { id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' },
-      { id: 'internal-documents', path: '/nd/internal-documents', label: 'Documents', icon: 'file' },
-      { id: 'regulation-documents', path: '/nd/regulation-documents', label: 'Regulation Docs Library', icon: 'library' },
+  private link(item: NavItem): NavEntry {
+    return { kind: 'link', item };
+  }
+
+  private group(group: NavGroup): NavEntry {
+    return { kind: 'group', group };
+  }
+
+  private documentsGroup(role: string): NavGroup {
+    const children: NavItem[] = [
+      { id: 'internal-documents', path: '/nd/internal-documents', label: 'Internal documents', icon: 'file' },
+      { id: 'regulation-documents', path: '/nd/regulation-documents', label: 'Regulation docs', icon: 'library' },
+      { id: 'libraries', path: '/nd/libraries', label: 'Regulation points library', icon: 'list' },
     ];
     if (role === 'super_admin') {
-      items.push(
+      children.push(
         {
           id: 'internal-documents-deleted',
           path: '/nd/internal-documents/deleted',
-          label: 'Deleted documents',
+          label: 'Deleted internal docs',
           icon: 'trash',
           secondary: true,
         },
@@ -205,78 +299,149 @@ export class NdShellComponent implements OnInit, OnDestroy {
         },
       );
     }
-    items.push(
-      { id: 'libraries', path: '/nd/libraries', label: 'Regulation Points Libraries', icon: 'list' },
-      { id: 'in-progress', path: '/nd/in-progress', label: 'In progress', icon: 'clock', badgeAlways: true },
-      viewAll,
-      { id: 'analyse-v8', path: '/nd/analyse-v8', label: 'New analysis', icon: 'plus', cta: true },
-    );
-    return items;
+    return { id: 'documents', label: 'Documents', icon: 'file', children };
   }
 
-  private navForRole(role: string): NavItem[] {
+  private analysisGroup(role: string): NavGroup {
+    const children: NavItem[] = [
+      { id: 'in-progress', path: '/nd/in-progress', label: 'In progress', icon: 'clock', badgeAlways: true },
+      {
+        id: 'analysis-runs-all',
+        path: '/nd/analysis-runs',
+        label: 'All analysis',
+        icon: 'list',
+        badgeAlways: true,
+        ...(role === 'maker' ? { queryParams: { mine: '1' } } : {}),
+      },
+    ];
+    if (role === 'maker' || role === 'super_admin') {
+      children.push({
+        id: 'analyse-v8',
+        path: '/nd/analyse-v8',
+        label: 'New analysis',
+        icon: 'plus',
+        cta: true,
+      });
+    }
+    return { id: 'analysis', label: 'Analysis', icon: 'list', children };
+  }
+
+  private pendingReviewsGroup(role: string): NavGroup | null {
+    const children: NavItem[] = [];
+    if (role === 'maker' || role === 'super_admin' || role === 'checker' || role === 'reviewer') {
+      children.push({
+        id: 'analysis-runs-correction',
+        path: '/nd/analysis-runs',
+        label: 'Pending correction',
+        icon: 'clock',
+        badgeAlways: true,
+        queryParams:
+          role === 'maker' ? { mine: '1', correction: '1' } : { correction: '1' },
+      });
+    }
+    if (role === 'super_admin' || role === 'checker' || role === 'reviewer') {
+      children.push({
+        id: 'checker-queue',
+        path: '/nd/checker',
+        label: 'Pending review',
+        icon: 'check',
+        badgeAlways: true,
+      });
+    }
+    if (role === 'super_admin' || role === 'reviewer') {
+      children.push({
+        id: 'reviewer-queue',
+        path: '/nd/reviewer',
+        label: 'Pending final review',
+        icon: 'check',
+        badgeAlways: true,
+      });
+    }
+    if (!children.length) return null;
+    return { id: 'pending-reviews', label: 'Pending reviews', icon: 'check', children };
+  }
+
+  private adminGroup(): NavGroup {
+    return {
+      id: 'admin',
+      label: 'Administration',
+      icon: 'settings',
+      children: [
+        { id: 'admin-users', path: '/nd/admin/users', label: 'User management', icon: 'users' },
+        { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
+        { id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' },
+        { id: 'admin-deleted-runs', path: '/nd/admin/deleted-runs', label: 'Deleted analyses', icon: 'trash' },
+      ],
+    };
+  }
+
+  private navForRole(role: string): NavEntry[] {
+    const overview = this.link({ id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' });
+
     switch (role) {
-      case 'super_admin':
+      case 'super_admin': {
+        const pending = this.pendingReviewsGroup(role);
         return [
-          ...this.workspaceNav(role),
-          { id: 'admin-users', path: '/nd/admin/users', label: 'User Management', icon: 'users' },
-          { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
-          { id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' },
-          { id: 'admin-deleted-runs', path: '/nd/admin/deleted-runs', label: 'Deleted analyses', icon: 'trash' },
-          {
-            id: 'analysis-runs-correction',
-            path: '/nd/analysis-runs',
-            label: 'Pending correction',
-            icon: 'clock',
-            badgeAlways: true,
-            queryParams: { correction: '1' },
-          },
-          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check', badgeAlways: true },
-          { id: 'reviewer-queue', path: '/nd/reviewer', label: 'Pending final review', icon: 'check', badgeAlways: true },
+          overview,
+          this.group(this.documentsGroup(role)),
+          this.group(this.analysisGroup(role)),
+          ...(pending ? [this.group(pending)] : []),
+          this.group(this.adminGroup()),
         ];
-      case 'maker':
+      }
+      case 'maker': {
+        const pending = this.pendingReviewsGroup(role);
         return [
-          ...this.workspaceNav(role),
-          {
-            id: 'analysis-runs-correction',
-            path: '/nd/analysis-runs',
-            label: 'Pending correction',
-            icon: 'clock',
-            badgeAlways: true,
-            queryParams: { mine: '1', correction: '1' },
-          },
+          overview,
+          this.group(this.documentsGroup(role)),
+          this.group(this.analysisGroup(role)),
+          ...(pending ? [this.group(pending)] : []),
         ];
-      case 'checker':
+      }
+      case 'checker': {
+        const pending = this.pendingReviewsGroup(role);
         return [
-          { id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' },
-          { id: 'analysis-runs-all', path: '/nd/analysis-runs', label: 'All analysis', icon: 'list', badgeAlways: true },
-          {
-            id: 'analysis-runs-correction',
-            path: '/nd/analysis-runs',
-            label: 'Pending correction',
-            icon: 'clock',
-            badgeAlways: true,
-            queryParams: { correction: '1' },
-          },
-          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check', badgeAlways: true },
+          overview,
+          this.group({
+            id: 'analysis',
+            label: 'Analysis',
+            icon: 'list',
+            children: [
+              {
+                id: 'analysis-runs-all',
+                path: '/nd/analysis-runs',
+                label: 'All analysis',
+                icon: 'list',
+                badgeAlways: true,
+              },
+            ],
+          }),
+          ...(pending ? [this.group(pending)] : []),
         ];
-      case 'reviewer':
+      }
+      case 'reviewer': {
+        const pending = this.pendingReviewsGroup(role);
         return [
-          { id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' },
-          { id: 'analysis-runs-all', path: '/nd/analysis-runs', label: 'All analysis', icon: 'list', badgeAlways: true },
-          {
-            id: 'analysis-runs-correction',
-            path: '/nd/analysis-runs',
-            label: 'Pending correction',
-            icon: 'clock',
-            badgeAlways: true,
-            queryParams: { correction: '1' },
-          },
-          { id: 'checker-queue', path: '/nd/checker', label: 'Pending review', icon: 'check', badgeAlways: true },
-          { id: 'reviewer-queue', path: '/nd/reviewer', label: 'Pending final review', icon: 'check', badgeAlways: true },
+          overview,
+          this.group({
+            id: 'analysis',
+            label: 'Analysis',
+            icon: 'list',
+            children: [
+              {
+                id: 'analysis-runs-all',
+                path: '/nd/analysis-runs',
+                label: 'All analysis',
+                icon: 'list',
+                badgeAlways: true,
+              },
+            ],
+          }),
+          ...(pending ? [this.group(pending)] : []),
         ];
+      }
       default:
-        return [{ id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' }];
+        return [overview];
     }
   }
 }

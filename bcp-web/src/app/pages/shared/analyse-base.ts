@@ -209,6 +209,12 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private ndRunPollTimer: ReturnType<typeof setInterval> | null = null;
+  private ndRunPollInFlight = false;
+  /** Full points from last attach/detail load — status polls merge onto these. */
+  private ndRunDetailPoints: AnalysisPoint[] = [];
+  private ndRunSelectedSnapshot = '';
+  /** Prevents overlapping attach calls (queryParam subscribe can fire twice before ndRunId is set). */
+  private ndRunAttachInFlight: string | null = null;
   protected ndRunId: string | null = null;
   ndRunWorkflowStatus = '';
   /** Set from ND run detail when resuming — used to restore library mode in analyse-v8. */
@@ -314,9 +320,11 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     title: string;
     status: string;
     selected: boolean;
+    displayId: string;
   }> {
     const statusOf = (id: string) => {
-      if (this.sessionPointStatus.has(id)) return this.sessionPointStatus.get(id)!;
+      const resolved = this.resolveSessionPointStatus(id);
+      if (resolved) return resolved;
       return this.selected.has(id) && this.hasResumableRun ? 'queued' : 'not-run';
     };
     return this.govPoints.map((p) => ({
@@ -324,6 +332,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       title: p.title || p.text,
       status: statusOf(p.point_id),
       selected: this.selected.has(p.point_id),
+      displayId: formatGovPointDisplayId(p),
     }));
   }
 
@@ -355,6 +364,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     title: string;
     status: string;
     selected: boolean;
+    displayId: string;
   }> {
     const rows = this.coverageRows.filter((r) => r.selected);
     const scope = this.runScopePointIds;
@@ -379,11 +389,15 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     notRun: number;
     failed: number;
     completed: number;
+    running: number;
+    queued: number;
   } {
     const rows = this.coverageRows;
     const notRun = rows.filter((r) => r.status === 'not-run').length;
     const failed = rows.filter((r) => r.status === 'failed').length;
     const completed = rows.filter((r) => r.status === 'completed').length;
+    const running = rows.filter((r) => r.status === 'running' || r.status === 'processing').length;
+    const queued = rows.filter((r) => r.status === 'queued').length;
     const run = rows.filter((r) => r.status !== 'not-run').length;
     return {
       total: rows.length,
@@ -396,7 +410,69 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       notRun,
       failed,
       completed,
+      running,
+      queued,
     };
+  }
+
+  /** Counts for analysing-list filter tabs (scoped to current run rows). */
+  get analysingStatusCounts(): {
+    all: number;
+    running: number;
+    queued: number;
+    failed: number;
+    completed: number;
+  } {
+    const rows = this.analysingListRows;
+    return {
+      all: rows.length,
+      running: rows.filter((r) => r.status === 'running' || r.status === 'processing').length,
+      queued: rows.filter((r) => r.status === 'queued').length,
+      failed: rows.filter((r) => r.status === 'failed').length,
+      completed: rows.filter((r) => r.status === 'completed').length,
+    };
+  }
+
+  protected resolveSessionPointStatus(pointId: string): string | undefined {
+    const direct = this.sessionPointStatus.get(pointId);
+    if (direct) return direct;
+    const gov = this.govPoints.find((g) => g.point_id === pointId);
+    const section = gov?.section?.trim();
+    if (section) {
+      const bySection = this.sessionPointStatus.get(section);
+      if (bySection) return bySection;
+    }
+    const result = this.sessionPointResults.get(pointId);
+    if (result?.pointId && result.pointId !== pointId) {
+      return this.sessionPointStatus.get(result.pointId);
+    }
+    return undefined;
+  }
+
+  protected resolveSessionPoint(pointId: string): SessionPoint | undefined {
+    const direct = this.sessionPointResults.get(pointId);
+    if (direct) return direct;
+    const gov = this.govPoints.find((g) => g.point_id === pointId);
+    const section = gov?.section?.trim();
+    if (section) {
+      const bySection = this.sessionPointResults.get(section);
+      if (bySection) return bySection;
+    }
+    return undefined;
+  }
+
+  analysingDisplayId(pointId: string): string {
+    const gov = this.govPoints.find((g) => g.point_id === pointId);
+    if (gov) return formatGovPointDisplayId(gov);
+    const result = this.sessionPointResults.get(pointId);
+    if (result?.pointId && result.pointId !== pointId && !this.looksLikeUuid(result.pointId)) {
+      return result.pointId;
+    }
+    return this.looksLikeUuid(pointId) ? pointId.slice(0, 8) : pointId;
+  }
+
+  private looksLikeUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
   }
 
   get selectedPointDetail(): PointDetail | null {
@@ -628,10 +704,10 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       this.ndRunWorkflowStatus = '';
       return;
     }
-    const res = await this.ndApi.getAnalysisRun(id);
+    const res = await this.ndApi.getAnalysisRunStatus(id);
     if (res.success && res.data) {
-      const data = res.data as { run: { status: string } };
-      this.ndRunWorkflowStatus = data.run.status ?? '';
+      const data = res.data as { status: string };
+      this.ndRunWorkflowStatus = data.status ?? '';
     }
   }
 
@@ -683,8 +759,8 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   getPointPhaseStatus(pointId: string): PointPhaseDisplay | null {
-    const p = this.sessionPointResults.get(pointId);
-    const status = this.sessionPointStatus.get(pointId);
+    const p = this.resolveSessionPoint(pointId);
+    const status = this.resolveSessionPointStatus(pointId);
 
     if (!p && status === 'running') {
       return {
@@ -2515,6 +2591,10 @@ ${this.findingsPreview
       this.toast.show('Demo run stopped', 'warning', 2500);
       return;
     }
+    if (this.ndRunId) {
+      void this.stopNdAnalysisRun(this.ndRunId);
+      return;
+    }
     if (!this.sessionId || !this.isSessionActive) return;
     const label = this.complianceFileName || 'this analysis';
     const ok = window.confirm(
@@ -2544,6 +2624,54 @@ ${this.findingsPreview
         this.toast.show(this.apiErrorMessage(e, 'Could not stop analysis'), 'error', 4000);
       },
     });
+  }
+
+  private async stopNdAnalysisRun(runId: string): Promise<void> {
+    if (!this.isSessionActive && this.analysisState !== 'running') return;
+    const label = this.complianceFileName || this.selectedRegLabel || 'this analysis';
+    const ok = window.confirm(
+      `Stop "${label}"?\n\nQueued points will be cancelled. A point already being analysed may finish its current pass first.`,
+    );
+    if (!ok) return;
+
+    this.stopNdRunPolling();
+    const res = await this.ndApi.stopAnalysisRun(runId);
+    if (!res.success) {
+      this.toast.show(res.message || 'Could not stop analysis', 'error', 4000);
+      if (this.ndRunId) this.pollNdRun(this.ndRunId);
+      return;
+    }
+
+    for (const [pointId, status] of this.sessionPointStatus) {
+      if (status === 'queued' || status === 'processing' || status === 'running') {
+        this.sessionPointStatus.set(pointId, 'cancelled');
+      }
+    }
+    this.ndRunWorkflowStatus = 'cancelled';
+    this.analysisState = 'complete';
+    this.progress = 100;
+    this.analysisSteps.forEach((st) => {
+      st.done = true;
+      st.active = false;
+    });
+    this.toast.show('Analysis stopped', 'warning', 3500);
+    this.activeSessions.refresh();
+
+    // Refresh once so UI matches persisted cancelled points.
+    try {
+      const statusRes = await this.ndApi.getAnalysisRunStatus(runId);
+      if (statusRes.success && statusRes.data) {
+        const data = statusRes.data as {
+          status: string;
+          totalPointsCount: number;
+          processedPointsCount: number;
+          points: AnalysisPoint[];
+        };
+        this.applyNdRunState(runId, data, data.points ?? [], data);
+      }
+    } catch {
+      /* local cancelled state already applied */
+    }
   }
 
   openFullReport(): void {
@@ -3004,23 +3132,25 @@ ${this.findingsPreview
   }
 
   private async attachToNdAnalysisRun(runId: string): Promise<void> {
+    if (this.ndRunAttachInFlight === runId) return;
+    if (this.ndRunId === runId && this.ndRunDetailPoints.length > 0) return;
+    this.ndRunAttachInFlight = runId;
     this.analysisCompleteUiDone = false;
     this.showInlineGapReport = false;
     this.ndRunId = runId;
     this.isDemoRun = false;
 
-    const [detailRes, statusRes] = await Promise.all([
-      this.ndApi.getAnalysisRun(runId),
-      this.ndApi.getAnalysisRunStatus(runId),
-    ]);
+    try {
+      // Prefer /status?resume=true — one projected query, avoids slow GET /{id} under pool pressure.
+      const resumeRes = await this.ndApi.getAnalysisRunStatus(runId, { resume: true });
+      if (!resumeRes.success || !resumeRes.data) {
+        this.toast.show(resumeRes.message ?? 'Could not load analysis run', 'error');
+        if (this.ndRunId === runId) this.ndRunId = null;
+        return;
+      }
 
-    if (!detailRes.success || !detailRes.data) {
-      this.toast.show(detailRes.message ?? 'Could not load analysis run', 'error');
-      return;
-    }
-
-    const detail = detailRes.data as {
-      run: {
+      const resume = resumeRes.data as {
+        id?: string;
         name: string;
         status: string;
         libraryId?: string | null;
@@ -3030,105 +3160,260 @@ ${this.findingsPreview
         totalPointsCount: number;
         processedPointsCount: number;
         dualVerifyFailedCount?: number;
+        points: AnalysisPoint[];
       };
-      points: AnalysisPoint[];
-    };
 
-    this.ndRunLibraryId = detail.run.libraryId ? String(detail.run.libraryId) : null;
-    this.ndRunDualVerifyFailedCount = detail.run.dualVerifyFailedCount ?? 0;
-
-    const status = statusRes.success
-      ? (statusRes.data as {
-          status: string;
-          totalPointsCount: number;
-          processedPointsCount: number;
-          points: AnalysisPoint[];
-        })
-      : null;
-
-    const points = status?.points ?? detail.points;
-    const isDemoRun = (detail.run.name ?? '').startsWith('[Demo]');
-    if (isDemoRun) {
-      this.isDemoRun = true;
-      this.demoNdRunId = runId;
-    } else {
-      this.demoNdRunId = null;
-    }
-    this.applyNdRunState(runId, detail.run, points, status, isDemoRun);
-
-    const snapshot = this.parseJsonArray(detail.run.selectedPointsSnapshot);
-    const govPoints: GovPoint[] = snapshot.map((raw) => {
-      const snap = raw as Record<string, unknown>;
-      const pointNumber = String(snap['pointNumber'] ?? snap['point_id'] ?? '');
-      return {
-        point_id: pointNumber,
-        title: String(snap['pointTitle'] ?? snap['title'] ?? ''),
-        text: String(snap['pointContent'] ?? snap['text'] ?? ''),
-        section: String(snap['pageReference'] ?? snap['section'] ?? pointNumber),
+      const detail = {
+        run: {
+          name: resume.name,
+          status: resume.status,
+          libraryId: resume.libraryId,
+          selectedPointsSnapshot: resume.selectedPointsSnapshot ?? '',
+          selectedInternalDocIds: resume.selectedInternalDocIds ?? '',
+          selectedRegulationDocIds: resume.selectedRegulationDocIds ?? '',
+          totalPointsCount: resume.totalPointsCount,
+          processedPointsCount: resume.processedPointsCount,
+          dualVerifyFailedCount: resume.dualVerifyFailedCount,
+        },
+        points: resume.points ?? [],
       };
-    }).filter((p) => p.point_id);
 
-    if (govPoints.length) {
-      this.applyGovPoints(govPoints, detail.run.name, this.sessionSelectedPointIds);
-    }
+      this.ndRunLibraryId = detail.run.libraryId ? String(detail.run.libraryId) : null;
+      this.ndRunDualVerifyFailedCount = detail.run.dualVerifyFailedCount ?? 0;
+      this.ndRunSelectedSnapshot = detail.run.selectedPointsSnapshot ?? '';
 
-    const regIds = this.parseJsonArray(detail.run.selectedRegulationDocIds).map(String);
-    const internalIds = this.parseJsonArray(detail.run.selectedInternalDocIds).map(String);
+      const status = {
+        status: resume.status,
+        totalPointsCount: resume.totalPointsCount,
+        processedPointsCount: resume.processedPointsCount,
+        dualVerifyFailedCount: resume.dualVerifyFailedCount,
+        points: resume.points ?? [],
+      };
 
-    this.refreshRegulations(() => {
-      this.selectedRegIds.clear();
-      for (const id of regIds) {
-        const doc = this.regulationDocs.find(
-          (d) => d.id === id || d.ndStoredDocumentId === id,
-        );
-        if (doc) this.selectedRegIds.add(doc.id);
+      const points = detail.points;
+      this.ndRunDetailPoints = points;
+      const isDemoRun = (detail.run.name ?? '').startsWith('[Demo]');
+      if (isDemoRun) {
+        this.isDemoRun = true;
+        this.demoNdRunId = runId;
+      } else {
+        this.demoNdRunId = null;
       }
-      if (!this.selectedRegIds.size && this.regulationDocs.length) {
-        const tfs =
-          this.regulationDocs.find(
-            (d) => (d.fileHash ?? '').toLowerCase() === this.TFS_HASH.toLowerCase(),
-          ) ?? this.regulationDocs[0];
-        if (tfs) this.selectedRegIds.add(tfs.id);
-      }
-      this.syncSelectedDocs();
-    });
 
-    this.refreshComplianceDocs(() => {
-      this.selectedComplianceIds.clear();
-      for (const id of internalIds) {
-        const doc = this.complianceDocs.find((d) => d.id === id);
-        if (doc) {
-          this.selectedComplianceIds.add(doc.id);
-          this.selectComplianceDoc(doc, { silent: true, preserveAnalysisState: true });
+      // Restore library / regulation UI first so govPoints exist before status mapping.
+      await this.onNdRunContextLoaded({ ...detail, points });
+
+      if (!this.govPoints.length) {
+        const fromPoints = this.govPointsFromNdPoints(points);
+        if (fromPoints.length) {
+          this.applyGovPoints(fromPoints, detail.run.name, null);
+        } else {
+          const snapshot = this.parseJsonArray(detail.run.selectedPointsSnapshot);
+          const fromSnap = this.govPointsFromSelectedSnapshot(snapshot);
+          if (fromSnap.length) this.applyGovPoints(fromSnap, detail.run.name, null);
         }
       }
-    });
 
-    this.pointsCollapsed = true;
+      this.restoreNdRunSelection(detail.run.selectedPointsSnapshot, points);
 
-    await this.onNdRunContextLoaded(detail);
+      const regIds = this.parseJsonArray(detail.run.selectedRegulationDocIds).map(String);
+      const internalIds = this.parseJsonArray(detail.run.selectedInternalDocIds).map(String);
 
-    const runStatus = (status?.status ?? detail.run.status ?? '').toLowerCase();
-    const processedCount = status?.processedPointsCount ?? detail.run.processedPointsCount ?? 0;
-    const totalCount = status?.totalPointsCount ?? detail.run.totalPointsCount ?? 0;
-    const activelyProcessing = this.applyNdRunState(
-      runId,
-      detail.run,
-      points,
-      status,
-      isDemoRun,
-    );
+      this.refreshRegulations(() => {
+        this.selectedRegIds.clear();
+        for (const id of regIds) {
+          const doc = this.regulationDocs.find(
+            (d) => d.id === id || d.ndStoredDocumentId === id,
+          );
+          if (doc) this.selectedRegIds.add(doc.id);
+        }
+        if (!this.selectedRegIds.size && this.regulationDocs.length) {
+          const tfs =
+            this.regulationDocs.find(
+              (d) => (d.fileHash ?? '').toLowerCase() === this.TFS_HASH.toLowerCase(),
+            ) ?? this.regulationDocs[0];
+          if (tfs) this.selectedRegIds.add(tfs.id);
+        }
+        this.syncSelectedDocs();
+      });
 
-    if (activelyProcessing) {
-      if (runStatus === 'running') {
-        this.pollNdRun(runId);
+      this.refreshComplianceDocs(() => {
+        this.selectedComplianceIds.clear();
+        for (const id of internalIds) {
+          const doc = this.complianceDocs.find((d) => d.id === id);
+          if (doc) {
+            this.selectedComplianceIds.add(doc.id);
+            this.selectComplianceDoc(doc, { silent: true, preserveAnalysisState: true });
+          }
+        }
+      });
+
+      this.pointsCollapsed = true;
+
+      const runForState = {
+        ...detail.run,
+        status: status?.status ?? detail.run.status,
+        totalPointsCount: status?.totalPointsCount ?? detail.run.totalPointsCount,
+        processedPointsCount: status?.processedPointsCount ?? detail.run.processedPointsCount,
+        dualVerifyFailedCount:
+          status?.dualVerifyFailedCount ?? detail.run.dualVerifyFailedCount,
+      };
+
+      const activelyProcessing = this.applyNdRunState(
+        runId,
+        runForState,
+        points,
+        status
+          ? {
+              status: status.status,
+              totalPointsCount: status.totalPointsCount,
+              processedPointsCount: status.processedPointsCount,
+            }
+          : null,
+        isDemoRun,
+      );
+
+      // Re-apply selection after applyNdRunState (it resets selected to regulationPointIds).
+      this.restoreNdRunSelection(detail.run.selectedPointsSnapshot, points);
+      if (!this.selected.size && this.govPoints.length && points.length) {
+        for (const p of points) {
+          const id = p.regulationPointId || parsePointSnapshot(p.pointSnapshot).pointNumber || '';
+          const match = this.govPoints.find(
+            (g) =>
+              g.point_id === id ||
+              g.point_id === p.regulationPointId ||
+              (g.section?.trim() && g.section.trim() === parsePointSnapshot(p.pointSnapshot).pointNumber),
+          );
+          if (match) this.selected.add(match.point_id);
+        }
+        this.sessionSelectedPointIds = new Set(this.selected);
       }
-      this.onRunResumeAttached();
-    } else if (this.analysisState === 'running') {
-      this.onRunResumeAttached();
-    } else {
-      this.ndRunWorkflowStatus = runStatus;
+
+      const runStatus = (status?.status ?? detail.run.status ?? '').toLowerCase();
+      if (activelyProcessing) {
+        if (runStatus === 'running' || runStatus === 'draft' || runStatus === 'processing') {
+          this.pollNdRun(runId);
+        }
+        this.onRunResumeAttached();
+      } else if (this.analysisState === 'running') {
+        this.onRunResumeAttached();
+      } else {
+        this.ndRunWorkflowStatus = runStatus;
+      }
+    } finally {
+      if (this.ndRunAttachInFlight === runId) this.ndRunAttachInFlight = null;
     }
+  }
+
+  /** Merge lightweight /status rows onto full detail points (keep snapshots + AI results). */
+  private mergeNdRunPoints(
+    detailPoints: AnalysisPoint[],
+    statusPoints?: AnalysisPoint[] | null,
+  ): AnalysisPoint[] {
+    if (!statusPoints?.length) return detailPoints;
+    const byId = new Map(statusPoints.map((p) => [p.id, p]));
+    if (!detailPoints.length) return statusPoints;
+    return detailPoints.map((p) => {
+      const live = byId.get(p.id);
+      if (!live) return p;
+      return {
+        ...p,
+        landingAiStatus: live.landingAiStatus ?? p.landingAiStatus,
+        googleAiStatus: live.googleAiStatus ?? p.googleAiStatus,
+        dualVerifyStatus: live.dualVerifyStatus ?? p.dualVerifyStatus,
+        finalStatus: live.finalStatus ?? p.finalStatus,
+        landingAiError: live.landingAiError ?? p.landingAiError,
+        googleAiError: live.googleAiError ?? p.googleAiError,
+      };
+    });
+  }
+
+  private govPointsFromNdPoints(points: AnalysisPoint[]): GovPoint[] {
+    const out: GovPoint[] = [];
+    for (const p of points) {
+      const snap = parsePointSnapshot(p.pointSnapshot);
+      const pointId =
+        p.regulationPointId ||
+        snap.regulationPointId ||
+        snap.pointNumber ||
+        p.id;
+      if (!pointId) continue;
+      out.push({
+        point_id: pointId,
+        title: snap.pointTitle || '',
+        text: snap.pointContent || '',
+        section: (snap.pageReference || snap.pointNumber || pointId).trim(),
+      });
+    }
+    return out;
+  }
+
+  private govPointsFromSelectedSnapshot(snapshot: unknown[]): GovPoint[] {
+    const out: GovPoint[] = [];
+    for (const raw of snapshot) {
+      const snap = raw as Record<string, unknown>;
+      const pointId = String(
+        snap['regulationPointId'] ??
+          snap['pointId'] ??
+          snap['pointNumber'] ??
+          snap['point_id'] ??
+          '',
+      ).trim();
+      if (!pointId) continue;
+      out.push({
+        point_id: pointId,
+        title: String(snap['pointTitle'] ?? snap['title'] ?? ''),
+        text: String(snap['pointContent'] ?? snap['text'] ?? ''),
+        section: String(
+          snap['pageReference'] ?? snap['section'] ?? snap['pointNumber'] ?? pointId,
+        ),
+      });
+    }
+    return out;
+  }
+
+  /** Select govPoints that belong to this run (UUID, § number, or section). */
+  protected restoreNdRunSelection(
+    selectedPointsSnapshot: string,
+    points: AnalysisPoint[],
+  ): void {
+    const keys = new Set<string>();
+    for (const raw of this.parseJsonArray(selectedPointsSnapshot)) {
+      const snap = raw as Record<string, unknown>;
+      for (const key of [
+        snap['regulationPointId'],
+        snap['pointId'],
+        snap['pointNumber'],
+        snap['point_id'],
+        snap['pageReference'],
+        snap['section'],
+      ]) {
+        const s = String(key ?? '').trim();
+        if (s) keys.add(s);
+      }
+    }
+    for (const p of points) {
+      const snap = parsePointSnapshot(p.pointSnapshot);
+      if (p.regulationPointId) keys.add(p.regulationPointId);
+      if (snap.regulationPointId) keys.add(snap.regulationPointId);
+      if (snap.pointNumber) keys.add(snap.pointNumber);
+      if (snap.pageReference) keys.add(snap.pageReference.trim());
+      keys.add(p.id);
+    }
+    if (!keys.size || !this.govPoints.length) return;
+
+    this.selected.clear();
+    for (const g of this.govPoints) {
+      const sourced = g as GovPoint & { regulationPointId?: string };
+      if (
+        keys.has(g.point_id) ||
+        (sourced.regulationPointId && keys.has(sourced.regulationPointId)) ||
+        (g.section?.trim() && keys.has(g.section.trim()))
+      ) {
+        this.selected.add(g.point_id);
+      }
+    }
+    this.sessionSelectedPointIds = new Set(this.selected);
   }
 
   /** Hook for ND shells to restore library/regulation UI when opening ?run=. */
@@ -3136,6 +3421,7 @@ ${this.findingsPreview
     run: {
       libraryId?: string | null;
       selectedPointsSnapshot: string;
+      selectedRegulationDocIds?: string;
     };
     points: AnalysisPoint[];
   }): Promise<void> {}
@@ -3218,26 +3504,40 @@ ${this.findingsPreview
     for (const p of points) {
       const mapped = this.mapNdAnalysisPoint(p);
       if (!mapped.pointId) continue;
-      this.sessionPointStatus.set(mapped.pointId, this.normalizeStoredPointStatus(mapped));
-      this.sessionPointResults.set(mapped.pointId, mapped);
-      this.sessionSelectedPointIds.add(mapped.pointId);
-      this.selected.add(mapped.pointId);
+      const status = this.normalizeStoredPointStatus(mapped);
+      const snap = parsePointSnapshot(p.pointSnapshot);
+      const keys = new Set<string>([mapped.pointId]);
+      if (p.regulationPointId) keys.add(p.regulationPointId);
+      if (snap.pointNumber?.trim()) keys.add(snap.pointNumber.trim());
+      if (snap.regulationPointId?.trim()) keys.add(snap.regulationPointId.trim());
+      for (const key of keys) {
+        this.sessionPointStatus.set(key, status);
+        this.sessionPointResults.set(key, mapped);
+      }
+      // Prefer regulationPointId so selection matches govPoints after assignUniqueLibraryPointIds.
+      const selectId = p.regulationPointId || mapped.pointId;
+      this.sessionSelectedPointIds.add(selectId);
+      this.selected.add(selectId);
     }
 
     const first =
       points.find((p) => {
-        const snap = parsePointSnapshot(p.pointSnapshot);
         return p.landingAiStatus === 'completed' || p.dualVerifyStatus === 'completed';
       }) ?? points[0];
     if (first) {
       const snap = parsePointSnapshot(first.pointSnapshot);
-      const defaultId = snap.pointNumber || first.regulationPointId || first.id;
+      const defaultId = first.regulationPointId || snap.pointNumber || first.id;
       const selectionStillValid =
         !!previousSelection &&
         (this.sessionPointResults.has(previousSelection) ||
+          this.sessionPointStatus.has(previousSelection) ||
           points.some((point) => {
             const pointSnap = parsePointSnapshot(point.pointSnapshot);
-            return (pointSnap.pointNumber || point.regulationPointId || point.id) === previousSelection;
+            return (
+              point.regulationPointId === previousSelection ||
+              pointSnap.pointNumber === previousSelection ||
+              point.id === previousSelection
+            );
           }));
       this.selectedDetailPointId = selectionStillValid ? previousSelection : defaultId;
     }
@@ -3251,6 +3551,15 @@ ${this.findingsPreview
     );
 
     this.ndRunDualVerifyFailedCount = run.dualVerifyFailedCount ?? 0;
+
+    if (runStatus === 'cancelled') {
+      this.analysisState = 'complete';
+      this.progress = 100;
+      this.ndRunWorkflowStatus = runStatus;
+      this.stopNdRunPolling();
+      this.syncSelectionToGovPoints();
+      return false;
+    }
 
     const needsExecutionView = inFlight || !allPointsProcessed || hasLandingPendingOrFailed;
     const activelyProcessing =
@@ -3290,14 +3599,16 @@ ${this.findingsPreview
 
   private mapNdAnalysisPoint(p: AnalysisPoint): SessionPoint {
     const snap = parsePointSnapshot(p.pointSnapshot);
-    const pointId = snap.pointNumber || p.regulationPointId || p.id;
+    // Prefer regulationPointId so keys match govPoints after assignUniqueLibraryPointIds (UUID ids).
+    const pointId = p.regulationPointId || snap.pointNumber || p.id;
     const landingMessage = this.parseNdAiPayload(p.landingAiResult).message;
     const google = this.parseNdAiPayload(p.googleAiResult);
     const llmMessage = google.message;
     const agreement = google.agreement;
 
     let status = 'queued';
-    if (p.dualVerifyStatus === 'completed' || p.finalStatus) status = 'completed';
+    if (p.landingAiStatus === 'cancelled' || p.dualVerifyStatus === 'cancelled') status = 'cancelled';
+    else if (p.dualVerifyStatus === 'completed' || p.finalStatus) status = 'completed';
     else if (p.landingAiStatus === 'failed') status = 'failed';
     else if (
       landingMessage &&
@@ -3307,6 +3618,15 @@ ${this.findingsPreview
     } else if (p.landingAiStatus === 'running' || p.dualVerifyStatus === 'running') status = 'running';
     else if (p.landingAiStatus === 'completed' && p.dualVerifyStatus !== 'completed') status = 'running';
     else if (p.landingAiStatus === 'completed') status = 'completed';
+    else if (
+      p.landingAiStatus === 'compliant'
+      || p.landingAiStatus === 'partial_compliant'
+      || p.landingAiStatus === 'non_compliant'
+    ) {
+      status = p.dualVerifyStatus === 'passed' || p.dualVerifyStatus === 'failed' || p.dualVerifyStatus === 'skipped'
+        ? 'completed'
+        : 'running';
+    }
 
     return {
       id: p.id,
@@ -3342,18 +3662,37 @@ ${this.findingsPreview
 
   private pollNdRun(runId: string): void {
     this.stopNdRunPolling();
-    this.ndRunPollTimer = setInterval(() => {
-      void this.ndApi.getAnalysisRunStatus(runId).then((res) => {
-        if (!res.success || !res.data) return;
-        const data = res.data as {
-          status: string;
-          totalPointsCount: number;
-          processedPointsCount: number;
-          points: AnalysisPoint[];
-        };
-        this.applyNdRunState(runId, data, data.points, data);
-      });
-    }, 3500);
+    this.ndRunPollInFlight = false;
+    // Slow poll: /status + /sessions/active compete for a tiny Supabase session pool.
+    const intervalMs = 10_000;
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (this.ndRunPollInFlight) return;
+      this.ndRunPollInFlight = true;
+      void this.ndApi
+        .getAnalysisRunStatus(runId)
+        .then((res) => {
+          if (!res.success || !res.data) return;
+          const data = res.data as {
+            status: string;
+            totalPointsCount: number;
+            processedPointsCount: number;
+            dualVerifyFailedCount?: number;
+            points: AnalysisPoint[];
+          };
+          const merged = this.mergeNdRunPoints(this.ndRunDetailPoints, data.points);
+          if (merged.length) this.ndRunDetailPoints = merged;
+          this.applyNdRunState(runId, data, merged.length ? merged : data.points ?? [], data);
+          if (this.ndRunSelectedSnapshot) {
+            this.restoreNdRunSelection(this.ndRunSelectedSnapshot, merged.length ? merged : data.points ?? []);
+          }
+        })
+        .finally(() => {
+          this.ndRunPollInFlight = false;
+        });
+    };
+    tick();
+    this.ndRunPollTimer = setInterval(tick, intervalMs);
   }
 
   private apiErrorMessage(e: HttpErrorResponse, fallback = 'Request failed'): string {

@@ -5,8 +5,12 @@ const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'archived', 'unava
 const ACTIVE_STATUS = new Set(['queued', 'processing', 'running', 'in_progress', 'in-progress']);
 const STALE_QUEUED_MS = 30 * 60 * 1000;
 const STALE_RUNNING_MS = 2 * 60 * 60 * 1000;
-/** Background poll while ND shell is open — keep modest for Supabase pool headroom. */
-const SESSION_POLL_MS = 15_000;
+/**
+ * Background poll while ND shell is open.
+ * Keep slow — each call hits Postgres and competes with /status + analysis processor
+ * under a small Supabase session pool (often MaxPoolSize 5–8).
+ */
+const SESSION_POLL_MS = 45_000;
 
 /** Shared rule for nav badge, in-progress page, and document analysis runs. */
 export function isAnalysisStillActive(opts: {
@@ -91,6 +95,10 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
   private timer: ReturnType<typeof setInterval> | null = null;
   private watchers = 0;
   private visibilityBound = false;
+  private inFlight = false;
+  private lastRefreshAt = 0;
+  /** Ignore duplicate refresh() bursts (nav + analyse + stop all call this). */
+  private readonly minRefreshGapMs = 8_000;
 
   readonly sessions = signal<DualVerifySessionSummary[]>([]);
   readonly loading = signal(false);
@@ -99,7 +107,7 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
     this.watchers++;
     if (this.watchers === 1) {
       this.bindVisibility();
-      this.refresh();
+      this.refresh(true);
       this.timer = setInterval(() => this.refresh(), SESSION_POLL_MS);
     }
   }
@@ -112,8 +120,15 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
     }
   }
 
-  refresh(): void {
+  /** @param force bypass debounce (first watch / visibility return). */
+  refresh(force = false): void {
     if (typeof document !== 'undefined' && document.hidden) return;
+    if (this.inFlight) return;
+    const now = Date.now();
+    if (!force && now - this.lastRefreshAt < this.minRefreshGapMs) return;
+
+    this.inFlight = true;
+    this.lastRefreshAt = now;
     this.loading.set(true);
     this.api.listActiveDualVerifySessions().subscribe({
       next: (r) => {
@@ -124,8 +139,12 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
         );
         this.sessions.set(active);
         this.loading.set(false);
+        this.inFlight = false;
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        this.loading.set(false);
+        this.inFlight = false;
+      },
     });
   }
 
@@ -154,6 +173,6 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
   }
 
   private readonly onVisibilityChange = (): void => {
-    if (!document.hidden && this.watchers > 0) this.refresh();
+    if (!document.hidden && this.watchers > 0) this.refresh(true);
   };
 }

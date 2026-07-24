@@ -30,14 +30,21 @@ export function aggregateGapRiskCounts(
   }
 
   for (const point of points) {
-    if (resolveAnalysisPointSeverity(point) === 'compliant') continue;
+    const severity = resolveAnalysisPointSeverity(point);
+    if (severity === 'compliant') continue;
     const gaps = meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point));
-    for (const gap of gaps) {
-      const key = `${point.id}:${gap.index}`;
-      const fromReview = reviewPriority.get(key);
-      const score = riskScoreFromRaw(fromReview ?? gap.priority ?? '');
-      counts = addGapRiskCount(counts, score);
+    if (gaps.length) {
+      for (const gap of gaps) {
+        const key = `${point.id}:${gap.index}`;
+        const fromReview = reviewPriority.get(key);
+        const score = riskScoreFromRaw(fromReview ?? gap.priority ?? '');
+        counts = addGapRiskCount(counts, score);
+      }
+      continue;
     }
+    // In-progress / unscored CAP: still count the finding by compliance severity.
+    const fallbackScore = severity === 'non_compliant' ? 85 : 50;
+    counts = addGapRiskCount(counts, fallbackScore);
   }
 
   return counts;

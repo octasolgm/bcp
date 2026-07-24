@@ -61,12 +61,14 @@ export class ShellComponent implements OnInit, OnDestroy {
       .pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => {
         this.refreshNavBadges();
+        // Debounced inside ActiveAnalysisSessionsService — avoid hammering /sessions/active.
         this.activeSessions.refresh();
       });
   }
 
   ngOnDestroy(): void {
     this.navSub?.unsubscribe();
+    this.activeSessions.unwatch();
   }
 
   refreshNavBadges(): void {

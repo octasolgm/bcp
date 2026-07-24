@@ -5,6 +5,10 @@ import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
 
 const API_TIMEOUT_MS = 25_000;
+/** Status poll for large runs (~140 points) — allow slow DB without canceling mid-response. */
+const ANALYSIS_STATUS_TIMEOUT_MS = 90_000;
+/** Full run detail (points + snapshots) for resume — larger than status, still no PDF enrichment. */
+const ANALYSIS_RUN_DETAIL_TIMEOUT_MS = 90_000;
 /** Login / profile — allow slow first hit when DB pool or Supabase Auth API is busy. */
 const AUTH_API_TIMEOUT_MS = 60_000;
 /** Library create/update can persist many regulation points in one request. */
@@ -474,15 +478,32 @@ export class NdApiService {
   }
 
   getAnalysisRun(id: string) {
-    return this.request<unknown>('GET', `/nd/analysis-runs/${id}`);
+    return this.request<unknown>(
+      'GET',
+      `/nd/analysis-runs/${id}`,
+      undefined,
+      true,
+      ANALYSIS_RUN_DETAIL_TIMEOUT_MS,
+    );
   }
 
-  getAnalysisRunStatus(id: string) {
-    return this.request<unknown>('GET', `/nd/analysis-runs/${id}/status`);
+  getAnalysisRunStatus(id: string, opts?: { resume?: boolean }) {
+    const q = opts?.resume ? '?resume=true' : '';
+    return this.request<unknown>(
+      'GET',
+      `/nd/analysis-runs/${id}/status${q}`,
+      undefined,
+      true,
+      ANALYSIS_STATUS_TIMEOUT_MS,
+    );
   }
 
   getAnalysisRunHistory(id: string) {
     return this.request<unknown>('GET', `/nd/analysis-runs/${id}/history`);
+  }
+
+  stopAnalysisRun(id: string) {
+    return this.request<unknown>('POST', `/nd/analysis-runs/${id}/stop`);
   }
 
   startAnalysisRun(id: string) {

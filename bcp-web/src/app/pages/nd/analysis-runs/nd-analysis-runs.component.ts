@@ -60,6 +60,7 @@ export class NdAnalysisRunsComponent implements OnInit {
   sortDir: 'asc' | 'desc' = 'desc';
   deletingId: string | null = null;
   submittingRunId: string | null = null;
+  stoppingId: string | null = null;
   historyOpen = false;
   historyRunId: string | null = null;
   historyRunName = '';
@@ -314,5 +315,23 @@ export class NdAnalysisRunsComponent implements OnInit {
       this.deleteError = res.message ?? 'Delete failed';
     }
     this.deletingId = null;
+  }
+
+  async stopRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    event?.preventDefault();
+    if (isLegacyAnalysisRun(run)) return;
+    if (!confirm(`Stop "${run.name}"?\n\nQueued points will be cancelled. A point already being analysed may finish its current pass first.`)) {
+      return;
+    }
+    this.stoppingId = run.id;
+    const res = await this.api.stopAnalysisRun(run.id);
+    this.stoppingId = null;
+    if (res.success) {
+      this.toast.show('Analysis stopped', 'warning');
+      await this.load();
+    } else {
+      this.toast.show(res.message ?? 'Could not stop analysis', 'error');
+    }
   }
 }

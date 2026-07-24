@@ -67,6 +67,8 @@
   &.high .stat-value { color: var(--high); }
   &.neutral .stat-value { color: var(--text-primary); }
   &.compliant .stat-value { color: var(--compliant); }
+  &.partial .stat-value { color: var(--medium, #f97316); }
+  &.non-compliant .stat-value { color: var(--critical); }
 }
 
 .risk-standard-note {
@@ -77,13 +79,17 @@
 }
 
 .stats-row.gap-risk-row {
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 
-  @media (max-width: 1100px) {
+  @media (max-width: 1280px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  @media (max-width: 900px) {
     grid-template-columns: repeat(3, 1fr);
   }
 
-  @media (max-width: 700px) {
+  @media (max-width: 640px) {
     grid-template-columns: repeat(2, 1fr);
   }
 }

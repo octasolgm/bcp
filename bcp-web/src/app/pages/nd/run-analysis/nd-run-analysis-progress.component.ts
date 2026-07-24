@@ -62,16 +62,25 @@ export class NdRunAnalysisProgressComponent implements OnInit, OnDestroy {
       this.error = runRes.message ?? 'Failed to load analysis run';
     }
     void this.pollStatus();
-    this.pollTimer = setInterval(() => void this.pollStatus(), 3500);
+    this.pollTimer = setInterval(() => void this.pollStatus(), 10_000);
   }
 
   ngOnDestroy(): void {
     if (this.pollTimer) clearInterval(this.pollTimer);
   }
 
+  private statusInFlight = false;
+
   async pollStatus(): Promise<void> {
-    const res = await this.api.getAnalysisRunStatus(this.runId);
-    if (res.success && res.data) this.status = res.data as RunStatus;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (this.statusInFlight) return;
+    this.statusInFlight = true;
+    try {
+      const res = await this.api.getAnalysisRunStatus(this.runId);
+      if (res.success && res.data) this.status = res.data as RunStatus;
+    } finally {
+      this.statusInFlight = false;
+    }
   }
 
   get currentStatus(): string {

@@ -21,9 +21,12 @@ public static class NdLegacyDataQueries
         {
             foreach (var batch in list.Chunk(100))
             {
-                var rows = await db.Database.SqlQueryRaw<HashRow>(
-                        "SELECT file_hash AS \"Hash\" FROM landing_ai_extract_cache WHERE file_hash = ANY({0})",
-                        batch.ToArray())
+                var batchHashes = batch.ToArray();
+                var placeholders = string.Join(", ", batchHashes.Select((_, i) => $"{{{i}}}"));
+                var sql =
+                    $"SELECT file_hash AS \"Hash\" FROM landing_ai_extract_cache WHERE file_hash IN ({placeholders})";
+                var rows = await db.Database
+                    .SqlQueryRaw<HashRow>(sql, batchHashes.Cast<object>().ToArray())
                     .ToListAsync(ct);
                 foreach (var r in rows)
                     if (!string.IsNullOrWhiteSpace(r.Hash)) set.Add(r.Hash);
@@ -108,7 +111,12 @@ public static class NdLegacyDataQueries
         legacyHref = $"/nd/analyse-v8?session={session.Id}",
     };
 
-    public static object MapNdRunSummary(NdAnalysisRun r, string? makerName = null) => new
+    public static object MapNdRunSummary(
+        NdAnalysisRun r,
+        string? makerName = null,
+        int? compliant = null,
+        int? partial = null,
+        int? nonCompliant = null) => new
     {
         id = r.Id,
         source = "nd_analysis",
@@ -128,5 +136,8 @@ public static class NdLegacyDataQueries
         legacySessionId = (Guid?)null,
         legacyHref = (string?)null,
         workflowHolder = NdRunEnrichmentHelper.WorkflowHolderLabel(r.Status),
+        compliant = compliant ?? 0,
+        partial = partial ?? 0,
+        nonCompliant = nonCompliant ?? 0,
     };
 }

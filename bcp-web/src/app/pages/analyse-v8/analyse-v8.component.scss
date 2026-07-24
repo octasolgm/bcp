@@ -490,10 +490,50 @@
   height: 42px;
 }
 
+.analyse-v8-page .analysing-status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.3rem 0.5rem 0;
+  border-bottom: 1px solid var(--v-border, #e2e8f0);
+}
+
+.analyse-v8-page .status-tab {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary, #64748b);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.25rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.2;
+
+  &:hover {
+    background: color-mix(in srgb, var(--v-border, #e2e8f0) 55%, transparent);
+    color: var(--text-primary, #0f172a);
+  }
+
+  &.active {
+    background: color-mix(in srgb, #0f766e 14%, white);
+    border-color: color-mix(in srgb, #0f766e 35%, white);
+    color: #0f766e;
+  }
+}
+
 .analyse-v8-page .status-row {
-  grid-template-columns: 3.25rem minmax(0, 1fr) minmax(4.5rem, auto);
+  grid-template-columns: 3.5rem minmax(0, 1fr) minmax(4.5rem, auto);
   align-items: start;
   overflow: hidden;
+
+  .sid {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
 
   .phase-row {
     flex-wrap: wrap;

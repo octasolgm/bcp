@@ -710,6 +710,58 @@
     }
 
     @if (hasResumableRun || analysisState !== 'idle') {
+      <div class="analysing-status-tabs" role="tablist" aria-label="Filter analysing list by status">
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'all'"
+          [attr.aria-selected]="analysingStatusFilter === 'all'"
+          (click)="setAnalysingStatusFilter('all')"
+        >
+          All ({{ analysingStatusCounts.all }})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'running'"
+          [attr.aria-selected]="analysingStatusFilter === 'running'"
+          (click)="setAnalysingStatusFilter('running')"
+        >
+          Running ({{ analysingStatusCounts.running }})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'queued'"
+          [attr.aria-selected]="analysingStatusFilter === 'queued'"
+          (click)="setAnalysingStatusFilter('queued')"
+        >
+          Queued ({{ analysingStatusCounts.queued }})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'failed'"
+          [attr.aria-selected]="analysingStatusFilter === 'failed'"
+          (click)="setAnalysingStatusFilter('failed')"
+        >
+          Failed ({{ analysingStatusCounts.failed }})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'completed'"
+          [attr.aria-selected]="analysingStatusFilter === 'completed'"
+          (click)="setAnalysingStatusFilter('completed')"
+        >
+          Done ({{ analysingStatusCounts.completed }})
+        </button>
+      </div>
       <div class="coverage-actions">
         <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || coverageCounts.notRun === 0" (click)="runRemainingPoints()">
           Run remaining ({{ coverageCounts.notRun }})
@@ -727,6 +779,8 @@
         <p class="empty-msg">Select regulation points to analyse.</p>
       } @else if (analysisState === 'idle' && !hasResumableRun) {
         <p class="empty-msg">Run analysis to track point-by-point status.</p>
+      } @else if (!sortedAnalysingRows.length) {
+        <p class="empty-msg">No points in “{{ analysingStatusFilter }}”.</p>
       } @else {
         <ul class="status-list">
           @for (row of sortedAnalysingRows; track row.pointId) {
@@ -735,7 +789,7 @@
               [class.detail-selected]="selectedDetailPointId === row.pointId"
               (click)="selectPointForDetail(row.pointId)"
             >
-              <span class="sid">{{ row.pointId }}</span>
+              <span class="sid" [title]="row.displayId || row.pointId">{{ row.displayId || analysingDisplayId(row.pointId) }}</span>
               <div class="status-main">
                 <span class="stitle" [title]="row.title">{{ truncate(row.title, 40) }}</span>
                 @if (getPointPhaseStatus(row.pointId); as phases) {
@@ -759,7 +813,7 @@
                       } @else if (phases.phase2.state === 'fail') {
                         <span class="phase-icon" aria-hidden="true">✗</span>
                       } @else if (phases.phase2.state === 'running') {
-                        <span class="phase-icon phase-spin" aria-hidden="true">…</span>
+                        <span class="phase-icon" aria-hidden="true">…</span>
                       }
                     </span>
                   </div>

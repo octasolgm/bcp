@@ -184,6 +184,13 @@ export const routes: Routes = [
         children: [
           { path: '', redirectTo: 'overview', pathMatch: 'full' },
           {
+            path: 'overview/metric',
+            loadComponent: () =>
+              import('./pages/nd/dashboard-metric-runs/nd-dashboard-metric-runs.component').then(
+                (m) => m.NdDashboardMetricRunsComponent,
+              ),
+          },
+          {
             path: 'overview',
             loadComponent: () =>
               import('./pages/nd/overview/nd-home.component').then((m) => m.NdHomeComponent),

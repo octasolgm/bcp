@@ -65,7 +65,7 @@
     <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
   </div>
 } @else {
-  <div class="card-surface nd-table-wrap">
+  <div class="card-surface nd-table-wrap nd-table-wrap--responsive">
     <table>
       <thead>
         <tr>
@@ -86,18 +86,18 @@
             [routerLink]="runLink(run)"
             [queryParams]="runQuery(run) || null"
           >
-            <td>
-              <span class="cell-title">{{ run.name }}</span>
+            <td class="col-run" data-label="Run">
+              <span class="cell-title"><strong>{{ run.name }}</strong></span>
             </td>
-            <td>
+            <td class="col-maker" data-label="Submitted by">
               <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
               <span class="submitted-by-name">{{ submittedByLabel(run) }}</span>
             </td>
-            <td>
+            <td class="col-with" data-label="With">
               <app-nd-run-role-badge [status]="run.status" />
             </td>
-            <td class="muted">{{ formatDate(run.submittedAt ?? run.createdAt) }}</td>
-            <td>
+            <td class="muted col-date" data-label="Submitted">{{ formatDate(run.submittedAt ?? run.createdAt) }}</td>
+            <td class="col-workflow" data-label="Summary">
               @if (complianceSummary(run) || gapsSummary(run)) {
                 <div class="stat-chips">
                   @if (complianceSummary(run); as compliance) {
@@ -111,17 +111,17 @@
                 <span class="muted">—</span>
               }
             </td>
-            <td>
+            <td class="col-gaps" data-label="Workflow">
               @if (workflowStatusLabel(run); as workflow) {
                 <span class="workflow-badge">{{ workflow }}</span>
               } @else {
                 <span class="muted">—</span>
               }
             </td>
-            <td>
+            <td class="col-status" data-label="Status">
               <app-nd-status-badge [status]="run.status" />
             </td>
-            <td class="row-actions" (click)="$event.stopPropagation()">
+            <td class="row-actions col-actions" data-label="Actions" (click)="$event.stopPropagation()">
               <app-nd-run-table-actions
                 [run]="run"
                 [queueReview]="!showHistory"

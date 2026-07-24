@@ -88,9 +88,12 @@ public static class NdRunEnrichmentHelper
             pointsByRun.TryGetValue(run.Id, out var runPoints);
             runPoints ??= [];
 
-            var compliant = runPoints.Count(p => p.FinalStatus == "compliant");
-            var partial = runPoints.Count(p => p.FinalStatus == "partial_compliant");
-            var nonCompliant = runPoints.Count(p => p.FinalStatus == "non_compliant");
+            var compliant = runPoints.Count(p =>
+                NdRunEnrichmentHelper.EffectiveComplianceStatus(p.FinalStatus, p.LandingAiStatus) == "compliant");
+            var partial = runPoints.Count(p =>
+                NdRunEnrichmentHelper.EffectiveComplianceStatus(p.FinalStatus, p.LandingAiStatus) == "partial_compliant");
+            var nonCompliant = runPoints.Count(p =>
+                NdRunEnrichmentHelper.EffectiveComplianceStatus(p.FinalStatus, p.LandingAiStatus) == "non_compliant");
 
             manualEvidenceByRun.TryGetValue(run.Id, out var byPoint);
             var totalGaps = NdCapGapCounter.CountForPoints(runPoints, byPoint);
@@ -128,7 +131,10 @@ public static class NdRunEnrichmentHelper
         return result;
     }
 
-    /// <summary>Fast list rows for nav and analysis-runs table (no per-point gap aggregation).</summary>
+    /// <summary>
+    /// Fast list rows for nav, analysis-runs table, and dashboard cards.
+    /// Includes compliance tallies (FinalStatus, else LandingAiStatus) without loading CAP text.
+    /// </summary>
     public static async Task<List<object>> MapSummariesLightAsync(
         AppDbContext db,
         IReadOnlyList<NdAnalysisRun> runs,
@@ -136,12 +142,47 @@ public static class NdRunEnrichmentHelper
     {
         if (runs.Count == 0) return [];
 
+        var runIds = runs.Select(r => r.Id).ToList();
         var makerIds = runs.Where(r => r.CreatedBy.HasValue).Select(r => r.CreatedBy!.Value).Distinct().ToList();
         var makers = makerIds.Count == 0
             ? new Dictionary<Guid, string>()
             : await db.NdProfiles.AsNoTracking()
                 .Where(p => makerIds.Contains(p.Id))
                 .ToDictionaryAsync(p => p.Id, p => p.FullName ?? "", ct);
+
+        // Project status columns only — avoid pulling large AI result blobs for list/dashboard.
+        var statusRows = await db.NdAnalysisPoints.AsNoTracking()
+            .Where(p => runIds.Contains(p.AnalysisRunId))
+            .Select(p => new { p.AnalysisRunId, p.FinalStatus, p.LandingAiStatus })
+            .ToListAsync(ct);
+
+        var complianceByRun = statusRows
+            .GroupBy(x => x.AnalysisRunId)
+            .ToDictionary(
+                g => g.Key,
+                g =>
+                {
+                    var compliant = 0;
+                    var partial = 0;
+                    var nonCompliant = 0;
+                    foreach (var row in g)
+                    {
+                        var status = EffectiveComplianceStatus(row.FinalStatus, row.LandingAiStatus);
+                        switch (status)
+                        {
+                            case "compliant":
+                                compliant++;
+                                break;
+                            case "partial_compliant":
+                                partial++;
+                                break;
+                            case "non_compliant":
+                                nonCompliant++;
+                                break;
+                        }
+                    }
+                    return (compliant, partial, nonCompliant);
+                });
 
         var list = new List<object>(runs.Count);
         foreach (var run in runs)
@@ -150,9 +191,29 @@ public static class NdRunEnrichmentHelper
             if (run.CreatedBy is Guid mid && makers.TryGetValue(mid, out var name))
                 makerName = name;
 
-            list.Add(NdLegacyDataQueries.MapNdRunSummary(run, makerName));
+            complianceByRun.TryGetValue(run.Id, out var counts);
+            list.Add(NdLegacyDataQueries.MapNdRunSummary(
+                run,
+                makerName,
+                counts.compliant,
+                counts.partial,
+                counts.nonCompliant));
         }
 
         return list;
+    }
+
+    /// <summary>Prefer dual-verify final status; fall back to Landing AI status for in-progress runs.</summary>
+    public static string? EffectiveComplianceStatus(string? finalStatus, string? landingAiStatus)
+    {
+        if (!string.IsNullOrWhiteSpace(finalStatus)
+            && finalStatus is "compliant" or "partial_compliant" or "non_compliant")
+            return finalStatus;
+
+        if (!string.IsNullOrWhiteSpace(landingAiStatus)
+            && landingAiStatus is "compliant" or "partial_compliant" or "non_compliant")
+            return landingAiStatus;
+
+        return null;
     }
 }

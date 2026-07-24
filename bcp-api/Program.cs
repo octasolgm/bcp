@@ -144,6 +144,7 @@ builder.Services.AddSingleton<GovPointsService>();
 builder.Services.AddSingleton<LocalJobQueue>();
 builder.Services.AddSingleton<DualVerifyJobStageTracker>();
 builder.Services.AddSingleton<SessionCancellationTracker>();
+builder.Services.AddSingleton<Reguliq.Api.Infrastructure.NewDashboard.NdAnalysisRunCancellationTracker>();
 builder.Services.AddSingleton<DualVerifyJobProcessor>();
 builder.Services.AddHostedService<DualVerifyWorkerHosted>();
 builder.Services.AddScoped<DualVerifyStoreService>();

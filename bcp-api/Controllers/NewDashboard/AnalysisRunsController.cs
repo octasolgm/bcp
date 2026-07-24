@@ -16,7 +16,7 @@ public class AnalysisRunsController(
     NdAnalysisProcessor processor,
     DemoAnalysisSeedService demoSeed,
     IServiceScopeFactory scopeFactory,
-    NdRegulationPointPageService pointPages) : NdControllerBase
+    NdAnalysisRunCancellationTracker runCancellation) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
 
@@ -243,8 +243,9 @@ public class AnalysisRunsController(
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
+        // Projected load — avoid Include(r => r.Points) which can stall under pool pressure.
         var run = await db.NdAnalysisRuns
-            .Include(r => r.Points)
+            .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
         if (run.Status == DeletedStatus)
@@ -262,14 +263,27 @@ public class AnalysisRunsController(
             .OrderBy(h => h.CreatedAt)
             .ToListAsync(ct);
 
-        var runRegDocIds = ParseSelectedRegulationDocIds(run.SelectedRegulationDocIds);
-        var enrichedPoints = new List<object>();
-        foreach (var p in run.Points.OrderBy(x => x.CreatedAt))
-        {
-            var snapshot = await pointPages.EnrichAnalysisPointSnapshotAsync(
-                p.PointSnapshot, p.RegulationPointId, runRegDocIds, ct);
-            enrichedPoints.Add(MapPoint(p, snapshot));
-        }
+        var points = await db.NdAnalysisPoints
+            .AsNoTracking()
+            .Where(p => p.AnalysisRunId == id)
+            .OrderBy(p => p.CreatedAt)
+            .Select(p => new
+            {
+                id = p.Id,
+                regulationPointId = p.RegulationPointId,
+                pointSnapshot = p.PointSnapshot,
+                landingAiStatus = p.LandingAiStatus,
+                landingAiResult = p.LandingAiResult,
+                landingAiError = p.LandingAiError,
+                googleAiStatus = p.GoogleAiStatus,
+                googleAiResult = p.GoogleAiResult,
+                googleAiError = p.GoogleAiError,
+                dualVerifyStatus = p.DualVerifyStatus,
+                finalStatus = p.FinalStatus,
+                finalActionPlan = p.FinalActionPlan,
+                originalAiActionPlan = p.OriginalAiActionPlan,
+            })
+            .ToListAsync(ct);
 
         return Ok(new
         {
@@ -277,21 +291,23 @@ public class AnalysisRunsController(
             data = new
             {
                 run = MapRunDetail(run, creator?.FullName),
-                points = enrichedPoints,
+                points,
                 history,
             },
         });
     }
 
     [HttpGet("{id:guid}/status")]
-    public async Task<IActionResult> Status(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Status(
+        Guid id,
+        [FromQuery] bool resume = false,
+        CancellationToken ct = default)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns
-            .Include(r => r.Points)
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
@@ -300,8 +316,68 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
-        // Lightweight poll payload — do not enrich pdfPage here (141× DB/cache per poll exhausts Supabase session pool).
-        var points = run.Points.Select(p => MapPoint(p)).ToList();
+        if (resume)
+        {
+            // One-shot open/resume payload: snapshots + AI text via projection (no Include / no PDF enrich).
+            var resumePoints = await db.NdAnalysisPoints
+                .AsNoTracking()
+                .Where(p => p.AnalysisRunId == id)
+                .OrderBy(p => p.CreatedAt)
+                .Select(p => new
+                {
+                    id = p.Id,
+                    regulationPointId = p.RegulationPointId,
+                    pointSnapshot = p.PointSnapshot,
+                    landingAiStatus = p.LandingAiStatus,
+                    landingAiResult = p.LandingAiResult,
+                    landingAiError = p.LandingAiError,
+                    googleAiStatus = p.GoogleAiStatus,
+                    googleAiResult = p.GoogleAiResult,
+                    googleAiError = p.GoogleAiError,
+                    dualVerifyStatus = p.DualVerifyStatus,
+                    finalStatus = p.FinalStatus,
+                    finalActionPlan = p.FinalActionPlan,
+                    originalAiActionPlan = p.OriginalAiActionPlan,
+                })
+                .ToListAsync(ct);
+
+            return Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    id = run.Id,
+                    name = run.Name,
+                    status = run.Status,
+                    libraryId = run.LibraryId,
+                    selectedPointsSnapshot = run.SelectedPointsSnapshot,
+                    selectedInternalDocIds = run.SelectedInternalDocIds,
+                    selectedRegulationDocIds = run.SelectedRegulationDocIds,
+                    totalPointsCount = run.TotalPointsCount,
+                    processedPointsCount = run.ProcessedPointsCount,
+                    landingAiCompletedCount = run.LandingAiCompletedCount,
+                    dualVerifyCompletedCount = run.DualVerifyCompletedCount,
+                    dualVerifyFailedCount = run.DualVerifyFailedCount,
+                    points = resumePoints,
+                },
+            });
+        }
+
+        // Poll payload: statuses only — never load PointSnapshot (can be huge × 140+ points).
+        var points = await db.NdAnalysisPoints
+            .AsNoTracking()
+            .Where(p => p.AnalysisRunId == id)
+            .OrderBy(p => p.CreatedAt)
+            .Select(p => new
+            {
+                id = p.Id,
+                regulationPointId = p.RegulationPointId,
+                landingAiStatus = p.LandingAiStatus,
+                googleAiStatus = p.GoogleAiStatus,
+                dualVerifyStatus = p.DualVerifyStatus,
+                finalStatus = p.FinalStatus,
+            })
+            .ToListAsync(ct);
 
         return Ok(new
         {
@@ -352,18 +428,78 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
+        var linkedCt = runCancellation.Register(id);
         _ = Task.Run(async () =>
         {
             using var scope = scopeFactory.CreateScope();
             var proc = scope.ServiceProvider.GetRequiredService<NdAnalysisProcessor>();
             try
             {
-                await proc.ProcessRunAsync(id, CancellationToken.None);
+                await proc.ProcessRunAsync(id, linkedCt);
+            }
+            catch (OperationCanceledException)
+            {
+                // Stop requested — ProcessRunAsync / Cancel endpoint persist cancelled state.
             }
             catch { /* logged in processor */ }
+            finally
+            {
+                runCancellation.Clear(id);
+            }
         }, CancellationToken.None);
 
         return Ok(new { success = true, message = "Analysis started", id });
+    }
+
+    [HttpPost("{id:guid}/stop")]
+    public async Task<IActionResult> Stop(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns
+            .Include(r => r.Points)
+            .FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound(new { success = false, message = "Not found" });
+        if (run.Status == DeletedStatus)
+            return NotFound(new { success = false, message = "Not found" });
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+            return StatusCode(403, new { success = false, message = "Forbidden" });
+
+        var terminal = run.Status is "completed" or "cancelled" or "dual_verify_failed" or "landing_ai_complete";
+        if (terminal && run.Points.All(p =>
+                p.LandingAiStatus is not ("pending" or "running")
+                && p.DualVerifyStatus is not ("pending" or "running")))
+        {
+            return Ok(new { success = true, message = "Analysis already finished", id, status = run.Status });
+        }
+
+        runCancellation.RequestStop(id);
+
+        foreach (var point in run.Points)
+        {
+            if (point.LandingAiStatus is "pending" or "running")
+            {
+                point.LandingAiStatus = "cancelled";
+                point.LandingAiError = "Stopped by user";
+                point.DualVerifyStatus = "skipped";
+                point.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+            else if (point.DualVerifyStatus is "pending" or "running")
+            {
+                point.DualVerifyStatus = "cancelled";
+                point.GoogleAiStatus = point.GoogleAiStatus is "running" or "pending" ? "cancelled" : point.GoogleAiStatus;
+                point.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+        }
+
+        run.Status = "cancelled";
+        run.ProcessedPointsCount = run.Points.Count(p =>
+            p.LandingAiStatus is "compliant" or "partial_compliant" or "non_compliant" or "failed" or "cancelled");
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new { success = true, message = "Analysis stopped", id, status = run.Status });
     }
 
     [HttpPost("{id:guid}/rerun-point/{pointId:guid}")]

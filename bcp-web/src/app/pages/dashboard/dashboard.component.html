@@ -16,30 +16,40 @@
 }
 
 <div class="stats-row gap-risk-row">
-  <button type="button" class="stat-card critical" (click)="openByRiskTier('critical')">
+  <button type="button" class="stat-card critical" (click)="openMetricBreakdown('critical')">
     <span class="stat-label">Critical gaps</span>
     <strong class="stat-value">{{ criticalGapCount }}</strong>
     <span class="stat-hint">Score 67–100</span>
   </button>
-  <button type="button" class="stat-card medium" (click)="openByRiskTier('medium')">
+  <button type="button" class="stat-card medium" (click)="openMetricBreakdown('medium')">
     <span class="stat-label">Medium risk gaps</span>
     <strong class="stat-value">{{ mediumGapCount }}</strong>
     <span class="stat-hint">Score 34–66</span>
   </button>
-  <button type="button" class="stat-card low" (click)="openByRiskTier('low')">
+  <button type="button" class="stat-card low" (click)="openMetricBreakdown('low')">
     <span class="stat-label">Low risk gaps</span>
     <strong class="stat-value">{{ lowGapCount }}</strong>
     <span class="stat-hint">Score 0–33</span>
   </button>
-  <button type="button" class="stat-card neutral" (click)="openBySeverity('all')">
+  <button type="button" class="stat-card neutral" (click)="openMetricBreakdown('findings')">
     <span class="stat-label">Total Findings</span>
     <strong class="stat-value">{{ totalFindings }}</strong>
     <span class="stat-hint">Across {{ analysisCountLabel }} analysis</span>
   </button>
-  <button type="button" class="stat-card compliant" (click)="openBySeverity('compliant')">
+  <button type="button" class="stat-card compliant" (click)="openMetricBreakdown('compliant')">
     <span class="stat-label">Compliant Items</span>
     <strong class="stat-value">{{ compliantCount }}</strong>
     <span class="stat-hint">Fully addressed</span>
+  </button>
+  <button type="button" class="stat-card partial" (click)="openMetricBreakdown('partial')">
+    <span class="stat-label">Partial Items</span>
+    <strong class="stat-value">{{ partialCount }}</strong>
+    <span class="stat-hint">Partially addressed</span>
+  </button>
+  <button type="button" class="stat-card non-compliant" (click)="openMetricBreakdown('non_compliant')">
+    <span class="stat-label">Non-compliant Items</span>
+    <strong class="stat-value">{{ nonCompliantCount }}</strong>
+    <span class="stat-hint">Not addressed</span>
   </button>
 </div>
 <p class="risk-standard-note">{{ riskStandardLabel }}</p>

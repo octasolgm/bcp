@@ -61,7 +61,7 @@
         <p>Try a different search or <button type="button" class="btn-link" (click)="clearFilters()">clear filters</button>.</p>
       </div>
     } @else {
-      <div class="card-surface nd-table-wrap nd-table-wrap--scroll nd-table-wrap--fit">
+      <div class="card-surface nd-table-wrap nd-table-wrap--scroll nd-table-wrap--responsive">
         <table>
           <thead>
             <tr>
@@ -98,17 +98,17 @@
                 [routerLink]="runLink(run)"
                 [queryParams]="runQuery(run) || null"
               >
-                <td class="col-run" [title]="run.name"><strong>{{ run.name }}</strong></td>
-                <td class="col-maker">
+                <td class="col-run" data-label="Run" [title]="run.name"><strong>{{ run.name }}</strong></td>
+                <td class="col-maker" data-label="Submitted by">
                   <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
                   <span class="submitted-by-name" [title]="submittedByLabel(run)">{{ submittedByLabel(run) }}</span>
                 </td>
-                <td class="col-with">
+                <td class="col-with" data-label="With">
                   <app-nd-run-role-badge [status]="run.status" />
                 </td>
-                <td class="muted col-points">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
-                <td class="muted col-date">{{ formatDate(submittedDate(run)) }}</td>
-                <td class="col-source">
+                <td class="muted col-points" data-label="Points">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
+                <td class="muted col-date" data-label="Date">{{ formatDate(submittedDate(run)) }}</td>
+                <td class="col-source" data-label="Source">
                   <span class="type-badge">
                     @if (run.source === 'legacy_dual_verify') {
                       Legacy DV
@@ -119,7 +119,7 @@
                     }
                   </span>
                 </td>
-                <td class="col-workflow">
+                <td class="col-workflow" data-label="Workflow">
                   @if (workflowStatusLabel(run); as workflow) {
                     <span class="workflow-badge" [title]="workflow">{{ workflow }}</span>
                   } @else if (run.workflowHolder) {
@@ -128,7 +128,7 @@
                     <span class="muted">—</span>
                   }
                 </td>
-                <td class="muted col-gaps">
+                <td class="muted col-gaps" data-label="Gaps">
                   @if (run.totalGaps !== undefined && run.totalGaps > 0) {
                     {{ run.totalGaps }}
                     @if (run.totalReviews !== undefined && run.totalReviews > 0) {
@@ -138,17 +138,19 @@
                     —
                   }
                 </td>
-                <td class="col-status">
+                <td class="col-status" data-label="Status">
                   <app-nd-status-badge [status]="run.status" />
                 </td>
-                <td class="row-actions col-actions" (click)="$event.stopPropagation()">
+                <td class="row-actions col-actions" data-label="Actions" (click)="$event.stopPropagation()">
                   <app-nd-run-table-actions
                     [run]="run"
                     [submittingRunId]="submittingRunId"
                     [deletingId]="deletingId"
+                    [stoppingId]="stoppingId"
                     (historyClick)="openHistory($event)"
                     (submitClick)="submitRunForReview($event)"
                     (deleteClick)="deleteRun($event)"
+                    (stopClick)="stopRun($event)"
                   />
                 </td>
               </tr>

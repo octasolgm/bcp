@@ -1,0 +1,63 @@
+<div class="page-header nd-shrink">
+  <div>
+    <p class="crumb">
+      <a routerLink="/nd/overview">Overview</a>
+      <span aria-hidden="true"> / </span>
+      <span>{{ metricLabel }}</span>
+    </p>
+    <h1>{{ metricLabel }} by analysis</h1>
+    <p class="subtitle">
+      @if (metricHint) {
+        {{ metricHint }} ·
+      }
+      {{ rows.length }} analysis with a count · {{ totalCount }} total
+    </p>
+  </div>
+  <div class="header-actions">
+    <a routerLink="/nd/overview" class="btn-secondary">← Back to dashboard</a>
+  </div>
+</div>
+
+<div class="nd-page-body nd-page-body--fill">
+  @if (loadError && !loading) {
+    <p class="nd-error page-flash nd-shrink">{{ loadError }}</p>
+  }
+
+  @if (loading) {
+    <p class="muted-loading nd-shrink">Loading analyses for this metric…</p>
+  } @else if (!rows.length) {
+    <div class="card-surface empty-state nd-shrink">
+      <strong>No analyses contribute to this total</strong>
+      <p>Open <a routerLink="/nd/analysis-runs">All analysis</a> or run a new comparison to score points.</p>
+    </div>
+  } @else {
+    <div class="table-wrap nd-table-wrap--responsive">
+      <table class="nd-table">
+        <thead>
+          <tr>
+            <th>Analysis</th>
+            <th>Status</th>
+            <th class="num">{{ countColumnLabel }}</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows; track row.run.id) {
+            <tr class="clickable-row" (click)="openRun(row)" role="link" tabindex="0"
+              (keydown.enter)="openRun(row)">
+              <td>
+                <strong class="run-name">{{ row.run.name || 'Untitled analysis' }}</strong>
+                <span class="run-meta">{{ row.run.processedPointsCount ?? 0 }}/{{ row.run.totalPointsCount ?? 0 }} points</span>
+              </td>
+              <td>
+                <app-nd-status-badge [status]="row.run.status" />
+              </td>
+              <td class="num count-cell">{{ row.count }}</td>
+              <td>{{ formatDate(row.run.createdAt) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

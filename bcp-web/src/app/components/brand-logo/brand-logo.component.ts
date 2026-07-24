@@ -33,20 +33,20 @@ export type BrandLogoVariant = 'header' | 'primary' | 'mark';
       }
 
       .brand-logo-header {
-        height: 36px;
+        height: 48px;
         width: auto;
-        max-width: min(320px, 52vw);
+        max-width: min(420px, 70vw);
       }
 
       .brand-logo-primary {
-        height: 40px;
+        height: 52px;
         width: auto;
-        max-width: min(320px, 88vw);
+        max-width: min(420px, 90vw);
       }
 
       .brand-logo-mark {
-        height: 32px;
-        width: 32px;
+        height: 36px;
+        width: 36px;
       }
     `,
   ],
@@ -62,6 +62,8 @@ export class BrandLogoComponent {
         return BRAND.logoPrimary;
       case 'mark':
         return BRAND.logoMark;
+      case 'header':
+        return BRAND.logoHeader;
       default:
         return BRAND.logoPrimary;
     }

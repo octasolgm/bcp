@@ -89,11 +89,20 @@ function pickStructuredBlocks(landingMessage: string, llmMessage: string): Refer
   );
 }
 
-/** Authoritative tier for all ND views — persisted finalStatus wins when set. */
+/** Authoritative tier for all ND views — finalStatus, else Landing AI status, else parsed messages. */
 export function resolveAnalysisPointSeverity(point: AnalysisPoint): ComplianceSeverity {
   const fs = (point.finalStatus ?? '').toLowerCase();
   if (fs === 'compliant' || fs === 'partial_compliant' || fs === 'non_compliant') {
     return fs as ComplianceSeverity;
+  }
+
+  const landingStatus = (point.landingAiStatus ?? '').toLowerCase();
+  if (
+    landingStatus === 'compliant' ||
+    landingStatus === 'partial_compliant' ||
+    landingStatus === 'non_compliant'
+  ) {
+    return landingStatus as ComplianceSeverity;
   }
 
   const landingMessage = extractMessage(point.landingAiResult);

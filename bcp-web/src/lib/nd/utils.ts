@@ -12,7 +12,8 @@ export function formatBytes(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function parsePointSnapshot(raw: string): PointSnapshot {
+export function parsePointSnapshot(raw?: string | null): PointSnapshot {
+  if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as PointSnapshot & { pdfPage?: number | string | null };
     if (typeof parsed.pdfPage === 'string') {
