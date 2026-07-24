@@ -34,6 +34,7 @@ public class LandingAiCompareService(
             point,
             [new InternalDocPayload(hash, internalFileName, markdown, internalPdf)],
             forceRefresh,
+            ComparePromptVersion.V1,
             ct);
     }
 
@@ -41,6 +42,7 @@ public class LandingAiCompareService(
         GovPoint point,
         IReadOnlyList<InternalDocPayload> internalDocs,
         bool forceRefresh,
+        ComparePromptVersion promptVersion = ComparePromptVersion.V1,
         CancellationToken ct = default)
     {
         if (!client.IsConfigured)
@@ -52,8 +54,8 @@ public class LandingAiCompareService(
         var compositeHash = LandingAiCacheRepository.CompositeFileHash(
             internalDocs.Select(d => d.FileHash));
         var displayName = FormatDocLabel(internalDocs);
-        var promptVersion = internalDocs.Count > 1 ? "v2-multi" : "v2";
-        var compareKey = LandingAiCacheRepository.CompareCacheKey(compositeHash, point.PointId, promptVersion);
+        var cacheVersion = promptVersion.ToCacheKey(internalDocs.Count);
+        var compareKey = LandingAiCacheRepository.CompareCacheKey(compositeHash, point.PointId, cacheVersion);
 
         if (!forceRefresh)
         {
@@ -76,7 +78,8 @@ public class LandingAiCompareService(
 
         var promptMarkdown = LandingAiComparePromptBuilder.Build(
             point,
-            internalDocs.Select(d => (d.FileName, d.Markdown)).ToList());
+            internalDocs.Select(d => (d.FileName, d.Markdown)).ToList(),
+            promptVersion);
 
         logger.LogInformation("Landing AI extract starting for {Point}", point.PointId);
         var extraction = await client.ExtractComparisonAsync(promptMarkdown, ct);
@@ -93,20 +96,29 @@ public class LandingAiCompareService(
     {
         if (string.IsNullOrWhiteSpace(comparison.OutputResponse)) return comparison;
 
-        int? resolved = null;
-        foreach (var doc in internalDocs)
+        var lines = comparison.OutputResponse
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(l => !l.Contains("No corresponding procedure found", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (lines.Count == 0) return comparison;
+
+        var resolvedLines = new List<string>();
+        foreach (var line in lines)
         {
-            resolved = PolicyPageResolver.Resolve(doc.Markdown, comparison.OutputResponse);
-            if (resolved.HasValue) break;
+            int? resolved = null;
+            foreach (var doc in internalDocs)
+            {
+                resolved = PolicyPageResolver.Resolve(doc.Markdown, line);
+                if (resolved.HasValue) break;
+            }
+
+            resolvedLines.Add(resolved is > 0
+                ? PolicyPageResolver.RewriteCitationPage(line, resolved.Value)
+                : line);
         }
 
-        if (resolved is > 0)
-        {
-            comparison.OutputResponse = PolicyPageResolver.RewriteCitationPage(
-                comparison.OutputResponse,
-                resolved.Value);
-        }
-
+        comparison.OutputResponse = string.Join('\n', resolvedLines);
         return comparison;
     }
 

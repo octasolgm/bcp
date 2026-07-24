@@ -4,11 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService, type ThemeMode } from '../../services/theme.service';
+import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, BrandLogoComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
 })

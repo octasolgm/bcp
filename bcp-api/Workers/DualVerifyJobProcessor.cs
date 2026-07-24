@@ -26,7 +26,7 @@ public class DualVerifyJobProcessor(
         using var scope = scopeFactory.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<DualVerifyStoreService>();
         var landingAi = scope.ServiceProvider.GetRequiredService<LandingAiCompareService>();
-        var gemini = scope.ServiceProvider.GetRequiredService<GeminiService>();
+        var dualVerifyLlm = scope.ServiceProvider.GetRequiredService<DualVerifyLlmService>();
         var govPoints = scope.ServiceProvider.GetRequiredService<GovPointsService>();
         var compliancePdf = scope.ServiceProvider.GetRequiredService<CompliancePdfResolver>();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -80,24 +80,25 @@ public class DualVerifyJobProcessor(
             string phase2;
             if (!string.IsNullOrWhiteSpace(markdown) && markdown.Length > 100)
             {
-                SetStage(job, pass1Cached ? "Pass 2 — Gemini (resume, text)…" : "Pass 2 — Gemini (text)…");
+                SetStage(job, pass1Cached ? "Pass 2 — LLM (resume, text)…" : "Pass 2 — LLM (text)…");
                 logger.LogInformation(
-                    "Dual verify {Session}:{Point} — Pass 2 text mode ({Model}{Resume})",
-                    job.SessionId, job.PointId, job.Phase2Model, pass1Cached ? ", Pass 1 cached" : "");
-                phase2 = await gemini.AnalyzeTextAsync(prompt, job.Phase2Model, ct);
+                    "Dual verify {Session}:{Point} — Pass 2 text mode{Resume}",
+                    job.SessionId, job.PointId, pass1Cached ? ", Pass 1 cached" : "");
+                phase2 = await dualVerifyLlm.AnalyzeTextAsync(prompt, ct);
             }
             else
             {
-                SetStage(job, pass1Cached ? "Pass 2 — Gemini (resume, PDF)…" : "Pass 2 — Gemini (PDF)…");
+                SetStage(job, pass1Cached ? "Pass 2 — LLM (resume, PDF)…" : "Pass 2 — LLM (PDF)…");
                 logger.LogInformation(
-                    "Dual verify {Session}:{Point} — Pass 2 PDF mode ({Model}, {Kb} KB{Resume})",
-                    job.SessionId, job.PointId, job.Phase2Model, (pdf?.Length ?? 0) / 1024,
+                    "Dual verify {Session}:{Point} — Pass 2 PDF mode ({Kb} KB{Resume})",
+                    job.SessionId, job.PointId, (pdf?.Length ?? 0) / 1024,
                     pass1Cached ? ", Pass 1 cached" : "");
-                phase2 = await gemini.AnalyzeWithPdfAsync(pdf!, job.InternalFileName, prompt, job.Phase2Model, ct);
+                phase2 = await dualVerifyLlm.AnalyzeWithPdfsAsync(
+                    [(pdf!, job.InternalFileName)], prompt, ct);
             }
 
             if (string.IsNullOrWhiteSpace(phase2))
-                throw new InvalidOperationException("Gemini returned empty Phase 2 message");
+                throw new InvalidOperationException("Dual verify LLM returned empty Phase 2 message");
             logger.LogInformation(
                 "Dual verify {Session}:{Point} — Pass 2 done in {Sec:F1}s (total {Total:F1}s)",
                 job.SessionId, job.PointId, sw.Elapsed.TotalSeconds - phase1Sec, sw.Elapsed.TotalSeconds);

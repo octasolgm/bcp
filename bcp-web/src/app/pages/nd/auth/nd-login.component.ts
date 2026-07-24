@@ -4,11 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ThemeService, type ThemeMode } from '../../../services/theme.service';
+import { BrandLogoComponent } from '../../../components/brand-logo/brand-logo.component';
 
 @Component({
   selector: 'app-nd-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, BrandLogoComponent],
   templateUrl: './nd-login.component.html',
   styleUrl: './nd-login.component.scss',
 })

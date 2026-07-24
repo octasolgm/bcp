@@ -7,11 +7,12 @@ import { ToastService } from '../services/toast.service';
 import { ApiService } from '../services/api.service';
 import { ActiveAnalysisSessionsService } from '../services/active-analysis-sessions.service';
 import { AuthService } from '../services/auth.service';
+import { BrandLogoComponent } from '../components/brand-logo/brand-logo.component';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, BrandLogoComponent],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.scss',
 })

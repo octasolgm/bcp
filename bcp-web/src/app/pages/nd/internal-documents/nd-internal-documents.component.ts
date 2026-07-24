@@ -44,7 +44,7 @@ type InternalDocAnalysisRun = {
 @Component({
   selector: 'app-nd-internal-documents',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './nd-internal-documents.component.html',
   styleUrls: ['./nd-internal-documents.component.scss', '../nd-shared.scss'],
 })
@@ -75,10 +75,17 @@ export class NdInternalDocumentsComponent implements OnInit {
   sortDir: SortDir = 'desc';
 
   async ngOnInit(): Promise<void> {
-    this.route.queryParamMap.subscribe((params) => {
-      this.showDeleted = params.get('deleted') === '1';
-      void this.load();
-    });
+    if (this.route.snapshot.queryParamMap.get('deleted') === '1') {
+      await this.router.navigate(['/nd/internal-documents/deleted'], { replaceUrl: true });
+      return;
+    }
+    this.syncDeletedFromRoute();
+    this.route.data.subscribe(() => this.syncDeletedFromRoute());
+  }
+
+  private syncDeletedFromRoute(): void {
+    this.showDeleted = !!this.route.snapshot.data['deletedOnly'];
+    void this.load();
   }
 
   get canUpload(): boolean {
@@ -152,6 +159,17 @@ export class NdInternalDocumentsComponent implements OnInit {
       this.error = res.message ?? 'Failed to load documents';
     }
     this.loading = false;
+  }
+
+  async openDocument(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.error = '';
+    const res = await this.api.getInternalDocumentFileUrl(doc.id);
+    if (res.success && res.data?.url) {
+      window.open(res.data.url, '_blank', 'noopener');
+      return;
+    }
+    this.error = res.message ?? 'Could not open document';
   }
 
   async handleDelete(doc: InternalDocument, event?: Event): Promise<void> {

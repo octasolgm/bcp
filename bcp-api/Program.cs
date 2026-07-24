@@ -113,6 +113,13 @@ builder.Services.Configure<NodeBridgeOptions>(o =>
 });
 
 builder.Services.AddHttpClient<GeminiService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.DualVerifyLlmSettingsService>();
+builder.Services.AddScoped<DualVerifyLlmService>();
+builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.OpenAiCompatibleLlmClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.AnthropicLlmClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.XAiLlmClient), c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.XAiLlmClient>();
 builder.Services.AddHttpClient<NodeBridgeService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 
 builder.Services.AddSingleton<KafkaConfig>();

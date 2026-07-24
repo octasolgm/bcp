@@ -1085,10 +1085,12 @@ public class RegulationDocumentsController(
             if (ndDoc.Status == StatusHidden)
                 return NotFound(new { success = false, message = "Not found" });
 
-            var points = await db.NdRegulationPoints.AsNoTracking()
-                .Where(p => p.RegulationDocumentId == ndDoc.Id)
-                .OrderBy(p => p.PointNumber)
-                .ToListAsync(ct);
+            var points = PointNumberSort.OrderByPointNumber(
+                    await db.NdRegulationPoints.AsNoTracking()
+                        .Where(p => p.RegulationDocumentId == ndDoc.Id)
+                        .ToListAsync(ct),
+                    p => p.PointNumber)
+                .ToList();
 
             return Ok(new
             {
@@ -1305,7 +1307,7 @@ public class RegulationDocumentsController(
             extractedByName = ProfileName(profileNames, d.ExtractedBy),
             originalFileName = stored?.OriginalFileName,
             isHidden,
-            hiddenAt = isHidden ? stored?.HiddenAt ?? d.UpdatedAt : null,
+            hiddenAt = isHidden ? (DateTimeOffset?)(stored?.HiddenAt ?? d.UpdatedAt) : null,
         };
     }
 
@@ -1348,7 +1350,7 @@ public class RegulationDocumentsController(
             extractedByName = ProfileName(profileNames, ndForLegacy?.ExtractedBy),
             originalFileName = leg.OriginalFileName,
             isHidden,
-            hiddenAt = isHidden ? leg.HiddenAt ?? leg.UpdatedAt : null,
+            hiddenAt = isHidden ? (DateTimeOffset?)(leg.HiddenAt ?? leg.UpdatedAt) : null,
         };
     }
 
@@ -1431,7 +1433,7 @@ public class RegulationDocumentsController(
                 merged.Add(MapLegacyPoint(mapDocId, gov));
         }
 
-        foreach (var nd in ndPoints.OrderBy(p => p.PointNumber))
+        foreach (var nd in PointNumberSort.OrderByPointNumber(ndPoints, p => p.PointNumber))
         {
             var key = NormalizePointNumberKey(nd.PointNumber);
             if (string.IsNullOrWhiteSpace(key) || !seen.Add(key)) continue;

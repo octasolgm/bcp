@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Reguliq.Api.Models;
+using Reguliq.Api.Services.LandingAi;
 
 namespace Reguliq.Api.Services;
 
@@ -247,12 +248,15 @@ public static class DualVerifyPromptBuilder
         GovPoint point,
         string landingMessage,
         string? markdownSupplement = null,
-        IReadOnlyList<string>? attachedFileNames = null)
+        IReadOnlyList<string>? attachedFileNames = null,
+        ComparePromptVersion version = ComparePromptVersion.V1)
     {
         var sb = new StringBuilder();
         sb.AppendLine("DUAL VERIFICATION PIPELINE — PASS 2 (INDEPENDENT)");
         sb.AppendLine("You are the second verifier. Landing AI (Pass 1) already analyzed this requirement.");
         sb.AppendLine("Re-read the attached internal PDF(s) and produce your own assessment.");
+        if (version == ComparePromptVersion.V2)
+            AppendPass2RulesV2(sb);
         if (attachedFileNames is { Count: > 0 })
         {
             sb.AppendLine(attachedFileNames.Count == 1
@@ -275,7 +279,48 @@ public static class DualVerifyPromptBuilder
             sb.AppendLine(markdownSupplement.Trim());
             sb.AppendLine("---");
         }
+        if (version == ComparePromptVersion.V2)
+            AppendPass2OutputFormatV2(sb);
+
         return sb.ToString();
+    }
+
+    private static void AppendPass2RulesV2(StringBuilder sb)
+    {
+        sb.AppendLine();
+        sb.AppendLine("Pass 2 rules (V2):");
+        sb.AppendLine("- Independently search ALL attached internal PDF(s) and markdown for evidence on EVERY sub-obligation.");
+        sb.AppendLine("- Use the same semantic standards as Pass 1 — confirm or correct, not stricter keyword matching.");
+        sb.AppendLine("- Search every attached document before concluding Non-Compliant. Compliant if any document satisfies all sub-obligations.");
+        sb.AppendLine("- If Pass 1 evidence is accurate and complete, align with the same status and similar confidence.");
+        sb.AppendLine("- Cite each source with: [Document Name], Section [X], Page [N]: \"verbatim quote\". One line per document/page when multiple sources apply.");
+    }
+
+    private static void AppendPass2OutputFormatV2(StringBuilder sb)
+    {
+        sb.AppendLine();
+        sb.AppendLine("Your response MUST use exactly this block format (field labels matter for automated comparison):");
+        sb.AppendLine();
+        sb.AppendLine("[point_id and title]");
+        sb.AppendLine("[full requirement text]");
+        sb.AppendLine();
+        sb.AppendLine("Reference PDF :");
+        sb.AppendLine("[document file name(s) with evidence — comma-separate when multiple]");
+        sb.AppendLine();
+        sb.AppendLine("Output/Response :");
+        sb.AppendLine("[Document Name], Section [X], Page [N]: \"verbatim quote\"");
+        sb.AppendLine("(one line per source when multiple documents/pages apply; or exactly: No corresponding procedure found.)");
+        sb.AppendLine();
+        sb.AppendLine("Fulfilled clauses :");
+        sb.AppendLine("• [sub-obligation] — [Document Name], Section [X], Page [N]: \"quote\"");
+        sb.AppendLine("(use None only if nothing is covered)");
+        sb.AppendLine();
+        sb.AppendLine("Comply Yes/No (Status) : Compliant | Partial Compliant | Non-Compliant");
+        sb.AppendLine("Compliance Confidence % : [0-100]%");
+        sb.AppendLine("Corrective Action Plan :");
+        sb.AppendLine("Gap(s): ... OR empty / N/A if Compliant");
+        sb.AppendLine("Responsibility :");
+        sb.AppendLine("[role] OR empty / N/A if Compliant");
     }
 
     private static string FormatPoint(GovPoint point)

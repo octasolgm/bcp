@@ -606,8 +606,13 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   protected onAnalysisComplete(): void {
     if (this.analysisCompleteUiDone) return;
     this.analysisCompleteUiDone = true;
-    this.buildInlineGapItems();
-    this.showInlineGapReport = true;
+    // ND Analyse v8 runs use embedded app-nd-gap-analysis (GET /nd/results) — not session inline rows.
+    if (!this.activeNdRunId) {
+      this.buildInlineGapItems();
+      this.showInlineGapReport = true;
+    } else {
+      this.showInlineGapReport = false;
+    }
     const afterPersist = () => void this.refreshNdRunWorkflowStatus();
     // Demo runs persist in finishDemoRun() before this is called.
     if (!this.isDemoRun && !this.activeNdRunId && this.sessionPointResults.size > 0) {

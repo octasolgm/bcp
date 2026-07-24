@@ -521,7 +521,7 @@ export class DualVerifyComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.seeding = false;
-        this.error = 'Could not reload gov points — is Reguliq.Api running on :5100?';
+        this.error = 'Could not reload gov points — is the API running on :5100?';
       },
     });
   }

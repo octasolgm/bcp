@@ -10,12 +10,13 @@ import {
 } from '../../services/active-analysis-sessions.service';
 import { NdShellFocusService } from '../../services/nd/nd-shell-focus.service';
 import type { AnalysisRunSummary } from '../../../lib/nd/types';
+import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.component';
 
 type NavItem = {
   id: string;
   path: string;
   label: string;
-  icon: 'grid' | 'file' | 'library' | 'clock' | 'plus' | 'users' | 'building' | 'check' | 'list' | 'trash';
+  icon: 'grid' | 'file' | 'library' | 'clock' | 'plus' | 'users' | 'building' | 'check' | 'list' | 'trash' | 'settings';
   cta?: boolean;
   secondary?: boolean;
   queryParams?: Record<string, string>;
@@ -24,7 +25,7 @@ type NavItem = {
 @Component({
   selector: 'app-nd-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, BrandLogoComponent],
   templateUrl: './nd-shell.component.html',
   styleUrl: './nd-shell.component.scss',
 })
@@ -167,6 +168,12 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
     if (role === 'super_admin') {
       tasks.push(
+        this.api.getInternalDocuments(true).then((res) => {
+          set('internal-documents-deleted', res.data?.length ?? 0);
+        }),
+        this.api.getRegulationDocuments({ hiddenOnly: true }).then((res) => {
+          set('regulation-documents-deleted', res.data?.length ?? 0);
+        }),
         this.api.getUsers().then((res) => {
           set('admin-users', res.data?.length ?? 0);
         }),
@@ -228,15 +235,36 @@ export class NdShellComponent implements OnInit, OnDestroy {
       secondary: true,
       ...(role === 'maker' ? { queryParams: { mine: '1' } } : {}),
     };
-    return [
+    const items: NavItem[] = [
       { id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' },
       { id: 'internal-documents', path: '/nd/internal-documents', label: 'Documents', icon: 'file' },
       { id: 'regulation-documents', path: '/nd/regulation-documents', label: 'Regulation Docs Library', icon: 'library' },
+    ];
+    if (role === 'super_admin') {
+      items.push(
+        {
+          id: 'internal-documents-deleted',
+          path: '/nd/internal-documents/deleted',
+          label: 'Deleted documents',
+          icon: 'trash',
+          secondary: true,
+        },
+        {
+          id: 'regulation-documents-deleted',
+          path: '/nd/regulation-documents/deleted',
+          label: 'Deleted regulations',
+          icon: 'trash',
+          secondary: true,
+        },
+      );
+    }
+    items.push(
       { id: 'libraries', path: '/nd/libraries', label: 'Regulation Points Libraries', icon: 'list' },
       { id: 'in-progress', path: '/nd/in-progress', label: 'In progress', icon: 'clock' },
       viewAll,
       { id: 'analyse-v8', path: '/nd/analyse-v8', label: 'New analysis', icon: 'plus', cta: true },
-    ];
+    );
+    return items;
   }
 
   private navForRole(role: string): NavItem[] {
@@ -246,6 +274,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
           ...this.workspaceNav(role),
           { id: 'admin-users', path: '/nd/admin/users', label: 'User Management', icon: 'users' },
           { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
+          { id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' },
           { id: 'admin-deleted-runs', path: '/nd/admin/deleted-runs', label: 'Deleted analyses', icon: 'trash' },
           {
             id: 'analysis-runs-correction',

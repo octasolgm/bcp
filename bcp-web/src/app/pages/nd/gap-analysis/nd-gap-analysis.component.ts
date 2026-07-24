@@ -1,6 +1,7 @@
 import {
   ChangeDetectorRef,
   Component,
+  ElementRef,
   EventEmitter,
   inject,
   Input,
@@ -10,6 +11,7 @@ import {
   Output,
   signal,
   SimpleChanges,
+  ViewChild,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -71,6 +73,7 @@ import type { PolicyDocCatalogEntry } from '../../../../lib/nd/policy-doc-resolv
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus, validateSavedActionReviewsComplete, countSavedReviewProgress } from '../../../../lib/nd/action-item-review';
 import { canAddActionItemReviews, isReviewRole, reviewDisabledHint, reviewWorkspaceLink, attachmentCountsByPoint } from '../../../../lib/nd/nd-review-run-helpers';
 import { computeRunGapStats, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
+import { buildNdGapListItems, ndComplianceSummaryFromPoints } from '../../../../lib/nd/nd-run-display';
 import type { NdRunReviewBody } from '../../../services/nd/nd-api.service';
 import type { RunReviewDraft } from '../../../../lib/nd/run-review';
 
@@ -166,6 +169,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   /** Display id of the row whose detail panel is open — at most one. */
   readonly expandedItemId = signal<string | null>(null);
 
+  @ViewChild('findingsSection') findingsSection?: ElementRef<HTMLElement>;
+
   ngOnInit(): void {
     if (this.embedMode || this.reviewWorkspaceMode !== 'none') {
       if (this.embedRunId) {
@@ -220,6 +225,9 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   get summary() {
+    if (this.ndRunData?.points?.length) {
+      return ndComplianceSummaryFromPoints(this.ndRunData.points);
+    }
     return {
       compliant: this.items.filter((i) => i.severity === 'compliant').length,
       partialCompliant: this.items.filter((i) => i.severity === 'partial_compliant').length,
@@ -1008,6 +1016,30 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  filterFromSummaryCard(severity: GapSeverity): void {
+    const next: 'all' | GapSeverity = this.activeFilter === severity ? 'all' : severity;
+    this.setFilter(next);
+    if (!this.embedMode) {
+      void this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { filter: next === 'all' ? null : next },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+      });
+    }
+    this.scrollToFindings();
+  }
+
+  isSummaryCardActive(severity: GapSeverity): boolean {
+    return this.activeFilter === severity;
+  }
+
+  private scrollToFindings(): void {
+    setTimeout(() => {
+      this.findingsSection?.nativeElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }
+
   setViewMode(mode: 'cards' | 'list'): void {
     this.viewMode = mode;
     if (mode === 'list') this.ensureListSelection();
@@ -1480,50 +1512,9 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     focus: string | null,
   ): void {
     const overlays = this.sessionKey ? loadGapDrafts(this.sessionKey) : {};
-    const items: GapItemData[] = [];
-    let displayIndex = 0;
+    const { items, pointIds } = buildNdGapListItems(data.points, overlays);
 
-    for (const point of data.points) {
-      const snap = parsePointSnapshot(point.pointSnapshot);
-      const pointKey = (snap.pointNumber || point.regulationPointId || point.id || '').trim();
-      if (!pointKey) continue;
-
-      const hasOutput =
-        Boolean(point.landingAiResult?.trim()) ||
-        Boolean(point.googleAiResult?.trim()) ||
-        Boolean(point.finalStatus?.trim()) ||
-        Boolean(point.finalActionPlan?.trim()) ||
-        Boolean(point.originalAiActionPlan?.trim());
-      if (!hasOutput) continue;
-
-      displayIndex++;
-      const sectionLabel = pointKey.startsWith('§') ? pointKey : `§${pointKey}`;
-      const overlayKey = sectionLabel.replace(/^§/, '');
-      const overlay = overlays[overlayKey];
-
-      items.push({
-        id: String(displayIndex).padStart(2, '0'),
-        section: sectionLabel,
-        title: snap.pointTitle?.trim() || pointKey,
-        severity: normalizeGapSeverity(resolveAnalysisPointSeverity(point)),
-        gapCount: 0,
-        signedOff: overlay?.signedOff ?? false,
-        expanded: false,
-        regulatoryText: snap.pointContent?.trim() || snap.pointTitle?.trim() || pointKey,
-        policyText: overlay?.gaps ? '' : '(See detail panel)',
-        regPage: 'source',
-        policyPage: 'source',
-        gaps: overlay?.gaps ?? '',
-        managementResponse: overlay?.managementResponse ?? '',
-        designEffectiveness: overlay?.designEffectiveness ?? '',
-        operatingEffectiveness: overlay?.operatingEffectiveness ?? '',
-        overallEffectiveness: overlay?.overallEffectiveness ?? '',
-        documentReference: overlay?.documentReference ?? '',
-        evidence: overlay?.evidence ?? '',
-      });
-    }
-
-    this.pointIds = items.map((i) => i.section.replace(/^§/, ''));
+    this.pointIds = pointIds;
     this.reportByPointId = new Map();
     this.items = items;
     this.applyExpandedSelection(items, section, focus, overlays);

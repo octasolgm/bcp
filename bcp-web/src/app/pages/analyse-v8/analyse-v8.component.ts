@@ -23,6 +23,7 @@ import type {
 import { parseReferenceComplianceBlock } from '../../../lib/ai-lab/parse-reference-response';
 import type { GapSeverity, GapItemData } from '../../services/reguliq-store';
 import { parsePointSnapshot } from '../../../lib/nd/utils';
+import { ndComplianceSummaryFromPoints } from '../../../lib/nd/nd-run-display';
 import { countDisplayGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus } from '../../../lib/nd/action-item-review';
 import { canAddActionItemReviews, isReviewRole, reviewDisabledHint } from '../../../lib/nd/nd-review-run-helpers';
@@ -126,6 +127,8 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   private librariesLoaded = false;
   private navSub?: Subscription;
   ndInternalParseStatus = new Map<string, string>();
+  /** Loaded from GET /nd/results — same source as gap-analysis. */
+  private ndRunPointsList: AnalysisPoint[] = [];
 
   override readonly formatChapterLabel = formatChapterLabel;
   override readonly formatSectionGroupLabel = formatSectionGroupLabel;
@@ -558,6 +561,13 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     return resolveAnalysisPointSeverity(point);
   }
 
+  override get inlineGapSummary(): { compliant: number; partialCompliant: number; nonCompliant: number } {
+    if (this.ndRunPointsList.length) {
+      return ndComplianceSummaryFromPoints(this.ndRunPointsList);
+    }
+    return super.inlineGapSummary;
+  }
+
   async loadNdRunPoints(runId: string): Promise<void> {
     const res = await this.ndApi.getResults(runId);
     if (!res.success || !res.data) return;
@@ -568,6 +578,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
       actionItemReviews?: ActionItemReviewEntry[];
     };
     this.ndRunStatus = data.run.status;
+    this.ndRunPointsList = data.points ?? [];
     this.ndPointAttachments = data.pointAttachments ?? [];
     this.ndActionItemReviews = data.actionItemReviews ?? [];
     this.ndRunPointsByNumber.clear();

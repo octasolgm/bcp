@@ -10,6 +10,22 @@ export type Department = {
   createdAt?: string;
 };
 
+export type DualVerifyLlmProviderOption = {
+  id: string;
+  label: string;
+  models: string[];
+  defaultModel: string;
+  apiKeyConfigured: boolean;
+};
+
+export type DualVerifyLlmSettings = {
+  provider: string;
+  model: string;
+  providers: DualVerifyLlmProviderOption[];
+  updatedAt?: string | null;
+  updatedBy?: string | null;
+};
+
 export type RegulationDocument = {
   id: string;
   source?: 'legacy' | 'nd' | 'manual';

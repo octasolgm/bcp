@@ -56,7 +56,7 @@ export function Sidebar({ profile }: { profile: UserProfile }) {
       style={{ minHeight: "100vh" }}
     >
       <div className="border-b border-[var(--border)] p-4">
-        <div className="font-semibold text-[var(--accent)]">Reguliq</div>
+        <div className="font-semibold text-[var(--accent)]">Comply-Solution</div>
         <div className="text-xs text-[var(--text-muted)]">Compliance workspace</div>
       </div>
       <nav className="flex-1 space-y-1 p-3">

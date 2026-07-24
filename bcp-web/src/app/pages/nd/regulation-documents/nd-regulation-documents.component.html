@@ -34,13 +34,6 @@
 </div>
 
 <div class="nd-fill-panel reg-docs-fill">
-@if (canViewDeleted) {
-  <div class="filter-pills tabs nd-shrink">
-    <a routerLink="/nd/regulation-documents" class="tab" [class.active]="!showDeleted">Active</a>
-    <a routerLink="/nd/regulation-documents" class="tab" [class.active]="showDeleted" [queryParams]="{ deleted: '1' }">Deleted</a>
-  </div>
-}
-
 @if (!showDeleted) {
 <div class="filter-pills nd-list-toolbar nd-shrink point-search-toolbar">
   <input
@@ -252,43 +245,75 @@
                     </span>
                   }
                 </td>
-                <td (click)="$event.stopPropagation()">
-                  <button type="button" class="btn-use" (click)="viewPoints(d, $event)">
-                    {{ isManualDoc(d) ? 'Manage points' : 'View points' }}
-                  </button>
-                  @if (canExtract && !isManualDoc(d)) {
+                <td class="reg-doc-actions-cell" (click)="$event.stopPropagation()">
+                  <div class="reg-doc-row-actions">
                     <button
                       type="button"
-                      class="btn-secondary btn-sm"
-                      [disabled]="extractingId === d.id"
-                      (click)="handleExtract(d, $event)"
+                      class="row-action-btn compact"
+                      [title]="isManualDoc(d) ? 'Manage points' : 'View points'"
+                      (click)="viewPoints(d, $event)"
                     >
-                      {{ extractingId === d.id ? 'Extracting…' : 'Run extraction' }}
+                      {{ isManualDoc(d) ? 'Manage' : 'View' }}
                     </button>
-                  }
-                  @if (!isManualDoc(d)) {
-                    <button type="button" class="btn-link" (click)="openDocument(d, $event)">Open PDF</button>
-                  }
-                  @if (canUpload && !isManualDoc(d) && !showDeleted) {
-                    <button
-                      type="button"
-                      class="btn-link btn-hide"
-                      [disabled]="hidingId === d.id"
-                      (click)="handleHide(d, $event)"
-                    >
-                      {{ hidingId === d.id ? 'Deleting…' : 'Delete' }}
-                    </button>
-                  }
-                  @if (showDeleted && canViewDeleted && !isManualDoc(d)) {
-                    <button
-                      type="button"
-                      class="btn-use btn-sm"
-                      [disabled]="hidingId === d.id"
-                      (click)="handleRestore(d, $event)"
-                    >
-                      {{ hidingId === d.id ? 'Restoring…' : 'Restore' }}
-                    </button>
-                  }
+                    @if (canExtract && !isManualDoc(d)) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact"
+                        title="Run extraction"
+                        [disabled]="extractingId === d.id"
+                        (click)="handleExtract(d, $event)"
+                      >
+                        {{ extractingId === d.id ? '…' : 'Extract' }}
+                      </button>
+                    }
+                    @if (!isManualDoc(d)) {
+                      <button
+                        type="button"
+                        class="row-action-btn icon-only"
+                        title="Open source PDF"
+                        aria-label="Open source PDF"
+                        (click)="openDocument(d, $event)"
+                      >
+                        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                          <path
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            d="M11 3.5H6.5A2 2 0 004.5 5.5v9A2 2 0 006.5 16.5h9a2 2 0 002-2V10M11 3.5h4.5V8M11 3.5L16.5 9"
+                          />
+                        </svg>
+                      </button>
+                      @if (canUpload && !showDeleted) {
+                        <button
+                          type="button"
+                          class="row-action-btn icon-only danger"
+                          title="Delete"
+                          aria-label="Delete"
+                          [disabled]="hidingId === d.id"
+                          (click)="handleHide(d, $event)"
+                        >
+                          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                            <path
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                              d="M5 6h10M8 6V4.5h4V6M7.5 6l.5 9h4l.5-9"
+                            />
+                          </svg>
+                        </button>
+                      }
+                      @if (showDeleted && canViewDeleted) {
+                        <button
+                          type="button"
+                          class="row-action-btn compact primary"
+                          [disabled]="hidingId === d.id"
+                          (click)="handleRestore(d, $event)"
+                        >
+                          {{ hidingId === d.id ? 'Restoring…' : 'Restore' }}
+                        </button>
+                      }
+                    }
+                  </div>
                 </td>
               </tr>
             }

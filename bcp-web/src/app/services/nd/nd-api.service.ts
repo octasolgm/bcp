@@ -141,6 +141,21 @@ export class NdApiService {
     return this.request<unknown[]>('GET', '/nd/users');
   }
 
+  getDualVerifyLlmSettings() {
+    return this.request<import('../../../lib/nd/types').DualVerifyLlmSettings>(
+      'GET',
+      '/nd/admin/settings/dual-verify-llm',
+    );
+  }
+
+  updateDualVerifyLlmSettings(body: { provider: string; model: string }) {
+    return this.request<import('../../../lib/nd/types').DualVerifyLlmSettings>(
+      'PUT',
+      '/nd/admin/settings/dual-verify-llm',
+      body,
+    );
+  }
+
   updateUser(id: string, body: Record<string, unknown>) {
     return this.request<unknown>('PUT', `/nd/users/${id}`, body);
   }
@@ -262,6 +277,13 @@ export class NdApiService {
   getInternalDocuments(hiddenOnly = false) {
     const suffix = hiddenOnly ? '?hiddenOnly=true' : '';
     return this.request<unknown[]>('GET', `/nd/internal-documents${suffix}`);
+  }
+
+  getInternalDocumentFileUrl(id: string) {
+    return this.request<{ url: string; fileName?: string; expiresIn?: number }>(
+      'GET',
+      `/nd/internal-documents/${id}/file-url`,
+    );
   }
 
   hideInternalDocument(id: string) {

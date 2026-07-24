@@ -1,0 +1,86 @@
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 960px;
+}
+
+.settings-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+
+  h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1.1rem;
+  }
+}
+
+.settings-updated {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.provider-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.provider-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--nd-border, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.85rem;
+
+  strong {
+    font-size: 0.95rem;
+  }
+
+  span {
+    color: var(--nd-muted, #94a3b8);
+  }
+}
+
+.provider-pill-ready span {
+  color: #22c55e;
+}
+
+.provider-pill-active {
+  border-color: var(--nd-accent, #6366f1);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25);
+}
+
+.settings-note code {
+  font-size: 0.82rem;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.nd-success {
+  color: #22c55e;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .settings-card-header {
+    flex-direction: column;
+  }
+}

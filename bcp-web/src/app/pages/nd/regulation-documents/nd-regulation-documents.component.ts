@@ -1,7 +1,7 @@
 import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import {
@@ -48,7 +48,7 @@ export type RegulationPointSearchGroup = {
 @Component({
   selector: 'app-nd-regulation-documents',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent],
+  imports: [CommonModule, FormsModule, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent],
   templateUrl: './nd-regulation-documents.component.html',
   styleUrls: ['./nd-regulation-documents.component.scss', '../nd-shared.scss'],
 })
@@ -58,6 +58,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   private readonly api = inject(NdApiService);
   private readonly shellFocus = inject(NdShellFocusService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   readonly auth = inject(NdAuthService);
   readonly formatPointPageRef = formatPointPageRef;
 
@@ -100,12 +101,19 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.restorePanelSplit();
     await this.auth.refreshProfile();
     await this.loadDepartments();
-    this.route.queryParamMap.subscribe((params) => {
-      const wasDeleted = this.showDeleted;
-      this.showDeleted = params.get('deleted') === '1';
-      if (wasDeleted && !this.showDeleted) this.closePointsPanel();
-      void this.loadDocs();
-    });
+    if (this.route.snapshot.queryParamMap.get('deleted') === '1') {
+      await this.router.navigate(['/nd/regulation-documents/deleted'], { replaceUrl: true });
+      return;
+    }
+    this.syncDeletedFromRoute();
+    this.route.data.subscribe(() => this.syncDeletedFromRoute());
+  }
+
+  private syncDeletedFromRoute(): void {
+    const wasDeleted = this.showDeleted;
+    this.showDeleted = !!this.route.snapshot.data['deletedOnly'];
+    if (wasDeleted && !this.showDeleted) this.closePointsPanel();
+    void this.loadDocs();
   }
 
   get panelGridColumns(): string | null {

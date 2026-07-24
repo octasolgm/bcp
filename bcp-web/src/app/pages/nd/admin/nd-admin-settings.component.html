@@ -1,0 +1,94 @@
+<div class="page-header">
+  <div>
+    <h1>Platform settings</h1>
+    <p class="subtitle">Configure dual-verify LLM used by Analysis v8 and legacy dual verify Pass 2.</p>
+  </div>
+</div>
+
+<div class="nd-page-body">
+  <div class="nd-page nd-page-fill">
+    @if (!isSuperAdmin) {
+      <p class="nd-error">Access denied</p>
+    } @else if (loading) {
+      <p class="nd-muted">Loading settings…</p>
+    } @else {
+      <section class="nd-card settings-card">
+        <header class="settings-card-header">
+          <div>
+            <h2>Dual verify model</h2>
+            <p class="nd-muted">
+              Pass 1 always uses Landing AI. Pass 2 uses the provider and model selected below.
+            </p>
+          </div>
+          @if (settings?.updatedAt) {
+            <span class="settings-updated nd-muted">Updated {{ settings!.updatedAt | date: 'medium' }}</span>
+          }
+        </header>
+
+        <div class="settings-grid">
+          <label class="nd-label">
+            Provider
+            <select
+              class="nd-input"
+              [(ngModel)]="selectedProvider"
+              (ngModelChange)="onProviderChange()"
+              aria-label="LLM provider"
+            >
+              @for (p of providerOptions; track p.id) {
+                <option [value]="p.id">{{ p.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="nd-label">
+            Model
+            <select class="nd-input" [(ngModel)]="selectedModel" aria-label="LLM model">
+              @for (m of modelOptions; track m) {
+                <option [value]="m">{{ m }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="provider-status-grid">
+          @for (p of providerOptions; track p.id) {
+            <div
+              class="provider-pill"
+              [class.provider-pill-active]="p.id === selectedProvider"
+              [class.provider-pill-ready]="p.apiKeyConfigured"
+            >
+              <strong>{{ p.label }}</strong>
+              <span>{{ p.apiKeyConfigured ? 'API key configured' : 'API key missing' }}</span>
+            </div>
+          }
+        </div>
+
+        <p class="nd-muted settings-note">
+          API keys are configured on the server (appsettings / Azure App Settings):
+          <code>GEMINI_API_KEY</code>, <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>XAI_API_KEY</code>.
+        </p>
+
+        @if (error) {
+          <p class="nd-error">{{ error }}</p>
+        }
+        @if (message) {
+          <p class="nd-success">{{ message }}</p>
+        }
+
+        <div class="settings-actions">
+          <button
+            type="button"
+            class="nd-btn-primary"
+            [disabled]="saving || !selectedProviderConfigured || !selectedModel"
+            (click)="save()"
+          >
+            {{ saving ? 'Saving…' : 'Save dual verify model' }}
+          </button>
+          @if (!selectedProviderConfigured) {
+            <span class="nd-muted">Configure the API key for this provider before saving.</span>
+          }
+        </div>
+      </section>
+    }
+  </div>
+</div>

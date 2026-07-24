@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Models;
@@ -12,11 +13,13 @@ public class NdAnalysisProcessor(
     AppDbContext db,
     LandingAiCompareService landingAi,
     NdInternalParseService internalParse,
-    GeminiService gemini,
+    DualVerifyLlmService dualVerifyLlm,
     SupabaseStorageService storage,
-    IConfiguration config,
+    IConfiguration configuration,
     ILogger<NdAnalysisProcessor> logger)
 {
+    private readonly ComparePromptVersion _comparePromptVersion =
+        NdAnalysisPromptDefaults.Resolve(configuration);
     private static bool IsLandingSuccess(string status) =>
         status is "compliant" or "partial_compliant" or "non_compliant";
 
@@ -35,7 +38,6 @@ public class NdAnalysisProcessor(
         await db.SaveChangesAsync(ct);
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        var phase2Model = ResolvePhase2Model();
 
         var points = run.Points
             .Where(p =>
@@ -53,7 +55,7 @@ public class NdAnalysisProcessor(
                 var internalDocs = await ResolveInternalDocsForPointAsync(point, internalDocIds, ct);
                 var dualOnly = IsLandingSuccess(point.LandingAiStatus) && point.DualVerifyStatus is "pending";
                 await ProcessPointPipelineAsync(
-                    run, point, internalDocs, phase2Model,
+                    run, point, internalDocs,
                     fullRerun: false, dualVerifyOnly: dualOnly, ct);
             }
             catch (Exception ex)
@@ -90,7 +92,6 @@ public class NdAnalysisProcessor(
         var internalDocs = evidenceOnly
             ? await ResolveGapEvidenceDocsAsync(point, actionIndex, ct)
             : await ResolveInternalDocsForPointAsync(point, internalDocIds, ct);
-        var phase2Model = ResolvePhase2Model();
 
         if (dualVerifyOnly)
         {
@@ -98,7 +99,7 @@ public class NdAnalysisProcessor(
             point.DualVerifyStatus = "pending";
             point.GoogleAiStatus = "pending";
             await db.SaveChangesAsync(ct);
-            await RunDualVerifyOnlyAsync(run, point, internalDocs, phase2Model, ct);
+            await RunDualVerifyOnlyAsync(run, point, internalDocs, ct);
         }
         else
         {
@@ -110,7 +111,7 @@ public class NdAnalysisProcessor(
             point.GoogleAiError = null;
             await db.SaveChangesAsync(ct);
             await ProcessPointPipelineAsync(
-                run, point, internalDocs, phase2Model,
+                run, point, internalDocs,
                 fullRerun: true, dualVerifyOnly: false, ct);
         }
 
@@ -125,7 +126,6 @@ public class NdAnalysisProcessor(
             ?? throw new InvalidOperationException("Analysis run not found.");
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        var phase2Model = ResolvePhase2Model();
 
         foreach (var point in run.Points.Where(p => p.DualVerifyStatus == "failed"))
         {
@@ -134,7 +134,7 @@ public class NdAnalysisProcessor(
             point.DualVerifyStatus = "pending";
             point.GoogleAiStatus = "pending";
             await db.SaveChangesAsync(ct);
-            await RunDualVerifyOnlyAsync(run, point, internalDocs, phase2Model, ct);
+            await RunDualVerifyOnlyAsync(run, point, internalDocs, ct);
         }
 
         await FinalizeRunStatusAsync(run, ct);
@@ -144,14 +144,13 @@ public class NdAnalysisProcessor(
         NdAnalysisRun run,
         NdAnalysisPoint point,
         IReadOnlyList<InternalDocPayload> internalDocs,
-        string phase2Model,
         bool fullRerun,
         bool dualVerifyOnly,
         CancellationToken ct)
     {
         if (dualVerifyOnly)
         {
-            await RunDualVerifyOnlyAsync(run, point, internalDocs, phase2Model, ct);
+            await RunDualVerifyOnlyAsync(run, point, internalDocs, ct);
             return;
         }
 
@@ -173,7 +172,7 @@ public class NdAnalysisProcessor(
             {
                 var forceRefresh = fullRerun && point.LandingAiRerunCount > 0;
                 var landingMessage = await landingAi.ComparePointAsync(
-                    govPoint, internalDocs.ToList(), forceRefresh, ct);
+                    govPoint, internalDocs.ToList(), forceRefresh, _comparePromptVersion, ct);
 
                 point.LandingAiStatus = NdComplianceParser.ExtractStatusFromMessage(landingMessage);
                 point.LandingAiResult = JsonSerializer.Serialize(new { message = landingMessage });
@@ -202,7 +201,7 @@ public class NdAnalysisProcessor(
         }
 
         if (!IsDualDone(point.DualVerifyStatus) || fullRerun)
-            await RunDualVerifyPhaseAsync(run, point, govPoint, internalDocs, phase2Model, ct);
+            await RunDualVerifyPhaseAsync(run, point, govPoint, internalDocs, ct);
         else
             await UpdateRunCountsAsync(run, ct);
     }
@@ -211,7 +210,6 @@ public class NdAnalysisProcessor(
         NdAnalysisRun run,
         NdAnalysisPoint point,
         IReadOnlyList<InternalDocPayload> internalDocs,
-        string phase2Model,
         CancellationToken ct)
     {
         var snapshot = JsonSerializer.Deserialize<PointSnapshotDto>(point.PointSnapshot)
@@ -236,7 +234,7 @@ public class NdAnalysisProcessor(
 
         try
         {
-            var phase2 = await RunGeminiPhase2Async(govPoint, landingMessage, internalDocs, phase2Model, ct);
+            var phase2 = await RunPhase2Async(govPoint, landingMessage, internalDocs, ct);
             ApplyDualVerifyResult(run, point, landingMessage, phase2);
         }
         catch (Exception ex)
@@ -256,7 +254,6 @@ public class NdAnalysisProcessor(
         NdAnalysisPoint point,
         GovPoint govPoint,
         IReadOnlyList<InternalDocPayload> internalDocs,
-        string phase2Model,
         CancellationToken ct)
     {
         point.GoogleAiStatus = "running";
@@ -270,7 +267,7 @@ public class NdAnalysisProcessor(
                 ? m.GetString() ?? ""
                 : "";
 
-            var phase2 = await RunGeminiPhase2Async(govPoint, landingMessage, internalDocs, phase2Model, ct);
+            var phase2 = await RunPhase2Async(govPoint, landingMessage, internalDocs, ct);
             ApplyDualVerifyResult(run, point, landingMessage, phase2);
         }
         catch (Exception ex)
@@ -285,17 +282,16 @@ public class NdAnalysisProcessor(
         await UpdateRunCountsAsync(run, ct);
     }
 
-    private async Task<string> RunGeminiPhase2Async(
+    private async Task<string> RunPhase2Async(
         GovPoint govPoint,
         string landingMessage,
         IReadOnlyList<InternalDocPayload> internalDocs,
-        string phase2Model,
         CancellationToken ct)
     {
         var markdownSupplement = BuildInternalMarkdownSupplement(internalDocs);
         var attachedNames = internalDocs.Select(d => d.FileName).ToList();
         var prompt = DualVerifyPromptBuilder.Build(
-            govPoint, landingMessage, markdownSupplement, attachedNames);
+            govPoint, landingMessage, markdownSupplement, attachedNames, _comparePromptVersion);
 
         var pdfs = internalDocs
             .Where(d => d.Pdf is { Length: > 0 })
@@ -303,9 +299,9 @@ public class NdAnalysisProcessor(
             .ToList();
 
         if (pdfs.Count > 0)
-            return await gemini.AnalyzeWithPdfsAsync(pdfs, prompt, phase2Model, ct);
+            return await dualVerifyLlm.AnalyzeWithPdfsAsync(pdfs, prompt, ct);
 
-        return await gemini.AnalyzeTextAsync(prompt, phase2Model, ct);
+        return await dualVerifyLlm.AnalyzeTextAsync(prompt, ct);
     }
 
     private static string BuildInternalMarkdownSupplement(IReadOnlyList<InternalDocPayload> internalDocs)
@@ -401,14 +397,6 @@ public class NdAnalysisProcessor(
 
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
-    }
-
-    private string ResolvePhase2Model()
-    {
-        var model = config["Gemini:DefaultModel"];
-        if (string.IsNullOrWhiteSpace(model))
-            throw new InvalidOperationException("Gemini:DefaultModel is not configured.");
-        return model;
     }
 
     private async Task<List<InternalDocPayload>> ResolveInternalDocsForPointAsync(

@@ -164,9 +164,15 @@ public class LandingAiCacheRepository(AppDbContext db, ILogger<LandingAiCacheRep
     public static string HashBuffer(byte[] data) =>
         Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
 
-    public static string CompareCacheKey(string internalFileHash, string pointId, string promptVersion = "v2")
+    public static string CompareCacheKey(string internalFileHash, string pointId, string promptVersion = "v1")
     {
-        var revision = promptVersion == "v1" ? "v1" : "v2-semantic";
+        var revision = promptVersion switch
+        {
+            "v1" => "compare-prompt-v1",
+            "v2-multi" => "compare-prompt-v2-multi",
+            "v2" => "compare-prompt-v2",
+            _ => $"compare-prompt-{promptVersion}",
+        };
         var input = $"{internalFileHash}:{pointId}:{revision}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
     }

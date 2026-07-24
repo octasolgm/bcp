@@ -142,6 +142,14 @@ public static class SupabaseSchemaBootstrap
         CREATE INDEX IF NOT EXISTS ix_document_analysis_runs_session
           ON document_analysis_runs (dual_verify_session_id);
         """,
+        """
+        CREATE TABLE IF NOT EXISTS nd_system_settings (
+          key TEXT PRIMARY KEY,
+          value_json JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_by UUID NULL
+        );
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, DatabaseConfig dbConfig, CancellationToken ct = default)

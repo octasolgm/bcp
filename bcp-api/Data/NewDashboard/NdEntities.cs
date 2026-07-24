@@ -568,3 +568,20 @@ public class NdAnalysisStatusHistory
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
+
+[Table("nd_system_settings")]
+public class NdSystemSetting
+{
+    [Key]
+    [Column("key")]
+    public string Key { get; set; } = "";
+
+    [Column("value_json")]
+    public string ValueJson { get; set; } = "{}";
+
+    [Column("updated_at")]
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    [Column("updated_by")]
+    public Guid? UpdatedBy { get; set; }
+}

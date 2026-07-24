@@ -273,6 +273,34 @@ public class InternalDocumentsController(
         });
     }
 
+    [HttpGet("{id:guid}/file-url")]
+    public async Task<IActionResult> FileUrl(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(appDb, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        if (!storage.IsConfigured)
+            return StatusCode(503, new { success = false, message = "Supabase Storage not configured." });
+
+        var doc = await appDb.StoredDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+        if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath))
+            return NotFound(new { success = false, message = "Document file not found." });
+
+        var url = await storage.CreateSignedUrlAsync(doc.StoragePath, 3600, ct);
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                url,
+                fileName = doc.OriginalFileName ?? doc.Title,
+                expiresIn = 3600,
+            },
+        });
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> SoftDelete(Guid id, CancellationToken ct)
     {

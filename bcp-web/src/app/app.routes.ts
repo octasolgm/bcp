@@ -16,61 +16,61 @@ const legacyAppRoutes: Routes = [
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
   {
     path: 'dashboard',
-    title: 'Dashboard · Reguliq',
+    title: 'Dashboard · Comply-Solution',
     loadComponent: () =>
       import('./pages/dashboard/dashboard.component').then((m) => m.DashboardComponent),
   },
   {
     path: 'analyse',
-    title: 'New Gap Analysis · Reguliq',
+    title: 'New Gap Analysis · Comply-Solution',
     loadComponent: () =>
       import('./pages/analyse/analyse.component').then((m) => m.AnalyseComponent),
   },
   {
     path: 'analyse-v2',
-    title: 'New Gap Analysis V2 · Reguliq',
+    title: 'New Gap Analysis V2 · Comply-Solution',
     loadComponent: () =>
       import('./pages/analyse-v2/analyse-v2.component').then((m) => m.AnalyseV2Component),
   },
   {
     path: 'analyse-v3',
-    title: 'New Gap Analysis V3 · Reguliq',
+    title: 'New Gap Analysis V3 · Comply-Solution',
     loadComponent: () =>
       import('./pages/analyse-v3/analyse-v3.component').then((m) => m.AnalyseV3Component),
   },
   {
     path: 'analyse-v4',
-    title: 'New Gap Analysis V4 · Reguliq',
+    title: 'New Gap Analysis V4 · Comply-Solution',
     loadComponent: () =>
       import('./pages/analyse-v4/analyse-v4.component').then((m) => m.AnalyseV4Component),
   },
   {
     path: 'analyse-v5',
-    title: 'New Gap Analysis V5 · Reguliq',
+    title: 'New Gap Analysis V5 · Comply-Solution',
     loadComponent: () =>
       import('./pages/analyse-v5/analyse-v5.component').then((m) => m.AnalyseV5Component),
   },
   {
     path: 'analyse-v6',
-    title: 'New Gap Analysis V6 · Reguliq',
+    title: 'New Gap Analysis V6 · Comply-Solution',
     loadComponent: () =>
       import('./pages/analyse-v6/analyse-v6.component').then((m) => m.AnalyseV6Component),
   },
   {
     path: 'analyse-v7',
-    title: 'New Gap Analysis V7 · Reguliq',
+    title: 'New Gap Analysis V7 · Comply-Solution',
     loadComponent: () =>
       import('./pages/analyse-v7/analyse-v7.component').then((m) => m.AnalyseV7Component),
   },
   {
     path: 'analyse-v8',
-    title: 'New Gap Analysis V8 · Reguliq',
+    title: 'New Gap Analysis V8 · Comply-Solution',
     loadComponent: () =>
       import('./pages/analyse-v8/analyse-v8.component').then((m) => m.AnalyseV8Component),
   },
   {
     path: 'gap-analysis',
-    title: 'Gap Analysis · Reguliq',
+    title: 'Gap Analysis · Comply-Solution',
     loadComponent: () =>
       import('./pages/gap-analysis-report/gap-analysis-report.component').then(
         (m) => m.GapAnalysisReportComponent,
@@ -78,7 +78,7 @@ const legacyAppRoutes: Routes = [
   },
   {
     path: 'regulations',
-    title: 'Regulation Docs Library · Reguliq',
+    title: 'Regulation Docs Library · Comply-Solution',
     loadComponent: () =>
       import('./pages/regulation-library/regulation-library.component').then(
         (m) => m.RegulationLibraryComponent,
@@ -86,19 +86,19 @@ const legacyAppRoutes: Routes = [
   },
   {
     path: 'documents',
-    title: 'Document Library · Reguliq',
+    title: 'Document Library · Comply-Solution',
     loadComponent: () =>
       import('./pages/documents/documents.component').then((m) => m.DocumentsComponent),
   },
   {
     path: 'in-progress',
-    title: 'Analyses in progress · Reguliq',
+    title: 'Analyses in progress · Comply-Solution',
     loadComponent: () =>
       import('./pages/in-progress/in-progress.component').then((m) => m.InProgressComponent),
   },
   {
     path: 'dual-verify',
-    title: 'Advanced Workbench · Reguliq',
+    title: 'Advanced Workbench · Comply-Solution',
     loadComponent: () =>
       import('./pages/dual-verify/dual-verify.component').then((m) => m.DualVerifyComponent),
   },
@@ -127,7 +127,7 @@ export const routes: Routes = [
   { path: 'overview', redirectTo: 'nd/overview', pathMatch: 'full' },
   {
     path: 'login',
-    title: 'Sign in · Reguliq',
+    title: 'Sign in · Comply-Solution',
     canActivate: [guestGuard],
     loadComponent: () =>
       import('./pages/login/login.component').then((m) => m.LoginComponent),
@@ -145,14 +145,14 @@ export const routes: Routes = [
     children: [
       {
         path: 'auth/login',
-        title: 'Sign in · Reguliq ND',
+        title: 'Sign in · Comply-Solution ND',
         canActivate: [ndGuestGuard],
         loadComponent: () =>
           import('./pages/nd/auth/nd-login.component').then((m) => m.NdLoginComponent),
       },
       {
         path: 'auth/forgot-password',
-        title: 'Forgot password · Reguliq ND',
+        title: 'Forgot password · Comply-Solution ND',
         canActivate: [ndGuestGuard],
         loadComponent: () =>
           import('./pages/nd/auth/nd-forgot-password.component').then(
@@ -161,7 +161,7 @@ export const routes: Routes = [
       },
       {
         path: 'auth/reset-password',
-        title: 'Reset password · Reguliq ND',
+        title: 'Reset password · Comply-Solution ND',
         loadComponent: () =>
           import('./pages/nd/auth/nd-reset-password.component').then(
             (m) => m.NdResetPasswordComponent,
@@ -169,7 +169,7 @@ export const routes: Routes = [
       },
       {
         path: 'auth/accept-invite',
-        title: 'Accept invite · Reguliq ND',
+        title: 'Accept invite · Comply-Solution ND',
         loadComponent: () =>
           import('./pages/nd/auth/nd-accept-invite.component').then(
             (m) => m.NdAcceptInviteComponent,
@@ -187,6 +187,15 @@ export const routes: Routes = [
             path: 'overview',
             loadComponent: () =>
               import('./pages/nd/overview/nd-home.component').then((m) => m.NdHomeComponent),
+          },
+          {
+            path: 'regulation-documents/deleted',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['super_admin'], deletedOnly: true },
+            loadComponent: () =>
+              import('./pages/nd/regulation-documents/nd-regulation-documents.component').then(
+                (m) => m.NdRegulationDocumentsComponent,
+              ),
           },
           {
             path: 'regulation-documents',
@@ -210,6 +219,15 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./pages/nd/regulation-documents/nd-regulation-document-detail.component').then(
                 (m) => m.NdRegulationDocumentDetailComponent,
+              ),
+          },
+          {
+            path: 'internal-documents/deleted',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['super_admin'], deletedOnly: true },
+            loadComponent: () =>
+              import('./pages/nd/internal-documents/nd-internal-documents.component').then(
+                (m) => m.NdInternalDocumentsComponent,
               ),
           },
           {
@@ -372,6 +390,15 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./pages/nd/admin/nd-admin-deleted-runs.component').then(
                 (m) => m.NdAdminDeletedRunsComponent,
+              ),
+          },
+          {
+            path: 'admin/settings',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['super_admin'] },
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-settings.component').then(
+                (m) => m.NdAdminSettingsComponent,
               ),
           },
         ],

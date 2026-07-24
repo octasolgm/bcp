@@ -28,6 +28,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdActionPlanItemReview> NdActionPlanItemReviews => Set<NdActionPlanItemReview>();
     public DbSet<NdAnalysisStatusHistory> NdAnalysisStatusHistories => Set<NdAnalysisStatusHistory>();
     public DbSet<NdHiddenLegacyRun> NdHiddenLegacyRuns => Set<NdHiddenLegacyRun>();
+    public DbSet<NdSystemSetting> NdSystemSettings => Set<NdSystemSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -99,21 +99,39 @@
 
 @if (!loading) {
 <div class="summary-row">
-  <div class="summary-card compliant">
+  <button
+    type="button"
+    class="summary-card compliant"
+    [class.active]="isSummaryCardActive('compliant')"
+    [attr.aria-pressed]="isSummaryCardActive('compliant')"
+    (click)="filterFromSummaryCard('compliant')"
+  >
     <span class="label">Compliance</span>
     <strong>{{ summary.compliant }}</strong>
     <span class="hint">Fully addressed</span>
-  </div>
-  <div class="summary-card partial_compliant">
+  </button>
+  <button
+    type="button"
+    class="summary-card partial_compliant"
+    [class.active]="isSummaryCardActive('partial_compliant')"
+    [attr.aria-pressed]="isSummaryCardActive('partial_compliant')"
+    (click)="filterFromSummaryCard('partial_compliant')"
+  >
     <span class="label">Partial compliance</span>
     <strong>{{ summary.partialCompliant }}</strong>
     <span class="hint">Needs improvement</span>
-  </div>
-  <div class="summary-card non_compliant">
+  </button>
+  <button
+    type="button"
+    class="summary-card non_compliant"
+    [class.active]="isSummaryCardActive('non_compliant')"
+    [attr.aria-pressed]="isSummaryCardActive('non_compliant')"
+    (click)="filterFromSummaryCard('non_compliant')"
+  >
     <span class="label">Non-compliance</span>
     <strong>{{ summary.nonCompliant }}</strong>
     <span class="hint">Corrective action required</span>
-  </div>
+  </button>
 </div>
 
 @if (items.length) {
@@ -133,7 +151,7 @@
   />
 }
 
-<div class="points-toolbar card-surface">
+<div class="points-toolbar card-surface" #findingsSection>
   <div class="toolbar-row toolbar-row-main">
     <div class="toolbar-group">
       <div class="view-toggle" role="tablist" aria-label="View mode">

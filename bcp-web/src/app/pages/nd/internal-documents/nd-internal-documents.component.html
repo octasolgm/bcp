@@ -23,12 +23,6 @@
 </div>
 
 <div class="nd-page-body">
-@if (canViewDeleted) {
-  <div class="filter-pills tabs nd-shrink">
-    <a routerLink="/nd/internal-documents" class="tab" [class.active]="!showDeleted">Active</a>
-    <a routerLink="/nd/internal-documents" class="tab" [class.active]="showDeleted" [queryParams]="{ deleted: '1' }">Deleted</a>
-  </div>
-}
 @if (message) {
   <div class="alert success nd-shrink">{{ message }}</div>
 }
@@ -129,35 +123,83 @@
                 }
               </span>
             </td>
-            <td>
-              <div class="row-actions">
+            <td class="internal-doc-actions-cell">
+              <div class="internal-doc-row-actions">
                 @if (!showDeleted) {
                   @if (canParse && d.parseStatus !== 'parsed') {
                     <button
                       type="button"
-                      class="btn-use"
+                      class="row-action-btn compact primary"
+                      [title]="parseButtonLabel(d)"
                       [disabled]="parsingId === d.id || d.parseStatus === 'processing'"
                       (click)="handleParse(d, $event)"
                     >
-                      {{ parseButtonLabel(d) }}
+                      {{ parsingId === d.id ? '…' : 'Parse' }}
                     </button>
                   }
-                  <button type="button" class="row-action-link" (click)="viewAnalysis(d)">View analysis</button>
-                  <button type="button" class="row-action-link" (click)="openHistory(d)">History</button>
+                  <button
+                    type="button"
+                    class="row-action-btn compact"
+                    title="View analysis runs"
+                    (click)="viewAnalysis(d)"
+                  >
+                    Analyses
+                  </button>
+                  <button
+                    type="button"
+                    class="row-action-btn icon-only ghost"
+                    title="History"
+                    aria-label="History"
+                    (click)="openHistory(d)"
+                  >
+                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                      <path
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        d="M10 4.5v5.25l3 1.75M10 18a8 8 0 100-16 8 8 0 000 16z"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="row-action-btn icon-only"
+                    title="Open source file"
+                    aria-label="Open source file"
+                    (click)="openDocument(d, $event)"
+                  >
+                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                      <path
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        d="M11 3.5H6.5A2 2 0 004.5 5.5v9A2 2 0 006.5 16.5h9a2 2 0 002-2V10M11 3.5h4.5V8M11 3.5L16.5 9"
+                      />
+                    </svg>
+                  </button>
                   @if (canDelete) {
                     <button
                       type="button"
-                      class="row-action-link btn-hide"
+                      class="row-action-btn icon-only danger"
+                      title="Delete"
+                      aria-label="Delete"
                       [disabled]="deletingId === d.id"
                       (click)="handleDelete(d, $event)"
                     >
-                      {{ deletingId === d.id ? 'Deleting…' : 'Delete' }}
+                      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                        <path
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.6"
+                          d="M5 6h10M8 6V4.5h4V6M7.5 6l.5 9h4l.5-9"
+                        />
+                      </svg>
                     </button>
                   }
                 } @else if (canViewDeleted) {
                   <button
                     type="button"
-                    class="btn-use"
+                    class="row-action-btn compact primary"
                     [disabled]="deletingId === d.id"
                     (click)="handleRestore(d, $event)"
                   >
