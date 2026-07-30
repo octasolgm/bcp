@@ -654,6 +654,125 @@
   }
 }
 
+.analyse-regul-page .progress-col-body {
+  .regul-reverse-panel {
+    margin-bottom: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--border-subtle, #e2e8f0);
+    border-radius: 8px;
+    background: var(--surface-elevated, #f8fafc);
+  }
+
+  .regul-reverse-summary {
+    margin: 0 0 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-secondary, #475569);
+  }
+
+  .regul-section-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 140px;
+    overflow-y: auto;
+    border: 1px solid var(--border-subtle, #e2e8f0);
+    border-radius: 6px;
+    background: #fff;
+  }
+
+  .regul-section-row {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr auto;
+    gap: 0.35rem 0.5rem;
+    align-items: center;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.75rem;
+    border-bottom: 1px solid var(--border-subtle, #f1f5f9);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &.is-running {
+      background: #eff6ff;
+      .regul-section-status {
+        color: #2563eb;
+        font-weight: 600;
+      }
+    }
+
+    &.is-done .regul-section-status {
+      color: #15803d;
+    }
+
+    &.is-failed .regul-section-status {
+      color: #b91c1c;
+    }
+  }
+
+  .regul-section-ref {
+    font-weight: 600;
+    color: var(--text-primary, #0f172a);
+  }
+
+  .regul-section-status {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .regul-int-block {
+    margin-top: 0.65rem;
+  }
+
+  .regul-int-heading {
+    margin: 0 0 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary, #64748b);
+  }
+
+  .regul-int-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+
+  .regul-int-row {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+    gap: 0.35rem 0.5rem;
+    align-items: center;
+    padding: 0.3rem 0;
+    font-size: 0.75rem;
+    border-bottom: 1px dashed var(--border-subtle, #e2e8f0);
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  .regul-int-clause {
+    font-weight: 600;
+    color: #7c3aed;
+  }
+
+  .regul-int-title {
+    color: var(--text-secondary, #64748b);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .compliance-pill.mini {
+    font-size: 0.625rem;
+    padding: 0.1rem 0.35rem;
+  }
+}
+
 .analyse-regul-page .compliance-pill {
   font-size: 0.5625rem;
   font-weight: 700;

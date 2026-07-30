@@ -22,9 +22,17 @@ public static class NdRegulAnalysisPointSync
         point.DualVerifyRunAt = DateTimeOffset.UtcNow;
         point.FinalStatus = NdComplianceParser.NormalizeStatus(
             NdRegulJudgmentFormatter.MapDisplayStatus(judgment.OverallStatus));
-        point.LandingAiActionPlan = NdComplianceParser.ExtractActionPlan(landingMessage);
-        if (!string.IsNullOrWhiteSpace(point.LandingAiActionPlan))
-            point.OriginalAiActionPlan ??= point.LandingAiActionPlan;
+        var capFromMessage = NdComplianceParser.ExtractActionPlan(landingMessage);
+        var capFromJudgment = !string.IsNullOrWhiteSpace(judgment.SuggestedAction)
+            ? judgment.SuggestedAction.Trim()
+            : judgment.GapDescription?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(capFromJudgment) || capFromJudgment is "N/A" or "—" or "-")
+            capFromJudgment = capFromMessage ?? "";
+        if (!string.IsNullOrWhiteSpace(capFromJudgment) && capFromJudgment is not ("N/A" or "—" or "-"))
+        {
+            point.LandingAiActionPlan = capFromJudgment;
+            point.OriginalAiActionPlan ??= capFromJudgment;
+        }
         point.UpdatedAt = DateTimeOffset.UtcNow;
     }
 

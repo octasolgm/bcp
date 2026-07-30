@@ -15,6 +15,8 @@ const AUTH_API_TIMEOUT_MS = 60_000;
 const RERUN_API_TIMEOUT_MS = 60_000;
 /** Library create/update can persist many regulation points in one request. */
 const LIBRARY_WRITE_TIMEOUT_MS = 120_000;
+/** Landing AI policy-clause extract (multi-chunk) — align with Bcp:HttpTimeoutMinutes (15). */
+const SECTION_EXTRACT_TIMEOUT_MS = 900_000;
 
 function friendlyNdApiError(raw: string, status?: number): string {
   if (
@@ -413,6 +415,9 @@ export class NdApiService {
     return this.request<{
       documentId: string;
       sectionExtractStatus?: string;
+      sectionExtractError?: string | null;
+      sectionExtractProgressLabel?: string | null;
+      sectionExtractProgressPct?: number | null;
       sectionCount?: number;
       sections: Array<{
         id: string;
@@ -431,8 +436,10 @@ export class NdApiService {
       sectionExtractStatus?: string;
       sectionCount?: number;
       sectionExtractedAt?: string;
+      sectionExtractProgressLabel?: string | null;
+      sectionExtractProgressPct?: number | null;
       reusedSaved?: boolean;
-    }>('POST', `/nd/internal-documents/${docId}/extract-sections${q}`);
+    }>('POST', `/nd/internal-documents/${docId}/extract-sections${q}`, undefined, true, SECTION_EXTRACT_TIMEOUT_MS);
   }
 
   async uploadInternalDocument(file: File) {

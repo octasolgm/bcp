@@ -95,7 +95,8 @@
 }
 
 .severity-badge.pending,
-.severity-badge.processing {
+.severity-badge.processing,
+.severity-badge.running {
   background: var(--medium-bg);
   color: var(--medium);
 }
@@ -103,6 +104,54 @@
 .severity-badge.failed {
   background: var(--critical-bg);
   color: var(--critical);
+}
+
+.severity-badge.extract-status-cell {
+  display: inline-flex;
+  min-width: 9rem;
+  max-width: 14rem;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.extract-status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.extract-status-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.extract-progress-track {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  overflow: hidden;
+}
+
+.extract-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 0.35s ease;
+}
+
+.extract-progress-track.panel-progress {
+  margin-top: 0.45rem;
+  height: 6px;
+  color: var(--accent);
+}
+
+.panel-extract-status {
+  display: block;
 }
 
 .btn-use {

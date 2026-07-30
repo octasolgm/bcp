@@ -62,6 +62,9 @@ Also give an overall_rating (strong/adequate/weak), 2-5 strengths, and 2-5 concr
     public static string BuildJudgmentQueryText(string clauseNo, string clauseText) =>
         $"REGULATORY CLAUSE {clauseNo}:\n{clauseText}\n\nJudge this clause against the excerpts above. If the excerpts don't clearly address the clause, prefer a lower confidence and non_compliant/partial design_status rather than assuming coverage that isn't shown.";
 
+    public static string BuildJudgmentRetryNote(string overallStatus) =>
+        $"--- RETRY ---\nYour overall_status was '{overallStatus}' but gap_description was empty. A partial or non_compliant finding MUST have a non-empty gap_description stating exactly what is missing and naming the document it was/was not found in. Provide that now.";
+
     public static string BuildReverseMappingContextText(IReadOnlyList<(string ClauseNo, string ClauseText)> regulatoryClauses)
     {
         var lines = regulatoryClauses.Select(c => $"{c.ClauseNo}: {c.ClauseText}");

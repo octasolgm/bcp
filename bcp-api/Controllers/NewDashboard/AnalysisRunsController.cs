@@ -384,12 +384,15 @@ public class AnalysisRunsController(
                     landingAiCompletedCount = run.LandingAiCompletedCount,
                     dualVerifyCompletedCount = run.DualVerifyCompletedCount,
                     dualVerifyFailedCount = run.DualVerifyFailedCount,
+                    workflowEngine = run.WorkflowEngine,
+                    regulPipelinePhase = run.RegulPipelinePhase,
+                    enableQualitative = run.EnableQualitative,
                     points = resumePoints,
                 },
             });
         }
 
-        // Poll payload: no PointSnapshot (can be huge × 140+ points); include AI text/errors for live UI.
+        // Poll payload: lightweight status; include INT snapshots + reverse section rows for Regul live UI.
         var points = await db.NdAnalysisPoints
             .AsNoTracking()
             .Where(p => p.AnalysisRunId == id)
@@ -398,6 +401,7 @@ public class AnalysisRunsController(
             {
                 id = p.Id,
                 regulationPointId = p.RegulationPointId,
+                pointSnapshot = p.RegulationPointId == null ? p.PointSnapshot : null,
                 landingAiStatus = p.LandingAiStatus,
                 landingAiResult = p.LandingAiResult,
                 landingAiError = p.LandingAiError,
@@ -409,6 +413,53 @@ public class AnalysisRunsController(
             })
             .ToListAsync(ct);
 
+        int? regulReverseSectionTotal = null;
+        int? regulReverseSectionCompleted = null;
+        List<object>? regulReverseSections = null;
+        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        {
+            var sections = await db.NdRegulInternalSections
+                .AsNoTracking()
+                .Where(s => s.AnalysisRunId == id)
+                .OrderBy(s => s.SectionRef)
+                .Select(s => new { s.Id, s.SectionRef, s.SectionText })
+                .ToListAsync(ct);
+
+            regulReverseSectionTotal = sections.Count;
+
+            var mappingStatuses = await db.NdRegulReverseMappings
+                .AsNoTracking()
+                .Where(m => m.AnalysisRunId == id)
+                .Select(m => new { m.InternalSectionId, m.Status })
+                .ToListAsync(ct);
+            var statusBySectionId = mappingStatuses
+                .GroupBy(m => m.InternalSectionId)
+                .ToDictionary(g => g.Key, g => g.First().Status);
+
+            regulReverseSectionCompleted = mappingStatuses.Count(m =>
+                m.Status is "completed" or "failed");
+
+            if (sections.Count > 0
+                && (run.RegulPipelinePhase is "reverse" or "qualitative"
+                    || run.Status is "running" or "processing"))
+            {
+                regulReverseSections = sections.Select(s =>
+                {
+                    var st = statusBySectionId.TryGetValue(s.Id, out var mapped)
+                        ? mapped
+                        : "queued";
+                    var preview = s.SectionText?.Trim() ?? "";
+                    if (preview.Length > 96) preview = preview[..93] + "…";
+                    return new
+                    {
+                        sectionRef = s.SectionRef,
+                        title = preview,
+                        status = st,
+                    };
+                }).Cast<object>().ToList();
+            }
+        }
+
         return Ok(new
         {
             success = true,
@@ -416,6 +467,12 @@ public class AnalysisRunsController(
             {
                 id = run.Id,
                 status = run.Status,
+                workflowEngine = run.WorkflowEngine,
+                regulPipelinePhase = run.RegulPipelinePhase,
+                enableQualitative = run.EnableQualitative,
+                regulReverseSectionTotal,
+                regulReverseSectionCompleted,
+                regulReverseSections,
                 totalPointsCount = run.TotalPointsCount,
                 processedPointsCount = run.ProcessedPointsCount,
                 landingAiCompletedCount = run.LandingAiCompletedCount,
@@ -621,29 +678,42 @@ public class AnalysisRunsController(
         var pointExists = await db.NdAnalysisPoints.AnyAsync(p => p.Id == pointId && p.AnalysisRunId == id, ct);
         if (!pointExists) return NotFound(new { success = false, message = "Analysis point not found" });
 
-        return QueuePointProcessing(id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex);
+        return QueuePointProcessing(run, id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex);
     }
 
     private IActionResult QueuePointProcessing(
+        NdAnalysisRun run,
         Guid runId,
         Guid pointId,
         bool dualVerifyOnly,
         bool evidenceOnly,
         int? actionIndex)
     {
+        var useRegul = AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine);
+        if (useRegul && evidenceOnly)
+            dualVerifyOnly = false;
+
         _ = Task.Run(async () =>
         {
             using var scope = scopeFactory.CreateScope();
-            var proc = scope.ServiceProvider.GetRequiredService<NdAnalysisProcessor>();
             try
             {
-                await proc.ProcessPointAsync(
-                    runId,
-                    pointId,
-                    dualVerifyOnly,
-                    evidenceOnly,
-                    actionIndex,
-                    CancellationToken.None);
+                if (useRegul)
+                {
+                    var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
+                    await regulProc.ProcessPointAsync(runId, pointId, dualVerifyOnly, CancellationToken.None);
+                }
+                else
+                {
+                    var proc = scope.ServiceProvider.GetRequiredService<NdAnalysisProcessor>();
+                    await proc.ProcessPointAsync(
+                        runId,
+                        pointId,
+                        dualVerifyOnly,
+                        evidenceOnly,
+                        actionIndex,
+                        CancellationToken.None);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -658,7 +728,7 @@ public class AnalysisRunsController(
         return Ok(new
         {
             success = true,
-            message = dualVerifyOnly ? "Phase 2 rerun started" : "Point rerun started",
+            message = dualVerifyOnly ? "Reverse rerun started" : "Point rerun started",
         });
     }
 
@@ -681,7 +751,7 @@ public class AnalysisRunsController(
         var pointExists = await db.NdAnalysisPoints.AnyAsync(p => p.Id == pointId && p.AnalysisRunId == id, ct);
         if (!pointExists) return NotFound(new { success = false, message = "Analysis point not found" });
 
-        return QueuePointProcessing(id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex);
+        return QueuePointProcessing(run, id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex);
     }
 
     [HttpPost("{id:guid}/rerun-dual-verify/all")]
@@ -694,6 +764,25 @@ public class AnalysisRunsController(
         if (run == null) return NotFound();
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
+
+        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        {
+            _ = Task.Run(async () =>
+            {
+                using var scope = scopeFactory.CreateScope();
+                var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
+                try
+                {
+                    await regulProc.RerunReversePhaseAsync(id, CancellationToken.None);
+                }
+                catch
+                {
+                    // Errors are persisted on the run by the processor.
+                }
+            }, CancellationToken.None);
+
+            return Ok(new { success = true, message = "Reverse pass rerun started" });
+        }
 
         _ = Task.Run(async () =>
         {
@@ -927,6 +1016,8 @@ public class AnalysisRunsController(
         createdBy = r.CreatedBy,
         createdAt = r.CreatedAt,
         submittedToCheckerAt = r.SubmittedToCheckerAt,
+        workflowEngine = r.WorkflowEngine,
+        regulPipelinePhase = r.RegulPipelinePhase,
     };
 
     private static object MapRunDetail(NdAnalysisRun r, string? creatorName) => new

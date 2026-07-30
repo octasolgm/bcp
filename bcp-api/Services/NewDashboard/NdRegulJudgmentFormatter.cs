@@ -13,7 +13,9 @@ public static class NdRegulJudgmentFormatter
         var fulfilled = status == "Compliant" ? "All required elements addressed." : "None";
         var corrective = !string.IsNullOrWhiteSpace(judgment.SuggestedAction)
             ? judgment.SuggestedAction.Trim()
-            : status == "Compliant" ? "N/A" : judgment.GapDescription.Trim();
+            : !string.IsNullOrWhiteSpace(judgment.GapDescription)
+                ? judgment.GapDescription.Trim()
+                : status == "Compliant" ? "N/A" : "";
         if (string.IsNullOrWhiteSpace(corrective))
             corrective = status == "Compliant" ? "N/A" : "—";
 

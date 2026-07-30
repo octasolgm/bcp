@@ -26,11 +26,6 @@ public class NdRegulAnalysisProcessor(
     NdAnalysisRunCancellationTracker runCancellation,
     ILogger<NdRegulAnalysisProcessor> logger)
 {
-    private const string JudgmentJsonInstruction =
-        "Respond with ONLY a JSON object (no markdown fences) with keys: " +
-        "design_status, operating_status, overall_status, confidence, interpretation, " +
-        "policy_extract (array of strings), document_reference, gap_description, suggested_action, gap_direction.";
-
     private const string ReverseMappingJsonInstruction =
         "Respond with ONLY a JSON object (no markdown fences) with keys: " +
         "mapped_clause_nos (array of strings), mapping (covered|no_regulatory_basis|basis_not_verifiable), " +
@@ -72,9 +67,18 @@ public class NdRegulAnalysisProcessor(
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
 
+        logger.LogInformation(
+            "Regul pipeline started for run {RunId} (qualitative={EnableQualitative}, llm={Provider}/{Model})",
+            runId,
+            run.EnableQualitative,
+            run.RegulLlmProvider,
+            run.RegulLlmModel);
+
         try
         {
+            await EnsureInternalSectionsForRunAsync(run, ct);
             await EnsureForwardFindingsAsync(run, ct);
+            logger.LogInformation("Regul pipeline phase=forward for run {RunId}", runId);
             await RunForwardPhaseAsync(run, ct);
             if (runCancellation.IsStopRequested(runId))
             {
@@ -85,6 +89,7 @@ public class NdRegulAnalysisProcessor(
             run.RegulPipelinePhase = "reverse";
             run.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
+            logger.LogInformation("Regul pipeline phase=reverse for run {RunId}", runId);
             await RunReversePhaseAsync(run, ct);
 
             if (run.EnableQualitative)
@@ -98,6 +103,7 @@ public class NdRegulAnalysisProcessor(
                 run.RegulPipelinePhase = "qualitative";
                 run.UpdatedAt = DateTimeOffset.UtcNow;
                 await db.SaveChangesAsync(ct);
+                logger.LogInformation("Regul pipeline phase=qualitative for run {RunId}", runId);
                 await RunQualitativePhaseAsync(run, ct);
             }
 
@@ -106,6 +112,11 @@ public class NdRegulAnalysisProcessor(
             await FinalizePointCountsAsync(run, ct);
             run.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
+            logger.LogInformation(
+                "Regul pipeline completed for run {RunId} (totalPoints={Total}, processed={Processed})",
+                runId,
+                run.TotalPointsCount,
+                run.ProcessedPointsCount);
         }
         catch (OperationCanceledException)
         {
@@ -149,23 +160,46 @@ public class NdRegulAnalysisProcessor(
 
     private async Task RunForwardPhaseAsync(NdAnalysisRun run, CancellationToken ct)
     {
-        var policyContext = await BuildPolicyContextAsync(run, ct);
+        var policyBundle = await LoadPolicyBundleAsync(run, ct);
         var pending = await db.NdRegulForwardFindings
             .Where(f => f.AnalysisRunId == run.Id && f.Status == "pending" && f.AnalysisPointId != null)
             .ToListAsync(ct);
 
         var pointById = run.Points.ToDictionary(p => p.Id);
         var completed = 0;
+        var total = pending.Count;
+        var cacheContext = policyBundle.TotalPages <= NdRegulPolicyContextService.FullManualMaxPages;
 
-        foreach (var finding in pending)
+        logger.LogInformation(
+            "Regul forward phase started for run {RunId}: {Total} clause(s), policyPages={Pages}, retrieval={Retrieval}",
+            run.Id,
+            total,
+            policyBundle.TotalPages,
+            policyBundle.TotalPages > NdRegulPolicyContextService.FullManualMaxPages);
+
+        for (var i = 0; i < pending.Count; i++)
         {
+            var finding = pending[i];
             if (runCancellation.IsStopRequested(run.Id)) throw new OperationCanceledException();
             if (!finding.AnalysisPointId.HasValue || !pointById.TryGetValue(finding.AnalysisPointId.Value, out var point))
                 continue;
 
+            var index = i + 1;
+            logger.LogInformation(
+                "Regul forward judgment started for run {RunId} clause {ClauseNo} ({Index}/{Total})",
+                run.Id,
+                finding.ClauseNo,
+                index,
+                total);
+
             try
             {
-                var judgment = await CallForwardJudgmentAsync(finding.ClauseNo, finding.ClauseText, policyContext, ct);
+                var judgment = await CallForwardJudgmentAsync(
+                    finding.ClauseNo,
+                    finding.ClauseText,
+                    policyBundle,
+                    cacheContext,
+                    ct);
                 var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
                     finding.ClauseNo, finding.ClauseText, judgment);
 
@@ -176,10 +210,19 @@ public class NdRegulAnalysisProcessor(
 
                 NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, landingMessage);
                 completed++;
+                logger.LogInformation(
+                    "Regul forward judgment completed for run {RunId} clause {ClauseNo} ({Index}/{Total}) status={Status} confidence={Confidence}",
+                    run.Id,
+                    finding.ClauseNo,
+                    index,
+                    total,
+                    judgment.OverallStatus,
+                    judgment.Confidence);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Regul forward judgment failed for clause {ClauseNo}", finding.ClauseNo);
+                logger.LogError(ex, "Regul forward judgment failed for run {RunId} clause {ClauseNo} ({Index}/{Total})",
+                    run.Id, finding.ClauseNo, index, total);
                 finding.Status = "failed";
                 finding.ErrorMessage = ex.Message;
                 finding.UpdatedAt = DateTimeOffset.UtcNow;
@@ -196,46 +239,67 @@ public class NdRegulAnalysisProcessor(
         }
 
         logger.LogInformation(
-            "Regul forward phase completed for run {RunId} ({Completed}/{Total})",
+            "Regul forward phase completed for run {RunId} ({Completed}/{Total}, policyPages={Pages}, retrieval={Retrieval})",
             run.Id,
             completed,
-            pending.Count);
+            pending.Count,
+            policyBundle.TotalPages,
+            policyBundle.TotalPages > NdRegulPolicyContextService.FullManualMaxPages);
     }
 
     private async Task<RegulJudgmentResult> CallForwardJudgmentAsync(
         string clauseNo,
         string clauseText,
-        string policyContext,
+        NdRegulPolicyContextService.PolicyBundle policyBundle,
+        bool cacheContextBlock,
         CancellationToken ct)
     {
-        var prompt = string.Join("\n\n", new[]
-        {
-            NdRegulPromptDefaults.JudgmentSystemPrompt.Trim(),
-            NdRegulPromptDefaults.BuildJudgmentContextText(policyContext),
-            NdRegulPromptDefaults.BuildJudgmentQueryText(clauseNo, clauseText),
-            JudgmentJsonInstruction,
-        });
+        var policyContext = policyBundle.BuildContextForClause(clauseText);
+        var contextBlock = NdRegulPromptDefaults.BuildJudgmentContextText(policyContext);
+        var queryBlock = NdRegulPromptDefaults.BuildJudgmentQueryText(clauseNo, clauseText);
 
-        var raw = await regulLlm.AnalyzeTextAsync(prompt, ct);
-        return NdRegulLlmJsonHelper.ParseJsonObject<RegulJudgmentResult>(raw);
+        RegulJudgmentResult judgment = null!;
+        for (var attempt = 0; attempt <= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries; attempt++)
+        {
+            var query = attempt == 0
+                ? queryBlock
+                : queryBlock + "\n\n" + NdRegulPromptDefaults.BuildJudgmentRetryNote(judgment.OverallStatus);
+
+            var raw = await regulLlm.CallJudgmentAsync(contextBlock, query, cacheContextBlock, ct);
+            judgment = NdRegulLlmJsonHelper.ParseJsonObject<RegulJudgmentResult>(raw);
+
+            judgment = NdRegulJudgmentPostProcessor.ApplyQuoteVerification(
+                judgment,
+                policyBundle.SourceTextForQuotes);
+
+            if (!NdRegulJudgmentPostProcessor.RequiresGapDescriptionRetry(judgment))
+                return judgment;
+
+            if (attempt >= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries)
+                return judgment;
+        }
+
+        return judgment;
+    }
+
+    private async Task<NdRegulPolicyContextService.PolicyBundle> LoadPolicyBundleAsync(
+        NdAnalysisRun run,
+        CancellationToken ct)
+    {
+        var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
+        var payloads = await LoadInternalDocPayloadsAsync(internalDocIds, ct);
+        if (payloads.Count == 0)
+            return NdRegulPolicyContextService.FromPayloads([
+                new InternalDocPayload("", "policy", "No internal policy text was attached to this run.", null),
+            ]);
+
+        return NdRegulPolicyContextService.FromPayloads(payloads);
     }
 
     private async Task<string> BuildPolicyContextAsync(NdAnalysisRun run, CancellationToken ct)
     {
-        var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        if (internalDocIds.Count == 0)
-            return "No internal policy text was attached to this run.";
-
-        var payloads = await LoadInternalDocPayloadsAsync(internalDocIds, ct);
-        if (payloads.Count == 0)
-            return "No internal policy text could be loaded.";
-
-        if (payloads.Count == 1)
-            return payloads[0].Markdown;
-
-        return string.Join(
-            "\n\n",
-            payloads.Select((d, i) => $"=== DOCUMENT: {d.FileName} ===\n{d.Markdown}"));
+        var bundle = await LoadPolicyBundleAsync(run, ct);
+        return bundle.BuildFullContext();
     }
 
     private async Task<List<InternalDocPayload>> LoadInternalDocPayloadsAsync(
@@ -257,7 +321,7 @@ public class NdRegulAnalysisProcessor(
 
     private async Task RunReversePhaseAsync(NdAnalysisRun run, CancellationToken ct)
     {
-        await ExtractAndStoreInternalSectionsAsync(run, ct);
+        await EnsureInternalSectionsForRunAsync(run, ct);
         await ClearIntReverseArtifactsAsync(run.Id, ct);
 
         var sections = await db.NdRegulInternalSections
@@ -274,15 +338,19 @@ public class NdRegulAnalysisProcessor(
             .ToDictionary(g => g.Key, g => g.First().ClauseText, StringComparer.OrdinalIgnoreCase);
 
         logger.LogInformation(
-            "Regul reverse mapping for run {RunId}: using {SelectedCount} selected regulatory clauses (not full regulation library)",
+            "Regul reverse phase started for run {RunId}: {SectionCount} internal section(s), {ClauseCount} regulatory clause(s)",
             run.Id,
+            sections.Count,
             regulatoryClauses.Count);
 
         var intRowsCreated = 0;
         var mappingsCompleted = 0;
+        var sectionTotal = sections.Count;
 
-        foreach (var section in sections)
+        for (var i = 0; i < sections.Count; i++)
         {
+            var section = sections[i];
+            var index = i + 1;
             if (runCancellation.IsStopRequested(run.Id)) throw new OperationCanceledException();
 
             var reverseRow = new NdRegulReverseMapping
@@ -296,6 +364,17 @@ public class NdRegulAnalysisProcessor(
 
             try
             {
+                reverseRow.Status = "running";
+                reverseRow.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+
+                logger.LogInformation(
+                    "Regul reverse mapping started for run {RunId} section {SectionRef} ({Index}/{Total})",
+                    run.Id,
+                    section.SectionRef,
+                    index,
+                    sectionTotal);
+
                 var mapping = await CallReverseMappingAsync(section, regulatoryClauses, ct);
                 reverseRow.Status = "completed";
                 reverseRow.Mapping = mapping.Mapping;
@@ -305,6 +384,7 @@ public class NdRegulAnalysisProcessor(
                 reverseRow.UpdatedAt = DateTimeOffset.UtcNow;
                 mappingsCompleted++;
 
+                var intClauseNo = "";
                 if (NdRegulReverseIntRows.ShouldCreateIntRow(mapping.Mapping))
                 {
                     var intFinding = NdRegulReverseIntRows.BuildIntFinding(
@@ -348,11 +428,35 @@ public class NdRegulAnalysisProcessor(
                         intFinding.ClauseNo, intFinding.ClauseText, judgment);
                     NdRegulAnalysisPointSync.ApplyIntReverseFinding(intPoint, landingMessage, judgment);
                     intRowsCreated++;
+                    intClauseNo = intFinding.ClauseNo;
+                    logger.LogInformation(
+                        "Regul reverse INT row created for run {RunId} section {SectionRef} clause={IntClause} pointId={PointId}",
+                        run.Id,
+                        section.SectionRef,
+                        intClauseNo,
+                        intPoint.Id);
                 }
+
+                logger.LogInformation(
+                    "Regul reverse mapping completed for run {RunId} section {SectionRef} ({Index}/{Total}) mapping={Mapping} intRow={IntCreated} progress={Completed}/{SectionTotal}",
+                    run.Id,
+                    section.SectionRef,
+                    index,
+                    sectionTotal,
+                    mapping.Mapping,
+                    intClauseNo.Length > 0,
+                    mappingsCompleted,
+                    sectionTotal);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Regul reverse mapping failed for section {SectionRef}", section.SectionRef);
+                logger.LogError(
+                    ex,
+                    "Regul reverse mapping failed for run {RunId} section {SectionRef} ({Index}/{Total})",
+                    run.Id,
+                    section.SectionRef,
+                    index,
+                    sectionTotal);
                 reverseRow.Status = "failed";
                 reverseRow.ErrorMessage = ex.Message;
                 reverseRow.UpdatedAt = DateTimeOffset.UtcNow;
@@ -410,6 +514,13 @@ public class NdRegulAnalysisProcessor(
         await db.SaveChangesAsync(ct);
     }
 
+    private async Task EnsureInternalSectionsForRunAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        var count = await db.NdRegulInternalSections.CountAsync(s => s.AnalysisRunId == run.Id, ct);
+        if (count > 0) return;
+        await ExtractAndStoreInternalSectionsAsync(run, ct);
+    }
+
     private async Task ExtractAndStoreInternalSectionsAsync(NdAnalysisRun run, CancellationToken ct)
     {
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
@@ -420,7 +531,7 @@ public class NdRegulAnalysisProcessor(
             .Where(s => s.AnalysisRunId == run.Id)
             .ToListAsync(ct);
         if (existing.Count > 0)
-            db.NdRegulInternalSections.RemoveRange(existing);
+            return;
 
         var allSections = new List<NdRegulInternalSection>();
 
@@ -555,6 +666,140 @@ public class NdRegulAnalysisProcessor(
     private async Task MarkCancelledAsync(NdAnalysisRun run, CancellationToken ct)
     {
         run.Status = "cancelled";
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Re-run forward (or full reverse phase) for one point on a Regul workflow run.</summary>
+    public async Task ProcessPointAsync(
+        Guid runId,
+        Guid pointId,
+        bool reverseOnly,
+        CancellationToken ct)
+    {
+        var run = await db.NdAnalysisRuns
+            .Include(r => r.Points)
+            .FirstOrDefaultAsync(r => r.Id == runId, ct)
+            ?? throw new InvalidOperationException("Analysis run not found.");
+
+        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            throw new InvalidOperationException("Not a Regul workflow run.");
+
+        var point = run.Points.FirstOrDefault(p => p.Id == pointId)
+            ?? throw new InvalidOperationException("Analysis point not found.");
+
+        if (runCancellation.IsStopRequested(runId))
+        {
+            await MarkCancelledAsync(run, ct);
+            return;
+        }
+
+        run.Status = "running";
+        run.RegulPipelineError = null;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        if (reverseOnly)
+        {
+            run.RegulPipelinePhase = "reverse";
+            await db.SaveChangesAsync(ct);
+            await RunReversePhaseAsync(run, ct);
+            await FinalizePointCountsAsync(run, ct);
+            run.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return;
+        }
+
+        await EnsureInternalSectionsForRunAsync(run, ct);
+        await EnsureForwardFindingsAsync(run, ct);
+        var finding = await db.NdRegulForwardFindings
+            .FirstOrDefaultAsync(f => f.AnalysisRunId == runId && f.AnalysisPointId == pointId, ct);
+
+        point.LandingAiStatus = "pending";
+        point.LandingAiResult = null;
+        point.LandingAiError = null;
+        point.GoogleAiStatus = "pending";
+        point.GoogleAiResult = null;
+        point.GoogleAiError = null;
+        point.DualVerifyStatus = "pending";
+        point.FinalStatus = null;
+        point.UpdatedAt = DateTimeOffset.UtcNow;
+
+        if (finding != null)
+        {
+            finding.Status = "pending";
+            finding.ErrorMessage = null;
+            finding.ResultJson = null;
+            finding.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        run.RegulPipelinePhase = "forward";
+        await db.SaveChangesAsync(ct);
+
+        if (finding == null)
+            return;
+
+        var policyBundle = await LoadPolicyBundleAsync(run, ct);
+        var cacheContext = policyBundle.TotalPages <= NdRegulPolicyContextService.FullManualMaxPages;
+        try
+        {
+            var judgment = await CallForwardJudgmentAsync(
+                finding.ClauseNo,
+                finding.ClauseText,
+                policyBundle,
+                cacheContext,
+                ct);
+            var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
+                finding.ClauseNo, finding.ClauseText, judgment);
+            finding.Status = "completed";
+            finding.ResultJson = JsonSerializer.Serialize(judgment);
+            finding.ErrorMessage = null;
+            finding.UpdatedAt = DateTimeOffset.UtcNow;
+            NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, landingMessage);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Regul forward rerun failed for clause {ClauseNo}", finding.ClauseNo);
+            finding.Status = "failed";
+            finding.ErrorMessage = ex.Message;
+            finding.UpdatedAt = DateTimeOffset.UtcNow;
+            point.LandingAiStatus = "failed";
+            point.LandingAiError = ex.Message;
+            point.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await FinalizePointCountsAsync(run, ct);
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Re-run reverse mapping for all internal sections (Regul workflow only).</summary>
+    public async Task RerunReversePhaseAsync(Guid runId, CancellationToken ct)
+    {
+        var run = await db.NdAnalysisRuns
+            .Include(r => r.Points)
+            .FirstOrDefaultAsync(r => r.Id == runId, ct)
+            ?? throw new InvalidOperationException("Analysis run not found.");
+
+        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            throw new InvalidOperationException("Not a Regul workflow run.");
+
+        if (runCancellation.IsStopRequested(runId))
+        {
+            await MarkCancelledAsync(run, ct);
+            return;
+        }
+
+        run.Status = "running";
+        run.RegulPipelinePhase = "reverse";
+        run.RegulPipelineError = null;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        await RunReversePhaseAsync(run, ct);
+        await FinalizePointCountsAsync(run, ct);
+        run.RegulPipelinePhase = "done";
+        run.Status = "completed";
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
     }

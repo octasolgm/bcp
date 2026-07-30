@@ -132,9 +132,23 @@
               </span>
             </td>
             <td>
-              <span class="severity-badge" [ngClass]="sectionExtractClass(d.sectionExtractStatus)">
+              <span class="severity-badge extract-status-cell" [ngClass]="sectionExtractClass(d.sectionExtractStatus)">
                 @if (isExtractingSections(d)) {
-                  Extracting…
+                  <span class="extract-status-stack">
+                    <span class="extract-status-label">{{ sectionExtractStatusText(d) }}</span>
+                    @if (sectionExtractProgressPct(d); as pct) {
+                      <span
+                        class="extract-progress-track"
+                        role="progressbar"
+                        [attr.aria-valuenow]="pct"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        [attr.aria-label]="sectionExtractStatusText(d)"
+                      >
+                        <span class="extract-progress-fill" [style.width.%]="pct"></span>
+                      </span>
+                    }
+                  </span>
                 } @else {
                   {{ sectionExtractLabel(d.sectionExtractStatus) }}
                   @if (d.sectionCount) {
@@ -263,9 +277,26 @@
       <div>
         <h3>{{ sectionsFor.title }}</h3>
         <p>
-          {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
-          @if (sectionsFor.sectionCount) {
-            · {{ sectionsFor.sectionCount }} section(s)
+          @if (isExtractingSections(sectionsFor)) {
+            <span class="extract-status-stack panel-extract-status">
+              <span>{{ sectionExtractStatusText(sectionsFor) }}</span>
+              @if (sectionExtractProgressPct(sectionsFor); as pct) {
+                <span
+                  class="extract-progress-track panel-progress"
+                  role="progressbar"
+                  [attr.aria-valuenow]="pct"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                >
+                  <span class="extract-progress-fill" [style.width.%]="pct"></span>
+                </span>
+              }
+            </span>
+          } @else {
+            {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
+            @if (sectionsFor.sectionCount) {
+              · {{ sectionsFor.sectionCount }} section(s)
+            }
           }
         </p>
       </div>

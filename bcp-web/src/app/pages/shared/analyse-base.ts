@@ -68,6 +68,7 @@ import {
 } from '../../../lib/regulation-catalog-utils';
 import { parsePointSnapshot, resolveSnapshotDisplayNumber } from '../../../lib/nd/utils';
 import type { AnalysisPoint, AnalysisRunSummary, PointSnapshot, RegulationDocument } from '../../../lib/nd/types';
+import { analysisPointCoverageStatus } from '../../../lib/nd/analysis-point-mapper';
 import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
 import {
   exportGapAnalysisExcelFromPoints,
@@ -235,11 +236,46 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   private ndRunPollInFlight = false;
   /** Full points from last attach/detail load — status polls merge onto these. */
   private ndRunDetailPoints: AnalysisPoint[] = [];
-  private ndRunSelectedSnapshot = '';
+  protected ndRunSelectedSnapshot = '';
   /** Prevents overlapping attach calls (queryParam subscribe can fire twice before ndRunId is set). */
   private ndRunAttachInFlight: string | null = null;
   protected ndRunId: string | null = null;
   ndRunWorkflowStatus = '';
+  /** Regul workflow V3 — forward | reverse | qualitative | done (from status poll). */
+  protected ndRegulPipelinePhase = '';
+  protected ndWorkflowEngine = '';
+  protected ndRegulReverseSectionTotal = 0;
+  protected ndRegulReverseSectionCompleted = 0;
+  protected ndRegulReverseSections: Array<{
+    sectionRef: string;
+    title: string;
+    status: string;
+  }> = [];
+
+  /** Hook after each ND /status poll merge (Regul shell overrides for phase UI). */
+  protected onNdRunPollMerged(_data: {
+    status: string;
+    workflowEngine?: string;
+    regulPipelinePhase?: string;
+    regulReverseSectionTotal?: number | null;
+    regulReverseSectionCompleted?: number | null;
+    regulReverseSections?: Array<{ sectionRef: string; title: string; status: string }>;
+    totalPointsCount: number;
+    processedPointsCount: number;
+  }): void {}
+
+  protected isRegulPipelineRun(): boolean {
+    return this.ndWorkflowEngine === 'regul_pipeline';
+  }
+
+  protected isRegulPipelineInFlight(): boolean {
+    if (!this.isRegulPipelineRun()) return false;
+    const run = (this.ndRunWorkflowStatus || '').toLowerCase();
+    if (run !== 'running' && run !== 'processing') return false;
+    const phase = (this.ndRegulPipelinePhase || '').toLowerCase();
+    return phase !== 'done';
+  }
+
   /** Set from ND run detail when resuming — used to restore library mode in analyse-v8. */
   protected ndRunLibraryId: string | null = null;
   protected ndRunDualVerifyFailedCount = 0;
@@ -383,6 +419,11 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     if (this.demoQueue.length) return new Set(this.demoQueue);
     if (this.sessionSelectedPointIds?.size) return this.sessionSelectedPointIds;
     return null;
+  }
+
+  /** ND shells may exclude reverse-only INT rows from gov catalog and analysing scope. */
+  protected filterPointsForRunScope(points: AnalysisPoint[]): AnalysisPoint[] {
+    return points;
   }
 
   get analysingListRows(): Array<{
@@ -627,11 +668,15 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   needsPhase2RerunForPoint(pointId: string): boolean {
     const p = this.resolveSessionPoint(pointId);
     if (!p) return false;
+    const nd = this.ndRunDetailPoints.find((ap) => this.ndPointMatchesId(ap, pointId));
     return needsPhase2Rerun({
       status: p.status,
       landingMessage: p.landingMessage,
       llmMessage: p.llmMessage,
       errorMessage: p.errorMessage,
+      landingAiStatus: nd?.landingAiStatus,
+      googleAiStatus: nd?.googleAiStatus,
+      dualVerifyStatus: nd?.dualVerifyStatus,
     });
   }
 
@@ -746,13 +791,53 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     return phase === 1 ? display.phase1.state === 'running' : display.phase2.state === 'running';
   }
 
-  /** True when this analysing-list row can show per-point rerun actions. */
+    /** True when this analysing-list row can show per-point rerun actions. */
   canShowPointRerunActions(pointId: string): boolean {
     if (!this.hasResumableRun) return false;
     if (this.isPointRerunInFlight(pointId)) return true;
     const status = this.resolveSessionPointStatus(pointId) ?? '';
-    if (status === 'running' || status === 'processing' || status === 'queued') return false;
+    if (status === 'running' || status === 'processing') return false;
+    if (status === 'queued') {
+      return this.isNdRunStuck || this.analysisState !== 'running';
+    }
+  if (status === 'not-run') return true;
     return status === 'completed' || status === 'failed' || status === 'cancelled' || this.needsPhase2RerunForPoint(pointId);
+  }
+
+  /** ND run looks active in UI but no point is actually running and progress is still 0. */
+  get isNdRunStuck(): boolean {
+    if (!this.ndRunId) return false;
+    const rows = this.analysingListRows;
+    if (!rows.length) return false;
+    const runningCount = rows.filter(
+      (r) => r.status === 'running' || r.status === 'processing',
+    ).length;
+    const pendingLike = rows.filter(
+      (r) => r.status === 'queued' || r.status === 'not-run',
+    ).length;
+    if (pendingLike === 0) return false;
+    if (runningCount > 0) return false;
+    if (this.progressDone > 0) return false;
+    return this.analysisState === 'running' || pendingLike === rows.length;
+  }
+
+  /** Points eligible for (re)start — queued or never run. */
+  get ndQueuedOrNotRunCount(): number {
+    return this.analysingListRows.filter(
+      (r) => r.status === 'queued' || r.status === 'not-run',
+    ).length;
+  }
+
+  protected rerunAllStuckOrQueued(): void {
+    if (!this.ndRunId) return;
+    const ids = this.analysingListRows
+      .filter((r) => r.status === 'queued' || r.status === 'not-run')
+      .map((r) => r.pointId);
+    if (!ids.length) {
+      this.toast.show('No points to rerun', 'info');
+      return;
+    }
+    void this.launchNdAnalysisRun(this.ndRunId, ids);
   }
 
   /** Full Landing + Phase 2 rerun for one point. */
@@ -2970,7 +3055,13 @@ ${this.findingsPreview
 
   runRemainingPoints(): void {
     if (this.ndRunId) {
-      void this.launchNdAnalysisRun(this.ndRunId, this.comparableSelectedIds());
+      const ids =
+        this.ndQueuedOrNotRunCount > 0
+          ? this.analysingListRows
+              .filter((r) => r.status === 'queued' || r.status === 'not-run')
+              .map((r) => r.pointId)
+          : this.comparableSelectedIds();
+      void this.launchNdAnalysisRun(this.ndRunId, ids);
       return;
     }
     if (!this.sessionId) return;
@@ -3423,6 +3514,9 @@ ${this.findingsPreview
         name: string;
         status: string;
         libraryId?: string | null;
+        workflowEngine?: string;
+        regulPipelinePhase?: string | null;
+        enableQualitative?: boolean;
         selectedPointsSnapshot: string;
         selectedInternalDocIds: string;
         selectedRegulationDocIds: string;
@@ -3448,6 +3542,8 @@ ${this.findingsPreview
       };
 
       this.ndRunLibraryId = detail.run.libraryId ? String(detail.run.libraryId) : null;
+      if (resume.workflowEngine) this.ndWorkflowEngine = resume.workflowEngine;
+      if (resume.regulPipelinePhase != null) this.ndRegulPipelinePhase = resume.regulPipelinePhase;
       this.ndRunDualVerifyFailedCount = detail.run.dualVerifyFailedCount ?? 0;
       this.ndRunSelectedSnapshot = detail.run.selectedPointsSnapshot ?? '';
 
@@ -3460,6 +3556,7 @@ ${this.findingsPreview
       };
 
       const points = detail.points;
+      const scopePoints = this.filterPointsForRunScope(points);
       this.ndRunDetailPoints = points;
       const isDemoRun = (detail.run.name ?? '').startsWith('[Demo]');
       if (isDemoRun) {
@@ -3473,7 +3570,8 @@ ${this.findingsPreview
       await this.onNdRunContextLoaded({ ...detail, points });
 
       if (!this.govPoints.length) {
-        const fromPoints = this.govPointsFromNdPoints(points);
+        const scopePoints = this.filterPointsForRunScope(points);
+        const fromPoints = this.govPointsFromNdPoints(scopePoints);
         if (fromPoints.length) {
           this.applyGovPoints(fromPoints, detail.run.name, null);
         } else {
@@ -3543,9 +3641,9 @@ ${this.findingsPreview
       );
 
       // Re-apply selection after applyNdRunState (it resets selected to regulationPointIds).
-      this.restoreNdRunSelection(detail.run.selectedPointsSnapshot, points);
-      if (!this.selected.size && this.govPoints.length && points.length) {
-        for (const p of points) {
+      this.restoreNdRunSelection(detail.run.selectedPointsSnapshot, scopePoints);
+      if (!this.selected.size && this.govPoints.length && scopePoints.length) {
+        for (const p of scopePoints) {
           const id = p.regulationPointId || parsePointSnapshot(p.pointSnapshot).pointNumber || '';
           const match = this.govPoints.find(
             (g) =>
@@ -3582,8 +3680,10 @@ ${this.findingsPreview
   ): AnalysisPoint[] {
     if (!statusPoints?.length) return detailPoints;
     const byId = new Map(statusPoints.map((p) => [p.id, p]));
-    if (!detailPoints.length) return statusPoints;
-    return detailPoints.map((p) => {
+    if (!detailPoints.length) return statusPoints as AnalysisPoint[];
+
+    const detailIds = new Set(detailPoints.map((p) => p.id));
+    const merged = detailPoints.map((p) => {
       const live = byId.get(p.id);
       if (!live) return p;
       return {
@@ -3596,8 +3696,16 @@ ${this.findingsPreview
         finalStatus: live.finalStatus ?? p.finalStatus,
         landingAiError: live.landingAiError ?? p.landingAiError,
         googleAiError: live.googleAiError ?? p.googleAiError,
+        pointSnapshot: p.pointSnapshot || (live as AnalysisPoint).pointSnapshot || p.pointSnapshot,
       };
     });
+
+    for (const live of statusPoints) {
+      if (!detailIds.has(live.id)) {
+        merged.push(live as AnalysisPoint);
+      }
+    }
+    return merged;
   }
 
   private govPointsFromNdPoints(points: AnalysisPoint[]): GovPoint[] {
@@ -3666,7 +3774,7 @@ ${this.findingsPreview
         if (s) keys.add(s);
       }
     }
-    for (const p of points) {
+    for (const p of this.filterPointsForRunScope(points)) {
       const snap = parsePointSnapshot(p.pointSnapshot);
       if (p.regulationPointId) keys.add(p.regulationPointId);
       if (snap.regulationPointId) keys.add(snap.regulationPointId);
@@ -3767,13 +3875,43 @@ ${this.findingsPreview
       totalPointsCount: number;
       processedPointsCount: number;
       dualVerifyFailedCount?: number;
+      workflowEngine?: string;
+      regulPipelinePhase?: string | null;
+      regulReverseSectionTotal?: number | null;
+      regulReverseSectionCompleted?: number | null;
+      regulReverseSections?: Array<{ sectionRef: string; title: string; status: string }> | null;
     },
     points: AnalysisPoint[],
-    status: { status: string; totalPointsCount: number; processedPointsCount: number } | null,
+    status: {
+      status: string;
+      totalPointsCount: number;
+      processedPointsCount: number;
+      workflowEngine?: string;
+      regulPipelinePhase?: string | null;
+      regulReverseSectionTotal?: number | null;
+      regulReverseSectionCompleted?: number | null;
+      regulReverseSections?: Array<{ sectionRef: string; title: string; status: string }> | null;
+    } | null,
     isDemoRun = false,
   ): boolean {
     const previousSelection = this.selectedDetailPointId;
     this.sessionId = null;
+    if (run.workflowEngine) this.ndWorkflowEngine = run.workflowEngine;
+    if (status?.workflowEngine) this.ndWorkflowEngine = status.workflowEngine;
+    const phaseFromPoll = status?.regulPipelinePhase ?? run.regulPipelinePhase;
+    if (phaseFromPoll !== undefined && phaseFromPoll !== null) {
+      this.ndRegulPipelinePhase = phaseFromPoll;
+    }
+    const pollData = status ?? run;
+    if (pollData.regulReverseSectionTotal != null) {
+      this.ndRegulReverseSectionTotal = pollData.regulReverseSectionTotal;
+    }
+    if (pollData.regulReverseSectionCompleted != null) {
+      this.ndRegulReverseSectionCompleted = pollData.regulReverseSectionCompleted;
+    }
+    if (pollData.regulReverseSections) {
+      this.ndRegulReverseSections = pollData.regulReverseSections;
+    }
     this.progressTotal = status?.totalPointsCount ?? run.totalPointsCount ?? points.length;
     this.progressDone = status?.processedPointsCount ?? run.processedPointsCount ?? 0;
     this.sessionPointStatus.clear();
@@ -3781,10 +3919,13 @@ ${this.findingsPreview
     this.selected.clear();
     this.sessionSelectedPointIds = new Set<string>();
 
+    const runStatusLabel = (status?.status ?? run.status ?? '').toLowerCase();
+
     for (const p of points) {
+      if (this.isRegulPipelineRun() && !p.regulationPointId) continue;
       const mapped = this.mapNdAnalysisPoint(p);
       if (!mapped.pointId) continue;
-      const status = this.normalizeStoredPointStatus(mapped);
+      const pointStatus = this.resolveNdPointSessionStatus(p, mapped, runStatusLabel);
       const snap = parsePointSnapshot(p.pointSnapshot);
       const keys = new Set<string>([mapped.pointId]);
       if (p.id) keys.add(p.id);
@@ -3793,7 +3934,7 @@ ${this.findingsPreview
       if (snap.regulationPointId?.trim()) keys.add(snap.regulationPointId.trim());
       if (snap.pageReference?.trim()) keys.add(snap.pageReference.trim());
       for (const key of keys) {
-        this.sessionPointStatus.set(key, status);
+        this.sessionPointStatus.set(key, pointStatus);
         this.sessionPointResults.set(key, mapped);
       }
       // Prefer regulationPointId so selection matches govPoints after assignUniqueLibraryPointIds.
@@ -3841,7 +3982,7 @@ ${this.findingsPreview
       this.selectedDetailPointId = selectionStillValid ? previousSelection : defaultId;
     }
 
-    const runStatus = (status?.status ?? run.status ?? '').toLowerCase();
+    const runStatus = runStatusLabel;
     const allPointsProcessed =
       this.progressTotal > 0 && this.progressDone >= this.progressTotal;
     const inFlight = runStatus === 'draft' || runStatus === 'running';
@@ -3884,6 +4025,16 @@ ${this.findingsPreview
       if (!activelyProcessing && this.pointPhaseRerun.size === 0) this.stopNdRunPolling();
       else if (this.pointPhaseRerun.size > 0) this.ensureNdRunPolling(runId);
       this.syncSelectionToGovPoints();
+      this.onNdRunPollMerged({
+        status: runStatusLabel,
+        workflowEngine: this.ndWorkflowEngine,
+        regulPipelinePhase: this.ndRegulPipelinePhase,
+        regulReverseSectionTotal: this.ndRegulReverseSectionTotal,
+        regulReverseSectionCompleted: this.ndRegulReverseSectionCompleted,
+        regulReverseSections: this.ndRegulReverseSections,
+        totalPointsCount: this.progressTotal,
+        processedPointsCount: this.progressDone,
+      });
       return activelyProcessing;
     }
 
@@ -3898,7 +4049,102 @@ ${this.findingsPreview
     }
     this.onAnalysisComplete();
     this.syncSelectionToGovPoints();
+    this.onNdRunPollMerged({
+      status: runStatusLabel,
+      workflowEngine: this.ndWorkflowEngine,
+      regulPipelinePhase: this.ndRegulPipelinePhase,
+      regulReverseSectionTotal: this.ndRegulReverseSectionTotal,
+      regulReverseSectionCompleted: this.ndRegulReverseSectionCompleted,
+      regulReverseSections: this.ndRegulReverseSections,
+      totalPointsCount: this.progressTotal,
+      processedPointsCount: this.progressDone,
+    });
     return false;
+  }
+
+  /** Populate session maps from persisted analysis points (e.g. after GET /nd/results). */
+  protected hydrateNdSessionFromPoints(
+    points: AnalysisPoint[],
+    run?: { status?: string; processedPointsCount?: number; totalPointsCount?: number },
+  ): void {
+    this.sessionPointStatus.clear();
+    this.sessionPointResults.clear();
+    this.sessionSelectedPointIds = new Set();
+    this.selected.clear();
+
+    const runStatus = (run?.status ?? '').toLowerCase();
+
+    for (const p of points) {
+      const mapped = this.mapNdAnalysisPoint(p);
+      if (!mapped.pointId) continue;
+      let status = this.resolveNdPointSessionStatus(p, mapped, runStatus);
+
+      const snap = parsePointSnapshot(p.pointSnapshot);
+      const keys = new Set<string>([mapped.pointId]);
+      if (p.id) keys.add(p.id);
+      if (p.regulationPointId) keys.add(p.regulationPointId);
+      if (snap.pointNumber?.trim()) keys.add(snap.pointNumber.trim());
+      if (snap.regulationPointId?.trim()) keys.add(snap.regulationPointId.trim());
+      if (snap.pageReference?.trim()) keys.add(snap.pageReference.trim());
+      for (const key of keys) {
+        this.sessionPointStatus.set(key, status);
+        this.sessionPointResults.set(key, mapped);
+      }
+      const selectId = p.regulationPointId || mapped.pointId;
+      this.sessionSelectedPointIds.add(selectId);
+      this.selected.add(selectId);
+    }
+
+    for (const g of this.govPoints) {
+      const resolved = this.resolveSessionPoint(g.point_id);
+      if (!resolved) continue;
+      const status =
+        this.resolveSessionPointStatus(g.point_id) ?? this.normalizeStoredPointStatus(resolved);
+      if (!this.sessionPointResults.has(g.point_id)) {
+        this.sessionPointResults.set(g.point_id, resolved);
+      }
+      if (!this.sessionPointStatus.has(g.point_id)) {
+        this.sessionPointStatus.set(g.point_id, status);
+      }
+    }
+
+    this.progressTotal = run?.totalPointsCount ?? points.length;
+    this.progressDone = run?.processedPointsCount ?? 0;
+
+    const allProcessed =
+      this.progressTotal > 0 && this.progressDone >= this.progressTotal;
+    if (runStatus === 'running' || runStatus === 'processing') {
+      this.analysisState = 'running';
+    } else if (allProcessed && runStatus !== 'draft') {
+      this.analysisState = 'complete';
+      this.progress = 100;
+    } else if (this.analysisState !== 'running') {
+      this.analysisState = 'idle';
+    }
+  }
+
+  private resolveNdPointSessionStatus(
+    p: AnalysisPoint,
+    mapped: SessionPoint,
+    runStatus: string,
+  ): string {
+    if (this.isRegulPipelineRun()) {
+      return analysisPointCoverageStatus(p, runStatus, {
+        workflowEngine: this.ndWorkflowEngine,
+        regulPipelinePhase: this.ndRegulPipelinePhase,
+      });
+    }
+
+    const status = this.normalizeStoredPointStatus(mapped);
+    const unprocessed =
+      p.landingAiStatus === 'pending' &&
+      !mapped.landingMessage?.trim() &&
+      (p.dualVerifyStatus === 'pending' || !p.dualVerifyStatus) &&
+      !mapped.llmMessage?.trim();
+    const run = runStatus.toLowerCase();
+    if (unprocessed && (run === 'draft' || run === '')) return 'not-run';
+    if (unprocessed && (run === 'running' || run === 'processing')) return 'running';
+    return status;
   }
 
   private mapNdAnalysisPoint(p: AnalysisPoint): SessionPoint {
@@ -4269,11 +4515,12 @@ ${this.findingsPreview
     }
   }
 
-  private pollNdRun(runId: string): void {
+  protected pollNdRun(runId: string): void {
     this.stopNdRunPolling();
     this.ndRunPollInFlight = false;
-    // Slow poll: /status + /sessions/active compete for a tiny Supabase session pool.
-    const intervalMs = this.pointPhaseRerun.size > 0 ? 3_000 : 10_000;
+    // Slow poll unless Regul reverse/forward is in flight (live section + INT rows).
+    const intervalMs =
+      this.pointPhaseRerun.size > 0 || this.isRegulPipelineInFlight() ? 3_000 : 10_000;
     const tick = () => {
       if (typeof document !== 'undefined' && document.hidden) return;
       if (this.ndRunPollInFlight) return;
@@ -4287,14 +4534,22 @@ ${this.findingsPreview
             totalPointsCount: number;
             processedPointsCount: number;
             dualVerifyFailedCount?: number;
+            workflowEngine?: string;
+            regulPipelinePhase?: string | null;
+            regulReverseSectionTotal?: number | null;
+            regulReverseSectionCompleted?: number | null;
+            regulReverseSections?: Array<{ sectionRef: string; title: string; status: string }> | null;
             points: AnalysisPoint[];
           };
           const merged = this.mergeNdRunPoints(this.ndRunDetailPoints, data.points);
-          if (merged.length) this.ndRunDetailPoints = merged;
-          this.applyNdRunState(runId, data, merged.length ? merged : data.points ?? [], data);
-          this.onNdRunPointsLiveUpdate(merged.length ? merged : data.points ?? []);
+          this.ndRunDetailPoints = merged.length ? merged : data.points ?? [];
+          this.applyNdRunState(runId, data, this.ndRunDetailPoints, data);
+          this.onNdRunPointsLiveUpdate(this.ndRunDetailPoints);
           if (this.ndRunSelectedSnapshot) {
-            this.restoreNdRunSelection(this.ndRunSelectedSnapshot, merged.length ? merged : data.points ?? []);
+            this.restoreNdRunSelection(
+              this.ndRunSelectedSnapshot,
+              this.filterPointsForRunScope(this.ndRunDetailPoints),
+            );
           }
         })
         .finally(() => {

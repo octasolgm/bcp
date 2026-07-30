@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Reguliq.Api.Infrastructure;
 
 namespace Reguliq.Api.Services.Llm;
@@ -131,6 +132,53 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config)
         return await PostMessagesAsync(BuildMessagesBody(model, messages), ct);
     }
 
+    /// <summary>
+    /// Regul.ai-style structured tool call: system prompt + cacheable context block + per-clause query block.
+    /// Returns serialized tool input JSON.
+    /// </summary>
+    public async Task<string> StructuredToolCallAsync(
+        string system,
+        string contextBlock,
+        string queryBlock,
+        string toolName,
+        JsonObject inputSchema,
+        string model,
+        bool cacheContextBlock,
+        CancellationToken ct = default)
+    {
+        EnsureApiKey();
+
+        var contextContent = new Dictionary<string, object>
+        {
+            ["type"] = "text",
+            ["text"] = contextBlock,
+        };
+        if (cacheContextBlock)
+            contextContent["cache_control"] = new { type = "ephemeral" };
+
+        var userContent = new object[]
+        {
+            contextContent,
+            new { type = "text", text = queryBlock },
+        };
+
+        var messages = new object[] { new { role = "user", content = userContent } };
+        var body = BuildMessagesBody(model, messages);
+        body["system"] = system;
+        body["tools"] = new object[]
+        {
+            new
+            {
+                name = toolName,
+                description = $"Structured output for {toolName}",
+                input_schema = inputSchema,
+            },
+        };
+        body["tool_choice"] = new { type = "tool", name = toolName };
+
+        return await PostMessagesAsync(body, ct, expectToolUse: true);
+    }
+
     public async Task<string> AnalyzeWithPdfsAsync(
         IReadOnlyList<(byte[] Pdf, string FileName)> pdfs,
         string prompt,
@@ -158,7 +206,10 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config)
         return await PostMessagesAsync(BuildMessagesBody(model, messages), ct);
     }
 
-    private async Task<string> PostMessagesAsync(Dictionary<string, object> body, CancellationToken ct)
+    private async Task<string> PostMessagesAsync(
+        Dictionary<string, object> body,
+        CancellationToken ct,
+        bool expectToolUse = false)
     {
         StripUnsupportedAnthropicSamplingParams(body);
         var url = $"{BaseUrl.TrimEnd('/')}/messages";
@@ -174,7 +225,9 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config)
         if (!res.IsSuccessStatusCode)
             throw new HttpRequestException($"Anthropic API error ({res.StatusCode}): {text[..Math.Min(300, text.Length)]}");
 
-        return ParseMessagesResponse(text);
+        return expectToolUse
+            ? ParseToolUseResponse(text)
+            : ParseMessagesResponse(text);
     }
 
     private void EnsureApiKey()
@@ -200,6 +253,25 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config)
         }
 
         throw new InvalidOperationException("Anthropic API returned empty response.");
+    }
+
+    private static string ParseToolUseResponse(string responseText)
+    {
+        using var doc = JsonDocument.Parse(responseText);
+        if (doc.RootElement.TryGetProperty("content", out var blocks))
+        {
+            foreach (var block in blocks.EnumerateArray())
+            {
+                if (block.TryGetProperty("type", out var typeEl)
+                    && typeEl.GetString() == "tool_use"
+                    && block.TryGetProperty("input", out var input))
+                {
+                    return input.GetRawText();
+                }
+            }
+        }
+
+        throw new InvalidOperationException("Anthropic API returned no tool_use block.");
     }
 }
 

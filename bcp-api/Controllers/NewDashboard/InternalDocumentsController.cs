@@ -32,6 +32,8 @@ public class InternalDocumentsController(
         if (hiddenOnly && profile!.Role != "super_admin")
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
+        await sectionService.RecoverAllStaleSectionExtractsAsync(ct);
+
         var docs = await appDb.StoredDocuments.AsNoTracking()
             .Where(d => (d.DocKind == "document" || d.DocKind == "internal") && d.IsHidden == hiddenOnly)
             .OrderByDescending(d => hiddenOnly ? d.HiddenAt ?? d.UpdatedAt : d.CreatedAt)
@@ -69,6 +71,12 @@ public class InternalDocumentsController(
                 sectionCount = d.SectionCount,
                 sectionExtractedAt = d.SectionExtractedAt,
                 sectionExtractError = d.SectionExtractError,
+                sectionExtractProgressLabel = ShowsSectionExtractProgress(d.SectionExtractStatus)
+                    ? d.SectionExtractProgressLabel
+                    : null,
+                sectionExtractProgressPct = ShowsSectionExtractProgress(d.SectionExtractStatus)
+                    ? d.SectionExtractProgressPct
+                    : null,
                 sectionExtractedBy = d.SectionExtractedBy,
                 sectionExtractedByName = ProfileName(profileNames, d.SectionExtractedBy),
                 isHidden = d.IsHidden,
@@ -440,7 +448,7 @@ public class InternalDocumentsController(
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
-        var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+        var doc = await sectionService.RecoverStaleSectionExtractIfNeededAsync(id, ct);
         if (doc == null) return NotFound(new { success = false, message = "Document not found." });
 
         var sections = await sectionService.ListSectionsAsync(id, ct);
@@ -451,6 +459,13 @@ public class InternalDocumentsController(
             {
                 documentId = id,
                 sectionExtractStatus = doc.SectionExtractStatus,
+                sectionExtractError = doc.SectionExtractError,
+                sectionExtractProgressLabel = ShowsSectionExtractProgress(doc.SectionExtractStatus)
+                    ? doc.SectionExtractProgressLabel
+                    : null,
+                sectionExtractProgressPct = ShowsSectionExtractProgress(doc.SectionExtractStatus)
+                    ? doc.SectionExtractProgressPct
+                    : null,
                 sectionCount = doc.SectionCount ?? sections.Count,
                 sections = sections.Select(s => new
                 {
@@ -491,6 +506,12 @@ public class InternalDocumentsController(
                     sectionExtractStatus = doc?.SectionExtractStatus ?? "extracted",
                     sectionCount = sections.Count,
                     sectionExtractedAt = doc?.SectionExtractedAt,
+                    sectionExtractProgressLabel = ShowsSectionExtractProgress(doc?.SectionExtractStatus)
+                        ? doc?.SectionExtractProgressLabel
+                        : null,
+                    sectionExtractProgressPct = ShowsSectionExtractProgress(doc?.SectionExtractStatus)
+                        ? doc?.SectionExtractProgressPct
+                        : null,
                     reusedSaved = !force && doc?.SectionExtractStatus == "extracted",
                 },
             });
@@ -539,4 +560,7 @@ public class InternalDocumentsController(
             "DOC" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             _ => "application/octet-stream",
         };
+
+    private static bool ShowsSectionExtractProgress(string? status) =>
+        string.Equals(status, "processing", StringComparison.OrdinalIgnoreCase);
 }

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -49,7 +49,7 @@ type InternalDocAnalysisRun = {
   templateUrl: './nd-internal-documents.component.html',
   styleUrls: ['./nd-internal-documents.component.scss', '../nd-shared.scss'],
 })
-export class NdInternalDocumentsComponent implements OnInit {
+export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   private readonly api = inject(NdApiService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -79,6 +79,11 @@ export class NdInternalDocumentsComponent implements OnInit {
   sortColumn: DocSortColumn = 'uploaded';
   sortDir: SortDir = 'desc';
 
+  private sectionExtractPollTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly pollingSectionExtractIds = new Set<string>();
+  private readonly sectionExtractPollStartedAt = new Map<string, number>();
+  private static readonly SECTION_EXTRACT_POLL_MS = 11 * 60 * 1000;
+
   async ngOnInit(): Promise<void> {
     if (this.route.snapshot.queryParamMap.get('deleted') === '1') {
       await this.router.navigate(['/nd/internal-documents/deleted'], { replaceUrl: true });
@@ -86,6 +91,118 @@ export class NdInternalDocumentsComponent implements OnInit {
     }
     this.syncDeletedFromRoute();
     this.route.data.subscribe(() => this.syncDeletedFromRoute());
+  }
+
+  ngOnDestroy(): void {
+    this.stopSectionExtractPolling();
+  }
+
+  private stopSectionExtractPolling(): void {
+    if (this.sectionExtractPollTimer) {
+      clearInterval(this.sectionExtractPollTimer);
+      this.sectionExtractPollTimer = null;
+    }
+  }
+
+  private ensureSectionExtractPolling(): void {
+    if (this.sectionExtractPollTimer || !this.pollingSectionExtractIds.size) return;
+    this.sectionExtractPollTimer = setInterval(() => void this.pollSectionExtractingDocs(), 5000);
+  }
+
+  private trackSectionExtractingDoc(docId: string): void {
+    this.pollingSectionExtractIds.add(docId);
+    this.sectionExtractPollStartedAt.set(docId, Date.now());
+    this.extractingSectionsId = docId;
+    const idx = this.docs.findIndex((d) => d.id === docId);
+    if (idx >= 0) {
+      this.docs[idx] = {
+        ...this.docs[idx],
+        sectionExtractStatus: 'processing',
+        sectionExtractProgressLabel: 'Starting section extract…',
+        sectionExtractProgressPct: 5,
+        sectionExtractError: null,
+      };
+      if (this.sectionsFor?.id === docId) {
+        this.sectionsFor = this.docs[idx];
+      }
+    }
+    this.ensureSectionExtractPolling();
+  }
+
+  private syncSectionExtractPollingFromDocs(): void {
+    for (const doc of this.docs) {
+      if ((doc.sectionExtractStatus ?? '').toLowerCase() === 'processing') {
+        this.pollingSectionExtractIds.add(doc.id);
+        if (!this.sectionExtractPollStartedAt.has(doc.id)) {
+          this.sectionExtractPollStartedAt.set(doc.id, Date.now());
+        }
+      }
+    }
+    if (this.pollingSectionExtractIds.size) this.ensureSectionExtractPolling();
+  }
+
+  private async pollSectionExtractingDocs(): Promise<void> {
+    if (!this.pollingSectionExtractIds.size) {
+      this.stopSectionExtractPolling();
+      return;
+    }
+    for (const id of [...this.pollingSectionExtractIds]) {
+      const res = await this.api.getInternalDocumentSections(id);
+      if (!res.success || !res.data) continue;
+      const st = (res.data.sectionExtractStatus ?? '').toLowerCase();
+      const count = res.data.sectionCount ?? res.data.sections?.length ?? 0;
+      const idx = this.docs.findIndex((d) => d.id === id);
+      if (idx >= 0) {
+        this.docs[idx] = {
+          ...this.docs[idx],
+          sectionExtractStatus: res.data.sectionExtractStatus ?? this.docs[idx].sectionExtractStatus,
+          sectionCount: count,
+          sectionExtractError: res.data.sectionExtractError ?? this.docs[idx].sectionExtractError,
+          sectionExtractProgressLabel:
+            res.data.sectionExtractProgressLabel ?? this.docs[idx].sectionExtractProgressLabel,
+          sectionExtractProgressPct:
+            res.data.sectionExtractProgressPct ?? this.docs[idx].sectionExtractProgressPct,
+        };
+        if (this.sectionsFor?.id === id) {
+          this.sectionsFor = this.docs[idx];
+        }
+      }
+      if (st === 'processing') {
+        const started = this.sectionExtractPollStartedAt.get(id) ?? Date.now();
+        if (Date.now() - started > NdInternalDocumentsComponent.SECTION_EXTRACT_POLL_MS) {
+          this.pollingSectionExtractIds.delete(id);
+          this.sectionExtractPollStartedAt.delete(id);
+          if (this.extractingSectionsId === id) this.extractingSectionsId = null;
+          this.error =
+            'Section extract did not finish in time. Restart the API, refresh this page, then click Retry extract.';
+          await this.load(true);
+        }
+        continue;
+      }
+      this.sectionExtractPollStartedAt.delete(id);
+      if (st === 'extracted') {
+        this.pollingSectionExtractIds.delete(id);
+        if (this.extractingSectionsId === id) this.extractingSectionsId = null;
+        const title = this.docs[idx]?.title ?? 'Document';
+        this.message = `Extracted ${count} sections from "${title}"`;
+        this.error = '';
+        if (this.sectionsFor?.id === id) {
+          this.sectionsFor = this.docs[idx] ?? this.sectionsFor;
+          await this.loadSections(id);
+        }
+      } else if (st === 'failed') {
+        this.pollingSectionExtractIds.delete(id);
+        if (this.extractingSectionsId === id) this.extractingSectionsId = null;
+        const detail = res.data.sectionExtractError?.trim();
+        this.error = detail
+          ? detail
+          : `Section extract failed for "${this.docs[idx]?.title ?? 'document'}"`;
+      }
+    }
+    if (!this.pollingSectionExtractIds.size) {
+      this.stopSectionExtractPolling();
+      await this.load(true);
+    }
   }
 
   private syncDeletedFromRoute(): void {
@@ -139,7 +256,25 @@ export class NdInternalDocumentsComponent implements OnInit {
   }
 
   isExtractingSections(doc: InternalDocument): boolean {
-    return this.extractingSectionsId === doc.id || doc.sectionExtractStatus === 'processing';
+    return (
+      this.extractingSectionsId === doc.id ||
+      this.pollingSectionExtractIds.has(doc.id) ||
+      doc.sectionExtractStatus === 'processing'
+    );
+  }
+
+  sectionExtractStatusText(doc: InternalDocument): string {
+    if (this.isExtractingSections(doc)) {
+      return doc.sectionExtractProgressLabel?.trim() || this.sectionExtractLabel(doc.sectionExtractStatus);
+    }
+    return this.sectionExtractLabel(doc.sectionExtractStatus);
+  }
+
+  sectionExtractProgressPct(doc: InternalDocument): number | null {
+    if (!this.isExtractingSections(doc)) return null;
+    const pct = doc.sectionExtractProgressPct;
+    if (pct == null || Number.isNaN(pct)) return null;
+    return Math.max(0, Math.min(100, pct));
   }
 
   canExtractSections(doc: InternalDocument): boolean {
@@ -189,6 +324,7 @@ export class NdInternalDocumentsComponent implements OnInit {
     const res = await this.api.getInternalDocuments(this.showDeleted);
     if (res.success && res.data) {
       this.docs = res.data as InternalDocument[];
+      this.syncSectionExtractPollingFromDocs();
     } else if (!silent || this.docs.length === 0) {
       this.error = res.message ?? 'Failed to load documents';
     }
@@ -354,6 +490,8 @@ export class NdInternalDocumentsComponent implements OnInit {
         ...this.docs[idx],
         sectionExtractStatus: res.data.sectionExtractStatus,
         sectionCount: res.data.sectionCount ?? this.sectionRows.length,
+        sectionExtractProgressLabel: res.data.sectionExtractProgressLabel,
+        sectionExtractProgressPct: res.data.sectionExtractProgressPct,
       };
       if (this.sectionsFor?.id === docId) {
         this.sectionsFor = this.docs[idx];
@@ -368,14 +506,23 @@ export class NdInternalDocumentsComponent implements OnInit {
       return;
     }
     const force = doc.sectionExtractStatus === 'extracted';
-    this.extractingSectionsId = doc.id;
+    this.trackSectionExtractingDoc(doc.id);
     this.error = '';
     const res = await this.api.extractInternalDocumentSections(doc.id, force);
-    this.extractingSectionsId = null;
     if (!res.success) {
+      if ((res.message ?? '').toLowerCase().includes('timed out')) {
+        this.message =
+          'Section extract is still running (Landing AI can take several minutes). Watching for completion…';
+        this.error = '';
+        return;
+      }
+      this.extractingSectionsId = null;
+      this.pollingSectionExtractIds.delete(doc.id);
       this.error = res.message ?? 'Section extract failed';
       return;
     }
+    this.pollingSectionExtractIds.delete(doc.id);
+    this.extractingSectionsId = null;
     const count = res.data?.sectionCount ?? 0;
     const reused = res.data?.reusedSaved;
     this.message = reused
@@ -391,6 +538,8 @@ export class NdInternalDocumentsComponent implements OnInit {
         sectionCount: count,
         sectionExtractedAt: res.data?.sectionExtractedAt ?? this.docs[idx].sectionExtractedAt,
         sectionExtractError: null,
+        sectionExtractProgressLabel: null,
+        sectionExtractProgressPct: null,
       };
     }
     if (this.sectionsFor?.id === doc.id) {

@@ -90,6 +90,12 @@ public class StoredDocument
     [Column("section_extract_error")]
     public string? SectionExtractError { get; set; }
 
+    [Column("section_extract_progress_label")]
+    public string? SectionExtractProgressLabel { get; set; }
+
+    [Column("section_extract_progress_pct")]
+    public int? SectionExtractProgressPct { get; set; }
+
     [Column("section_count")]
     public int? SectionCount { get; set; }
 

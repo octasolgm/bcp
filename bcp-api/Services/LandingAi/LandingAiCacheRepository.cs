@@ -32,6 +32,35 @@ public class LandingAiCacheRepository(AppDbContext db, ILogger<LandingAiCacheRep
         }
     }
 
+    /// <summary>
+    /// Per-document cache key first; if missing, reuse legacy content-hash row and copy to the doc key (no API call).
+    /// </summary>
+    public async Task<ParseCacheRow?> ResolveParseCacheAsync(
+        string cacheKey,
+        string? legacyContentHash,
+        string parseModel,
+        CancellationToken ct = default)
+    {
+        var row = await GetParseCacheAsync(cacheKey, ct);
+        if (!string.IsNullOrWhiteSpace(row?.Markdown))
+            return row;
+
+        var legacyHash = (legacyContentHash ?? "").Trim();
+        if (legacyHash.Length == 0
+            || string.Equals(legacyHash, cacheKey, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var legacy = await GetParseCacheAsync(legacyHash, ct);
+        if (string.IsNullOrWhiteSpace(legacy?.Markdown))
+            return null;
+
+        logger.LogInformation(
+            "Reusing legacy parse cache (content hash) under per-document key {Prefix}…",
+            cacheKey.Length >= 12 ? cacheKey[..12] : cacheKey);
+        await SaveParseCacheAsync(cacheKey, legacy.FileName, legacy.Markdown, parseModel, ct);
+        return legacy;
+    }
+
     public async Task SaveParseCacheAsync(
         string fileHash,
         string fileName,
@@ -137,6 +166,37 @@ public class LandingAiCacheRepository(AppDbContext db, ILogger<LandingAiCacheRep
             logger.LogDebug(ex, "Gov extract cache miss for {Hash}", fileHash);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Per-document cache key first; if missing, reuse legacy content-hash extract and copy to the doc key (no API call).
+    /// </summary>
+    public async Task<string?> ResolveExtractPointsJsonAsync(
+        string cacheKey,
+        string? legacyContentHash,
+        string schemaKey,
+        string extractModel,
+        CancellationToken ct = default)
+    {
+        var json = await GetExtractPointsJsonAsync(cacheKey, schemaKey, ct);
+        if (!string.IsNullOrWhiteSpace(json))
+            return json;
+
+        var legacyHash = (legacyContentHash ?? "").Trim();
+        if (legacyHash.Length == 0
+            || string.Equals(legacyHash, cacheKey, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        json = await GetExtractPointsJsonAsync(legacyHash, schemaKey, ct);
+        if (string.IsNullOrWhiteSpace(json))
+            return null;
+
+        logger.LogInformation(
+            "Reusing legacy {Schema} extract cache under per-document key {Prefix}…",
+            schemaKey,
+            cacheKey.Length >= 12 ? cacheKey[..12] : cacheKey);
+        await SaveExtractPointsCacheAsync(cacheKey, schemaKey, json, extractModel, ct);
+        return json;
     }
 
     public async Task SaveExtractPointsCacheAsync(

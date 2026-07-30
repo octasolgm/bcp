@@ -15,6 +15,12 @@ ALTER TABLE stored_documents
 ALTER TABLE stored_documents
   ADD COLUMN IF NOT EXISTS section_extracted_by UUID NULL;
 
+ALTER TABLE stored_documents
+  ADD COLUMN IF NOT EXISTS section_extract_progress_label TEXT NULL;
+
+ALTER TABLE stored_documents
+  ADD COLUMN IF NOT EXISTS section_extract_progress_pct INTEGER NULL;
+
 CREATE TABLE IF NOT EXISTS nd_internal_document_sections (
   id UUID PRIMARY KEY,
   stored_document_id UUID NOT NULL REFERENCES stored_documents(id) ON DELETE CASCADE,

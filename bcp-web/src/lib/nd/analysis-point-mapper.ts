@@ -29,6 +29,67 @@ function parseNdAiPayload(raw?: string | null): {
   }
 }
 
+/** Session/coverage status for a stored ND analysis point (Regul forward/reverse or legacy dual-verify). */
+export type RegulCoverageContext = {
+  workflowEngine?: string | null;
+  regulPipelinePhase?: string | null;
+};
+
+export function analysisPointCoverageStatus(
+  p: AnalysisPoint,
+  runStatus?: string | null,
+  regul?: RegulCoverageContext,
+): string {
+  const landing = parseNdAiPayload(p.landingAiResult);
+  const google = parseNdAiPayload(p.googleAiResult);
+  const landingMessage = landing.message;
+  const llmMessage = google.message;
+  const run = (runStatus ?? '').toLowerCase();
+  const isRegul = regul?.workflowEngine === 'regul_pipeline';
+  const phase = (regul?.regulPipelinePhase ?? '').toLowerCase();
+  const runActive = run === 'running' || run === 'processing';
+
+  // Regul V3: forward-complete regulatory rows stay in-flight until pipeline phase is done.
+  if (isRegul && p.regulationPointId && runActive && phase !== 'done') {
+    if (p.landingAiStatus === 'failed') return 'failed';
+    if (p.landingAiStatus !== 'completed') return 'running';
+    return 'running';
+  }
+
+  if (p.landingAiStatus === 'cancelled' || p.dualVerifyStatus === 'cancelled') return 'cancelled';
+  if (p.dualVerifyStatus === 'completed' || p.finalStatus) return 'completed';
+  if (p.landingAiStatus === 'failed') return 'failed';
+  if (
+    landingMessage &&
+    (p.googleAiStatus === 'failed' || p.dualVerifyStatus === 'failed')
+  ) {
+    return 'completed';
+  }
+  if (
+    p.landingAiStatus === 'running' ||
+    p.dualVerifyStatus === 'running' ||
+    p.googleAiStatus === 'running'
+  ) {
+    return 'running';
+  }
+  if (p.landingAiStatus === 'completed' && p.dualVerifyStatus !== 'completed') return 'running';
+  if (p.landingAiStatus === 'completed') return 'completed';
+  if (
+    p.landingAiStatus === 'compliant' ||
+    p.landingAiStatus === 'partial_compliant' ||
+    p.landingAiStatus === 'non_compliant'
+  ) {
+    return p.dualVerifyStatus === 'passed' ||
+      p.dualVerifyStatus === 'failed' ||
+      p.dualVerifyStatus === 'skipped'
+      ? 'completed'
+      : 'running';
+  }
+
+  if (run === 'running' || run === 'processing') return 'running';
+  return 'not-run';
+}
+
 function mapNdPointStatus(
   p: AnalysisPoint,
   landingMessage: string,

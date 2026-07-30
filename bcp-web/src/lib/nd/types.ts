@@ -97,6 +97,8 @@ export type InternalDocument = {
   sectionCount?: number | null;
   sectionExtractedAt?: string | null;
   sectionExtractError?: string | null;
+  sectionExtractProgressLabel?: string | null;
+  sectionExtractProgressPct?: number | null;
   sectionExtractedByName?: string | null;
 };
 
@@ -156,6 +158,8 @@ export type AnalysisRunSummary = {
   totalGaps?: number;
   reviewedGaps?: number;
   totalReviews?: number;
+  workflowEngine?: string | null;
+  regulPipelinePhase?: string | null;
 };
 
 export type AnalysisPoint = {

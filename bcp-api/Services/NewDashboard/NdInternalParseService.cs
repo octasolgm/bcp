@@ -76,7 +76,7 @@ public class NdInternalParseService(
             hash = doc.FileHash.Trim();
 
         var cacheKey = await NdStoredDocumentExtractionCache.EnsureKeyAsync(db, doc, ct);
-        var cached = await cache.GetParseCacheAsync(cacheKey, ct);
+        var cached = await cache.ResolveParseCacheAsync(cacheKey, hash, _opts.ParseModel, ct);
         if (!string.IsNullOrWhiteSpace(cached?.Markdown))
         {
             await MarkParsedAsync(doc, hash, parsedBy, ct);

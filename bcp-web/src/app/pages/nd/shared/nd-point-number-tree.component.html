@@ -124,6 +124,9 @@
             truncate(node.row.point.title || node.row.point.text, 48)
           }}</span>
         }
+        @if (!node.row.forAnalysis) {
+          <span class="point-tag-header">Header</span>
+        }
       </label>
     } @else if (mode === 'view' || !resolvePointId(node.row)) {
       <div

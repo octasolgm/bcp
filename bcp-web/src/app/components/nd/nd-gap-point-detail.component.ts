@@ -118,6 +118,8 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Input() evidenceRerunningActionIndex: number | null = null;
   /** Pin point-level review to bottom with scrollable detail above (list / review workspace). */
   @Input() dockPointReview = false;
+  /** Regul workflow V3 — forward/reverse labels, no V8 dual-verify pass 2 block. */
+  @Input() isRegulWorkflow = false;
 
   @Output() startEdit = new EventEmitter<void>();
   @Output() cancelEdit = new EventEmitter<void>();
@@ -298,7 +300,14 @@ export class NdGapPointDetailComponent implements OnChanges {
       }
     }
     if (!this.policyExtract) {
-      this.policyExtract = 'No corresponding policy extract found.';
+      const notStarted =
+        !this.landingMessage?.trim() &&
+        !this.llmMessage?.trim() &&
+        (this.point.landingAiStatus === 'pending' || !this.point.landingAiStatus) &&
+        (this.point.dualVerifyStatus === 'pending' || !this.point.dualVerifyStatus);
+      this.policyExtract = notStarted
+        ? 'Analysis not started yet — run forward/reverse to extract policy text.'
+        : 'No corresponding policy extract found.';
     }
 
     const resolvedDocId =
@@ -332,6 +341,7 @@ export class NdGapPointDetailComponent implements OnChanges {
     // synthesize from the regulatory requirement so the panel is usable.
     // Never invent CAP for queued / unscored points.
     if (
+      !this.isRegulWorkflow &&
       this.resolvedSeverity &&
       this.resolvedSeverity !== 'compliant' &&
       (this.capGaps.length === 0 || isWeakCorrectivePlan(effectiveCap))

@@ -14,6 +14,9 @@ export function isPhase2Complete(point: {
   googleAiStatus?: string | null;
   dualVerifyStatus?: string | null;
 }): boolean {
+  if (point.googleAiStatus === 'skipped' && point.dualVerifyStatus === 'completed') {
+    return true;
+  }
   if (point.llmMessage?.trim()) return true;
   if (point.googleAiResult?.trim()) return true;
   return point.dualVerifyStatus === 'completed' || point.googleAiStatus === 'completed';

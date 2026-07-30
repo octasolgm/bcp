@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -41,11 +41,12 @@ type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'st
   templateUrl: './in-progress.component.html',
   styleUrls: ['./in-progress.component.scss', '../nd/nd-shared.scss', '../nd/analysis-runs/nd-analysis-runs.component.scss'],
 })
-export class InProgressComponent implements OnInit {
+export class InProgressComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly ndApi = inject(NdApiService);
   private readonly auth = inject(NdAuthService);
   private readonly toast = inject(ToastService);
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   allRuns: AnalysisRunSummary[] = [];
   loading = false;
@@ -73,6 +74,14 @@ export class InProgressComponent implements OnInit {
 
   ngOnInit(): void {
     void this.load();
+    this.pollTimer = setInterval(() => void this.load(), 8_000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
   }
 
   refresh(): void {
@@ -80,7 +89,7 @@ export class InProgressComponent implements OnInit {
   }
 
   async load(): Promise<void> {
-    this.loading = true;
+    if (!this.loading) this.loading = true;
     this.loadError = '';
     const role = this.auth.getRole();
     const res = await this.ndApi.getAnalysisRuns(

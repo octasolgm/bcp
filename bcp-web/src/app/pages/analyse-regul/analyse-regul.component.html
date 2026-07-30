@@ -390,7 +390,7 @@
                 <p class="empty-msg">No points match search.</p>
               } @else {
                 @if (govSourceLabel) { <p class="source-note">{{ govSourceLabel }}</p> }
-                <p class="source-note muted-small">Each regulation document has its own points · checked rows are compared in gap analysis</p>
+                <p class="source-note muted-small">Each regulation document has its own points · checked rows run in gap analysis (including section headers)</p>
                 @if (regulationDisplayUseDocGroups) {
                   @for (doc of visibleRegulationDisplayDocs; track doc.key) {
                     <div class="acc-item lib-hier-doc">
@@ -425,6 +425,7 @@
                                       [selected]="selected"
                                       [selectedDetailPointId]="selectedDetailPointId"
                                       [catalogPoints]="pointsCatalogGovPoints"
+                                      [resolvePointId]="selectableRegPointId.bind(this)"
                                       (togglePoint)="toggle($event)"
                                       (toggleGroup)="togglePointIds($event)"
                                       (selectDetail)="selectPointForDetail($event)"
@@ -439,25 +440,29 @@
                               [selected]="selected"
                               [selectedDetailPointId]="selectedDetailPointId"
                               [catalogPoints]="pointsCatalogGovPoints"
+                              [resolvePointId]="selectableRegPointId.bind(this)"
                               (togglePoint)="toggle($event)"
                               (toggleGroup)="togglePointIds($event)"
                               (selectDetail)="selectPointForDetail($event)"
                             />
                             @if (!doc.pointTree.length) {
                               @for (row of doc.flatRows; track row.point.point_id) {
-                                @if (row.forAnalysis) {
-                                  <label class="point-line" [class.detail-selected]="selectedDetailPointId === row.point.point_id" [style.paddingLeft.rem]="(row.depth - 1) * 0.65">
-                                    <input type="checkbox" [checked]="selected.has(row.point.point_id)" (change)="toggle(row.point.point_id)" />
+                                @if (selectableRegPointId(row); as pid) {
+                                  <label
+                                    class="point-line"
+                                    [class.detail-selected]="selectedDetailPointId === pid"
+                                    [class.point-header-row]="!row.forAnalysis"
+                                    [style.paddingLeft.rem]="(row.depth - 1) * 0.65"
+                                  >
+                                    <input type="checkbox" [checked]="selected.has(pid)" (change)="toggle(pid)" />
                                     <span class="pid">{{ row.displayId }}</span>
-                                    <span class="ptxt" (click)="selectPointForDetail(row.point.point_id); $event.preventDefault()">{{ truncate(row.point.title || row.point.text, 48) }}</span>
+                                    <span class="ptxt" (click)="selectPointForDetail(pid); $event.preventDefault()">{{
+                                      truncate(row.point.title || row.point.text, 48)
+                                    }}</span>
+                                    @if (!row.forAnalysis) {
+                                      <span class="point-tag-header">Header</span>
+                                    }
                                   </label>
-                                } @else {
-                                  <div class="point-line point-header-row" [style.paddingLeft.rem]="(row.depth - 1) * 0.65">
-                                    <span class="point-header-mark">§</span>
-                                    <span class="pid">{{ row.displayId }}</span>
-                                    <span class="ptxt muted">{{ truncate(row.point.title || row.point.text, 48) }}</span>
-                                    <span class="point-tag-header">Header</span>
-                                  </div>
                                 }
                               }
                             }
@@ -479,11 +484,13 @@
                       </button>
                       @if (isChapterExpanded(ch.chapter)) {
                         <div class="acc-body">
-                          <app-nd-point-number-tree
-                            [nodes]="ch.tree"
-                            [selected]="selected"
-                            [selectedDetailPointId]="selectedDetailPointId"
-                            (togglePoint)="toggle($event)"
+                                    <app-nd-point-number-tree
+                                      [nodes]="ch.tree"
+                                      [selected]="selected"
+                                      [selectedDetailPointId]="selectedDetailPointId"
+                                      [catalogPoints]="pointsCatalogGovPoints"
+                                      [resolvePointId]="selectableRegPointId.bind(this)"
+                                      (togglePoint)="toggle($event)"
                             (toggleGroup)="togglePointIds($event)"
                             (selectDetail)="selectPointForDetail($event)"
                           />
@@ -493,19 +500,21 @@
                   }
                 } @else {
                   @for (row of pointDisplayFlatRows; track row.point.point_id) {
-                    @if (row.forAnalysis) {
-                      <label class="point-line" [class.detail-selected]="selectedDetailPointId === row.point.point_id">
-                        <input type="checkbox" [checked]="selected.has(row.point.point_id)" (change)="toggle(row.point.point_id)" />
+                    @if (selectableRegPointId(row); as pid) {
+                      <label
+                        class="point-line"
+                        [class.detail-selected]="selectedDetailPointId === pid"
+                        [class.point-header-row]="!row.forAnalysis"
+                      >
+                        <input type="checkbox" [checked]="selected.has(pid)" (change)="toggle(pid)" />
                         <span class="pid">{{ row.displayId }}</span>
-                        <span class="ptxt" (click)="selectPointForDetail(row.point.point_id); $event.preventDefault()">{{ truncate(row.point.title || row.point.text, 48) }}</span>
+                        <span class="ptxt" (click)="selectPointForDetail(pid); $event.preventDefault()">{{
+                          truncate(row.point.title || row.point.text, 48)
+                        }}</span>
+                        @if (!row.forAnalysis) {
+                          <span class="point-tag-header">Header</span>
+                        }
                       </label>
-                    } @else {
-                      <div class="point-line point-header-row" [style.paddingLeft.rem]="(row.depth - 1) * 0.65">
-                        <span class="point-header-mark">§</span>
-                        <span class="pid">{{ row.displayId }}</span>
-                        <span class="ptxt muted">{{ truncate(row.point.title || row.point.text, 48) }}</span>
-                        <span class="point-tag-header">Header</span>
-                      </div>
                     }
                   }
                 }
@@ -514,7 +523,7 @@
 
             @if (govPoints.length) {
               <p class="panel-foot">
-                {{ selectedCount }}/{{ govPoints.length }} points for analysis
+                {{ selectedCount }}/{{ regulationPointPoolCount }} points for analysis
                 @if (showNdPointSources && pointsSource === 'library' && selectedLibraryIds.size) {
                   @if (libraryPointsFootnote(); as note) {
                     · {{ note }}
@@ -605,8 +614,8 @@
                   {{ selectedComplianceIds.size }}/{{ filteredComplianceDocs.length }} selected
                 }
               </p>
-              @if (isNdShell && pass2LlmSummary) {
-                <p class="pass2-llm-foot">Pass 2: {{ pass2LlmSummary }}</p>
+              @if (isNdShell && regulWorkflowLlmSummary) {
+                <p class="pass2-llm-foot">Reverse pass: {{ regulWorkflowLlmSummary }}</p>
               }
             </div>
           }
@@ -618,10 +627,10 @@
   <section class="action-strip" aria-label="Analysis summary and run">
     @if (showDualVerifyFailedBanner) {
       <div class="dv-failed-banner" role="status">
-        <strong>Dual verify failed</strong>
+        <strong>Reverse pass failed</strong>
         <span>
-          Phase 1 (Landing AI) completed for all points. Some Phase 2 (Google) checks failed —
-          review results below or rerun dual verify only (no extra Landing AI credits).
+          Forward analysis completed for all points. Some reverse checks failed —
+          review results below or rerun reverse only.
         </span>
         @if (ndRunId && phase2RetryCount > 0) {
           <button
@@ -630,7 +639,7 @@
             [disabled]="retryingPointId === '__batch__'"
             (click)="rerunAllDualVerifyFailed()"
           >
-            {{ retryingPointId === '__batch__' ? 'Rerunning…' : ('Rerun dual verify (' + phase2RetryCount + ')') }}
+            {{ retryingPointId === '__batch__' ? 'Rerunning…' : regulRerunReverseLabel }}
           </button>
         }
       </div>
@@ -657,9 +666,22 @@
       @if (isSessionActive) {
         <button type="button" class="btn-stop v8-stop" (click)="stopAnalysis()">Stop</button>
         <span class="run-progress-pill v8-run-progress" aria-live="polite">{{ sessionProgressLabel }}</span>
+        @if (exportableDoneGapPointCount > 0) {
+          <button type="button" class="btn-secondary btn-sm run-workflow-btn" [disabled]="exportingGapReport" (click)="exportDoneGapAnalysisExcel()">
+            {{ exportingGapReport ? 'Exporting…' : ('Export Excel (' + exportableDoneGapPointCount + ')') }}
+          </button>
+        }
       } @else if (analysisState === 'complete') {
         @if (showWorkflowStatusBadge) {
           <app-nd-status-badge [status]="ndRunWorkflowStatus" />
+        }
+        @if (exportableDoneGapPointCount > 0) {
+          <button type="button" class="btn-secondary btn-sm run-workflow-btn" [disabled]="exportingGapReport" (click)="exportDoneGapAnalysisExcel()">
+            {{ exportingGapReport ? 'Exporting…' : ('Export Excel (' + exportableDoneGapPointCount + ')') }}
+          </button>
+          <button type="button" class="btn-secondary btn-sm run-workflow-btn" [disabled]="exportingGapReport" (click)="exportDoneGapAnalysisPdf()">
+            Export PDF
+          </button>
         }
         <button type="button" class="btn-secondary btn-sm run-workflow-btn" (click)="openGapReport()">Gap report</button>
         @if (canSubmitForChecker) {
@@ -682,15 +704,15 @@
     </div>
   </section>
 
-  @if (!isSessionActive && !canRun && (runBlockedReason || (isNdShell && pass2LlmSummary))) {
+  @if (!isSessionActive && !canRun && (runBlockedReason || (isNdShell && regulWorkflowLlmSummary))) {
     <div class="run-hint-row">
       @if (runBlockedReason) {
         <p class="run-hint">{{ runBlockedReason }}</p>
       } @else {
         <span></span>
       }
-      @if (isNdShell && pass2LlmSummary) {
-        <p class="run-hint run-hint-llm">Pass 2 dual verify: {{ pass2LlmSummary }}</p>
+      @if (isNdShell && regulWorkflowLlmSummary) {
+        <p class="run-hint run-hint-llm">Reverse pass LLM: {{ regulWorkflowLlmSummary }}</p>
       }
     </div>
   }
@@ -827,11 +849,26 @@
             Export PDF ({{ exportableDoneGapPointCount }})
           </button>
         }
-        <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || coverageCounts.notRun === 0" (click)="runRemainingPoints()">
-          Run remaining ({{ coverageCounts.notRun }})
+        <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || ndQueuedOrNotRunCount === 0" (click)="runRemainingPoints()">
+          Run remaining ({{ ndQueuedOrNotRunCount }})
         </button>
-        <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || phase2RetryCount === 0" (click)="retryFailedOnly()">
-          {{ ndRunId ? ('Rerun dual verify (' + phase2RetryCount + ')') : ('Retry Phase 2 (' + phase2RetryCount + ')') }}
+        @if (ndQueuedOrNotRunCount > 0) {
+          <button
+            type="button"
+            class="btn-sm"
+            [disabled]="!hasResumableRun || !!retryingPointId"
+            (click)="rerunAllStuckOrQueuedWithConfirm()"
+          >
+            Rerun forward ({{ ndQueuedOrNotRunCount }})
+          </button>
+        }
+        <button
+          type="button"
+          class="btn-sm"
+          [disabled]="!hasResumableRun || !!retryingPointId"
+          (click)="rerunRegulReversePassWithConfirm()"
+        >
+          Rerun reverse pass
         </button>
       </div>
     }
@@ -897,24 +934,12 @@
                           type="button"
                           class="phase-action"
                           [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'all'"
-                          title="Rerun Phase 1 + Phase 2 for this point"
+                          title="Rerun forward for this point"
                           [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
                           (click)="rerunPointAll(row.pointId); $event.stopPropagation()"
                         >
-                          {{ pointRerunButtonLabel(row.pointId, 'Rerun all', 'all') }}
+                          {{ pointRerunButtonLabel(row.pointId, 'Rerun forward', 'all') }}
                         </button>
-                        @if (needsPhase2RerunForPoint(row.pointId) || pointRerunMode(row.pointId) === 'phase2') {
-                          <button
-                            type="button"
-                            class="phase-action phase-action-p2"
-                            [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'phase2'"
-                            title="Rerun Phase 2 only (no Landing AI credits)"
-                            [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
-                            (click)="rerunPointPhase2(row.pointId); $event.stopPropagation()"
-                          >
-                            {{ pointRerunButtonLabel(row.pointId, 'Rerun Phase 2', 'phase2') }}
-                          </button>
-                        }
                       </div>
                     }
                   </div>
@@ -924,25 +949,13 @@
                       <button
                         type="button"
                         class="phase-action"
-                      [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'all'"
-                      title="Rerun Phase 1 + Phase 2 for this point"
-                      [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
-                      (click)="rerunPointAll(row.pointId); $event.stopPropagation()"
-                    >
-                      {{ pointRerunButtonLabel(row.pointId, 'Rerun all', 'all') }}
-                    </button>
-                    @if (needsPhase2RerunForPoint(row.pointId) || pointRerunMode(row.pointId) === 'phase2') {
-                      <button
-                        type="button"
-                        class="phase-action phase-action-p2"
-                        [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'phase2'"
-                        title="Rerun Phase 2 only (no Landing AI credits)"
+                        [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'all'"
+                        title="Rerun forward for this point"
                         [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
-                        (click)="rerunPointPhase2(row.pointId); $event.stopPropagation()"
+                        (click)="rerunPointAll(row.pointId); $event.stopPropagation()"
                       >
-                        {{ pointRerunButtonLabel(row.pointId, 'Rerun Phase 2', 'phase2') }}
+                        {{ pointRerunButtonLabel(row.pointId, 'Rerun forward', 'all') }}
                       </button>
-                    }
                     </div>
                   </div>
                 }
@@ -984,6 +997,42 @@
       @if (analysisState === 'running') {
         <div class="progress-block">
           <h4>Analysing against {{ selectedRegLabel }}…</h4>
+          @if (showRegulReverseProgress) {
+            <div class="regul-reverse-panel">
+              <p class="regul-reverse-summary">{{ regulReverseProgressLabel }}</p>
+              @if (regulReverseSectionRows.length) {
+                <ul class="regul-section-list" aria-label="Internal section reverse mapping">
+                  @for (row of regulReverseSectionRows; track row.sectionRef) {
+                    <li
+                      class="regul-section-row"
+                      [class.is-running]="row.status === 'running'"
+                      [class.is-done]="row.status === 'completed'"
+                      [class.is-failed]="row.status === 'failed'"
+                    >
+                      <span class="regul-section-ref">{{ row.sectionRef }}</span>
+                      <span class="regul-section-status">{{ formatReverseSectionStatus(row.status) }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+              @if (regulReverseIntRows.length) {
+                <div class="regul-int-block">
+                  <h5 class="regul-int-heading">INT findings ({{ regulReverseIntRows.length }})</h5>
+                  <ul class="regul-int-list" aria-label="Reverse INT findings">
+                    @for (row of regulReverseIntRows; track row.clause) {
+                      <li class="regul-int-row">
+                        <span class="regul-int-clause">{{ row.clause }}</span>
+                        <span class="regul-int-title" [title]="row.title">{{ truncate(row.title, 48) }}</span>
+                        @if (row.severity) {
+                          <span class="compliance-pill mini" [class]="row.severity">{{ intRowSeverityLabel(row.severity) }}</span>
+                        }
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+            </div>
+          }
           <ul class="step-list">
             @for (step of analysisSteps; track step.label) {
               <li [class.done]="step.done" [class.active]="step.active">
@@ -1007,7 +1056,11 @@
           </div>
         </div>
       } @else {
-        <p class="empty-msg">Run analysis to see live progress here.</p>
+        @if (isNdRunStuck) {
+          <p class="empty-msg warn">Analysis did not start — use <strong>Rerun all</strong> or rerun each point below.</p>
+        } @else {
+          <p class="empty-msg">Run analysis to see live progress here.</p>
+        }
       }
     </div>
   </div>
@@ -1063,6 +1116,7 @@
           @defer (when selectedDetailAnalysisPoint) {
           <app-nd-gap-point-detail
             [point]="ndPoint"
+            [isRegulWorkflow]="true"
             [snapshot]="selectedPointSnapshot"
             [displayClause]="resultClauseLabel !== '—' ? resultClauseLabel : null"
             [hideReportHeader]="true"
@@ -1116,9 +1170,11 @@
                 (click)="retrySinglePoint(selectedPointDetail.pointId)"
               >
                 @if (needsPhase2RerunForPoint(selectedPointDetail.pointId)) {
-                  Re-run Phase 2
+                  Re-run forward
+                } @else if (selectedPointDetail.status === 'not-run' || selectedPointDetail.status === 'queued') {
+                  Run analysis
                 } @else {
-                  {{ selectedPointDetail.status === 'not-run' ? 'Run' : 'Re-run' }}
+                  Re-run forward
                 }
               </button>
             }
@@ -1144,9 +1200,6 @@
             }
           </span>
           <p class="detail-summary">{{ selectedPointDetail.summary }}</p>
-          @if (selectedPointReportItem) {
-            <app-dual-verify-result-card [item]="selectedPointReportItem" />
-          }
           @if (hasResumableRun && selectedPointDetail.status !== 'not-run') {
             <button
               type="button"
@@ -1155,7 +1208,7 @@
               (click)="retrySinglePoint(selectedPointDetail.pointId)"
             >
               @if (needsPhase2RerunForPoint(selectedPointDetail.pointId)) {
-                Re-run Phase 2
+                Re-run reverse
               } @else {
                 Re-run
               }

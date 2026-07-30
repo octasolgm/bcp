@@ -279,6 +279,14 @@ public static class SupabaseSchemaBootstrap
           ADD COLUMN IF NOT EXISTS section_extracted_by UUID NULL;
         """,
         """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS section_extract_progress_label TEXT NULL;
+        """,
+        """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS section_extract_progress_pct INTEGER NULL;
+        """,
+        """
         CREATE TABLE IF NOT EXISTS nd_internal_document_sections (
           id UUID PRIMARY KEY,
           stored_document_id UUID NOT NULL REFERENCES stored_documents(id) ON DELETE CASCADE,
@@ -292,6 +300,10 @@ public static class SupabaseSchemaBootstrap
         """
         CREATE INDEX IF NOT EXISTS ix_nd_internal_document_sections_doc
           ON nd_internal_document_sections (stored_document_id);
+        """,
+        """
+        ALTER TABLE landing_ai_extract_cache
+          DROP CONSTRAINT IF EXISTS landing_ai_extract_cache_schema_key_check;
         """,
     ];
 

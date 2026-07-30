@@ -58,6 +58,10 @@ public class NdAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
+        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            throw new InvalidOperationException(
+                "regul_pipeline runs use NdRegulAnalysisProcessor, not NdAnalysisProcessor (dual verify).");
+
         if (await IsRunStoppedAsync(run, ct))
         {
             await MarkRunCancelledAsync(run, CancellationToken.None);
@@ -206,6 +210,10 @@ public class NdAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
+        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            throw new InvalidOperationException(
+                "regul_pipeline runs use NdRegulAnalysisProcessor, not NdAnalysisProcessor (dual verify).");
+
         var point = run.Points.FirstOrDefault(p => p.Id == pointId)
             ?? throw new InvalidOperationException("Analysis point not found.");
 
@@ -246,6 +254,10 @@ public class NdAnalysisProcessor(
             .Include(r => r.Points)
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
+
+        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            throw new InvalidOperationException(
+                "regul_pipeline runs use NdRegulAnalysisProcessor.RerunReversePhaseAsync.");
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
 

@@ -101,6 +101,15 @@ export function analysisRunDisplayStatusLabel(status: string): string {
 
 /** Next workflow step or in-progress hint for a run row. */
 export function analysisRunWorkflowLabel(run: AnalysisRunSummary): string {
+  if (run.workflowEngine === 'regul_pipeline') {
+    const phase = (run.regulPipelinePhase ?? '').toLowerCase();
+    if (phase === 'forward') return 'Forward judgment';
+    if (phase === 'reverse') return 'Reverse coverage mapping';
+    if (phase === 'qualitative') return 'Qualitative assessment';
+    if (phase === 'done') return 'Finalizing';
+    if (analysisRunNeedsExecutionView(run)) return 'Regul pipeline';
+  }
+
   if (analysisRunNeedsExecutionView(run)) {
     const total = run.totalPointsCount ?? 0;
     const processed = run.processedPointsCount ?? 0;

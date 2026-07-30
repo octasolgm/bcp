@@ -439,21 +439,21 @@
 
   @if (landingMessage || llmMessage || googleAiError || pass1ErrorMessage || phase2Running || phase1Running) {
     <details class="pass-details" [attr.open]="phaseOutputDefaultOpen || phase2Running || phase1Running ? '' : null">
-      <summary>Full phase 1 &amp; 2 AI output</summary>
+      <summary>{{ isRegulWorkflow ? 'Forward analysis detail' : 'Full phase 1 &amp; 2 AI output' }}</summary>
       <div class="passes">
         @if (phase1Running) {
           <div class="pass">
-            <p class="pass-label p1">Pass 1 — Landing AI</p>
-            <p class="muted-inline">Running Phase 1 (Landing AI)…</p>
+            <p class="pass-label p1">{{ isRegulWorkflow ? 'Forward pass' : 'Pass 1 — Landing AI' }}</p>
+            <p class="muted-inline">{{ isRegulWorkflow ? 'Running forward analysis…' : 'Running Phase 1 (Landing AI)…' }}</p>
           </div>
         } @else if (landingMessage) {
           <div class="pass">
-            <p class="pass-label p1">Pass 1 — Landing AI</p>
+            <p class="pass-label p1">{{ isRegulWorkflow ? 'Forward pass' : 'Pass 1 — Landing AI' }}</p>
             <app-reference-compliance-card [message]="landingMessage" [hideCapSection]="true" />
           </div>
         } @else if (pass1ErrorMessage) {
           <div class="pass">
-            <p class="pass-label p1">Pass 1 — Landing AI</p>
+            <p class="pass-label p1">{{ isRegulWorkflow ? 'Forward pass' : 'Pass 1 — Landing AI' }}</p>
             <div class="pass-error-box" role="alert">
               <p class="pass-error-title">{{ pass1ErrorTitle }}</p>
               <p class="pass-error-message">{{ pass1ErrorMessage }}</p>
@@ -466,30 +466,32 @@
             </div>
           </div>
         }
-        @if (phase2Running) {
-          <div class="pass">
-            <p class="pass-label p2">Pass 2 — LLM verify</p>
-            <p class="muted-inline">Running Phase 2 dual verify…</p>
-          </div>
-        } @else if (llmMessage) {
-          <div class="pass">
-            <p class="pass-label p2">Pass 2 — LLM verify</p>
-            <app-reference-compliance-card [message]="llmMessage" [hideCapSection]="true" />
-          </div>
-        } @else if (googleAiError) {
-          <div class="pass">
-            <p class="pass-label p2">Pass 2 — LLM verify</p>
-            <div class="pass-error-box" role="alert">
-              <p class="pass-error-title">{{ pass2ErrorTitle }}</p>
-              <p class="pass-error-message">{{ pass2ErrorMessage }}</p>
-              @if (pass2ErrorFull && pass2ErrorFull !== pass2ErrorMessage) {
-                <details class="pass-error-details">
-                  <summary>Technical details</summary>
-                  <pre class="pass-error-full">{{ pass2ErrorFull }}</pre>
-                </details>
-              }
+        @if (!isRegulWorkflow || point.googleAiStatus !== 'skipped') {
+          @if (phase2Running) {
+            <div class="pass">
+              <p class="pass-label p2">{{ isRegulWorkflow ? 'Reverse verify' : 'Pass 2 — LLM verify' }}</p>
+              <p class="muted-inline">{{ isRegulWorkflow ? 'Running reverse mapping…' : 'Running Phase 2 dual verify…' }}</p>
             </div>
-          </div>
+          } @else if (llmMessage) {
+            <div class="pass">
+              <p class="pass-label p2">{{ isRegulWorkflow ? 'Reverse verify' : 'Pass 2 — LLM verify' }}</p>
+              <app-reference-compliance-card [message]="llmMessage" [hideCapSection]="true" />
+            </div>
+          } @else if (googleAiError) {
+            <div class="pass">
+              <p class="pass-label p2">{{ isRegulWorkflow ? 'Reverse verify' : 'Pass 2 — LLM verify' }}</p>
+              <div class="pass-error-box" role="alert">
+                <p class="pass-error-title">{{ pass2ErrorTitle }}</p>
+                <p class="pass-error-message">{{ pass2ErrorMessage }}</p>
+                @if (pass2ErrorFull && pass2ErrorFull !== pass2ErrorMessage) {
+                  <details class="pass-error-details">
+                    <summary>Technical details</summary>
+                    <pre class="pass-error-full">{{ pass2ErrorFull }}</pre>
+                  </details>
+                }
+              </div>
+            </div>
+          }
         }
       </div>
     </details>
