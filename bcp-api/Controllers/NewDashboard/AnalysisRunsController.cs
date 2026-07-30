@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
@@ -34,6 +35,14 @@ public class AnalysisRunsController(
         /// <summary>bcp_landing (default) or regul_pipeline (Regul workflow V3).</summary>
         string? WorkflowEngine = null,
         bool EnableQualitative = false);
+
+    public record ConfirmClausesClauseUpdate(
+        Guid AnalysisPointId,
+        string? PointNumber,
+        string? PointTitle,
+        string? PointContent);
+
+    public record ConfirmClausesRequest(List<ConfirmClausesClauseUpdate>? Clauses);
 
     [HttpGet]
     public async Task<IActionResult> List(
@@ -449,6 +458,13 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
+        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine) && run.RegulClausesConfirmedAt == null)
+            return BadRequest(new
+            {
+                success = false,
+                message = "Confirm regulatory clauses before starting Regul workflow analysis.",
+            });
+
         var linkedCt = runCancellation.Register(id);
         var useRegul = AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine);
         _ = Task.Run(async () =>
@@ -479,6 +495,60 @@ public class AnalysisRunsController(
         }, CancellationToken.None);
 
         return Ok(new { success = true, message = "Analysis started", id });
+    }
+
+    /// <summary>Regul workflow: review/edit clauses then confirm before Run analysis (Regul.ai extraction_review gate).</summary>
+    [HttpPost("{id:guid}/confirm-clauses")]
+    public async Task<IActionResult> ConfirmClauses(
+        Guid id,
+        [FromBody] ConfirmClausesRequest? body,
+        CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns
+            .Include(r => r.Points)
+            .FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound(new { success = false, message = "Not found" });
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+            return StatusCode(403, new { success = false, message = "Forbidden" });
+        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            return BadRequest(new { success = false, message = "Not a Regul workflow run." });
+        if (run.Status is not "draft")
+            return BadRequest(new { success = false, message = "Clauses can only be confirmed on draft runs." });
+
+        if (body?.Clauses is { Count: > 0 })
+        {
+            var byId = run.Points.ToDictionary(p => p.Id);
+            foreach (var clause in body.Clauses)
+            {
+                if (!byId.TryGetValue(clause.AnalysisPointId, out var point)) continue;
+                point.PointSnapshot = MergeClauseSnapshot(point.PointSnapshot, clause);
+                point.UpdatedAt = DateTimeOffset.UtcNow;
+
+                var (no, text) = ParseClauseSnapshot(point.PointSnapshot);
+                var finding = await db.NdRegulForwardFindings
+                    .FirstOrDefaultAsync(f => f.AnalysisRunId == run.Id && f.AnalysisPointId == point.Id, ct);
+                if (finding != null)
+                {
+                    finding.ClauseNo = no;
+                    finding.ClauseText = text;
+                    finding.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+            }
+        }
+
+        run.RegulClausesConfirmedAt = DateTimeOffset.UtcNow;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new
+        {
+            success = true,
+            message = "Clauses confirmed. You can now run analysis.",
+            regulClausesConfirmedAt = run.RegulClausesConfirmedAt,
+        });
     }
 
     [HttpPost("{id:guid}/stop")]
@@ -884,7 +954,41 @@ public class AnalysisRunsController(
         regulLlmModel = r.RegulLlmModel,
         regulPipelinePhase = r.RegulPipelinePhase,
         regulPipelineError = r.RegulPipelineError,
+        regulClausesConfirmedAt = r.RegulClausesConfirmedAt,
     };
+
+    private static (string ClauseNo, string ClauseText) ParseClauseSnapshot(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return ("", "");
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            var root = doc.RootElement;
+            var no = root.TryGetProperty("pointNumber", out var pn) ? pn.GetString() ?? ""
+                : root.TryGetProperty("point_number", out var pn2) ? pn2.GetString() ?? "" : "";
+            var text = root.TryGetProperty("pointText", out var pt) ? pt.GetString() ?? ""
+                : root.TryGetProperty("point_text", out var pt2) ? pt2.GetString() ?? ""
+                : root.TryGetProperty("pointContent", out var pc) ? pc.GetString() ?? ""
+                : root.TryGetProperty("text", out var t) ? t.GetString() ?? "" : "";
+            return (no, text);
+        }
+        catch
+        {
+            return ("", "");
+        }
+    }
+
+    private static string MergeClauseSnapshot(string existing, ConfirmClausesClauseUpdate update)
+    {
+        var node = JsonNode.Parse(string.IsNullOrWhiteSpace(existing) ? "{}" : existing) as JsonObject ?? new JsonObject();
+        if (!string.IsNullOrWhiteSpace(update.PointNumber))
+            node["pointNumber"] = update.PointNumber.Trim();
+        if (!string.IsNullOrWhiteSpace(update.PointTitle))
+            node["pointTitle"] = update.PointTitle.Trim();
+        if (update.PointContent != null)
+            node["pointContent"] = update.PointContent;
+        return node.ToJsonString();
+    }
 
     private static string ResolveWorkflowEngine(string? raw) =>
         AnalysisWorkflowEngine.IsRegulPipeline(raw)

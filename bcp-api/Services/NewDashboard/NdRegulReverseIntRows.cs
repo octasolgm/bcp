@@ -89,4 +89,32 @@ public static class NdRegulReverseIntRows
             return "Verify or correct the claimed regulatory basis for this section.";
         return "Confirm this content is intentional operational detail; document its regulatory basis if one exists.";
     }
+
+    public static RegulJudgmentResult ToJudgmentResult(
+        string? mapping,
+        bool contradictsRegulation,
+        double confidence,
+        string commentary,
+        string sectionText,
+        string? sourceDoc)
+    {
+        var overallStatus = contradictsRegulation ? "non_compliant" : "partial";
+        var gapDirection = string.Equals(mapping, "no_regulatory_basis", StringComparison.OrdinalIgnoreCase)
+            ? "no_regulatory_basis"
+            : "basis_not_verifiable";
+
+        return new RegulJudgmentResult
+        {
+            DesignStatus = overallStatus,
+            OperatingStatus = overallStatus,
+            OverallStatus = overallStatus,
+            Confidence = confidence,
+            Interpretation = commentary?.Trim() ?? "",
+            PolicyExtract = string.IsNullOrWhiteSpace(sectionText) ? [] : [sectionText.Trim()],
+            DocumentReference = sourceDoc?.Trim() ?? "",
+            GapDescription = BuildGapDescription(mapping, contradictsRegulation, commentary),
+            SuggestedAction = BuildSuggestedAction(mapping, contradictsRegulation),
+            GapDirection = gapDirection,
+        };
+    }
 }

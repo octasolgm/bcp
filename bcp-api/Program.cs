@@ -132,6 +132,7 @@ builder.Services.AddHttpClient<GeminiService>(c => ConfigureAiHttpTimeout(c, htt
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.DualVerifyLlmSettingsService>();
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.RegulWorkflowLlmSettingsService>();
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.RegulWorkflowLlmService>();
 builder.Services.AddScoped<DualVerifyLlmService>();
 builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.OpenAiCompatibleLlmClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.AnthropicLlmClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));

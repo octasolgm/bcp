@@ -25,16 +25,36 @@ BCP **analyse-regul** (`workflow_engine = regul_pipeline`) follows the same **an
 | Parse regulation + internal | Local ingest/OCR | **Landing AI parse** → `landing_ai_parse_cache` |
 | Extract regulation clauses/points | Claude `EXTRACTION_SYSTEM_PROMPT` + `record_clauses` | **Landing AI** `gov-requirement-points.schema.json` (library points) |
 | Extract internal sections (reverse A) | Claude same prompt + `record_clauses` | **Landing AI** `policy-clauses.schema.json` — **same output shape** as Regul `EXTRACTION_TOOL_SCHEMA` (`clause_no`, `clause_text`, `source_page`) |
+| Clause review gate | `/review/{id}` — edit + confirm | Inline panel on **analyse-regul** → `POST /nd/analysis-runs/{id}/confirm-clauses` (`regul_clauses_confirmed_at`) |
 | Forward judgment | Claude `JUDGMENT_SYSTEM_PROMPT` | Admin **regul_workflow_llm** + `NdRegulPromptDefaults.JudgmentSystemPrompt` |
-| Reverse map each section | Claude `REVERSE_MAPPING_SYSTEM_PROMPT` | Same prompt in `NdRegulPromptDefaults` + admin LLM |
-| Reverse **INT** gap rows | `INT {section_ref}` when mapping ≠ `covered` | Same — `NdRegulReverseIntRows` → `regul_forward_findings` |
-| Qualitative | Claude one-shot | Admin LLM + `NdRegulPromptDefaults.QualitativeAssessmentSystemPrompt` |
+| Gap UI + export (forward) | Workbench findings table | Sync to **`analysis_points`** (`landing_ai_result` message format) via `NdRegulAnalysisPointSync` |
+| Reverse map each section | Claude `REVERSE_MAPPING_SYSTEM_PROMPT` | Same prompt in `NdRegulPromptDefaults` + admin LLM (`CallReverseMappingAsync`) |
+| Reverse **INT** gap rows | `INT {section_ref}` when mapping ≠ `covered` | `NdRegulReverseIntRows` → `regul_forward_findings` + new **`analysis_points`** rows (gap list + Excel/PDF) |
+| Qualitative | Claude one-shot | Admin LLM + `NdRegulPromptDefaults.QualitativeAssessmentSystemPrompt` → `regul_qualitative_assessments` |
+| Qualitative UI | Workbench summary card | **Qualitative Document Assessment** card on analyse-regul (from `GET /nd/results/{id}`) |
+
+**Implementation status (BCP V3):** forward judgment, reverse mapping, INT rows, qualitative assessment, clause confirm gate, gap UI sync, and export are **implemented** in `NdRegulAnalysisProcessor`.
 
 **BCP prompts (analysis only — not Landing extract):** `bcp-api/Services/NewDashboard/NdRegulPromptDefaults.cs` (ported from Regul.ai `app/backend/llm/prompts.py`).
 
 **BCP extraction schemas:** `bcp-api/Schemas/gov-requirement-points.schema.json` (regulation), `bcp-api/Schemas/policy-clauses.schema.json` (internal sections — Regul `EXTRACTION_TOOL_SCHEMA` shape).
 
 **BCP pipeline:** `bcp-api/Services/NewDashboard/NdRegulAnalysisProcessor.cs` · internal extract: `LandingAiPolicyClauseExtractService` (15-page chunks, cached per `file_hash`).
+
+### BCP pipeline phases (`regul_pipeline_phase`)
+
+| Phase | What runs | DB tables |
+|-------|-----------|-------------|
+| `forward` | LLM judgment per selected regulation point | `regul_forward_findings`, `analysis_points` (synced) |
+| `reverse` | Landing internal extract → reverse map LLM per section → INT rows | `regul_internal_sections`, `regul_reverse_mappings`, `regul_forward_findings` (INT), `analysis_points` (INT) |
+| `qualitative` | One LLM call (only if `enable_qualitative = true`) | `regul_qualitative_assessments` |
+| `done` | Run `status = completed` | — |
+
+**Start analysis:** `POST /nd/analysis-runs/{id}/start` when `workflow_engine = regul_pipeline` (requires `regul_clauses_confirmed_at`).
+
+**Results:** `GET /nd/results/{runId}` — same gap/action-plan surface as V8 (`points` from `analysis_points`) plus `regulQualitativeAssessment` for Regul runs.
+
+**UI route:** `http://localhost:3002/nd/analyse-regul` (or `/analyse-regul`).
 
 ---
 
@@ -351,7 +371,16 @@ A numbering skeleton was detected automatically by scanning this text for labels
 
 ## Step 8 — Phase A: Forward judgment (per regulatory clause)
 
-- **Service:** `judge_clause()` → `_call_judgment()`
+**BCP V3 (this repo):**
+- **Service:** `NdRegulAnalysisProcessor.RunForwardPhaseAsync()` → `CallForwardJudgmentAsync()`
+- **Model:** admin `regul_workflow_llm` via `RegulWorkflowLlmService`
+- **System prompt:** `NdRegulPromptDefaults.JudgmentSystemPrompt` (same text as Regul `JUDGMENT_SYSTEM_PROMPT`)
+- **User content:** `BuildJudgmentContextText(policyContext)` + `BuildJudgmentQueryText(clause_no, clause_text)` + JSON instruction (not Anthropic tool schema — plain JSON object response)
+- **Policy context:** full internal markdown from selected internal docs (`BuildPolicyContextAsync`) — **no keyword retrieval yet** (Regul.ai uses retrieval when policy > 50 pages)
+- **Save in DB:** `regul_forward_findings` + sync to `analysis_points` (`NdRegulAnalysisPointSync.ApplyForwardJudgment`)
+- **Post-process (Regul.ai only):** `verify_quotes()`, confidence downgrade — **not ported** to BCP yet
+
+**Regul.ai (original):**
 - **Model:** `claude-sonnet-5`
 - **max_tokens:** `8192` (default)
 - **System prompt:** `JUDGMENT_SYSTEM_PROMPT`
@@ -470,6 +499,7 @@ Your overall_status was '{status}' but gap_description was empty. A partial or n
 
 ### 9B — Map each internal section
 
+**Regul.ai (original):**
 - **Service:** `reverse_map_section()`
 - **Model:** `claude-sonnet-5`
 - **System prompt:** `REVERSE_MAPPING_SYSTEM_PROMPT`
@@ -479,7 +509,14 @@ Your overall_status was '{status}' but gap_description was empty. A partial or n
 - **Tool name:** `record_mapping`
 - **Schema:** `REVERSE_MAPPING_TOOL_SCHEMA`
 
-**Exact system prompt (REVERSE_MAPPING_SYSTEM_PROMPT):**
+**BCP V3 (this repo):**
+- **Service:** `NdRegulAnalysisProcessor.CallReverseMappingAsync()` during `RunReversePhaseAsync()`
+- **Model:** admin `regul_workflow_llm`
+- **System prompt:** `NdRegulPromptDefaults.ReverseMappingSystemPrompt`
+- **User content:** same structure as Regul — `BuildReverseMappingContextText()` + `BuildReverseMappingQueryText()` + JSON instruction
+- **Save in DB:** `regul_reverse_mappings`; INT gap rows when `mapping ≠ covered` (see below)
+
+**Regul.ai tool details:**
 
 ```
 You are a compliance analyst performing reverse-coverage analysis: given a section of a bank's internal policy manual and the full list of extracted regulatory requirement clauses, determine which regulatory clause(s) (if any) this internal section implements.
@@ -523,7 +560,13 @@ Which regulatory clause(s) above, if any, does this section implement?
 }
 ```
 
-**Sections that become gap rows:** `no_regulatory_basis` or `basis_not_verifiable` (and conflicts via `contradicts_regulation`) → synthetic rows with `clause_no` like **`INT 7.9-2`** + matching findings. In Regul.ai these land in `clauses` + `findings`; in BCP V3 they are stored as `regul_forward_findings` with `ClauseNo = "INT …"` via `NdRegulReverseIntRows` (reverse mapping LLM call not yet wired).
+**Sections that become gap rows:** `no_regulatory_basis` or `basis_not_verifiable` (and conflicts via `contradicts_regulation`) → synthetic rows with `clause_no` like **`INT 7.9-2`** + matching findings.
+
+**Regul.ai:** stored in `clauses` + `findings`.
+
+**BCP V3:** `NdRegulReverseIntRows.BuildIntFinding()` → `regul_forward_findings` with `ClauseNo = "INT …"`. Each INT row also creates an **`analysis_points`** row (no `regulation_point_id`) with `pointSnapshot` (`pointNumber = INT …`) and `landing_ai_result` synced via `NdRegulAnalysisPointSync.ApplyIntReverseFinding()` so **gap list, embedded gap report, Excel, and PDF** include INT rows the same way as forward regulatory gaps.
+
+**BCP reverse mapping LLM:** `NdRegulAnalysisProcessor.CallReverseMappingAsync()` — JSON response parsed as `RegulReverseMappingResult`; saved to `regul_reverse_mappings` (`mapping`, `mapped_clause_nos`, `result_json`).
 
 ---
 
@@ -570,10 +613,18 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 
 **Save in DB:** `qualitative_assessments` (one row per assessment — summary card in UI, not findings table rows)
 
+**BCP V3:**
+- **Service:** `NdRegulAnalysisProcessor.RunQualitativePhaseAsync()` (only when `analysis_runs.enable_qualitative = true`)
+- **Model:** admin `regul_workflow_llm` (not hardcoded Sonnet)
+- **Input:** concatenated forward regulatory clause text + full internal policy markdown (`BuildRegulatoryTextAsync` + `BuildPolicyContextAsync`)
+- **Output:** `regul_qualitative_assessments.result_json` (`overallRating`, `dimensions[5]`, `strengths`, `improvementRecommendations`)
+- **UI:** `regulQualitativeAssessment` on `GET /nd/results/{runId}`; **Qualitative Document Assessment** card on analyse-regul when `status = completed`
+
 ---
 
 ## Step 11 — Results + downstream workflow
 
+**Regul.ai:**
 - **UI:** workbench findings table, qualitative card, detail dialog
 - **Status:** `checking` → checker accept/override → optional reviewer → **`finalized`**
 - **Export:** `GET /assessments/{id}/export/xlsx` (Book 6 layout) when `finalized`
@@ -587,6 +638,12 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 | Finalize | `POST /assessments/{id}/finalize` |
 | Export Excel | `GET /assessments/{id}/export/xlsx` |
 
+**BCP V3:**
+- **UI:** `/nd/analyse-regul` — embedded `nd-gap-analysis`, qualitative card, inline gap report, Excel/PDF export (subtitle “Regul workflow V3” on PDF)
+- **Status:** `draft` → `running` → `completed` → `submitted_for_review` → checker/reviewer (same V8 maker-checker as analyse-v8)
+- **API:** `GET /nd/results/{runId}` — `points` (forward + INT), `regulQualitativeAssessment`, action plans, reviews
+- **Export:** same gap export helpers as V8 (`buildGapAnalysisExportRows`, `exportGapAnalysisPdfFromPoints`) — INT rows included when synced to `analysis_points`
+
 ---
 
 # What each AI step is for
@@ -598,11 +655,22 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 | **9** | Reverse coverage | Each internal section vs all rules → **`INT …`** rows for conflicts / no basis / unverified basis (mapping ≠ `covered`) |
 | **10** | Qualitative (Claude) | One overall score of policy writing quality |
 
-**Short path:** Upload (local OCR) → Claude extracts clauses → human confirms → Claude judges + reverse + qualitative → humans finalize & export.
+**Short path (Regul.ai):** Upload (local OCR) → Claude extracts clauses → human confirms → Claude judges + reverse + qualitative → humans finalize & export.
+
+**Short path (BCP V3):** Landing parse/extract (library points + internal docs) → select points → confirm clauses on analyse-regul → admin LLM forward + reverse + optional qualitative → gap report / Excel / PDF via `analysis_points` → maker-checker review (V8 surfaces).
+
+### BCP vs Regul.ai — not yet ported
+
+| Feature | Regul.ai | BCP V3 |
+|---------|----------|--------|
+| Quote verification (`verify_quotes`) | Yes | No |
+| Keyword retrieval when policy > 50 pages | Yes | No (full markdown sent) |
+| Judgment concurrency / rate limit | 5 parallel, 20/min | Sequential per clause/section |
+| Anthropic structured tool calls | Yes | Plain JSON object responses |
 
 ---
 
-# DB tables
+# DB tables (Regul.ai)
 
 | Table | Role |
 |-------|------|
@@ -622,20 +690,44 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 |-------|----------|--------|
 | Analysis prompts | `app/backend/llm/prompts.py` | `bcp-api/Services/NewDashboard/NdRegulPromptDefaults.cs` |
 | Extraction tool schema (internal) | `EXTRACTION_TOOL_SCHEMA` in `schemas.py` | `bcp-api/Schemas/policy-clauses.schema.json` |
-| Reg extraction | Claude + `record_clauses` | `LandingAiGovExtractService` + gov schema |
+| Reg extraction | Claude + `record_clauses` | `LandingAiGovExtractService` + gov schema (library upload) |
 | Internal section extract | Claude + `record_clauses` | `LandingAiPolicyClauseExtractService` |
-| INT reverse rows | `pipeline.py` `_reverse_coverage_findings` | `NdRegulReverseIntRows` |
-| Pipeline | `pipeline.py` `run_pipeline()` | `NdRegulAnalysisProcessor` |
-| Tool schemas (judgment/reverse/qual) | `app/backend/llm/schemas.py` | (planned — port when LLM calls wired) |
-| Anthropic adapter | `app/backend/llm/provider.py` | Admin LLM via `RegulWorkflowLlmSettingsService` |
-| Policy retrieval | `app/backend/llm/retrieval.py` | (planned for forward judgment) |
+| Forward judgment LLM | `judge_clause()` | `CallForwardJudgmentAsync()` + `RegulWorkflowLlmService` |
+| Forward → gap UI | Workbench `findings` table | `NdRegulAnalysisPointSync` → `analysis_points` |
+| INT reverse rows | `pipeline.py` `_reverse_coverage_findings` | `NdRegulReverseIntRows` + `analysis_points` sync |
+| Reverse mapping LLM | `reverse_map_section()` | `CallReverseMappingAsync()` |
+| Qualitative LLM | `run_qualitative_assessment()` | `RunQualitativePhaseAsync()` |
+| Judgment JSON models | `schemas.py` tool schemas | `NdRegulJudgmentModels.cs` + `NdRegulLlmJsonHelper` |
+| Landing message format | Workbench display | `NdRegulJudgmentFormatter.FormatLandingMessage()` |
+| Pipeline | `pipeline.py` `run_pipeline()` | `NdRegulAnalysisProcessor.ProcessRunAsync()` |
+| LLM provider | `app/backend/llm/provider.py` (Anthropic) | `RegulWorkflowLlmSettingsService` + `ProviderLlmClients` |
+| Policy retrieval (>50 pages) | `app/backend/llm/retrieval.py` | **Not yet** — BCP sends full internal markdown today |
+| Clause confirm gate | `POST .../confirm-clauses` | `AnalysisRunsController` `confirm-clauses` |
 | Analyze API | `app/backend/api/analyze.py` | `AnalysisRunsController` `/start` → `regul_pipeline` |
+| Results / gap export | Workbench + Excel export | `ResultsController` + `nd-gap-analysis` + `buildGapAnalysisExportRows` |
 | Ingest / parse | `app/backend/ingest/parsers.py` | `NdInternalParseService` + Landing parse cache |
 
 ---
 
-# Assessment status
+# BCP DB tables (V3 Regul workflow)
 
+| Table | Role |
+|-------|------|
+| `analysis_runs` | Run metadata; `workflow_engine = regul_pipeline`, `regul_pipeline_phase`, `enable_qualitative`, `regul_clauses_confirmed_at`, `regul_llm_provider` / `regul_llm_model` |
+| `analysis_points` | **Gap UI + export source** — forward regulatory points + INT reverse rows (`landing_ai_result` message format) |
+| `regul_forward_findings` | Per-clause judgment JSON (forward + INT rows) |
+| `regul_internal_sections` | Landing-extracted internal sections (`section_ref`, `section_text`, `source_doc`, `source_page`) |
+| `regul_reverse_mappings` | Reverse map result per internal section (`mapping`, `mapped_clause_nos`, `result_json`) |
+| `regul_qualitative_assessments` | One qualitative summary per run (when enabled) |
+| `regulation_points` / library snapshots | Pre-extracted regulatory clauses (replaces per-run Claude extract) |
+| `landing_ai_parse_cache` / `landing_ai_extract_cache` | Cached Landing parse + policy-clause extract |
+| `nd_system_settings` | `regul_workflow_llm` provider + model |
+
+SQL bootstrap: `bcp-api/scripts/supabase/009_regul_workflow.sql` · EF: `RegulWorkflowEntities.cs`, `SupabaseSchemaBootstrap.cs`.
+
+---
+
+# Assessment status (Regul.ai)
 | status | User action |
 |--------|-------------|
 | `draft` | Created; extraction may be in progress |

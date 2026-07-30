@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
@@ -86,6 +87,35 @@ public class ResultsController(
             });
         }
 
+        var qualitativeRow = AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine)
+            ? await db.NdRegulQualitativeAssessments.AsNoTracking()
+                .FirstOrDefaultAsync(q => q.AnalysisRunId == runId, ct)
+            : null;
+
+        object? regulQualitativeAssessment = null;
+        if (qualitativeRow != null)
+        {
+            object? parsedResult = null;
+            if (!string.IsNullOrWhiteSpace(qualitativeRow.ResultJson))
+            {
+                try
+                {
+                    parsedResult = JsonSerializer.Deserialize<object>(qualitativeRow.ResultJson);
+                }
+                catch
+                {
+                    parsedResult = qualitativeRow.ResultJson;
+                }
+            }
+
+            regulQualitativeAssessment = new
+            {
+                status = qualitativeRow.Status,
+                result = parsedResult,
+                errorMessage = qualitativeRow.ErrorMessage,
+            };
+        }
+
         return Ok(new
         {
             success = true,
@@ -96,6 +126,8 @@ public class ResultsController(
                     run.Id,
                     run.Name,
                     run.Status,
+                    run.WorkflowEngine,
+                    run.RegulClausesConfirmedAt,
                     run.TotalPointsCount,
                     run.ProcessedPointsCount,
                     run.DualVerifyFailedCount,
@@ -129,6 +161,7 @@ public class ResultsController(
                     r.CreatedAt,
                 }),
                 statusHistory = history,
+                regulQualitativeAssessment,
             },
         });
     }

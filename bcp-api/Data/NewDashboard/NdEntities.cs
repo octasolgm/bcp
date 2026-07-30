@@ -255,6 +255,10 @@ public class NdAnalysisRun
     [Column("regul_pipeline_error")]
     public string? RegulPipelineError { get; set; }
 
+    /// <summary>Regul workflow: maker confirmed clause list before Run analysis (Regul.ai extraction_review gate).</summary>
+    [Column("regul_clauses_confirmed_at")]
+    public DateTimeOffset? RegulClausesConfirmedAt { get; set; }
+
     [Column("library_id")]
     public Guid? LibraryId { get; set; }
 

@@ -18,6 +18,9 @@ ALTER TABLE analysis_runs
 ALTER TABLE analysis_runs
   ADD COLUMN IF NOT EXISTS regul_pipeline_error TEXT NULL;
 
+ALTER TABLE analysis_runs
+  ADD COLUMN IF NOT EXISTS regul_clauses_confirmed_at TIMESTAMPTZ NULL;
+
 CREATE TABLE IF NOT EXISTS regul_forward_findings (
   id UUID PRIMARY KEY,
   analysis_run_id UUID NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,

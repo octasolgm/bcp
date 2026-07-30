@@ -55,6 +55,8 @@ import {
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
+import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
+import { exportGapAnalysisPdfFromPoints } from '../../../lib/nd/export/gap-analysis-export';
 
 type PointsSource = 'regulation' | 'library';
 
@@ -92,6 +94,40 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   /** Include Regul.ai qualitative assessment phase when running analysis. */
   enableQualitativeAssessment = false;
   regulWorkflowLlmSummary = '';
+  /** Regul.ai-style clause review gate before Run analysis. */
+  showRegulClauseReview = false;
+  regulClausesConfirmed = false;
+  regulClauseConfirmLoading = false;
+  regulQualitativeAssessment: {
+    status: string;
+    result?: {
+      overallRating?: string;
+      overall_rating?: string;
+      dimensions?: Array<{
+        dimension: string;
+        rating: string;
+        commentary: string;
+        examples?: string[];
+      }>;
+      strengths?: string[];
+      improvementRecommendations?: string[];
+      improvement_recommendations?: string[];
+    };
+    errorMessage?: string;
+  } | null = null;
+  readonly regulQualitativeDimensionLabels: Record<string, string> = {
+    clarity_and_tone: 'Clarity & Tone',
+    structure_and_navigation: 'Structure & Navigation',
+    depth_of_implementation_detail: 'Depth of Implementation Detail',
+    alignment_with_regulatory_language: 'Alignment with Regulatory Language',
+    actionability_for_staff: 'Actionability for Staff',
+  };
+  regulClauseRows: Array<{
+    pointId: string;
+    pointNumber: string;
+    pointTitle: string;
+    pointContent: string;
+  }> = [];
   ndRunPointsByNumber = new Map<string, AnalysisPoint>();
   ndRunStatus = '';
   resultEditingPointId: string | null = null;
@@ -970,6 +1006,38 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return resolveAnalysisPointSeverity(point);
   }
 
+  get regulQualitativeOverallRating(): string {
+    const result = this.regulQualitativeAssessment?.result;
+    if (!result) return '';
+    return String(result.overallRating ?? result.overall_rating ?? '').trim();
+  }
+
+  get regulQualitativeDimensions(): Array<{
+    dimension: string;
+    rating: string;
+    commentary: string;
+    examples?: string[];
+  }> {
+    const dims = this.regulQualitativeAssessment?.result?.dimensions;
+    return Array.isArray(dims) ? dims : [];
+  }
+
+  get regulQualitativeStrengths(): string[] {
+    const s = this.regulQualitativeAssessment?.result?.strengths;
+    return Array.isArray(s) ? s : [];
+  }
+
+  get regulQualitativeRecommendations(): string[] {
+    const result = this.regulQualitativeAssessment?.result;
+    if (!result) return [];
+    const recs = result.improvementRecommendations ?? result.improvement_recommendations;
+    return Array.isArray(recs) ? recs : [];
+  }
+
+  get showRegulQualitativeCard(): boolean {
+    return this.regulQualitativeAssessment?.status === 'completed' && this.regulQualitativeOverallRating.length > 0;
+  }
+
   override get inlineGapSummary(): { compliant: number; partialCompliant: number; nonCompliant: number } {
     if (this.ndRunPointsList.length) {
       return ndComplianceSummaryFromPoints(this.ndRunPointsList);
@@ -981,12 +1049,19 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     const res = await this.ndApi.getResults(runId);
     if (!res.success || !res.data) return;
     const data = res.data as {
-      run: { status: string };
+      run: { status: string; regulClausesConfirmedAt?: string | null; workflowEngine?: string };
       points: AnalysisPoint[];
       pointAttachments?: PointGapAttachment[];
       actionItemReviews?: ActionItemReviewEntry[];
+      regulQualitativeAssessment?: {
+        status: string;
+        result?: Record<string, unknown>;
+        errorMessage?: string;
+      } | null;
     };
     this.ndRunStatus = data.run.status;
+    this.regulClausesConfirmed = Boolean(data.run.regulClausesConfirmedAt);
+    this.regulQualitativeAssessment = data.regulQualitativeAssessment ?? null;
     this.ndRunPointsList = data.points ?? [];
     this.ndPointAttachments = data.pointAttachments ?? [];
     this.ndActionItemReviews = data.actionItemReviews ?? [];
@@ -1007,6 +1082,72 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       this.reviewsByPointId.set(p.id, reviewsForPoint(this.ndActionItemReviews, p.id));
     }
     this.syncInlineGapSeveritiesFromNdRun();
+    if (
+      this.ndRunStatus === 'draft' &&
+      !this.regulClausesConfirmed &&
+      this.ndRunPointsList.length > 0
+    ) {
+      this.showRegulClauseReview = true;
+      this.buildRegulClauseRows();
+    }
+  }
+
+  private buildRegulClauseRows(): void {
+    this.regulClauseRows = this.ndRunPointsList.map((p) => {
+      const snap = parsePointSnapshot(p.pointSnapshot);
+      return {
+        pointId: p.id,
+        pointNumber: snap.pointNumber ?? '',
+        pointTitle: snap.pointTitle ?? '',
+        pointContent: snap.pointContent ?? snap.pointText ?? '',
+      };
+    });
+  }
+
+  async confirmRegulClauses(): Promise<void> {
+    if (!this.ndRunId || this.regulClauseConfirmLoading) return;
+    this.regulClauseConfirmLoading = true;
+    try {
+      const clauses = this.regulClauseRows.map((row) => ({
+        analysisPointId: row.pointId,
+        pointNumber: row.pointNumber,
+        pointTitle: row.pointTitle,
+        pointContent: row.pointContent,
+      }));
+      const res = await this.ndApi.confirmRegulClauses(this.ndRunId, clauses);
+      if (!res.success) {
+        this.toast.show(res.message ?? 'Could not confirm clauses', 'error', 5000);
+        return;
+      }
+      this.regulClausesConfirmed = true;
+      this.showRegulClauseReview = false;
+      this.toast.show('Clauses confirmed — you can now Run analysis', 'success', 4000);
+      await this.loadNdRunPoints(this.ndRunId);
+    } finally {
+      this.regulClauseConfirmLoading = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  override exportDoneGapAnalysisPdf(): void {
+    if (this.exportingGapReport || !this.ndRunId) return;
+    const points = this.collectDoneAnalysisPointsForExport();
+    const rows = buildGapAnalysisExportRows(points);
+    if (!rows.length) {
+      this.toast.show('No completed points with AI results to export yet', 'info');
+      return;
+    }
+    this.exportingGapReport = true;
+    this.cdr.markForCheck();
+    try {
+      exportGapAnalysisPdfFromPoints(points, {
+        runName: 'Gap Analysis Report',
+        subtitle: `Regul workflow V3 · ${rows.length} point(s)`,
+      });
+    } finally {
+      this.exportingGapReport = false;
+      this.cdr.markForCheck();
+    }
   }
 
   /** Index analysis points under § number, regulation UUID, and analysis-point id. */
@@ -1725,6 +1866,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       if (this.loadingPoints) return 'Regulation points are still loading.';
       if (this.uploadingReg) return 'Wait for the regulation upload to finish.';
       if (this.loadingCompliance) return 'Internal documents are still loading.';
+      if (this.ndRunId && this.ndRunStatus === 'draft' && !this.regulClausesConfirmed) {
+        return 'Confirm regulatory clauses in the review panel before running analysis.';
+      }
       return null;
     }
     return super.runBlockedReason;
@@ -1758,6 +1902,13 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         const incomplete =
           data.totalPointsCount > 0 && data.processedPointsCount < data.totalPointsCount;
         if (st === 'draft' || incomplete || st === 'failed') {
+          await this.loadNdRunPoints(this.ndRunId);
+          if (!this.regulClausesConfirmed) {
+            this.showRegulClauseReview = true;
+            this.buildRegulClauseRows();
+            this.toast.show('Review and confirm clauses, then Run again', 'info', 5000);
+            return;
+          }
           await this.launchNdAnalysisRun(this.ndRunId, selectedIds);
           return;
         }
@@ -1777,7 +1928,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       queryParams: { run: runId },
       replaceUrl: true,
     });
-    await this.launchNdAnalysisRun(runId, selectedIds);
+    await this.loadNdRunPoints(runId);
+    this.showRegulClauseReview = true;
+    this.buildRegulClauseRows();
+    this.toast.show('Review clauses and confirm before running analysis', 'info', 5000);
   }
 
   private buildNdCreateRunPayload(selectedIds: string[]): Record<string, unknown> {

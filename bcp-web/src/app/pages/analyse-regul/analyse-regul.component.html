@@ -696,6 +696,46 @@
   }
 </div>
 
+@if (showRegulClauseReview && ndRunId) {
+  <section class="card-surface regul-clause-review" aria-label="Review regulatory clauses">
+    <h2>Review clauses before analysis</h2>
+    <p class="muted-small">
+      Same as Regul.ai clause review — edit clause text if needed, then confirm. Analysis starts only after confirm.
+    </p>
+    <div class="regul-clause-list">
+      @for (row of regulClauseRows; track row.pointId) {
+        <div class="regul-clause-row">
+          <label class="regul-clause-no">
+            <span>Clause no.</span>
+            <input type="text" [(ngModel)]="row.pointNumber" />
+          </label>
+          <label class="regul-clause-title">
+            <span>Title</span>
+            <input type="text" [(ngModel)]="row.pointTitle" />
+          </label>
+          <label class="regul-clause-text">
+            <span>Clause text</span>
+            <textarea rows="4" [(ngModel)]="row.pointContent"></textarea>
+          </label>
+        </div>
+      }
+    </div>
+    <div class="regul-clause-actions">
+      <button
+        type="button"
+        class="btn-primary btn-sm"
+        [disabled]="regulClauseConfirmLoading || regulClausesConfirmed"
+        (click)="confirmRegulClauses()"
+      >
+        {{ regulClauseConfirmLoading ? 'Confirming…' : regulClausesConfirmed ? 'Clauses confirmed' : 'Confirm clauses' }}
+      </button>
+      @if (regulClausesConfirmed) {
+        <span class="muted-small">Ready — click <strong>Run</strong> and type <strong>start</strong>.</span>
+      }
+    </div>
+  </section>
+}
+
 <!-- 3-column workspace: analysing | progress | result -->
 <div #workspaceEl class="workspace-3col workspace-resizable v8-workspace">
   <div class="col-panel col-status" [style.width.px]="colLeftWidth">
@@ -1133,6 +1173,42 @@
 </div>
 
 @if (analysisState === 'complete' && activeNdRunId) {
+  @if (showRegulQualitativeCard) {
+    <section class="regul-qualitative-card" aria-label="Qualitative document assessment">
+      <div class="regul-qualitative-head">
+        <h2>Qualitative Document Assessment</h2>
+        <span class="regul-qualitative-badge" [class.strong]="regulQualitativeOverallRating === 'strong'" [class.weak]="regulQualitativeOverallRating === 'weak'">
+          {{ regulQualitativeOverallRating | uppercase }}
+        </span>
+      </div>
+      <div class="regul-qualitative-body">
+        @for (dim of regulQualitativeDimensions; track dim.dimension) {
+          <p class="regul-qualitative-dim">
+            <strong>{{ regulQualitativeDimensionLabels[dim.dimension] ?? dim.dimension }}</strong>
+            <span class="dim-rating">[{{ dim.rating }}]</span>
+            — {{ dim.commentary }}
+          </p>
+        }
+        @if (regulQualitativeStrengths.length) {
+          <p class="regul-qualitative-list">
+            <strong>Strengths:</strong> {{ regulQualitativeStrengths.join('; ') }}
+          </p>
+        }
+        @if (regulQualitativeRecommendations.length) {
+          <p class="regul-qualitative-list">
+            <strong>Recommendations:</strong> {{ regulQualitativeRecommendations.join('; ') }}
+          </p>
+        }
+      </div>
+    </section>
+  } @else if (regulQualitativeAssessment?.status === 'failed') {
+    <section class="regul-qualitative-card regul-qualitative-error" aria-label="Qualitative assessment error">
+      <h2>Qualitative Document Assessment</h2>
+      <p class="regul-qualitative-list">
+        Assessment could not be completed: {{ regulQualitativeAssessment?.errorMessage ?? 'Unknown error' }}
+      </p>
+    </section>
+  }
   <section #gapReportEl class="v8-embedded-results">
     <app-nd-gap-analysis
       [embedMode]="true"

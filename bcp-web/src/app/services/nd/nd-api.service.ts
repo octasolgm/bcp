@@ -549,6 +549,22 @@ export class NdApiService {
     return this.request<unknown>('POST', `/nd/analysis-runs/${id}/start`);
   }
 
+  confirmRegulClauses(
+    id: string,
+    clauses: Array<{
+      analysisPointId: string;
+      pointNumber?: string;
+      pointTitle?: string;
+      pointContent?: string;
+    }>,
+  ) {
+    return this.request<{ regulClausesConfirmedAt?: string }>(
+      'POST',
+      `/nd/analysis-runs/${id}/confirm-clauses`,
+      { clauses },
+    );
+  }
+
   rerunPoint(runId: string, pointId: string, opts?: { evidenceOnly?: boolean; actionIndex?: number }) {
     const params = new URLSearchParams();
     if (opts?.evidenceOnly) params.set('evidenceOnly', 'true');
