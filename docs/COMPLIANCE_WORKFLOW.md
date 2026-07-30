@@ -116,7 +116,8 @@
 ┌─────────────────────────────────────┐
 │ 11. Reverse coverage                │
 │     A) Extract internal sections    │
-│        (EXTRACTION_SYSTEM_PROMPT)   │
+│        Landing AI policy-clauses    │
+│        (Regul EXTRACTION_TOOL shape)│
 │     B) Map each section → clauses   │
 │        REVERSE_MAPPING_SYSTEM_PROMPT│
 │     Rows with INT prefix in UI      │
@@ -563,23 +564,26 @@ Judge this clause against the excerpts above. If the excerpts don't clearly addr
 
 ### 11A — Extract internal sections
 
-- **Service (planned):** port `extract_internal_sections()` — reuses Regul `extract_clauses()` on policy text
-- **Model:** admin `regul_workflow_llm`
-- **Prompts:** same **`EXTRACTION_SYSTEM_PROMPT`** + `build_extraction_prompt()` on **internal** text
-- **Chunk size:** **15** pages (`INTERNAL_SECTION_PAGE_CHUNK_SIZE` in Regul.ai)
+- **Service:** `LandingAiPolicyClauseExtractService` via `NdRegulAnalysisProcessor.ExtractAndStoreInternalSectionsAsync()`
+- **Model:** Landing AI `extract-latest` (`LandingAi:ExtractModel`) — **not** admin regul LLM
+- **Schema:** `bcp-api/Schemas/policy-clauses.schema.json` — same shape as Regul.ai **`EXTRACTION_TOOL_SCHEMA`** / `record_clauses`: `clauses[]` with `clause_no`, `clause_text`, `source_page`
+- **Chunk size:** **15** pages (`LandingAiPolicyClauseExtractService.InternalSectionPagesPerChunk` — same as Regul `INTERNAL_SECTION_PAGE_CHUNK_SIZE`)
+- **Cache:** `landing_ai_extract_cache` per internal `file_hash` + schema key `policy_clauses_v1`
 
 **Input (11A)**
 
 | Layer | What is sent |
 |-------|----------------|
 | **From DB** | Internal doc markdown from `landing_ai_parse_cache` |
-| **To LLM** | Internal policy text chunks; tool `record_clauses` → `InternalSection` |
+| **To Landing AI** | Markdown chunks; schema extract → `clause_no` / `clause_text` / `source_page` |
+| **Save** | `regul_internal_sections` (`section_ref`, `section_text`, `source_page`, `source_doc`) |
+
+**Analysis prompts (11B onward):** `bcp-api/Services/NewDashboard/NdRegulPromptDefaults.cs` (ported from Regul.ai `prompts.py`).
 
 ### 11B — Map each internal section
 
-- **Service (planned):** `reverse_map_section()`
+- **Service (planned):** `reverse_map_section()` — prompt in `NdRegulPromptDefaults.ReverseMappingSystemPrompt`
 - **Model:** admin `regul_workflow_llm`
-- **System prompt:** `REVERSE_MAPPING_SYSTEM_PROMPT`
 - **Tool:** `record_mapping`
 
 **Exact system prompt (reverse mapping) — same as Regul.ai:**
@@ -607,7 +611,7 @@ Rules:
 }
 ```
 
-**Sections that become gap rows:** `no_regulatory_basis` or `basis_not_verifiable` → synthetic **`INT x.x`** rows (planned in gap UI).
+**Sections that become gap rows:** When mapping is `no_regulatory_basis` or `basis_not_verifiable` (or `contradicts_regulation`), Regul.ai creates **`INT {section_ref}`** rows. BCP uses `NdRegulReverseIntRows` → `regul_forward_findings` with `ClauseNo = "INT …"` (reverse LLM wiring planned).
 
 **Save in DB:** `regul_internal_sections`, `regul_reverse_mappings`
 
@@ -743,6 +747,10 @@ WHERE table_schema = 'public' AND table_name LIKE 'regul_%' ORDER BY table_name;
 | Piece | File |
 |-------|------|
 | Regul pipeline processor | `bcp-api/Services/NewDashboard/NdRegulAnalysisProcessor.cs` |
+| Internal section extract (Landing) | `bcp-api/Services/LandingAi/LandingAiPolicyClauseExtractService.cs` |
+| Policy clause schema | `bcp-api/Schemas/policy-clauses.schema.json` |
+| Analysis prompts (BCP) | `bcp-api/Services/NewDashboard/NdRegulPromptDefaults.cs` |
+| INT reverse rows helper | `bcp-api/Services/NewDashboard/NdRegulReverseIntRows.cs` |
 | Workflow engine constant | `bcp-api/Services/NewDashboard/AnalysisWorkflowEngine.cs` |
 | Regul LLM settings | `bcp-api/Services/Llm/RegulWorkflowLlmSettingsService.cs` |
 | Run create/start | `bcp-api/Controllers/NewDashboard/AnalysisRunsController.cs` |

@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "properties": {
+    "clauses": {
+      "type": "array",
+      "description": "Discrete individually-assessable policy sections/clauses. Same shape as Regul.ai EXTRACTION_TOOL_SCHEMA (record_clauses). Segment internal policy manuals into sections a compliance officer can map on their own. Preserve official numbering (e.g. 3.2, 4.1.1). Go to the DEEPEST enumeration level: if section 2.3 has sub-points (a)(b)(i), emit 2.3-a, 2.3-b — never one merged 2.3 summary. Full verbatim clause_text — do not summarize obligation body text. Skip preambles, revision history, and admin-only text unless they impose an obligation. EXCEPTION: entire annexes/typology/red-flag illustrative lists are ONE clause per annex group (summarize the group; do not split every example). Every clause_no must be unique; invent -a, -b suffixes when needed.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "clause_no": {
+            "type": "string",
+            "description": "Official section/clause number, e.g. 3.2 or 4.1.1 or 2.3-a"
+          },
+          "clause_text": {
+            "type": "string",
+            "description": "Full text of this individually-assessable section — verbatim for obligations, not summarized"
+          },
+          "source_page": {
+            "type": "integer",
+            "description": "1-indexed PDF viewer page where this section starts; use 0 if unknown"
+          }
+        },
+        "required": ["clause_no", "clause_text", "source_page"]
+      }
+    }
+  },
+  "required": ["clauses"]
+}

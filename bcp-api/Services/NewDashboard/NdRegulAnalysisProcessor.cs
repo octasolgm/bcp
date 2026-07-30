@@ -1,19 +1,25 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
+using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.Llm;
+using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard;
 
 /// <summary>
 /// Regul.ai-style pipeline: forward judgment → reverse coverage → optional qualitative.
-/// Stores results in regul_* tables; analysis_runs remains the umbrella record.
+/// Internal section extraction uses Landing AI (policy-clauses schema); analysis steps use admin LLM + Regul prompts.
 /// </summary>
 public class NdRegulAnalysisProcessor(
     AppDbContext db,
     RegulWorkflowLlmSettingsService llmSettings,
+    NdInternalParseService internalParse,
+    LandingAiPolicyClauseExtractService policyClauseExtract,
+    SupabaseStorageService storage,
     NdAnalysisRunCancellationTracker runCancellation,
     ILogger<NdRegulAnalysisProcessor> logger)
 {
@@ -124,9 +130,9 @@ public class NdRegulAnalysisProcessor(
 
     private async Task RunForwardPhaseAsync(NdAnalysisRun run, CancellationToken ct)
     {
-        // Phase 2 implementation: port Regul.ai judge_clause() + verify_quotes().
+        // Phase 2: judge_clause() with NdRegulPromptDefaults.JudgmentSystemPrompt + admin LLM.
         var pending = await db.NdRegulForwardFindings
-            .Where(f => f.AnalysisRunId == run.Id && f.Status == "pending")
+            .Where(f => f.AnalysisRunId == run.Id && f.Status == "pending" && f.AnalysisPointId != null)
             .ToListAsync(ct);
 
         foreach (var finding in pending)
@@ -144,16 +150,87 @@ public class NdRegulAnalysisProcessor(
             pending.Count);
     }
 
-    private Task RunReversePhaseAsync(NdAnalysisRun run, CancellationToken ct)
+    private async Task RunReversePhaseAsync(NdAnalysisRun run, CancellationToken ct)
     {
-        // Phase 3 implementation: extract_internal_sections + reverse_map_section.
-        logger.LogInformation("Regul reverse phase placeholder for run {RunId}", run.Id);
-        return Task.CompletedTask;
+        await ExtractAndStoreInternalSectionsAsync(run, ct);
+
+        // Phase 3: reverse_map_section() per section with NdRegulPromptDefaults.ReverseMappingSystemPrompt.
+        // Non-covered sections → INT rows via NdRegulReverseIntRows (same as Regul pipeline.py _reverse_coverage_findings).
+        var sectionCount = await db.NdRegulInternalSections
+            .CountAsync(s => s.AnalysisRunId == run.Id, ct);
+        logger.LogInformation(
+            "Regul reverse mapping placeholder for run {RunId} ({Count} internal sections extracted)",
+            run.Id,
+            sectionCount);
+    }
+
+    private async Task ExtractAndStoreInternalSectionsAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
+        if (internalDocIds.Count == 0)
+            throw new InvalidOperationException("No internal documents selected for this Regul workflow run.");
+
+        var existing = await db.NdRegulInternalSections
+            .Where(s => s.AnalysisRunId == run.Id)
+            .ToListAsync(ct);
+        if (existing.Count > 0)
+            db.NdRegulInternalSections.RemoveRange(existing);
+
+        var allSections = new List<NdRegulInternalSection>();
+
+        foreach (var idStr in internalDocIds)
+        {
+            if (!Guid.TryParse(idStr, out var docId)) continue;
+
+            var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == docId, ct);
+            if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath))
+            {
+                logger.LogWarning("Internal document {DocId} not found or missing storage path", docId);
+                continue;
+            }
+
+            if (!storage.IsConfigured)
+                throw new InvalidOperationException("Supabase Storage not configured.");
+
+            var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
+            var payload = await internalParse.EnsureParsedAsync(doc, bytes, ct);
+            var fileName = payload.FileName ?? doc.OriginalFileName ?? doc.Title ?? "policy.pdf";
+
+            var clauses = await policyClauseExtract.ExtractFromMarkdownAsync(
+                payload.FileHash,
+                fileName,
+                payload.Markdown,
+                ct);
+
+            foreach (var clause in clauses)
+            {
+                allSections.Add(new NdRegulInternalSection
+                {
+                    AnalysisRunId = run.Id,
+                    SectionRef = clause.ClauseNo,
+                    SectionText = clause.ClauseText,
+                    SourceDoc = fileName,
+                    SourcePage = clause.SourcePage > 0 ? clause.SourcePage : null,
+                });
+            }
+        }
+
+        if (allSections.Count == 0)
+            throw new InvalidOperationException("No internal policy sections extracted for reverse coverage.");
+
+        db.NdRegulInternalSections.AddRange(allSections);
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Extracted {Count} internal sections for run {RunId} via Landing AI ({Schema})",
+            allSections.Count,
+            run.Id,
+            LandingAiPolicyClauseExtractService.PolicyClausesSchemaKey);
     }
 
     private Task RunQualitativePhaseAsync(NdAnalysisRun run, CancellationToken ct)
     {
-        // Phase 4 implementation: run_qualitative_assessment.
+        // Phase 4: run_qualitative_assessment() with NdRegulPromptDefaults.QualitativeAssessmentSystemPrompt.
         var row = db.NdRegulQualitativeAssessments
             .FirstOrDefault(q => q.AnalysisRunId == run.Id);
         if (row == null)

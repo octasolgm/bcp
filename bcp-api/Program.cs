@@ -98,6 +98,7 @@ builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdStoredDocumentUpl
 builder.Services.AddScoped<LandingAiCacheRepository>();
 builder.Services.AddScoped<LandingAiCompareService>();
 builder.Services.AddScoped<LandingAiGovExtractService>();
+builder.Services.AddScoped<LandingAiPolicyClauseExtractService>();
 
 var httpTimeout = TimeSpan.FromMinutes(
     BcpConfiguration.GetInt(builder.Configuration, 15, "Bcp:HttpTimeoutMinutes", "BCP_HTTP_TIMEOUT_MINUTES"));

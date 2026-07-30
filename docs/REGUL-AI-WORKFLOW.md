@@ -16,6 +16,28 @@
 
 ---
 
+# BCP New Dashboard — V3 Regul workflow (this repo)
+
+BCP **analyse-regul** (`workflow_engine = regul_pipeline`) follows the same **analysis** steps as Regul.ai (forward judgment → reverse map → optional qualitative) but uses **Landing AI** for structural extraction where BCP already parses documents.
+
+| Step | Regul.ai (original) | BCP V3 (`feat/nd-regul-workflow`) |
+|------|---------------------|-----------------------------------|
+| Parse regulation + internal | Local ingest/OCR | **Landing AI parse** → `landing_ai_parse_cache` |
+| Extract regulation clauses/points | Claude `EXTRACTION_SYSTEM_PROMPT` + `record_clauses` | **Landing AI** `gov-requirement-points.schema.json` (library points) |
+| Extract internal sections (reverse A) | Claude same prompt + `record_clauses` | **Landing AI** `policy-clauses.schema.json` — **same output shape** as Regul `EXTRACTION_TOOL_SCHEMA` (`clause_no`, `clause_text`, `source_page`) |
+| Forward judgment | Claude `JUDGMENT_SYSTEM_PROMPT` | Admin **regul_workflow_llm** + `NdRegulPromptDefaults.JudgmentSystemPrompt` |
+| Reverse map each section | Claude `REVERSE_MAPPING_SYSTEM_PROMPT` | Same prompt in `NdRegulPromptDefaults` + admin LLM |
+| Reverse **INT** gap rows | `INT {section_ref}` when mapping ≠ `covered` | Same — `NdRegulReverseIntRows` → `regul_forward_findings` |
+| Qualitative | Claude one-shot | Admin LLM + `NdRegulPromptDefaults.QualitativeAssessmentSystemPrompt` |
+
+**BCP prompts (analysis only — not Landing extract):** `bcp-api/Services/NewDashboard/NdRegulPromptDefaults.cs` (ported from Regul.ai `app/backend/llm/prompts.py`).
+
+**BCP extraction schemas:** `bcp-api/Schemas/gov-requirement-points.schema.json` (regulation), `bcp-api/Schemas/policy-clauses.schema.json` (internal sections — Regul `EXTRACTION_TOOL_SCHEMA` shape).
+
+**BCP pipeline:** `bcp-api/Services/NewDashboard/NdRegulAnalysisProcessor.cs` · internal extract: `LandingAiPolicyClauseExtractService` (15-page chunks, cached per `file_hash`).
+
+---
+
 # BOX DIAGRAM
 
 ```
@@ -76,13 +98,15 @@
 │ 10. For EACH regulatory clause:     │
 │   Load policy context               │
 │   Forward judgment (Claude)         │
-│   Post-process: verify_quotes       │
+│   Post-process:bg verify_quotes       │
 └──────────────────┬──────────────────┘
                    ▼
 ┌─────────────────────────────────────┐
 │ 11. Reverse coverage                │
 │   A) Extract internal sections      │
+│     (BCP: Landing AI policy schema) │
 │   B) Map each section → clauses     │
+│     (LLM — same as Regul.ai)        │
 └──────────────────┬──────────────────┘
                    ▼
 ┌─────────────────────────────────────┐
@@ -428,12 +452,21 @@ Your overall_status was '{status}' but gap_description was empty. A partial or n
 
 ### 9A — Extract internal sections
 
+**Regul.ai (original):**
 - **Service:** `extract_internal_sections()` → reuses `extract_clauses()` on each policy doc
 - **Model:** `claude-sonnet-5`
 - **System prompt:** same **`EXTRACTION_SYSTEM_PROMPT`**
 - **User prompt:** same **`build_extraction_prompt()`** on **internal** policy text
 - **Chunk size:** **15** pages (`INTERNAL_SECTION_PAGE_CHUNK_SIZE`)
 - **Tool:** `record_clauses` → mapped to `InternalSection` (`section_ref`, `section_text`, `source_page`, `source_doc`)
+
+**BCP V3 (this repo):**
+- **Service:** `LandingAiPolicyClauseExtractService.ExtractFromMarkdownAsync()` during reverse phase (`NdRegulAnalysisProcessor`)
+- **Model:** Landing AI `extract-latest` (`LandingAi:ExtractModel`) — **not** the admin regul LLM
+- **Schema:** `Schemas/policy-clauses.schema.json` — same fields as Regul **`EXTRACTION_TOOL_SCHEMA`**: `clauses[]` with `clause_no`, `clause_text`, `source_page`
+- **Chunk size:** **15** pages (`LandingAiPolicyClauseExtractService.InternalSectionPagesPerChunk`)
+- **Cache:** `landing_ai_extract_cache` keyed by internal `file_hash` + schema `policy_clauses_v1`
+- **Save in DB:** `regul_internal_sections` (`section_ref` ← `clause_no`, `section_text`, `source_page`, `source_doc`)
 
 ### 9B — Map each internal section
 
@@ -490,7 +523,7 @@ Which regulatory clause(s) above, if any, does this section implement?
 }
 ```
 
-**Sections that become gap rows:** `no_regulatory_basis` or `basis_not_verifiable` (and some conflicts) → synthetic `clauses` with `clause_no` like **`INT 7.9-2`** + matching `findings`.
+**Sections that become gap rows:** `no_regulatory_basis` or `basis_not_verifiable` (and conflicts via `contradicts_regulation`) → synthetic rows with `clause_no` like **`INT 7.9-2`** + matching findings. In Regul.ai these land in `clauses` + `findings`; in BCP V3 they are stored as `regul_forward_findings` with `ClauseNo = "INT …"` via `NdRegulReverseIntRows` (reverse mapping LLM call not yet wired).
 
 ---
 
@@ -562,7 +595,7 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 |------|------|---------|
 | **5** | Extract clauses (Claude) | Turn regulatory text into numbered clauses for review |
 | **8** | Forward judgment (Claude) | For each clause: does policy cover it? → compliant / partial / non_compliant + evidence |
-| **9** | Reverse coverage (Claude) | Each internal section vs all rules → `INT …` rows for conflicts / no basis |
+| **9** | Reverse coverage | Each internal section vs all rules → **`INT …`** rows for conflicts / no basis / unverified basis (mapping ≠ `covered`) |
 | **10** | Qualitative (Claude) | One overall score of policy writing quality |
 
 **Short path:** Upload (local OCR) → Claude extracts clauses → human confirms → Claude judges + reverse + qualitative → humans finalize & export.
@@ -585,15 +618,19 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 
 # Code map
 
-| Piece | File |
-|-------|------|
-| All prompts | `app/backend/llm/prompts.py` |
-| Tool schemas | `app/backend/llm/schemas.py` |
-| Pipeline | `app/backend/llm/pipeline.py` → `run_pipeline()`, `judge_clause()`, `verify_quotes()` |
-| Anthropic adapter | `app/backend/llm/provider.py` |
-| Policy retrieval | `app/backend/llm/retrieval.py` |
-| Analyze API + SSE | `app/backend/api/analyze.py` |
-| Ingest (local OCR) | `app/backend/ingest/parsers.py` |
+| Piece | Regul.ai | BCP V3 |
+|-------|----------|--------|
+| Analysis prompts | `app/backend/llm/prompts.py` | `bcp-api/Services/NewDashboard/NdRegulPromptDefaults.cs` |
+| Extraction tool schema (internal) | `EXTRACTION_TOOL_SCHEMA` in `schemas.py` | `bcp-api/Schemas/policy-clauses.schema.json` |
+| Reg extraction | Claude + `record_clauses` | `LandingAiGovExtractService` + gov schema |
+| Internal section extract | Claude + `record_clauses` | `LandingAiPolicyClauseExtractService` |
+| INT reverse rows | `pipeline.py` `_reverse_coverage_findings` | `NdRegulReverseIntRows` |
+| Pipeline | `pipeline.py` `run_pipeline()` | `NdRegulAnalysisProcessor` |
+| Tool schemas (judgment/reverse/qual) | `app/backend/llm/schemas.py` | (planned — port when LLM calls wired) |
+| Anthropic adapter | `app/backend/llm/provider.py` | Admin LLM via `RegulWorkflowLlmSettingsService` |
+| Policy retrieval | `app/backend/llm/retrieval.py` | (planned for forward judgment) |
+| Analyze API | `app/backend/api/analyze.py` | `AnalysisRunsController` `/start` → `regul_pipeline` |
+| Ingest / parse | `app/backend/ingest/parsers.py` | `NdInternalParseService` + Landing parse cache |
 
 ---
 
