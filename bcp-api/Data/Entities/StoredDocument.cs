@@ -80,6 +80,22 @@ public class StoredDocument
     [Column("parse_error")]
     public string? ParseError { get; set; }
 
+    /// <summary>Library section extract: pending | processing | extracted | failed</summary>
+    [Column("section_extract_status")]
+    public string SectionExtractStatus { get; set; } = "pending";
+
+    [Column("section_extracted_at")]
+    public DateTimeOffset? SectionExtractedAt { get; set; }
+
+    [Column("section_extract_error")]
+    public string? SectionExtractError { get; set; }
+
+    [Column("section_count")]
+    public int? SectionCount { get; set; }
+
+    [Column("section_extracted_by")]
+    public Guid? SectionExtractedBy { get; set; }
+
     [Column("uploaded_by")]
     public Guid? UploadedBy { get; set; }
 

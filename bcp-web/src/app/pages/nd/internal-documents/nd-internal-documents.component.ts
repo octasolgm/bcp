@@ -18,7 +18,8 @@ import {
   type SortDir,
 } from '../../../../lib/nd/list-utils';
 import { ndAnalysisRunTarget } from '../../../../lib/nd/run-links';
-import type { AnalysisRunSummary, InternalDocument } from '../../../../lib/nd/types';
+import type { AnalysisRunSummary, InternalDocument, InternalDocumentSection } from '../../../../lib/nd/types';
+import { NdInternalDocumentSectionsPanelComponent } from './nd-internal-document-sections-panel.component';
 
 type DocSortColumn = 'title' | 'uploaded' | 'size' | 'source';
 
@@ -44,7 +45,7 @@ type InternalDocAnalysisRun = {
 @Component({
   selector: 'app-nd-internal-documents',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, NdInternalDocumentSectionsPanelComponent],
   templateUrl: './nd-internal-documents.component.html',
   styleUrls: ['./nd-internal-documents.component.scss', '../nd-shared.scss'],
 })
@@ -60,11 +61,15 @@ export class NdInternalDocumentsComponent implements OnInit {
   loading = true;
   uploading = false;
   parsingId: string | null = null;
+  extractingSectionsId: string | null = null;
   deletingId: string | null = null;
   showDeleted = false;
   error = '';
   message = '';
   historyFor: InternalDocument | null = null;
+  sectionsFor: InternalDocument | null = null;
+  sectionRows: InternalDocumentSection[] = [];
+  loadingSections = false;
   analysisFor: InternalDocument | null = null;
   analysisRuns: InternalDocAnalysisRun[] = [];
   loadingAnalysisRuns = false;
@@ -117,6 +122,35 @@ export class NdInternalDocumentsComponent implements OnInit {
     if (status === 'processing') return 'Parsing…';
     if (status === 'failed') return 'Failed';
     return 'Pending parse';
+  }
+
+  sectionExtractClass(status?: string): string {
+    if (status === 'extracted') return 'completed';
+    if (status === 'processing') return 'running';
+    if (status === 'failed') return 'failed';
+    return 'pending';
+  }
+
+  sectionExtractLabel(status?: string): string {
+    if (status === 'extracted') return 'Extracted';
+    if (status === 'processing') return 'Extracting…';
+    if (status === 'failed') return 'Failed';
+    return 'Pending extract';
+  }
+
+  isExtractingSections(doc: InternalDocument): boolean {
+    return this.extractingSectionsId === doc.id || doc.sectionExtractStatus === 'processing';
+  }
+
+  canExtractSections(doc: InternalDocument): boolean {
+    return doc.parseStatus === 'parsed' && !this.isExtractingSections(doc);
+  }
+
+  sectionExtractButtonLabel(doc: InternalDocument): string {
+    if (this.extractingSectionsId === doc.id) return 'Extracting…';
+    if (doc.sectionExtractStatus === 'failed') return 'Retry extract';
+    if (doc.sectionExtractStatus === 'extracted') return 'Re-extract';
+    return 'Extract sections';
   }
 
   isParsingDoc(doc: InternalDocument): boolean {
@@ -284,6 +318,85 @@ export class NdInternalDocumentsComponent implements OnInit {
       this.error = res.message ?? 'Upload failed';
     }
     this.uploading = false;
+  }
+
+  async openSections(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.sectionsFor = doc;
+    this.sectionRows = [];
+    await this.loadSections(doc.id);
+  }
+
+  closeSections(): void {
+    this.sectionsFor = null;
+    this.sectionRows = [];
+    this.loadingSections = false;
+  }
+
+  private async loadSections(docId: string): Promise<void> {
+    this.loadingSections = true;
+    const res = await this.api.getInternalDocumentSections(docId);
+    this.loadingSections = false;
+    if (!res.success || !res.data) {
+      this.toast.show(res.message ?? 'Could not load sections', 'error');
+      return;
+    }
+    this.sectionRows = (res.data.sections ?? []).map((s) => ({
+      id: s.id,
+      sectionRef: s.sectionRef,
+      sectionText: s.sectionText,
+      sourcePage: s.sourcePage,
+      displayOrder: s.displayOrder,
+    }));
+    const idx = this.docs.findIndex((d) => d.id === docId);
+    if (idx >= 0 && res.data.sectionExtractStatus) {
+      this.docs[idx] = {
+        ...this.docs[idx],
+        sectionExtractStatus: res.data.sectionExtractStatus,
+        sectionCount: res.data.sectionCount ?? this.sectionRows.length,
+      };
+      if (this.sectionsFor?.id === docId) {
+        this.sectionsFor = this.docs[idx];
+      }
+    }
+  }
+
+  async handleExtractSections(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (doc.parseStatus !== 'parsed') {
+      this.toast.show('Parse the document first', 'warning', 4000);
+      return;
+    }
+    const force = doc.sectionExtractStatus === 'extracted';
+    this.extractingSectionsId = doc.id;
+    this.error = '';
+    const res = await this.api.extractInternalDocumentSections(doc.id, force);
+    this.extractingSectionsId = null;
+    if (!res.success) {
+      this.error = res.message ?? 'Section extract failed';
+      return;
+    }
+    const count = res.data?.sectionCount ?? 0;
+    const reused = res.data?.reusedSaved;
+    this.message = reused
+      ? `Using ${count} saved sections for "${doc.title}" (no new Landing AI call)`
+      : force
+        ? `Re-extracted ${count} sections from "${doc.title}"`
+        : `Extracted ${count} sections from "${doc.title}"`;
+    const idx = this.docs.findIndex((d) => d.id === doc.id);
+    if (idx >= 0) {
+      this.docs[idx] = {
+        ...this.docs[idx],
+        sectionExtractStatus: res.data?.sectionExtractStatus ?? 'extracted',
+        sectionCount: count,
+        sectionExtractedAt: res.data?.sectionExtractedAt ?? this.docs[idx].sectionExtractedAt,
+        sectionExtractError: null,
+      };
+    }
+    if (this.sectionsFor?.id === doc.id) {
+      this.sectionsFor = this.docs[idx] ?? doc;
+      await this.loadSections(doc.id);
+    }
   }
 
   openHistory(doc: InternalDocument): void {

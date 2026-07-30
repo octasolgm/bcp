@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdDepartment> NdDepartments => Set<NdDepartment>();
     public DbSet<NdRegulationDocument> NdRegulationDocuments => Set<NdRegulationDocument>();
     public DbSet<NdRegulationPoint> NdRegulationPoints => Set<NdRegulationPoint>();
+    public DbSet<NdInternalDocumentSection> NdInternalDocumentSections => Set<NdInternalDocumentSection>();
     public DbSet<NdLibrary> NdLibraries => Set<NdLibrary>();
     public DbSet<NdLibraryPoint> NdLibraryPoints => Set<NdLibraryPoint>();
     public DbSet<NdAnalysisRun> NdAnalysisRuns => Set<NdAnalysisRun>();
@@ -140,6 +141,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(d => d.Points)
                 .HasForeignKey(p => p.RegulationDocumentId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdInternalDocumentSection>(e =>
+        {
+            e.HasOne<StoredDocument>()
+                .WithMany()
+                .HasForeignKey(s => s.StoredDocumentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(s => s.StoredDocumentId);
         });
         modelBuilder.Entity<NdLibraryPoint>(e =>
         {

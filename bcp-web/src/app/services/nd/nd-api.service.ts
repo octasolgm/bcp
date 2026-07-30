@@ -409,6 +409,32 @@ export class NdApiService {
     );
   }
 
+  getInternalDocumentSections(docId: string) {
+    return this.request<{
+      documentId: string;
+      sectionExtractStatus?: string;
+      sectionCount?: number;
+      sections: Array<{
+        id: string;
+        sectionRef: string;
+        sectionText: string;
+        sourcePage?: number | null;
+        displayOrder?: number;
+      }>;
+    }>('GET', `/nd/internal-documents/${docId}/sections`);
+  }
+
+  extractInternalDocumentSections(docId: string, force = false) {
+    const q = force ? '?force=true' : '';
+    return this.request<{
+      id: string;
+      sectionExtractStatus?: string;
+      sectionCount?: number;
+      sectionExtractedAt?: string;
+      reusedSaved?: boolean;
+    }>('POST', `/nd/internal-documents/${docId}/extract-sections${q}`);
+  }
+
   async uploadInternalDocument(file: File) {
     const form = new FormData();
     form.append('file', file);

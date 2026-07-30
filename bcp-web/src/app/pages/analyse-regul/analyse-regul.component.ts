@@ -1099,7 +1099,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         pointId: p.id,
         pointNumber: snap.pointNumber ?? '',
         pointTitle: snap.pointTitle ?? '',
-        pointContent: snap.pointContent ?? snap.pointText ?? '',
+        pointContent: snap.pointContent ?? '',
       };
     });
   }

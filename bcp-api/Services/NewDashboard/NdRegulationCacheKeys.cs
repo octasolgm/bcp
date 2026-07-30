@@ -2,7 +2,7 @@ namespace Reguliq.Api.Services.NewDashboard;
 
 /// <summary>
 /// Per-upload Landing AI cache keys — separate from content SHA-256 so re-uploading the same
-/// PDF bytes creates a fresh parse/extract pipeline for each regulation document.
+/// PDF bytes creates a fresh parse/extract pipeline for each stored document (regulation or internal).
 /// </summary>
 public static class NdRegulationCacheKeys
 {

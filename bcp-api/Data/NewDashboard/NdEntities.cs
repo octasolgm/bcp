@@ -164,6 +164,32 @@ public class NdRegulationPoint
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+[Table("nd_internal_document_sections")]
+public class NdInternalDocumentSection
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("stored_document_id")]
+    public Guid StoredDocumentId { get; set; }
+
+    [Column("section_ref")]
+    public string SectionRef { get; set; } = "";
+
+    [Column("section_text")]
+    public string SectionText { get; set; } = "";
+
+    [Column("source_page")]
+    public int? SourcePage { get; set; }
+
+    [Column("display_order")]
+    public int DisplayOrder { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 [Table("libraries")]
 public class NdLibrary
 {

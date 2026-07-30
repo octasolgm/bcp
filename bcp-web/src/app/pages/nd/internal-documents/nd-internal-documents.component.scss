@@ -62,6 +62,11 @@
     color: var(--text-muted);
     white-space: nowrap;
   }
+
+  .section-count-meta {
+    font-weight: 500;
+    opacity: 0.85;
+  }
 }
 
 .doc-cell {
@@ -212,6 +217,21 @@
   z-index: 141;
   padding: 1.25rem;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+
+  &.sections-panel-wide {
+    width: min(560px, 100vw);
+  }
+
+  .sections-panel-actions {
+    margin-bottom: 0.75rem;
+  }
+
+  app-nd-internal-document-sections-panel {
+    flex: 1;
+    min-height: 0;
+  }
 
   header {
     display: flex;

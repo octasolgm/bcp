@@ -134,7 +134,7 @@ export type PointDetail = {
 @Directive()
 export abstract class AnalyseBase implements OnInit, OnDestroy {
   protected readonly toast = inject(ToastService);
-  private readonly cdr = inject(ChangeDetectorRef);
+  protected readonly cdr = inject(ChangeDetectorRef);
   protected readonly route = inject(ActivatedRoute);
   protected readonly router = inject(Router);
   protected readonly api = inject(ApiService);

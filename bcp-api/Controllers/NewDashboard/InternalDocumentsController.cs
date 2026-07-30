@@ -19,6 +19,7 @@ public class InternalDocumentsController(
     SupabaseStorageService storage,
     NdStoredDocumentUploadService uploadPrep,
     NdInternalParseService parseService,
+    NdInternalDocumentSectionService sectionService,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
     [HttpGet]
@@ -38,7 +39,7 @@ public class InternalDocumentsController(
 
         var profileNames = await LoadProfileNamesAsync(
             appDb,
-            docs.SelectMany(d => new Guid?[] { d.UploadedBy, d.ParsedBy, d.HiddenBy }),
+            docs.SelectMany(d => new Guid?[] { d.UploadedBy, d.ParsedBy, d.HiddenBy, d.SectionExtractedBy }),
             ct);
 
         var items = new List<object>();
@@ -64,6 +65,12 @@ public class InternalDocumentsController(
                 uploadedByName = ProfileName(profileNames, d.UploadedBy),
                 parsedBy = d.ParsedBy,
                 parsedByName = ProfileName(profileNames, d.ParsedBy),
+                sectionExtractStatus = d.SectionExtractStatus,
+                sectionCount = d.SectionCount,
+                sectionExtractedAt = d.SectionExtractedAt,
+                sectionExtractError = d.SectionExtractError,
+                sectionExtractedBy = d.SectionExtractedBy,
+                sectionExtractedByName = ProfileName(profileNames, d.SectionExtractedBy),
                 isHidden = d.IsHidden,
                 hiddenAt = d.HiddenAt,
                 convertedFromWord = !string.IsNullOrWhiteSpace(d.SourceStoragePath),
@@ -267,6 +274,7 @@ public class InternalDocumentsController(
                 ParseStatus = "pending",
                 UploadedBy = profile!.Id,
             };
+            row.ExtractionCacheKey = NdRegulationCacheKeys.ForStoredDocument(row.Id);
             appDb.StoredDocuments.Add(row);
             await appDb.SaveChangesAsync(ct);
 
@@ -412,6 +420,78 @@ public class InternalDocumentsController(
                             await LoadProfileNamesAsync(appDb, [doc.ParsedBy], ct),
                             doc.ParsedBy)
                         : null,
+                },
+            });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:guid}/sections")]
+    public async Task<IActionResult> ListSections(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(appDb, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (doc == null) return NotFound(new { success = false, message = "Document not found." });
+
+        var sections = await sectionService.ListSectionsAsync(id, ct);
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                documentId = id,
+                sectionExtractStatus = doc.SectionExtractStatus,
+                sectionCount = doc.SectionCount ?? sections.Count,
+                sections = sections.Select(s => new
+                {
+                    id = s.Id,
+                    sectionRef = s.SectionRef,
+                    sectionText = s.SectionText,
+                    sourcePage = s.SourcePage,
+                    displayOrder = s.DisplayOrder,
+                }),
+            },
+        });
+    }
+
+    [HttpPost("{id:guid}/extract-sections")]
+    public async Task<IActionResult> ExtractSections(
+        Guid id,
+        [FromQuery] bool force = false,
+        CancellationToken ct = default)
+    {
+        var (profile, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        try
+        {
+            var sections = await sectionService.ExtractAndSaveSectionsAsync(id, profile!.Id, force, ct);
+            var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+            return Ok(new
+            {
+                success = true,
+                message = force
+                    ? $"Re-extracted {sections.Count} policy sections."
+                    : sections.Count > 0 && doc?.SectionExtractStatus == "extracted"
+                        ? $"Using {sections.Count} saved policy sections (no new Landing AI call)."
+                        : $"Extracted {sections.Count} policy sections.",
+                data = new
+                {
+                    id,
+                    sectionExtractStatus = doc?.SectionExtractStatus ?? "extracted",
+                    sectionCount = sections.Count,
+                    sectionExtractedAt = doc?.SectionExtractedAt,
+                    reusedSaved = !force && doc?.SectionExtractStatus == "extracted",
                 },
             });
         }

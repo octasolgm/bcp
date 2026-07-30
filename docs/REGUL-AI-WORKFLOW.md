@@ -23,8 +23,10 @@ BCP **analyse-regul** (`workflow_engine = regul_pipeline`) follows the same **an
 | Step | Regul.ai (original) | BCP V3 (`feat/nd-regul-workflow`) |
 |------|---------------------|-----------------------------------|
 | Parse regulation + internal | Local ingest/OCR | **Landing AI parse** → `landing_ai_parse_cache` |
-| Extract regulation clauses/points | Claude `EXTRACTION_SYSTEM_PROMPT` + `record_clauses` | **Landing AI** `gov-requirement-points.schema.json` (library points) |
-| Extract internal sections (reverse A) | Claude same prompt + `record_clauses` | **Landing AI** `policy-clauses.schema.json` — **same output shape** as Regul `EXTRACTION_TOOL_SCHEMA` (`clause_no`, `clause_text`, `source_page`) |
+| Extract regulation clauses/points | Claude `EXTRACTION_SYSTEM_PROMPT` + `record_clauses` | **Landing AI** `gov-requirement-points.schema.json` — **manual Run extraction** on `/nd/regulation-documents` → `regulation_points` + viewpoints UI |
+| Parse internal policy | Part of ingest / analysis | **Manual Run parse** on `/nd/internal-documents` → `POST …/parse` |
+| Extract internal sections | Claude extract at reverse (Step 11A) | **Landing AI** `policy-clauses.schema.json` — **manual Run extract sections** on `/nd/internal-documents` **or** auto on first Regul reverse run |
+| View internal sections | N/A (only at analysis) | **Sections panel** on internal doc library (`GET …/sections`) — mirror regulation viewpoints |
 | Clause review gate | `/review/{id}` — edit + confirm | Inline panel on **analyse-regul** → `POST /nd/analysis-runs/{id}/confirm-clauses` (`regul_clauses_confirmed_at`) |
 | Forward judgment | Claude `JUDGMENT_SYSTEM_PROMPT` | Admin **regul_workflow_llm** + `NdRegulPromptDefaults.JudgmentSystemPrompt` |
 | Gap UI + export (forward) | Workbench findings table | Sync to **`analysis_points`** (`landing_ai_result` message format) via `NdRegulAnalysisPointSync` |
@@ -33,20 +35,29 @@ BCP **analyse-regul** (`workflow_engine = regul_pipeline`) follows the same **an
 | Qualitative | Claude one-shot | Admin LLM + `NdRegulPromptDefaults.QualitativeAssessmentSystemPrompt` → `regul_qualitative_assessments` |
 | Qualitative UI | Workbench summary card | **Qualitative Document Assessment** card on analyse-regul (from `GET /nd/results/{id}`) |
 
-**Implementation status (BCP V3):** forward judgment, reverse mapping, INT rows, qualitative assessment, clause confirm gate, gap UI sync, and export are **implemented** in `NdRegulAnalysisProcessor`.
+**Implementation status (BCP V3):** forward judgment, reverse mapping, INT rows, qualitative assessment, clause confirm gate, gap UI sync, export, and **internal document library section extract + viewer** are **implemented**.
 
 **BCP prompts (analysis only — not Landing extract):** `bcp-api/Services/NewDashboard/NdRegulPromptDefaults.cs` (ported from Regul.ai `app/backend/llm/prompts.py`).
 
 **BCP extraction schemas:** `bcp-api/Schemas/gov-requirement-points.schema.json` (regulation), `bcp-api/Schemas/policy-clauses.schema.json` (internal sections — Regul `EXTRACTION_TOOL_SCHEMA` shape).
 
-**BCP pipeline:** `bcp-api/Services/NewDashboard/NdRegulAnalysisProcessor.cs` · internal extract: `LandingAiPolicyClauseExtractService` (15-page chunks, cached per `file_hash`).
+**BCP services:** `NdRegulAnalysisProcessor.cs` (analysis pipeline) · `LandingAiPolicyClauseExtractService` (15-page chunks, cache `policy_clauses_v1`) · `NdInternalDocumentSectionService` (library persist + workflow reuse).
+
+### BCP library setup (before analyse-regul)
+
+| Document type | UI route | Steps | View extracted structure |
+|---------------|----------|-------|--------------------------|
+| **Regulation** | `/nd/regulation-documents` | Upload → **Run extraction** (manual) | `nd-regulation-points-panel` (viewpoints tree) |
+| **Internal policy** | `/nd/internal-documents` | Upload → **Run parse** → **Extract sections** (manual) | **Sections** side panel (`nd-internal-document-sections-panel`) |
+
+Regulation extraction does **not** run automatically on upload (`extractionStatus = pending` until you click Run extraction). Internal section extract requires **parsed** status first; if you skip library extract, the Regul **reverse** phase still extracts (and saves to library) on first analysis run.
 
 ### BCP pipeline phases (`regul_pipeline_phase`)
 
 | Phase | What runs | DB tables |
 |-------|-----------|-------------|
 | `forward` | LLM judgment per selected regulation point | `regul_forward_findings`, `analysis_points` (synced) |
-| `reverse` | Landing internal extract → reverse map LLM per section → INT rows | `regul_internal_sections`, `regul_reverse_mappings`, `regul_forward_findings` (INT), `analysis_points` (INT) |
+| `reverse` | Reuse **library** internal sections (or extract + save) → copy to `regul_internal_sections` → reverse map LLM per section → INT rows | `nd_internal_document_sections` (library), `regul_internal_sections` (per run), `regul_reverse_mappings`, `regul_forward_findings` (INT), `analysis_points` (INT) |
 | `qualitative` | One LLM call (only if `enable_qualitative = true`) | `regul_qualitative_assessments` |
 | `done` | Run `status = completed` | — |
 
@@ -55,6 +66,10 @@ BCP **analyse-regul** (`workflow_engine = regul_pipeline`) follows the same **an
 **Results:** `GET /nd/results/{runId}` — same gap/action-plan surface as V8 (`points` from `analysis_points`) plus `regulQualitativeAssessment` for Regul runs.
 
 **UI route:** `http://localhost:3002/nd/analyse-regul` (or `/analyse-regul`).
+
+**Internal sections API (library):**
+- `POST /nd/internal-documents/{id}/extract-sections` — Landing policy-clause extract → `nd_internal_document_sections`
+- `GET /nd/internal-documents/{id}/sections` — list sections for Sections panel
 
 ---
 
@@ -123,8 +138,8 @@ BCP **analyse-regul** (`workflow_engine = regul_pipeline`) follows the same **an
                    ▼
 ┌─────────────────────────────────────┐
 │ 11. Reverse coverage                │
-│   A) Extract internal sections      │
-│     (BCP: Landing AI policy schema) │
+│   A) Internal sections              │
+│     (BCP: library OR reverse extract)│
 │   B) Map each section → clauses     │
 │     (LLM — same as Regul.ai)        │
 └──────────────────┬──────────────────┘
@@ -141,12 +156,18 @@ BCP **analyse-regul** (`workflow_engine = regul_pipeline`) follows the same **an
 └─────────────────────────────────────┘
 ```
 
-**Important notes**
+**Important notes (Regul.ai)**
 - **Upload/ingest** is local (no Claude). Text stored once per `sha256`.
 - **Extract** (Step 7) only segments the **regulatory** document. Internal policy is **not** clause-extracted until reverse coverage (Step 11A).
 - **Confirm clauses** is mandatory before **Run analysis**.
 - There is **no dual-verify second model** — one Claude judgment per clause + server-side quote verification.
 - **Run analysis** is one button; backend runs judgment → reverse coverage → qualitative in `run_pipeline()`.
+
+**Important notes (BCP V3)**
+- **Regulation:** upload → manual **Run extraction** → viewpoints in regulation library (not re-extracted on each analyse-regul run).
+- **Internal:** upload → manual **Run parse** → optional manual **Extract sections** (preview in Sections panel) → select doc on analyse-regul.
+- **Reverse phase:** uses `nd_internal_document_sections` when present; otherwise `NdInternalDocumentSectionService.EnsureSectionsForWorkflowAsync()` extracts via Landing AI, saves to library + `regul_internal_sections` for the run.
+- **Confirm clauses** on analyse-regul before Run (inline panel, not separate `/review` page).
 
 ---
 
@@ -201,7 +222,18 @@ BCP **analyse-regul** (`workflow_engine = regul_pipeline`) follows the same **an
 - **Model:** none
 - **Prompt:** none
 
-Same local ingest + `sha256` dedup as Step 2. Policy text is **not** sent to Claude until **Run analysis**.
+Same local ingest + `sha256` dedup as Step 2. Policy text is **not** sent to Claude until **Run analysis** (Regul.ai). On BCP, parse internal docs in the **Document Library** before section extract or analysis.
+
+**BCP V3 — Internal document library (`/nd/internal-documents`)**
+
+| Step | API | Result |
+|------|-----|--------|
+| Upload | `POST /nd/internal-documents/upload` | `stored_documents` row, `parse_status = pending` |
+| Parse | `POST /nd/internal-documents/{id}/parse` | Markdown in `landing_ai_parse_cache`, `parse_status = parsed` |
+| Extract sections | `POST /nd/internal-documents/{id}/extract-sections` | `nd_internal_document_sections` + `section_extract_status = extracted` |
+| View sections | `GET /nd/internal-documents/{id}/sections` | Sections panel UI (searchable list) |
+
+`stored_documents` columns: `section_extract_status`, `section_count`, `section_extracted_at`, `section_extract_error`, `section_extracted_by`.
 
 ---
 
@@ -490,12 +522,21 @@ Your overall_status was '{status}' but gap_description was empty. A partial or n
 - **Tool:** `record_clauses` → mapped to `InternalSection` (`section_ref`, `section_text`, `source_page`, `source_doc`)
 
 **BCP V3 (this repo):**
-- **Service:** `LandingAiPolicyClauseExtractService.ExtractFromMarkdownAsync()` during reverse phase (`NdRegulAnalysisProcessor`)
-- **Model:** Landing AI `extract-latest` (`LandingAi:ExtractModel`) — **not** the admin regul LLM
-- **Schema:** `Schemas/policy-clauses.schema.json` — same fields as Regul **`EXTRACTION_TOOL_SCHEMA`**: `clauses[]` with `clause_no`, `clause_text`, `source_page`
+
+**Library extract (recommended — mirror regulation viewpoints):**
+- **UI:** `/nd/internal-documents` — **Extract** button (after parse) + **Sections** panel
+- **Service:** `NdInternalDocumentSectionService.ExtractAndSaveSectionsAsync()`
+- **API:** `POST /nd/internal-documents/{id}/extract-sections`
+- **Model:** Landing AI `extract-latest` — **not** admin regul LLM
+- **Schema:** `Schemas/policy-clauses.schema.json` (`clause_no`, `clause_text`, `source_page`)
 - **Chunk size:** **15** pages (`LandingAiPolicyClauseExtractService.InternalSectionPagesPerChunk`)
-- **Cache:** `landing_ai_extract_cache` keyed by internal `file_hash` + schema `policy_clauses_v1`
-- **Save in DB:** `regul_internal_sections` (`section_ref` ← `clause_no`, `section_text`, `source_page`, `source_doc`)
+- **Cache:** `landing_ai_extract_cache` keyed by `file_hash` + `policy_clauses_v1`
+- **Save in DB:** `nd_internal_document_sections` (`section_ref`, `section_text`, `source_page`, `display_order`)
+
+**Analysis run (reverse phase):**
+- **Service:** `NdInternalDocumentSectionService.EnsureSectionsForWorkflowAsync()` then copy rows into `regul_internal_sections` for the run
+- **If library empty:** same Landing extract runs once, persists to `nd_internal_document_sections`, then continues reverse mapping
+- **Per-run copy:** `regul_internal_sections` (`section_ref`, `section_text`, `source_page`, `source_doc`)
 
 ### 9B — Map each internal section
 
@@ -657,7 +698,7 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 
 **Short path (Regul.ai):** Upload (local OCR) → Claude extracts clauses → human confirms → Claude judges + reverse + qualitative → humans finalize & export.
 
-**Short path (BCP V3):** Landing parse/extract (library points + internal docs) → select points → confirm clauses on analyse-regul → admin LLM forward + reverse + optional qualitative → gap report / Excel / PDF via `analysis_points` → maker-checker review (V8 surfaces).
+**Short path (BCP V3):** Regulation library: upload → **Run extraction** → viewpoints. Internal library: upload → **Run parse** → **Extract sections** (optional preview) → analyse-regul: select reg points + internal docs → confirm clauses → admin LLM forward + reverse + optional qualitative → gap report / Excel / PDF → maker-checker (V8 surfaces).
 
 ### BCP vs Regul.ai — not yet ported
 
@@ -691,7 +732,8 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 | Analysis prompts | `app/backend/llm/prompts.py` | `bcp-api/Services/NewDashboard/NdRegulPromptDefaults.cs` |
 | Extraction tool schema (internal) | `EXTRACTION_TOOL_SCHEMA` in `schemas.py` | `bcp-api/Schemas/policy-clauses.schema.json` |
 | Reg extraction | Claude + `record_clauses` | `LandingAiGovExtractService` + gov schema (library upload) |
-| Internal section extract | Claude + `record_clauses` | `LandingAiPolicyClauseExtractService` |
+| Internal section extract | Claude + `record_clauses` (reverse only) | `LandingAiPolicyClauseExtractService` + **`NdInternalDocumentSectionService`** (library + workflow reuse) |
+| Internal sections UI | N/A | `/nd/internal-documents` Sections panel · `nd-internal-document-sections-panel` |
 | Forward judgment LLM | `judge_clause()` | `CallForwardJudgmentAsync()` + `RegulWorkflowLlmService` |
 | Forward → gap UI | Workbench `findings` table | `NdRegulAnalysisPointSync` → `analysis_points` |
 | INT reverse rows | `pipeline.py` `_reverse_coverage_findings` | `NdRegulReverseIntRows` + `analysis_points` sync |
@@ -716,14 +758,16 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 | `analysis_runs` | Run metadata; `workflow_engine = regul_pipeline`, `regul_pipeline_phase`, `enable_qualitative`, `regul_clauses_confirmed_at`, `regul_llm_provider` / `regul_llm_model` |
 | `analysis_points` | **Gap UI + export source** — forward regulatory points + INT reverse rows (`landing_ai_result` message format) |
 | `regul_forward_findings` | Per-clause judgment JSON (forward + INT rows) |
-| `regul_internal_sections` | Landing-extracted internal sections (`section_ref`, `section_text`, `source_doc`, `source_page`) |
+| `regul_internal_sections` | Per-run copy of internal sections for reverse mapping (`analysis_run_id`) |
+| `nd_internal_document_sections` | **Library** policy sections (`stored_document_id`) — source for Sections panel + reverse reuse |
+| `stored_documents` | Internal uploads; `parse_status`, `section_extract_status`, `section_count`, etc. |
 | `regul_reverse_mappings` | Reverse map result per internal section (`mapping`, `mapped_clause_nos`, `result_json`) |
 | `regul_qualitative_assessments` | One qualitative summary per run (when enabled) |
 | `regulation_points` / library snapshots | Pre-extracted regulatory clauses (replaces per-run Claude extract) |
 | `landing_ai_parse_cache` / `landing_ai_extract_cache` | Cached Landing parse + policy-clause extract |
 | `nd_system_settings` | `regul_workflow_llm` provider + model |
 
-SQL bootstrap: `bcp-api/scripts/supabase/009_regul_workflow.sql` · EF: `RegulWorkflowEntities.cs`, `SupabaseSchemaBootstrap.cs`.
+SQL bootstrap: `bcp-api/scripts/supabase/009_regul_workflow.sql`, `010_internal_document_sections.sql` · EF: `NdEntities.cs` (`NdInternalDocumentSection`), `RegulWorkflowEntities.cs`, `SupabaseSchemaBootstrap.cs`.
 
 ---
 

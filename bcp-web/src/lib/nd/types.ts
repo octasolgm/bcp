@@ -93,6 +93,19 @@ export type InternalDocument = {
   convertedFromWord?: boolean;
   sourceOriginalFileName?: string | null;
   landingAiFileName?: string | null;
+  sectionExtractStatus?: 'pending' | 'processing' | 'extracted' | 'failed' | string;
+  sectionCount?: number | null;
+  sectionExtractedAt?: string | null;
+  sectionExtractError?: string | null;
+  sectionExtractedByName?: string | null;
+};
+
+export type InternalDocumentSection = {
+  id: string;
+  sectionRef: string;
+  sectionText: string;
+  sourcePage?: number | null;
+  displayOrder?: number;
 };
 
 export type LibrarySummary = {

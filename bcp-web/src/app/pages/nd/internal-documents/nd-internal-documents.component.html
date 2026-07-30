@@ -5,7 +5,7 @@
       @if (showDeleted) {
         Soft-deleted documents are hidden from the library but kept in the database — parse credits and file data are preserved. Restore to make them visible again.
       } @else {
-        Upload PDF or Word (.doc, .docx). Landing AI ADE parses these formats directly. Use <strong>Run parse</strong> before analysis.
+        Upload PDF or Word (.doc, .docx). <strong>Run parse</strong> then <strong>Extract sections</strong> before Regul analysis (or sections are extracted automatically on first reverse run).
       }
     </p>
   </div>
@@ -97,6 +97,7 @@
           <th>Extracted by</th>
           <th>Size</th>
           <th>Parse status</th>
+          <th>Sections</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -130,6 +131,18 @@
                 }
               </span>
             </td>
+            <td>
+              <span class="severity-badge" [ngClass]="sectionExtractClass(d.sectionExtractStatus)">
+                @if (isExtractingSections(d)) {
+                  Extracting…
+                } @else {
+                  {{ sectionExtractLabel(d.sectionExtractStatus) }}
+                  @if (d.sectionCount) {
+                    <span class="section-count-meta">({{ d.sectionCount }})</span>
+                  }
+                }
+              </span>
+            </td>
             <td class="internal-doc-actions-cell">
               <div class="internal-doc-row-actions">
                 @if (!showDeleted) {
@@ -142,6 +155,25 @@
                       (click)="handleParse(d, $event)"
                     >
                       {{ parsingId === d.id ? '…' : 'Parse' }}
+                    </button>
+                  }
+                  @if (canParse && d.parseStatus === 'parsed') {
+                    <button
+                      type="button"
+                      class="row-action-btn compact"
+                      [title]="sectionExtractButtonLabel(d)"
+                      [disabled]="!canExtractSections(d)"
+                      (click)="handleExtractSections(d, $event)"
+                    >
+                      {{ extractingSectionsId === d.id ? '…' : 'Extract' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="row-action-btn compact"
+                      title="View extracted policy sections"
+                      (click)="openSections(d, $event)"
+                    >
+                      Sections
                     </button>
                   }
                   <button
@@ -223,6 +255,41 @@
   }
 }
 </div>
+
+@if (sectionsFor) {
+  <div class="hist-backdrop" (click)="closeSections()"></div>
+  <aside class="hist-panel sections-panel-wide" role="dialog" aria-label="Policy sections">
+    <header>
+      <div>
+        <h3>{{ sectionsFor.title }}</h3>
+        <p>
+          {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
+          @if (sectionsFor.sectionCount) {
+            · {{ sectionsFor.sectionCount }} section(s)
+          }
+        </p>
+      </div>
+      <button type="button" class="btn-close" (click)="closeSections()" aria-label="Close">✕</button>
+    </header>
+    @if (canParse && sectionsFor.parseStatus === 'parsed') {
+      <div class="sections-panel-actions">
+        <button
+          type="button"
+          class="btn-primary btn-sm"
+          [disabled]="!canExtractSections(sectionsFor)"
+          (click)="handleExtractSections(sectionsFor)"
+        >
+          {{ sectionExtractButtonLabel(sectionsFor) }}
+        </button>
+      </div>
+    }
+    <app-nd-internal-document-sections-panel
+      [docTitle]="sectionsFor.title"
+      [sections]="sectionRows"
+      [loading]="loadingSections"
+    />
+  </aside>
+}
 
 @if (historyFor) {
   <div class="hist-backdrop" (click)="closeHistory()"></div>

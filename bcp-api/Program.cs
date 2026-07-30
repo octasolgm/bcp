@@ -186,6 +186,7 @@ builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationUploadS
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationPointRepairService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationPointPageService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdInternalParseService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdInternalDocumentSectionService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisProcessor>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulAnalysisProcessor>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.DemoAnalysisSeedService>();

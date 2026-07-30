@@ -69,16 +69,19 @@ public class NdInternalParseService(
             throw new InvalidOperationException(
                 "Landing AI is not configured. Set LandingAi:ApiKey in appsettings.");
 
-        var hash = !string.IsNullOrWhiteSpace(doc.FileHash)
-            ? doc.FileHash.Trim()
-            : LandingAiCacheRepository.HashBuffer(pdfBytes);
+        var hash = LandingAiCacheRepository.HashBuffer(pdfBytes);
+        if (string.IsNullOrWhiteSpace(doc.FileHash))
+            doc.FileHash = hash;
+        else
+            hash = doc.FileHash.Trim();
 
-        var cached = await cache.GetParseCacheAsync(hash, ct);
+        var cacheKey = await NdStoredDocumentExtractionCache.EnsureKeyAsync(db, doc, ct);
+        var cached = await cache.GetParseCacheAsync(cacheKey, ct);
         if (!string.IsNullOrWhiteSpace(cached?.Markdown))
         {
             await MarkParsedAsync(doc, hash, parsedBy, ct);
             return new InternalDocPayload(
-                hash,
+                cacheKey,
                 doc.OriginalFileName,
                 cached.Markdown,
                 pdfBytes);
@@ -101,9 +104,9 @@ public class NdInternalParseService(
                 ?? doc.Title
                 ?? "document";
             var markdown = await documentParse.ParseToMarkdownAsync(pdfBytes, fileName, ct);
-            await cache.SaveParseCacheAsync(hash, fileName, markdown, _opts.ParseModel, ct);
+            await cache.SaveParseCacheAsync(cacheKey, fileName, markdown, _opts.ParseModel, ct);
             await MarkParsedAsync(doc, hash, parsedBy, ct);
-            return new InternalDocPayload(hash, doc.OriginalFileName ?? fileName, markdown, pdfBytes);
+            return new InternalDocPayload(cacheKey, doc.OriginalFileName ?? fileName, markdown, pdfBytes);
         }
         catch (Exception ex)
         {

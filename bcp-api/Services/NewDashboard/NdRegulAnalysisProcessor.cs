@@ -21,7 +21,7 @@ public class NdRegulAnalysisProcessor(
     RegulWorkflowLlmSettingsService llmSettings,
     RegulWorkflowLlmService regulLlm,
     NdInternalParseService internalParse,
-    LandingAiPolicyClauseExtractService policyClauseExtract,
+    NdInternalDocumentSectionService internalSectionService,
     SupabaseStorageService storage,
     NdAnalysisRunCancellationTracker runCancellation,
     ILogger<NdRegulAnalysisProcessor> logger)
@@ -265,20 +265,18 @@ public class NdRegulAnalysisProcessor(
             .OrderBy(s => s.SectionRef)
             .ToListAsync(ct);
 
-        var forwardFindings = await db.NdRegulForwardFindings
-            .Where(f => f.AnalysisRunId == run.Id && f.AnalysisPointId != null)
-            .OrderBy(f => f.ClauseNo)
-            .ToListAsync(ct);
+        var regulatoryClauses = BuildSelectedRegulatoryClauses(run);
+        if (regulatoryClauses.Count == 0)
+            throw new InvalidOperationException("No selected regulatory clauses available for reverse mapping.");
 
-        if (forwardFindings.Count == 0)
-            throw new InvalidOperationException("No forward regulatory clauses available for reverse mapping.");
+        var regulatoryByNo = regulatoryClauses
+            .GroupBy(c => c.ClauseNo, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().ClauseText, StringComparer.OrdinalIgnoreCase);
 
-        var regulatoryClauses = forwardFindings
-            .Select(f => (f.ClauseNo, f.ClauseText))
-            .ToList();
-        var regulatoryByNo = forwardFindings
-            .GroupBy(f => f.ClauseNo)
-            .ToDictionary(g => g.Key, g => g.First().ClauseText);
+        logger.LogInformation(
+            "Regul reverse mapping for run {RunId}: using {SelectedCount} selected regulatory clauses (not full regulation library)",
+            run.Id,
+            regulatoryClauses.Count);
 
         var intRowsCreated = 0;
         var mappingsCompleted = 0;
@@ -437,28 +435,18 @@ public class NdRegulAnalysisProcessor(
                 continue;
             }
 
-            if (!storage.IsConfigured)
-                throw new InvalidOperationException("Supabase Storage not configured.");
+            var fileName = doc.Title ?? doc.OriginalFileName ?? "policy.pdf";
+            var sections = await internalSectionService.EnsureSectionsForWorkflowAsync(doc, ct);
 
-            var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
-            var payload = await internalParse.EnsureParsedAsync(doc, bytes, ct);
-            var fileName = payload.FileName ?? doc.OriginalFileName ?? doc.Title ?? "policy.pdf";
-
-            var clauses = await policyClauseExtract.ExtractFromMarkdownAsync(
-                payload.FileHash,
-                fileName,
-                payload.Markdown,
-                ct);
-
-            foreach (var clause in clauses)
+            foreach (var section in sections)
             {
                 allSections.Add(new NdRegulInternalSection
                 {
                     AnalysisRunId = run.Id,
-                    SectionRef = clause.ClauseNo,
-                    SectionText = clause.ClauseText,
+                    SectionRef = section.SectionRef,
+                    SectionText = section.SectionText,
                     SourceDoc = fileName,
-                    SourcePage = clause.SourcePage > 0 ? clause.SourcePage : null,
+                    SourcePage = section.SourcePage,
                 });
             }
         }
@@ -470,7 +458,7 @@ public class NdRegulAnalysisProcessor(
         await db.SaveChangesAsync(ct);
 
         logger.LogInformation(
-            "Extracted {Count} internal sections for run {RunId} via Landing AI ({Schema})",
+            "Prepared {Count} internal sections for run {RunId} (library or Landing {Schema})",
             allSections.Count,
             run.Id,
             LandingAiPolicyClauseExtractService.PolicyClausesSchemaKey);
@@ -529,28 +517,27 @@ public class NdRegulAnalysisProcessor(
 
     private async Task<string> BuildRegulatoryTextAsync(NdAnalysisRun run, CancellationToken ct)
     {
-        var findings = await db.NdRegulForwardFindings
-            .Where(f => f.AnalysisRunId == run.Id && f.AnalysisPointId != null)
-            .OrderBy(f => f.ClauseNo)
-            .ToListAsync(ct);
-
-        if (findings.Count == 0)
-        {
-            var lines = new List<string>();
-            foreach (var point in run.Points.OrderBy(p => p.CreatedAt))
-            {
-                var (clauseNo, clauseText) = ParseClauseFromSnapshot(point.PointSnapshot);
-                if (string.IsNullOrWhiteSpace(clauseNo) && string.IsNullOrWhiteSpace(clauseText)) continue;
-                lines.Add($"REGULATORY CLAUSE {clauseNo}:\n{clauseText}");
-            }
-            return lines.Count == 0
-                ? "No regulatory clauses were selected for this run."
-                : string.Join("\n\n", lines);
-        }
+        var clauses = BuildSelectedRegulatoryClauses(run);
+        if (clauses.Count == 0)
+            return "No regulatory clauses were selected for this run.";
 
         return string.Join(
             "\n\n",
-            findings.Select(f => $"REGULATORY CLAUSE {f.ClauseNo}:\n{f.ClauseText}"));
+            clauses.Select(c => $"REGULATORY CLAUSE {c.ClauseNo}:\n{c.ClauseText}"));
+    }
+
+    /// <summary>Regulatory context for reverse/qualitative — only clauses the user selected for this run.</summary>
+    private static List<(string ClauseNo, string ClauseText)> BuildSelectedRegulatoryClauses(NdAnalysisRun run)
+    {
+        var list = new List<(string ClauseNo, string ClauseText)>();
+        foreach (var point in run.Points.OrderBy(p => p.CreatedAt))
+        {
+            var (clauseNo, clauseText) = ParseClauseFromSnapshot(point.PointSnapshot);
+            if (string.IsNullOrWhiteSpace(clauseNo) && string.IsNullOrWhiteSpace(clauseText))
+                continue;
+            list.Add((clauseNo, clauseText));
+        }
+        return list;
     }
 
     private async Task FinalizePointCountsAsync(NdAnalysisRun run, CancellationToken ct)

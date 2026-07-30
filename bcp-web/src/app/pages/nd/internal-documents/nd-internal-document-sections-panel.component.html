@@ -1,0 +1,49 @@
+<div class="sections-panel">
+  <div class="panel-head">
+    <p class="panel-status">{{ statusLabel }}</p>
+    @if (sections.length > 0) {
+      <input
+        type="search"
+        class="panel-search"
+        placeholder="Search sections…"
+        [(ngModel)]="search"
+        aria-label="Search sections"
+      />
+    }
+  </div>
+
+  <div class="panel-body">
+    @if (loading) {
+      <p class="empty">Loading…</p>
+    } @else if (visibleSections.length === 0) {
+      <p class="empty">
+        @if (sections.length === 0) {
+          Run section extract to segment this policy into assessable sections (same Landing schema as Regul reverse phase).
+        } @else {
+          No sections match your search.
+        }
+      </p>
+    } @else {
+      @for (s of visibleSections; track s.id) {
+        <div class="section-line">
+          <span class="section-ref">{{ s.sectionRef }}</span>
+          @if (s.sourcePage) {
+            <span class="section-page">p. {{ s.sourcePage }}</span>
+          }
+          <div class="section-text-wrap">
+            @if (isExpanded(s.id) || !isLong(s.sectionText)) {
+              <span class="section-text">{{ s.sectionText }}</span>
+            } @else {
+              <span class="section-text">{{ preview(s.sectionText) }}</span>
+            }
+            @if (isLong(s.sectionText)) {
+              <button type="button" class="text-toggle" (click)="toggleExpanded(s.id)">
+                {{ isExpanded(s.id) ? 'Show less' : 'Show more' }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+    }
+  </div>
+</div>
