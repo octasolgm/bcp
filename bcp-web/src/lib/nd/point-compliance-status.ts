@@ -89,8 +89,26 @@ function pickStructuredBlocks(landingMessage: string, llmMessage: string): Refer
   );
 }
 
-/** Authoritative tier for all ND views — finalStatus, else Landing AI status, else parsed messages. */
-export function resolveAnalysisPointSeverity(point: AnalysisPoint): ComplianceSeverity {
+/** True when the point has a scored compliance status or AI output to parse. */
+export function analysisPointIsScored(point: AnalysisPoint): boolean {
+  const fs = (point.finalStatus ?? '').toLowerCase();
+  if (fs === 'compliant' || fs === 'partial_compliant' || fs === 'non_compliant') return true;
+
+  const landingStatus = (point.landingAiStatus ?? '').toLowerCase();
+  if (
+    landingStatus === 'compliant' ||
+    landingStatus === 'partial_compliant' ||
+    landingStatus === 'non_compliant'
+  ) {
+    return true;
+  }
+
+  return Boolean(extractMessage(point.landingAiResult) || extractMessage(point.googleAiResult));
+}
+
+/** Authoritative tier for all ND views — finalStatus, else Landing AI status, else parsed messages.
+ *  Returns null while the point is still queued / pending (do not invent Partial). */
+export function resolveAnalysisPointSeverity(point: AnalysisPoint): ComplianceSeverity | null {
   const fs = (point.finalStatus ?? '').toLowerCase();
   if (fs === 'compliant' || fs === 'partial_compliant' || fs === 'non_compliant') {
     return fs as ComplianceSeverity;
@@ -107,6 +125,8 @@ export function resolveAnalysisPointSeverity(point: AnalysisPoint): ComplianceSe
 
   const landingMessage = extractMessage(point.landingAiResult);
   const llmMessage = extractMessage(point.googleAiResult);
+  if (!landingMessage && !llmMessage) return null;
+
   const agreement = extractAgreement(point.googleAiResult);
   const structured = pickStructuredBlocks(landingMessage, llmMessage);
   return severityFromAgreement(agreement, structured?.status ?? '');
@@ -114,12 +134,14 @@ export function resolveAnalysisPointSeverity(point: AnalysisPoint): ComplianceSe
 
 /** Status label shown in pills, badges, and summary cards — same everywhere. */
 export function resolvePointComplianceLabel(point: AnalysisPoint): string {
-  return complianceSeverityLabel(resolveAnalysisPointSeverity(point));
+  const severity = resolveAnalysisPointSeverity(point);
+  return severity ? complianceSeverityLabel(severity) : '';
 }
 
 /** Confidence % aligned with resolved severity (never show 100% when partial/non-compliant). */
 export function resolveDisplayConfidence(point: AnalysisPoint): string {
   const severity = resolveAnalysisPointSeverity(point);
+  if (!severity) return '—';
   const landingMessage = extractMessage(point.landingAiResult);
   const llmMessage = extractMessage(point.googleAiResult);
   const agreement = extractAgreement(point.googleAiResult);

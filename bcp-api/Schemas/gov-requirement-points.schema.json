@@ -3,25 +3,25 @@
   "properties": {
     "points": {
       "type": "array",
-      "description": "Every numbered government or regulatory requirement clause extracted from the document",
+      "description": "Every official numbered regulatory section and requirement clause in the document. Emit each point_id exactly once at every hierarchy level present (e.g. 2, 2.1, 2.1.1, 3.1, 3.1.1). Extract section headings (2.1, 8.6, 11.1) when they have introductory or requirement body text. Extract unnumbered callout boxes using their exact heading as point_id. Skip table-of-contents lines and bare part titles with no body (e.g. Part III only).",
       "items": {
         "type": "object",
         "properties": {
           "point_id": {
             "type": "string",
-            "description": "Official numbering such as 2.6.5, Article 3, TFS-REQ-03"
+            "description": "Official document numbering when present (e.g. 2.1, 3.1, 3.1.4). For unnumbered callout boxes use the exact heading text from the document. Never invent IDs like Part III or Elements of an AML/CFT Program."
           },
           "title": {
             "type": "string",
-            "description": "Short title of the requirement point"
+            "description": "Short heading/title for the point when present in the document"
           },
           "text": {
             "type": "string",
-            "description": "Full verbatim requirement text including all sub-conditions"
+            "description": "Full verbatim body text for the point, including all sub-bullets, conditions, and citations. Do not summarize."
           },
           "section": {
             "type": "string",
-            "description": "Parent section or article reference"
+            "description": "Parent section reference with heading, e.g. 3.1 Summary of obligations"
           },
           "page_hint": {
             "type": "integer",

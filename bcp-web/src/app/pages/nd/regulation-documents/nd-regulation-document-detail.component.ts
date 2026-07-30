@@ -31,6 +31,9 @@ export class NdRegulationDocumentDetailComponent implements OnInit {
   points: RegulationPoint[] = [];
   loading = true;
   extracting = false;
+  repairing = false;
+  refreshingPages = false;
+  message = '';
   error = '';
   pointsSource = '';
 
@@ -63,6 +66,44 @@ export class NdRegulationDocumentDetailComponent implements OnInit {
       if (this.doc) this.doc = { ...this.doc, pointCount: count };
     }
     this.loading = false;
+  }
+
+  get hasPoints(): boolean {
+    if (!this.doc) return false;
+    const st = (this.doc.extractionStatus ?? '').toLowerCase();
+    return st === 'extracted' || st === 'completed' || (this.doc.pointCount ?? 0) > 0 || this.points.length > 0;
+  }
+
+  async handleRepair(): Promise<void> {
+    if (!this.docId) return;
+    this.repairing = true;
+    this.error = '';
+    this.message = '';
+    const res = await this.api.repairRegulationPoints(this.docId);
+    if (res.success && res.data) {
+      const r = res.data.repair;
+      this.message =
+        `Repaired: ${r.beforeCount} → ${r.afterCount} active (${r.softDeleted} soft-deleted).`;
+      await this.load();
+    } else {
+      this.error = res.message ?? 'Could not repair points';
+    }
+    this.repairing = false;
+  }
+
+  async handleRefreshPages(): Promise<void> {
+    if (!this.docId) return;
+    this.refreshingPages = true;
+    this.error = '';
+    this.message = '';
+    const res = await this.api.refreshRegulationPageReferences(this.docId);
+    if (res.success) {
+      this.message = `Updated PDF pages for ${res.data?.pointsUpdated ?? 0} points.`;
+      await this.load();
+    } else {
+      this.error = res.message ?? 'Could not refresh page numbers';
+    }
+    this.refreshingPages = false;
   }
 
   async handleExtract(): Promise<void> {

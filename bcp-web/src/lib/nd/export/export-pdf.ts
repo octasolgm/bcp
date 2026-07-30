@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import type { ResultsData } from "../types";
-import { formatDate, parsePointSnapshot } from "../utils";
+import { formatDate, parsePointSnapshot, resolveAnalysisPointDisplayNumber } from "../utils";
 
 export function exportResultsPdf(data: ResultsData): void {
   const doc = new jsPDF();
@@ -31,7 +31,9 @@ export function exportResultsPdf(data: ResultsData): void {
 
   for (const p of data.points) {
     const snap = parsePointSnapshot(p.pointSnapshot);
-    addLine(`${snap.pointNumber ?? ""} ${snap.pointTitle ?? ""}`, 12);
+    const pointNumber = resolveAnalysisPointDisplayNumber(p, snap);
+    const heading = [pointNumber, snap.pointTitle?.trim()].filter(Boolean).join(" — ");
+    addLine(heading || snap.pointTitle?.trim() || "Point", 12);
     if (snap.pointContent) addLine(snap.pointContent, 9);
     if (p.finalStatus) addLine(`Status: ${p.finalStatus.replace(/_/g, " ")}`, 9);
     const plan = p.finalActionPlan ?? p.originalAiActionPlan;

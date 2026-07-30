@@ -1,4 +1,4 @@
-import { Directive, HostListener, inject, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Directive, HostListener, inject, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { forkJoin, from, of, Subscription } from 'rxjs';
@@ -14,6 +14,20 @@ import {
 } from '../../services/api.service';
 
 type SessionPoint = SessionProgress['points'][number];
+
+type PointPhaseRerunBaseline = {
+  landing: string | null;
+  google: string | null;
+  dual: string | null;
+  googleResult: string | null;
+};
+
+type PointPhaseRerunEntry = {
+  mode: 'all' | 'phase2';
+  sawPhase2InFlight: boolean;
+  sawPhase1InFlight: boolean;
+  baseline: PointPhaseRerunBaseline | null;
+};
 import {
   analyzeGovPointSet,
   buildPointDisplayChapters,
@@ -30,7 +44,10 @@ import {
   formatSectionGroupLabel,
   groupGovPointsByChapter,
   pointMatchesPrefix,
+  resolveGovPointDisplayNumber,
+  resolveGovPointListTitle,
   type GovPointChapterGroup,
+  type GovPointWithNumber,
 } from '../../../lib/gov-point-filter';
 import { ANALYSIS_ROUTES } from '../../navigation/analysis-routes';
 import { shellRouteSegments } from '../../services/app-route-prefix';
@@ -49,8 +66,13 @@ import {
   sortRegulationDocuments,
   type NdGovPoint,
 } from '../../../lib/regulation-catalog-utils';
-import { parsePointSnapshot } from '../../../lib/nd/utils';
-import type { AnalysisPoint, AnalysisRunSummary, RegulationDocument } from '../../../lib/nd/types';
+import { parsePointSnapshot, resolveSnapshotDisplayNumber } from '../../../lib/nd/utils';
+import type { AnalysisPoint, AnalysisRunSummary, PointSnapshot, RegulationDocument } from '../../../lib/nd/types';
+import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
+import {
+  exportGapAnalysisExcelFromPoints,
+  exportGapAnalysisPdfFromPoints,
+} from '../../../lib/nd/export/gap-analysis-export';
 import { analysisRunNeedsExecutionView } from '../../../lib/nd/run-links';
 import {
   needsPhase2Rerun,
@@ -112,6 +134,7 @@ export type PointDetail = {
 @Directive()
 export abstract class AnalyseBase implements OnInit, OnDestroy {
   protected readonly toast = inject(ToastService);
+  private readonly cdr = inject(ChangeDetectorRef);
   protected readonly route = inject(ActivatedRoute);
   protected readonly router = inject(Router);
   protected readonly api = inject(ApiService);
@@ -236,6 +259,9 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   findingsPreview: Array<{ severity: string; title: string; section: string; pointId: string }> = [];
   sessionPointStatus = new Map<string, string>();
   retryingPointId: string | null = null;
+  exportingGapReport = false;
+  /** Per-point phase rerun in flight (keys match sessionPointStatus aliases). */
+  private pointPhaseRerun = new Map<string, PointPhaseRerunEntry>();
   isDemoRun = false;
   demoNdRunId: string | null = null;
   demoSaveInProgress = false;
@@ -329,10 +355,10 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     };
     return this.govPoints.map((p) => ({
       pointId: p.point_id,
-      title: p.title || p.text,
+      title: resolveGovPointListTitle(p as GovPointWithNumber),
       status: statusOf(p.point_id),
       selected: this.selected.has(p.point_id),
-      displayId: formatGovPointDisplayId(p),
+      displayId: resolveGovPointDisplayNumber(p as GovPointWithNumber) || this.analysingDisplayId(p.point_id),
     }));
   }
 
@@ -433,16 +459,30 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     };
   }
 
-  protected resolveSessionPointStatus(pointId: string): string | undefined {
-    const direct = this.sessionPointStatus.get(pointId);
-    if (direct) return direct;
+  /** Alternate ids (section / regulation UUID / session pointId) for the same analysing-list row. */
+  protected sessionLookupKeysForPointId(pointId: string): string[] {
+    const keys = new Set<string>([pointId]);
     const gov = this.govPoints.find((g) => g.point_id === pointId);
-    const section = gov?.section?.trim();
-    if (section) {
-      const bySection = this.sessionPointStatus.get(section);
-      if (bySection) return bySection;
+    if (gov) {
+      const section = gov.section?.trim();
+      if (section) keys.add(section);
+      const sourced = gov as GovPoint & { regulationPointId?: string; pointNumber?: string };
+      if (sourced.regulationPointId?.trim()) keys.add(sourced.regulationPointId.trim());
+      if (sourced.pointNumber?.trim()) keys.add(sourced.pointNumber.trim());
+      const displayNum = resolveGovPointDisplayNumber(gov as GovPointWithNumber);
+      if (displayNum) keys.add(displayNum);
     }
     const result = this.sessionPointResults.get(pointId);
+    if (result?.pointId) keys.add(result.pointId);
+    return [...keys];
+  }
+
+  protected resolveSessionPointStatus(pointId: string): string | undefined {
+    for (const key of this.sessionLookupKeysForPointId(pointId)) {
+      const status = this.sessionPointStatus.get(key);
+      if (status) return status;
+    }
+    const result = this.resolveSessionPoint(pointId);
     if (result?.pointId && result.pointId !== pointId) {
       return this.sessionPointStatus.get(result.pointId);
     }
@@ -450,44 +490,58 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   protected resolveSessionPoint(pointId: string): SessionPoint | undefined {
-    const direct = this.sessionPointResults.get(pointId);
-    if (direct) return direct;
-    const gov = this.govPoints.find((g) => g.point_id === pointId);
-    const section = gov?.section?.trim();
-    if (section) {
-      const bySection = this.sessionPointResults.get(section);
-      if (bySection) return bySection;
+    for (const key of this.sessionLookupKeysForPointId(pointId)) {
+      const direct = this.sessionPointResults.get(key);
+      if (direct) return direct;
+    }
+    // Last resort: match by session.pointId when maps were keyed only by analysis-point UUID.
+    for (const sp of this.sessionPointResults.values()) {
+      if (sp.pointId === pointId) return sp;
     }
     return undefined;
   }
 
   analysingDisplayId(pointId: string): string {
     const gov = this.govPoints.find((g) => g.point_id === pointId);
-    if (gov) return formatGovPointDisplayId(gov);
+    if (gov) {
+      const num = resolveGovPointDisplayNumber(gov as GovPointWithNumber);
+      if (num) return num;
+    }
+    const snap = this.pointSnapshotForPointId(pointId);
+    if (snap) {
+      const fromSnap = resolveSnapshotDisplayNumber(snap, pointId);
+      if (fromSnap) return fromSnap;
+    }
     const result = this.sessionPointResults.get(pointId);
     if (result?.pointId && result.pointId !== pointId && !this.looksLikeUuid(result.pointId)) {
       return result.pointId;
     }
-    return this.looksLikeUuid(pointId) ? pointId.slice(0, 8) : pointId;
+    return this.looksLikeUuid(pointId) ? '' : pointId;
   }
 
-  private looksLikeUuid(value: string): boolean {
+  protected looksLikeUuid(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+  }
+
+  /** ND runs override — used for human-readable § numbers in the analysing list. */
+  protected pointSnapshotForPointId(_pointId: string): PointSnapshot | null {
+    return null;
   }
 
   get selectedPointDetail(): PointDetail | null {
     if (!this.selectedDetailPointId) return null;
     const p = this.govPoints.find((g) => g.point_id === this.selectedDetailPointId);
-    const result = this.sessionPointResults.get(this.selectedDetailPointId);
+    const result = this.resolveSessionPoint(this.selectedDetailPointId);
     const status =
-      this.sessionPointStatus.get(this.selectedDetailPointId) ??
+      this.resolveSessionPointStatus(this.selectedDetailPointId) ??
       (this.selected.has(this.selectedDetailPointId) && this.hasResumableRun ? 'queued' : 'not-run');
     const agreement = result?.agreementJson;
     const severity = this.severityFromPoint(agreement);
     const solved = this.isPointSolved(agreement, status);
+    const displayId = this.analysingDisplayId(this.selectedDetailPointId);
     return {
       pointId: this.selectedDetailPointId,
-      title: p?.title || p?.text || result?.pointTitle || this.selectedDetailPointId,
+      title: p?.title || p?.text || result?.pointTitle || displayId || 'Regulation point',
       status,
       severity,
       solved,
@@ -495,13 +549,13 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
         agreement?.summary ||
         result?.errorMessage ||
         (status === 'not-run' ? 'This point has not been analysed yet.' : 'Analysis in progress…'),
-      section: p?.section ? `§${p.section}` : `§${this.selectedDetailPointId}`,
+      section: displayId ? `§${displayId}` : p?.section ? `§${p.section}` : '—',
     };
   }
 
   get selectedPointReportItem(): DualVerifyReportItem | null {
     if (!this.selectedDetailPointId) return null;
-    const p = this.sessionPointResults.get(this.selectedDetailPointId);
+    const p = this.resolveSessionPoint(this.selectedDetailPointId);
     if (!p) return null;
     if (!p.landingMessage && !p.llmMessage && p.status !== 'failed' && !p.errorMessage) return null;
     const gov = this.govPoints.find((g) => g.point_id === this.selectedDetailPointId);
@@ -571,7 +625,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   needsPhase2RerunForPoint(pointId: string): boolean {
-    const p = this.sessionPointResults.get(pointId);
+    const p = this.resolveSessionPoint(pointId);
     if (!p) return false;
     return needsPhase2Rerun({
       status: p.status,
@@ -579,6 +633,146 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       llmMessage: p.llmMessage,
       errorMessage: p.errorMessage,
     });
+  }
+
+  /** Done analysing-list rows with at least one AI pass — eligible for gap export. */
+  get exportableDoneGapPointCount(): number {
+    if (!this.ndRunId || !this.ndRunDetailPoints.length) return 0;
+    return buildGapAnalysisExportRows(this.collectDoneAnalysisPointsForExport()).length;
+  }
+
+  protected collectDoneAnalysisPointsForExport(): AnalysisPoint[] {
+    if (!this.ndRunId || !this.ndRunDetailPoints.length) return [];
+
+    const doneKeys = new Set<string>();
+    for (const row of this.analysingListRows) {
+      if (this.resolveSessionPointStatus(row.pointId) !== 'completed') continue;
+      doneKeys.add(row.pointId);
+      for (const key of this.sessionLookupKeysForPointId(row.pointId)) {
+        doneKeys.add(key);
+      }
+    }
+
+    const out: AnalysisPoint[] = [];
+    const seen = new Set<string>();
+    for (const ap of this.ndRunDetailPoints) {
+      if (seen.has(ap.id)) continue;
+      const matchesDone = [...doneKeys].some((key) => this.ndPointMatchesId(ap, key));
+      if (!matchesDone) continue;
+      seen.add(ap.id);
+      out.push(ap);
+    }
+
+    out.sort((a, b) => {
+      const sa = parsePointSnapshot(a.pointSnapshot).pointNumber || a.regulationPointId || a.id;
+      const sb = parsePointSnapshot(b.pointSnapshot).pointNumber || b.regulationPointId || b.id;
+      return sa.localeCompare(sb, undefined, { numeric: true });
+    });
+    return out;
+  }
+
+  async exportDoneGapAnalysisExcel(): Promise<void> {
+    if (this.exportingGapReport || !this.ndRunId) return;
+    const points = this.collectDoneAnalysisPointsForExport();
+    const rows = buildGapAnalysisExportRows(points);
+    if (!rows.length) {
+      this.toast.show('No completed points with AI results to export yet', 'info');
+      return;
+    }
+    this.exportingGapReport = true;
+    this.cdr.markForCheck();
+    try {
+      await exportGapAnalysisExcelFromPoints(points);
+      this.toast.show(`Exported ${rows.length} point(s) to Excel`, 'success');
+    } catch {
+      this.toast.show('Export failed — try again', 'error');
+    } finally {
+      this.exportingGapReport = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  exportDoneGapAnalysisPdf(): void {
+    if (this.exportingGapReport || !this.ndRunId) return;
+    const points = this.collectDoneAnalysisPointsForExport();
+    const rows = buildGapAnalysisExportRows(points);
+    if (!rows.length) {
+      this.toast.show('No completed points with AI results to export yet', 'info');
+      return;
+    }
+    this.exportingGapReport = true;
+    this.cdr.markForCheck();
+    try {
+      exportGapAnalysisPdfFromPoints(points, {
+        runName: 'Gap Analysis Report',
+        subtitle: `${rows.length} done point(s) · Analyse v8`,
+      });
+      this.toast.show(`Exported ${rows.length} point(s) to PDF`, 'success');
+    } catch {
+      this.toast.show('Export failed — try again', 'error');
+    } finally {
+      this.exportingGapReport = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** True while a per-point phase rerun is queued or running. */
+  isPointRerunInFlight(pointId: string): boolean {
+    if (this.resolvePointRerunMode(pointId) != null) return true;
+    return this.retryingPointId === pointId;
+  }
+
+  /** Label for per-point rerun buttons while a rerun is in flight. */
+  pointRerunButtonLabel(
+    pointId: string,
+    idleLabel: string,
+    action: 'all' | 'phase2' = 'all',
+  ): string {
+    const mode = this.resolvePointRerunMode(pointId);
+    if (action === 'phase2' && mode === 'phase2') return 'Rerunning Phase 2…';
+    if (action === 'all' && mode === 'all') return 'Rerunning…';
+    return idleLabel;
+  }
+
+  /** Which phase rerun is in flight for this row, if any. */
+  pointRerunMode(pointId: string): 'all' | 'phase2' | null {
+    return this.resolvePointRerunMode(pointId);
+  }
+
+  /** True when the analysing list / detail should show a phase chip as running. */
+  pointPhaseChipRunning(pointId: string, phase: 1 | 2): boolean {
+    const display = this.getPointPhaseStatus(pointId);
+    if (!display) return false;
+    return phase === 1 ? display.phase1.state === 'running' : display.phase2.state === 'running';
+  }
+
+  /** True when this analysing-list row can show per-point rerun actions. */
+  canShowPointRerunActions(pointId: string): boolean {
+    if (!this.hasResumableRun) return false;
+    if (this.isPointRerunInFlight(pointId)) return true;
+    const status = this.resolveSessionPointStatus(pointId) ?? '';
+    if (status === 'running' || status === 'processing' || status === 'queued') return false;
+    return status === 'completed' || status === 'failed' || status === 'cancelled' || this.needsPhase2RerunForPoint(pointId);
+  }
+
+  /** Full Landing + Phase 2 rerun for one point. */
+  rerunPointAll(pointId: string): void {
+    if (this.ndRunId) {
+      void this.retryNdPoint(pointId, false);
+      return;
+    }
+    if (!this.sessionId) return;
+    this.enqueueRetry([pointId], true);
+  }
+
+  /** Phase 2 / dual-verify only (no Landing AI credits). */
+  rerunPointPhase2(pointId: string): void {
+    if (this.ndRunId) {
+      void this.retryNdPoint(pointId, true);
+      return;
+    }
+    if (!this.sessionId) return;
+    this.enqueueRetry([pointId], false);
   }
 
   private normalizeStoredPointStatus(p: SessionPoint): string {
@@ -761,6 +955,31 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   getPointPhaseStatus(pointId: string): PointPhaseDisplay | null {
     const p = this.resolveSessionPoint(pointId);
     const status = this.resolveSessionPointStatus(pointId);
+    const rerunMode = this.resolvePointRerunMode(pointId);
+
+    if (rerunMode === 'phase2') {
+      return {
+        phase1: { label: 'Phase 1', state: p?.landingMessage ? 'ok' : 'running' },
+        phase2: { label: 'Phase 2', state: 'running' },
+      };
+    }
+    if (rerunMode === 'all') {
+      const stage = p?.runningStage?.toLowerCase() ?? '';
+      const status = this.resolveSessionPointStatus(pointId);
+      const landingActive =
+        stage.includes('landing') || (status === 'running' && !p?.landingMessage);
+      if (landingActive) {
+        return {
+          phase1: { label: 'Phase 1', state: 'running' },
+          phase2: { label: 'Phase 2', state: 'idle' },
+        };
+      }
+      const phase1Done = !!p?.landingMessage;
+      return {
+        phase1: { label: 'Phase 1', state: phase1Done ? 'ok' : 'running' },
+        phase2: { label: 'Phase 2', state: phase1Done ? 'running' : 'idle' },
+      };
+    }
 
     if (!p && status === 'running') {
       return {
@@ -769,6 +988,21 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       };
     }
     if (!p) return null;
+
+    if (status === 'queued' || status === 'running' || status === 'processing') {
+      if (p.landingMessage && !p.llmMessage) {
+        return {
+          phase1: { label: 'Phase 1', state: 'ok' },
+          phase2: { label: 'Phase 2', state: 'running' },
+        };
+      }
+      if (!p.landingMessage) {
+        return {
+          phase1: { label: 'Phase 1', state: 'running' },
+          phase2: { label: 'Phase 2', state: 'idle' },
+        };
+      }
+    }
 
     if ((status === 'failed' || p.status === 'failed') && !p.landingMessage) {
       return {
@@ -2297,7 +2531,14 @@ ${this.findingsPreview
     this.expandedChapters.clear();
     if (!this.regulationDisplayUseDocGroups) {
       if (this.pointDisplayChapters.length) {
-        this.expandedChapters.add(this.pointDisplayChapters[0].chapter);
+        for (const ch of this.pointDisplayChapters) {
+          if (ch.chapter === '1' || ch.chapter === 'intro') {
+            this.expandedChapters.add(ch.chapter);
+          }
+        }
+        if (!this.expandedChapters.size) {
+          this.expandedChapters.add(this.pointDisplayChapters[0].chapter);
+        }
       } else if (this.chapterGroups.length) {
         this.expandedChapters.add(this.chapterGroups[0].chapter);
       }
@@ -2627,21 +2868,16 @@ ${this.findingsPreview
   }
 
   private async stopNdAnalysisRun(runId: string): Promise<void> {
-    if (!this.isSessionActive && this.analysisState !== 'running') return;
     const label = this.complianceFileName || this.selectedRegLabel || 'this analysis';
     const ok = window.confirm(
-      `Stop "${label}"?\n\nQueued points will be cancelled. A point already being analysed may finish its current pass first.`,
+      `Stop "${label}"?\n\nQueued points will be cancelled. The point currently being analysed may finish its current AI call first, then the run stops.`,
     );
     if (!ok) return;
 
     this.stopNdRunPolling();
-    const res = await this.ndApi.stopAnalysisRun(runId);
-    if (!res.success) {
-      this.toast.show(res.message || 'Could not stop analysis', 'error', 4000);
-      if (this.ndRunId) this.pollNdRun(this.ndRunId);
-      return;
-    }
+    this.retryingPointId = null;
 
+    // Optimistic UI — Stop must feel immediate even if the worker is mid-call.
     for (const [pointId, status] of this.sessionPointStatus) {
       if (status === 'queued' || status === 'processing' || status === 'running') {
         this.sessionPointStatus.set(pointId, 'cancelled');
@@ -2654,10 +2890,19 @@ ${this.findingsPreview
       st.done = true;
       st.active = false;
     });
+
+    const res = await this.ndApi.stopAnalysisRun(runId);
+    if (!res.success) {
+      this.toast.show(res.message || 'Could not stop analysis', 'error', 4000);
+      if (this.ndRunId) this.pollNdRun(this.ndRunId);
+      return;
+    }
+
     this.toast.show('Analysis stopped', 'warning', 3500);
     this.activeSessions.refresh();
 
-    // Refresh once so UI matches persisted cancelled points.
+    // Sync cancelled points from API — do not re-apply a still-running payload
+    // (that used to put the UI back into "running" after Stop).
     try {
       const statusRes = await this.ndApi.getAnalysisRunStatus(runId);
       if (statusRes.success && statusRes.data) {
@@ -2667,7 +2912,12 @@ ${this.findingsPreview
           processedPointsCount: number;
           points: AnalysisPoint[];
         };
-        this.applyNdRunState(runId, data, data.points ?? [], data);
+        if ((data.status ?? '').toLowerCase() === 'cancelled') {
+          this.applyNdRunState(runId, data, data.points ?? [], data);
+        } else {
+          this.ndRunWorkflowStatus = 'cancelled';
+          this.analysisState = 'complete';
+        }
       }
     } catch {
       /* local cancelled state already applied */
@@ -2701,12 +2951,11 @@ ${this.findingsPreview
   }
 
   retrySinglePoint(pointId: string): void {
-    if (this.ndRunId) {
-      void this.retryNdPoint(pointId, this.needsPhase2RerunForPoint(pointId));
+    if (this.needsPhase2RerunForPoint(pointId)) {
+      this.rerunPointPhase2(pointId);
       return;
     }
-    if (!this.sessionId) return;
-    this.enqueueRetry([pointId], !this.needsPhase2RerunForPoint(pointId));
+    this.rerunPointAll(pointId);
   }
 
   retryAllRunPoints(): void {
@@ -2755,24 +3004,32 @@ ${this.findingsPreview
     this.enqueueRetry(ids, false);
   }
 
-  private async retryNdPoint(pointId: string, phase2Only: boolean): Promise<void> {
+  protected async retryNdPoint(pointId: string, phase2Only: boolean): Promise<void> {
     if (!this.ndRunId) return;
-    const p = this.sessionPointResults.get(pointId);
+    const p = this.resolveSessionPoint(pointId);
     if (!p?.id) {
       this.toast.show('Point not found in this run', 'warning');
       return;
     }
+    const mode = phase2Only ? 'phase2' : 'all';
+    this.setPointPhaseRerun(pointId, mode);
     this.retryingPointId = pointId;
     this.analysisState = 'running';
     const res = phase2Only
       ? await this.ndApi.rerunDualVerify(this.ndRunId, p.id)
       : await this.ndApi.rerunPoint(this.ndRunId, p.id);
-    this.retryingPointId = null;
     if (!res.success) {
+      this.clearPointPhaseRerun(pointId);
+      this.retryingPointId = null;
       this.toast.show(res.message ?? 'Could not re-queue point', 'error');
+      console.error('[BCP] Point rerun failed to queue', { pointId, mode, message: res.message });
       return;
     }
+    this.retryingPointId = null;
     this.sessionPointStatus.set(pointId, 'queued');
+    for (const key of this.sessionLookupKeysForPointId(pointId)) {
+      this.sessionPointStatus.set(key, 'queued');
+    }
     this.toast.show(phase2Only ? 'Re-running Phase 2…' : 'Re-queued point', 'success', 2200);
     this.pollNdRun(this.ndRunId);
   }
@@ -2793,6 +3050,10 @@ ${this.findingsPreview
 
   private enqueueRetry(pointIds: string[], forceRefresh: boolean): void {
     if (!this.sessionId || !pointIds.length) return;
+    const mode = forceRefresh ? 'all' : 'phase2';
+    for (const id of pointIds) {
+      this.setPointPhaseRerun(id, mode);
+    }
     this.retryingPointId = pointIds.length === 1 ? pointIds[0] : '__batch__';
     this.error = '';
     this.analysisState = 'running';
@@ -2821,7 +3082,6 @@ ${this.findingsPreview
       next: (r) => {
         const n = r.data?.requeued ?? pointIds.length;
         this.toast.show(`Re-queued ${n} point(s)`, 'success', 2200);
-        this.retryingPointId = null;
         for (const id of pointIds) {
           this.sessionPointStatus.set(id, 'queued');
           this.sessionSelectedPointIds?.add(id);
@@ -2830,10 +3090,12 @@ ${this.findingsPreview
         this.poll(this.sessionId!);
       },
       error: (e: HttpErrorResponse) => {
+        for (const id of pointIds) this.clearPointPhaseRerun(id);
         this.retryingPointId = null;
         this.analysisState = 'complete';
         this.error = e.error?.message ?? 'Could not re-queue points';
         this.toast.show(this.error, 'error', 4000);
+        console.error('[BCP] Session point rerun failed to queue', { pointIds, mode, error: this.error });
       },
     });
   }
@@ -3026,6 +3288,7 @@ ${this.findingsPreview
               this.sessionPointResults.set(p.pointId, p);
             }
           }
+          this.settlePointRerunsFromSessionPoints(points);
           const pct =
             this.progressTotal > 0
               ? Math.round((this.progressDone / this.progressTotal) * 100)
@@ -3124,11 +3387,17 @@ ${this.findingsPreview
     }
   }
 
-  private stopNdRunPolling(): void {
+  private stopNdRunPolling(force = false): void {
+    if (!force && this.pointPhaseRerun.size > 0) return;
     if (this.ndRunPollTimer) {
       clearInterval(this.ndRunPollTimer);
       this.ndRunPollTimer = null;
     }
+  }
+
+  private ensureNdRunPolling(runId: string): void {
+    if (this.ndRunPollTimer) return;
+    this.pollNdRun(runId);
   }
 
   private async attachToNdAnalysisRun(runId: string): Promise<void> {
@@ -3300,6 +3569,7 @@ ${this.findingsPreview
       } else {
         this.ndRunWorkflowStatus = runStatus;
       }
+      this.onNdRunAttached(runId, points);
     } finally {
       if (this.ndRunAttachInFlight === runId) this.ndRunAttachInFlight = null;
     }
@@ -3319,7 +3589,9 @@ ${this.findingsPreview
       return {
         ...p,
         landingAiStatus: live.landingAiStatus ?? p.landingAiStatus,
+        landingAiResult: live.landingAiResult ?? p.landingAiResult,
         googleAiStatus: live.googleAiStatus ?? p.googleAiStatus,
+        googleAiResult: live.googleAiResult ?? p.googleAiResult,
         dualVerifyStatus: live.dualVerifyStatus ?? p.dualVerifyStatus,
         finalStatus: live.finalStatus ?? p.finalStatus,
         landingAiError: live.landingAiError ?? p.landingAiError,
@@ -3340,10 +3612,11 @@ ${this.findingsPreview
       if (!pointId) continue;
       out.push({
         point_id: pointId,
+        pointNumber: snap.pointNumber?.trim() || undefined,
         title: snap.pointTitle || '',
         text: snap.pointContent || '',
         section: (snap.pageReference || snap.pointNumber || pointId).trim(),
-      });
+      } as GovPointWithNumber);
     }
     return out;
   }
@@ -3362,12 +3635,13 @@ ${this.findingsPreview
       if (!pointId) continue;
       out.push({
         point_id: pointId,
+        pointNumber: String(snap['pointNumber'] ?? '').trim() || undefined,
         title: String(snap['pointTitle'] ?? snap['title'] ?? ''),
         text: String(snap['pointContent'] ?? snap['text'] ?? ''),
         section: String(
           snap['pageReference'] ?? snap['section'] ?? snap['pointNumber'] ?? pointId,
         ),
-      });
+      } as GovPointWithNumber);
     }
     return out;
   }
@@ -3428,6 +3702,12 @@ ${this.findingsPreview
 
   /** Hook for shells (e.g. analyse-v8) to scroll/focus when resuming an in-progress run. */
   protected onRunResumeAttached(): void {}
+
+  /** Hook after ?run= attach finishes — seed Result-panel ND points even when not polling. */
+  protected onNdRunAttached(_runId: string, _points: AnalysisPoint[]): void {}
+
+  /** Called after each ND /status poll merge so subclasses can refresh local indexes. */
+  protected onNdRunPointsLiveUpdate(_points: AnalysisPoint[]): void {}
 
   /**
    * ND shell only — starts NdAnalysisProcessor and polls DB status.
@@ -3507,9 +3787,11 @@ ${this.findingsPreview
       const status = this.normalizeStoredPointStatus(mapped);
       const snap = parsePointSnapshot(p.pointSnapshot);
       const keys = new Set<string>([mapped.pointId]);
+      if (p.id) keys.add(p.id);
       if (p.regulationPointId) keys.add(p.regulationPointId);
       if (snap.pointNumber?.trim()) keys.add(snap.pointNumber.trim());
       if (snap.regulationPointId?.trim()) keys.add(snap.regulationPointId.trim());
+      if (snap.pageReference?.trim()) keys.add(snap.pageReference.trim());
       for (const key of keys) {
         this.sessionPointStatus.set(key, status);
         this.sessionPointResults.set(key, mapped);
@@ -3519,6 +3801,23 @@ ${this.findingsPreview
       this.sessionSelectedPointIds.add(selectId);
       this.selected.add(selectId);
     }
+
+    // Alias current gov list ids so Analysing-list clicks always resolve in Result.
+    for (const g of this.govPoints) {
+      const resolved = this.resolveSessionPoint(g.point_id);
+      if (!resolved) continue;
+      const status =
+        this.resolveSessionPointStatus(g.point_id) ?? this.normalizeStoredPointStatus(resolved);
+      if (!this.sessionPointResults.has(g.point_id)) {
+        this.sessionPointResults.set(g.point_id, resolved);
+      }
+      if (!this.sessionPointStatus.has(g.point_id)) {
+        this.sessionPointStatus.set(g.point_id, status);
+      }
+    }
+
+    this.settlePointRerunsFromNdPoints(points);
+    if (this.pointPhaseRerun.size > 0) this.touchPointRerunUi();
 
     const first =
       points.find((p) => {
@@ -3582,7 +3881,8 @@ ${this.findingsPreview
         this.markStep(1, true);
       }
       this.ndRunWorkflowStatus = runStatus;
-      if (!activelyProcessing) this.stopNdRunPolling();
+      if (!activelyProcessing && this.pointPhaseRerun.size === 0) this.stopNdRunPolling();
+      else if (this.pointPhaseRerun.size > 0) this.ensureNdRunPolling(runId);
       this.syncSelectionToGovPoints();
       return activelyProcessing;
     }
@@ -3591,7 +3891,11 @@ ${this.findingsPreview
     this.progress = 100;
     if (isDemoRun) this.demoNdRunId = runId;
     this.ndRunWorkflowStatus = runStatus;
-    this.stopNdRunPolling();
+    if (this.pointPhaseRerun.size > 0) {
+      this.ensureNdRunPolling(runId);
+    } else {
+      this.stopNdRunPolling();
+    }
     this.onAnalysisComplete();
     this.syncSelectionToGovPoints();
     return false;
@@ -3615,7 +3919,7 @@ ${this.findingsPreview
       (p.googleAiStatus === 'failed' || p.dualVerifyStatus === 'failed')
     ) {
       status = 'completed';
-    } else if (p.landingAiStatus === 'running' || p.dualVerifyStatus === 'running') status = 'running';
+    } else if (p.landingAiStatus === 'running' || p.dualVerifyStatus === 'running' || p.googleAiStatus === 'running') status = 'running';
     else if (p.landingAiStatus === 'completed' && p.dualVerifyStatus !== 'completed') status = 'running';
     else if (p.landingAiStatus === 'completed') status = 'completed';
     else if (
@@ -3628,6 +3932,17 @@ ${this.findingsPreview
         : 'running';
     }
 
+    let runningStage: string | undefined;
+    if (p.landingAiStatus === 'running' || (p.landingAiStatus === 'pending' && !landingMessage)) {
+      runningStage = 'landing';
+    } else if (
+      p.googleAiStatus === 'running' ||
+      p.dualVerifyStatus === 'running' ||
+      (p.landingAiStatus === 'completed' && !llmMessage && (p.dualVerifyStatus === 'pending' || p.googleAiStatus === 'pending'))
+    ) {
+      runningStage = 'phase2';
+    }
+
     return {
       id: p.id,
       pointId,
@@ -3637,7 +3952,301 @@ ${this.findingsPreview
       llmMessage: llmMessage || undefined,
       agreementJson: agreement,
       errorMessage: p.landingAiError ?? p.googleAiError ?? undefined,
+      runningStage,
     };
+  }
+
+  private resolvePointRerunMode(pointId: string): 'all' | 'phase2' | null {
+    for (const key of this.sessionLookupKeysForPointId(pointId)) {
+      const entry = this.pointPhaseRerun.get(key);
+      if (entry) return entry.mode;
+    }
+    const sp = this.resolveSessionPoint(pointId);
+    if (sp?.id && this.pointPhaseRerun.has(sp.id)) {
+      return this.pointPhaseRerun.get(sp.id)!.mode;
+    }
+    if (this.retryingPointId === pointId) {
+      return this.pointPhaseRerun.get(pointId)?.mode ?? 'all';
+    }
+    return null;
+  }
+
+  private setPointPhaseRerun(pointId: string, mode: 'all' | 'phase2'): void {
+    const baseline = this.capturePointRerunBaseline(pointId);
+    const entry: PointPhaseRerunEntry = {
+      mode,
+      sawPhase2InFlight: false,
+      sawPhase1InFlight: false,
+      baseline,
+    };
+    const keys = new Set<string>([pointId, ...this.sessionLookupKeysForPointId(pointId)]);
+    const sp = this.resolveSessionPoint(pointId);
+    if (sp?.id?.trim()) keys.add(sp.id.trim());
+    for (const key of keys) {
+      this.pointPhaseRerun.set(key, entry);
+    }
+    console.info('[BCP] Point rerun queued', {
+      pointId,
+      mode: mode === 'phase2' ? 'Phase 2 only' : 'Phase 1 + Phase 2',
+    });
+    this.touchPointRerunUi();
+  }
+
+  private capturePointRerunBaseline(pointId: string): PointPhaseRerunBaseline | null {
+    const ap = this.ndRunDetailPoints.find((p) => this.ndPointMatchesId(p, pointId));
+    if (ap) {
+      return {
+        landing: ap.landingAiStatus ?? null,
+        google: ap.googleAiStatus ?? null,
+        dual: ap.dualVerifyStatus ?? null,
+        googleResult: ap.googleAiResult ?? null,
+      };
+    }
+    return null;
+  }
+
+  private ndPointChangedSinceRerunBaseline(
+    p: AnalysisPoint,
+    baseline: PointPhaseRerunBaseline,
+  ): boolean {
+    return (
+      (p.landingAiStatus ?? null) !== baseline.landing ||
+      (p.googleAiStatus ?? null) !== baseline.google ||
+      (p.dualVerifyStatus ?? null) !== baseline.dual ||
+      (p.googleAiResult ?? null) !== baseline.googleResult
+    );
+  }
+
+  private isPhase2RerunSettled(p: AnalysisPoint): boolean {
+    return (
+      p.dualVerifyStatus === 'completed' ||
+      p.dualVerifyStatus === 'failed' ||
+      p.dualVerifyStatus === 'passed' ||
+      p.dualVerifyStatus === 'skipped' ||
+      p.googleAiStatus === 'failed' ||
+      p.googleAiStatus === 'completed' ||
+      p.googleAiStatus === 'compliant' ||
+      p.googleAiStatus === 'partial_compliant' ||
+      p.googleAiStatus === 'non_compliant'
+    );
+  }
+
+  private touchPointRerunUi(): void {
+    this.cdr.markForCheck();
+  }
+
+  private clearPointPhaseRerun(pointId: string): void {
+    for (const key of this.sessionLookupKeysForPointId(pointId)) {
+      this.pointPhaseRerun.delete(key);
+    }
+    this.pointPhaseRerun.delete(pointId);
+    const sp = this.resolveSessionPoint(pointId);
+    if (sp?.id) this.pointPhaseRerun.delete(sp.id);
+    if (this.retryingPointId === pointId) {
+      this.retryingPointId = null;
+    }
+    if (this.retryingPointId === '__batch__' && this.pointPhaseRerun.size === 0) {
+      this.retryingPointId = null;
+    }
+    if (this.pointPhaseRerun.size === 0) {
+      this.stopNdRunPolling(true);
+    }
+    this.touchPointRerunUi();
+  }
+
+  private notePointRerunInFlightFromNdPoint(ap: AnalysisPoint, trackedId: string): void {
+    const entry = this.pointPhaseRerun.get(trackedId);
+    if (!entry) return;
+    if (
+      ap.landingAiStatus === 'running' ||
+      ap.landingAiStatus === 'pending' ||
+      (entry.mode === 'all' && !this.isLandingTerminal(ap.landingAiStatus))
+    ) {
+      entry.sawPhase1InFlight = true;
+    }
+    if (
+      ap.googleAiStatus === 'running' ||
+      ap.googleAiStatus === 'pending' ||
+      ap.dualVerifyStatus === 'running' ||
+      ap.dualVerifyStatus === 'pending'
+    ) {
+      entry.sawPhase2InFlight = true;
+    }
+  }
+
+  private isLandingTerminal(status: string | null | undefined): boolean {
+    return (
+      status === 'failed' ||
+      status === 'completed' ||
+      status === 'compliant' ||
+      status === 'partial_compliant' ||
+      status === 'non_compliant'
+    );
+  }
+
+  private settlePointRerunsFromNdPoints(points: AnalysisPoint[]): void {
+    if (!this.pointPhaseRerun.size) return;
+    for (const [trackedId, entry] of [...this.pointPhaseRerun.entries()]) {
+      const ap = points.find((p) => this.ndPointMatchesId(p, trackedId));
+      if (!ap) continue;
+      this.notePointRerunInFlightFromNdPoint(ap, trackedId);
+      if (!this.isNdPointRerunSettled(ap, entry)) continue;
+      this.finishPointRerun(trackedId, entry.mode, {
+        phase1Status: ap.landingAiStatus,
+        phase1Error: ap.landingAiError,
+        phase2Status: ap.dualVerifyStatus,
+        googleStatus: ap.googleAiStatus,
+        phase2Error: ap.googleAiError,
+        landingMessage: this.parseNdAiPayload(ap.landingAiResult).message,
+        llmMessage: this.parseNdAiPayload(ap.googleAiResult).message,
+      });
+    }
+  }
+
+  private settlePointRerunsFromSessionPoints(points: SessionPoint[]): void {
+    if (!this.pointPhaseRerun.size) return;
+    for (const [trackedId, entry] of [...this.pointPhaseRerun.entries()]) {
+      const sp = points.find((p) => p.pointId === trackedId || this.sessionLookupKeysForPointId(trackedId).includes(p.pointId));
+      if (!sp || !this.isSessionPointRerunSettled(sp, entry.mode)) continue;
+      this.finishPointRerun(trackedId, entry.mode, {
+        phase1Status: sp.landingMessage ? 'completed' : sp.status,
+        phase1Error: sp.status === 'failed' && !sp.landingMessage ? sp.errorMessage : undefined,
+        phase2Status: sp.llmMessage ? 'completed' : sp.status,
+        googleStatus: sp.llmMessage ? 'completed' : undefined,
+        phase2Error: sp.errorMessage,
+        landingMessage: sp.landingMessage,
+        llmMessage: sp.llmMessage,
+      });
+    }
+  }
+
+  private ndPointMatchesId(p: AnalysisPoint, pointId: string): boolean {
+    const snap = parsePointSnapshot(p.pointSnapshot);
+    const candidates = [
+      p.id,
+      p.regulationPointId,
+      snap.pointNumber,
+      snap.regulationPointId,
+    ].filter((v): v is string => !!v?.trim());
+    if (candidates.includes(pointId)) return true;
+    return this.sessionLookupKeysForPointId(pointId).some((k) => candidates.includes(k));
+  }
+
+  private isNdPointRerunSettled(p: AnalysisPoint, entry: PointPhaseRerunEntry): boolean {
+    const mode = entry.mode;
+    const baseline = entry.baseline;
+    const changed = baseline ? this.ndPointChangedSinceRerunBaseline(p, baseline) : false;
+
+    const landingRunning =
+      p.landingAiStatus === 'running' || (mode === 'all' && p.landingAiStatus === 'pending');
+    const phase2Running =
+      p.googleAiStatus === 'running' ||
+      p.dualVerifyStatus === 'running' ||
+      p.googleAiStatus === 'pending' ||
+      p.dualVerifyStatus === 'pending' ||
+      (this.isLandingTerminal(p.landingAiStatus) &&
+        p.dualVerifyStatus === 'pending' &&
+        !this.parseNdAiPayload(p.googleAiResult).message);
+    if (landingRunning || phase2Running) return false;
+
+    if (mode === 'phase2') {
+      if (!entry.sawPhase2InFlight && !changed) return false;
+      return this.isPhase2RerunSettled(p);
+    }
+
+    const landingWasDone =
+      !!baseline?.landing &&
+      this.isLandingTerminal(baseline.landing) &&
+      baseline.landing !== 'failed';
+
+    if (landingWasDone) {
+      if (!entry.sawPhase2InFlight && !changed) return false;
+      return this.isPhase2RerunSettled(p);
+    }
+
+    if (
+      !entry.sawPhase1InFlight &&
+      !changed &&
+      p.landingAiStatus === 'failed'
+    ) {
+      return false;
+    }
+    if (!this.isLandingTerminal(p.landingAiStatus)) return false;
+    if (p.landingAiStatus === 'failed') return true;
+    if (!entry.sawPhase2InFlight && !changed) return false;
+    return this.isPhase2RerunSettled(p);
+  }
+
+  private isSessionPointRerunSettled(p: SessionPoint, mode: 'all' | 'phase2'): boolean {
+    if (p.status === 'running' || p.status === 'queued' || p.status === 'processing') return false;
+    if (p.runningStage?.toLowerCase().includes('landing') || p.runningStage?.toLowerCase().includes('phase2')) {
+      return false;
+    }
+    if (mode === 'phase2') {
+      return !!p.llmMessage || p.status === 'failed' || p.status === 'completed';
+    }
+    return p.status === 'completed' || p.status === 'failed' || p.status === 'cancelled';
+  }
+
+  private finishPointRerun(
+    pointId: string,
+    mode: 'all' | 'phase2',
+    detail: {
+      phase1Status?: string | null;
+      phase1Error?: string | null;
+      phase2Status?: string | null;
+      googleStatus?: string | null;
+      phase2Error?: string | null;
+      landingMessage?: string | null;
+      llmMessage?: string | null;
+    },
+  ): void {
+    this.clearPointPhaseRerun(pointId);
+    const phases = this.getPointPhaseStatus(pointId);
+    const phase1Pass = phases?.phase1.state === 'ok';
+    const phase2Pass = phases?.phase2.state === 'ok' || phases?.phase2.state === 'warn';
+    const phase1Fail = phases?.phase1.state === 'fail';
+    const phase2Fail = phases?.phase2.state === 'fail';
+
+    console.group(`[BCP] Point rerun finished: ${pointId}`);
+    console.log('Rerun mode:', mode === 'phase2' ? 'Phase 2 only' : 'Phase 1 + Phase 2');
+    console.log('Phase 1:', {
+      status: detail.phase1Status,
+      pass: phase1Pass,
+      fail: phase1Fail,
+      error: detail.phase1Error ?? null,
+      hasMessage: !!detail.landingMessage,
+    });
+    console.log('Phase 2:', {
+      status: detail.phase2Status,
+      googleStatus: detail.googleStatus ?? null,
+      pass: phase2Pass,
+      fail: phase2Fail,
+      error: detail.phase2Error ?? null,
+      hasMessage: !!detail.llmMessage,
+    });
+    console.log('UI phase chips:', phases);
+    if (phase1Fail || phase2Fail) {
+      console.warn('[BCP] Rerun completed with failure', {
+        pointId,
+        phase1Error: detail.phase1Error,
+        phase2Error: detail.phase2Error,
+      });
+      const err = (phase2Fail ? detail.phase2Error : detail.phase1Error) ?? 'Rerun failed';
+      const short = err.length > 160 ? `${err.slice(0, 157)}…` : err;
+      this.toast.show(short, 'error', 8000);
+    } else {
+      console.info('[BCP] Rerun completed successfully', { pointId });
+      this.toast.show(mode === 'phase2' ? 'Phase 2 complete' : 'Point rerun complete', 'success', 3000);
+    }
+    console.groupEnd();
+
+    this.buildInlineGapItems();
+
+    const selectedKeys = this.sessionLookupKeysForPointId(pointId);
+    if (this.selectedDetailPointId && selectedKeys.includes(this.selectedDetailPointId)) {
+      this.selectPointForDetail(this.selectedDetailPointId);
+    }
   }
 
   private parseNdAiPayload(raw?: string | null): { message: string; agreement?: SessionPoint['agreementJson'] } {
@@ -3664,7 +4273,7 @@ ${this.findingsPreview
     this.stopNdRunPolling();
     this.ndRunPollInFlight = false;
     // Slow poll: /status + /sessions/active compete for a tiny Supabase session pool.
-    const intervalMs = 10_000;
+    const intervalMs = this.pointPhaseRerun.size > 0 ? 3_000 : 10_000;
     const tick = () => {
       if (typeof document !== 'undefined' && document.hidden) return;
       if (this.ndRunPollInFlight) return;
@@ -3683,6 +4292,7 @@ ${this.findingsPreview
           const merged = this.mergeNdRunPoints(this.ndRunDetailPoints, data.points);
           if (merged.length) this.ndRunDetailPoints = merged;
           this.applyNdRunState(runId, data, merged.length ? merged : data.points ?? [], data);
+          this.onNdRunPointsLiveUpdate(merged.length ? merged : data.points ?? []);
           if (this.ndRunSelectedSnapshot) {
             this.restoreNdRunSelection(this.ndRunSelectedSnapshot, merged.length ? merged : data.points ?? []);
           }

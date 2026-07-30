@@ -32,6 +32,14 @@
     >
       {{ exporting ? 'Exporting…' : 'Export XLSX' }}
     </button>
+    <button
+      type="button"
+      class="btn-secondary"
+      [disabled]="exporting || !items.length"
+      (click)="exportPdf()"
+    >
+      Export PDF
+    </button>
     @if (ndRunId) {
       <button type="button" class="btn-secondary" (click)="openRunHistory()">History</button>
     }

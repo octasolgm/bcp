@@ -59,9 +59,13 @@ public class StoredDocument
     [Column("source_storage_path")]
     public string? SourceStoragePath { get; set; }
 
-    /// <summary>SHA-256 of file bytes — key into Landing AI extract cache.</summary>
+    /// <summary>SHA-256 of file bytes — content identity (duplicate detection), not Landing AI cache.</summary>
     [Column("file_hash")]
     public string? FileHash { get; set; }
+
+    /// <summary>Unique per upload — key into landing_ai_parse_cache / landing_ai_extract_cache for ND regulations.</summary>
+    [Column("extraction_cache_key")]
+    public string? ExtractionCacheKey { get; set; }
 
     [Column("point_count")]
     public int? PointCount { get; set; }

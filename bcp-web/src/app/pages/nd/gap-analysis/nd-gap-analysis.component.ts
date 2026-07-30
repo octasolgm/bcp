@@ -18,7 +18,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-import { downloadExcelRows } from '../../../../lib/ai-lab/excel-write';
+import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints } from '../../../../lib/nd/export/gap-analysis-export';
 import {
   progressPointToReportItem,
   savedResultToReportItem,
@@ -666,7 +666,10 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         ndPoint.finalActionPlan?.trim() ||
         ndPoint.originalAiActionPlan?.trim() ||
         actionPlan;
-      status = complianceSeverityLabel(resolveAnalysisPointSeverity(ndPoint));
+      status = (() => {
+        const sev = resolveAnalysisPointSeverity(ndPoint);
+        return sev ? complianceSeverityLabel(sev) : 'Pending';
+      })();
       confidence = resolveDisplayConfidence(ndPoint);
     }
 
@@ -1128,51 +1131,56 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   async exportXlsx(): Promise<void> {
     if (this.exporting) return;
+    const points = this.analysisPointsForExport();
+    if (!points.length) {
+      this.toast.show('No analysis results to export', 'info');
+      return;
+    }
     this.exporting = true;
     try {
-      const headers = [
-        'ID',
-        'Section',
-        'Title',
-        'Severity',
-        'Regulatory Requirement',
-        'Policy Extract',
-        'Gaps Identified',
-        'Management Response',
-        'Design Effectiveness',
-        'Operating Effectiveness',
-        'Overall Effectiveness',
-        'Document Reference',
-        'Evidence',
-      ];
-      const rows = this.items.map((i) => [
-        i.id,
-        i.section,
-        i.title,
-        gapSeverityLabel(i.severity),
-        i.regulatoryText,
-        i.policyText,
-        i.gaps,
-        i.managementResponse,
-        i.designEffectiveness,
-        i.operatingEffectiveness,
-        i.overallEffectiveness,
-        i.documentReference,
-        i.evidence,
-      ]);
-      await downloadExcelRows(
-        `reguliq-gap-analysis-${new Date().toISOString().slice(0, 10)}.xlsx`,
-        'Gap Analysis',
-        headers,
-        rows,
-        [8, 10, 36, 12, 40, 40, 36, 36, 18, 18, 18, 22, 36],
-      );
+      await exportGapAnalysisExcelFromPoints(points);
       this.toast.show('Exported gap analysis Excel file', 'success');
     } catch {
       this.toast.show('Export failed — try again', 'error');
     } finally {
       this.exporting = false;
     }
+  }
+
+  exportPdf(): void {
+    if (this.exporting) return;
+    const points = this.analysisPointsForExport();
+    if (!points.length) {
+      this.toast.show('No analysis results to export', 'info');
+      return;
+    }
+    try {
+      exportGapAnalysisPdfFromPoints(points, {
+        runName: this.sourceLabel || 'Gap Analysis Report',
+        subtitle: this.subtitle,
+      });
+      this.toast.show('Exported gap analysis PDF', 'success');
+    } catch {
+      this.toast.show('Export failed — try again', 'error');
+    }
+  }
+
+  private analysisPointsForExport(): AnalysisPoint[] {
+    if (!this.ndRunData?.points?.length) return [];
+    const keys = new Set(
+      this.items.map((i) => i.section.replace(/^§/, '').trim().toLowerCase()),
+    );
+    const matched = this.ndRunData.points.filter((p) => {
+      const snap = parsePointSnapshot(p.pointSnapshot);
+      const candidates = [snap.pointNumber, p.regulationPointId, p.id, snap.regulationPointId].filter(
+        Boolean,
+      ) as string[];
+      return candidates.some((c) => keys.has(c.trim().toLowerCase()));
+    });
+    if (matched.length) return matched;
+    return this.ndRunData.points.filter(
+      (p) => p.landingAiResult?.trim() || p.googleAiResult?.trim(),
+    );
   }
 
   ngOnDestroy(): void {
@@ -1541,7 +1549,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         ndPoint,
         this.attachmentCountByPointId.get(ndPoint.id) ?? 0,
       );
-      item.severity = normalizeGapSeverity(resolveAnalysisPointSeverity(ndPoint));
+      const severity = resolveAnalysisPointSeverity(ndPoint);
+      if (severity) item.severity = normalizeGapSeverity(severity);
       item.gapCount = gapCount;
     }
 
@@ -1587,6 +1596,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         const ndPoint = this.analysisPointForGap(item);
         if (!ndPoint) return item;
         const severity = resolveAnalysisPointSeverity(ndPoint);
+        if (!severity) return item;
         const gapCount = countDisplayGapsForAnalysisPoint(
           ndPoint,
           this.attachmentCountByPointId.get(ndPoint.id) ?? 0,

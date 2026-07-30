@@ -299,6 +299,17 @@
                       </button>
                     }
                     @if (canExtract && !isManualDoc(d)) {
+                      @if (hasExtractedPoints(d)) {
+                        <button
+                          type="button"
+                          class="row-action-btn compact"
+                          title="Repair duplicates and junk (no Landing AI credits)"
+                          [disabled]="repairingPointsId === d.id"
+                          (click)="handleRepairPoints(d, $event)"
+                        >
+                          {{ repairingPointsId === d.id ? '…' : 'Repair' }}
+                        </button>
+                      }
                       <button
                         type="button"
                         class="row-action-btn compact"
@@ -414,7 +425,16 @@
       </div>
       @if (canExtract && selectedDoc && !isManualDoc(selectedDoc)) {
         <div class="panel-extract">
-          @if (hasExtractedPoints(selectedDoc)) {
+          @if (hasExtractedPoints(selectedDoc) || (selectedDoc.pointCount ?? 0) > 0) {
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              [disabled]="repairingPointsId === selectedDoc.id"
+              (click)="handleRepairPoints(selectedDoc)"
+              title="Remove duplicates and junk points (soft-delete) and refresh page numbers — no Landing AI credits"
+            >
+              {{ repairingPointsId === selectedDoc.id ? 'Repairing…' : 'Repair points' }}
+            </button>
             <button
               type="button"
               class="btn-secondary btn-sm"

@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-import { downloadExcelRows } from '../../../lib/ai-lab/excel-write';
+import { exportGapAnalysisExcelFromPoints } from '../../../lib/nd/export/gap-analysis-export';
 import {
   progressPointToReportItem,
   savedResultToReportItem,
@@ -255,51 +255,38 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
 
   async exportXlsx(): Promise<void> {
     if (this.exporting) return;
+    const points = this.analysisPointsForExport();
+    if (!points.length) {
+      this.toast.show('No analysis results to export', 'info');
+      return;
+    }
     this.exporting = true;
     try {
-      const headers = [
-        'ID',
-        'Section',
-        'Title',
-        'Severity',
-        'Regulatory Requirement',
-        'Policy Extract',
-        'Gaps Identified',
-        'Management Response',
-        'Design Effectiveness',
-        'Operating Effectiveness',
-        'Overall Effectiveness',
-        'Document Reference',
-        'Evidence',
-      ];
-      const rows = this.items.map((i) => [
-        i.id,
-        i.section,
-        i.title,
-        gapSeverityLabel(i.severity),
-        i.regulatoryText,
-        i.policyText,
-        i.gaps,
-        i.managementResponse,
-        i.designEffectiveness,
-        i.operatingEffectiveness,
-        i.overallEffectiveness,
-        i.documentReference,
-        i.evidence,
-      ]);
-      await downloadExcelRows(
-        `reguliq-gap-analysis-${new Date().toISOString().slice(0, 10)}.xlsx`,
-        'Gap Analysis',
-        headers,
-        rows,
-        [8, 10, 36, 12, 40, 40, 36, 36, 18, 18, 18, 22, 36],
-      );
+      await exportGapAnalysisExcelFromPoints(points);
       this.toast.show('Exported gap analysis Excel file', 'success');
     } catch {
       this.toast.show('Export failed — try again', 'error');
     } finally {
       this.exporting = false;
     }
+  }
+
+  private analysisPointsForExport(): AnalysisPoint[] {
+    if (!this.ndRunData?.points?.length) return [];
+    const keys = new Set(
+      this.items.map((i) => i.section.replace(/^§/, '').trim().toLowerCase()),
+    );
+    const matched = this.ndRunData.points.filter((p) => {
+      const snap = parsePointSnapshot(p.pointSnapshot);
+      const candidates = [snap.pointNumber, p.regulationPointId, p.id, snap.regulationPointId].filter(
+        Boolean,
+      ) as string[];
+      return candidates.some((c) => keys.has(c.trim().toLowerCase()));
+    });
+    if (matched.length) return matched;
+    return this.ndRunData.points.filter(
+      (p) => p.landingAiResult?.trim() || p.googleAiResult?.trim(),
+    );
   }
 
   ngOnDestroy(): void {
@@ -587,6 +574,7 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
         const ndPoint = this.analysisPointForGapItem(item);
         if (!ndPoint) return item;
         const severity = resolveAnalysisPointSeverity(ndPoint);
+        if (!severity) return item;
         const gapCount = countDisplayGapsForAnalysisPoint(
           ndPoint,
           (this.ndRunData!.pointAttachments ?? []).filter((a) => a.analysisPointId === ndPoint.id).length,

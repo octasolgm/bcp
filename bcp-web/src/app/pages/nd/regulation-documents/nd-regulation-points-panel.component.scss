@@ -31,6 +31,13 @@
   color: var(--text-secondary);
 }
 
+.panel-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 .panel-search {
   width: 100%;
   padding: 0.4rem 0.65rem;
@@ -204,6 +211,12 @@
   font-size: 0.625rem;
   font-weight: 700;
   margin-top: 0.1rem;
+
+  &.point-check-skip {
+    background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
 }
 
 .pid {
@@ -228,10 +241,56 @@
   color: #a86800;
 }
 
+.point-tag-skip {
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  color: var(--text-muted);
+  cursor: help;
+}
+
 .point-intro .pid {
   opacity: 0.75;
 }
 
-.ptxt {
+.ptitle {
+  display: block;
+  font-weight: 600;
   color: var(--text-primary);
+}
+
+.ptxt {
+  color: var(--text-secondary);
+  margin-top: 0.1rem;
+}
+
+.point-text-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ptxt-full {
+  white-space: pre-line;
+}
+
+.point-text-toggle {
+  display: inline-block;
+  margin-top: 0.15rem;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }

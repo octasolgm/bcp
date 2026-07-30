@@ -757,10 +757,26 @@
 
   .phase-row {
     display: flex;
-    flex-wrap: nowrap;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .phase-chips {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.35rem;
     min-width: 0;
+  }
+
+  .phase-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
   }
 
   .phase-chip {
@@ -821,6 +837,46 @@
   .phase-idle,
   .phase-skip {
     opacity: 0.72;
+  }
+
+  .phase-action {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.08rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    color: var(--accent);
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    &.phase-action-busy {
+      cursor: wait;
+      animation: phase-pulse 1s ease-in-out infinite;
+    }
+  }
+
+  .phase-action-p2 {
+    border-color: color-mix(in srgb, var(--critical) 40%, transparent);
+    background: color-mix(in srgb, var(--critical) 8%, transparent);
+    color: var(--critical);
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--critical) 14%, transparent);
+    }
   }
 
   .sstatus {

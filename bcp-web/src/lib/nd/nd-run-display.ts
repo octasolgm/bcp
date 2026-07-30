@@ -20,6 +20,7 @@ export function ndComplianceSummaryFromPoints(points: AnalysisPoint[]): NdCompli
   let nonCompliant = 0;
   for (const point of points) {
     const severity = resolveAnalysisPointSeverity(point);
+    if (!severity) continue;
     if (severity === 'compliant') compliant++;
     else if (severity === 'partial_compliant') partialCompliant++;
     else nonCompliant++;
@@ -54,6 +55,9 @@ export function buildNdGapListItems(
     const pointKey = (snap.pointNumber || point.regulationPointId || point.id || '').trim();
     if (!pointKey || !pointHasSavedOutput(point)) continue;
 
+    const severity = resolveAnalysisPointSeverity(point);
+    if (!severity) continue;
+
     displayIndex++;
     const sectionLabel = pointKey.startsWith('§') ? pointKey : `§${pointKey}`;
     const overlayKey = sectionLabel.replace(/^§/, '');
@@ -64,7 +68,7 @@ export function buildNdGapListItems(
       id: String(displayIndex).padStart(2, '0'),
       section: sectionLabel,
       title: snap.pointTitle?.trim() || pointKey,
-      severity: normalizeGapSeverity(resolveAnalysisPointSeverity(point)),
+      severity: normalizeGapSeverity(severity),
       gapCount: 0,
       signedOff: overlay?.signedOff ?? false,
       expanded: false,

@@ -214,9 +214,9 @@
   font-weight: 700;
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
+  background: var(--pastel-warn-bg);
+  color: var(--on-pastel-label);
+  border: 1px solid var(--pastel-warn-border);
   white-space: nowrap;
   flex-shrink: 0;
   cursor: pointer;
@@ -224,7 +224,7 @@
   line-height: inherit;
 
   &:hover {
-    background: #fde68a;
+    filter: brightness(0.96);
   }
 }
 
@@ -547,9 +547,9 @@
   letter-spacing: 0.03em;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
+  background: var(--pastel-warn-bg);
+  color: var(--on-pastel-label);
+  border: 1px solid var(--pastel-warn-border);
 }
 
 .severity-badge.sm {

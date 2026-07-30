@@ -1,0 +1,15 @@
+---
+description: Restart BCP API after backend changes so fixes are actually running
+globs: bcp-api/**/*
+alwaysApply: false
+---
+
+# BCP API — always restart after changes
+
+After **any** edit under `bcp-api/` that affects runtime behavior (services, controllers, config loaded at startup):
+
+1. **Do not** assume `dotnet run` from an old terminal is still valid — `Bcp.Api.exe` keeps the previous DLL until stopped.
+2. **Always** stop the process on port **5100**, rebuild, and start the API before asking the user to retest.
+3. Prefer: `bcp-api/scripts/restart-api.ps1 -Detached` from repo root (or `-NoBuild` only if you just built in the same step).
+
+Until the API is restarted, the user will still see old errors (e.g. Anthropic `temperature` BadRequest) even when source is fixed.

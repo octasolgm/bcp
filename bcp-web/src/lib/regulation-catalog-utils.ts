@@ -2,6 +2,15 @@ import type { GovPoint } from './gov-point-filter';
 import { analyzeGovPointSet, isManualRegulationSource, type GovPointSetAnalysis } from './library-points-utils';
 import type { RegulationDocument, RegulationPoint } from './nd/types';
 
+function extractSectionFromPageReference(pageReference?: string | null): string | undefined {
+  const ref = (pageReference ?? '').trim();
+  if (!ref) return undefined;
+  const pageSplit = ref.search(/\s*·\s*p\.\s*\d+/i);
+  if (pageSplit > 0) return ref.slice(0, pageSplit).trim();
+  if (/^p\.\s*\d+$/i.test(ref)) return undefined;
+  return ref;
+}
+
 export function normalizeRegulationPoint(raw: Record<string, unknown>): RegulationPoint {
   return {
     id: String(raw['id'] ?? ''),
@@ -35,11 +44,13 @@ export function regulationPointToGovPoint(
   options?: { manual?: boolean },
 ): GovPoint {
   if (options?.manual) return manualRegulationPointToGovPoint(p);
+  const pageRef = (p.pageReference ?? '').trim();
+  const sectionFromRef = extractSectionFromPageReference(pageRef);
   return {
     point_id: p.pointNumber,
     title: p.pointTitle ?? undefined,
     text: p.pointContent,
-    section: p.pageReference ?? undefined,
+    section: sectionFromRef ?? (pageRef || undefined),
   };
 }
 
@@ -49,6 +60,8 @@ export type NdGovPoint = GovPoint & {
   pointNumber: string;
   docId: string;
   docName: string;
+  isIntroductionPoint?: boolean;
+  isAnnexPoint?: boolean;
 };
 
 export function regulationPointToNdGovPoint(
@@ -64,6 +77,8 @@ export function regulationPointToNdGovPoint(
     regulationDocumentId: meta.docId,
     docName: meta.docName,
     docId: meta.docId,
+    isIntroductionPoint: p.isIntroductionPoint,
+    isAnnexPoint: p.isAnnexPoint,
   };
 }
 

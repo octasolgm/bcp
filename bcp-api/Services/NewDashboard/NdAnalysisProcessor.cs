@@ -20,8 +20,11 @@ public class NdAnalysisProcessor(
     NdAnalysisRunCancellationTracker runCancellation,
     ILogger<NdAnalysisProcessor> logger)
 {
-    private readonly ComparePromptVersion _comparePromptVersion =
+    private readonly ComparePromptVersion _defaultComparePromptVersion =
         NdAnalysisPromptDefaults.Resolve(configuration);
+
+    private ComparePromptVersion ResolvePromptVersion(NdAnalysisRun run) =>
+        ComparePromptVersionExtensions.ParseOrDefault(run.ComparePromptVersion, _defaultComparePromptVersion);
 
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
     {
@@ -55,15 +58,22 @@ public class NdAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
-        if (run.Status == "cancelled" || runCancellation.IsStopRequested(runId))
+        if (await IsRunStoppedAsync(run, ct))
         {
-            await MarkRunCancelledAsync(run, ct);
+            await MarkRunCancelledAsync(run, CancellationToken.None);
             return;
         }
 
         run.Status = "running";
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        // Stop may have won the race while we wrote "running".
+        if (await IsRunStoppedAsync(run, CancellationToken.None))
+        {
+            await MarkRunCancelledAsync(run, CancellationToken.None);
+            return;
+        }
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
 
@@ -76,7 +86,7 @@ public class NdAnalysisProcessor(
 
         foreach (var point in points)
         {
-            if (ct.IsCancellationRequested || runCancellation.IsStopRequested(runId))
+            if (await IsRunStoppedAsync(run, ct))
             {
                 await MarkRunCancelledAsync(run, CancellationToken.None);
                 return;
@@ -84,6 +94,7 @@ public class NdAnalysisProcessor(
 
             // Re-read status in case Stop endpoint already marked points cancelled.
             await db.Entry(point).ReloadAsync(CancellationToken.None);
+            await db.Entry(run).ReloadAsync(CancellationToken.None);
             if (point.LandingAiStatus is "cancelled"
                 || point.DualVerifyStatus is "cancelled"
                 || run.Status == "cancelled")
@@ -116,13 +127,39 @@ public class NdAnalysisProcessor(
             }
         }
 
-        if (ct.IsCancellationRequested || runCancellation.IsStopRequested(runId))
+        if (await IsRunStoppedAsync(run, CancellationToken.None))
         {
             await MarkRunCancelledAsync(run, CancellationToken.None);
             return;
         }
 
         await FinalizeRunStatusAsync(run, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Stop can persist cancelled via another DbContext; this processor must not overwrite it on SaveChanges.
+    /// </summary>
+    private async Task<bool> IsRunStoppedAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested || runCancellation.IsStopRequested(run.Id))
+            return true;
+        if (run.Status == "cancelled")
+            return true;
+
+        var dbStatus = await db.NdAnalysisRuns.AsNoTracking()
+            .Where(r => r.Id == run.Id)
+            .Select(r => r.Status)
+            .FirstOrDefaultAsync(CancellationToken.None);
+        return dbStatus == "cancelled";
+    }
+
+    private async Task EnsureNotStoppedAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        if (await IsRunStoppedAsync(run, ct))
+        {
+            await MarkRunCancelledAsync(run, CancellationToken.None);
+            throw new OperationCanceledException();
+        }
     }
 
     private async Task MarkRunCancelledAsync(NdAnalysisRun run, CancellationToken ct)
@@ -181,14 +218,15 @@ public class NdAnalysisProcessor(
         {
             point.DualVerifyRerunCount++;
             point.DualVerifyStatus = "pending";
-            point.GoogleAiStatus = "pending";
+            point.GoogleAiStatus = "running";
+            point.GoogleAiError = null;
             await db.SaveChangesAsync(ct);
             await RunDualVerifyOnlyAsync(run, point, internalDocs, ct);
         }
         else
         {
             point.LandingAiRerunCount++;
-            point.LandingAiStatus = "pending";
+            point.LandingAiStatus = "running";
             point.DualVerifyStatus = "pending";
             point.GoogleAiStatus = "pending";
             point.LandingAiError = null;
@@ -216,7 +254,8 @@ public class NdAnalysisProcessor(
             var internalDocs = await ResolveInternalDocsForPointAsync(point, internalDocIds, ct);
             point.DualVerifyRerunCount++;
             point.DualVerifyStatus = "pending";
-            point.GoogleAiStatus = "pending";
+            point.GoogleAiStatus = "running";
+            point.GoogleAiError = null;
             await db.SaveChangesAsync(ct);
             await RunDualVerifyOnlyAsync(run, point, internalDocs, ct);
         }
@@ -232,6 +271,8 @@ public class NdAnalysisProcessor(
         bool dualVerifyOnly,
         CancellationToken ct)
     {
+        await EnsureNotStoppedAsync(run, ct);
+
         if (dualVerifyOnly)
         {
             await RunDualVerifyOnlyAsync(run, point, internalDocs, ct);
@@ -239,23 +280,24 @@ public class NdAnalysisProcessor(
         }
 
         var snapshot = ParsePointSnapshot(point.PointSnapshot);
-        var govPoint = new GovPoint(
-            snapshot.PointNumber ?? snapshot.PointId ?? "",
-            snapshot.PointTitle,
-            snapshot.PointContent ?? "",
-            snapshot.PageReference);
+        var govPoint = await NdAnalysisGovPointResolver.ResolveAsync(
+            db, point.RegulationPointId, snapshot, ct);
+        var promptVersion = ResolvePromptVersion(run);
 
         if (!IsLandingSuccess(point.LandingAiStatus) || fullRerun)
         {
             point.LandingAiStatus = "running";
             point.UpdatedAt = DateTimeOffset.UtcNow;
+            await EnsureNotStoppedAsync(run, ct);
             await db.SaveChangesAsync(ct);
 
             try
             {
                 var forceRefresh = fullRerun;
                 var landingMessage = await landingAi.ComparePointAsync(
-                    govPoint, internalDocs.ToList(), forceRefresh, _comparePromptVersion, ct);
+                    govPoint, internalDocs.ToList(), forceRefresh, promptVersion, ct);
+
+                await EnsureNotStoppedAsync(run, ct);
 
                 point.LandingAiStatus = NdComplianceParser.ExtractStatusFromMessage(landingMessage);
                 point.LandingAiResult = JsonSerializer.Serialize(new { message = landingMessage });
@@ -264,6 +306,11 @@ public class NdAnalysisProcessor(
                 point.LandingAiError = null;
 
                 await SaveInitialActionPlanIfNeededAsync(point, run.CreatedBy, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                await MarkRunCancelledAsync(run, CancellationToken.None);
+                throw;
             }
             catch (Exception ex)
             {
@@ -275,6 +322,8 @@ public class NdAnalysisProcessor(
                 return;
             }
         }
+
+        await EnsureNotStoppedAsync(run, ct);
 
         if (!IsLandingSuccess(point.LandingAiStatus))
         {
@@ -296,11 +345,8 @@ public class NdAnalysisProcessor(
         CancellationToken ct)
     {
         var snapshot = ParsePointSnapshot(point.PointSnapshot);
-        var govPoint = new GovPoint(
-            snapshot.PointNumber ?? snapshot.PointId ?? "",
-            snapshot.PointTitle,
-            snapshot.PointContent ?? "",
-            snapshot.PageReference);
+        var govPoint = await NdAnalysisGovPointResolver.ResolveAsync(
+            db, point.RegulationPointId, snapshot, ct);
 
         if (string.IsNullOrWhiteSpace(point.LandingAiResult))
             throw new InvalidOperationException("No Landing AI result to verify against.");
@@ -312,12 +358,19 @@ public class NdAnalysisProcessor(
 
         point.GoogleAiStatus = "running";
         point.DualVerifyStatus = "pending";
+        await EnsureNotStoppedAsync(run, ct);
         await db.SaveChangesAsync(ct);
 
         try
         {
-            var phase2 = await RunPhase2Async(govPoint, landingMessage, internalDocs, ct);
+            var phase2 = await RunPhase2Async(govPoint, landingMessage, internalDocs, ResolvePromptVersion(run), ct);
+            await EnsureNotStoppedAsync(run, ct);
             ApplyDualVerifyResult(run, point, landingMessage, phase2);
+        }
+        catch (OperationCanceledException)
+        {
+            await MarkRunCancelledAsync(run, CancellationToken.None);
+            throw;
         }
         catch (Exception ex)
         {
@@ -338,6 +391,8 @@ public class NdAnalysisProcessor(
         IReadOnlyList<InternalDocPayload> internalDocs,
         CancellationToken ct)
     {
+        await EnsureNotStoppedAsync(run, ct);
+
         point.GoogleAiStatus = "running";
         point.DualVerifyStatus = "pending";
         await db.SaveChangesAsync(ct);
@@ -349,8 +404,14 @@ public class NdAnalysisProcessor(
                 ? m.GetString() ?? ""
                 : "";
 
-            var phase2 = await RunPhase2Async(govPoint, landingMessage, internalDocs, ct);
+            var phase2 = await RunPhase2Async(govPoint, landingMessage, internalDocs, ResolvePromptVersion(run), ct);
+            await EnsureNotStoppedAsync(run, ct);
             ApplyDualVerifyResult(run, point, landingMessage, phase2);
+        }
+        catch (OperationCanceledException)
+        {
+            await MarkRunCancelledAsync(run, CancellationToken.None);
+            throw;
         }
         catch (Exception ex)
         {
@@ -368,22 +429,33 @@ public class NdAnalysisProcessor(
         GovPoint govPoint,
         string landingMessage,
         IReadOnlyList<InternalDocPayload> internalDocs,
+        ComparePromptVersion promptVersion,
         CancellationToken ct)
     {
         var markdownSupplement = BuildInternalMarkdownSupplement(internalDocs);
         var attachedNames = internalDocs.Select(d => d.FileName).ToList();
         var prompt = DualVerifyPromptBuilder.Build(
-            govPoint, landingMessage, markdownSupplement, attachedNames, _comparePromptVersion);
+            govPoint, landingMessage, markdownSupplement, attachedNames, promptVersion);
 
         var pdfs = internalDocs
-            .Where(d => d.Pdf is { Length: > 0 })
+            .Where(d => d.Pdf is { Length: > 0 } && LandingAiDocumentFormats.IsPdf(d.FileName, d.Pdf))
             .Select(d => (d.Pdf!, d.FileName))
             .ToList();
 
-        if (pdfs.Count > 0)
-            return await dualVerifyLlm.AnalyzeWithPdfsAsync(pdfs, prompt, ct);
+        var skippedNonPdf = internalDocs.Count(d => d.Pdf is { Length: > 0 }) - pdfs.Count;
+        if (skippedNonPdf > 0)
+        {
+            logger.LogInformation(
+                "Phase 2: skipping {Count} non-PDF internal file(s); using parsed markdown in prompt",
+                skippedNonPdf);
+        }
 
-        return await dualVerifyLlm.AnalyzeTextAsync(prompt, ct);
+        // Prefer text when we have parsed markdown (Word uploads, cached parse, etc.) — same as legacy dual-verify worker.
+        var hasMarkdown = !string.IsNullOrWhiteSpace(markdownSupplement) && markdownSupplement.Trim().Length > 100;
+        if (hasMarkdown || pdfs.Count == 0)
+            return await dualVerifyLlm.AnalyzeTextAsync(prompt, ct);
+
+        return await dualVerifyLlm.AnalyzeWithPdfsAsync(pdfs, prompt, ct);
     }
 
     private static string BuildInternalMarkdownSupplement(IReadOnlyList<InternalDocPayload> internalDocs)
@@ -451,17 +523,41 @@ public class NdAnalysisProcessor(
 
     private async Task UpdateRunCountsAsync(NdAnalysisRun run, CancellationToken ct)
     {
+        if (await IsRunStoppedAsync(run, ct))
+        {
+            await MarkRunCancelledAsync(run, CancellationToken.None);
+            throw new OperationCanceledException();
+        }
+
         run.ProcessedPointsCount = run.Points.Count(p =>
             IsLandingSuccess(p.LandingAiStatus) || p.LandingAiStatus == "failed");
         run.LandingAiCompletedCount = run.Points.Count(p => IsLandingSuccess(p.LandingAiStatus));
         run.DualVerifyCompletedCount = run.Points.Count(p => p.DualVerifyStatus == "passed");
         run.DualVerifyFailedCount = run.Points.Count(p => p.DualVerifyStatus == "failed");
         run.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Never let a stale tracked Status="running" overwrite Stop's cancelled row.
+        var dbStatus = await db.NdAnalysisRuns.AsNoTracking()
+            .Where(r => r.Id == run.Id)
+            .Select(r => r.Status)
+            .FirstOrDefaultAsync(CancellationToken.None);
+        if (dbStatus == "cancelled")
+        {
+            await MarkRunCancelledAsync(run, CancellationToken.None);
+            throw new OperationCanceledException();
+        }
+
         await db.SaveChangesAsync(ct);
     }
 
     private async Task FinalizeRunStatusAsync(NdAnalysisRun run, CancellationToken ct)
     {
+        if (await IsRunStoppedAsync(run, ct))
+        {
+            await MarkRunCancelledAsync(run, CancellationToken.None);
+            return;
+        }
+
         await UpdateRunCountsAsync(run, ct);
 
         var total = run.TotalPointsCount;

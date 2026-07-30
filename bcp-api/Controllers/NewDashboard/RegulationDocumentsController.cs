@@ -22,6 +22,7 @@ public class RegulationDocumentsController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
     NdRegulationUploadService uploadService,
+    NdRegulationPointRepairService pointRepair,
     LandingAiGovExtractService govExtract,
     GovPointsService govPoints,
     SupabaseStorageService storage,
@@ -1010,6 +1011,43 @@ public class RegulationDocumentsController(
         }
     }
 
+    [HttpPost("{id:guid}/points/repair")]
+    public async Task<IActionResult> RepairPoints(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var ndDoc = await db.NdRegulationDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id, ct)
+            ?? await db.NdRegulationDocuments.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.StoredDocumentId == id, ct);
+        if (ndDoc == null)
+            return NotFound(new { success = false, message = "Regulation document not found." });
+        if (ndDoc.IsManual)
+            return BadRequest(new { success = false, message = "Repair is not available for manual documents." });
+
+        try
+        {
+            var result = await pointRepair.RepairDocumentAsync(ndDoc.Id, ct);
+            var pointCount = await db.NdRegulationPoints.CountAsync(p => p.RegulationDocumentId == ndDoc.Id, ct);
+            return Ok(new
+            {
+                success = true,
+                message = $"Repaired points: {result.BeforeCount} → {result.AfterCount} active ({result.SoftDeleted} soft-deleted).",
+                data = new
+                {
+                    regulationDocumentId = ndDoc.Id,
+                    pointCount,
+                    repair = result,
+                },
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
     [HttpPost("{id:guid}/extract")]
     public async Task<IActionResult> Extract(Guid id, CancellationToken ct)
     {
@@ -1335,7 +1373,7 @@ public class RegulationDocumentsController(
         if (hasChildren)
             return BadRequest(new { success = false, message = "Remove child points before deleting this point." });
 
-        db.NdRegulationPoints.Remove(point);
+        point.Status = NdRegulationPointStatus.Removed;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return Ok(new { success = true });

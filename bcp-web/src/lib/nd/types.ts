@@ -134,6 +134,10 @@ export type AnalysisRunSummary = {
   compliant?: number;
   partial?: number;
   nonCompliant?: number;
+  /** Gap risk bands from CAP priority (0–33 / 34–66 / 67–100). */
+  criticalGaps?: number;
+  mediumGaps?: number;
+  lowGaps?: number;
   submittedAt?: string;
   workflowHolder?: string;
   totalGaps?: number;

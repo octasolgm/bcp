@@ -80,14 +80,35 @@ export function parseReferenceCitation(text: string): ParsedReferenceCitation {
   }
 
   const pageMatch = trimmed.match(/Page\s+(\d+(?:\s*[-–]\s*\d+)?)/i);
-  const sectionMatch = trimmed.match(
-    /Section\s+([^:'"]+?)(?=\s*:\s*['"]|$)/i,
+  // Prefer a tight section token (clause number or short name). Avoid swallowing
+  // UUIDs / regulation titles that Landing sometimes pastes after "Section".
+  const tightSection = trimmed.match(
+    /Section\s+(\d+(?:\.\d+)*|[A-Za-z][\w./-]{0,40})(?=\s*[,:).]|\s*$)/i,
   );
+  const looseSection = trimmed.match(/Section\s+([^:'"]+?)(?=\s*:\s*['"]|$)/i);
+  let section = (tightSection?.[1] ?? looseSection?.[1] ?? '').trim() || null;
+  if (section) {
+    section = section.replace(/[).,:;\]]+\s*$/g, '').trim() || null;
+    if (section && /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(section)) {
+      const numbered = section.match(/\b(\d+(?:\.\d+)*)\b/);
+      section = numbered?.[1] ?? null;
+    } else if (section) {
+      const numbered = section.match(/^(\d+(?:\.\d+)*)\b(.*)$/);
+      if (numbered) {
+        const rest = numbered[2].trim();
+        if (!rest || rest.length > 24 || (/^[A-Z]/.test(rest) && rest.split(/\s+/).length >= 3)) {
+          section = numbered[1];
+        }
+      } else if (section.length > 48) {
+        section = section.slice(0, 45).trimEnd() + '…';
+      }
+    }
+  }
   const quoteMatch = trimmed.match(/['"]([^'"]+)['"]/);
 
   return {
     page: pageMatch?.[1]?.trim() ?? null,
-    section: sectionMatch?.[1]?.trim() ?? null,
+    section,
     quote: quoteMatch?.[1]?.trim() ?? null,
   };
 }

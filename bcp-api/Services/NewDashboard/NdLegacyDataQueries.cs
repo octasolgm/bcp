@@ -116,7 +116,10 @@ public static class NdLegacyDataQueries
         string? makerName = null,
         int? compliant = null,
         int? partial = null,
-        int? nonCompliant = null) => new
+        int? nonCompliant = null,
+        int? criticalGaps = null,
+        int? mediumGaps = null,
+        int? lowGaps = null) => new
     {
         id = r.Id,
         source = "nd_analysis",
@@ -139,5 +142,8 @@ public static class NdLegacyDataQueries
         compliant = compliant ?? 0,
         partial = partial ?? 0,
         nonCompliant = nonCompliant ?? 0,
+        criticalGaps = criticalGaps ?? 0,
+        mediumGaps = mediumGaps ?? 0,
+        lowGaps = lowGaps ?? 0,
     };
 }

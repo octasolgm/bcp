@@ -1,0 +1,32 @@
+<div class="page-header nd-shrink">
+  <div>
+    <h1>Analysis versions</h1>
+    <p class="subtitle">Pick a UI version. V1 is the original; V2 is the editable clone.</p>
+  </div>
+</div>
+
+<div class="nd-page-body">
+  <div class="version-list">
+    @for (v of versions; track v.id) {
+      @if (v.path) {
+        <a [routerLink]="v.path" class="version-card">
+          <span class="version-id">{{ v.id }}</span>
+          <span class="version-body">
+            <strong>{{ v.label }}</strong>
+            <span class="version-desc">{{ v.description }}</span>
+          </span>
+          <span class="version-cta">Open</span>
+        </a>
+      } @else {
+        <div class="version-card disabled" aria-disabled="true">
+          <span class="version-id">{{ v.id }}</span>
+          <span class="version-body">
+            <strong>{{ v.label }}</strong>
+            <span class="version-desc">{{ v.description }}</span>
+          </span>
+          <span class="version-cta muted">Soon</span>
+        </div>
+      }
+    }
+  </div>
+</div>

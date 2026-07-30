@@ -46,10 +46,28 @@ public class LandingAiComparePromptBuilderTests
     }
 
     [Fact]
+    public void Build_V3_IncludesRegulJudgmentRules()
+    {
+        var prompt = LandingAiComparePromptBuilder.Build(
+            SamplePoint,
+            "markdown body",
+            "policy.pdf",
+            ComparePromptVersion.V3);
+
+        Assert.Contains("Document-perspective rule", prompt);
+        Assert.Contains("Vendor/list-provider due diligence", prompt);
+        Assert.Contains("Element-level checking", prompt);
+        Assert.Contains("VERBATIM", prompt);
+        Assert.DoesNotContain("CBUAE and TFS", prompt);
+    }
+
+    [Fact]
     public void ToCacheKey_SeparatesVersions()
     {
         Assert.Equal("v1", ComparePromptVersion.V1.ToCacheKey(1));
         Assert.Equal("v2", ComparePromptVersion.V2.ToCacheKey(1));
         Assert.Equal("v2-multi", ComparePromptVersion.V2.ToCacheKey(2));
+        Assert.Equal("v3", ComparePromptVersion.V3.ToCacheKey(1));
+        Assert.Equal("v3-multi", ComparePromptVersion.V3.ToCacheKey(2));
     }
 }

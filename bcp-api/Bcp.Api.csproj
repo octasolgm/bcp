@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <DefaultItemExcludes>$(DefaultItemExcludes);tests/**;_run_out/**;_build_check*/**;publish/**;build-out/**;publish-test*/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);tests/**;_run_out/**;_build_check*/**;publish/**;build-out/**;publish-test*/**;scripts/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

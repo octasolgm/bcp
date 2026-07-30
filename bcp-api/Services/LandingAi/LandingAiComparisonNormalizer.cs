@@ -80,7 +80,8 @@ public static class LandingAiComparisonNormalizer
         }
         else
         {
-            corrective ??= "Re-run comparison or verify internal document.";
+            if (IsWeakCorrectivePlan(corrective))
+                corrective = BuildFallbackCorrectivePlan(requirementText, status);
             responsibility ??= "Compliance Team";
         }
 
@@ -96,13 +97,57 @@ public static class LandingAiComparisonNormalizer
         };
     }
 
+    /// <summary>
+    /// Empty / placeholder CAPs (e.g. "Re-run comparison…") leave the UI with no real gap or action.
+    /// Build a structured Gap(s) plan from the regulatory requirement so makers see what is missing.
+    /// </summary>
+    internal static bool IsWeakCorrectivePlan(string? corrective)
+    {
+        if (string.IsNullOrWhiteSpace(corrective)) return true;
+        var t = corrective.Trim();
+        if (t is "—" or "-" or "N/A" or "n/a" or "None" or "none") return true;
+        if (t.Contains("Re-run comparison", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.Contains("verify internal document", StringComparison.OrdinalIgnoreCase)
+            && !t.Contains("Missing:", StringComparison.OrdinalIgnoreCase))
+            return true;
+        // Literal "Missing: MISSING" with no real intent
+        if (System.Text.RegularExpressions.Regex.IsMatch(
+                t, @"Missing:\s*MISSING\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            return true;
+        return false;
+    }
+
+    internal static string BuildFallbackCorrectivePlan(string? requirementText, string status)
+    {
+        var intent = SummarizeRequirementIntent(requirementText);
+        var priority = status.Contains("Partial", StringComparison.OrdinalIgnoreCase) ? "Medium" : "Higher";
+        return
+            $"Gap(s):\n(1) Missing: No equivalent internal procedure covers — {intent}. " +
+            $"Fix: Draft, approve, and implement an internal control/procedure that addresses this requirement; " +
+            $"assign an owner and retain evidence of implementation. Priority: {priority}.";
+    }
+
+    private static string SummarizeRequirementIntent(string? requirementText)
+    {
+        var text = (requirementText ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return "the stated regulatory obligation";
+
+        // Prefer first sentence / clause; keep short for the Missing field.
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+        var cut = text.IndexOfAny(['.', ';', '\n']);
+        if (cut > 40 && cut < 220) text = text[..cut].Trim();
+        if (text.Length > 220) text = text[..217].TrimEnd() + "…";
+        return text;
+    }
+
     private static ComplianceComparisonResult Empty() => new()
     {
         OutputResponse = "No corresponding procedure found.",
         Status = "Non-Compliant",
         Confidence = 0,
         FulfilledClauses = "None",
-        CorrectiveAction = "Re-run comparison or verify internal document.",
+        CorrectiveAction = BuildFallbackCorrectivePlan(null, "Non-Compliant"),
         Responsibility = "Compliance Team",
     };
 

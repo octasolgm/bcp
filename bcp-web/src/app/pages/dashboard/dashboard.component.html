@@ -18,17 +18,17 @@
 <div class="stats-row gap-risk-row">
   <button type="button" class="stat-card critical" (click)="openMetricBreakdown('critical')">
     <span class="stat-label">Critical gaps</span>
-    <strong class="stat-value">{{ criticalGapCount }}</strong>
+    <strong class="stat-value">{{ criticalGapCount < 0 ? '…' : criticalGapCount }}</strong>
     <span class="stat-hint">Score 67–100</span>
   </button>
   <button type="button" class="stat-card medium" (click)="openMetricBreakdown('medium')">
     <span class="stat-label">Medium risk gaps</span>
-    <strong class="stat-value">{{ mediumGapCount }}</strong>
+    <strong class="stat-value">{{ mediumGapCount < 0 ? '…' : mediumGapCount }}</strong>
     <span class="stat-hint">Score 34–66</span>
   </button>
   <button type="button" class="stat-card low" (click)="openMetricBreakdown('low')">
     <span class="stat-label">Low risk gaps</span>
-    <strong class="stat-value">{{ lowGapCount }}</strong>
+    <strong class="stat-value">{{ lowGapCount < 0 ? '…' : lowGapCount }}</strong>
     <span class="stat-hint">Score 0–33</span>
   </button>
   <button type="button" class="stat-card neutral" (click)="openMetricBreakdown('findings')">

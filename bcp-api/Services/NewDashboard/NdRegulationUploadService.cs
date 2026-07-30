@@ -63,6 +63,7 @@ public class NdRegulationUploadService(
             Pages = Math.Max(1, (int)Math.Round(prepared.SizeBytes / 45000.0)),
             UploadedBy = userId,
         };
+        stored.ExtractionCacheKey = NdRegulationCacheKeys.ForStoredDocument(stored.Id);
         db.StoredDocuments.Add(stored);
         await db.SaveChangesAsync(ct);
 
@@ -103,10 +104,13 @@ public class NdRegulationUploadService(
             fileHash = LandingAiCacheRepository.HashBuffer(bytes);
         }
 
-        var parseMarkdown = (await parseCache.GetParseCacheAsync(fileHash, ct))?.Markdown;
+        var cacheKey = await EnsureExtractionCacheKeyAsync(db, stored, ct);
+        var parseMarkdown = (await parseCache.GetParseCacheAsync(cacheKey, ct))?.Markdown;
+        if (string.IsNullOrWhiteSpace(parseMarkdown))
+            parseMarkdown = regDoc.ExtractionMarkdown;
         if (string.IsNullOrWhiteSpace(parseMarkdown))
             throw new InvalidOperationException(
-                "No cached document parse found. Run extract once (same file bytes reuse parse cache without extra parse credits).");
+                "No cached document parse found. Run extract once for this regulation document.");
 
         int? pdfPageCount = stored.Pages is > 1 ? stored.Pages : null;
         if (pdfPageCount is null or <= 1)
@@ -471,10 +475,11 @@ public class NdRegulationUploadService(
         }
 
         var fileHash = LandingAiCacheRepository.HashBuffer(bytes);
+        var cacheKey = await ResolveExtractionCacheKeyAsync(dbCtx, regDoc, ct);
         RegulationParseCheckpoint? checkpoint = null;
         if (regDoc.ExtractionParseChunkCompleted is int completed && completed >= 0)
         {
-            var cached = await cache.GetParseCacheAsync(fileHash, ct);
+            var cached = await cache.GetParseCacheAsync(cacheKey, ct);
             checkpoint = new RegulationParseCheckpoint
             {
                 ResumeFromChunkIndex = completed + 1,
@@ -483,7 +488,7 @@ public class NdRegulationUploadService(
                 {
                     regDoc.ExtractionParseChunkCompleted = chunkIndex;
                     regDoc.UpdatedAt = DateTimeOffset.UtcNow;
-                    await cache.SaveParseCacheAsync(fileHash, fileName, mergedMarkdown, landingOpts.ParseModel, ct);
+                    await cache.SaveParseCacheAsync(cacheKey, fileName, mergedMarkdown, landingOpts.ParseModel, ct);
                     await dbCtx.SaveChangesAsync(ct);
                 },
             };
@@ -496,14 +501,14 @@ public class NdRegulationUploadService(
                 {
                     regDoc.ExtractionParseChunkCompleted = chunkIndex;
                     regDoc.UpdatedAt = DateTimeOffset.UtcNow;
-                    await cache.SaveParseCacheAsync(fileHash, fileName, mergedMarkdown, landingOpts.ParseModel, ct);
+                    await cache.SaveParseCacheAsync(cacheKey, fileName, mergedMarkdown, landingOpts.ParseModel, ct);
                     await dbCtx.SaveChangesAsync(ct);
                 },
             };
         }
 
         var result = await gov.ExtractFromUploadAsync(
-            bytes, fileName, null, ReportProgress, checkpoint, ct);
+            bytes, fileName, null, ReportProgress, checkpoint, cacheKey, ct);
 
         int? pdfPageCount = null;
         try
@@ -516,15 +521,18 @@ public class NdRegulationUploadService(
             // optional
         }
 
-        var parseMarkdown = (await cache.GetParseCacheAsync(fileHash, ct))?.Markdown;
+        var parseMarkdown = (await cache.GetParseCacheAsync(cacheKey, ct))?.Markdown;
+        if (!string.IsNullOrWhiteSpace(parseMarkdown))
+            regDoc.ExtractionMarkdown = parseMarkdown;
 
         await ReportProgress(new ExtractionProgressUpdate($"Saving {result.Points.Count} regulation points…", 92));
 
         var existingPoints = await dbCtx.NdRegulationPoints
-            .Where(p => p.RegulationDocumentId == regDoc.Id)
+            .IgnoreQueryFilters()
+            .Where(p => p.RegulationDocumentId == regDoc.Id && p.Status == NdRegulationPointStatus.Active)
             .ToListAsync(ct);
-        if (existingPoints.Count > 0)
-            dbCtx.NdRegulationPoints.RemoveRange(existingPoints);
+        foreach (var existing in existingPoints)
+            existing.Status = NdRegulationPointStatus.Removed;
 
         var pointsJson = JsonSerializer.Serialize(new { points = result.Points });
         regDoc.ExtractionResult = pointsJson;
@@ -596,6 +604,35 @@ public class NdRegulationUploadService(
         }
 
         await dbCtx.SaveChangesAsync(ct);
+    }
+
+    private static async Task<string> ResolveExtractionCacheKeyAsync(
+        AppDbContext dbCtx,
+        NdRegulationDocument regDoc,
+        CancellationToken ct)
+    {
+        if (regDoc.StoredDocumentId is Guid storedId)
+        {
+            var stored = await dbCtx.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct);
+            if (stored != null)
+                return await EnsureExtractionCacheKeyAsync(dbCtx, stored, ct);
+        }
+
+        return NdRegulationCacheKeys.ForRegulationDocument(regDoc.Id);
+    }
+
+    private static async Task<string> EnsureExtractionCacheKeyAsync(
+        AppDbContext dbCtx,
+        Data.Entities.StoredDocument stored,
+        CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(stored.ExtractionCacheKey))
+            return stored.ExtractionCacheKey.Trim();
+
+        stored.ExtractionCacheKey = NdRegulationCacheKeys.ForStoredDocument(stored.Id);
+        stored.UpdatedAt = DateTimeOffset.UtcNow;
+        await dbCtx.SaveChangesAsync(ct);
+        return stored.ExtractionCacheKey;
     }
 
     private static string? FormatPointPageReference(string? section, int? pdfPage)

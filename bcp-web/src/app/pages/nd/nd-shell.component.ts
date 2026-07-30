@@ -315,13 +315,22 @@ export class NdShellComponent implements OnInit, OnDestroy {
       },
     ];
     if (role === 'maker' || role === 'super_admin') {
-      children.push({
-        id: 'analyse-v8',
-        path: '/nd/analyse-v8',
-        label: 'New analysis',
-        icon: 'plus',
-        cta: true,
-      });
+      children.push(
+        {
+          id: 'analyse-v8',
+          path: '/nd/analyse-v8',
+          label: 'New analysis',
+          icon: 'plus',
+          cta: true,
+        },
+        {
+          id: 'analysis-versions',
+          path: '/nd/analysis-versions',
+          label: 'Analysis Version',
+          icon: 'list',
+          cta: true,
+        },
+      );
     }
     return { id: 'analysis', label: 'Analysis', icon: 'list', children };
   }

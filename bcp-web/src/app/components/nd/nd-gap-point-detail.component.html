@@ -34,7 +34,7 @@
         <span class="ai-tag">AI extracted</span>
       </p>
       @if (policyRefs.length) {
-        @for (ref of policyRefs; track ref.page + (ref.section ?? '') + (ref.docId ?? '')) {
+        @for (ref of policyRefs; track (ref.page + '|' + (ref.section ?? '') + '|' + (ref.docId ?? '') + '|' + (ref.quote ?? '').slice(0, 40))) {
           <div class="policy-ref-row">
             @if (canOpenPolicyRef(ref)) {
               <button
@@ -125,7 +125,7 @@
       <div class="cap-toolbar">
         <p class="cap-title">
           Corrective Action Plan
-          <span class="ai-tag">AI draft — review &amp; edit</span>
+          <span class="ai-tag">{{ capSourceLabel }} — review &amp; edit</span>
         </p>
         <div class="cap-toolbar-actions">
           @if (showHistoryPanel) {
@@ -202,9 +202,9 @@
             @if (isEditingGap(gap.index)) {
               <div class="cap-gap cap-gap-edit">
                 <p class="gap-label">Action {{ gap.index }}</p>
-                <p class="gap-missing-label">Missing</p>
+                <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
                 <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
-                <p class="fix-label">Fix:</p>
+                <p class="fix-label">Action (what to do)</p>
                 <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.fix" placeholder="Corrective action…"></textarea>
                 <p class="gap-priority-label">Priority</p>
                 <div class="gap-priority-options" role="group" aria-label="Gap priority">
@@ -278,10 +278,10 @@
                       <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
                     }
                   </div>
-                  <p class="gap-missing-label">Missing</p>
+                  <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
                   <p>{{ gap.missing }}</p>
                   @if (gap.fix) {
-                    <p class="fix-label">Fix:</p>
+                    <p class="fix-label">Action (what to do)</p>
                     <p>{{ gap.fix }}</p>
                   }
                   @if (showGapEvidenceForGap(gap)) {
@@ -352,9 +352,9 @@
         @if (addingNewAction) {
           <div class="cap-gap cap-gap-edit cap-gap-new">
             <p class="gap-label">New action</p>
-            <p class="gap-missing-label">Missing</p>
+            <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
             <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
-            <p class="fix-label">Fix:</p>
+            <p class="fix-label">Action (what to do)</p>
             <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.fix" placeholder="Corrective action…"></textarea>
             <p class="gap-priority-label">Priority</p>
             <div class="gap-priority-options" role="group" aria-label="Gap priority">
@@ -437,20 +437,58 @@
     <p class="resp-line"><strong>Responsibility:</strong> {{ responsibility }}</p>
   }
 
-  @if (landingMessage || llmMessage) {
-    <details class="pass-details" [attr.open]="phaseOutputDefaultOpen ? '' : null">
+  @if (landingMessage || llmMessage || googleAiError || pass1ErrorMessage || phase2Running || phase1Running) {
+    <details class="pass-details" [attr.open]="phaseOutputDefaultOpen || phase2Running || phase1Running ? '' : null">
       <summary>Full phase 1 &amp; 2 AI output</summary>
       <div class="passes">
-        @if (landingMessage) {
+        @if (phase1Running) {
+          <div class="pass">
+            <p class="pass-label p1">Pass 1 — Landing AI</p>
+            <p class="muted-inline">Running Phase 1 (Landing AI)…</p>
+          </div>
+        } @else if (landingMessage) {
           <div class="pass">
             <p class="pass-label p1">Pass 1 — Landing AI</p>
             <app-reference-compliance-card [message]="landingMessage" [hideCapSection]="true" />
           </div>
+        } @else if (pass1ErrorMessage) {
+          <div class="pass">
+            <p class="pass-label p1">Pass 1 — Landing AI</p>
+            <div class="pass-error-box" role="alert">
+              <p class="pass-error-title">{{ pass1ErrorTitle }}</p>
+              <p class="pass-error-message">{{ pass1ErrorMessage }}</p>
+              @if (pass1ErrorFull && pass1ErrorFull !== pass1ErrorMessage) {
+                <details class="pass-error-details">
+                  <summary>Technical details</summary>
+                  <pre class="pass-error-full">{{ pass1ErrorFull }}</pre>
+                </details>
+              }
+            </div>
+          </div>
         }
-        @if (llmMessage) {
+        @if (phase2Running) {
+          <div class="pass">
+            <p class="pass-label p2">Pass 2 — LLM verify</p>
+            <p class="muted-inline">Running Phase 2 dual verify…</p>
+          </div>
+        } @else if (llmMessage) {
           <div class="pass">
             <p class="pass-label p2">Pass 2 — LLM verify</p>
             <app-reference-compliance-card [message]="llmMessage" [hideCapSection]="true" />
+          </div>
+        } @else if (googleAiError) {
+          <div class="pass">
+            <p class="pass-label p2">Pass 2 — LLM verify</p>
+            <div class="pass-error-box" role="alert">
+              <p class="pass-error-title">{{ pass2ErrorTitle }}</p>
+              <p class="pass-error-message">{{ pass2ErrorMessage }}</p>
+              @if (pass2ErrorFull && pass2ErrorFull !== pass2ErrorMessage) {
+                <details class="pass-error-details">
+                  <summary>Technical details</summary>
+                  <pre class="pass-error-full">{{ pass2ErrorFull }}</pre>
+                </details>
+              }
+            </div>
           </div>
         }
       </div>

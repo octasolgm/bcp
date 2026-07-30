@@ -103,7 +103,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
     return this.data?.points.filter((p) => resolveAnalysisPointSeverity(p) === 'non_compliant').length ?? 0;
   }
 
-  pointSeverity(point: AnalysisPoint): ComplianceSeverity {
+  pointSeverity(point: AnalysisPoint): ComplianceSeverity | null {
     return resolveAnalysisPointSeverity(point);
   }
 
@@ -187,7 +187,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
       this.pointSort,
       this.pointSortDir,
       (p) => parsePointSnapshot(p.pointSnapshot).pointNumber ?? '',
-      (p) => resolveAnalysisPointSeverity(p),
+      (p) => resolveAnalysisPointSeverity(p) ?? '',
     );
   }
 

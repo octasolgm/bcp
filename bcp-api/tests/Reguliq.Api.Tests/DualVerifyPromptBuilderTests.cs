@@ -36,4 +36,19 @@ public class DualVerifyPromptBuilderTests
         Assert.Contains("a.pdf", prompt);
         Assert.Contains("b.pdf", prompt);
     }
+
+    [Fact]
+    public void Build_V3_IncludesRegulPass2Rules()
+    {
+        var point = new GovPoint("2.1.1", "Customer due diligence", "Banks must verify customers.", "2.1");
+        var prompt = DualVerifyPromptBuilder.Build(
+            point,
+            "Pass 1 landing output",
+            version: ComparePromptVersion.V3);
+
+        Assert.Contains("Pass 2 rules (V3", prompt);
+        Assert.Contains("Document-perspective", prompt);
+        Assert.Contains("Element-level checking", prompt);
+        Assert.Contains("Output/Response :", prompt);
+    }
 }

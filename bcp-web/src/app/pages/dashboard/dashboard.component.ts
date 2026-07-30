@@ -271,6 +271,16 @@ export class DashboardComponent implements OnInit {
       this.gapRiskCounts = emptyGapRiskCounts();
       return;
     }
+    // Prefer server-side tallies from summaryOnly (CAP text only — no full /nd/results).
+    // Local getResults used to time out at 25s and leave Critical/Medium stuck at 0.
+    const hasServerGapRisk = this.ndRuns.some(
+      (r) => r.criticalGaps != null || r.mediumGaps != null || r.lowGaps != null,
+    );
+    if (hasServerGapRisk) {
+      this.gapRiskCounts = this.aggregateGapRiskFromRunSummaries(this.ndRuns);
+      this.gapRiskLoading = false;
+      return;
+    }
     this.gapRiskLoading = true;
     try {
       const scored = this.ndRuns.filter(
@@ -300,6 +310,24 @@ export class DashboardComponent implements OnInit {
     } finally {
       this.gapRiskLoading = false;
     }
+  }
+
+  /** Sum Critical/Medium/Low from light analysis-run summaries (all scored runs). */
+  private aggregateGapRiskFromRunSummaries(runs: AnalysisRunSummary[]): GapRiskCounts {
+    let merged = emptyGapRiskCounts();
+    for (const r of runs) {
+      if (r.criticalGaps == null && r.mediumGaps == null && r.lowGaps == null) continue;
+      const c = r.criticalGaps ?? 0;
+      const m = r.mediumGaps ?? 0;
+      const l = r.lowGaps ?? 0;
+      merged = mergeGapRiskCounts(merged, {
+        critical: c,
+        medium: m,
+        low: l,
+        total: c + m + l,
+      });
+    }
+    return merged;
   }
 
   readonly riskStandardLabel = RISK_STANDARD_SUMMARY;
@@ -364,7 +392,7 @@ export class DashboardComponent implements OnInit {
 
   get criticalGapCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading || this.gapRiskLoading) return 0;
+      if (this.ndRunsLoading || this.gapRiskLoading) return -1;
       return this.gapRiskCounts.critical;
     }
     return this.criticalCount;
@@ -372,7 +400,7 @@ export class DashboardComponent implements OnInit {
 
   get mediumGapCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading || this.gapRiskLoading) return 0;
+      if (this.ndRunsLoading || this.gapRiskLoading) return -1;
       return this.gapRiskCounts.medium;
     }
     return this.highCount;
@@ -380,7 +408,7 @@ export class DashboardComponent implements OnInit {
 
   get lowGapCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading || this.gapRiskLoading) return 0;
+      if (this.ndRunsLoading || this.gapRiskLoading) return -1;
       return this.gapRiskCounts.low;
     }
     return 0;

@@ -22,7 +22,13 @@ import type {
 } from '../../../lib/nd/types';
 import { parseReferenceComplianceBlock } from '../../../lib/ai-lab/parse-reference-response';
 import type { GapSeverity, GapItemData } from '../../services/reguliq-store';
-import { parsePointSnapshot } from '../../../lib/nd/utils';
+import { parsePointSnapshot, normalizePointSnapshotLabels, hydratePointSnapshotFromGov, resolveSnapshotDisplayNumber, resolveRunPointDisplayMeta, isUuidLike, type RunPointDisplayMeta } from '../../../lib/nd/utils';
+import {
+  formatChapterLabel,
+  formatSectionGroupLabel,
+  isJunkExtractPointId,
+  resolveGovPointDisplayNumber,
+} from '../../../lib/gov-point-filter';
 import { ndComplianceSummaryFromPoints } from '../../../lib/nd/nd-run-display';
 import { countDisplayGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus } from '../../../lib/nd/action-item-review';
@@ -30,6 +36,7 @@ import { canAddActionItemReviews, isReviewRole, reviewDisabledHint } from '../..
 import {
   resolveAnalysisPointSeverity,
   resolvePointComplianceLabel,
+  type ComplianceSeverity,
 } from '../../../lib/nd/point-compliance-status';
 import { type SortDir } from '../../../lib/nd/list-utils';
 import { sortByPointKey, type PointSortMode } from '../../../lib/nd/point-sort';
@@ -45,10 +52,6 @@ import {
   type LibraryPointDisplayTree,
   type SourcedGovPoint,
 } from '../../../lib/library-points-utils';
-import {
-  formatChapterLabel,
-  formatSectionGroupLabel,
-} from '../../../lib/gov-point-filter';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
@@ -79,6 +82,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   analysingPointSort: PointSortMode = 'number';
   analysingPointSortDir: SortDir = 'asc';
   analysingStatusFilter: 'all' | 'running' | 'queued' | 'failed' | 'completed' = 'all';
+  pointDetailModalId: string | null = null;
 
   @ViewChild('workspaceEl') workspaceEl?: ElementRef<HTMLElement>;
   @ViewChild('gapReportEl') gapReportEl?: ElementRef<HTMLElement>;
@@ -102,6 +106,8 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   evidenceRerunningActionIndex: number | null = null;
   private sessionPointCache = new Map<string, AnalysisPoint>();
   private snapshotByPointId = new Map<string, PointSnapshot>();
+  private runPointMetaByAnalysisId = new Map<string, RunPointDisplayMeta>();
+  private runPointMetaByGovKey = new Map<string, RunPointDisplayMeta>();
   private attachmentsByPointId = new Map<string, PointGapAttachment[]>();
   private reviewsByPointId = new Map<string, ActionItemReviewEntry[]>();
 
@@ -414,6 +420,16 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     return match?.point_id ?? (regId || num || null);
   }
 
+  get pointsCatalogGovPoints(): GovPoint[] {
+    const source = this.rawGovPoints.length ? this.rawGovPoints : this.govPoints;
+    return source.map((p) => ({
+      point_id: p.point_id,
+      title: p.title,
+      text: p.text,
+      section: p.section,
+    }));
+  }
+
   libraryCountSummary(): string {
     if (!this.libraryStoredCount) return '';
     const parts = [`${this.libraryStoredCount} stored`];
@@ -456,29 +472,313 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   }
 
   analysisPointForPointId(pointId: string): AnalysisPoint | null {
-    const saved = this.ndRunPointsByNumber.get(pointId);
-    if (saved) return saved;
+    for (const key of this.sessionLookupKeysForPointId(pointId)) {
+      const saved = this.ndRunPointsByNumber.get(key);
+      if (saved) {
+        // Prefer session-built view when the saved row isn't scored yet but session has output
+        if (!resolveAnalysisPointSeverity(saved)) {
+          const session = this.resolveSessionPoint(pointId);
+          if (session?.landingMessage || session?.llmMessage) {
+            break;
+          }
+        }
+        return saved;
+      }
+    }
     const cached = this.sessionPointCache.get(pointId);
     if (cached) return cached;
+    for (const key of this.sessionLookupKeysForPointId(pointId)) {
+      const cachedAlias = this.sessionPointCache.get(key);
+      if (cachedAlias) {
+        this.sessionPointCache.set(pointId, cachedAlias);
+        return cachedAlias;
+      }
+    }
     const built = this.buildSessionAnalysisPoint(pointId);
     if (built) this.sessionPointCache.set(pointId, built);
     return built;
   }
 
-  pointSnapshotForPointId(pointId: string): PointSnapshot | null {
+  displayLabelForPoint(pointId: string): string {
+    const label = this.analysingDisplayId(pointId);
+    return label && !isUuidLike(label) ? label : '—';
+  }
+
+  get resultClauseLabel(): string {
+    const id = this.selectedDetailPointId;
+    if (!id) return '—';
+    const meta = this.runPointMetaByGovKey.get(id);
+    if (meta?.clause) return meta.clause;
+    const ap = this.selectedDetailAnalysisPoint;
+    if (ap) {
+      const m = this.metaForAnalysisPoint(ap);
+      if (m.clause) return m.clause;
+    }
+    const label = this.displayLabelForPoint(id);
+    return label && label !== '—' ? label : '—';
+  }
+
+  override selectPointForDetail(pointId: string): void {
+    super.selectPointForDetail(this.resolveDetailPointId(pointId));
+  }
+
+  private resolveDetailPointId(pointId: string): string {
+    const meta = this.runPointMetaByGovKey.get(pointId);
+    if (meta?.clause) return meta.clause;
+
+    for (const m of this.runPointMetaByAnalysisId.values()) {
+      if (m.analysisPointId === pointId || m.govKey === pointId) {
+        if (m.clause) return m.clause;
+      }
+    }
+
+    if (!isUuidLike(pointId)) return pointId;
+
+    for (const p of this.ndRunPointsList) {
+      if (p.regulationPointId === pointId || p.id === pointId) {
+        const m = this.metaForAnalysisPoint(p);
+        if (m.clause) return m.clause;
+      }
+    }
+
+    const cat = this.govCatalog().find(
+      (g) => (g as SourcedGovPoint).regulationPointId === pointId,
+    );
+    if (cat) {
+      const num = resolveGovPointDisplayNumber(cat);
+      if (num && !isUuidLike(num)) return num;
+    }
+
+    return pointId;
+  }
+
+  override get analysingListRows(): Array<{
+    pointId: string;
+    title: string;
+    status: string;
+    selected: boolean;
+    displayId: string;
+  }> {
+    if (!this.ndRunPointsList.length) return super.analysingListRows;
+    return this.ndRunPointsList.map((p) => {
+      const meta = this.metaForAnalysisPoint(p);
+      const govKey = meta.govKey;
+      const status =
+        this.resolveSessionPointStatus(govKey) ??
+        this.resolveSessionPointStatus(p.id) ??
+        this.resolveSessionPointStatus(p.regulationPointId ?? '') ??
+        'completed';
+      return {
+        pointId: govKey,
+        title: meta.title,
+        status,
+        selected: true,
+        displayId: meta.clause,
+      };
+    });
+  }
+
+  override analysingDisplayId(pointId: string): string {
+    const cached = this.runPointMetaByGovKey.get(pointId);
+    if (cached?.clause) return cached.clause;
+    for (const meta of this.runPointMetaByAnalysisId.values()) {
+      if (meta.govKey === pointId || meta.analysisPointId === pointId) {
+        return meta.clause;
+      }
+    }
+    const ap = this.analysisPointForPointId(pointId);
+    if (ap) {
+      const meta = this.metaForAnalysisPoint(ap);
+      if (meta.clause) return meta.clause;
+    }
+    const fromSuper = super.analysingDisplayId(pointId);
+    return fromSuper && !isUuidLike(fromSuper) ? fromSuper : '';
+  }
+
+  protected override sessionLookupKeysForPointId(pointId: string): string[] {
+    const keys = new Set(super.sessionLookupKeysForPointId(pointId));
+    const meta = this.runPointMetaByGovKey.get(pointId);
+    if (meta) {
+      keys.add(meta.analysisPointId);
+      keys.add(meta.govKey);
+      if (meta.clause) keys.add(meta.clause);
+    }
+    for (const m of this.runPointMetaByAnalysisId.values()) {
+      if (m.govKey === pointId || m.analysisPointId === pointId || m.clause === pointId) {
+        keys.add(m.analysisPointId);
+        keys.add(m.govKey);
+        if (m.clause) keys.add(m.clause);
+      }
+    }
+    return [...keys];
+  }
+
+  private govCatalog(): SourcedGovPoint[] {
+    const seen = new Set<string>();
+    const out: SourcedGovPoint[] = [];
+    for (const p of [...this.govPoints, ...this.rawGovPoints] as SourcedGovPoint[]) {
+      const key = `${p.point_id}|${p.regulationPointId ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+    return out;
+  }
+
+  private metaForAnalysisPoint(p: AnalysisPoint): RunPointDisplayMeta {
+    const cached = this.runPointMetaByAnalysisId.get(p.id);
+    if (cached) return cached;
+    const meta = resolveRunPointDisplayMeta(p, this.govCatalog());
+    this.runPointMetaByAnalysisId.set(p.id, meta);
+    this.runPointMetaByGovKey.set(meta.govKey, meta);
+    if (meta.clause) this.runPointMetaByGovKey.set(meta.clause, meta);
+    return meta;
+  }
+
+  private reconcileRunWithGovCatalog(): void {
+    this.runPointMetaByAnalysisId.clear();
+    this.runPointMetaByGovKey.clear();
+    if (!this.ndRunPointsList.length) return;
+
+    const govKeys = new Set<string>();
+    for (const p of this.ndRunPointsList) {
+      const meta = this.metaForAnalysisPoint(p);
+      this.snapshotByPointId.set(p.id, meta.snapshot);
+      govKeys.add(meta.govKey);
+
+      this.ndRunPointsByNumber.set(p.id, p);
+      this.ndRunPointsByNumber.set(meta.govKey, p);
+      if (meta.clause) this.ndRunPointsByNumber.set(meta.clause, p);
+      if (p.regulationPointId) this.ndRunPointsByNumber.set(p.regulationPointId, p);
+
+      const mapped =
+        this.sessionPointResults.get(p.id) ??
+        this.sessionPointResults.get(p.regulationPointId ?? '') ??
+        this.sessionPointResults.get(meta.govKey);
+      if (mapped) {
+        this.sessionPointResults.set(meta.govKey, mapped);
+        if (meta.clause) this.sessionPointResults.set(meta.clause, mapped);
+        const status =
+          this.sessionPointStatus.get(p.id) ??
+          this.sessionPointStatus.get(p.regulationPointId ?? '');
+        if (status) {
+          this.sessionPointStatus.set(meta.govKey, status);
+          if (meta.clause) this.sessionPointStatus.set(meta.clause, status);
+        }
+      }
+    }
+
+    if (govKeys.size) {
+      this.selected = new Set(govKeys);
+      this.sessionSelectedPointIds = new Set(govKeys);
+    }
+  }
+
+  openPointDetailModal(pointId: string, event: Event): void {
+    event.stopPropagation();
+    this.pointDetailModalId = pointId;
+  }
+
+  closePointDetailModal(): void {
+    this.pointDetailModalId = null;
+  }
+
+  pointDetailModalSnapshot(): PointSnapshot | null {
+    if (!this.pointDetailModalId) return null;
+    return this.pointSnapshotForPointId(this.pointDetailModalId);
+  }
+
+  pointDetailModalGov(): GovPoint | undefined {
+    if (!this.pointDetailModalId) return undefined;
+    return this.govPoints.find((g) => g.point_id === this.pointDetailModalId);
+  }
+
+  protected override pointSnapshotForPointId(pointId: string): PointSnapshot | null {
+    const meta = this.runPointMetaByGovKey.get(pointId);
+    if (meta?.snapshot) return meta.snapshot;
+
     const point = this.analysisPointForPointId(pointId);
     if (!point) return null;
     const cached = this.snapshotByPointId.get(point.id);
     if (cached) return cached;
-    const snap = parsePointSnapshot(point.pointSnapshot);
+    const raw = parsePointSnapshot(point.pointSnapshot);
+    const gov = this.govPointForAnalysis(pointId);
+    const snap = hydratePointSnapshotFromGov(
+      raw,
+      gov,
+      point.regulationPointId || pointId,
+    );
     this.snapshotByPointId.set(point.id, snap);
     return snap;
+  }
+
+  private govPointForAnalysis(pointId: string): SourcedGovPoint | undefined {
+    const all = [
+      ...(this.govPoints as SourcedGovPoint[]),
+      ...(this.rawGovPoints as SourcedGovPoint[]),
+    ];
+
+    const direct = all.find((g) => g.point_id === pointId);
+    if (direct) return direct;
+
+    const byDisplay = all.find((g) => resolveGovPointDisplayNumber(g) === pointId);
+    if (byDisplay) return byDisplay;
+
+    const saved = this.ndRunPointsByNumber.get(pointId);
+    const snap = saved ? parsePointSnapshot(saved.pointSnapshot) : null;
+    const clause =
+      (snap?.pointNumber && !this.looksLikeUuid(snap.pointNumber)
+        ? snap.pointNumber.trim()
+        : '') || resolveSnapshotDisplayNumber(snap ?? {}, saved?.regulationPointId ?? pointId);
+
+    if (clause) {
+      const byClause = all.find((g) => resolveGovPointDisplayNumber(g) === clause);
+      if (byClause) return byClause;
+    }
+
+    const snapText = (snap?.pointContent ?? '').trim();
+    if (snapText.length >= 20) {
+      const needle = snapText.slice(0, 48);
+      const byText = all.find((g) => (g.text ?? '').trim().includes(needle));
+      if (byText) return byText;
+    }
+
+    if (this.looksLikeUuid(pointId) || saved?.regulationPointId) {
+      const regId = saved?.regulationPointId ?? pointId;
+      const matches = all.filter((g) => g.regulationPointId === regId);
+      if (matches.length === 1) return matches[0];
+      if (clause) {
+        const narrowed = matches.find((g) => resolveGovPointDisplayNumber(g) === clause);
+        if (narrowed) return narrowed;
+      }
+      if (snapText) {
+        const narrowed = matches.find((g) =>
+          (g.text ?? '').trim().includes(snapText.slice(0, 40)),
+        );
+        if (narrowed) return narrowed;
+      }
+    }
+
+    return all.find(
+      (g) => g.regulationPointId === pointId || g.pointNumber === pointId,
+    );
   }
 
   gapCountForPointId(pointId: string): number {
     const point = this.analysisPointForPointId(pointId);
     if (!point) return 0;
-    return countDisplayGapsForAnalysisPoint(point, this.attachmentsForPoint(pointId).length);
+    const attachments = this.attachmentsForPoint(pointId).length;
+    let count = countDisplayGapsForAnalysisPoint(point, attachments);
+    if (count > 0) return count;
+    // Live poll can leave a stale pending row in ndRunPointsByNumber while session
+    // already has Landing text — rebuild from session so the gap badge survives.
+    const sev = this.getPointGapSeverity(pointId);
+    if (!sev || sev === 'compliant') return 0;
+    if (resolveAnalysisPointSeverity(point)) return 0;
+    const rebuilt = this.buildSessionAnalysisPoint(pointId);
+    if (!rebuilt) return 0;
+    this.sessionPointCache.set(pointId, rebuilt);
+    return countDisplayGapsForAnalysisPoint(rebuilt, attachments);
   }
 
   gapCountForGapItem(item: GapItemData): number {
@@ -488,8 +788,12 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   }
 
   override getPointGapSeverity(pointId: string): GapSeverity | null {
-    const saved = this.ndRunPointsByNumber.get(pointId);
-    if (saved) return resolveAnalysisPointSeverity(saved);
+    for (const key of this.sessionLookupKeysForPointId(pointId)) {
+      const saved = this.ndRunPointsByNumber.get(key);
+      if (!saved) continue;
+      const sev = resolveAnalysisPointSeverity(saved);
+      if (sev) return sev;
+    }
     return super.getPointGapSeverity(pointId);
   }
 
@@ -513,7 +817,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
       this.analysingPointSortDir,
       (row) => row.displayId || row.pointId,
       (row) => this.getPointGapSeverity(row.pointId) ?? '',
-    );
+    ).filter((row, index, arr) => arr.findIndex((r) => r.pointId === row.pointId) === index);
   }
 
   setAnalysingStatusFilter(filter: 'all' | 'running' | 'queued' | 'failed' | 'completed'): void {
@@ -651,7 +955,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     return resolvePointComplianceLabel(point);
   }
 
-  pointComplianceSeverity(point: AnalysisPoint): GapSeverity {
+  pointComplianceSeverity(point: AnalysisPoint): GapSeverity | null {
     return resolveAnalysisPointSeverity(point);
   }
 
@@ -675,9 +979,9 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     this.ndRunPointsList = data.points ?? [];
     this.ndPointAttachments = data.pointAttachments ?? [];
     this.ndActionItemReviews = data.actionItemReviews ?? [];
-    this.ndRunPointsByNumber.clear();
-    this.sessionPointCache.clear();
-    this.snapshotByPointId.clear();
+    this.indexNdRunPoints(data.points ?? []);
+    this.reconcileRunWithGovCatalog();
+    this.fixSelectedDetailPointAfterReconcile();
     this.attachmentsByPointId.clear();
     this.reviewsByPointId.clear();
 
@@ -688,15 +992,106 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     }
 
     for (const p of data.points) {
-      const snap = parsePointSnapshot(p.pointSnapshot);
-      const num = snap.pointNumber?.trim();
-      if (num) this.ndRunPointsByNumber.set(num, p);
-      if (p.id) {
-        this.snapshotByPointId.set(p.id, snap);
-        this.reviewsByPointId.set(p.id, reviewsForPoint(this.ndActionItemReviews, p.id));
-      }
+      if (!p.id) continue;
+      this.reviewsByPointId.set(p.id, reviewsForPoint(this.ndActionItemReviews, p.id));
     }
     this.syncInlineGapSeveritiesFromNdRun();
+  }
+
+  /** Index analysis points under § number, regulation UUID, and analysis-point id. */
+  private indexNdRunPoints(points: AnalysisPoint[]): void {
+    this.ndRunPointsByNumber.clear();
+    this.sessionPointCache.clear();
+    this.snapshotByPointId.clear();
+
+    for (const p of points) {
+      const raw = parsePointSnapshot(p.pointSnapshot);
+      const gov = this.govPointForAnalysis(
+        p.regulationPointId ?? raw.regulationPointId ?? p.id ?? '',
+      );
+      const snap = hydratePointSnapshotFromGov(
+        raw,
+        gov,
+        p.regulationPointId ?? raw.regulationPointId,
+      );
+      const keys = new Set<string>();
+      const displayNum = resolveSnapshotDisplayNumber(snap, p.regulationPointId);
+      if (displayNum) keys.add(displayNum);
+      if (snap.pointNumber?.trim() && !this.looksLikeUuid(snap.pointNumber)) {
+        keys.add(snap.pointNumber.trim());
+      }
+      if (snap.regulationPointId?.trim()) keys.add(snap.regulationPointId.trim());
+      if (snap.pageReference?.trim()) keys.add(snap.pageReference.trim());
+      if (p.regulationPointId?.trim()) keys.add(p.regulationPointId.trim());
+      if (p.id) keys.add(p.id);
+      for (const key of keys) this.ndRunPointsByNumber.set(key, p);
+      if (p.id) this.snapshotByPointId.set(p.id, snap);
+
+      // Also index under current gov list ids (library remaps point_id).
+      for (const g of this.govPoints) {
+        const gNum = resolveGovPointDisplayNumber(g as SourcedGovPoint);
+        const sourced = g as SourcedGovPoint;
+        const matches =
+          (displayNum && gNum === displayNum) ||
+          (g.point_id === p.id) ||
+          (p.regulationPointId &&
+            (g.point_id === p.regulationPointId || sourced.regulationPointId === p.regulationPointId));
+        if (matches) this.ndRunPointsByNumber.set(g.point_id, p);
+      }
+    }
+
+    if (this.govCatalog().length) {
+      this.reconcileRunWithGovCatalog();
+    }
+  }
+
+  private fixSelectedDetailPointAfterReconcile(): void {
+    const current = this.selectedDetailPointId;
+    if (!current) return;
+
+    const direct = this.runPointMetaByGovKey.get(current);
+    if (direct?.clause) {
+      this.selectedDetailPointId = direct.clause;
+      return;
+    }
+
+    for (const p of this.ndRunPointsList) {
+      if (p.id === current || p.regulationPointId === current) {
+        const meta = this.metaForAnalysisPoint(p);
+        if (meta.clause) {
+          this.selectedDetailPointId = meta.clause;
+          return;
+        }
+      }
+    }
+
+    const ap = this.analysisPointForPointId(current);
+    if (ap) {
+      const meta = this.metaForAnalysisPoint(ap);
+      if (meta.clause) {
+        this.selectedDetailPointId = meta.clause;
+      }
+    }
+  }
+
+  protected override onNdRunAttached(runId: string, points: AnalysisPoint[]): void {
+    if (points.length) {
+      this.ndRunPointsList = points;
+      this.indexNdRunPoints(points);
+      this.reconcileRunWithGovCatalog();
+      this.fixSelectedDetailPointAfterReconcile();
+    }
+    void this.loadNdRunPoints(runId);
+  }
+
+  /** Keep gap/severity badges in sync while /status poll merges live Landing results. */
+  protected override onNdRunPointsLiveUpdate(points: AnalysisPoint[]): void {
+    if (points.length) {
+      this.ndRunPointsList = points;
+      this.indexNdRunPoints(points);
+      this.fixSelectedDetailPointAfterReconcile();
+    }
+    this.sessionPointCache.clear();
   }
 
   private syncInlineGapSeveritiesFromNdRun(): void {
@@ -706,7 +1101,8 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
       const saved = this.ndRunPointsByNumber.get(pointId) ?? this.analysisPointForPointId(pointId);
       if (!saved) continue;
       const attachmentCount = this.attachmentsByPointId.get(saved.id)?.length ?? 0;
-      item.severity = resolveAnalysisPointSeverity(saved);
+      const severity = resolveAnalysisPointSeverity(saved);
+      if (severity) item.severity = severity;
       item.gapCount = countDisplayGapsForAnalysisPoint(saved, attachmentCount);
     }
   }
@@ -730,7 +1126,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
       const ndPoint = this.analysisPointForPointId(pointId);
       if (!ndPoint) continue;
       const severity = resolveAnalysisPointSeverity(ndPoint);
-      if (severity === 'compliant') continue;
+      if (!severity || severity === 'compliant') continue;
       const gapCount = countDisplayGapsForAnalysisPoint(ndPoint, this.attachmentsForPoint(pointId).length);
       rows.push({
         pointId,
@@ -823,34 +1219,63 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   }
 
   private buildSessionAnalysisPoint(pointId: string): AnalysisPoint | null {
-    const session = this.sessionPointResults.get(pointId);
-    if (!session?.landingMessage && !session?.llmMessage) return null;
-    const gov = this.govPoints.find((g) => g.point_id === pointId);
+    const session = this.resolveSessionPoint(pointId);
+    if (!session) return null;
     const landing = session.landingMessage ?? '';
     const llm = session.llmMessage ?? '';
+    // Still show Result for completed/failed points even if AI text was not hydrated yet.
+    if (!landing && !llm && !session.errorMessage && session.status === 'not-run') return null;
+    const gov = this.govPointForAnalysis(pointId);
+    const primary = (llm || landing).trim();
+    const block = primary ? parseReferenceComplianceBlock(primary) : null;
     const cap =
-      parseReferenceComplianceBlock(landing).correctiveAction?.trim() ||
-      parseReferenceComplianceBlock(llm).correctiveAction?.trim() ||
+      block?.correctiveAction?.trim() ||
       this.inlineGapItems.find((i) => this.gapItemPointId(i) === pointId)?.gaps?.trim() ||
       '';
-    const sev = this.getPointGapSeverity(pointId);
+    const fromBlock = normalizeStatusToSeverity(block?.status ?? '');
+    const fromSession = this.sessionPointSeverityHint(pointId);
+    const sev = fromBlock ?? fromSession;
+    const scoredStatus =
+      sev ??
+      (session.status === 'failed' ? null : landing || llm ? 'partial_compliant' : null);
     return {
-      id: pointId,
+      id: session.id || pointId,
+      regulationPointId: session.pointId !== pointId ? session.pointId : pointId,
       pointSnapshot: JSON.stringify({
-        pointNumber: pointId,
-        pointTitle: gov?.title ?? session.pointTitle ?? null,
-        pointContent: gov?.text ?? null,
+        pointNumber:
+          resolveGovPointDisplayNumber(gov as SourcedGovPoint) ||
+          resolveSnapshotDisplayNumber(
+            {
+              pointNumber: (gov as SourcedGovPoint)?.pointNumber,
+              pointTitle: gov?.title ?? session.pointTitle ?? undefined,
+              pointContent: gov?.text ?? undefined,
+              pageReference: gov?.section ?? undefined,
+              regulationPointId: session.pointId || pointId,
+            },
+            session.pointId || pointId,
+          ) ||
+          null,
+        pointTitle: gov?.title ?? session.pointTitle ?? undefined,
+        pointContent: gov?.text ?? undefined,
+        pageReference: gov?.section ?? undefined,
         regulationDocumentId: this.regulationPdfDocId,
+        regulationPointId: session.pointId || pointId,
       }),
-      landingAiStatus: landing ? 'compliant' : 'failed',
+      landingAiStatus: scoredStatus ?? (session.status === 'failed' ? 'failed' : 'pending'),
       landingAiResult: landing ? JSON.stringify({ message: landing }) : null,
-      googleAiStatus: llm ? 'compliant' : 'pending',
+      googleAiStatus: llm ? scoredStatus ?? 'pending' : 'pending',
       googleAiResult: llm ? JSON.stringify({ message: llm }) : null,
       dualVerifyStatus: session.agreementJson ? 'passed' : 'skipped',
       finalStatus: sev,
-      finalActionPlan: cap || null,
-      originalAiActionPlan: cap || null,
+      finalActionPlan: cap && cap !== 'N/A' && cap !== '—' ? cap : null,
+      originalAiActionPlan: cap && cap !== 'N/A' && cap !== '—' ? cap : null,
+      landingAiError: session.errorMessage ?? null,
     };
+  }
+
+  /** Severity from session report path without touching ndRunPointsByNumber (avoids recursion). */
+  private sessionPointSeverityHint(pointId: string): GapSeverity | null {
+    return super.getPointGapSeverity(pointId);
   }
 
   startResultCapEdit(point: AnalysisPoint): void {
@@ -1029,11 +1454,6 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
         perLibraryRaw.set(libId, libRaw);
       }
 
-      for (const [libId, libRaw] of perLibraryRaw) {
-        const preparedLib = prepareLibraryPointsForAnalysis(libRaw);
-        this.libraryComparableCounts.set(libId, preparedLib.unique.length);
-      }
-
       if (!allRaw.length) {
         this.error = 'Selected regulation points libraries have no points';
         this.rawGovPoints = [];
@@ -1050,6 +1470,9 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
       this.libraryDuplicateGroups = prepared.duplicateGroups;
       this.libraryHierarchy = buildLibraryPointHierarchy(allRaw, prepared.unique);
       this.libraryDisplayTree = buildLibraryStoredPointDisplay(allRaw, prepared.unique);
+      for (const lib of this.libraryDisplayTree) {
+        this.libraryComparableCounts.set(lib.libraryId, lib.analyseCount);
+      }
       this.chapterGroups = [];
 
       if (this.libraryDisplayTree.length) {
@@ -1083,6 +1506,11 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
         'success',
         3200,
       );
+
+      if (this.ndRunPointsList.length) {
+        this.indexNdRunPoints(this.ndRunPointsList);
+        this.fixSelectedDetailPointAfterReconcile();
+      }
     } catch {
       this.error = 'Failed to load regulation points library';
     } finally {
@@ -1158,6 +1586,10 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   }): Promise<void> {
     if (!this.isNdShell) return;
 
+    if (detail.points?.length) {
+      this.ndRunPointsList = detail.points;
+    }
+
     const libId = detail.run.libraryId ? String(detail.run.libraryId) : null;
     if (libId) {
       this.pointsSource = 'library';
@@ -1170,7 +1602,8 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
       this.useLibraryPoints = false;
     }
 
-    this.restoreNdRunSelection(detail.run.selectedPointsSnapshot, detail.points ?? []);
+    this.reconcileRunWithGovCatalog();
+    this.fixSelectedDetailPointAfterReconcile();
   }
 
   get showDualVerifyFailedBanner(): boolean {
@@ -1402,13 +1835,32 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
 
     return selectedIds.map((id) => {
       const p = byPointId.get(id) ?? (this.govPoints.find((g) => g.point_id === id) as SourcedGovPoint | undefined);
-      if (!p) return { pointNumber: id };
+      if (!p) return { pointNumber: this.displayLabelForPoint(id) || null };
+      const pointNumber =
+        resolveGovPointDisplayNumber(p) ||
+        (p.pointNumber && !this.looksLikeUuid(p.pointNumber) && !isJunkExtractPointId(p.pointNumber)
+          ? p.pointNumber
+          : resolveSnapshotDisplayNumber(
+              {
+                pointNumber: p.pointNumber,
+                pointTitle: p.title ?? undefined,
+                pointContent: p.text,
+                pageReference: p.section ?? undefined,
+                regulationPointId: p.regulationPointId ?? id,
+              },
+              p.regulationPointId ?? id,
+            )) ||
+        null;
+      const gov = this.govPointForAnalysis(id);
+      const content = (gov?.text?.trim() || p.text?.trim() || '').length >= (p.text?.trim().length ?? 0)
+        ? gov?.text?.trim() || p.text
+        : p.text;
       return {
-        pointNumber: p.point_id,
-        pointId: p.point_id,
-        pointTitle: p.title ?? null,
-        pointContent: p.text,
-        pageReference: p.section ?? null,
+        pointNumber,
+        pointId: p.regulationPointId ?? id,
+        pointTitle: p.title ?? gov?.title ?? undefined,
+        pointContent: content,
+        pageReference: p.section ?? undefined,
         regulationPointId: p.regulationPointId ?? null,
         regulationDocumentId:
           p.docId ??
@@ -1549,6 +2001,23 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     super.runRemainingPoints();
   }
 
+  override rerunPointAll(pointId: string): void {
+    if (this.isNdShell) {
+      this.requestNdRunConfirm(
+        'Rerun this point',
+        'Type start to rerun Phase 1 (Landing AI) and Phase 2 for this point.',
+        () => super.rerunPointAll(pointId),
+      );
+      return;
+    }
+    super.rerunPointAll(pointId);
+  }
+
+  override rerunPointPhase2(pointId: string): void {
+    // Phase 2 only — no Landing AI credits; skip the typed confirm.
+    super.rerunPointPhase2(pointId);
+  }
+
   get selectedPointGovText(): string {
     if (!this.selectedDetailPointId) return '';
     const gov = this.govPoints.find((g) => g.point_id === this.selectedDetailPointId);
@@ -1570,4 +2039,15 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     document.body.classList.remove('panel-resizing');
     super.ngOnDestroy();
   }
+}
+
+function normalizeStatusToSeverity(raw: string): ComplianceSeverity | null {
+  const s = raw.replace(/\*+/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!s) return null;
+  if (/\bnon[- ]?compliant\b/.test(s) || (/\bnon\b/.test(s) && /compliant/.test(s))) {
+    return 'non_compliant';
+  }
+  if (/\bpartial\b/.test(s)) return 'partial_compliant';
+  if (/\bcompliant\b/.test(s)) return 'compliant';
+  return null;
 }

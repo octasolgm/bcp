@@ -103,27 +103,49 @@ export class NdDashboardMetricRunsComponent implements OnInit, OnDestroy {
       const metric = this.metricId;
 
       if (isRiskTierMetric(metric)) {
-        const candidates = runs.filter(
-          (r) =>
-            (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0) > 0 ||
-            (r.processedPointsCount ?? 0) > 0,
-        );
-        const scored: MetricRunRow[] = [];
-        for (const run of candidates) {
-          const detail = await this.api.getResults(run.id);
-          if (!detail.success || !detail.data) continue;
-          const data = detail.data as {
-            points?: AnalysisPoint[];
-            actionItemReviews?: ActionItemReviewRow[];
-          };
-          const gaps = aggregateGapRiskCounts(
-            data.points ?? [],
-            data.actionItemReviews ?? [],
+        // Prefer server gap-risk tallies (same as overview) — avoid N× full getResults.
+        const fromSummary = runs
+          .map((run) => ({
+            run,
+            count: riskCountFromGaps(
+              {
+                critical: run.criticalGaps ?? 0,
+                medium: run.mediumGaps ?? 0,
+                low: run.lowGaps ?? 0,
+                total:
+                  (run.criticalGaps ?? 0) + (run.mediumGaps ?? 0) + (run.lowGaps ?? 0),
+              },
+              metric,
+            ),
+          }))
+          .filter((r) => r.count > 0);
+        const hasServer =
+          runs.some((r) => r.criticalGaps != null || r.mediumGaps != null || r.lowGaps != null);
+        if (hasServer) {
+          this.rows = fromSummary;
+        } else {
+          const candidates = runs.filter(
+            (r) =>
+              (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0) > 0 ||
+              (r.processedPointsCount ?? 0) > 0,
           );
-          const count = riskCountFromGaps(gaps, metric);
-          if (count > 0) scored.push({ run, count });
+          const scored: MetricRunRow[] = [];
+          for (const run of candidates) {
+            const detail = await this.api.getResults(run.id);
+            if (!detail.success || !detail.data) continue;
+            const data = detail.data as {
+              points?: AnalysisPoint[];
+              actionItemReviews?: ActionItemReviewRow[];
+            };
+            const gaps = aggregateGapRiskCounts(
+              data.points ?? [],
+              data.actionItemReviews ?? [],
+            );
+            const count = riskCountFromGaps(gaps, metric);
+            if (count > 0) scored.push({ run, count });
+          }
+          this.rows = scored;
         }
-        this.rows = scored;
       } else {
         this.rows = runs
           .map((run) => ({ run, count: complianceCountForRun(run, metric) }))

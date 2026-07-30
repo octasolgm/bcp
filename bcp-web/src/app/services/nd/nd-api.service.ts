@@ -11,6 +11,8 @@ const ANALYSIS_STATUS_TIMEOUT_MS = 90_000;
 const ANALYSIS_RUN_DETAIL_TIMEOUT_MS = 90_000;
 /** Login / profile — allow slow first hit when DB pool or Supabase Auth API is busy. */
 const AUTH_API_TIMEOUT_MS = 60_000;
+/** Rerun should return quickly after queueing; allow headroom if API is under load. */
+const RERUN_API_TIMEOUT_MS = 60_000;
 /** Library create/update can persist many regulation points in one request. */
 const LIBRARY_WRITE_TIMEOUT_MS = 120_000;
 
@@ -290,6 +292,21 @@ export class NdApiService {
     );
   }
 
+  repairRegulationPoints(docId: string) {
+    return this.request<{
+      regulationDocumentId: string;
+      pointCount: number;
+      repair: {
+        beforeCount: number;
+        afterCount: number;
+        softDeleted: number;
+        duplicateGroups: number;
+        junkRemoved: number;
+        pagesRefreshed: number;
+      };
+    }>('POST', `/nd/regulation-documents/${docId}/points/repair`);
+  }
+
   getDocumentPoints(docId: string) {
     return this.request<unknown[]>('GET', `/nd/regulation-documents/${docId}/points`);
   }
@@ -518,6 +535,9 @@ export class NdApiService {
     return this.request<unknown>(
       'POST',
       `/nd/analysis-runs/${runId}/rerun-point/${pointId}${q ? `?${q}` : ''}`,
+      undefined,
+      true,
+      RERUN_API_TIMEOUT_MS,
     );
   }
 
@@ -529,11 +549,20 @@ export class NdApiService {
     return this.request<unknown>(
       'POST',
       `/nd/analysis-runs/${runId}/rerun-dual-verify/${pointId}${q ? `?${q}` : ''}`,
+      undefined,
+      true,
+      RERUN_API_TIMEOUT_MS,
     );
   }
 
   rerunAllFailedDualVerify(runId: string) {
-    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/rerun-dual-verify/all`);
+    return this.request<unknown>(
+      'POST',
+      `/nd/analysis-runs/${runId}/rerun-dual-verify/all`,
+      undefined,
+      true,
+      RERUN_API_TIMEOUT_MS,
+    );
   }
 
   submitForReview(runId: string) {
@@ -553,7 +582,7 @@ export class NdApiService {
   }
 
   getResults(runId: string) {
-    return this.request<unknown>('GET', `/nd/results/${runId}`);
+    return this.request<unknown>('GET', `/nd/results/${runId}`, undefined, true, ANALYSIS_RUN_DETAIL_TIMEOUT_MS);
   }
 
   saveActionItemReview(

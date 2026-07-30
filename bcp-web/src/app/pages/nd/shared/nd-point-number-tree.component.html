@@ -32,10 +32,36 @@
             <div class="point-line point-header-row point-header-inline">
               <span class="point-header-mark">§</span>
               <span class="pid">{{ node.row.displayId }}</span>
-              <span class="ptxt muted">{{
-                truncate(node.row.point.title || node.row.point.text, 52)
-              }}</span>
-              <span class="point-tag-header">Header</span>
+              <div class="point-text-wrap">
+                @if (showRichDetails && hasSeparateTitle(node.row.point)) {
+                  <span class="ptitle">{{ pointTitle(node.row.point) }}</span>
+                }
+                @if (showRichDetails && showDetail(node.row.point)) {
+                  @if (isPointExpanded(pointRowKey(node.row)) || !isDetailLong(node.row.point)) {
+                    <span class="ptxt ptxt-full">{{ pointDetail(node.row.point) }}</span>
+                  } @else {
+                    <span class="ptxt muted">{{ truncate(pointDetail(node.row.point), previewLen) }}</span>
+                  }
+                  @if (isDetailLong(node.row.point)) {
+                    <button
+                      type="button"
+                      class="point-text-toggle"
+                      (click)="togglePointText(pointRowKey(node.row), $event)"
+                    >
+                      {{ isPointExpanded(pointRowKey(node.row)) ? 'Show less' : 'Show more' }}
+                    </button>
+                  }
+                } @else {
+                  <span class="ptxt muted">{{
+                    pointTitle(node.row.point) || truncate(node.row.point.text, 52)
+                  }}</span>
+                }
+              </div>
+              @if (node.row.isIntroduction) {
+                <span class="point-tag-header point-tag-intro">Intro</span>
+              } @else {
+                <span class="point-tag-header">Header</span>
+              }
             </div>
           }
 
@@ -45,6 +71,8 @@
             [mode]="mode"
             [selected]="selected"
             [selectedDetailPointId]="selectedDetailPointId"
+            [showRichDetails]="showRichDetails"
+            [catalogPoints]="catalogPoints"
             [resolvePointId]="resolvePointId"
             (togglePoint)="togglePoint.emit($event)"
             (toggleGroup)="toggleGroup.emit($event)"
@@ -56,7 +84,7 @@
   } @else if (node.row) {
     @if (mode === 'analysis' && resolvePointId(node.row); as pid) {
       <label
-        class="point-line"
+        class="point-line point-line-rich"
         [class.detail-selected]="selectedDetailPointId === pid"
         [style.marginLeft.rem]="baseDepth * 0.35"
       >
@@ -67,13 +95,39 @@
           (change)="onToggle(pid)"
         />
         <span class="pid">{{ node.row.displayId }}</span>
-        <span class="ptxt" (click)="onSelectDetail(pid, $event)">{{
-          truncate(node.row.point.title || node.row.point.text, 48)
-        }}</span>
+        @if (showRichDetails) {
+          <div class="point-text-wrap" (click)="onSelectDetail(pid, $event)">
+            @if (hasSeparateTitle(node.row.point)) {
+              <span class="ptitle">{{ pointTitle(node.row.point) }}</span>
+            }
+            @if (showDetail(node.row.point)) {
+              @if (isPointExpanded(pointRowKey(node.row)) || !isDetailLong(node.row.point)) {
+                <span class="ptxt ptxt-full">{{ pointDetail(node.row.point) }}</span>
+              } @else {
+                <span class="ptxt">{{ truncate(pointDetail(node.row.point), previewLen) }}</span>
+              }
+              @if (isDetailLong(node.row.point)) {
+                <button
+                  type="button"
+                  class="point-text-toggle"
+                  (click)="togglePointText(pointRowKey(node.row), $event)"
+                >
+                  {{ isPointExpanded(pointRowKey(node.row)) ? 'Show less' : 'Show more' }}
+                </button>
+              }
+            } @else if (pointTitle(node.row.point)) {
+              <span class="ptitle">{{ pointTitle(node.row.point) }}</span>
+            }
+          </div>
+        } @else {
+          <span class="ptxt" (click)="onSelectDetail(pid, $event)">{{
+            truncate(node.row.point.title || node.row.point.text, 48)
+          }}</span>
+        }
       </label>
     } @else if (mode === 'view' || !resolvePointId(node.row)) {
       <div
-        class="point-line"
+        class="point-line point-line-rich"
         [class.point-header-row]="!node.row.forAnalysis"
         [style.marginLeft.rem]="baseDepth * 0.35"
       >
@@ -83,11 +137,47 @@
           <span class="point-header-mark">§</span>
         }
         <span class="pid">{{ node.row.displayId }}</span>
-        <span class="ptxt" [class.muted]="!node.row.forAnalysis">{{
-          truncate(node.row.point.title || node.row.point.text, 52)
-        }}</span>
+        @if (showRichDetails) {
+          <div class="point-text-wrap">
+            @if (hasSeparateTitle(node.row.point)) {
+              <span class="ptitle">{{ pointTitle(node.row.point) }}</span>
+            }
+            @if (showDetail(node.row.point)) {
+              @if (isPointExpanded(pointRowKey(node.row)) || !isDetailLong(node.row.point)) {
+                <span class="ptxt ptxt-full" [class.muted]="!node.row.forAnalysis">{{
+                  pointDetail(node.row.point)
+                }}</span>
+              } @else {
+                <span class="ptxt" [class.muted]="!node.row.forAnalysis">{{
+                  truncate(pointDetail(node.row.point), previewLen)
+                }}</span>
+              }
+              @if (isDetailLong(node.row.point)) {
+                <button
+                  type="button"
+                  class="point-text-toggle"
+                  (click)="togglePointText(pointRowKey(node.row), $event)"
+                >
+                  {{ isPointExpanded(pointRowKey(node.row)) ? 'Show less' : 'Show more' }}
+                </button>
+              }
+            } @else {
+              <span class="ptxt" [class.muted]="!node.row.forAnalysis">{{
+                pointTitle(node.row.point) || truncate(node.row.point.text, 52)
+              }}</span>
+            }
+          </div>
+        } @else {
+          <span class="ptxt" [class.muted]="!node.row.forAnalysis">{{
+            truncate(node.row.point.title || node.row.point.text, 52)
+          }}</span>
+        }
         @if (!node.row.forAnalysis) {
-          <span class="point-tag-header">Header</span>
+          @if (node.row.isIntroduction) {
+            <span class="point-tag-header point-tag-intro">Intro</span>
+          } @else {
+            <span class="point-tag-header">Header</span>
+          }
         }
       </div>
     }

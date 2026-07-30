@@ -14,7 +14,7 @@ public class LandingAiGovExtractService(
     IOptions<LandingAiOptions> options,
     ILogger<LandingAiGovExtractService> logger)
 {
-    public const string GovSchemaKey = "gov_requirement_points";
+    public const string GovSchemaKey = "gov_requirement_points_v3";
     public const string BuiltinGovDocId = "gov-tfs-guidelines";
     public const string BuiltinGovFileHash =
         "c84713f9aacd18415680356aeae47bcacff9c17458b5595b575400b12fe8f2ff";
@@ -34,7 +34,7 @@ public class LandingAiGovExtractService(
         string? markdownOverride,
         Func<ExtractionProgressUpdate, Task>? reportProgress,
         CancellationToken ct = default)
-        => ExtractFromUploadAsync(fileBytes, fileName, markdownOverride, reportProgress, parseCheckpoint: null, ct);
+        => ExtractFromUploadAsync(fileBytes, fileName, markdownOverride, reportProgress, parseCheckpoint: null, cacheKeyOverride: null, ct);
 
     public async Task<GovExtractResponse> ExtractFromUploadAsync(
         byte[]? fileBytes,
@@ -42,28 +42,33 @@ public class LandingAiGovExtractService(
         string? markdownOverride,
         Func<ExtractionProgressUpdate, Task>? reportProgress,
         RegulationParseCheckpoint? parseCheckpoint,
+        string? cacheKeyOverride = null,
         CancellationToken ct = default)
     {
         if (!client.IsConfigured)
             throw new InvalidOperationException(
                 "Landing AI not configured. Set LandingAi:ApiKey in appsettings.");
 
-        var fileHash = "markdown-only";
+        var contentHash = "markdown-only";
         var markdown = markdownOverride?.Trim() ?? "";
 
         if (fileBytes is { Length: > 0 })
-            fileHash = LandingAiCacheRepository.HashBuffer(fileBytes);
+            contentHash = LandingAiCacheRepository.HashBuffer(fileBytes);
+
+        var cacheKey = string.IsNullOrWhiteSpace(cacheKeyOverride)
+            ? contentHash
+            : cacheKeyOverride.Trim();
 
         if (string.IsNullOrWhiteSpace(markdown) && fileBytes is { Length: > 0 })
         {
-            var cachedParse = await cache.GetParseCacheAsync(fileHash, ct);
+            var cachedParse = await cache.GetParseCacheAsync(cacheKey, ct);
             if (!string.IsNullOrWhiteSpace(cachedParse?.Markdown)
                 && IsParseCacheComplete(cachedParse.Markdown, fileBytes, fileName))
             {
                 logger.LogInformation(
-                    "Using cached Landing AI parse for gov extract ({File}, hash {HashPrefix}…)",
+                    "Using cached Landing AI parse for gov extract ({File}, cache {CachePrefix}…)",
                     fileName,
-                    fileHash.Length >= 12 ? fileHash[..12] : fileHash);
+                    cacheKey.Length >= 12 ? cacheKey[..12] : cacheKey);
                 if (reportProgress != null)
                     await reportProgress(new ExtractionProgressUpdate("Using cached document parse…", 58));
                 markdown = cachedParse!.Markdown;
@@ -73,42 +78,42 @@ public class LandingAiGovExtractService(
                 logger.LogInformation("Landing AI parse for gov extract ({File}, {Kb} KB)", fileName, fileBytes.Length / 1024);
                 markdown = await documentParse.ParseToMarkdownAsync(
                     fileBytes, fileName, reportProgress, parseCheckpoint, ct);
-                await cache.SaveParseCacheAsync(fileHash, fileName, markdown, _opts.ParseModel, ct);
+                await cache.SaveParseCacheAsync(cacheKey, fileName, markdown, _opts.ParseModel, ct);
             }
         }
 
         if (string.IsNullOrWhiteSpace(markdown))
             throw new InvalidOperationException("Upload a gov PDF or provide markdown.");
 
-        var cachedJson = await cache.GetExtractPointsJsonAsync(fileHash, GovSchemaKey, ct);
+        var cachedJson = await cache.GetExtractPointsJsonAsync(cacheKey, GovSchemaKey, ct);
         if (!string.IsNullOrWhiteSpace(cachedJson))
         {
             if (reportProgress != null)
                 await reportProgress(new ExtractionProgressUpdate("Loading cached regulation points…", 85));
-            var cachedPoints = GovPointsParser.ParseFromExtractJson(cachedJson);
-            cachedPoints = await ResolvePointPagesAsync(fileHash, cachedPoints, ct);
+            var cachedPoints = GovPointExtractNormalizer.DedupeAndFilter(
+                GovPointsParser.ParseFromExtractJson(cachedJson));
+            cachedPoints = await ResolvePointPagesAsync(cacheKey, cachedPoints, ct);
             govPoints.SetPoints(cachedPoints, "db-cache");
             return new GovExtractResponse(
-                true, true, fileName, fileHash, GovSchemaKey,
+                true, true, fileName, contentHash, GovSchemaKey,
                 cachedPoints.Count, ToApiPoints(cachedPoints), 0, govPoints.Source);
         }
 
         logger.LogInformation("Landing AI gov extract ({Model})", _opts.ExtractModel);
         if (reportProgress != null)
             await reportProgress(new ExtractionProgressUpdate("Extracting regulation points…", 72));
-        var extraction = await client.ExtractGovRequirementPointsAsync(markdown, ct);
-        var points = GovPointsParser.ParseFromExtraction(extraction);
+        var points = await ExtractPointsChunkedAsync(markdown, reportProgress, ct);
         if (points.Count == 0)
             throw new InvalidOperationException("No requirement points found in document.");
 
-        points = await ResolvePointPagesAsync(fileHash, points, ct, markdown);
+        points = await ResolvePointPagesAsync(cacheKey, points, ct, markdown);
 
         var pointsJson = JsonSerializer.Serialize(new { points = ToApiPoints(points) });
-        await cache.SaveExtractPointsCacheAsync(fileHash, GovSchemaKey, pointsJson, _opts.ExtractModel, ct);
+        await cache.SaveExtractPointsCacheAsync(cacheKey, GovSchemaKey, pointsJson, _opts.ExtractModel, ct);
         govPoints.SetPoints(points, "extract-live");
 
         return new GovExtractResponse(
-            true, false, fileName, fileHash, GovSchemaKey,
+            true, false, fileName, contentHash, GovSchemaKey,
             points.Count, ToApiPoints(points), null, govPoints.Source);
     }
 
@@ -121,7 +126,8 @@ public class LandingAiGovExtractService(
         var cachedJson = await cache.GetExtractPointsJsonAsync(fileHash, GovSchemaKey, ct);
         if (!string.IsNullOrWhiteSpace(cachedJson))
         {
-            var points = GovPointsParser.ParseFromExtractJson(cachedJson);
+            var points = GovPointExtractNormalizer.DedupeAndFilter(
+                GovPointsParser.ParseFromExtractJson(cachedJson));
             points = await ResolvePointPagesAsync(fileHash, points, ct);
             govPoints.SetPoints(points, "db-cache");
             logger.LogInformation("Loaded {Count} gov points from DB extract cache", points.Count);
@@ -142,8 +148,38 @@ public class LandingAiGovExtractService(
             text = p.Text,
             section = p.Section,
             page_hint = p.PageHint is > 0 ? p.PageHint : 0,
-            point_type = "mandatory",
+            point_type = string.IsNullOrWhiteSpace(p.PointType) ? "mandatory" : p.PointType,
         }).ToList();
+
+    private async Task<List<GovPoint>> ExtractPointsChunkedAsync(
+        string markdown,
+        Func<ExtractionProgressUpdate, Task>? reportProgress,
+        CancellationToken ct)
+    {
+        var chunks = GovMarkdownChunker.SplitForExtract(markdown);
+        if (chunks.Count <= 1)
+        {
+            var extraction = await client.ExtractGovRequirementPointsAsync(markdown, ct);
+            return GovPointExtractNormalizer.DedupeAndFilter(GovPointsParser.ParseFromExtraction(extraction));
+        }
+
+        var merged = new List<GovPoint>();
+        for (var i = 0; i < chunks.Count; i++)
+        {
+            if (reportProgress != null)
+            {
+                var pct = 72 + (int)Math.Round((i + 1) / (double)chunks.Count * 12);
+                await reportProgress(new ExtractionProgressUpdate(
+                    $"Extracting regulation points (part {i + 1}/{chunks.Count})…",
+                    pct));
+            }
+
+            var extraction = await client.ExtractGovRequirementPointsAsync(chunks[i], ct);
+            merged.AddRange(GovPointsParser.ParseFromExtraction(extraction));
+        }
+
+        return GovPointExtractNormalizer.DedupeAndFilter(merged);
+    }
 
     private static bool IsParseCacheComplete(string markdown, byte[] fileBytes, string fileName)
     {
@@ -224,17 +260,21 @@ public static class GovPointsParser
         foreach (var p in points.EnumerateArray())
         {
             var id = p.TryGetProperty("point_id", out var pid) ? pid.GetString() : null;
-            var text = p.TryGetProperty("text", out var pt) ? pt.GetString() : null;
+            var text = p.TryGetProperty("text", out var textEl) ? textEl.GetString() : null;
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(text)) continue;
             int? pageHint = null;
             if (p.TryGetProperty("page_hint", out var ph) && ph.ValueKind == JsonValueKind.Number && ph.TryGetInt32(out var hint))
                 pageHint = hint;
+            string? pointType = null;
+            if (p.TryGetProperty("point_type", out var typeEl) && typeEl.ValueKind == JsonValueKind.String)
+                pointType = typeEl.GetString();
             list.Add(new GovPoint(
                 id.Trim(),
                 p.TryGetProperty("title", out var t) ? t.GetString() : null,
                 text.Trim(),
                 p.TryGetProperty("section", out var s) ? s.GetString() : null,
-                pageHint));
+                pageHint,
+                pointType));
         }
         return list;
     }

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.NewDashboard;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -27,7 +28,9 @@ public class AnalysisRunsController(
         Guid? DepartmentId,
         List<object> SelectedPointsSnapshot,
         List<string> SelectedInternalDocIds,
-        List<string> SelectedRegulationDocIds);
+        List<string> SelectedRegulationDocIds,
+        /// <summary>Optional prompt pack: v1 | v2 | v3. Analyse-v9 sends v3 (Regul.ai rules).</summary>
+        string? ComparePromptVersion = null);
 
     [HttpGet]
     public async Task<IActionResult> List(
@@ -202,10 +205,19 @@ public class AnalysisRunsController(
         if (error != null) return error;
 
         var points = body.SelectedPointsSnapshot ?? [];
+        string? storedPromptVersion = null;
+        if (!string.IsNullOrWhiteSpace(body.ComparePromptVersion))
+        {
+            storedPromptVersion = ComparePromptVersionExtensions
+                .ParseOrDefault(body.ComparePromptVersion, ComparePromptVersion.V2)
+                .ToApiValue();
+        }
+
         var run = new NdAnalysisRun
         {
             Name = body.Name.Trim(),
             Description = body.Description,
+            ComparePromptVersion = storedPromptVersion,
             LibraryId = body.LibraryId,
             DepartmentId = body.DepartmentId,
             SelectedPointsSnapshot = JsonSerializer.Serialize(points),
@@ -363,7 +375,7 @@ public class AnalysisRunsController(
             });
         }
 
-        // Poll payload: statuses only — never load PointSnapshot (can be huge × 140+ points).
+        // Poll payload: no PointSnapshot (can be huge × 140+ points); include AI text/errors for live UI.
         var points = await db.NdAnalysisPoints
             .AsNoTracking()
             .Where(p => p.AnalysisRunId == id)
@@ -373,7 +385,11 @@ public class AnalysisRunsController(
                 id = p.Id,
                 regulationPointId = p.RegulationPointId,
                 landingAiStatus = p.LandingAiStatus,
+                landingAiResult = p.LandingAiResult,
+                landingAiError = p.LandingAiError,
                 googleAiStatus = p.GoogleAiStatus,
+                googleAiResult = p.GoogleAiResult,
+                googleAiError = p.GoogleAiError,
                 dualVerifyStatus = p.DualVerifyStatus,
                 finalStatus = p.FinalStatus,
             })
@@ -518,8 +534,48 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
 
-        await processor.ProcessPointAsync(id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex, ct);
-        return Ok(new { success = true });
+        var pointExists = await db.NdAnalysisPoints.AnyAsync(p => p.Id == pointId && p.AnalysisRunId == id, ct);
+        if (!pointExists) return NotFound(new { success = false, message = "Analysis point not found" });
+
+        return QueuePointProcessing(id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex);
+    }
+
+    private IActionResult QueuePointProcessing(
+        Guid runId,
+        Guid pointId,
+        bool dualVerifyOnly,
+        bool evidenceOnly,
+        int? actionIndex)
+    {
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            var proc = scope.ServiceProvider.GetRequiredService<NdAnalysisProcessor>();
+            try
+            {
+                await proc.ProcessPointAsync(
+                    runId,
+                    pointId,
+                    dualVerifyOnly,
+                    evidenceOnly,
+                    actionIndex,
+                    CancellationToken.None);
+            }
+            catch (OperationCanceledException)
+            {
+                // Stop requested for this run.
+            }
+            catch
+            {
+                // Errors are persisted on the analysis point by the processor.
+            }
+        }, CancellationToken.None);
+
+        return Ok(new
+        {
+            success = true,
+            message = dualVerifyOnly ? "Phase 2 rerun started" : "Point rerun started",
+        });
     }
 
     [HttpPost("{id:guid}/rerun-dual-verify/{pointId:guid}")]
@@ -538,8 +594,10 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
 
-        await processor.ProcessPointAsync(id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex, ct);
-        return Ok(new { success = true });
+        var pointExists = await db.NdAnalysisPoints.AnyAsync(p => p.Id == pointId && p.AnalysisRunId == id, ct);
+        if (!pointExists) return NotFound(new { success = false, message = "Analysis point not found" });
+
+        return QueuePointProcessing(id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex);
     }
 
     [HttpPost("{id:guid}/rerun-dual-verify/all")]
@@ -553,8 +611,21 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
 
-        await processor.RerunAllFailedDualVerifyAsync(id, ct);
-        return Ok(new { success = true });
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            var proc = scope.ServiceProvider.GetRequiredService<NdAnalysisProcessor>();
+            try
+            {
+                await proc.RerunAllFailedDualVerifyAsync(id, CancellationToken.None);
+            }
+            catch
+            {
+                // Errors are persisted on analysis points by the processor.
+            }
+        }, CancellationToken.None);
+
+        return Ok(new { success = true, message = "Phase 2 reruns started" });
     }
 
     [HttpPost("{id:guid}/submit-for-review")]

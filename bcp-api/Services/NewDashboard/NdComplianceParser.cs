@@ -25,6 +25,19 @@ public static class NdComplianceParser
 
     public static string? ExtractActionPlan(string message)
     {
+        // Formatter writes "Corrective Action Plan :" with the body on following lines.
+        // Same-line capture alone often yields "" and FinalActionPlan never gets saved.
+        var block = Regex.Match(
+            message,
+            @"Corrective Action Plan(?:\s*\(CAP\))?\s*:\s*(.*?)(?=\r?\n\s*Responsibility\s*:|\z)",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        if (block.Success)
+        {
+            var fromBlock = block.Groups[1].Value.Trim();
+            if (!string.IsNullOrWhiteSpace(fromBlock) && fromBlock is not ("N/A" or "—" or "-"))
+                return fromBlock;
+        }
+
         var cap = ExtractField(message, "Corrective Action Plan (CAP)", "CAP", "Action Plan");
         return string.IsNullOrWhiteSpace(cap) || cap is "N/A" or "—" ? null : cap.Trim();
     }

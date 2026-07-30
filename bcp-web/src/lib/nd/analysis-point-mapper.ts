@@ -4,8 +4,14 @@ import {
 } from '../dual-verify-report';
 import type { DualVerifyAgreement } from '../landing-ai/dual-verify-merge';
 import { normalizeSessionPointStatus } from '../session-point-status';
+import { reportItemsToGapItems } from '../../app/services/gap-analysis-mapper';
+import type { GapItemData } from '../../app/services/reguliq-store';
 import type { AnalysisPoint } from './types';
 import { parsePointSnapshot } from './utils';
+
+function comparePointIds(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true });
+}
 
 function parseNdAiPayload(raw?: string | null): {
   message: string;
@@ -77,4 +83,25 @@ export function analysisPointToReportItem(p: AnalysisPoint): DualVerifyReportIte
     agreementJson: google.agreement,
     errorMessage: p.landingAiError ?? p.googleAiError ?? undefined,
   });
+}
+
+/** Map ND analysis points to gap-analysis export rows (Pass 1 only, or Pass 1 + 2). */
+export function analysisPointsToGapExportItems(points: AnalysisPoint[]): GapItemData[] {
+  const reports: DualVerifyReportItem[] = [];
+  const seen = new Set<string>();
+
+  for (const p of points) {
+    const report = analysisPointToReportItem(p);
+    if (!report) continue;
+    const hasOutput = Boolean(report.landingMessage?.trim() || report.llmMessage?.trim());
+    if (!hasOutput) continue;
+    const snap = parsePointSnapshot(p.pointSnapshot);
+    if (snap.pointContent?.trim()) report.govText = snap.pointContent.trim();
+    if (seen.has(report.pointId)) continue;
+    seen.add(report.pointId);
+    reports.push(report);
+  }
+
+  reports.sort((a, b) => comparePointIds(a.pointId, b.pointId));
+  return reportItemsToGapItems(reports);
 }

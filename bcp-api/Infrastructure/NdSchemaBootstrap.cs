@@ -263,6 +263,12 @@ public static class NdSchemaBootstrap
             ALTER TABLE regulation_points
               ADD COLUMN IF NOT EXISTS is_annex_point BOOLEAN NOT NULL DEFAULT false;
 
+            ALTER TABLE regulation_points
+              ADD COLUMN IF NOT EXISTS status INTEGER NOT NULL DEFAULT 1;
+
+            CREATE INDEX IF NOT EXISTS idx_regulation_points_doc_status
+              ON regulation_points (regulation_document_id, status);
+
             ALTER TABLE regulation_documents
               ADD COLUMN IF NOT EXISTS is_manual BOOLEAN NOT NULL DEFAULT false;
 

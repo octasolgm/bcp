@@ -75,6 +75,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   uploading = false;
   extractingId: string | null = null;
   refreshingPagesId: string | null = null;
+  repairingPointsId: string | null = null;
   hidingId: string | null = null;
   showDeleted = false;
   savingDeptId: string | null = null;
@@ -390,6 +391,29 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   hasExtractedPoints(doc: RegulationDocument): boolean {
     const st = (doc.extractionStatus ?? '').toLowerCase();
     return st === 'extracted' || st === 'completed' || (doc.pointCount ?? 0) > 0;
+  }
+
+  async handleRepairPoints(doc: RegulationDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.repairingPointsId = doc.id;
+    this.error = '';
+    try {
+      const res = await this.api.repairRegulationPoints(doc.id);
+      if (res.success && res.data) {
+        const r = res.data.repair;
+        this.message =
+          `Repaired points: ${r.beforeCount} → ${r.afterCount} active ` +
+          `(${r.softDeleted} soft-deleted, ${r.pagesRefreshed} pages refreshed).`;
+        if (this.selectedDoc?.id === doc.id || this.showPointsPanel) {
+          await this.loadPointsForDoc(doc.id);
+          await this.loadDocs(true);
+        }
+      } else {
+        this.error = res.message ?? 'Could not repair points';
+      }
+    } finally {
+      this.repairingPointsId = null;
+    }
   }
 
   async handleRefreshPageReferences(doc: RegulationDocument, event?: Event): Promise<void> {

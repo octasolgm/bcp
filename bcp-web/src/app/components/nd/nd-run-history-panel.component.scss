@@ -281,27 +281,27 @@
 }
 
 .role-pill-super {
-  color: #1d4ed8;
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  color: var(--on-pastel-info);
+  background: var(--pastel-info-bg);
+  border-color: var(--pastel-info-border);
 }
 
 .role-pill-checker {
-  color: #b45309;
-  background: #fffbeb;
-  border-color: #fde68a;
+  color: var(--on-pastel-label);
+  background: var(--pastel-warn-bg);
+  border-color: var(--pastel-warn-border);
 }
 
 .role-pill-reviewer {
-  color: #047857;
-  background: #ecfdf5;
-  border-color: #a7f3d0;
+  color: var(--on-pastel-ok);
+  background: var(--pastel-ok-bg);
+  border-color: var(--pastel-ok-border);
 }
 
 .role-pill-maker {
-  color: #0f766e;
-  background: #f0fdfa;
-  border-color: #99f6e4;
+  color: var(--on-pastel-ok);
+  background: var(--pastel-ok-bg);
+  border-color: var(--pastel-ok-border);
 }
 
 .role-pill-default {
@@ -364,31 +364,31 @@
   line-height: 1.2;
 
   &.chip-gaps {
-    color: #92400e;
-    background: #fffbeb;
-    border-color: #fde68a;
+    color: var(--on-pastel-label);
+    background: var(--pastel-warn-bg);
+    border-color: var(--pastel-warn-border);
   }
 
   &.chip-reviewed {
-    color: #1d4ed8;
-    background: #eff6ff;
-    border-color: #bfdbfe;
+    color: var(--on-pastel-info);
+    background: var(--pastel-info-bg);
+    border-color: var(--pastel-info-border);
   }
 
   &.chip-stage {
-    color: #475569;
-    background: #f8fafc;
-    border-color: #e2e8f0;
+    color: var(--on-pastel-muted);
+    background: var(--pastel-neutral-bg);
+    border-color: var(--pastel-neutral-border);
   }
 
   &.chip-priority {
-    color: #0f766e;
-    background: #f0fdfa;
-    border-color: #99f6e4;
+    color: var(--on-pastel-ok);
+    background: var(--pastel-ok-bg);
+    border-color: var(--pastel-ok-border);
   }
 
   &.chip-status {
-    color: #7c3aed;
+    color: #5b21b6;
     background: #f5f3ff;
     border-color: #ddd6fe;
   }

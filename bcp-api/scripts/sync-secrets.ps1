@@ -22,6 +22,7 @@ $secrets = [ordered]@{
     Supabase          = $dev.Supabase
     Gemini            = [ordered]@{ ApiKey = $dev.Gemini.ApiKey }
     LandingAi         = [ordered]@{ ApiKey = $dev.LandingAi.ApiKey }
+    Anthropic         = [ordered]@{ ApiKey = $dev.Anthropic.ApiKey }
 }
 
 # Kafka / Azure Event Hubs (same as monorepo reguliq-dotnet .env)

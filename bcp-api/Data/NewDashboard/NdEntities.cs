@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Reguliq.Api.Services.NewDashboard;
 
 namespace Reguliq.Api.Data.NewDashboard.Entities;
 
@@ -155,6 +156,10 @@ public class NdRegulationPoint
     [Column("is_annex_point")]
     public bool IsAnnexPoint { get; set; }
 
+    /// <summary>1 = active, -1 = soft-deleted (kept for audit/recovery).</summary>
+    [Column("status")]
+    public int Status { get; set; } = NdRegulationPointStatus.Active;
+
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
@@ -225,6 +230,10 @@ public class NdAnalysisRun
 
     [Column("description")]
     public string? Description { get; set; }
+
+    /// <summary>Landing AI + dual-verify prompt revision for this run (v1|v2|v3). Null = ND default (v2).</summary>
+    [Column("compare_prompt_version")]
+    public string? ComparePromptVersion { get; set; }
 
     [Column("library_id")]
     public Guid? LibraryId { get; set; }

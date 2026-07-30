@@ -25,6 +25,10 @@ public static class SupabaseSchemaBootstrap
           ADD COLUMN IF NOT EXISTS transport TEXT NOT NULL DEFAULT 'local';
         """,
         """
+        ALTER TABLE analysis_runs
+          ADD COLUMN IF NOT EXISTS compare_prompt_version TEXT NULL;
+        """,
+        """
         CREATE TABLE IF NOT EXISTS stored_documents (
           id UUID PRIMARY KEY,
           title TEXT NOT NULL DEFAULT '',
@@ -101,6 +105,10 @@ public static class SupabaseSchemaBootstrap
         """
         ALTER TABLE stored_documents
           ADD COLUMN IF NOT EXISTS source_storage_path TEXT NULL;
+        """,
+        """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS extraction_cache_key TEXT NULL;
         """,
         """
         CREATE TABLE IF NOT EXISTS landing_ai_parse_cache (

@@ -257,6 +257,8 @@ public static class DualVerifyPromptBuilder
         sb.AppendLine("Re-read the attached internal PDF(s) and produce your own assessment.");
         if (version == ComparePromptVersion.V2)
             AppendPass2RulesV2(sb);
+        else if (version == ComparePromptVersion.V3)
+            AppendPass2RulesV3(sb);
         if (attachedFileNames is { Count: > 0 })
         {
             sb.AppendLine(attachedFileNames.Count == 1
@@ -279,7 +281,7 @@ public static class DualVerifyPromptBuilder
             sb.AppendLine(markdownSupplement.Trim());
             sb.AppendLine("---");
         }
-        if (version == ComparePromptVersion.V2)
+        if (version is ComparePromptVersion.V2 or ComparePromptVersion.V3)
             AppendPass2OutputFormatV2(sb);
 
         return sb.ToString();
@@ -293,6 +295,20 @@ public static class DualVerifyPromptBuilder
         sb.AppendLine("- Use the same semantic standards as Pass 1 — confirm or correct, not stricter keyword matching.");
         sb.AppendLine("- Search every attached document before concluding Non-Compliant. Compliant if any document satisfies all sub-obligations.");
         sb.AppendLine("- If Pass 1 evidence is accurate and complete, align with the same status and similar confidence.");
+        sb.AppendLine("- Cite each source with: [Document Name], Section [X], Page [N]: \"verbatim quote\". One line per document/page when multiple sources apply.");
+    }
+
+    /// <summary>Regul.ai judgment rules for Pass 2 (analyse-v9 / V3).</summary>
+    private static void AppendPass2RulesV3(StringBuilder sb)
+    {
+        sb.AppendLine();
+        sb.AppendLine("Pass 2 rules (V3 — Regul.ai judgment):");
+        sb.AppendLine("- Independently re-judge the clause against ALL attached internal PDF(s) and markdown. Confirm or correct Pass 1; do not copy it blindly.");
+        sb.AppendLine("- Document-perspective: the bank IMPLEMENTS the regulator's requirements — it is not expected to restate regulator-only content (other entity types, legal disclaimers, supervisor instructions). Omitting that content is NEVER a gap — mark Compliant with a note.");
+        sb.AppendLine("- Vendor/list-provider due diligence means verifying the vendor-supplied list's accuracy/completeness against required source lists — NOT general procurement/vendor onboarding. Do not invent a vendor-vetting requirement the clause never asked for.");
+        sb.AppendLine("- Element-level checking: for multi-element clauses, assess each element separately (covered / not covered with evidence). Compliant only if every element is covered; Partial if some; Non-Compliant if none.");
+        sb.AppendLine("- Quotes must be VERBATIM from the internal text. Prefer lower confidence / Partial or Non-Compliant when evidence is weak rather than assuming coverage.");
+        sb.AppendLine("- Gap text is MANDATORY when Partial or Non-Compliant: state exactly what is missing and which document it was / was not found in.");
         sb.AppendLine("- Cite each source with: [Document Name], Section [X], Page [N]: \"verbatim quote\". One line per document/page when multiple sources apply.");
     }
 

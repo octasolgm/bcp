@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import type { ResultsData } from "../types";
-import { formatDate, parsePointSnapshot } from "../utils";
+import { formatDate, parsePointSnapshot, resolveAnalysisPointDisplayNumber } from "../utils";
 
 export async function exportResultsExcel(data: ResultsData): Promise<void> {
   const wb = new ExcelJS.Workbook();
@@ -20,7 +20,7 @@ export async function exportResultsExcel(data: ResultsData): Promise<void> {
   for (const p of data.points) {
     const snap = parsePointSnapshot(p.pointSnapshot);
     ws.addRow({
-      pointNumber: snap.pointNumber ?? "",
+      pointNumber: resolveAnalysisPointDisplayNumber(p, snap),
       pointTitle: snap.pointTitle ?? "",
       pointContent: snap.pointContent ?? "",
       status: p.finalStatus?.replace(/_/g, " ") ?? "",

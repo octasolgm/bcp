@@ -48,6 +48,11 @@ function requirementCell(block: ReferenceComplianceBlock): string {
   return normalizeMultiline(title || body || '');
 }
 
+/** Format corrective action / CAP text for Excel gap columns. */
+export function formatCorrectiveActionAsGaps(cap: string | undefined): string {
+  return formatActionPlan(cap);
+}
+
 function formatActionPlan(cap: string | undefined): string {
   const raw = cap?.trim();
   if (!raw || raw === 'N/A' || raw === '—') return '';

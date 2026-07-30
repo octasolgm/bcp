@@ -1,4 +1,5 @@
 import {
+  classifyGovPoint,
   enrichGovPointSectionsForPicker,
   filterComparableGovLeafPoints,
   formatChapterLabel,
@@ -6,6 +7,12 @@ import {
   formatSectionGroupLabel,
   groupGovPointsByChapter,
   groupGovPointsForPicker,
+  isSectionOnePoint,
+  isJunkExtractPointId,
+  resolveGovPointDisplayNumber,
+  resolveLogicalPointId,
+  normalizeNumericPointId,
+  sectionHeadingTitleForKey,
   type GovPoint,
   type GovPointChapterGroup,
 } from './gov-point-filter';
@@ -20,6 +27,8 @@ export type SourcedGovPoint = GovPoint & {
   docId?: string;
   docName?: string;
   pointNumber?: string;
+  isIntroductionPoint?: boolean;
+  isAnnexPoint?: boolean;
 };
 
 export type LibraryDocGroup = {
@@ -121,14 +130,44 @@ export function dedupeGovPointsByNumber<T extends GovPoint>(
   return dedupeGovPointsByFingerprint(points);
 }
 
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
+/** Keep numeric clause ids (3.1.5) as selection keys; link DB row via regulationPointId. */
 export function assignUniqueLibraryPointIds<T extends SourcedGovPoint>(points: T[]): T[] {
   return points.map((p) => {
-    const pointNumber = (p.section ?? p.point_id).trim();
-    const uniqueId = p.regulationPointId?.trim() || p.point_id;
+    const idRaw = p.point_id.trim().replace(/\.$/, '');
+    const idClause = !isUuidLike(idRaw) ? normalizeNumericPointId(idRaw) : null;
+    const numRaw = (p.pointNumber ?? '').trim().replace(/\.$/, '');
+    const numClause =
+      numRaw && !isUuidLike(numRaw) ? normalizeNumericPointId(numRaw) : null;
+    let clauseId = idClause;
+    if (idClause && numClause) {
+      const idDepth = idClause.split('.').length;
+      const numDepth = numClause.split('.').length;
+      clauseId = idDepth >= numDepth ? idClause : numClause;
+    } else {
+      clauseId =
+        idClause ||
+        numClause ||
+        (() => {
+          const logical = resolveLogicalPointId(p);
+          return (
+            normalizeNumericPointId(logical) ||
+            (logical && !isUuidLike(logical) && !isJunkExtractPointId(logical)
+              ? logical
+              : '')
+          );
+        })();
+    }
+    const regId = p.regulationPointId?.trim() || '';
+    const selectionId = clauseId || regId || idRaw;
     return {
       ...p,
-      section: pointNumber || p.section,
-      point_id: uniqueId,
+      pointNumber: clauseId || p.pointNumber,
+      point_id: selectionId,
+      regulationPointId: regId || p.regulationPointId,
     };
   });
 }
@@ -164,6 +203,7 @@ export type LibraryPointDisplayRow = {
   point: SourcedGovPoint;
   displayId: string;
   forAnalysis: boolean;
+  isIntroduction: boolean;
   depth: number;
 };
 
@@ -338,11 +378,29 @@ function rowFromGovPoint(
   isForAnalysis: (point: GovPoint) => boolean,
 ): LibraryPointDisplayRow {
   const sourced = p as SourcedGovPoint;
-  const displayId = (sourced.pointNumber ?? p.point_id).trim().replace(/\.$/, '');
+  const fallback = (sourced.pointNumber ?? p.point_id).trim().replace(/\.$/, '');
+  const displayId =
+    resolveGovPointDisplayNumber(sourced) ||
+    (fallback && !/^[0-9a-f-]{36}$/i.test(fallback) && !isJunkExtractPointId(fallback)
+      ? fallback
+      : '');
+  const forAnalysis = isForAnalysis(p);
+  const classified = classifyGovPoint(p);
+  const isIntroduction =
+    Boolean(sourced.isIntroductionPoint) ||
+    isSectionOnePoint(p.point_id, p.section ?? '') ||
+    (!forAnalysis &&
+      Boolean(
+        classified.reason?.includes('§1') ||
+          classified.reason?.includes('introduction') ||
+          classified.reason?.includes('purpose') ||
+          classified.reason?.includes('applicability'),
+      ));
   return {
     point: sourced,
     displayId,
-    forAnalysis: isForAnalysis(p),
+    forAnalysis,
+    isIntroduction,
     depth: pointNumberDepth(displayId),
   };
 }
@@ -359,6 +417,27 @@ function govPointsForGrouping(points: GovPoint[]): GovPoint[] {
     }
     return p;
   });
+}
+
+/** Stored row ids (point_id on SourcedGovPoint) that participate in gap analysis — same rule as regulation doc load. */
+export function resolveComparablePointIdsForDoc(
+  docPoints: SourcedGovPoint[],
+  docName?: string | null,
+): Set<string> {
+  const name = docName ?? docPoints[0]?.docName;
+  const grouping = docPoints.map((p) => ({
+    point_id: p.pointNumber ?? p.point_id,
+    title: p.title,
+    text: p.text,
+    section: p.section,
+  }));
+  const analyzed = analyzeGovPointSet(grouping, { docName: name });
+  const comparableNums = new Set(analyzed.comparable.map((p) => p.point_id));
+  return new Set(
+    docPoints
+      .filter((p) => comparableNums.has(p.pointNumber ?? p.point_id))
+      .map((p) => p.point_id),
+  );
 }
 
 /** Per regulation document: manual flat list or extracted § chapters. */
@@ -419,7 +498,7 @@ function chaptersFromGovGroups(
       }
       return {
         key: sec.key,
-        label: formatSectionGroupLabel(sec.key),
+        label: formatSectionGroupLabel(sec.key, sectionHeadingTitleForKey(sec.key, sourcePoints)),
         rows: sortDisplayRows(rows),
       };
     });
@@ -430,7 +509,7 @@ function chaptersFromGovGroups(
     );
     return {
       chapter: ch.chapter,
-      label: formatChapterLabel(ch.chapter),
+      label: formatChapterLabel(ch.chapter, sectionHeadingTitleForKey(ch.chapter, sourcePoints)),
       sections,
       tree: chapterTreeFromRows(ch.chapter, sections.flatMap((s) => s.rows)),
       storedCount: chStored,
@@ -458,8 +537,8 @@ function bucketPointsByTopChapter(
       const rows = sortDisplayRows(pts.map((p) => rowFromGovPoint(p, isForAnalysis)));
       return {
         chapter,
-        label: formatChapterLabel(chapter),
-        sections: [{ key: chapter, label: formatSectionGroupLabel(chapter), rows }],
+        label: formatChapterLabel(chapter, sectionHeadingTitleForKey(chapter, points)),
+        sections: [{ key: chapter, label: formatSectionGroupLabel(chapter, sectionHeadingTitleForKey(chapter, points)), rows }],
         tree: chapterTreeFromRows(chapter, rows),
         storedCount: pts.length,
         analyseCount: rows.filter((r) => r.forAnalysis).length,
@@ -500,9 +579,8 @@ export function buildPointDisplayChapters(
 /** All stored library points in §chapter → section → numbered rows (headers + leaves). */
 export function buildLibraryStoredPointDisplay(
   rawPoints: SourcedGovPoint[],
-  analysePoints: SourcedGovPoint[],
+  _analysePoints?: SourcedGovPoint[],
 ): LibraryPointDisplayTree[] {
-  const analyseIds = new Set(analysePoints.map((p) => p.regulationPointId ?? p.point_id));
   const byLib = new Map<string, SourcedGovPoint[]>();
 
   for (const p of rawPoints) {
@@ -532,63 +610,17 @@ export function buildLibraryStoredPointDisplay(
       const docName = docPoints[0]?.docName ?? 'Regulation document';
       const docKey = `${libraryId}:${docId}`;
       const isManual = isManualRegulationSource(docName);
-
-      let chapters: LibraryPointDisplayChapter[] = [];
-      let flatRows: LibraryPointDisplayRow[] = [];
-      let useChapters = false;
-
-      if (isManual) {
-        flatRows = sortDisplayRows(
-          docPoints.map((p) =>
-            rowFromGovPoint(sourcedToGovPoint(p), () =>
-              analyseIds.has(p.regulationPointId ?? p.point_id),
-            ),
-          ),
-        );
-        chapters = [];
-        useChapters = false;
-      } else {
-        const isForAnalysis = (gov: GovPoint) => {
-          const num = gov.point_id.trim().replace(/\.$/, '');
-          const src = docPoints.find(
-            (p) => (p.pointNumber ?? p.point_id).trim().replace(/\.$/, '') === num,
-          );
-          return src ? analyseIds.has(src.regulationPointId ?? src.point_id) : false;
-        };
-        const grouped = govPointsForGrouping(docPoints);
-        let display = buildPointDisplayChapters(grouped, isForAnalysis);
-        if (!display.useChapters && grouped.length) {
-          const chapters = bucketPointsByTopChapter(grouped, isForAnalysis);
-          display = { chapters, flatRows: [], useChapters: chapters.length > 0 };
-        }
-        chapters = display.chapters;
-        flatRows = display.flatRows;
-        useChapters = display.useChapters;
-      }
-
-      const allRows = useChapters
-        ? chapters.flatMap((ch) => ch.sections.flatMap((s) => s.rows))
-        : flatRows;
-      const pointTree = useChapters ? [] : buildPointNumberTree(allRows.length ? allRows : flatRows);
-
-      const docStored = docPoints.length;
-      const docAnalyse = docPoints.filter((p) =>
-        analyseIds.has(p.regulationPointId ?? p.point_id),
-      ).length;
+      const comparableIds = resolveComparablePointIdsForDoc(docPoints, docName);
+      const display = buildRegulationDocPointDisplay(docPoints, isManual, comparableIds);
 
       documents.push({
         key: docKey,
         docId,
         docName,
-        chapters,
-        flatRows,
-        pointTree,
-        useChapters,
-        storedCount: docStored,
-        analyseCount: docAnalyse,
+        ...display,
       });
-      libStored += docStored;
-      libAnalyse += docAnalyse;
+      libStored += display.storedCount;
+      libAnalyse += display.analyseCount;
     }
 
     documents.sort((a, b) => a.docName.localeCompare(b.docName));
@@ -631,6 +663,8 @@ export function mapLibrarySnapshotToSourced(
     text: String(snap['pointContent'] ?? ''),
     section: pageReference || undefined,
     pointNumber: pointNumber || undefined,
+    isIntroductionPoint: Boolean(snap['isIntroductionPoint'] ?? snap['is_introduction_point']),
+    isAnnexPoint: Boolean(snap['isAnnexPoint'] ?? snap['is_annex_point']),
     sourceLabel: meta.libraryName,
     sourceKey: `${meta.libraryId}:${docId}`,
     regulationPointId: String(p.regulationPointId),

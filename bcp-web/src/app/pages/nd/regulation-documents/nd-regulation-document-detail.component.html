@@ -7,6 +7,14 @@
   </div>
   @if (canExtract && doc) {
     <div class="header-actions">
+      @if (hasPoints) {
+        <button type="button" class="nd-btn-secondary" [disabled]="repairing" (click)="handleRepair()">
+          {{ repairing ? 'Repairing…' : 'Repair points' }}
+        </button>
+        <button type="button" class="nd-btn-secondary" [disabled]="refreshingPages" (click)="handleRefreshPages()">
+          {{ refreshingPages ? 'Refreshing…' : 'Refresh PDF pages' }}
+        </button>
+      }
       <button type="button" class="nd-btn-primary" [disabled]="extracting" (click)="handleExtract()">
         {{ extracting ? 'Extracting…' : 'Run extraction' }}
       </button>
@@ -36,6 +44,9 @@
 
         @if (error) {
           <p class="nd-error">{{ error }}</p>
+        }
+        @if (message) {
+          <p class="nd-muted">{{ message }}</p>
         }
 
         <div class="nd-card reg-detail-help">

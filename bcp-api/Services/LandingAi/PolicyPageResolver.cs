@@ -21,13 +21,14 @@ public static partial class PolicyPageResolver
 
         if (!string.IsNullOrWhiteSpace(quote))
         {
-            var byQuote = FindInSegments(segments, quote);
+            // Prefer last match — TOC / front-matter often repeat short phrases on early pages.
+            var byQuote = FindInSegments(segments, quote, preferLast: true);
             if (byQuote.HasValue) return byQuote;
         }
 
         if (!string.IsNullOrWhiteSpace(section))
         {
-            var bySection = FindSectionPage(markdown, segments, section);
+            var bySection = FindSectionPageLast(markdown, segments, section);
             if (bySection.HasValue) return bySection;
         }
 
@@ -576,8 +577,16 @@ public static partial class PolicyPageResolver
         if (quoteMatch.Success) quote = quoteMatch.Groups[1].Value.Trim();
 
         string? section = null;
-        var sectionMatch = SectionRegex().Match(trimmed);
-        if (sectionMatch.Success) section = sectionMatch.Groups[1].Value.Trim().TrimEnd(':');
+        var tightSection = TightSectionRegex().Match(trimmed);
+        if (tightSection.Success)
+            section = tightSection.Groups[1].Value.Trim();
+        else
+        {
+            var sectionMatch = SectionRegex().Match(trimmed);
+            if (sectionMatch.Success) section = sectionMatch.Groups[1].Value.Trim().TrimEnd(':');
+        }
+
+        section = SanitizeSectionLabel(section);
 
         int? aiPage = null;
         var pageMatch = PageCitationRegex().Match(trimmed);
@@ -585,6 +594,38 @@ public static partial class PolicyPageResolver
             aiPage = p;
 
         return (quote, section, aiPage);
+    }
+
+    /// <summary>
+    /// Strip UUID / regulation-title leaks and trailing ")." junk from AI Section labels
+    /// so quote/section page lookup uses a real policy section id (e.g. 7.2).
+    /// </summary>
+    internal static string? SanitizeSectionLabel(string? section)
+    {
+        if (string.IsNullOrWhiteSpace(section)) return null;
+        var s = section.Trim().TrimEnd(')', '.', ',', ':', ';', ']').Trim();
+        if (string.IsNullOrWhiteSpace(s)) return null;
+
+        if (UuidRegex().IsMatch(s))
+        {
+            var withoutUuid = UuidRegex().Replace(s, " ");
+            withoutUuid = WhitespaceRegex().Replace(withoutUuid, " ").Trim();
+            var numbered = NumberedSectionPrefixRegex().Match(withoutUuid);
+            if (!numbered.Success) numbered = NumberedSectionAnywhereRegex().Match(s);
+            return numbered.Success ? numbered.Groups[1].Value : null;
+        }
+
+        var prefix = NumberedSectionPrefixRegex().Match(s);
+        if (prefix.Success)
+        {
+            var rest = s[prefix.Length..].Trim();
+            if (string.IsNullOrEmpty(rest) || rest.Length > 24) return prefix.Groups[1].Value;
+            if (char.IsUpper(rest[0]) && rest.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 3)
+                return prefix.Groups[1].Value;
+            return prefix.Groups[1].Value;
+        }
+
+        return s.Length > 48 ? s[..45].TrimEnd() + "…" : s;
     }
 
     private static string NormalizeForMatch(string text) =>
@@ -595,6 +636,9 @@ public static partial class PolicyPageResolver
 
     [GeneratedRegex(@"Section\s+([^:'""]+?)(?=\s*:\s*['""]|$)", RegexOptions.IgnoreCase)]
     private static partial Regex SectionRegex();
+
+    [GeneratedRegex(@"Section\s+(\d+(?:\.\d+)*|[A-Za-z][\w./-]{0,40})(?=\s*[,:).]|\s*$)", RegexOptions.IgnoreCase)]
+    private static partial Regex TightSectionRegex();
 
     [GeneratedRegex(@"['""]([^'""]+)['""]")]
     private static partial Regex QuoteRegex();
@@ -610,4 +654,13 @@ public static partial class PolicyPageResolver
 
     [GeneratedRegex(@"^\d+(\.\d+)+$")]
     private static partial Regex NumberedClauseRegex();
+
+    [GeneratedRegex(@"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", RegexOptions.IgnoreCase)]
+    private static partial Regex UuidRegex();
+
+    [GeneratedRegex(@"^(\d+(?:\.\d+)*)\b")]
+    private static partial Regex NumberedSectionPrefixRegex();
+
+    [GeneratedRegex(@"\b(\d+(?:\.\d+)*)\b")]
+    private static partial Regex NumberedSectionAnywhereRegex();
 }

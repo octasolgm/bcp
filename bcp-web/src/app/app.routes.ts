@@ -11,6 +11,13 @@ const ndAnalyseV8Route = {
     import('./pages/analyse-v8/analyse-v8.component').then((m) => m.AnalyseV8Component),
 };
 
+const ndAnalyseV9Route = {
+  canActivate: [ndRoleGuard],
+  data: { ndRoles: ['maker', 'super_admin'] },
+  loadComponent: () =>
+    import('./pages/analyse-v9/analyse-v9.component').then((m) => m.AnalyseV9Component),
+};
+
 /** Legacy app pages (served under /old/*). */
 const legacyAppRoutes: Routes = [
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
@@ -252,6 +259,21 @@ export const routes: Routes = [
           {
             path: 'analyse-v8',
             ...ndAnalyseV8Route,
+          },
+          {
+            path: 'analyse-v9',
+            title: 'New Gap Analysis V2 · Comply-Solution',
+            ...ndAnalyseV9Route,
+          },
+          {
+            path: 'analysis-versions',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['maker', 'super_admin'] },
+            title: 'Analysis versions · Comply-Solution',
+            loadComponent: () =>
+              import('./pages/nd/analysis-versions/nd-analysis-versions.component').then(
+                (m) => m.NdAnalysisVersionsComponent,
+              ),
           },
           {
             path: 'dual-verify',

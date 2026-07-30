@@ -31,7 +31,7 @@ export function aggregateGapRiskCounts(
 
   for (const point of points) {
     const severity = resolveAnalysisPointSeverity(point);
-    if (severity === 'compliant') continue;
+    if (!severity || severity === 'compliant') continue;
     const gaps = meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point));
     if (gaps.length) {
       for (const gap of gaps) {

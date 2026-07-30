@@ -18,6 +18,47 @@ export type PolicyRefProof = {
   quote?: string | null;
 };
 
+const UUID_RE =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/**
+ * Clean AI "Section …" labels. Landing often pastes regulation point UUIDs/titles
+ * or trailing punctuation into the citation (e.g. "Section 2)." or
+ * "Section &lt;uuid&gt; International Legislative…").
+ */
+export function sanitizePolicySection(section: string | null | undefined): string | null {
+  if (!section?.trim()) return null;
+  let s = section.trim();
+
+  // Drop trailing junk from malformed cites: "2).", "7.2):", "Legal Basis)."
+  s = s.replace(/[).,:;\]]+\s*$/g, '').trim();
+  if (!s) return null;
+
+  if (UUID_RE.test(s)) {
+    const withoutUuid = s.replace(UUID_RE, ' ').replace(/\s+/g, ' ').trim();
+    const numbered = withoutUuid.match(/^(\d+(?:\.\d+)*)\b/) ?? s.match(/\b(\d+(?:\.\d+)*)\b/);
+    // UUID + regulation title leak — keep only a short clause number if present.
+    if (numbered && numbered[1].length <= 16) return numbered[1];
+    return null;
+  }
+
+  // Prefer clause numbers when the rest looks like a long document title.
+  const numbered = s.match(/^(\d+(?:\.\d+)*)\b(.*)$/);
+  if (numbered) {
+    const num = numbered[1];
+    const rest = numbered[2].trim();
+    if (!rest) return num;
+    if (rest.length > 24) return num;
+    // "2 International…" style — number only
+    if (/^[A-Z]/.test(rest) && rest.split(/\s+/).length >= 3) return num;
+    return num;
+  }
+
+  // Named sections ("Legal Basis") — keep short; drop long prose.
+  if (s.length > 48) return s.slice(0, 45).trimEnd() + '…';
+  return s;
+}
+
 function normalizeName(value: string): string {
   return value
     .toLowerCase()
@@ -69,7 +110,8 @@ export function formatPolicyRefLabel(ref: PolicyRefProof, multiDoc = false): str
   const parts: string[] = [];
   if (multiDoc && ref.docLabel) parts.push(ref.docLabel);
   if (ref.page) parts.push(`Page ${ref.page}`);
-  if (ref.section) parts.push(`Section ${ref.section}`);
+  const section = sanitizePolicySection(ref.section);
+  if (section) parts.push(`Section ${section}`);
   return parts.join(', ') || 'Policy source';
 }
 
@@ -103,13 +145,14 @@ export function parsePolicyCitationFromLine(line: string): {
     }
   }
 
+  // Prefer "Section 7.28, Page 10: quote" — capture a tight section token first.
   const structured = trimmed.match(
-    /Section\s+([^,:'"]+?)(?:,\s*Page\s+(\d+(?:\s*[-–]\s*\d+)?))?\s*:\s*['"]([^'"]+)['"]/i,
+    /Section\s+(\d+(?:\.\d+)*|[A-Za-z][\w./-]{0,40})(?:,\s*Page\s+(\d+(?:\s*[-–]\s*\d+)?))?\s*:\s*['"]([^'"]+)['"]/i,
   );
   if (structured) {
     return {
       docName,
-      section: structured[1]?.trim() ?? null,
+      section: sanitizePolicySection(structured[1]),
       page: structured[2]?.trim() ?? null,
       quote: structured[3]?.trim() ?? null,
     };
@@ -122,13 +165,18 @@ export function parsePolicyCitationFromLine(line: string): {
     return {
       docName,
       page: pageFirst[1]?.trim() ?? null,
-      section: pageFirst[2]?.trim() ?? null,
+      section: sanitizePolicySection(pageFirst[2]),
       quote: pageFirst[3]?.trim() ?? null,
     };
   }
 
   const cite = parseReferenceCitation(trimmed);
-  return { docName, ...cite };
+  return {
+    docName,
+    page: cite.page,
+    section: sanitizePolicySection(cite.section),
+    quote: cite.quote,
+  };
 }
 
 function splitCitationSourceLines(text: string): string[] {
@@ -168,17 +216,28 @@ function pushPolicyRef(
   blockReferencePdf: string,
 ): void {
   const parsed = parsePolicyCitationFromLine(line);
-  if (!parsed.page && !parsed.section) return;
+  const section = sanitizePolicySection(parsed.section);
+  if (!parsed.page && !section) return;
+  // Skip empty or UUID-junk cites with no usable quote (noise from bad AI lines).
+  if (!parsed.quote?.trim() && section == null && !parsed.page) return;
 
   const docId = resolveDocForCitation(parsed.docName, blockReferencePdf, catalog);
-  const pageKey = parsed.page ?? parsed.section ?? line.slice(0, 40);
-  const key = `${docId ?? parsed.docName ?? 'default'}:${pageKey}:${parsed.section ?? ''}`;
+  const quoteKey = (parsed.quote ?? '').slice(0, 80).toLowerCase();
+  const pageKey = parsed.page ?? section ?? line.slice(0, 40);
+  const key = `${docId ?? parsed.docName ?? 'default'}:${pageKey}:${section ?? ''}:${quoteKey}`;
   if (seen.has(key)) return;
+  // Same quote already shown under another junk section — keep first clean one.
+  if (quoteKey.length >= 20) {
+    for (const existing of refs) {
+      const eq = (existing.quote ?? '').slice(0, 80).toLowerCase();
+      if (eq === quoteKey) return;
+    }
+  }
   seen.add(key);
 
   refs.push({
     page: parsed.page ?? '',
-    section: parsed.section,
+    section,
     docId,
     docLabel: docLabelForId(docId, catalog),
     quote: parsed.quote,
@@ -210,15 +269,16 @@ export function buildPolicyRefProofs(
       // Fallback: single citation parse for legacy v1 one-line output
       if (refs.length === beforeCount && block.outputResponse?.trim()) {
         const cite = parseReferenceCitation(block.outputResponse);
-        if (cite.page || cite.section) {
+        const section = sanitizePolicySection(cite.section);
+        if (cite.page || section) {
           const docId = resolvePolicyDocId(refPdf, catalog);
-          const pageKey = cite.page ?? cite.section ?? block.outputResponse.slice(0, 40);
-          const key = `${docId ?? 'default'}:${pageKey}`;
+          const pageKey = cite.page ?? section ?? block.outputResponse.slice(0, 40);
+          const key = `${docId ?? 'default'}:${pageKey}:${section ?? ''}`;
           if (!seen.has(key)) {
             seen.add(key);
             refs.push({
               page: cite.page ?? '',
-              section: cite.section,
+              section,
               docId,
               docLabel: docLabelForId(docId, catalog),
               quote: cite.quote,

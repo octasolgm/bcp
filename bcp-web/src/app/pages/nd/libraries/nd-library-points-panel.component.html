@@ -2,7 +2,7 @@
   <div class="panel-head">
     <p class="panel-status" [class.panel-error]="error">{{ statusLabel }}</p>
     @if (!loading && libraryStoredCount > 0) {
-      <p class="panel-hint">✓ = compared in gap analysis · unmarked rows are section headers (context only)</p>
+      <p class="panel-hint">✓ = compared in gap analysis · Intro / section headers are shown for context only</p>
       <input
         type="search"
         class="panel-search"
@@ -58,6 +58,7 @@
                                 <app-nd-point-number-tree
                                   [nodes]="ch.tree"
                                   mode="view"
+                                  [catalogPoints]="catalogPoints"
                                 />
                               </div>
                             }
@@ -67,6 +68,7 @@
                         <app-nd-point-number-tree
                           [nodes]="doc.pointTree.length ? doc.pointTree : []"
                           mode="view"
+                          [catalogPoints]="catalogPoints"
                         />
                         @if (!doc.pointTree.length) {
                           @for (row of doc.flatRows; track row.point.regulationPointId ?? row.displayId) {
@@ -121,7 +123,11 @@
     <span class="pid">{{ row.displayId }}</span>
     <span class="ptxt">{{ truncate(row.point.title || row.point.text, 52) }}</span>
     @if (!row.forAnalysis) {
-      <span class="point-tag-header">Header</span>
+      @if (row.isIntroduction) {
+        <span class="point-tag-header point-tag-intro">Intro</span>
+      } @else {
+        <span class="point-tag-header">Header</span>
+      }
     }
   </div>
 </ng-template>

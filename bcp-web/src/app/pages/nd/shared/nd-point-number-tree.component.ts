@@ -8,7 +8,11 @@ import {
   SimpleChanges,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { formatSectionGroupLabel } from '../../../../lib/gov-point-filter';
+import {
+  formatSectionGroupLabel,
+  sectionHeadingTitleForKey,
+  type GovPoint,
+} from '../../../../lib/gov-point-filter';
 import type { LibraryPointDisplayRow, PointDisplayTreeNode } from '../../../../lib/library-points-utils';
 
 @Component({
@@ -24,6 +28,8 @@ export class NdPointNumberTreeComponent implements OnChanges {
   @Input() mode: 'analysis' | 'view' = 'analysis';
   @Input() selected = new Set<string>();
   @Input() selectedDetailPointId: string | null = null;
+  @Input() showRichDetails = true;
+  @Input() catalogPoints: GovPoint[] = [];
   @Input() resolvePointId: (row: LibraryPointDisplayRow) => string | null = (row) =>
     row.forAnalysis ? row.point.point_id : null;
 
@@ -32,9 +38,18 @@ export class NdPointNumberTreeComponent implements OnChanges {
   @Output() selectDetail = new EventEmitter<string>();
 
   expandedKeys = new Set<string>();
+  expandedPoints = new Set<string>();
+  readonly previewLen = 120;
+  private resolvedCatalog: GovPoint[] = [];
+
   readonly formatSectionGroupLabel = formatSectionGroupLabel;
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['nodes'] || changes['catalogPoints']) {
+      this.resolvedCatalog = this.catalogPoints.length
+        ? this.catalogPoints
+        : this.collectCatalogFromNodes(this.nodes);
+    }
     if (changes['nodes']) {
       this.expandedKeys = new Set(
         this.nodes.filter((node) => node.children.length > 0).map((node) => node.key),
@@ -49,7 +64,54 @@ export class NdPointNumberTreeComponent implements OnChanges {
   }
 
   groupLabel(node: PointDisplayTreeNode): string {
-    return this.formatSectionGroupLabel(node.displayId);
+    const fromCatalog = sectionHeadingTitleForKey(node.displayId, this.resolvedCatalog);
+    const headerTitle =
+      fromCatalog ||
+      (node.children.length > 0 && node.row && !this.resolvePointId(node.row)
+        ? node.row.point.title?.trim()
+        : null);
+    return this.formatSectionGroupLabel(node.displayId, headerTitle);
+  }
+
+  hasSeparateTitle(point: GovPoint): boolean {
+    const title = (point.title ?? '').trim();
+    const text = (point.text ?? '').trim();
+    return !!(title && text && title !== text);
+  }
+
+  pointTitle(point: GovPoint): string {
+    return (point.title ?? '').trim();
+  }
+
+  pointDetail(point: GovPoint): string {
+    const title = (point.title ?? '').trim();
+    const text = (point.text ?? '').trim();
+    if (title && text && title !== text) return text;
+    if (!title && text) return text;
+    return '';
+  }
+
+  showDetail(point: GovPoint): boolean {
+    return this.pointDetail(point).length > 0;
+  }
+
+  isDetailLong(point: GovPoint): boolean {
+    return this.pointDetail(point).length > this.previewLen;
+  }
+
+  pointRowKey(row: LibraryPointDisplayRow): string {
+    return row.point.regulationPointId ?? row.point.point_id ?? row.displayId;
+  }
+
+  isPointExpanded(key: string): boolean {
+    return this.expandedPoints.has(key);
+  }
+
+  togglePointText(key: string, event?: Event): void {
+    event?.stopPropagation();
+    event?.preventDefault();
+    if (this.expandedPoints.has(key)) this.expandedPoints.delete(key);
+    else this.expandedPoints.add(key);
   }
 
   isExpanded(key: string): boolean {
@@ -100,5 +162,25 @@ export class NdPointNumberTreeComponent implements OnChanges {
     for (const child of node.children) {
       this.walkSelectable(child, ids);
     }
+  }
+
+  private collectCatalogFromNodes(nodes: PointDisplayTreeNode[]): GovPoint[] {
+    const out: GovPoint[] = [];
+    const seen = new Set<string>();
+    const walk = (list: PointDisplayTreeNode[]) => {
+      for (const node of list) {
+        if (node.row) {
+          const p = node.row.point;
+          const key = `${p.point_id}|${p.section ?? ''}|${p.title ?? ''}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            out.push(p);
+          }
+        }
+        if (node.children.length) walk(node.children);
+      }
+    };
+    walk(nodes);
+    return out;
   }
 }

@@ -392,27 +392,34 @@ export function filterComparableGovLeafPoints(points: GovPoint[]): {
   const enriched = enrichGovPointSections(points);
   const comparable: GovPoint[] = [];
   const skipped: Array<{ point: GovPoint; reason: string }> = [];
-  const allPointIds = enriched.map((p) => p.point_id);
+  const allPointIds = enriched.map((p) => resolveLogicalPointId(p as GovPointWithNumber));
 
   for (const point of enriched) {
-    let { comparable: ok, reason } = classifyGovPoint(point);
+    const logicalId = resolveLogicalPointId(point as GovPointWithNumber);
+    const forClassify = { ...point, point_id: logicalId };
+    let { comparable: ok, reason } = classifyGovPoint(forClassify);
 
-    if (ok && point.point_id.trim() === '2.') {
+    if (ok && isJunkExtractPointId(logicalId)) {
+      ok = false;
+      reason = 'section heading / part title (not a numbered clause)';
+    }
+
+    if (ok && logicalId.trim() === '2.') {
       ok = false;
       reason = '§2 umbrella skipped';
     }
 
-    if (ok && isNamedSectionSummaryPoint(point.point_id)) {
+    if (ok && isNamedSectionSummaryPoint(logicalId)) {
       ok = false;
       reason = 'section summary duplicate (use numbered sub-points)';
     }
 
-    if (ok && isBareDefinitionLabel(point.point_id)) {
+    if (ok && isBareDefinitionLabel(logicalId)) {
       ok = false;
       reason = 'definition list label (not a requirement point id)';
     }
 
-    if (ok && isNumericParentWithChildren(point.point_id, allPointIds)) {
+    if (ok && isNumericParentWithChildren(logicalId, allPointIds)) {
       ok = false;
       reason = 'section header skipped (compare leaf sub-points only)';
     }
@@ -421,7 +428,12 @@ export function filterComparableGovLeafPoints(points: GovPoint[]): {
     else skipped.push({ point, reason: reason ?? 'informational' });
   }
 
-  comparable.sort((a, b) => compareGovPointIds(a.point_id, b.point_id));
+  comparable.sort((a, b) =>
+    compareGovPointIds(
+      resolveLogicalPointId(a as GovPointWithNumber),
+      resolveLogicalPointId(b as GovPointWithNumber),
+    ),
+  );
   return { comparable, skipped };
 }
 
@@ -534,10 +546,146 @@ function splitGovPointObligationBullets(text: string): string[] {
   return [];
 }
 
+function normalizePointNumberKey(pointNumber?: string | null): string {
+  return (pointNumber ?? '').trim().replace(/\.$/, '').toLowerCase();
+}
+
+function contentFingerprint(text?: string | null): string {
+  return (text ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isNearDuplicateGovContent(a?: string | null, b?: string | null): boolean {
+  const ta = contentFingerprint(a);
+  const tb = contentFingerprint(b);
+  if (!ta || !tb) return false;
+  if (ta === tb) return true;
+  const shorter = ta.length <= tb.length ? ta : tb;
+  const longer = ta.length <= tb.length ? tb : ta;
+  return longer.includes(shorter);
+}
+
 /**
- * Expand §X.Y extract blobs with inline bullet lists into leaf ids (3.1 → 3.1.1 …).
- * Keep in sync with apps/api/src/modules/landing-ai/utils/gov-point-filter.ts
+ * When extract rows share a number (four "7.8" sub-topics), nest as 7.8.1, 7.8.2, …
+ * Keep in sync with GovPointExtractNormalizer.AssignNestedIdsToDuplicateSiblings (bcp-api).
  */
+export function assignNestedIdsToDuplicateSiblings(points: GovPoint[]): GovPoint[] {
+  if (!points.length) return points;
+
+  const groups = new Map<string, GovPoint[]>();
+  for (const point of points) {
+    const key = normalizePointNumberKey(point.point_id);
+    if (!key) continue;
+    const list = groups.get(key) ?? [];
+    list.push(point);
+    groups.set(key, list);
+  }
+
+  const singletonKeys = new Set(
+    [...groups.entries()].filter(([, list]) => list.length === 1).map(([key]) => key),
+  );
+  const occupied = new Set<string>();
+  for (const point of points) {
+    const key = normalizePointNumberKey(point.point_id);
+    if (key && singletonKeys.has(key)) occupied.add(key);
+  }
+
+  const reassigned = new Map<GovPoint, string>();
+  for (const [key, group] of groups) {
+    if (group.length <= 1) continue;
+
+    const distinct: GovPoint[] = [];
+    for (const item of group) {
+      if (
+        distinct.some(
+          (existing) =>
+            isNearDuplicateGovContent(existing.text, item.text) &&
+            contentFingerprint(existing.title) === contentFingerprint(item.title),
+        )
+      ) {
+        continue;
+      }
+      distinct.push(item);
+    }
+
+    if (distinct.length <= 1) continue;
+
+    let suffix = 1;
+    for (const item of distinct) {
+      let nestedId = `${key}.${suffix}`;
+      while (occupied.has(nestedId)) {
+        suffix += 1;
+        nestedId = `${key}.${suffix}`;
+      }
+      reassigned.set(item, nestedId);
+      occupied.add(nestedId);
+      suffix += 1;
+    }
+  }
+
+  return points.map((point) => {
+    const nested = reassigned.get(point);
+    if (!nested) return point;
+    return { ...point, point_id: nested };
+  });
+}
+
+/**
+ * When children exist (3.1.1) but parent (3.1) is missing, synthesize a section-heading row.
+ * Keep in sync with GovPointExtractNormalizer.SynthesizeMissingParentPoints (bcp-api).
+ */
+export function synthesizeMissingParentGovPoints(points: GovPoint[]): GovPoint[] {
+  if (!points.length) return points;
+
+  const byKey = new Map<string, GovPoint>();
+  for (const point of points) {
+    const key = normalizePointNumberKey(point.point_id);
+    if (key && !byKey.has(key)) byKey.set(key, point);
+  }
+
+  const parentsNeeded = new Set<string>();
+  for (const key of byKey.keys()) {
+    const parts = key.split('.');
+    for (let depth = 1; depth < parts.length; depth += 1) {
+      const parent = parts.slice(0, depth).join('.');
+      if (!byKey.has(parent)) parentsNeeded.add(parent);
+    }
+  }
+
+  if (!parentsNeeded.size) return points;
+
+  const output = [...points];
+  for (const parentId of [...parentsNeeded].sort(compareGovPointIds)) {
+    const children = points.filter((p) => {
+      const id = normalizeNumericPointId(p.point_id);
+      return !!id?.startsWith(`${parentId}.`);
+    });
+    const sectionLine = resolveParentSectionLine(parentId, children);
+    const title = sectionLine ? headingTitleFromSectionLine(sectionLine) : null;
+    output.push({
+      point_id: parentId,
+      title: title ?? undefined,
+      text: title ?? `Section ${parentId}`,
+      section: sectionLine ?? undefined,
+      point_type: 'informational',
+    });
+  }
+
+  return output;
+}
+
+function resolveParentSectionLine(parentId: string, children: GovPoint[]): string | null {
+  for (const child of children) {
+    const fromSection = headingTitleFromSectionLine(child.section);
+    if (fromSection) return `${parentId}. ${fromSection}`;
+
+    const embedded =
+      headingTitleEmbeddedForClause(parentId, child.section) ??
+      headingTitleEmbeddedForClause(parentId, child.title) ??
+      headingTitleEmbeddedForClause(parentId, child.text);
+    if (embedded) return `${parentId}. ${embedded}`;
+  }
+  return null;
+}
 export function expandGovPointSubLeaves(points: GovPoint[]): GovPoint[] {
   const expanded: GovPoint[] = [];
 
@@ -559,9 +707,10 @@ export function expandGovPointSubLeaves(points: GovPoint[]): GovPoint[] {
       (point.title ? `${norm}. ${point.title}` : `${norm}.`);
 
     bullets.forEach((bullet, index) => {
+      const leafId = `${norm}.${index + 1}`;
       expanded.push({
         ...point,
-        point_id: `${norm}.${index + 1}`,
+        point_id: leafId,
         title: inferBulletTitle(bullet) ?? point.title,
         text: bullet,
         section,
@@ -589,6 +738,111 @@ export function enrichGovPointSections(points: GovPoint[]): GovPoint[] {
   });
 }
 
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
+/** Keep in sync with GovPointExtractNormalizer.IsJunkExtractPointId (bcp-api). */
+export function isJunkExtractPointId(pointId?: string | null): boolean {
+  const id = (pointId ?? '').trim();
+  if (!id) return true;
+
+  const junkSingleWord = new Set(
+    ['complexity', 'controls', 'policies', 'procedures', 'typology', 'size/value', 'elements', 'element', 'governance'],
+  );
+  if (junkSingleWord.has(id.toLowerCase())) return true;
+
+  const junkPatterns = [
+    /^part\s+[ivxlc]+/i,
+    /^part\s+v\b/i,
+    /^elements?\s+of\s+an?\s+aml/i,
+    /^the\s+elements\s+of/i,
+    /^aml\/?cft\s+program\s+element/i,
+    /^(first|second|third)\s+line\s+of\s+defense/i,
+    /^scope\s+of\s+guidelines/i,
+    /^part\s+iii\b/i,
+    /^part\s+iv\b/i,
+  ];
+  if (junkPatterns.some((re) => re.test(id))) return true;
+  if (/^element[s]?\b/i.test(id) && !/^\d/.test(id)) return true;
+  if (id.includes(' - ') && !/^(aml[-/ ]?cft|article\s+\d+|annex\s+\d+)/i.test(id)) return true;
+  if (/^part\s/i.test(id)) return true;
+
+  return false;
+}
+
+/** Pull official clause id (e.g. 2.6.6) from section/title text — not Part I/II headings. */
+export function extractNumericClauseRef(text?: string | null): string | null {
+  const s = (text ?? '').trim();
+  if (!s) return null;
+
+  const lead = s.match(/^(?:§\s*)?(\d+\.\d+(?:\.\d+)*)\.?(?:\s|[.—–\-:)]|$)/);
+  if (lead) return normalizeNumericPointId(lead[1]);
+
+  const inner = s.match(/(?:^|[·—–\-]\s*)(?:§\s*)?(\d+\.\d+(?:\.\d+)*)\.?(?:\s|[.—–\-:)]|$)/);
+  if (inner) return normalizeNumericPointId(inner[1]);
+
+  return normalizeNumericPointId(s);
+}
+
+export type GovPointWithNumber = GovPoint & { pointNumber?: string };
+
+/** Best id for classify/filter — prefers numeric clause, skips Part I junk and UUID keys. */
+export function resolveLogicalPointId(point: GovPointWithNumber): string {
+  const id = point.point_id.trim().replace(/\.$/, '');
+  const idNorm = !isUuidLike(id) ? normalizeNumericPointId(id) : null;
+
+  const num = (point.pointNumber ?? '').trim().replace(/\.$/, '');
+  const numNorm = num && !isUuidLike(num) ? normalizeNumericPointId(num) : null;
+
+  if (idNorm && numNorm) {
+    const idDepth = idNorm.split('.').length;
+    const numDepth = numNorm.split('.').length;
+    if (idDepth !== numDepth) return idDepth > numDepth ? idNorm : numNorm;
+    return idNorm;
+  }
+  if (idNorm) return idNorm;
+  if (numNorm) return numNorm;
+  if (num && !isJunkExtractPointId(num)) return num;
+
+  if (!isUuidLike(id)) {
+    if (!isJunkExtractPointId(id)) return id;
+  }
+
+  const fromSection =
+    extractNumericClauseRef(point.section) ??
+    extractNumericClauseRef((point.section ?? '').split('·')[0]);
+  if (fromSection) return fromSection;
+
+  const fromTitle = extractNumericClauseRef(point.title);
+  if (fromTitle) return fromTitle;
+
+  return num || id;
+}
+
+/** UI label for a regulation point — never prefer parent §3.1 over leaf 3.1.1; hide UUIDs and Part headings. */
+export function resolveGovPointDisplayNumber(point: GovPointWithNumber): string {
+  const logical = resolveLogicalPointId(point);
+  const norm = normalizeNumericPointId(logical);
+  if (norm) return norm;
+  if (logical && !isUuidLike(logical) && !isJunkExtractPointId(logical)) {
+    return logical.replace(/\.$/, '');
+  }
+
+  const fromText = extractNumericClauseRef(point.text?.split('\n')[0]);
+  if (fromText) return fromText;
+
+  const display = formatGovPointDisplayId({
+    ...point,
+    point_id: isUuidLike(point.point_id) ? logical : point.point_id,
+  });
+  if (display && !isUuidLike(display) && !isJunkExtractPointId(display)) {
+    return display.replace(/\.$/, '');
+  }
+
+  return '';
+}
+
 /**
  * Human-readable point id for UI — numeric ids unchanged; annex roman items
  * show as Annex-1.2.(i) (not bare (i) or main-body 2.(i)).
@@ -596,15 +850,20 @@ export function enrichGovPointSections(points: GovPoint[]): GovPoint[] {
 export function formatGovPointDisplayId(point: GovPoint): string {
   const id = point.point_id.trim();
   const section = (point.section ?? '').trim();
+  const sectionHead = section.split('·')[0].trim();
 
-  if (section) {
-    const sectionNorm = normalizeNumericPointId(section);
-    if (sectionNorm) return sectionNorm;
-    if (!normalizeNumericPointId(id)) return section;
+  const idNorm = isUuidLike(id) ? null : normalizeNumericPointId(id);
+  const sectionNorm =
+    normalizeNumericPointId(sectionHead) ?? normalizeNumericPointId(section);
+
+  if (idNorm) {
+    if (!sectionNorm || idNorm.split('.').length >= sectionNorm.split('.').length) {
+      return idNorm;
+    }
   }
 
-  const norm = normalizeNumericPointId(id);
-  if (norm) return norm;
+  if (sectionNorm) return sectionNorm;
+  if (section && !normalizeNumericPointId(id)) return sectionHead || section;
 
   if (isRomanPointId(id)) {
     const section = (point.section ?? '').trim();
@@ -620,22 +879,213 @@ export function formatGovPointDisplayId(point: GovPoint): string {
 }
 
 /** Chapter header — main body §N; annex chapters shown without § prefix. */
-export function formatChapterLabel(chapter: string): string {
+export function formatChapterLabel(chapter: string, headingTitle?: string | null): string {
   const c = chapter.trim();
-  if (c === 'other') return 'Other points';
-  if (/^annex\s+\d+/i.test(c)) return c;
-  return `§${c}`;
+  let base: string;
+  if (c === 'other') base = 'Other points';
+  else if (c === 'intro') base = '§1 Introduction';
+  else if (/^annex\s+\d+/i.test(c)) base = c;
+  else base = `§${c}`;
+  const title = headingTitle?.trim();
+  if (title && c !== 'intro' && c !== 'other') return `${base} ${title}`;
+  return base;
+}
+
+function displayChapterSortRank(chapter: string): number {
+  const c = chapter.trim().toLowerCase();
+  if (c === 'intro') return -2;
+  if (c === '1') return -1;
+  if (c === 'other') return 9_999;
+  if (/^annex/.test(c)) return 5_000;
+  const n = Number.parseInt(c, 10);
+  if (!Number.isNaN(n)) return n;
+  return 4_000;
+}
+
+/** Resolve UI chapter bucket — never drops points (intro, annex, orphans). */
+export function resolveDisplayChapterKey(point: GovPoint): string {
+  const chapter = getChapterKey(point.point_id, point.section);
+  if (chapter) return chapter;
+
+  if (isSectionOnePoint(point.point_id, point.section ?? '')) return '1';
+
+  const { comparable, reason } = classifyGovPoint(point);
+  if (!comparable) {
+    const r = reason ?? '';
+    if (
+      r.includes('§1') ||
+      r.includes('introduction') ||
+      r.includes('purpose') ||
+      r.includes('applicability') ||
+      r.includes('informational narrative')
+    ) {
+      return 'intro';
+    }
+    if (r.includes('annex')) {
+      return resolveAnnexChapter(point.section, point.point_id) ?? 'annex';
+    }
+  }
+
+  const top = point.point_id.trim().match(/^(\d+)/);
+  if (top) return top[1];
+
+  return 'other';
+}
+
+/** Title text from a section line, e.g. "3.1. Summary of Minimum…" → "Summary of Minimum…". */
+export function headingTitleFromSectionLine(section?: string | null): string | null {
+  const s = (section ?? '').trim();
+  if (!s) return null;
+
+  const withoutPage = s.replace(/\s*·\s*p\.\s*\d+.*$/i, '').trim();
+  const segments = withoutPage.split(/\s*·\s*/).map((part) => part.trim()).filter(Boolean);
+
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const seg = segments[i];
+    const m = seg.match(/^\d+(?:\.\d+)*\.?\s+(.+)$/);
+    if (m?.[1]?.trim() && !isJunkSectionHeadingTitle(m[1])) {
+      return m[1].trim();
+    }
+  }
+
+  const whole = withoutPage.match(/^\d+(?:\.\d+)*\.?\s+(.+)$/);
+  if (whole?.[1]?.trim() && !isJunkSectionHeadingTitle(whole[1])) {
+    return whole[1].trim();
+  }
+
+  return null;
+}
+
+function isJunkSectionHeadingTitle(title: string): boolean {
+  const t = title.trim();
+  if (!t) return true;
+  if (/^p\.\s*\d+/i.test(t)) return true;
+  if (/^[·•\-–—]/.test(t)) return true;
+  return false;
+}
+
+/** Find "3.1. Summary of…" embedded anywhere in a stored field. */
+function headingTitleEmbeddedForClause(norm: string, text?: string | null): string | null {
+  const s = (text ?? '').trim();
+  if (!s) return null;
+  const escaped = norm.replace(/\./g, '\\.');
+  const patterns = [
+    new RegExp(`\\b${escaped}\\.\\s+([^·\\n]{4,}?)(?:\\s*·|$)`, 'i'),
+    new RegExp(`\\b${escaped}\\s+([A-Z][^·\\n]{4,}?)(?:\\s*·|$)`),
+  ];
+  for (const re of patterns) {
+    const m = s.match(re);
+    if (m?.[1]?.trim() && !isJunkSectionHeadingTitle(m[1])) {
+      return m[1].trim();
+    }
+  }
+  return null;
+}
+
+function resolvePointHeadingTitle(point: GovPoint | undefined, clauseKey: string): string | null {
+  if (!point) return null;
+
+  const title = (point.title ?? '').trim();
+  if (title && !normalizeNumericPointId(title)) return title;
+
+  const fromSection = headingTitleFromSectionLine(point.section);
+  if (fromSection) return fromSection;
+
+  const embedded =
+    headingTitleEmbeddedForClause(clauseKey, point.section) ??
+    headingTitleEmbeddedForClause(clauseKey, point.title) ??
+    headingTitleEmbeddedForClause(clauseKey, point.text);
+  if (embedded) return embedded;
+
+  const text = (point.text ?? '').trim();
+  if (text) {
+    const firstLine = text.split(/\n/)[0]?.trim() ?? '';
+    const fromFirst =
+      headingTitleFromSectionLine(firstLine) ??
+      headingTitleEmbeddedForClause(clauseKey, firstLine);
+    if (fromFirst && !isJunkSectionHeadingTitle(fromFirst)) return fromFirst;
+
+    const pointId = normalizeNumericPointId(point.point_id) ?? stripGovPointPrefix(point.point_id);
+    if (
+      pointId === clauseKey &&
+      firstLine &&
+      !isJunkSectionHeadingTitle(firstLine) &&
+      !normalizeNumericPointId(firstLine) &&
+      !/^[•\-*]\s/.test(firstLine) &&
+      firstLine.length <= 120
+    ) {
+      return firstLine;
+    }
+  }
+
+  return null;
+}
+
+/** Section heading title for §3.1-style group keys — from stored point title or section line. */
+export function sectionHeadingTitleForKey(key: string, points: GovPoint[]): string | null {
+  const norm = normalizeNumericPointId(key.trim());
+  if (!norm) return null;
+
+  const direct = points.find((p) => {
+    const id = normalizeNumericPointId(p.point_id) ?? stripGovPointPrefix(p.point_id);
+    return id === norm;
+  });
+  const directResolved = resolvePointHeadingTitle(direct, norm);
+  if (directResolved) return directResolved;
+
+  const candidates = new Set<string>();
+  for (const p of points) {
+    const id = normalizeNumericPointId(p.point_id) ?? stripGovPointPrefix(p.point_id);
+    const isChild = !!id?.startsWith(`${norm}.`);
+    const sg = sectionGroupFromSection(p.section);
+    if (id !== norm && !isChild && sg !== norm) continue;
+
+    const fromSection = headingTitleFromSectionLine(p.section);
+    if (fromSection) candidates.add(fromSection);
+
+    const embedded =
+      headingTitleEmbeddedForClause(norm, p.section) ??
+      headingTitleEmbeddedForClause(norm, p.title) ??
+      headingTitleEmbeddedForClause(norm, p.text);
+    if (embedded) candidates.add(embedded);
+  }
+
+  if (candidates.size === 1) return [...candidates][0];
+  if (candidates.size > 1) {
+    return [...candidates].sort((a, b) => b.length - a.length)[0];
+  }
+
+  return null;
+}
+
+/** Short label for analysing / result lists — prefer point title over body text. */
+export function resolveGovPointListTitle(point: GovPointWithNumber): string {
+  const title = (point.title ?? '').trim();
+  if (title) return title;
+  const displayId = resolveGovPointDisplayNumber(point);
+  if (displayId) {
+    const heading = sectionHeadingTitleForKey(displayId, [point]);
+    if (heading) return heading;
+  }
+  const text = (point.text ?? '').trim();
+  if (!text) return '';
+  const first = text.split(/\n/)[0]?.trim() ?? text;
+  return first.length > 120 ? `${first.slice(0, 117)}…` : first;
 }
 
 /** Section bar label — numeric groups get § prefix; annex headings stay verbatim. */
-export function formatSectionGroupLabel(key: string): string {
+export function formatSectionGroupLabel(key: string, headingTitle?: string | null): string {
   const k = key.trim();
   if (!k) return k;
-  if (/^annex\s+\d+/i.test(k)) return k;
-  if (/^annex\s+\d+\s*·\s*/i.test(k)) return k;
-  if (/^\d+\.\d+(?:\.\d+)*$/.test(k)) return `§${k}`;
-  if (/^\d+$/.test(k)) return `§${k}`;
-  return k;
+  let base: string;
+  if (/^annex\s+\d+/i.test(k)) base = k;
+  else if (/^annex\s+\d+\s*·\s*/i.test(k)) base = k;
+  else if (/^\d+\.\d+(?:\.\d+)*$/.test(k)) base = `§${k}`;
+  else if (/^\d+$/.test(k)) base = `§${k}`;
+  else base = k;
+  const title = headingTitle?.trim();
+  if (title) return `${base} ${title}`;
+  return base;
 }
 
 /** Section group from heading, e.g. "2.4. Internal Controls" → "2.4", "4. NOTIFICATION…" → "4". */
@@ -660,6 +1110,7 @@ export function stripGovPointPrefix(pointId: string): string {
 /** Top-level chapter id — main §2, §3, or Annex 1 (not annex "2." confused with §2). */
 export function getChapterKey(pointId: string, section?: string): string | null {
   const id = stripGovPointPrefix(pointId);
+  if (/^1$/.test(id) || /^1\.$/.test(id)) return '1';
   const annex = resolveAnnexChapter(section, id);
   if (annex) return annex;
 
@@ -717,15 +1168,14 @@ export type GovPointChapterGroup = {
   sections: Array<{ key: string; points: GovPoint[] }>;
 };
 
-/** Group comparable points by chapter (§2, §3) and mid-level section (§2.4, §2.1). */
+/** Group all points by chapter (intro, §1, §2, annex) and mid-level section (§2.4, §2.1). */
 export function groupGovPointsByChapter(points: GovPoint[]): GovPointChapterGroup[] {
   const chapterMap = new Map<string, Map<string, GovPoint[]>>();
 
   for (const point of points) {
-    const chapter = getChapterKey(point.point_id, point.section);
-    if (!chapter) continue;
+    const chapter = resolveDisplayChapterKey(point);
     const sectionKey =
-      getSectionGroupKey(point.point_id, point.section) ?? point.point_id.trim();
+      getSectionGroupKey(point.point_id, point.section) ?? (point.point_id.trim() || chapter);
 
     if (!chapterMap.has(chapter)) chapterMap.set(chapter, new Map());
     const sectionMap = chapterMap.get(chapter)!;
@@ -734,21 +1184,23 @@ export function groupGovPointsByChapter(points: GovPoint[]): GovPointChapterGrou
   }
 
   return [...chapterMap.entries()]
-    .sort(([a], [b]) => compareGovPointIds(a, b))
+    .sort(([a], [b]) => {
+      const rank = displayChapterSortRank(a) - displayChapterSortRank(b);
+      return rank !== 0 ? rank : compareGovPointIds(a, b);
+    })
     .map(([chapter, sectionMap]) => ({
       chapter,
-      points: points.filter(
-        (p) => getChapterKey(p.point_id, p.section) === chapter,
-      ),
+      points: points.filter((p) => resolveDisplayChapterKey(p) === chapter),
       sections: [...sectionMap.entries()]
         .sort(([a], [b]) => compareGovPointIds(a, b))
         .map(([key, sectionPoints]) => ({ key, points: sectionPoints })),
     }));
 }
 
-/** Annex section labelling only — no sub-leaf expansion (picker rows must match DB point numbers). */
+/** Annex section labelling + duplicate-number nesting for picker display. */
 export function enrichGovPointSectionsForPicker(points: GovPoint[]): GovPoint[] {
-  return points.map((point) => {
+  const nested = assignNestedIdsToDuplicateSiblings(points);
+  return nested.map((point) => {
     const section = (point.section ?? '').trim();
     if (!section || isAnnexSectionHeading(section)) return point;
 
@@ -776,6 +1228,11 @@ export function groupGovPointsForPicker(points: GovPoint[]): GovPointChapterGrou
     });
   }
   return grouped;
+}
+
+/** Full catalog for §heading resolution — includes synthesized parent section rows. */
+export function buildGovPointDisplayCatalog(points: GovPoint[]): GovPoint[] {
+  return synthesizeMissingParentGovPoints(enrichGovPointSectionsForPicker(points));
 }
 
 /** All extracted points grouped for display (§2, §3, §4, intro, annex). */

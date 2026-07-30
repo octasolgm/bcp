@@ -17,31 +17,105 @@ function extractAiMessage(raw?: string | null): string {
   }
 }
 
-/** Same cap resolution as nd-gap-point-detail (saved plan → AI corrective action). */
-export function resolveCapSourceForAnalysisPoint(p: AnalysisPoint): string {
+/** Phase 2 verification prose — not a user-facing corrective action. */
+export function isVerificationMetaCapText(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t || t === 'n/a' || t === '—' || t === '-') return true;
+  if (/^n\/a\s*[—–-]/.test(t)) return true;
+  if (t.includes('semantically satisfied')) return true;
+  if (t.includes('independently confirm')) return true;
+  if (/\bpass\s*[12]\b/.test(t) && (t.includes('confirm') || t.includes('assessment') || t.includes('verif'))) {
+    return true;
+  }
+  return false;
+}
+
+function capFromMessage(message: string): string {
+  if (!message.trim()) return '';
+  const block = parseReferenceComplianceBlock(message);
+  const cap = block.correctiveAction?.trim() ?? '';
+  if (!cap || isVerificationMetaCapText(cap)) return '';
+  return cap;
+}
+
+/** Prefer Landing AI CAP; Phase 2 is verification and often returns N/A + meta narrative. */
+export function resolveAiCorrectiveActionForPoint(p: AnalysisPoint): string {
   const landingMessage = extractAiMessage(p.landingAiResult);
   const llmMessage = extractAiMessage(p.googleAiResult);
-  const primaryMsg = (llmMessage || landingMessage).trim();
-  const primaryBlock = parseReferenceComplianceBlock(primaryMsg);
-  const aiCap =
-    primaryBlock.correctiveAction && primaryBlock.correctiveAction !== 'N/A'
-      ? primaryBlock.correctiveAction.trim()
-      : '';
+  const landingCap = capFromMessage(landingMessage);
+  if (landingCap) return landingCap;
+  return capFromMessage(llmMessage);
+}
+
+/** Same cap resolution as nd-gap-point-detail (saved plan → AI corrective action). */
+export function resolveCapSourceForAnalysisPoint(p: AnalysisPoint): string {
   const originalPlan = p.originalAiActionPlan?.trim() ?? '';
   const currentPlan = p.finalActionPlan?.trim() ?? originalPlan;
-  return currentPlan || originalPlan || aiCap;
+  const aiCap = resolveAiCorrectiveActionForPoint(p);
+  const capSource = currentPlan || originalPlan || aiCap;
+  if (!capSource || isVerificationMetaCapText(capSource) || isWeakCorrectivePlan(capSource)) return '';
+  return capSource;
 }
 
 /** Placeholder CAP rows (e.g. "** N/A **") must not count as real gaps. */
 export function isPlaceholderGapText(text: string): boolean {
   const t = text.trim().toLowerCase().replace(/\*+/g, '').trim();
-  return !t || t === 'n/a' || t === '—' || t === '-' || t === 'none' || t === 'not applicable';
+  if (isVerificationMetaCapText(text)) return true;
+  return (
+    !t ||
+    t === 'n/a' ||
+    t === '—' ||
+    t === '-' ||
+    t === 'none' ||
+    t === 'not applicable' ||
+    t === 'missing' ||
+    t.includes('re-run comparison') ||
+    t.includes('verify internal document')
+  );
 }
 
 export function isMeaningfulCapGap(gap: CapGap): boolean {
   const missingOk = !isPlaceholderGapText(gap.missing);
   const fixOk = Boolean(gap.fix?.trim()) && !isPlaceholderGapText(gap.fix);
   return missingOk || fixOk;
+}
+
+/** True when CAP is the old generic placeholder with no real gap/action. */
+export function isWeakCorrectivePlan(source: string): boolean {
+  const t = source.trim();
+  if (!t || t === 'N/A' || t === '—') return true;
+  if (isVerificationMetaCapText(t)) return true;
+  const lower = t.toLowerCase();
+  if (lower.includes('re-run comparison') || lower.includes('verify internal document')) {
+    // Structured plan that only wraps the placeholder is still weak.
+    if (!/missing:\s*(?!missing\b).{12,}/i.test(t)) return true;
+  }
+  if (/missing:\s*missing\b/i.test(t) && /re-run comparison|verify internal/i.test(t)) return true;
+  return false;
+}
+
+/** Build a readable Gap/Fix when Landing left only a placeholder CAP. */
+export function buildFallbackCapGaps(requirementText: string, severity?: string | null): CapGap[] {
+  const intent = summarizeRequirementIntent(requirementText);
+  const priority =
+    severity === 'partial_compliant' || severity === 'partial' ? 'medium' : 'higher';
+  return [
+    {
+      index: 1,
+      missing: `No equivalent internal procedure covers — ${intent}`,
+      fix: 'Draft, approve, and implement an internal control/procedure that addresses this requirement; assign an owner and retain evidence of implementation.',
+      priority,
+    },
+  ];
+}
+
+function summarizeRequirementIntent(requirementText: string): string {
+  let text = requirementText.replace(/\s+/g, ' ').trim();
+  if (!text) return 'the stated regulatory obligation';
+  const cut = text.search(/[.;\n]/);
+  if (cut > 40 && cut < 220) text = text.slice(0, cut).trim();
+  if (text.length > 220) text = text.slice(0, 217).trimEnd() + '…';
+  return text;
 }
 
 export function meaningfulCapGaps(source: string): CapGap[] {
@@ -53,25 +127,31 @@ export function countCapGapsForAnalysisPoint(p: AnalysisPoint): number {
   return countDisplayGapsForAnalysisPoint(p);
 }
 
-/** Gap badges: compliant points show 0 unless manually uploaded evidence exists. */
+/** Gap badges: compliant / unscored points show 0 unless manually uploaded evidence exists. */
 export function countDisplayGapsForAnalysisPoint(
   p: AnalysisPoint,
   manualEvidenceCount = 0,
 ): number {
   const severity = resolveAnalysisPointSeverity(p);
+  // Queued / pending — never invent "1 gap" before Landing has scored the point.
+  if (!severity) return manualEvidenceCount > 0 ? manualEvidenceCount : 0;
   if (severity === 'compliant') return manualEvidenceCount > 0 ? manualEvidenceCount : 0;
-  const count = meaningfulCapGaps(resolveCapSourceForAnalysisPoint(p)).length;
+  const source = resolveCapSourceForAnalysisPoint(p);
+  let count = meaningfulCapGaps(source).length;
+  if (count === 0 && (isWeakCorrectivePlan(source) || !source.trim())) {
+    count = 1;
+  }
   return Math.max(count, manualEvidenceCount);
 }
 
 export function countCapGapsForReportItem(item: DualVerifyReportItem): number {
   const landingStatus = item.agreement?.landingStatus?.toLowerCase() ?? '';
   if (landingStatus === 'compliant') return 0;
-  for (const msg of [item.llmMessage, item.landingMessage]) {
+  for (const msg of [item.landingMessage, item.llmMessage]) {
     if (!msg?.trim()) continue;
     const block = parseReferenceComplianceBlock(msg);
     const cap = block.correctiveAction?.trim();
-    if (cap && cap !== 'N/A') {
+    if (cap && !isVerificationMetaCapText(cap)) {
       const count = meaningfulCapGaps(cap).length;
       if (count > 0) return count;
     }

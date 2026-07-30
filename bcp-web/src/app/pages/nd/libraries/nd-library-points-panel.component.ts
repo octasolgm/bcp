@@ -54,6 +54,7 @@ export class NdLibraryPointsPanelComponent implements OnChanges {
   libraryDuplicateCount = 0;
   displayTree: LibraryPointDisplayTree[] = [];
   libraryDuplicateGroups: GovPointDuplicateGroup[] = [];
+  catalogPoints: GovPoint[] = [];
 
   expandedLibraryIds = new Set<string>();
   expandedLibraryDocKeys = new Set<string>();
@@ -259,14 +260,20 @@ export class NdLibraryPointsPanelComponent implements OnChanges {
     });
 
     const prepared = prepareLibraryPointsForAnalysis(allRaw);
+    this.catalogPoints = allRaw.map((p) => ({
+      point_id: p.point_id,
+      title: p.title,
+      text: p.text,
+      section: p.section,
+    }));
     this.libraryStoredCount = prepared.storedCount;
-    this.analyseCount = prepared.unique.length;
     this.libraryDuplicateCount = prepared.duplicateGroups.reduce(
       (n, g) => n + g.duplicates.length,
       0,
     );
     this.libraryDuplicateGroups = prepared.duplicateGroups;
     this.displayTree = buildLibraryStoredPointDisplay(allRaw, prepared.unique);
+    this.analyseCount = this.displayTree.reduce((n, lib) => n + lib.analyseCount, 0);
 
     this.expandedLibraryIds = new Set();
     this.expandedLibraryDocKeys = new Set();

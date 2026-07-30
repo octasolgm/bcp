@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
+using Reguliq.Api.Services.NewDashboard;
 
 namespace Reguliq.Api.Data;
 
@@ -129,6 +130,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(e => e.ExtractionResult).HasColumnType("jsonb");
         modelBuilder.Entity<NdRegulationPoint>(e =>
         {
+            e.Property(p => p.Status).HasDefaultValue(NdRegulationPointStatus.Active);
+            e.HasQueryFilter(p => p.Status == NdRegulationPointStatus.Active);
             e.HasOne<NdRegulationDocument>()
                 .WithMany(d => d.Points)
                 .HasForeignKey(p => p.RegulationDocumentId)

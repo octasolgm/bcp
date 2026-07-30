@@ -306,6 +306,7 @@
                                               [nodes]="ch.tree"
                                               [selected]="selected"
                                               [selectedDetailPointId]="selectedDetailPointId"
+                                              [catalogPoints]="pointsCatalogGovPoints"
                                               [resolvePointId]="selectableLibraryPointId.bind(this)"
                                               (togglePoint)="toggle($event)"
                                               (toggleGroup)="togglePointIds($event)"
@@ -320,6 +321,7 @@
                                       [nodes]="doc.pointTree.length ? doc.pointTree : []"
                                       [selected]="selected"
                                       [selectedDetailPointId]="selectedDetailPointId"
+                                      [catalogPoints]="pointsCatalogGovPoints"
                                       [resolvePointId]="selectableLibraryPointId.bind(this)"
                                       (togglePoint)="toggle($event)"
                                       (toggleGroup)="togglePointIds($event)"
@@ -422,6 +424,7 @@
                                       [nodes]="ch.tree"
                                       [selected]="selected"
                                       [selectedDetailPointId]="selectedDetailPointId"
+                                      [catalogPoints]="pointsCatalogGovPoints"
                                       (togglePoint)="toggle($event)"
                                       (toggleGroup)="togglePointIds($event)"
                                       (selectDetail)="selectPointForDetail($event)"
@@ -435,6 +438,7 @@
                               [nodes]="doc.pointTree.length ? doc.pointTree : []"
                               [selected]="selected"
                               [selectedDetailPointId]="selectedDetailPointId"
+                              [catalogPoints]="pointsCatalogGovPoints"
                               (togglePoint)="toggle($event)"
                               (toggleGroup)="togglePointIds($event)"
                               (selectDetail)="selectPointForDetail($event)"
@@ -763,6 +767,26 @@
         </button>
       </div>
       <div class="coverage-actions">
+        @if (ndRunId && exportableDoneGapPointCount > 0) {
+          <button
+            type="button"
+            class="btn-sm"
+            [disabled]="exportingGapReport"
+            (click)="exportDoneGapAnalysisExcel()"
+            title="Export all done points (Gap Analysis format)"
+          >
+            {{ exportingGapReport ? 'Exporting…' : ('Export Excel (' + exportableDoneGapPointCount + ')') }}
+          </button>
+          <button
+            type="button"
+            class="btn-sm"
+            [disabled]="exportingGapReport"
+            (click)="exportDoneGapAnalysisPdf()"
+            title="Export all done points as gap analysis PDF"
+          >
+            Export PDF ({{ exportableDoneGapPointCount }})
+          </button>
+        }
         <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || coverageCounts.notRun === 0" (click)="runRemainingPoints()">
           Run remaining ({{ coverageCounts.notRun }})
         </button>
@@ -789,33 +813,97 @@
               [class.detail-selected]="selectedDetailPointId === row.pointId"
               (click)="selectPointForDetail(row.pointId)"
             >
-              <span class="sid" [title]="row.displayId || row.pointId">{{ row.displayId || analysingDisplayId(row.pointId) }}</span>
+              <button
+                type="button"
+                class="point-info-btn"
+                title="View full requirement"
+                aria-label="View full requirement"
+                (click)="openPointDetailModal(row.pointId, $event)"
+              >
+                ⓘ
+              </button>
+              <span class="sid" [title]="displayLabelForPoint(row.pointId)">{{ row.displayId || displayLabelForPoint(row.pointId) }}</span>
               <div class="status-main">
                 <span class="stitle" [title]="row.title">{{ truncate(row.title, 40) }}</span>
                 @if (getPointPhaseStatus(row.pointId); as phases) {
                   <div class="phase-row">
-                    <span class="phase-chip" [class]="'phase-' + phases.phase1.state">
-                      <span class="phase-label">{{ phases.phase1.label }}</span>
-                      @if (phases.phase1.state === 'ok') {
-                        <span class="phase-icon" aria-hidden="true">✓</span>
-                      } @else if (phases.phase1.state === 'fail') {
-                        <span class="phase-icon" aria-hidden="true">✗</span>
-                      } @else if (phases.phase1.state === 'running') {
-                        <span class="phase-icon phase-spin" aria-hidden="true">…</span>
-                      }
-                    </span>
-                    <span class="phase-chip" [class]="'phase-' + phases.phase2.state">
-                      <span class="phase-label">{{ phases.phase2.label }}</span>
-                      @if (phases.phase2.state === 'ok') {
-                        <span class="phase-icon" aria-hidden="true">✓</span>
-                      } @else if (phases.phase2.state === 'warn') {
-                        <span class="phase-icon" aria-hidden="true">!</span>
-                      } @else if (phases.phase2.state === 'fail') {
-                        <span class="phase-icon" aria-hidden="true">✗</span>
-                      } @else if (phases.phase2.state === 'running') {
-                        <span class="phase-icon" aria-hidden="true">…</span>
-                      }
-                    </span>
+                    <div class="phase-chips">
+                      <span class="phase-chip" [class]="'phase-' + phases.phase1.state">
+                        <span class="phase-label">{{ phases.phase1.label }}</span>
+                        @if (phases.phase1.state === 'ok') {
+                          <span class="phase-icon" aria-hidden="true">✓</span>
+                        } @else if (phases.phase1.state === 'fail') {
+                          <span class="phase-icon" aria-hidden="true">✗</span>
+                        } @else if (phases.phase1.state === 'running') {
+                          <span class="phase-icon phase-spin" aria-hidden="true">…</span>
+                        }
+                      </span>
+                      <span class="phase-chip" [class]="'phase-' + phases.phase2.state">
+                        <span class="phase-label">{{ phases.phase2.label }}</span>
+                        @if (phases.phase2.state === 'ok') {
+                          <span class="phase-icon" aria-hidden="true">✓</span>
+                        } @else if (phases.phase2.state === 'warn') {
+                          <span class="phase-icon" aria-hidden="true">!</span>
+                        } @else if (phases.phase2.state === 'fail') {
+                          <span class="phase-icon" aria-hidden="true">✗</span>
+                        } @else if (phases.phase2.state === 'running') {
+                          <span class="phase-icon phase-spin" aria-hidden="true">…</span>
+                        }
+                      </span>
+                    </div>
+                    @if (canShowPointRerunActions(row.pointId)) {
+                      <div class="phase-actions">
+                        <button
+                          type="button"
+                          class="phase-action"
+                          [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'all'"
+                          title="Rerun Phase 1 + Phase 2 for this point"
+                          [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                          (click)="rerunPointAll(row.pointId); $event.stopPropagation()"
+                        >
+                          {{ pointRerunButtonLabel(row.pointId, 'Rerun all', 'all') }}
+                        </button>
+                        @if (needsPhase2RerunForPoint(row.pointId) || pointRerunMode(row.pointId) === 'phase2') {
+                          <button
+                            type="button"
+                            class="phase-action phase-action-p2"
+                            [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'phase2'"
+                            title="Rerun Phase 2 only (no Landing AI credits)"
+                            [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                            (click)="rerunPointPhase2(row.pointId); $event.stopPropagation()"
+                          >
+                            {{ pointRerunButtonLabel(row.pointId, 'Rerun Phase 2', 'phase2') }}
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                } @else if (canShowPointRerunActions(row.pointId)) {
+                  <div class="phase-row">
+                    <div class="phase-actions">
+                      <button
+                        type="button"
+                        class="phase-action"
+                      [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'all'"
+                      title="Rerun Phase 1 + Phase 2 for this point"
+                      [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                      (click)="rerunPointAll(row.pointId); $event.stopPropagation()"
+                    >
+                      {{ pointRerunButtonLabel(row.pointId, 'Rerun all', 'all') }}
+                    </button>
+                    @if (needsPhase2RerunForPoint(row.pointId) || pointRerunMode(row.pointId) === 'phase2') {
+                      <button
+                        type="button"
+                        class="phase-action phase-action-p2"
+                        [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'phase2'"
+                        title="Rerun Phase 2 only (no Landing AI credits)"
+                        [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                        (click)="rerunPointPhase2(row.pointId); $event.stopPropagation()"
+                      >
+                        {{ pointRerunButtonLabel(row.pointId, 'Rerun Phase 2', 'phase2') }}
+                      </button>
+                    }
+                    </div>
                   </div>
                 }
               </div>
@@ -895,7 +983,7 @@
   <div class="col-panel col-result col-panel-flex">
     <div class="col-head">
       <h3>Result</h3>
-      <span class="count">{{ selectedDetailPointId || '—' }}</span>
+      <span class="count">{{ resultClauseLabel }}</span>
       @if (analysisState === 'complete') {
         <button type="button" class="btn-secondary btn-sm" (click)="openGapReport()">Gap report</button>
       }
@@ -911,10 +999,12 @@
         <div class="result-detail-card-full">
           <header class="result-point-header">
             <div class="result-point-heading">
-              <h3>
-                §{{ selectedPointSnapshot?.pointNumber ?? selectedDetailPointId }}
+              <h3 class="result-point-title">
+                @if (resultClauseLabel !== '—') {
+                  <span class="result-clause-num">§{{ resultClauseLabel }}</span>
+                }
                 @if (selectedPointSnapshot?.pointTitle) {
-                  — {{ selectedPointSnapshot?.pointTitle }}
+                  <span class="result-clause-title">{{ selectedPointSnapshot?.pointTitle }}</span>
                 }
               </h3>
               @if (pointComplianceSeverity(ndPoint); as severity) {
@@ -934,6 +1024,11 @@
           <app-nd-gap-point-detail
             [point]="ndPoint"
             [snapshot]="selectedPointSnapshot"
+            [displayClause]="resultClauseLabel !== '—' ? resultClauseLabel : null"
+            [hideReportHeader]="true"
+            [phase2Running]="pointPhaseChipRunning(selectedDetailPointId!, 2)"
+            [phase1Running]="pointPhaseChipRunning(selectedDetailPointId!, 1)"
+            [phaseOutputDefaultOpen]="isPointRerunInFlight(selectedDetailPointId!)"
             [canEdit]="canEditResultCap"
             [editing]="resultEditingPointId === ndPoint.id"
             [saving]="resultCapSavingPointId === ndPoint.id"
@@ -992,7 +1087,7 @@
             <p class="muted-inline">Loading detail…</p>
           }
         </div>
-      } @else if (selectedPointReportItem && selectedPointDetail) {
+      } @else if (selectedDetailPointId && selectedPointDetail) {
         <div class="detail-card result-detail-card">
           <div class="detail-head">
             <span class="severity-badge" [class]="selectedPointDetail.severity">{{ selectedPointDetail.severity }}</span>
@@ -1009,6 +1104,9 @@
             }
           </span>
           <p class="detail-summary">{{ selectedPointDetail.summary }}</p>
+          @if (selectedPointReportItem) {
+            <app-dual-verify-result-card [item]="selectedPointReportItem" />
+          }
           @if (hasResumableRun && selectedPointDetail.status !== 'not-run') {
             <button
               type="button"
@@ -1147,6 +1245,7 @@
               <app-nd-gap-point-detail
                 [point]="ndPoint"
                 [snapshot]="pointSnapshotForPointId(pointId)"
+                [hideReportHeader]="true"
                 [canEdit]="canEditResultCap"
                 [editing]="resultEditingPointId === ndPoint.id"
                 [saving]="resultCapSavingPointId === ndPoint.id"
@@ -1222,6 +1321,33 @@
       <button type="button" class="btn-primary btn-sm" [disabled]="!ndRunConfirmReady" (click)="confirmNdRun()">
         Confirm &amp; run
       </button>
+    </div>
+  </dialog>
+}
+
+@if (pointDetailModalId) {
+  <div class="run-confirm-backdrop" (click)="closePointDetailModal()"></div>
+  <dialog class="run-confirm-dialog point-detail-dialog" open aria-labelledby="point-detail-title">
+    <button type="button" class="point-detail-close" aria-label="Close" (click)="closePointDetailModal()">×</button>
+    <h2 id="point-detail-title">
+      §{{ displayLabelForPoint(pointDetailModalId) }}
+      @if (pointDetailModalSnapshot()?.pointTitle) {
+        — {{ pointDetailModalSnapshot()?.pointTitle }}
+      }
+    </h2>
+    @if (pointDetailModalSnapshot()?.pageReference) {
+      <p class="point-detail-meta">
+        <strong>Clause / page:</strong> {{ pointDetailModalSnapshot()?.pageReference }}
+      </p>
+    }
+    @if (pointDetailModalGov()?.title && pointDetailModalGov()?.title !== pointDetailModalSnapshot()?.pointTitle) {
+      <p class="point-detail-meta"><strong>Title:</strong> {{ pointDetailModalGov()?.title }}</p>
+    }
+    <div class="point-detail-body">
+      {{ pointDetailModalSnapshot()?.pointContent || pointDetailModalGov()?.text || 'No requirement text stored.' }}
+    </div>
+    <div class="run-confirm-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="closePointDetailModal()">Close</button>
     </div>
   </dialog>
 }

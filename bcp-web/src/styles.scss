@@ -32,6 +32,25 @@
   --info-bg: rgba(37, 99, 235, 0.15);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+
+  /* Ink for pastel/cream alert panels — must stay dark in both themes */
+  --on-pastel: #1e293b;
+  --on-pastel-muted: #64748b;
+  --on-pastel-label: #92400e;
+  --on-pastel-ok: #065f46;
+  --on-pastel-danger: #991b1b;
+  --on-pastel-info: #1e40af;
+
+  --pastel-warn-bg: #fffbeb;
+  --pastel-warn-border: #fde68a;
+  --pastel-ok-bg: #ecfdf5;
+  --pastel-ok-border: #a7f3d0;
+  --pastel-danger-bg: #fef2f2;
+  --pastel-danger-border: #fecaca;
+  --pastel-info-bg: #dbeafe;
+  --pastel-info-border: #93c5fd;
+  --pastel-neutral-bg: #f8fafc;
+  --pastel-neutral-border: #cbd5e1;
 }
 
 [data-theme='dark'] {
@@ -117,6 +136,12 @@
   --backdrop: rgba(15, 23, 42, 0.4);
   --hover-surface: rgba(15, 23, 42, 0.06);
   --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+/* Pastel / cream panels (fulfilled lists, CAP cards, status chips) keep dark ink
+   so dark-theme --text-primary (near-white) never renders as light-on-light. */
+.pastel-ink {
+  color: var(--on-pastel);
 }
 
 * {

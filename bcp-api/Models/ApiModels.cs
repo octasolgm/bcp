@@ -2,7 +2,13 @@ namespace Reguliq.Api.Models;
 
 public record ApiResponse<T>(bool Success, T Data, string? Message = null);
 
-public record GovPoint(string PointId, string? Title, string Text, string? Section, int? PageHint = null);
+public record GovPoint(
+    string PointId,
+    string? Title,
+    string Text,
+    string? Section,
+    int? PageHint = null,
+    string? PointType = null);
 
 public record DualVerifyAgreementDto(
     string Status,

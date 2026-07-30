@@ -1,6 +1,9 @@
 <div class="points-panel">
   <div class="panel-head">
     <p class="panel-status">{{ statusLabel }}</p>
+    @if (viewNote) {
+      <p class="panel-note">{{ viewNote }}</p>
+    }
     @if (points.length > 0) {
       <div class="panel-toolbar">
         <input
@@ -15,6 +18,10 @@
             <button type="button" class="panel-link-btn" (click)="expandAll()">Expand all</button>
             <span class="panel-expand-sep" aria-hidden="true">·</span>
             <button type="button" class="panel-link-btn" (click)="collapseAll()">Collapse all</button>
+            <span class="panel-expand-sep" aria-hidden="true">·</span>
+            <button type="button" class="panel-link-btn" (click)="expandAllDetails()">Expand all details</button>
+            <span class="panel-expand-sep" aria-hidden="true">·</span>
+            <button type="button" class="panel-link-btn" (click)="collapseAllDetails()">Collapse all details</button>
           </div>
         }
       </div>
@@ -37,7 +44,7 @@
         <div class="acc-item">
           <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
             <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
-            <span>{{ formatChapterLabel(ch.chapter) }}</span>
+            <span>{{ chapterLabel(ch.chapter) }}</span>
             <span class="acc-meta">{{ ch.points.length }}</span>
           </button>
           @if (isChapterExpanded(ch.chapter)) {
@@ -50,22 +57,47 @@
                     (click)="toggleSection(ch.chapter, sec.key, $event)"
                   >
                     <span class="chevron sec-chevron" [class.open]="isSectionExpanded(ch.chapter, sec.key)">›</span>
-                    <span>{{ formatSectionGroupLabel(sec.key) }}</span>
+                    <span>{{ sectionLabel(sec) }}</span>
                     <span class="acc-meta sec-meta">{{ sec.points.length }}</span>
                   </button>
                 }
                 @if (!showSectionBar(ch.sections, sec.key, ch.chapter) || isSectionExpanded(ch.chapter, sec.key)) {
                   @for (p of sec.points; track p.point_id) {
-                    <div class="point-line" [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint" [class.point-highlight]="isHighlighted(p.point_id)">
-                      <span class="point-check" aria-hidden="true">✓</span>
+                    <div class="point-line" [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint || !isComparablePoint(p.point_id)" [class.point-highlight]="isHighlighted(p.point_id)">
+                      <span class="point-check" [class.point-check-skip]="!isComparablePoint(p.point_id)" aria-hidden="true">{{ isComparablePoint(p.point_id) ? '✓' : '○' }}</span>
                       <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
-                      @if (pointMeta(p.point_id)?.isIntroductionPoint) {
+                      @if (pointMeta(p.point_id)?.isIntroductionPoint || skipReason(p.point_id)?.includes('§1') || skipReason(p.point_id)?.includes('introduction')) {
                         <span class="point-tag">Intro</span>
                       }
                       @if (pointMeta(p.point_id)?.isAnnexPoint) {
                         <span class="point-tag point-tag-annex">Annex</span>
                       }
-                      <span class="ptxt">{{ truncate(p.title || p.text, 52) }}</span>
+                      @if (!isComparablePoint(p.point_id)) {
+                        <span class="point-tag point-tag-skip" [title]="skipReason(p.point_id) ?? ''">{{ skipReasonShort(p.point_id) }}</span>
+                      }
+                      <div class="point-text-wrap">
+                        @if (hasSeparateTitle(p)) {
+                          <span class="ptitle">{{ pointTitle(p) }}</span>
+                        }
+                        @if (showDetail(p)) {
+                          @if (isPointExpanded(p.point_id) || !isDetailLong(p)) {
+                            <span class="ptxt ptxt-full">{{ pointDetail(p) }}</span>
+                          } @else {
+                            <span class="ptxt">{{ truncate(pointDetail(p), previewLen) }}</span>
+                          }
+                          @if (isDetailLong(p)) {
+                            <button
+                              type="button"
+                              class="point-text-toggle"
+                              (click)="togglePointText(p.point_id, $event)"
+                            >
+                              {{ isPointExpanded(p.point_id) ? 'Show less' : 'Show more' }}
+                            </button>
+                          }
+                        } @else if (pointTitle(p)) {
+                          <span class="ptitle">{{ pointTitle(p) }}</span>
+                        }
+                      </div>
                     </div>
                   }
                 }

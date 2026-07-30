@@ -97,4 +97,32 @@ public class PolicyPageResolverTests
 
         Assert.True(page is >= 76 and <= 78, $"expected ~77, got {page}");
     }
+
+    [Theory]
+    [InlineData("2).", "2")]
+    [InlineData("7.2):", "7.2")]
+    [InlineData("Legal Basis).", "Legal Basis")]
+    [InlineData("31e325e2-5e6f-4df1-859b-203afe942c0c International Legislative and Regulatory Framework)", null)]
+    [InlineData("7.2 Identification of Suspicious Transactions", "7.2")]
+    public void SanitizeSectionLabel_CleansAiJunk(string input, string? expected)
+    {
+        Assert.Equal(expected, PolicyPageResolver.SanitizeSectionLabel(input));
+    }
+
+    [Fact]
+    public void Resolve_PrefersQuoteLastMatch_AndIgnoresUuidSection()
+    {
+        var md = $"""
+            {PolicyPageResolver.PageMarkerPrefix}2 -->
+            founding members appear in the table of contents summary
+            {PolicyPageResolver.PageMarkerPrefix}6 -->
+            The UAE is one of the founding members of MENA FATF regional body.
+            """;
+
+        var line =
+            """"Page 2, Section 31e325e2-5e6f-4df1-859b-203afe942c0c International Legislative): "The UAE is one of the founding members of MENA"""";
+
+        var page = PolicyPageResolver.Resolve(md, line);
+        Assert.Equal(6, page);
+    }
 }

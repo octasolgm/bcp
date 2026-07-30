@@ -97,6 +97,7 @@ public static class NdRunEnrichmentHelper
 
             manualEvidenceByRun.TryGetValue(run.Id, out var byPoint);
             var totalGaps = NdCapGapCounter.CountForPoints(runPoints, byPoint);
+            var gapRisk = NdGapRiskCounter.AggregateForPoints(runPoints);
 
             reviewedByRun.TryGetValue(run.Id, out var reviewedGaps);
             totalReviewsByRun.TryGetValue(run.Id, out var totalReviews);
@@ -120,6 +121,9 @@ public static class NdRunEnrichmentHelper
                 totalGaps,
                 reviewedGaps,
                 totalReviews,
+                criticalGaps = gapRisk.Critical,
+                mediumGaps = gapRisk.Medium,
+                lowGaps = gapRisk.Low,
                 totalPointsCount = run.TotalPointsCount,
                 processedPointsCount = run.ProcessedPointsCount,
                 dualVerifyFailedCount = run.DualVerifyFailedCount,
@@ -133,7 +137,8 @@ public static class NdRunEnrichmentHelper
 
     /// <summary>
     /// Fast list rows for nav, analysis-runs table, and dashboard cards.
-    /// Includes compliance tallies (FinalStatus, else LandingAiStatus) without loading CAP text.
+    /// Loads status + CAP text only (not Landing/LLM result blobs) so Critical/Medium/Low cards
+    /// can populate without a second full /nd/results download.
     /// </summary>
     public static async Task<List<object>> MapSummariesLightAsync(
         AppDbContext db,
@@ -150,39 +155,37 @@ public static class NdRunEnrichmentHelper
                 .Where(p => makerIds.Contains(p.Id))
                 .ToDictionaryAsync(p => p.Id, p => p.FullName ?? "", ct);
 
-        // Project status columns only — avoid pulling large AI result blobs for list/dashboard.
-        var statusRows = await db.NdAnalysisPoints.AsNoTracking()
+        // Status + CAP only — avoid landing_ai_result / google_ai_result blobs.
+        var capRows = await db.NdAnalysisPoints.AsNoTracking()
             .Where(p => runIds.Contains(p.AnalysisRunId))
-            .Select(p => new { p.AnalysisRunId, p.FinalStatus, p.LandingAiStatus })
+            .Select(p => new
+            {
+                p.Id,
+                p.AnalysisRunId,
+                p.FinalStatus,
+                p.LandingAiStatus,
+                p.FinalActionPlan,
+                p.OriginalAiActionPlan,
+                p.LandingAiActionPlan,
+            })
             .ToListAsync(ct);
 
-        var complianceByRun = statusRows
-            .GroupBy(x => x.AnalysisRunId)
-            .ToDictionary(
-                g => g.Key,
-                g =>
-                {
-                    var compliant = 0;
-                    var partial = 0;
-                    var nonCompliant = 0;
-                    foreach (var row in g)
-                    {
-                        var status = EffectiveComplianceStatus(row.FinalStatus, row.LandingAiStatus);
-                        switch (status)
-                        {
-                            case "compliant":
-                                compliant++;
-                                break;
-                            case "partial_compliant":
-                                partial++;
-                                break;
-                            case "non_compliant":
-                                nonCompliant++;
-                                break;
-                        }
-                    }
-                    return (compliant, partial, nonCompliant);
-                });
+        var pointIds = capRows.Select(p => p.Id).ToList();
+        var reviewPriorityRows = pointIds.Count == 0
+            ? []
+            : await db.NdActionPlanItemReviews.AsNoTracking()
+                .Where(r => pointIds.Contains(r.AnalysisPointId) && r.Priority != null && r.Priority != "")
+                .Select(r => new { r.AnalysisPointId, r.ActionIndex, r.Priority, r.CreatedAt, r.SortOrder })
+                .ToListAsync(ct);
+
+        // Latest review priority wins per (point, actionIndex).
+        var reviewPriority = reviewPriorityRows
+            .OrderByDescending(r => r.SortOrder)
+            .ThenByDescending(r => r.CreatedAt)
+            .GroupBy(r => (r.AnalysisPointId, r.ActionIndex))
+            .ToDictionary(g => g.Key, g => (string?)g.First().Priority);
+
+        var byRun = capRows.GroupBy(x => x.AnalysisRunId).ToDictionary(g => g.Key, g => g.ToList());
 
         var list = new List<object>(runs.Count);
         foreach (var run in runs)
@@ -191,13 +194,47 @@ public static class NdRunEnrichmentHelper
             if (run.CreatedBy is Guid mid && makers.TryGetValue(mid, out var name))
                 makerName = name;
 
-            complianceByRun.TryGetValue(run.Id, out var counts);
+            byRun.TryGetValue(run.Id, out var rows);
+            rows ??= [];
+
+            var compliant = 0;
+            var partial = 0;
+            var nonCompliant = 0;
+            foreach (var row in rows)
+            {
+                switch (EffectiveComplianceStatus(row.FinalStatus, row.LandingAiStatus))
+                {
+                    case "compliant":
+                        compliant++;
+                        break;
+                    case "partial_compliant":
+                        partial++;
+                        break;
+                    case "non_compliant":
+                        nonCompliant++;
+                        break;
+                }
+            }
+
+            var gapRisk = NdGapRiskCounter.AggregateForCapRows(
+                rows.Select(r => new NdGapRiskCounter.CapRow(
+                    r.Id,
+                    r.FinalStatus,
+                    r.LandingAiStatus,
+                    r.FinalActionPlan,
+                    r.OriginalAiActionPlan,
+                    r.LandingAiActionPlan)),
+                reviewPriority);
+
             list.Add(NdLegacyDataQueries.MapNdRunSummary(
                 run,
                 makerName,
-                counts.compliant,
-                counts.partial,
-                counts.nonCompliant));
+                compliant,
+                partial,
+                nonCompliant,
+                gapRisk.Critical,
+                gapRisk.Medium,
+                gapRisk.Low));
         }
 
         return list;

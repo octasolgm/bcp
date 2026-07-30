@@ -28,10 +28,11 @@ import {
   normalizeGapPriority,
   type GapPriority,
 } from '../../../lib/nd/gap-priority';
-import { meaningfulCapGaps, isMeaningfulCapGap } from '../../../lib/nd/cap-gap-count';
+import { meaningfulCapGaps, isMeaningfulCapGap, isWeakCorrectivePlan, buildFallbackCapGaps, resolveAiCorrectiveActionForPoint, isVerificationMetaCapText } from '../../../lib/nd/cap-gap-count';
 import { agreementBadgeClass, type AgreementStatus, type DualVerifyAgreement } from '../../../lib/landing-ai/dual-verify-merge';
 import { ReferenceComplianceCardComponent } from '../reference-compliance-card/reference-compliance-card.component';
 import type { ActionPlanHistoryEntry, AnalysisPoint, Department, PointGapAttachment, PointSnapshot } from '../../../lib/nd/types';
+import { resolveSnapshotDisplayNumber, regulatoryRequirementText, isUuidLike } from '../../../lib/nd/utils';
 import { NdApiService } from '../../services/nd/nd-api.service';
 import {
   complianceSeverityLabel,
@@ -91,7 +92,13 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Input() policyDocCatalog: PolicyDocCatalogEntry[] = [];
   @Input() regulationDocId: string | null = null;
   @Input() hideReportHeader = false;
+  /** Resolved clause number (e.g. 2.2) — overrides snapshot UUID labels. */
+  @Input() displayClause: string | null = null;
   @Input() phaseOutputDefaultOpen = false;
+  /** Phase 2 dual-verify rerun in flight for this point. */
+  @Input() phase2Running = false;
+  /** Phase 1 Landing AI rerun in flight (full point rerun). */
+  @Input() phase1Running = false;
   /** Checker/reviewer: per-action status + comment controls. */
   @Input() reviewMode = false;
   /** Show review history / add-review area for checker, reviewer, super_admin. */
@@ -150,6 +157,13 @@ export class NdGapPointDetailComponent implements OnChanges {
   regulationPageLabel: string | null = null;
   landingMessage = '';
   llmMessage = '';
+  googleAiError = '';
+  pass2ErrorTitle = 'Phase 2 failed';
+  pass2ErrorMessage = '';
+  pass2ErrorFull = '';
+  pass1ErrorTitle = 'Phase 1 failed';
+  pass1ErrorMessage = '';
+  pass1ErrorFull = '';
   agreement?: DualVerifyAgreement;
   primaryBlock!: ReferenceComplianceBlock;
   showFulfilled = false;
@@ -167,7 +181,8 @@ export class NdGapPointDetailComponent implements OnChanges {
   draftGap: CapGap = { index: 1, missing: '', fix: '', priority: '' };
   /** Filter history panel to a single action item. */
   historyGapIndex: number | null = null;
-  resolvedSeverity: ComplianceSeverity = 'partial_compliant';
+  resolvedSeverity: ComplianceSeverity | null = null;
+  capSourceLabel = 'Compliance AI draft';
 
   get pointLevelReviews(): ActionItemReviewEntry[] {
     return reviewsForPointLevel(this.savedActionItemReviews);
@@ -180,7 +195,9 @@ export class NdGapPointDetailComponent implements OnChanges {
       this.point?.finalActionPlan ?? '',
       this.point?.originalAiActionPlan ?? '',
       this.point?.landingAiResult ?? '',
+      this.point?.landingAiError ?? '',
       this.point?.googleAiResult ?? '',
+      this.point?.googleAiError ?? '',
     ].join('\u001f');
 
     if (nextKey !== this.contentKey) {
@@ -201,24 +218,40 @@ export class NdGapPointDetailComponent implements OnChanges {
     }
 
     const snap = this.snapshot;
-    this.pointHeading = [
-      snap?.pointNumber ? `§${snap.pointNumber}` : '',
-      snap?.pointTitle ?? '',
-    ]
-      .filter(Boolean)
-      .join(' — ');
+    const fromInput =
+      this.displayClause?.trim() && !isUuidLike(this.displayClause) ? this.displayClause.trim() : '';
+    const fromSnap = resolveSnapshotDisplayNumber(snap ?? {}, this.point.regulationPointId);
+    const displayNum = fromInput || (fromSnap && !isUuidLike(fromSnap) ? fromSnap : '');
+    let title = snap?.pointTitle?.trim() || '';
+    if (title && isUuidLike(title.split(/\s+/)[0]?.replace(/^§/, ''))) {
+      title = title.replace(/^§?\s*[0-9a-f-]{36}\s*[—–\-]\s*/i, '').trim();
+    }
+    this.pointHeading = displayNum
+      ? title
+        ? `§${displayNum} — ${title}`
+        : `§${displayNum}`
+      : title || 'Regulation point';
 
-    this.regulatoryText =
-      snap?.pointContent?.trim() ||
-      snap?.pointTitle?.trim() ||
-      snap?.pointNumber?.trim() ||
-      '—';
+    this.regulatoryText = regulatoryRequirementText(snap, {
+      title: snap?.pointTitle ?? undefined,
+      text: snap?.pointContent ?? '',
+    }) || '—';
 
     this.regulationPage = resolveRegulationPdfPage(snap?.pageReference, snap?.pdfPage ?? null);
     this.regulationPageLabel = formatPointPageRef(snap?.pageReference, this.regulationPage);
 
     this.landingMessage = this.extractMessage(this.point.landingAiResult);
     this.llmMessage = this.extractMessage(this.point.googleAiResult);
+    this.googleAiError = this.point.googleAiError?.trim() ?? '';
+    const pass2Err = this.formatPhaseError(this.googleAiError, 'Phase 2 dual verify failed');
+    this.pass2ErrorTitle = pass2Err.title;
+    this.pass2ErrorMessage = pass2Err.message;
+    this.pass2ErrorFull = pass2Err.full;
+    const landingErrRaw = this.point.landingAiError?.trim() ?? '';
+    const pass1Err = this.formatPhaseError(landingErrRaw, 'Phase 1 (Landing AI) failed');
+    this.pass1ErrorTitle = pass1Err.title;
+    this.pass1ErrorMessage = pass1Err.message;
+    this.pass1ErrorFull = pass1Err.full;
     this.agreement = this.extractAgreement(this.point.googleAiResult);
 
     const primaryMsg = (this.llmMessage || this.landingMessage).trim();
@@ -283,22 +316,43 @@ export class NdGapPointDetailComponent implements OnChanges {
 
     this.originalPlan = this.point.originalAiActionPlan?.trim() ?? '';
     this.currentPlan = this.point.finalActionPlan?.trim() ?? this.originalPlan;
-    // No plan saved on the point yet — fall back to the Corrective Action Plan
-    // field inside the AI output so the cards still render like dual-verify.
-    const aiCap =
-      this.primaryBlock.correctiveAction && this.primaryBlock.correctiveAction !== 'N/A'
-        ? this.primaryBlock.correctiveAction.trim()
-        : '';
+    const aiCap = resolveAiCorrectiveActionForPoint(this.point);
     const capSource = this.currentPlan || this.originalPlan || aiCap;
-    if (!this.currentPlan) this.currentPlan = aiCap;
-    this.capGaps = capSource ? meaningfulCapGaps(capSource) : [];
-
+    const effectiveCap =
+      capSource && !isVerificationMetaCapText(capSource) && !isWeakCorrectivePlan(capSource)
+        ? capSource
+        : '';
+    if (!this.currentPlan && effectiveCap) this.currentPlan = effectiveCap;
+    if (!effectiveCap && isWeakCorrectivePlan(this.currentPlan)) {
+      this.currentPlan = '';
+    }
     this.resolvedSeverity = resolveAnalysisPointSeverity(this.point);
+    this.capGaps = effectiveCap ? meaningfulCapGaps(effectiveCap) : [];
+    // Old Landing placeholder CAP ("Re-run comparison…") has no real gap/action —
+    // synthesize from the regulatory requirement so the panel is usable.
+    // Never invent CAP for queued / unscored points.
+    if (
+      this.resolvedSeverity &&
+      this.resolvedSeverity !== 'compliant' &&
+      (this.capGaps.length === 0 || isWeakCorrectivePlan(effectiveCap))
+    ) {
+      this.capGaps = buildFallbackCapGaps(this.regulatoryText, this.resolvedSeverity);
+      if (!this.currentPlan || isWeakCorrectivePlan(this.currentPlan)) {
+        const g = this.capGaps[0];
+        this.currentPlan = `Gap(s):\n(1) Missing: ${g.missing}. Fix: ${g.fix}. Priority: ${g.priority || 'Medium'}.`;
+      }
+    }
+
+    const userEditedPlan =
+      Boolean(this.point.finalActionPlan?.trim()) &&
+      this.point.finalActionPlan!.trim() !== (this.point.originalAiActionPlan?.trim() ?? '');
+    this.capSourceLabel = userEditedPlan ? 'Edited' : 'Compliance AI draft';
+
     this.showCapSection =
-      this.capGaps.length > 0 ||
-      (this.resolvedSeverity !== 'compliant' &&
-        Boolean(capSource) &&
-        (this.resolvedSeverity === 'partial_compliant' || this.resolvedSeverity === 'non_compliant'));
+      this.resolvedSeverity === 'partial_compliant' ||
+      this.resolvedSeverity === 'non_compliant' ||
+      (this.capGaps.length > 0 && this.resolvedSeverity !== 'compliant') ||
+      (userEditedPlan && this.capGaps.length > 0);
 
     if (!this.editing) {
       this.resetEditState();
@@ -343,7 +397,7 @@ export class NdGapPointDetailComponent implements OnChanges {
   }
 
   get displayComplianceStatus(): string {
-    return complianceSeverityLabel(this.resolvedSeverity);
+    return this.resolvedSeverity ? complianceSeverityLabel(this.resolvedSeverity) : 'Pending';
   }
 
   get displayConfidence(): string {
@@ -599,6 +653,31 @@ export class NdGapPointDetailComponent implements OnChanges {
     const input = event.target as HTMLInputElement;
     if (input.files?.length) this.uploadEvidence.emit(input.files);
     input.value = '';
+  }
+
+  /** User-facing phase error (strip HTTP wrapper + parse JSON when present). */
+  private formatPhaseError(raw: string, title: string): { title: string; message: string; full: string } {
+    const full = raw.trim();
+    if (!full) return { title, message: '', full: '' };
+
+    let rest = full.replace(/^(Anthropic API error|Landing AI[^:]*)\s*\(\w+\):\s*/i, '').trim();
+    const jsonStart = rest.indexOf('{');
+    if (jsonStart >= 0) {
+      try {
+        const parsed = JSON.parse(rest.slice(jsonStart)) as {
+          error?: { message?: string };
+          message?: string;
+        };
+        const inner = parsed.error?.message ?? parsed.message;
+        if (typeof inner === 'string' && inner.trim()) {
+          return { title, message: inner.trim(), full };
+        }
+      } catch {
+        /* use rest below */
+      }
+    }
+
+    return { title, message: rest || full, full };
   }
 
   formatDate = formatDate;

@@ -134,7 +134,7 @@ export class NdRunAnalysisProgressComponent implements OnInit, OnDestroy {
   parsePointSnapshot = parsePointSnapshot;
 
   pointComplianceSeverity(point: AnalysisPoint): string {
-    return resolveAnalysisPointSeverity(point);
+    return resolveAnalysisPointSeverity(point) ?? '';
   }
 
   private parseJsonArray(value: string | undefined): unknown[] {

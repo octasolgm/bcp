@@ -102,20 +102,33 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config)
     private string BaseUrl =>
         BcpConfiguration.GetString(config, "Anthropic:BaseUrl", "ANTHROPIC_API_BASE") ?? "https://api.anthropic.com/v1";
 
+    /// <summary>
+    /// Anthropic Messages API: do not send temperature, top_p, or top_k when extended thinking is enabled,
+    /// and many current models reject temperature entirely (400 deprecated). Dual-verify uses plain messages only.
+    /// </summary>
+    private static Dictionary<string, object> BuildMessagesBody(string model, object[] messages) =>
+        new()
+        {
+            ["model"] = model,
+            ["max_tokens"] = 8192,
+            ["messages"] = messages,
+        };
+
+    private static void StripUnsupportedAnthropicSamplingParams(Dictionary<string, object> body)
+    {
+        body.Remove("temperature");
+        body.Remove("top_p");
+        body.Remove("top_k");
+    }
+
     public async Task<string> AnalyzeTextAsync(string prompt, string model, CancellationToken ct = default)
     {
         EnsureApiKey();
-        var body = new
+        var messages = new[]
         {
-            model,
-            max_tokens = 8192,
-            temperature = 0.1,
-            messages = new[]
-            {
-                new { role = "user", content = new object[] { new { type = "text", text = prompt } } },
-            },
+            new { role = "user", content = new object[] { new { type = "text", text = prompt } } },
         };
-        return await PostMessagesAsync(body, ct);
+        return await PostMessagesAsync(BuildMessagesBody(model, messages), ct);
     }
 
     public async Task<string> AnalyzeWithPdfsAsync(
@@ -141,18 +154,13 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config)
             });
         }
 
-        var body = new
-        {
-            model,
-            max_tokens = 8192,
-            temperature = 0.1,
-            messages = new[] { new { role = "user", content = content.ToArray() } },
-        };
-        return await PostMessagesAsync(body, ct);
+        var messages = new[] { new { role = "user", content = content.ToArray() } };
+        return await PostMessagesAsync(BuildMessagesBody(model, messages), ct);
     }
 
-    private async Task<string> PostMessagesAsync(object body, CancellationToken ct)
+    private async Task<string> PostMessagesAsync(Dictionary<string, object> body, CancellationToken ct)
     {
+        StripUnsupportedAnthropicSamplingParams(body);
         var url = $"{BaseUrl.TrimEnd('/')}/messages";
         using var req = new HttpRequestMessage(HttpMethod.Post, url)
         {

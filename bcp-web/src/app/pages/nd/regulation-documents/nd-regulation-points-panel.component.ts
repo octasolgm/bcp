@@ -2,10 +2,12 @@ import { Component, Input, OnChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
+  buildGovPointDisplayCatalog,
   formatChapterLabel,
   formatGovPointDisplayId,
   formatSectionGroupLabel,
-  groupGovPointsByChapter,
+  groupGovPointsForPicker,
+  sectionHeadingTitleForKey,
   type GovPoint,
   type GovPointChapterGroup,
 } from '../../../../lib/gov-point-filter';
@@ -13,16 +15,8 @@ import {
   analyzeGovPointSet,
   formatPointCountSummary,
 } from '../../../../lib/library-points-utils';
+import { regulationPointToGovPoint } from '../../../../lib/regulation-catalog-utils';
 import type { RegulationPoint } from '../../../../lib/nd/types';
-
-function toGovPoint(p: RegulationPoint): GovPoint {
-  return {
-    point_id: p.pointNumber,
-    title: p.pointTitle ?? undefined,
-    text: p.pointContent,
-    section: p.pageReference ?? undefined,
-  };
-}
 
 @Component({
   selector: 'app-nd-regulation-points-panel',
@@ -41,10 +35,15 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   search = '';
   expandedChapters = new Set<string>();
   expandedSections = new Set<string>();
+  expandedPoints = new Set<string>();
   chapterGroups: GovPointChapterGroup[] = [];
+  private allGovPoints: GovPoint[] = [];
+  readonly previewLen = 120;
   storedCount = 0;
   analyseCount = 0;
   skippedCount = 0;
+  skippedReasons = new Map<string, string>();
+  introductionCount = 0;
 
   readonly formatGovPointDisplayId = formatGovPointDisplayId;
   readonly formatSectionGroupLabel = formatSectionGroupLabel;
@@ -64,6 +63,11 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
           if (this.showSectionBar(ch.sections, sec.key, ch.chapter)) {
             this.expandedSections.add(this.sectionId(ch.chapter, sec.key));
           }
+          for (const p of sec.points) {
+            if (p.point_id.trim().toLowerCase() === highlight.toLowerCase()) {
+              this.expandedPoints.add(p.point_id);
+            }
+          }
         }
       }
     }
@@ -72,13 +76,22 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   get statusLabel(): string {
     if (this.loading) return 'Loading points…';
     if (!this.storedCount) return 'No points extracted yet.';
-    return formatPointCountSummary({
+    const base = formatPointCountSummary({
       storedCount: this.storedCount,
       analyseCount: this.analyseCount,
       skippedCount: this.skippedCount,
       comparable: [],
       skipped: [],
     });
+    if (this.introductionCount > 0) {
+      return `${base} · ${this.introductionCount} introduction (shown, not used in gap analysis)`;
+    }
+    return base;
+  }
+
+  get viewNote(): string {
+    if (!this.storedCount || this.skippedCount === 0) return '';
+    return 'Introduction, annex, and section-header points are shown for reference. Gap analysis uses numbered requirement leaves only (from §2 onward).';
   }
 
   get footnote(): string {
@@ -134,6 +147,22 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     this.expandedSections.clear();
   }
 
+  expandAllDetails(): void {
+    for (const ch of this.chapterGroups) {
+      for (const sec of ch.sections) {
+        for (const p of sec.points) {
+          if (this.isDetailLong(p)) {
+            this.expandedPoints.add(p.point_id);
+          }
+        }
+      }
+    }
+  }
+
+  collapseAllDetails(): void {
+    this.expandedPoints.clear();
+  }
+
   sectionId(chapter: string, sectionKey: string): string {
     return `${chapter}::${sectionKey}`;
   }
@@ -158,10 +187,83 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     return sections.length > 1 || key !== chapter;
   }
 
+  sectionLabel(sec: { key: string; points: GovPoint[] }): string {
+    return formatSectionGroupLabel(
+      sec.key,
+      sectionHeadingTitleForKey(sec.key, this.allGovPoints.length ? this.allGovPoints : sec.points),
+    );
+  }
+
+  chapterLabel(chapter: string): string {
+    return formatChapterLabel(
+      chapter,
+      sectionHeadingTitleForKey(chapter, this.allGovPoints),
+    );
+  }
+
   truncate(text: string, max: number): string {
     const t = text.trim();
     if (t.length <= max) return t;
     return `${t.slice(0, max)}…`;
+  }
+
+  hasSeparateTitle(p: GovPoint): boolean {
+    const title = (p.title ?? '').trim();
+    const text = (p.text ?? '').trim();
+    return !!(title && text && title !== text);
+  }
+
+  pointTitle(p: GovPoint): string {
+    return (p.title ?? '').trim();
+  }
+
+  pointDetail(p: GovPoint): string {
+    const title = (p.title ?? '').trim();
+    const text = (p.text ?? '').trim();
+    if (title && text && title !== text) return text;
+    if (!title && text) return text;
+    return '';
+  }
+
+  showDetail(p: GovPoint): boolean {
+    return this.pointDetail(p).length > 0;
+  }
+
+  isDetailLong(p: GovPoint): boolean {
+    return this.pointDetail(p).length > this.previewLen;
+  }
+
+  isPointExpanded(pointId: string): boolean {
+    if (this.search.trim()) return true;
+    return this.expandedPoints.has(pointId);
+  }
+
+  togglePointText(pointId: string, event?: Event): void {
+    event?.stopPropagation();
+    if (this.expandedPoints.has(pointId)) {
+      this.expandedPoints.delete(pointId);
+    } else {
+      this.expandedPoints.add(pointId);
+    }
+  }
+
+  isComparablePoint(pointId: string): boolean {
+    return !this.skippedReasons.has(pointId.trim());
+  }
+
+  skipReason(pointId: string): string | null {
+    return this.skippedReasons.get(pointId.trim()) ?? null;
+  }
+
+  skipReasonShort(pointId: string): string {
+    const reason = this.skipReason(pointId);
+    if (!reason) return '';
+    if (reason.includes('§1')) return 'Intro — not in gap analysis';
+    if (reason.includes('introduction')) return 'Intro — not in gap analysis';
+    if (reason.includes('annex')) return 'Annex — not in gap analysis';
+    if (reason.includes('section header')) return 'Section header only';
+    if (reason.includes('informational')) return 'Informational only';
+    return reason.length > 48 ? `${reason.slice(0, 45)}…` : reason;
   }
 
   isHighlighted(pointId: string): boolean {
@@ -171,15 +273,34 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   }
 
   private rebuildGroups(): void {
-    const govPoints = this.points.map(toGovPoint);
-    const analyzed = analyzeGovPointSet(govPoints, { docName: this.docName });
+    const rawGovPoints = this.points.map((p) => regulationPointToGovPoint(p));
+    this.allGovPoints = buildGovPointDisplayCatalog(rawGovPoints);
+    const analyzed = analyzeGovPointSet(rawGovPoints, { docName: this.docName });
     this.storedCount = analyzed.storedCount;
     this.analyseCount = analyzed.analyseCount;
     this.skippedCount = analyzed.skippedCount;
-    this.chapterGroups = groupGovPointsByChapter(analyzed.comparable);
+    this.introductionCount = this.points.filter(
+      (p) =>
+        p.isIntroductionPoint ||
+        analyzed.skipped.some(
+          (s) =>
+            s.point.point_id.trim() === p.pointNumber.trim() &&
+            (s.reason.includes('§1') || s.reason.includes('introduction')),
+        ),
+    ).length;
+    this.skippedReasons = new Map(
+      analyzed.skipped.map((s) => [s.point.point_id.trim(), s.reason]),
+    );
+    this.chapterGroups = groupGovPointsForPicker(rawGovPoints);
     this.expandedChapters.clear();
     this.expandedSections.clear();
+    this.expandedPoints.clear();
     if (this.chapterGroups.length) {
+      for (const ch of this.chapterGroups) {
+        if (ch.chapter === '1' || ch.chapter === 'intro') {
+          this.expandedChapters.add(ch.chapter);
+        }
+      }
       const first = this.chapterGroups[0];
       this.expandedChapters.add(first.chapter);
       for (const sec of first.sections) {
