@@ -130,6 +130,7 @@ builder.Services.Configure<NodeBridgeOptions>(o =>
 builder.Services.AddHttpClient<GeminiService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.DualVerifyLlmSettingsService>();
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.RegulWorkflowLlmSettingsService>();
 builder.Services.AddScoped<DualVerifyLlmService>();
 builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.OpenAiCompatibleLlmClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.AnthropicLlmClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));
@@ -184,6 +185,7 @@ builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationPointRe
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationPointPageService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdInternalParseService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisProcessor>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulAnalysisProcessor>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.DemoAnalysisSeedService>();
 builder.Services.AddHttpClient();
 

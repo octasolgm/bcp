@@ -218,6 +218,28 @@ export class NdApiService {
     );
   }
 
+  getRegulWorkflowLlmSettings() {
+    return this.request<import('../../../lib/nd/types').DualVerifyLlmSettings>(
+      'GET',
+      '/nd/admin/settings/regul-workflow-llm',
+    );
+  }
+
+  updateRegulWorkflowLlmSettings(body: { provider: string; model: string }) {
+    return this.request<import('../../../lib/nd/types').DualVerifyLlmSettings>(
+      'PUT',
+      '/nd/admin/settings/regul-workflow-llm',
+      body,
+    );
+  }
+
+  getActiveRegulWorkflowLlm() {
+    return this.request<import('../../../lib/nd/types').ActiveDualVerifyLlm>(
+      'GET',
+      '/nd/settings/regul-workflow-llm',
+    );
+  }
+
   updateUser(id: string, body: Record<string, unknown>) {
     return this.request<unknown>('PUT', `/nd/users/${id}`, body);
   }

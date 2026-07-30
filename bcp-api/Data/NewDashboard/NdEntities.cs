@@ -235,6 +235,26 @@ public class NdAnalysisRun
     [Column("compare_prompt_version")]
     public string? ComparePromptVersion { get; set; }
 
+    /// <summary>bcp_landing (V8) or regul_pipeline (Regul workflow V3).</summary>
+    [Column("workflow_engine")]
+    public string WorkflowEngine { get; set; } = "bcp_landing";
+
+    [Column("enable_qualitative")]
+    public bool EnableQualitative { get; set; }
+
+    [Column("regul_llm_provider")]
+    public string? RegulLlmProvider { get; set; }
+
+    [Column("regul_llm_model")]
+    public string? RegulLlmModel { get; set; }
+
+    /// <summary>forward | reverse | qualitative | done</summary>
+    [Column("regul_pipeline_phase")]
+    public string? RegulPipelinePhase { get; set; }
+
+    [Column("regul_pipeline_error")]
+    public string? RegulPipelineError { get; set; }
+
     [Column("library_id")]
     public Guid? LibraryId { get; set; }
 

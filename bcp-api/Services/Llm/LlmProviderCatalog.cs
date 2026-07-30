@@ -3,6 +3,7 @@ namespace Reguliq.Api.Services.Llm;
 public static class LlmProviderCatalog
 {
     public const string DualVerifySettingKey = "dual_verify_llm";
+    public const string RegulWorkflowSettingKey = "regul_workflow_llm";
 
     public static readonly IReadOnlyDictionary<string, LlmProviderDefinition> Providers =
         new Dictionary<string, LlmProviderDefinition>(StringComparer.OrdinalIgnoreCase)

@@ -1,0 +1,1361 @@
+<div class="analyse-v-page analyse-regul-page">
+<header class="page-header-v with-actions">
+  <div>
+    <h1>Gap Analysis <span class="ver-tag">{{ versionLabel }}</span></h1>
+    <p class="subtitle">Regulation library + points setup (V8), then Regul.ai forward/reverse pipeline</p>
+  </div>
+  <app-in-progress-nav-button />
+</header>
+
+@if (pendingRegBump) {
+  <div class="bump-banner">
+    <div>
+      <strong>{{ pendingRegBump.title }}</strong> already exists.
+      Upload as <em>{{ pendingRegBump.nextVersion }}</em>?
+    </div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmRegVersionBump()">Upload new version</button>
+      <button type="button" class="btn-sm" (click)="cancelRegVersionBump()">Cancel</button>
+    </div>
+  </div>
+}
+
+@if (pendingComplianceBump) {
+  <div class="bump-banner">
+    <div>
+      <strong>{{ pendingComplianceBump.title }}</strong> already exists.
+      Upload as <em>{{ pendingComplianceBump.nextVersion }}</em>?
+    </div>
+    <div class="bump-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="confirmComplianceVersionBump()">Upload new version</button>
+      <button type="button" class="btn-sm" (click)="cancelComplianceVersionBump()">Cancel</button>
+    </div>
+  </div>
+}
+
+@if (error) {
+  <p class="error-banner">{{ error }}</p>
+}
+
+<div class="v8-setup-stage">
+  <section class="setup-row setup-row-resizable setup-row-v8">
+    <div class="setup-row-inner">
+      <!-- Section 1: Regulation + Reg. points -->
+      <div class="v8-reg-sources-block" [style.width.%]="setupRegSourcesPct">
+        @if (showNdPointSources) {
+          <div class="v8-section-header">
+            <div class="v8-section-header-top">
+              <span class="v8-section-label">Regulation sources</span>
+              <div class="points-source-tabs">
+                <button
+                  type="button"
+                  class="source-tab"
+                  [class.active]="pointsSource === 'regulation'"
+                  (click)="setPointsSource('regulation')"
+                >
+                  From regulation
+                </button>
+                <button
+                  type="button"
+                  class="source-tab"
+                  [class.active]="pointsSource === 'library'"
+                  (click)="setPointsSource('library')"
+                >
+                  From regulation points library
+                </button>
+              </div>
+              @if (isNdShell) {
+                <p class="v8-run-confirm-note">Run requires typing <strong>start</strong> to confirm (uses AI credits).</p>
+              }
+            </div>
+          </div>
+        }
+
+        <div class="v8-reg-sources-columns">
+          @if (!showNdPointSources || pointsSource === 'regulation') {
+            <div class="doc-panel doc-panel-stretch v8-reg-doc-panel" [style.width.%]="setupRegInnerPct">
+              <div class="panel-header panel-header-v8">
+                <div class="panel-header-top">
+                  <h2>Regulation</h2>
+                  <div class="header-actions">
+                    <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredRegs()">All</button>
+                    <button type="button" class="toolbar-btn secondary" (click)="clearRegSelection()">Clear</button>
+                    <label class="btn-upload" [class.busy]="uploadingReg">
+                      <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" [disabled]="uploadingReg" />
+                      {{ uploadingReg ? '…' : 'Upload' }}
+                    </label>
+                  </div>
+                </div>
+                <input
+                  type="search"
+                  class="search-field header-search"
+                  placeholder="Search regulations…"
+                  [(ngModel)]="regSearch"
+                  aria-label="Search regulations"
+                />
+              </div>
+
+              @if (loadingRegs) {
+                <p class="empty-msg">Loading regulations…</p>
+              } @else {
+                <ul class="file-list">
+                  @for (doc of filteredRegulationDocs; track doc.id) {
+                    <li>
+                      <button type="button" class="file-row" [class.selected]="isRegFileSelected(doc.id)" [class.manual-reg-row]="doc.isNdManual" (click)="toggleRegFile(doc)">
+                        <span class="multi-check" [class.on]="isRegFileSelected(doc.id)">{{ isRegFileSelected(doc.id) ? '✓' : '' }}</span>
+                        <span class="fname">
+                          {{ fileLabel(doc) }}
+                          @if (doc.isNdManual) {
+                            <span class="manual-reg-hint">Custom points you enter manually</span>
+                          }
+                        </span>
+                        <span class="fmeta">{{ pointMeta(doc) }}</span>
+                        <span class="fmeta muted">{{ doc.version }}</span>
+                      </button>
+                    </li>
+                  } @empty {
+                    <li class="empty-msg">No regulation files</li>
+                  }
+                </ul>
+              }
+
+              @if (selectedRegIds.size) {
+                <p class="panel-foot">{{ selectedRegIds.size }} selected</p>
+              }
+            </div>
+
+            <div
+              class="resize-handle resize-handle-v"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize regulation panel"
+              (mousedown)="startTopSplit('reg', $event)"
+            ></div>
+          } @else {
+            <div class="doc-panel doc-panel-stretch v8-reg-doc-panel v8-library-panel" [style.width.%]="setupRegInnerPct">
+              <div class="panel-header panel-header-v8">
+                <div class="panel-header-top">
+                  <h2>Regulation points library</h2>
+                  <div class="header-actions">
+                    <label class="header-select-all" title="Select all libraries">
+                      <input
+                        type="checkbox"
+                        [checked]="allFilteredLibrariesSelected"
+                        (change)="toggleAllFilteredLibraries($any($event.target).checked)"
+                      />
+                      <span>All</span>
+                    </label>
+                  </div>
+                </div>
+                <input
+                  type="search"
+                  class="search-field header-search"
+                  placeholder="Search libraries…"
+                  [(ngModel)]="librarySearch"
+                  aria-label="Search regulation points libraries"
+                />
+              </div>
+
+              @if (libraryLoading && !libraries.length) {
+                <p class="empty-msg">Loading libraries…</p>
+              } @else {
+                <ul class="file-list">
+                  @for (lib of filteredLibraries; track lib.id) {
+                    <li>
+                      <button
+                        type="button"
+                        class="file-row"
+                        [class.selected]="isLibrarySelected(lib.id)"
+                        (click)="toggleLibrary(lib)"
+                      >
+                        <input
+                          type="checkbox"
+                          class="row-check"
+                          [checked]="isLibrarySelected(lib.id)"
+                          tabindex="-1"
+                          aria-hidden="true"
+                        />
+                        <span class="fname">{{ lib.name }}</span>
+                        <span class="fmeta">{{ libraryPointMeta(lib) }}</span>
+                        <a
+                          class="lib-view-link"
+                          [routerLink]="['/nd/libraries']"
+                          [queryParams]="{ view: lib.id }"
+                          title="View library points"
+                          (click)="$event.stopPropagation()"
+                        >View</a>
+                      </button>
+                    </li>
+                  } @empty {
+                    <li class="empty-msg">No regulation points libraries</li>
+                  }
+                </ul>
+              }
+
+              @if (selectedLibraryIds.size) {
+                <p class="panel-foot">{{ selectedLibraryIds.size }} selected</p>
+              }
+            </div>
+
+            <div
+              class="resize-handle resize-handle-v"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize library panel"
+              (mousedown)="startTopSplit('reg', $event)"
+            ></div>
+          }
+
+          <!-- Reg. points (column 2) -->
+          <div class="doc-panel doc-panel-flex doc-panel-stretch col-panel col-points points-top-panel v8-points-panel">
+            <div class="panel-header panel-header-v8">
+              <div class="panel-header-top">
+                <h2>Reg. points</h2>
+                @if (!showNdPointSources || pointsSource === 'regulation') {
+                  <div class="header-actions">
+                    <label class="header-select-all" title="Select all points">
+                      <input
+                        type="checkbox"
+                        [checked]="allPointsSelected"
+                        (change)="toggleAllPoints($any($event.target).checked)"
+                      />
+                      <span>All</span>
+                    </label>
+                  </div>
+                } @else if (govPoints.length) {
+                  <div class="header-actions">
+                    <label class="header-select-all" title="Select all points">
+                      <input
+                        type="checkbox"
+                        [checked]="allPointsSelected"
+                        (change)="toggleAllPoints($any($event.target).checked)"
+                      />
+                      <span>All</span>
+                    </label>
+                  </div>
+                }
+              </div>
+
+              @if (!showNdPointSources || pointsSource === 'regulation') {
+                <input
+                  type="search"
+                  class="search-field header-search"
+                  placeholder="Search points…"
+                  [(ngModel)]="govSearch"
+                  aria-label="Search regulation points"
+                />
+              }
+            </div>
+
+            <div class="col-body points-top-body">
+              @if (showNdPointSources && pointsSource === 'library') {
+                @if (libraryLoading || loadingPoints) {
+                  <p class="empty-msg">Loading regulation points library…</p>
+                } @else if (!selectedLibraryIds.size) {
+                  <p class="empty-msg">Select one or more regulation points libraries on the left to load points.</p>
+                } @else if (!govPoints.length) {
+                  <p class="empty-msg">No comparable points in the selected libraries.</p>
+                } @else {
+                  @if (govSourceLabel) {
+                    <p class="source-note lib-count-note">{{ govSourceLabel }}</p>
+                  }
+                  <p class="source-note lib-count-note muted-small">Checked points are compared in gap analysis. Section headers (2, 2.4, 2.1) are shown for structure — compare leaf points like 2.1.1.</p>
+
+                  @for (lib of libraryDisplayTree; track lib.key) {
+                    <div class="acc-item lib-hier-lib">
+                      <button type="button" class="acc-head" (click)="toggleLibraryHierarchy(lib.key)">
+                        <span class="chevron" [class.open]="isLibraryHierarchyExpanded(lib.key)">›</span>
+                        <span>{{ lib.libraryName }}</span>
+                        <span class="acc-meta">{{ lib.analyseCount }} analyse · {{ lib.storedCount }} stored</span>
+                      </button>
+                      @if (isLibraryHierarchyExpanded(lib.key)) {
+                        <div class="acc-body lib-hier-lib-body">
+                          @for (doc of lib.documents; track doc.key) {
+                            <div class="acc-item lib-hier-doc">
+                              <button type="button" class="acc-head acc-head-nested" (click)="toggleLibraryDoc(doc.key)">
+                                <span class="chevron" [class.open]="isLibraryDocExpanded(doc.key)">›</span>
+                                <span>{{ doc.docName }}</span>
+                                <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ doc.analyseCount }}</span>
+                              </button>
+                              @if (isLibraryDocExpanded(doc.key)) {
+                                <div class="acc-body">
+                                  @if (doc.useChapters) {
+                                    @for (ch of doc.chapters; track ch.chapter) {
+                                      <div class="acc-item tree-chapter-item">
+                                        <button
+                                          type="button"
+                                          class="acc-head tree-chapter-head"
+                                          (click)="toggleLibraryChapter(doc.key, ch.chapter)"
+                                        >
+                                          <span class="chevron" [class.open]="isLibraryChapterExpanded(doc.key, ch.chapter)">›</span>
+                                          <span>{{ ch.label }}</span>
+                                          <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ ch.analyseCount }}</span>
+                                          @if (ch.analyseCount > 0) {
+                                            <button
+                                              type="button"
+                                              class="acc-action"
+                                              (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)"
+                                            >
+                                              {{ displayChapterAllSelected(ch) ? '−' : '+' }}
+                                            </button>
+                                          }
+                                        </button>
+                                        @if (isLibraryChapterExpanded(doc.key, ch.chapter)) {
+                                          <div class="acc-body tree-chapter-body">
+                                            <app-nd-point-number-tree
+                                              [nodes]="ch.tree"
+                                              [selected]="selected"
+                                              [selectedDetailPointId]="selectedDetailPointId"
+                                              [catalogPoints]="pointsCatalogGovPoints"
+                                              [resolvePointId]="selectableLibraryPointId.bind(this)"
+                                              (togglePoint)="toggle($event)"
+                                              (toggleGroup)="togglePointIds($event)"
+                                              (selectDetail)="selectPointForDetail($event)"
+                                            />
+                                          </div>
+                                        }
+                                      </div>
+                                    }
+                                  } @else {
+                                    <app-nd-point-number-tree
+                                      [nodes]="doc.pointTree.length ? doc.pointTree : []"
+                                      [selected]="selected"
+                                      [selectedDetailPointId]="selectedDetailPointId"
+                                      [catalogPoints]="pointsCatalogGovPoints"
+                                      [resolvePointId]="selectableLibraryPointId.bind(this)"
+                                      (togglePoint)="toggle($event)"
+                                      (toggleGroup)="togglePointIds($event)"
+                                      (selectDetail)="selectPointForDetail($event)"
+                                    />
+                                    @if (!doc.pointTree.length) {
+                                      @for (row of doc.flatRows; track row.point.regulationPointId ?? row.displayId) {
+                                        @if (selectableLibraryPointId(row); as pid) {
+                                          <label class="point-line" [class.detail-selected]="selectedDetailPointId === pid">
+                                            <input type="checkbox" [checked]="selected.has(pid)" (change)="toggle(pid)" />
+                                            <span class="pid">{{ row.displayId }}</span>
+                                            <span class="ptxt">{{ truncate(row.point.title || row.point.text, 48) }}</span>
+                                          </label>
+                                        }
+                                      }
+                                    }
+                                  }
+                                </div>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  @if (libraryDuplicateGroups.length) {
+                    <div class="acc-item lib-dup-acc">
+                      <button type="button" class="acc-head acc-head-muted" (click)="toggleLibraryDuplicates()">
+                        <span class="chevron" [class.open]="libraryDuplicatesExpanded">›</span>
+                        <span>Duplicate points merged ({{ libraryDuplicateCount }})</span>
+                      </button>
+                      @if (libraryDuplicatesExpanded) {
+                        <div class="acc-body lib-dup-body">
+                          @for (grp of libraryDuplicateGroups; track grp.key) {
+                            <div class="lib-dup-group">
+                              <div class="lib-dup-primary">
+                                <span class="pid">{{ formatGovPointDisplayId(grp.primary) }}</span>
+                                <span class="ptxt">{{ truncate(grp.primary.title || grp.primary.text, 56) }}</span>
+                                @if (grp.primary.sourceLabel) {
+                                  <span class="lib-dup-src">{{ grp.primary.sourceLabel }}</span>
+                                }
+                              </div>
+                              @for (dup of grp.duplicates; track dup.regulationPointId ?? dup.point_id + dup.sourceKey) {
+                                <div class="lib-dup-alias">
+                                  <span class="pid muted">{{ formatGovPointDisplayId(dup) }}</span>
+                                  <span class="ptxt muted">{{ duplicateSourceLabel(dup) }}</span>
+                                </div>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                }
+              } @else if (loadingPoints || uploadingReg) {
+                <p class="empty-msg">Loading points…</p>
+              } @else if (!govPoints.length && !rawGovPoints.length) {
+                <p class="empty-msg">Select regulation file(s) to load points.</p>
+              } @else if (regulationDisplayUseDocGroups && visibleRegulationDisplayDocs.length === 0) {
+                <p class="empty-msg">No points match search.</p>
+              } @else if (!regulationDisplayUseDocGroups && pointDisplayUseChapters && visiblePointDisplayChapters.length === 0) {
+                <p class="empty-msg">No points match search.</p>
+              } @else if (!regulationDisplayUseDocGroups && !pointDisplayUseChapters && !govPoints.length) {
+                <p class="empty-msg">No points match search.</p>
+              } @else {
+                @if (govSourceLabel) { <p class="source-note">{{ govSourceLabel }}</p> }
+                <p class="source-note muted-small">Each regulation document has its own points · checked rows are compared in gap analysis</p>
+                @if (regulationDisplayUseDocGroups) {
+                  @for (doc of visibleRegulationDisplayDocs; track doc.key) {
+                    <div class="acc-item lib-hier-doc">
+                      <button type="button" class="acc-head acc-head-nested" (click)="toggleRegDoc(doc.key)">
+                        <span class="chevron" [class.open]="isRegDocExpanded(doc.key)">›</span>
+                        <span>{{ doc.docName }}</span>
+                        <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ doc.analyseCount }}</span>
+                      </button>
+                      @if (isRegDocExpanded(doc.key)) {
+                        <div class="acc-body">
+                          @if (doc.useChapters) {
+                            @for (ch of doc.chapters; track ch.chapter) {
+                              <div class="acc-item tree-chapter-item">
+                                <button type="button" class="acc-head tree-chapter-head" (click)="toggleRegChapter(doc.key, ch.chapter)">
+                                  <span class="chevron" [class.open]="isRegChapterExpanded(doc.key, ch.chapter)">›</span>
+                                  <span>{{ ch.label }}</span>
+                                  <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ ch.analyseCount }}</span>
+                                  @if (ch.analyseCount > 0) {
+                                    <button
+                                      type="button"
+                                      class="acc-action"
+                                      (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)"
+                                    >
+                                      {{ displayChapterAllSelected(ch) ? '−' : '+' }}
+                                    </button>
+                                  }
+                                </button>
+                                @if (isRegChapterExpanded(doc.key, ch.chapter)) {
+                                  <div class="acc-body tree-chapter-body">
+                                    <app-nd-point-number-tree
+                                      [nodes]="ch.tree"
+                                      [selected]="selected"
+                                      [selectedDetailPointId]="selectedDetailPointId"
+                                      [catalogPoints]="pointsCatalogGovPoints"
+                                      (togglePoint)="toggle($event)"
+                                      (toggleGroup)="togglePointIds($event)"
+                                      (selectDetail)="selectPointForDetail($event)"
+                                    />
+                                  </div>
+                                }
+                              </div>
+                            }
+                          } @else {
+                            <app-nd-point-number-tree
+                              [nodes]="doc.pointTree.length ? doc.pointTree : []"
+                              [selected]="selected"
+                              [selectedDetailPointId]="selectedDetailPointId"
+                              [catalogPoints]="pointsCatalogGovPoints"
+                              (togglePoint)="toggle($event)"
+                              (toggleGroup)="togglePointIds($event)"
+                              (selectDetail)="selectPointForDetail($event)"
+                            />
+                            @if (!doc.pointTree.length) {
+                              @for (row of doc.flatRows; track row.point.point_id) {
+                                @if (row.forAnalysis) {
+                                  <label class="point-line" [class.detail-selected]="selectedDetailPointId === row.point.point_id" [style.paddingLeft.rem]="(row.depth - 1) * 0.65">
+                                    <input type="checkbox" [checked]="selected.has(row.point.point_id)" (change)="toggle(row.point.point_id)" />
+                                    <span class="pid">{{ row.displayId }}</span>
+                                    <span class="ptxt" (click)="selectPointForDetail(row.point.point_id); $event.preventDefault()">{{ truncate(row.point.title || row.point.text, 48) }}</span>
+                                  </label>
+                                } @else {
+                                  <div class="point-line point-header-row" [style.paddingLeft.rem]="(row.depth - 1) * 0.65">
+                                    <span class="point-header-mark">§</span>
+                                    <span class="pid">{{ row.displayId }}</span>
+                                    <span class="ptxt muted">{{ truncate(row.point.title || row.point.text, 48) }}</span>
+                                    <span class="point-tag-header">Header</span>
+                                  </div>
+                                }
+                              }
+                            }
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                } @else if (pointDisplayUseChapters) {
+                  @for (ch of visiblePointDisplayChapters; track ch.chapter) {
+                    <div class="acc-item">
+                      <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
+                        <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
+                        <span>{{ ch.label }}</span>
+                        <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ ch.analyseCount }}</span>
+                        <button type="button" class="acc-action" (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)">
+                          {{ displayChapterAllSelected(ch) ? '−' : '+' }}
+                        </button>
+                      </button>
+                      @if (isChapterExpanded(ch.chapter)) {
+                        <div class="acc-body">
+                          <app-nd-point-number-tree
+                            [nodes]="ch.tree"
+                            [selected]="selected"
+                            [selectedDetailPointId]="selectedDetailPointId"
+                            (togglePoint)="toggle($event)"
+                            (toggleGroup)="togglePointIds($event)"
+                            (selectDetail)="selectPointForDetail($event)"
+                          />
+                        </div>
+                      }
+                    </div>
+                  }
+                } @else {
+                  @for (row of pointDisplayFlatRows; track row.point.point_id) {
+                    @if (row.forAnalysis) {
+                      <label class="point-line" [class.detail-selected]="selectedDetailPointId === row.point.point_id">
+                        <input type="checkbox" [checked]="selected.has(row.point.point_id)" (change)="toggle(row.point.point_id)" />
+                        <span class="pid">{{ row.displayId }}</span>
+                        <span class="ptxt" (click)="selectPointForDetail(row.point.point_id); $event.preventDefault()">{{ truncate(row.point.title || row.point.text, 48) }}</span>
+                      </label>
+                    } @else {
+                      <div class="point-line point-header-row" [style.paddingLeft.rem]="(row.depth - 1) * 0.65">
+                        <span class="point-header-mark">§</span>
+                        <span class="pid">{{ row.displayId }}</span>
+                        <span class="ptxt muted">{{ truncate(row.point.title || row.point.text, 48) }}</span>
+                        <span class="point-tag-header">Header</span>
+                      </div>
+                    }
+                  }
+                }
+              }
+            </div>
+
+            @if (govPoints.length) {
+              <p class="panel-foot">
+                {{ selectedCount }}/{{ govPoints.length }} points for analysis
+                @if (showNdPointSources && pointsSource === 'library' && selectedLibraryIds.size) {
+                  @if (libraryPointsFootnote(); as note) {
+                    · {{ note }}
+                  }
+                } @else if (!showNdPointSources || pointsSource === 'regulation') {
+                  @if (regPointsFootnote(); as note) {
+                    · {{ note }}
+                  }
+                }
+              </p>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div
+        class="resize-handle resize-handle-v"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize regulation sources section"
+        (mousedown)="startTopSplit('section', $event)"
+      ></div>
+
+      <!-- Section 2: Compliance -->
+      <div class="v8-compliance-block">
+        <div class="doc-panel doc-panel-stretch v8-compliance-panel">
+          <div class="panel-header panel-header-v8">
+            <div class="panel-header-top">
+              <h2>Internal Documents</h2>
+              <div class="header-actions">
+                <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredCompliance()">All</button>
+                <button type="button" class="toolbar-btn secondary" (click)="clearComplianceSelection()">Clear</button>
+                <label class="btn-upload" [class.busy]="uploadingCompliance">
+                  <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" [disabled]="uploadingCompliance" />
+                  {{ uploadingCompliance ? '…' : 'Upload' }}
+                </label>
+              </div>
+            </div>
+            <input
+              type="search"
+              class="search-field header-search"
+              placeholder="Search Internal docs…"
+              [(ngModel)]="complianceSearch"
+              aria-label="Search Internal documents"
+            />
+          </div>
+
+          @if (loadingCompliance) {
+            <p class="empty-msg">Loading…</p>
+          } @else {
+            <ul class="file-list">
+              @for (doc of filteredComplianceDocs; track doc.id) {
+                <li>
+                  <button
+                    type="button"
+                    class="file-row"
+                    [class.selected]="isComplianceFileSelected(doc.id)"
+                    [disabled]="attachingCompliance"
+                    (click)="toggleComplianceFile(doc)"
+                  >
+                    <span class="multi-check" [class.on]="isComplianceFileSelected(doc.id)">{{ isComplianceFileSelected(doc.id) ? '✓' : '' }}</span>
+                    <span class="fname">{{ fileLabel(doc) }}</span>
+                    <span class="fmeta">{{ doc.category || 'Compliance' }}</span>
+                    @if (isNdShell) {
+                      <span class="fmeta parse-status" [class.parsed]="complianceParseLabel(doc.id) === 'Parsed'">{{ complianceParseLabel(doc.id) }}</span>
+                    } @else {
+                      <span class="fmeta muted">{{ doc.version }}</span>
+                    }
+                  </button>
+                </li>
+              } @empty {
+                <li class="empty-msg">No compliance files</li>
+              }
+            </ul>
+          }
+
+          @if (filteredComplianceDocs.length || isNdShell) {
+            <div class="v8-compliance-foot">
+              <p
+                class="v8-compliance-foot-left"
+                [class.is-selection-hint]="
+                  isNdShell && needsComplianceDocumentSelection && !uploadingCompliance && !attachingCompliance
+                "
+              >
+                @if (isNdShell && needsComplianceDocumentSelection && !uploadingCompliance && !attachingCompliance) {
+                  Select or upload at least one internal (policy) document.
+                } @else if (filteredComplianceDocs.length) {
+                  {{ selectedComplianceIds.size }}/{{ filteredComplianceDocs.length }} selected
+                }
+              </p>
+              @if (isNdShell && pass2LlmSummary) {
+                <p class="pass2-llm-foot">Pass 2: {{ pass2LlmSummary }}</p>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="action-strip" aria-label="Analysis summary and run">
+    @if (showDualVerifyFailedBanner) {
+      <div class="dv-failed-banner" role="status">
+        <strong>Dual verify failed</strong>
+        <span>
+          Phase 1 (Landing AI) completed for all points. Some Phase 2 (Google) checks failed —
+          review results below or rerun dual verify only (no extra Landing AI credits).
+        </span>
+        @if (ndRunId && phase2RetryCount > 0) {
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            [disabled]="retryingPointId === '__batch__'"
+            (click)="rerunAllDualVerifyFailed()"
+          >
+            {{ retryingPointId === '__batch__' ? 'Rerunning…' : ('Rerun dual verify (' + phase2RetryCount + ')') }}
+          </button>
+        }
+      </div>
+    }
+    <div class="metrics-row metrics-row-4">
+      <div class="stat-box">
+        <strong>{{ selectedCount }}</strong>
+        <em>Regulation points</em>
+      </div>
+      <div class="stat-box">
+        <strong>{{ selectedComplianceIds.size }}</strong>
+        <em>Compliance docs</em>
+      </div>
+      <div class="stat-box">
+        <strong>{{ coverageCounts.completed }}</strong>
+        <em>Done</em>
+      </div>
+      <div class="stat-box warn">
+        <strong>{{ coverageCounts.failed }}</strong>
+        <em>Failed</em>
+      </div>
+    </div>
+    <div class="run-row">
+      @if (isSessionActive) {
+        <button type="button" class="btn-stop v8-stop" (click)="stopAnalysis()">Stop</button>
+        <span class="run-progress-pill v8-run-progress" aria-live="polite">{{ sessionProgressLabel }}</span>
+      } @else if (analysisState === 'complete') {
+        @if (showWorkflowStatusBadge) {
+          <app-nd-status-badge [status]="ndRunWorkflowStatus" />
+        }
+        <button type="button" class="btn-secondary btn-sm run-workflow-btn" (click)="openGapReport()">Gap report</button>
+        @if (canSubmitForChecker) {
+          <button type="button" class="btn-primary btn-sm run-workflow-btn" [disabled]="workflowLoading" (click)="submitForChecker()">
+            {{ workflowLoading ? 'Submitting…' : (ndRunWorkflowStatus === 'pulled_back' ? 'Resubmit for review' : 'Submit for review') }}
+          </button>
+        }
+        <a routerLink="/nd/analysis-runs" class="btn-secondary btn-sm run-workflow-btn">All analysis runs</a>
+      } @else {
+        <button type="button" class="btn-demo v8-demo" [disabled]="!govPoints.length || analysisState === 'running'" (click)="runDemoAnalysisAndScroll()">
+          Demo run
+        </button>
+        <button type="button" class="btn-run v8-run" [disabled]="!canRun" (click)="runAnalysisAndScroll()">
+          Run
+        </button>
+        @if (isNdShell) {
+          <span class="run-confirm-hint">Confirm with <strong>start</strong></span>
+        }
+      }
+    </div>
+  </section>
+
+  @if (!isSessionActive && !canRun && (runBlockedReason || (isNdShell && pass2LlmSummary))) {
+    <div class="run-hint-row">
+      @if (runBlockedReason) {
+        <p class="run-hint">{{ runBlockedReason }}</p>
+      } @else {
+        <span></span>
+      }
+      @if (isNdShell && pass2LlmSummary) {
+        <p class="run-hint run-hint-llm">Pass 2 dual verify: {{ pass2LlmSummary }}</p>
+      }
+    </div>
+  }
+</div>
+
+<!-- 3-column workspace: analysing | progress | result -->
+<div #workspaceEl class="workspace-3col workspace-resizable v8-workspace">
+  <div class="col-panel col-status" [style.width.px]="colLeftWidth">
+    <div class="col-head">
+      <h3>Analysing list</h3>
+      <span class="count">{{ analysingListDone }}/{{ analysingListTotal }}</span>
+    </div>
+
+    @if (selectedCoverageRows.length) {
+      <app-nd-point-sort-controls
+        class="analysing-point-sort"
+        [sort]="analysingPointSort"
+        [dir]="analysingPointSortDir"
+        (sortChange)="onAnalysingPointSortChange($event)"
+      />
+    }
+
+    @if (hasResumableRun || analysisState !== 'idle') {
+      <div class="analysing-status-tabs" role="tablist" aria-label="Filter analysing list by status">
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'all'"
+          [attr.aria-selected]="analysingStatusFilter === 'all'"
+          (click)="setAnalysingStatusFilter('all')"
+        >
+          All ({{ analysingStatusCounts.all }})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'running'"
+          [attr.aria-selected]="analysingStatusFilter === 'running'"
+          (click)="setAnalysingStatusFilter('running')"
+        >
+          Running ({{ analysingStatusCounts.running }})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'queued'"
+          [attr.aria-selected]="analysingStatusFilter === 'queued'"
+          (click)="setAnalysingStatusFilter('queued')"
+        >
+          Queued ({{ analysingStatusCounts.queued }})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'failed'"
+          [attr.aria-selected]="analysingStatusFilter === 'failed'"
+          (click)="setAnalysingStatusFilter('failed')"
+        >
+          Failed ({{ analysingStatusCounts.failed }})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'completed'"
+          [attr.aria-selected]="analysingStatusFilter === 'completed'"
+          (click)="setAnalysingStatusFilter('completed')"
+        >
+          Done ({{ analysingStatusCounts.completed }})
+        </button>
+      </div>
+      <div class="coverage-actions">
+        @if (ndRunId && exportableDoneGapPointCount > 0) {
+          <button
+            type="button"
+            class="btn-sm"
+            [disabled]="exportingGapReport"
+            (click)="exportDoneGapAnalysisExcel()"
+            title="Export all done points (Gap Analysis format)"
+          >
+            {{ exportingGapReport ? 'Exporting…' : ('Export Excel (' + exportableDoneGapPointCount + ')') }}
+          </button>
+          <button
+            type="button"
+            class="btn-sm"
+            [disabled]="exportingGapReport"
+            (click)="exportDoneGapAnalysisPdf()"
+            title="Export all done points as gap analysis PDF"
+          >
+            Export PDF ({{ exportableDoneGapPointCount }})
+          </button>
+        }
+        <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || coverageCounts.notRun === 0" (click)="runRemainingPoints()">
+          Run remaining ({{ coverageCounts.notRun }})
+        </button>
+        <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || phase2RetryCount === 0" (click)="retryFailedOnly()">
+          {{ ndRunId ? ('Rerun dual verify (' + phase2RetryCount + ')') : ('Retry Phase 2 (' + phase2RetryCount + ')') }}
+        </button>
+      </div>
+    }
+
+    <div class="col-body">
+      @if (!govPoints.length) {
+        <p class="empty-msg">Load regulation points above.</p>
+      } @else if (!selectedCoverageRows.length) {
+        <p class="empty-msg">Select regulation points to analyse.</p>
+      } @else if (analysisState === 'idle' && !hasResumableRun) {
+        <p class="empty-msg">Run analysis to track point-by-point status.</p>
+      } @else if (!sortedAnalysingRows.length) {
+        <p class="empty-msg">No points in “{{ analysingStatusFilter }}”.</p>
+      } @else {
+        <ul class="status-list">
+          @for (row of sortedAnalysingRows; track row.pointId) {
+            <li
+              class="status-row"
+              [class.detail-selected]="selectedDetailPointId === row.pointId"
+              (click)="selectPointForDetail(row.pointId)"
+            >
+              <button
+                type="button"
+                class="point-info-btn"
+                title="View full requirement"
+                aria-label="View full requirement"
+                (click)="openPointDetailModal(row.pointId, $event)"
+              >
+                ⓘ
+              </button>
+              <span class="sid" [title]="displayLabelForPoint(row.pointId)">{{ row.displayId || displayLabelForPoint(row.pointId) }}</span>
+              <div class="status-main">
+                <span class="stitle" [title]="row.title">{{ truncate(row.title, 40) }}</span>
+                @if (getPointPhaseStatus(row.pointId); as phases) {
+                  <div class="phase-row">
+                    <div class="phase-chips">
+                      <span class="phase-chip" [class]="'phase-' + phases.phase1.state">
+                        <span class="phase-label">{{ phases.phase1.label }}</span>
+                        @if (phases.phase1.state === 'ok') {
+                          <span class="phase-icon" aria-hidden="true">✓</span>
+                        } @else if (phases.phase1.state === 'fail') {
+                          <span class="phase-icon" aria-hidden="true">✗</span>
+                        } @else if (phases.phase1.state === 'running') {
+                          <span class="phase-icon phase-spin" aria-hidden="true">…</span>
+                        }
+                      </span>
+                      <span class="phase-chip" [class]="'phase-' + phases.phase2.state">
+                        <span class="phase-label">{{ phases.phase2.label }}</span>
+                        @if (phases.phase2.state === 'ok') {
+                          <span class="phase-icon" aria-hidden="true">✓</span>
+                        } @else if (phases.phase2.state === 'warn') {
+                          <span class="phase-icon" aria-hidden="true">!</span>
+                        } @else if (phases.phase2.state === 'fail') {
+                          <span class="phase-icon" aria-hidden="true">✗</span>
+                        } @else if (phases.phase2.state === 'running') {
+                          <span class="phase-icon phase-spin" aria-hidden="true">…</span>
+                        }
+                      </span>
+                    </div>
+                    @if (canShowPointRerunActions(row.pointId)) {
+                      <div class="phase-actions">
+                        <button
+                          type="button"
+                          class="phase-action"
+                          [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'all'"
+                          title="Rerun Phase 1 + Phase 2 for this point"
+                          [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                          (click)="rerunPointAll(row.pointId); $event.stopPropagation()"
+                        >
+                          {{ pointRerunButtonLabel(row.pointId, 'Rerun all', 'all') }}
+                        </button>
+                        @if (needsPhase2RerunForPoint(row.pointId) || pointRerunMode(row.pointId) === 'phase2') {
+                          <button
+                            type="button"
+                            class="phase-action phase-action-p2"
+                            [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'phase2'"
+                            title="Rerun Phase 2 only (no Landing AI credits)"
+                            [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                            (click)="rerunPointPhase2(row.pointId); $event.stopPropagation()"
+                          >
+                            {{ pointRerunButtonLabel(row.pointId, 'Rerun Phase 2', 'phase2') }}
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                } @else if (canShowPointRerunActions(row.pointId)) {
+                  <div class="phase-row">
+                    <div class="phase-actions">
+                      <button
+                        type="button"
+                        class="phase-action"
+                      [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'all'"
+                      title="Rerun Phase 1 + Phase 2 for this point"
+                      [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                      (click)="rerunPointAll(row.pointId); $event.stopPropagation()"
+                    >
+                      {{ pointRerunButtonLabel(row.pointId, 'Rerun all', 'all') }}
+                    </button>
+                    @if (needsPhase2RerunForPoint(row.pointId) || pointRerunMode(row.pointId) === 'phase2') {
+                      <button
+                        type="button"
+                        class="phase-action phase-action-p2"
+                        [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'phase2'"
+                        title="Rerun Phase 2 only (no Landing AI credits)"
+                        [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                        (click)="rerunPointPhase2(row.pointId); $event.stopPropagation()"
+                      >
+                        {{ pointRerunButtonLabel(row.pointId, 'Rerun Phase 2', 'phase2') }}
+                      </button>
+                    }
+                    </div>
+                  </div>
+                }
+              </div>
+              <div class="status-badges">
+                <span class="sstatus" [class]="row.status">{{ formatCoverageStatus(row.status) }}</span>
+                @if (gapCountForPointId(row.pointId); as gapCount) {
+                  @if (gapCount > 0) {
+                    <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+                  }
+                }
+                @if (getPointGapSeverity(row.pointId); as sev) {
+                  <span class="compliance-pill" [class]="sev" [title]="gapComplianceLabel(sev)">
+                    {{ gapComplianceShortLabel(sev) }}
+                  </span>
+                }
+              </div>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </div>
+
+  <div
+    class="resize-handle resize-handle-v"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize analysing list column"
+    (mousedown)="startColResize('left', $event)"
+  ></div>
+
+  <div class="col-panel col-progress" [style.width.px]="colMidWidth">
+    <div class="col-head">
+      <h3>Progress</h3>
+      <span class="count">{{ analysingListDone }}/{{ analysingListTotal }}</span>
+    </div>
+    <div class="col-body progress-col-body">
+      @if (analysisState === 'running') {
+        <div class="progress-block">
+          <h4>Analysing against {{ selectedRegLabel }}…</h4>
+          <ul class="step-list">
+            @for (step of analysisSteps; track step.label) {
+              <li [class.done]="step.done" [class.active]="step.active">
+                <span class="step-dot"></span>{{ step.label }}
+              </li>
+            }
+          </ul>
+          <div class="progress-bar"><div class="progress-fill" [style.width.%]="progress"></div></div>
+        </div>
+      } @else if (analysisState === 'complete') {
+        <div class="progress-complete-block">
+          <p class="progress-complete-title">Analysis complete</p>
+          <p class="progress-complete-meta">{{ analysingListDone }}/{{ analysingListTotal }} points analysed</p>
+          <div class="progress-complete-actions">
+            <button type="button" class="btn-secondary btn-sm" (click)="openGapReport()">Gap report</button>
+            @if (canSubmitForChecker) {
+              <button type="button" class="btn-primary btn-sm" [disabled]="workflowLoading" (click)="submitForChecker()">
+                {{ workflowLoading ? 'Submitting…' : 'Submit for review' }}
+              </button>
+            }
+          </div>
+        </div>
+      } @else {
+        <p class="empty-msg">Run analysis to see live progress here.</p>
+      }
+    </div>
+  </div>
+
+  <div
+    class="resize-handle resize-handle-v"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize progress column"
+    (mousedown)="startColResize('right', $event)"
+  ></div>
+
+  <div class="col-panel col-result col-panel-flex">
+    <div class="col-head">
+      <h3>Result</h3>
+      <span class="count">{{ resultClauseLabel }}</span>
+      @if (analysisState === 'complete') {
+        <button type="button" class="btn-secondary btn-sm" (click)="openGapReport()">Gap report</button>
+      }
+    </div>
+    <div class="result-detail result-detail-only">
+      @if (!selectedCoverageRows.length) {
+        <div class="detail-empty">
+          <strong>No points selected</strong>
+          Select regulation points above, then run analysis.
+        </div>
+      } @else if (selectedDetailAnalysisPoint) {
+        @let ndPoint = selectedDetailAnalysisPoint;
+        <div class="result-detail-card-full">
+          <header class="result-point-header">
+            <div class="result-point-heading">
+              <h3 class="result-point-title">
+                @if (resultClauseLabel !== '—') {
+                  <span class="result-clause-num">§{{ resultClauseLabel }}</span>
+                }
+                @if (selectedPointSnapshot?.pointTitle) {
+                  <span class="result-clause-title">{{ selectedPointSnapshot?.pointTitle }}</span>
+                }
+              </h3>
+              @if (pointComplianceSeverity(ndPoint); as severity) {
+                <span class="status-pill" [class]="severity">{{ selectedPointComplianceLabel() }}</span>
+              }
+            </div>
+          </header>
+          @if (!activeNdRunId) {
+            <p class="result-save-hint">Saving run… you can edit corrective actions once the run is saved.</p>
+          } @else if (!canEditResultCap) {
+            <p class="result-save-hint muted">Read-only while this run is in review.</p>
+          }
+          @if (resultDetailError) {
+            <p class="result-detail-error">{{ resultDetailError }}</p>
+          }
+          @defer (when selectedDetailAnalysisPoint) {
+          <app-nd-gap-point-detail
+            [point]="ndPoint"
+            [snapshot]="selectedPointSnapshot"
+            [displayClause]="resultClauseLabel !== '—' ? resultClauseLabel : null"
+            [hideReportHeader]="true"
+            [phase2Running]="pointPhaseChipRunning(selectedDetailPointId!, 2)"
+            [phase1Running]="pointPhaseChipRunning(selectedDetailPointId!, 1)"
+            [phaseOutputDefaultOpen]="isPointRerunInFlight(selectedDetailPointId!)"
+            [canEdit]="canEditResultCap"
+            [editing]="resultEditingPointId === ndPoint.id"
+            [saving]="resultCapSavingPointId === ndPoint.id"
+            [history]="resultHistoryPointId === ndPoint.id ? resultHistory : []"
+            [showHistoryPanel]="resultHistoryPointId === ndPoint.id"
+            [policyDocId]="policyPdfDocId"
+            [policyDocCatalog]="ndPolicyDocCatalog"
+            [regulationDocId]="selectedRegulationDocId"
+              [runId]="activeNdRunId"
+              [gapAttachments]="attachmentsForPoint(selectedDetailPointId!)"
+              [savedActionItemReviews]="savedReviewsForPoint(selectedDetailPointId!)"
+              [showReviewPanel]="canShowReviewPanel"
+              [reviewMode]="canReviewActionGaps"
+              [reviewDisabledHint]="gapReviewDisabledHint"
+              [savingActionReviewIndex]="savingActionReviewIndex"
+              [savingReviewId]="savingReviewId"
+              [canUploadEvidence]="canEditResultCap"
+            [evidenceUploading]="evidenceUploadingPointId === ndPoint.id"
+            [evidenceRerunning]="evidenceRerunningPointId === ndPoint.id"
+            [evidenceUploadingActionIndex]="evidenceUploadingPointId === ndPoint.id ? evidenceUploadingActionIndex : null"
+            [evidenceRerunningActionIndex]="evidenceRerunningPointId === ndPoint.id ? evidenceRerunningActionIndex : null"
+            (startEdit)="startResultCapEdit(ndPoint)"
+            (cancelEdit)="cancelResultCapEdit()"
+            (save)="saveResultCap(ndPoint.id, $event)"
+            (openHistory)="openResultCapHistory(ndPoint.id)"
+            (closeHistory)="closeResultCapHistory()"
+            (restoreVersion)="restoreResultCapVersion($event)"
+            (openPdf)="openPdfDocument($event.docId, $event.page)"
+            (uploadEvidence)="onUploadGapEvidence(selectedDetailPointId!, $event)"
+            (uploadGapEvidence)="onUploadGapEvidence(selectedDetailPointId!, $event.files, $event.actionIndex)"
+            (deleteEvidence)="onDeleteGapEvidence(selectedDetailPointId!, $event)"
+            (deleteGapEvidence)="onDeleteGapEvidence(selectedDetailPointId!, $event.attachmentId)"
+            (rerunWithEvidence)="onRerunWithEvidence(selectedDetailPointId!, $event)"
+            (rerunGapEvidence)="onRerunGapEvidence(selectedDetailPointId!, $event)"
+            (saveActionItemReview)="saveActionItemReview(selectedDetailPointId!, $event)"
+            (deleteActionItemReview)="deleteActionItemReview(selectedDetailPointId!, $event)"
+            (reorderActionItemReview)="reorderActionItemReview(selectedDetailPointId!, $event)"
+          />
+          <div class="detail-actions">
+            @if (hasResumableRun && selectedPointDetail) {
+              <button
+                type="button"
+                class="btn-sm"
+                [disabled]="retryingPointId === selectedPointDetail.pointId || selectedPointDetail.status === 'running'"
+                (click)="retrySinglePoint(selectedPointDetail.pointId)"
+              >
+                @if (needsPhase2RerunForPoint(selectedPointDetail.pointId)) {
+                  Re-run Phase 2
+                } @else {
+                  {{ selectedPointDetail.status === 'not-run' ? 'Run' : 'Re-run' }}
+                }
+              </button>
+            }
+          </div>
+          } @placeholder {
+            <p class="muted-inline">Loading detail…</p>
+          }
+        </div>
+      } @else if (selectedDetailPointId && selectedPointDetail) {
+        <div class="detail-card result-detail-card">
+          <div class="detail-head">
+            <span class="severity-badge" [class]="selectedPointDetail.severity">{{ selectedPointDetail.severity }}</span>
+            <h4>{{ selectedPointDetail.title }}</h4>
+          </div>
+          <p class="detail-section">{{ selectedPointDetail.section }} · {{ formatCoverageStatus(selectedPointDetail.status) }}</p>
+          <span class="solved-badge" [class]="selectedPointDetail.solved ? 'solved' : selectedPointDetail.status === 'completed' ? 'gap' : 'pending'">
+            @if (selectedPointDetail.solved) {
+              ✓ Point solved / compliant
+            } @else if (selectedPointDetail.status === 'completed') {
+              Gap identified — needs remediation
+            } @else {
+              {{ formatCoverageStatus(selectedPointDetail.status) }}
+            }
+          </span>
+          <p class="detail-summary">{{ selectedPointDetail.summary }}</p>
+          @if (selectedPointReportItem) {
+            <app-dual-verify-result-card [item]="selectedPointReportItem" />
+          }
+          @if (hasResumableRun && selectedPointDetail.status !== 'not-run') {
+            <button
+              type="button"
+              class="btn-sm"
+              [disabled]="retryingPointId === selectedPointDetail.pointId || selectedPointDetail.status === 'running'"
+              (click)="retrySinglePoint(selectedPointDetail.pointId)"
+            >
+              @if (needsPhase2RerunForPoint(selectedPointDetail.pointId)) {
+                Re-run Phase 2
+              } @else {
+                Re-run
+              }
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="detail-empty">
+          <strong>Select a point</strong>
+          Click a row in <em>Analysing list</em> to view compliance result and gap detail here.
+        </div>
+      }
+    </div>
+  </div>
+</div>
+
+@if (analysisState === 'complete' && activeNdRunId) {
+  <section #gapReportEl class="v8-embedded-results">
+    <app-nd-gap-analysis
+      [embedMode]="true"
+      [embedRunId]="activeNdRunId"
+      (runStatusChange)="onEmbeddedRunStatusChange($event)"
+    />
+  </section>
+} @else if (showInlineGapReport && inlineGapItems.length) {
+  <section #gapReportEl class="v8-inline-gap-report" aria-label="Full gap report">
+    <div class="inline-gap-head">
+      <div>
+        <h2>Gap report</h2>
+        <p class="inline-gap-sub">
+          @if (demoSaveInProgress) {
+            Saving analysis run to database…
+          } @else if (demoSaveError) {
+            Could not save run: {{ demoSaveError }}
+          } @else if (!activeNdRunId) {
+            Review findings below. Save the run to enable editing and submit for review.
+          } @else {
+            Expand a point below to edit its corrective action plan.
+          }
+        </p>
+      </div>
+      <div class="inline-gap-head-actions">
+        @if (demoSaveError && !demoSaveInProgress) {
+          <button type="button" class="btn-secondary btn-sm" (click)="retryDemoSave()">Retry save</button>
+        }
+        <button type="button" class="btn-secondary btn-sm" (click)="openGapReport()">Gap report</button>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-card compliant">
+        <span class="label">Compliance</span>
+        <strong>{{ inlineGapSummary.compliant }}</strong>
+      </div>
+      <div class="summary-card partial_compliant">
+        <span class="label">Partial compliance</span>
+        <strong>{{ inlineGapSummary.partialCompliant }}</strong>
+      </div>
+      <div class="summary-card non_compliant">
+        <span class="label">Non-compliance</span>
+        <strong>{{ inlineGapSummary.nonCompliant }}</strong>
+      </div>
+    </div>
+
+    @if (activeNdRunId && nonComplianceGapPoints.length) {
+      <div class="gap-verify-panel card-surface">
+        <h3>Non-compliance &amp; partial points — gap verification</h3>
+        <p class="gap-verify-hint">These points are not fully compliant. Expand each row to review AI gaps, upload manual gap analysis, and rerun for that point only.</p>
+        <ul class="gap-verify-list">
+          @for (row of nonComplianceGapPoints; track row.pointId) {
+            <li>
+              <strong>{{ row.label }}</strong>
+              <span class="severity-badge" [class]="row.severity">{{ gapComplianceLabel(row.severity) }}</span>
+              <span class="gap-count-badge">{{ row.gapCount }} gap{{ row.gapCount === 1 ? '' : 's' }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
+    <div class="filter-pills">
+      <button type="button" [class.active]="inlineGapFilter === 'all'" (click)="setInlineGapFilter('all')">
+        All ({{ inlineGapItems.length }})
+      </button>
+      <button type="button" [class.active]="inlineGapFilter === 'compliant'" (click)="setInlineGapFilter('compliant')">
+        Compliance
+      </button>
+      <button type="button" [class.active]="inlineGapFilter === 'partial_compliant'" (click)="setInlineGapFilter('partial_compliant')">
+        Partial compliance
+      </button>
+      <button type="button" [class.active]="inlineGapFilter === 'non_compliant'" (click)="setInlineGapFilter('non_compliant')">
+        Non-compliance
+      </button>
+    </div>
+
+    <div class="items-list">
+      @for (item of filteredInlineGapItems; track trackInlineGapItem(item)) {
+        @let pointId = gapItemPointId(item);
+        <article class="item-card card-surface" [class.expanded]="isInlineGapExpanded(item)">
+          <div
+            class="item-header"
+            role="button"
+            tabindex="0"
+            (click)="toggleInlineGapItem(item)"
+            (keydown.enter)="toggleInlineGapItem(item)"
+            (keydown.space)="$event.preventDefault(); toggleInlineGapItem(item)"
+          >
+            <span class="item-section">{{ item.section }}</span>
+            <strong class="item-title">{{ item.title }}</strong>
+            @if ((item.gapCount ?? 0) > 0) {
+              <button
+                type="button"
+                class="gap-count-badge"
+                (click)="expandInlineGapItem($event, item)"
+              >{{ item.gapCount }} gap{{ item.gapCount === 1 ? '' : 's' }}</button>
+            }
+            <span class="severity-badge" [class]="item.severity">{{ gapComplianceLabel(item.severity) }}</span>
+            <span class="chevron" [class.open]="isInlineGapExpanded(item)">›</span>
+          </div>
+          @if (isInlineGapExpanded(item)) {
+            <div class="item-body item-body-detail">
+              @defer (when isInlineGapExpanded(item)) {
+              @if (analysisPointForPointId(pointId); as ndPoint) {
+              @if (!activeNdRunId && !demoSaveInProgress) {
+                <p class="result-save-hint">Save the run to edit corrective actions for this point.</p>
+              }
+              <app-nd-gap-point-detail
+                [point]="ndPoint"
+                [snapshot]="pointSnapshotForPointId(pointId)"
+                [hideReportHeader]="true"
+                [canEdit]="canEditResultCap"
+                [editing]="resultEditingPointId === ndPoint.id"
+                [saving]="resultCapSavingPointId === ndPoint.id"
+                [history]="resultHistoryPointId === ndPoint.id ? resultHistory : []"
+                [showHistoryPanel]="resultHistoryPointId === ndPoint.id"
+                [policyDocId]="policyPdfDocId"
+            [policyDocCatalog]="ndPolicyDocCatalog"
+                [regulationDocId]="regDocIdForPointId(pointId)"
+                [runId]="activeNdRunId"
+                [gapAttachments]="attachmentsForPoint(pointId)"
+                [savedActionItemReviews]="savedReviewsForPoint(pointId)"
+                [showReviewPanel]="canShowReviewPanel"
+                [reviewMode]="canReviewActionGaps"
+                [reviewDisabledHint]="gapReviewDisabledHint"
+                [savingActionReviewIndex]="savingActionReviewIndex"
+              [savingReviewId]="savingReviewId"
+                [canUploadEvidence]="canEditResultCap"
+                [evidenceUploading]="evidenceUploadingPointId === ndPoint.id"
+                [evidenceRerunning]="evidenceRerunningPointId === ndPoint.id"
+                [evidenceUploadingActionIndex]="evidenceUploadingPointId === ndPoint.id ? evidenceUploadingActionIndex : null"
+                [evidenceRerunningActionIndex]="evidenceRerunningPointId === ndPoint.id ? evidenceRerunningActionIndex : null"
+                (startEdit)="startResultCapEdit(ndPoint)"
+                (cancelEdit)="cancelResultCapEdit()"
+                (save)="saveResultCap(ndPoint.id, $event)"
+                (openHistory)="openResultCapHistory(ndPoint.id)"
+                (closeHistory)="closeResultCapHistory()"
+                (restoreVersion)="restoreResultCapVersion($event)"
+                (openPdf)="openPdfDocument($event.docId, $event.page)"
+                (uploadEvidence)="onUploadGapEvidence(pointId, $event)"
+                (uploadGapEvidence)="onUploadGapEvidence(pointId, $event.files, $event.actionIndex)"
+                (deleteEvidence)="onDeleteGapEvidence(pointId, $event)"
+                (deleteGapEvidence)="onDeleteGapEvidence(pointId, $event.attachmentId)"
+                (rerunWithEvidence)="onRerunWithEvidence(pointId, $event)"
+                (rerunGapEvidence)="onRerunGapEvidence(pointId, $event)"
+                (saveActionItemReview)="saveActionItemReview(pointId, $event)"
+                (deleteActionItemReview)="deleteActionItemReview(pointId, $event)"
+                (reorderActionItemReview)="reorderActionItemReview(pointId, $event)"
+              />
+              } @else {
+                <p class="muted-inline">No detailed output for this point yet.</p>
+              }
+              } @placeholder {
+                <p class="muted-inline">Loading detail…</p>
+              }
+            </div>
+          }
+        </article>
+      }
+    </div>
+  </section>
+}
+
+@if (showNdRunConfirm) {
+  <div class="run-confirm-backdrop" (click)="cancelNdRunConfirm()"></div>
+  <dialog class="run-confirm-dialog" open aria-labelledby="run-confirm-title">
+    <h2 id="run-confirm-title">{{ ndRunConfirmTitle }}</h2>
+    <p class="run-confirm-lead">{{ ndRunConfirmHint }}</p>
+    @if (regulWorkflowLlmSummary) {
+      <p class="run-confirm-llm nd-muted">LLM: {{ regulWorkflowLlmSummary }}</p>
+    }
+    <label class="run-confirm-checkbox">
+      <input type="checkbox" [(ngModel)]="enableQualitativeAssessment" />
+      Include qualitative assessment (holistic policy writing review)
+    </label>
+    <p class="run-confirm-label">
+      Type <code>{{ ndRunConfirmPhrase }}</code> to continue:
+    </p>
+    <input
+      type="text"
+      class="run-confirm-input"
+      [(ngModel)]="ndRunConfirmInput"
+      (keydown)="onNdRunConfirmKeydown($event)"
+      autocomplete="off"
+      spellcheck="false"
+      [attr.placeholder]="ndRunConfirmPhrase"
+      aria-label="Confirmation word"
+    />
+    <div class="run-confirm-actions">
+      <button type="button" class="btn-secondary btn-sm" (click)="cancelNdRunConfirm()">Cancel</button>
+      <button type="button" class="btn-primary btn-sm" [disabled]="!ndRunConfirmReady" (click)="confirmNdRun()">
+        Confirm &amp; run
+      </button>
+    </div>
+  </dialog>
+}
+
+@if (pointDetailModalId) {
+  <div class="run-confirm-backdrop" (click)="closePointDetailModal()"></div>
+  <dialog class="run-confirm-dialog point-detail-dialog" open aria-labelledby="point-detail-title">
+    <button type="button" class="point-detail-close" aria-label="Close" (click)="closePointDetailModal()">×</button>
+    <h2 id="point-detail-title">
+      §{{ displayLabelForPoint(pointDetailModalId) }}
+      @if (pointDetailModalSnapshot()?.pointTitle) {
+        — {{ pointDetailModalSnapshot()?.pointTitle }}
+      }
+    </h2>
+    @if (pointDetailModalSnapshot()?.pageReference) {
+      <p class="point-detail-meta">
+        <strong>Clause / page:</strong> {{ pointDetailModalSnapshot()?.pageReference }}
+      </p>
+    }
+    @if (pointDetailModalGov()?.title && pointDetailModalGov()?.title !== pointDetailModalSnapshot()?.pointTitle) {
+      <p class="point-detail-meta"><strong>Title:</strong> {{ pointDetailModalGov()?.title }}</p>
+    }
+    <div class="point-detail-body">
+      {{ pointDetailModalSnapshot()?.pointContent || pointDetailModalGov()?.text || 'No requirement text stored.' }}
+    </div>
+    <div class="run-confirm-actions">
+      <button type="button" class="btn-primary btn-sm" (click)="closePointDetailModal()">Close</button>
+    </div>
+  </dialog>
+}
+</div>

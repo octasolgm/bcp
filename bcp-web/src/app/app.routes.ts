@@ -18,6 +18,14 @@ const ndAnalyseV9Route = {
     import('./pages/analyse-v9/analyse-v9.component').then((m) => m.AnalyseV9Component),
 };
 
+const ndAnalyseRegulRoute = {
+  canActivate: [ndRoleGuard],
+  data: { ndRoles: ['maker', 'super_admin'] },
+  title: 'Regul Workflow · Comply-Solution',
+  loadComponent: () =>
+    import('./pages/analyse-regul/analyse-regul.component').then((m) => m.AnalyseRegulComponent),
+};
+
 /** Legacy app pages (served under /old/*). */
 const legacyAppRoutes: Routes = [
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
@@ -264,6 +272,10 @@ export const routes: Routes = [
             path: 'analyse-v9',
             title: 'New Gap Analysis V2 · Comply-Solution',
             ...ndAnalyseV9Route,
+          },
+          {
+            path: 'analyse-regul',
+            ...ndAnalyseRegulRoute,
           },
           {
             path: 'analysis-versions',

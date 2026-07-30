@@ -30,6 +30,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdAnalysisStatusHistory> NdAnalysisStatusHistories => Set<NdAnalysisStatusHistory>();
     public DbSet<NdHiddenLegacyRun> NdHiddenLegacyRuns => Set<NdHiddenLegacyRun>();
     public DbSet<NdSystemSetting> NdSystemSettings => Set<NdSystemSetting>();
+    public DbSet<NdRegulForwardFinding> NdRegulForwardFindings => Set<NdRegulForwardFinding>();
+    public DbSet<NdRegulInternalSection> NdRegulInternalSections => Set<NdRegulInternalSection>();
+    public DbSet<NdRegulReverseMapping> NdRegulReverseMappings => Set<NdRegulReverseMapping>();
+    public DbSet<NdRegulQualitativeAssessment> NdRegulQualitativeAssessments => Set<NdRegulQualitativeAssessment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -159,6 +163,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(e => e.SelectedInternalDocIds).HasColumnType("jsonb");
         modelBuilder.Entity<NdAnalysisRun>()
             .Property(e => e.SelectedRegulationDocIds).HasColumnType("jsonb");
+        modelBuilder.Entity<NdRegulForwardFinding>(e =>
+        {
+            e.Property(f => f.ResultJson).HasColumnType("jsonb");
+            e.HasIndex(f => f.AnalysisRunId);
+        });
+        modelBuilder.Entity<NdRegulReverseMapping>(e =>
+        {
+            e.Property(m => m.MappedClauseNos).HasColumnType("jsonb");
+            e.Property(m => m.ResultJson).HasColumnType("jsonb");
+            e.HasIndex(m => m.AnalysisRunId);
+        });
+        modelBuilder.Entity<NdRegulQualitativeAssessment>(e =>
+        {
+            e.Property(q => q.ResultJson).HasColumnType("jsonb");
+            e.HasIndex(q => q.AnalysisRunId).IsUnique();
+        });
+        modelBuilder.Entity<NdRegulInternalSection>(e =>
+        {
+            e.HasIndex(s => s.AnalysisRunId);
+        });
         modelBuilder.Entity<NdAnalysisPoint>(e =>
         {
             e.Property(p => p.PointSnapshot).HasColumnType("jsonb");

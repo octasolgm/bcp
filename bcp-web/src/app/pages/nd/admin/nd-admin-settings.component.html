@@ -2,7 +2,7 @@
   <div>
     <h1>Platform settings</h1>
     <p class="subtitle">
-      Choose which AI model runs Pass 2 of compliance analysis. Pass 1 always uses document parsing (Landing AI).
+      Choose AI models for analysis workflows. Pass 1 (V8) always uses Landing AI for document parsing.
     </p>
   </div>
 </div>
@@ -90,6 +90,79 @@
           @if (!selectedProviderConfigured) {
             <span class="nd-muted">Select a provider that is ready, or ask your administrator to enable this one.</span>
           }
+        </div>
+      </section>
+
+      <section class="nd-card settings-card">
+        <header class="settings-card-header">
+          <div>
+            <h2>Regul workflow model (Analysis V3)</h2>
+            <p class="nd-muted">
+              Used for forward judgment, reverse coverage, and optional qualitative assessment on
+              <code>/nd/analyse-regul</code>.
+            </p>
+          </div>
+          @if (regulSettings?.updatedAt) {
+            <span class="settings-updated nd-muted">Updated {{ regulSettings!.updatedAt | date: 'medium' }}</span>
+          }
+        </header>
+
+        <div class="settings-grid">
+          <label class="nd-label">
+            Provider
+            <select
+              class="nd-input"
+              [(ngModel)]="regulSelectedProvider"
+              (ngModelChange)="onRegulProviderChange()"
+              aria-label="Regul workflow LLM provider"
+            >
+              @for (p of regulProviderOptions; track p.id) {
+                <option [value]="p.id">{{ p.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="nd-label">
+            Model
+            <select class="nd-input" [(ngModel)]="regulSelectedModel" aria-label="Regul workflow LLM model">
+              @for (m of regulModelOptions; track m) {
+                <option [value]="m">{{ m }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        @if (regulSelectedProviderMeta; as provider) {
+          <div
+            class="provider-status"
+            [class.provider-status-ready]="provider.apiKeyConfigured"
+            [class.provider-status-missing]="!provider.apiKeyConfigured"
+          >
+            <strong>{{ provider.label }}</strong>
+            @if (provider.apiKeyConfigured) {
+              <span class="provider-status-label">Ready for Regul workflow analyses.</span>
+            } @else {
+              <span class="provider-status-label">Not available yet for this environment.</span>
+            }
+          </div>
+        }
+
+        @if (regulError) {
+          <p class="nd-error">{{ regulError }}</p>
+        }
+        @if (regulMessage) {
+          <p class="nd-success">{{ regulMessage }}</p>
+        }
+
+        <div class="settings-actions">
+          <button
+            type="button"
+            class="nd-btn-primary"
+            [disabled]="regulSaving || !regulSelectedProviderConfigured || !regulSelectedModel"
+            (click)="saveRegul()"
+          >
+            {{ regulSaving ? 'Saving…' : 'Save Regul workflow model' }}
+          </button>
         </div>
       </section>
     }

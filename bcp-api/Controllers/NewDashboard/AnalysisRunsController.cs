@@ -30,7 +30,10 @@ public class AnalysisRunsController(
         List<string> SelectedInternalDocIds,
         List<string> SelectedRegulationDocIds,
         /// <summary>Optional prompt pack: v1 | v2 | v3. Analyse-v9 sends v3 (Regul.ai rules).</summary>
-        string? ComparePromptVersion = null);
+        string? ComparePromptVersion = null,
+        /// <summary>bcp_landing (default) or regul_pipeline (Regul workflow V3).</summary>
+        string? WorkflowEngine = null,
+        bool EnableQualitative = false);
 
     [HttpGet]
     public async Task<IActionResult> List(
@@ -218,6 +221,8 @@ public class AnalysisRunsController(
             Name = body.Name.Trim(),
             Description = body.Description,
             ComparePromptVersion = storedPromptVersion,
+            WorkflowEngine = ResolveWorkflowEngine(body.WorkflowEngine),
+            EnableQualitative = body.EnableQualitative,
             LibraryId = body.LibraryId,
             DepartmentId = body.DepartmentId,
             SelectedPointsSnapshot = JsonSerializer.Serialize(points),
@@ -445,13 +450,22 @@ public class AnalysisRunsController(
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
         var linkedCt = runCancellation.Register(id);
+        var useRegul = AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine);
         _ = Task.Run(async () =>
         {
             using var scope = scopeFactory.CreateScope();
-            var proc = scope.ServiceProvider.GetRequiredService<NdAnalysisProcessor>();
             try
             {
-                await proc.ProcessRunAsync(id, linkedCt);
+                if (useRegul)
+                {
+                    var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
+                    await regulProc.ProcessRunAsync(id, linkedCt);
+                }
+                else
+                {
+                    var proc = scope.ServiceProvider.GetRequiredService<NdAnalysisProcessor>();
+                    await proc.ProcessRunAsync(id, linkedCt);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -864,7 +878,18 @@ public class AnalysisRunsController(
         createdBy = r.CreatedBy,
         createdByName = creatorName,
         createdAt = r.CreatedAt,
+        workflowEngine = r.WorkflowEngine,
+        enableQualitative = r.EnableQualitative,
+        regulLlmProvider = r.RegulLlmProvider,
+        regulLlmModel = r.RegulLlmModel,
+        regulPipelinePhase = r.RegulPipelinePhase,
+        regulPipelineError = r.RegulPipelineError,
     };
+
+    private static string ResolveWorkflowEngine(string? raw) =>
+        AnalysisWorkflowEngine.IsRegulPipeline(raw)
+            ? AnalysisWorkflowEngine.RegulPipeline
+            : AnalysisWorkflowEngine.BcpLanding;
 
     private static object MapPoint(NdAnalysisPoint p, string? pointSnapshotOverride = null) => new
     {

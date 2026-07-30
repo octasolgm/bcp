@@ -34,10 +34,11 @@ export class NdAnalysisVersionsComponent {
     },
     {
       id: 'V3',
-      label: 'Analysis V3',
-      description: 'Reserved for a future clone. Not available yet.',
-      path: null,
-      status: 'coming_soon',
+      label: 'Analysis V3 — Regul Workflow',
+      description:
+        'V8 setup (reg library + points + internal docs) then Regul.ai forward/reverse/qualitative pipeline with admin-selected LLM.',
+      path: '/nd/analyse-regul',
+      status: 'available',
     },
   ];
 }

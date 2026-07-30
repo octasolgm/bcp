@@ -10,7 +10,8 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class SystemSettingsController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
-    DualVerifyLlmSettingsService llmSettings) : NdControllerBase
+    DualVerifyLlmSettingsService llmSettings,
+    RegulWorkflowLlmSettingsService regulLlmSettings) : NdControllerBase
 {
     public record DualVerifyLlmUpdateRequest(string Provider, string Model);
 
@@ -39,6 +40,42 @@ public class SystemSettingsController(
                 profile.Id,
                 ct);
             return Ok(new { success = true, data = view, message = "Dual verify LLM settings saved." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return BadRequest(new { success = false, message = "Could not save settings. Please try again." });
+        }
+    }
+
+    [HttpGet("regul-workflow-llm")]
+    public async Task<IActionResult> GetRegulWorkflowLlm(CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        var view = await regulLlmSettings.GetAdminViewAsync(ct);
+        return Ok(new { success = true, data = view });
+    }
+
+    [HttpPut("regul-workflow-llm")]
+    public async Task<IActionResult> UpdateRegulWorkflowLlm(
+        [FromBody] DualVerifyLlmUpdateRequest body,
+        CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        try
+        {
+            var view = await regulLlmSettings.SaveAsync(
+                new DualVerifyLlmConfig(body.Provider, body.Model),
+                profile.Id,
+                ct);
+            return Ok(new { success = true, data = view, message = "Regul workflow LLM settings saved." });
         }
         catch (InvalidOperationException ex)
         {
