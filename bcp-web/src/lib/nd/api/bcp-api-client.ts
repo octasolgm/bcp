@@ -220,6 +220,10 @@ export async function startAnalysisRun(token: string, id: string) {
   return apiFetch<unknown>(`/nd/analysis-runs/${id}/start`, token, { method: "POST" });
 }
 
+export async function startForwardOnlyAnalysis(token: string, id: string) {
+  return apiFetch<unknown>(`/nd/analysis-runs/${id}/start-forward`, token, { method: "POST" });
+}
+
 export async function rerunPoint(token: string, runId: string, pointId: string) {
   return apiFetch<unknown>(`/nd/analysis-runs/${runId}/rerun-point/${pointId}`, token, {
     method: "POST",
@@ -236,6 +240,12 @@ export async function rerunDualVerify(token: string, runId: string, pointId: str
 
 export async function rerunAllFailedDualVerify(token: string, runId: string) {
   return apiFetch<unknown>(`/nd/analysis-runs/${runId}/rerun-dual-verify/all`, token, {
+    method: "POST",
+  });
+}
+
+export async function rerunForwardOnly(token: string, runId: string) {
+  return apiFetch<unknown>(`/nd/analysis-runs/${runId}/rerun-forward`, token, {
     method: "POST",
   });
 }

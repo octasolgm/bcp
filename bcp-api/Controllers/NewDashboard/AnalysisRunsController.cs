@@ -293,22 +293,6 @@ public class AnalysisRunsController(
             .AsNoTracking()
             .Where(p => p.AnalysisRunId == id)
             .OrderBy(p => p.CreatedAt)
-            .Select(p => new
-            {
-                id = p.Id,
-                regulationPointId = p.RegulationPointId,
-                pointSnapshot = p.PointSnapshot,
-                landingAiStatus = p.LandingAiStatus,
-                landingAiResult = p.LandingAiResult,
-                landingAiError = p.LandingAiError,
-                googleAiStatus = p.GoogleAiStatus,
-                googleAiResult = p.GoogleAiResult,
-                googleAiError = p.GoogleAiError,
-                dualVerifyStatus = p.DualVerifyStatus,
-                finalStatus = p.FinalStatus,
-                finalActionPlan = p.FinalActionPlan,
-                originalAiActionPlan = p.OriginalAiActionPlan,
-            })
             .ToListAsync(ct);
 
         return Ok(new
@@ -316,8 +300,8 @@ public class AnalysisRunsController(
             success = true,
             data = new
             {
-                run = MapRunDetail(run, creator?.FullName),
-                points,
+                run = NdRegulApiProjection.MapRunDetail(run, creator?.FullName),
+                points = points.Select(p => NdRegulApiProjection.MapPoint(p, run.WorkflowEngine)).ToList(),
                 history,
             },
         });
@@ -349,72 +333,25 @@ public class AnalysisRunsController(
                 .AsNoTracking()
                 .Where(p => p.AnalysisRunId == id)
                 .OrderBy(p => p.CreatedAt)
-                .Select(p => new
-                {
-                    id = p.Id,
-                    regulationPointId = p.RegulationPointId,
-                    pointSnapshot = p.PointSnapshot,
-                    landingAiStatus = p.LandingAiStatus,
-                    landingAiResult = p.LandingAiResult,
-                    landingAiError = p.LandingAiError,
-                    googleAiStatus = p.GoogleAiStatus,
-                    googleAiResult = p.GoogleAiResult,
-                    googleAiError = p.GoogleAiError,
-                    dualVerifyStatus = p.DualVerifyStatus,
-                    finalStatus = p.FinalStatus,
-                    finalActionPlan = p.FinalActionPlan,
-                    originalAiActionPlan = p.OriginalAiActionPlan,
-                })
                 .ToListAsync(ct);
 
             return Ok(new
             {
                 success = true,
-                data = new
-                {
-                    id = run.Id,
-                    name = run.Name,
-                    status = run.Status,
-                    libraryId = run.LibraryId,
-                    selectedPointsSnapshot = run.SelectedPointsSnapshot,
-                    selectedInternalDocIds = run.SelectedInternalDocIds,
-                    selectedRegulationDocIds = run.SelectedRegulationDocIds,
-                    totalPointsCount = run.TotalPointsCount,
-                    processedPointsCount = run.ProcessedPointsCount,
-                    landingAiCompletedCount = run.LandingAiCompletedCount,
-                    dualVerifyCompletedCount = run.DualVerifyCompletedCount,
-                    dualVerifyFailedCount = run.DualVerifyFailedCount,
-                    workflowEngine = run.WorkflowEngine,
-                    regulPipelinePhase = run.RegulPipelinePhase,
-                    enableQualitative = run.EnableQualitative,
-                    points = resumePoints,
-                },
+                data = NdRegulApiProjection.MapResumeResponse(run, resumePoints),
             });
         }
 
         // Poll payload: lightweight status; include INT snapshots + reverse section rows for Regul live UI.
-        var points = await db.NdAnalysisPoints
+        var pointRows = await db.NdAnalysisPoints
             .AsNoTracking()
             .Where(p => p.AnalysisRunId == id)
             .OrderBy(p => p.CreatedAt)
-            .Select(p => new
-            {
-                id = p.Id,
-                regulationPointId = p.RegulationPointId,
-                pointSnapshot = p.RegulationPointId == null ? p.PointSnapshot : null,
-                landingAiStatus = p.LandingAiStatus,
-                landingAiResult = p.LandingAiResult,
-                landingAiError = p.LandingAiError,
-                googleAiStatus = p.GoogleAiStatus,
-                googleAiResult = p.GoogleAiResult,
-                googleAiError = p.GoogleAiError,
-                dualVerifyStatus = p.DualVerifyStatus,
-                finalStatus = p.FinalStatus,
-            })
             .ToListAsync(ct);
 
         int? regulReverseSectionTotal = null;
         int? regulReverseSectionCompleted = null;
+        int? regulReverseSectionFailed = null;
         List<object>? regulReverseSections = null;
         if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
         {
@@ -438,6 +375,7 @@ public class AnalysisRunsController(
 
             regulReverseSectionCompleted = mappingStatuses.Count(m =>
                 m.Status is "completed" or "failed");
+            regulReverseSectionFailed = mappingStatuses.Count(m => m.Status == "failed");
 
             if (sections.Count > 0
                 && (run.RegulPipelinePhase is "reverse" or "qualitative"
@@ -463,23 +401,13 @@ public class AnalysisRunsController(
         return Ok(new
         {
             success = true,
-            data = new
-            {
-                id = run.Id,
-                status = run.Status,
-                workflowEngine = run.WorkflowEngine,
-                regulPipelinePhase = run.RegulPipelinePhase,
-                enableQualitative = run.EnableQualitative,
+            data = NdRegulApiProjection.MapPollResponse(
+                run,
+                pointRows,
                 regulReverseSectionTotal,
                 regulReverseSectionCompleted,
-                regulReverseSections,
-                totalPointsCount = run.TotalPointsCount,
-                processedPointsCount = run.ProcessedPointsCount,
-                landingAiCompletedCount = run.LandingAiCompletedCount,
-                dualVerifyCompletedCount = run.DualVerifyCompletedCount,
-                dualVerifyFailedCount = run.DualVerifyFailedCount,
-                points,
-            },
+                regulReverseSectionFailed,
+                regulReverseSections),
         });
     }
 
@@ -552,6 +480,50 @@ public class AnalysisRunsController(
         }, CancellationToken.None);
 
         return Ok(new { success = true, message = "Analysis started", id });
+    }
+
+    [HttpPost("{id:guid}/start-forward")]
+    public async Task<IActionResult> StartForwardOnly(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound(new { success = false, message = "Not found" });
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+            return StatusCode(403, new { success = false, message = "Forbidden" });
+
+        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            return BadRequest(new { success = false, message = "Forward-only start is for Regul workflow runs." });
+
+        if (run.RegulClausesConfirmedAt == null)
+            return BadRequest(new
+            {
+                success = false,
+                message = "Confirm regulatory clauses before starting forward analysis.",
+            });
+
+        var linkedCt = runCancellation.Register(id);
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            try
+            {
+                var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
+                await regulProc.ProcessForwardOnlyRunAsync(id, linkedCt);
+            }
+            catch (OperationCanceledException)
+            {
+                // Stop requested — processor persists cancelled state.
+            }
+            catch { /* logged in processor */ }
+            finally
+            {
+                runCancellation.Clear(id);
+            }
+        }, CancellationToken.None);
+
+        return Ok(new { success = true, message = "Forward-only analysis started", id });
     }
 
     /// <summary>Regul workflow: review/edit clauses then confirm before Run analysis (Regul.ai extraction_review gate).</summary>
@@ -679,6 +651,37 @@ public class AnalysisRunsController(
         if (!pointExists) return NotFound(new { success = false, message = "Analysis point not found" });
 
         return QueuePointProcessing(run, id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex);
+    }
+
+    [HttpPost("{id:guid}/rerun-forward")]
+    public async Task<IActionResult> RerunForwardOnly(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound();
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+            return StatusCode(403);
+
+        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            return BadRequest(new { success = false, message = "Forward-only rerun is for Regul workflow runs." });
+
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
+            try
+            {
+                await regulProc.RerunForwardPhaseAsync(id, CancellationToken.None);
+            }
+            catch
+            {
+                // Errors are persisted on the run by the processor.
+            }
+        }, CancellationToken.None);
+
+        return Ok(new { success = true, message = "Forward-only rerun started (reverse preserved)" });
     }
 
     private IActionResult QueuePointProcessing(
@@ -1004,49 +1007,11 @@ public class AnalysisRunsController(
         return items;
     }
 
-    private static object MapRunSummary(NdAnalysisRun r) => new
-    {
-        id = r.Id,
-        name = r.Name,
-        status = r.Status,
-        totalPointsCount = r.TotalPointsCount,
-        processedPointsCount = r.ProcessedPointsCount,
-        dualVerifyFailedCount = r.DualVerifyFailedCount,
-        departmentId = r.DepartmentId,
-        createdBy = r.CreatedBy,
-        createdAt = r.CreatedAt,
-        submittedToCheckerAt = r.SubmittedToCheckerAt,
-        workflowEngine = r.WorkflowEngine,
-        regulPipelinePhase = r.RegulPipelinePhase,
-    };
+    private static object MapRunSummary(NdAnalysisRun r) =>
+        NdRegulApiProjection.MapRunSummary(r);
 
-    private static object MapRunDetail(NdAnalysisRun r, string? creatorName) => new
-    {
-        id = r.Id,
-        name = r.Name,
-        description = r.Description,
-        status = r.Status,
-        libraryId = r.LibraryId,
-        selectedPointsSnapshot = r.SelectedPointsSnapshot,
-        selectedInternalDocIds = r.SelectedInternalDocIds,
-        selectedRegulationDocIds = r.SelectedRegulationDocIds,
-        totalPointsCount = r.TotalPointsCount,
-        processedPointsCount = r.ProcessedPointsCount,
-        landingAiCompletedCount = r.LandingAiCompletedCount,
-        dualVerifyCompletedCount = r.DualVerifyCompletedCount,
-        dualVerifyFailedCount = r.DualVerifyFailedCount,
-        departmentId = r.DepartmentId,
-        createdBy = r.CreatedBy,
-        createdByName = creatorName,
-        createdAt = r.CreatedAt,
-        workflowEngine = r.WorkflowEngine,
-        enableQualitative = r.EnableQualitative,
-        regulLlmProvider = r.RegulLlmProvider,
-        regulLlmModel = r.RegulLlmModel,
-        regulPipelinePhase = r.RegulPipelinePhase,
-        regulPipelineError = r.RegulPipelineError,
-        regulClausesConfirmedAt = r.RegulClausesConfirmedAt,
-    };
+    private static object MapRunDetail(NdAnalysisRun r, string? creatorName) =>
+        NdRegulApiProjection.MapRunDetail(r, creatorName);
 
     private static (string ClauseNo, string ClauseText) ParseClauseSnapshot(string? raw)
     {
@@ -1086,20 +1051,6 @@ public class AnalysisRunsController(
             ? AnalysisWorkflowEngine.RegulPipeline
             : AnalysisWorkflowEngine.BcpLanding;
 
-    private static object MapPoint(NdAnalysisPoint p, string? pointSnapshotOverride = null) => new
-    {
-        id = p.Id,
-        regulationPointId = p.RegulationPointId,
-        pointSnapshot = pointSnapshotOverride ?? p.PointSnapshot,
-        landingAiStatus = p.LandingAiStatus,
-        landingAiResult = p.LandingAiResult,
-        landingAiError = p.LandingAiError,
-        googleAiStatus = p.GoogleAiStatus,
-        googleAiResult = p.GoogleAiResult,
-        googleAiError = p.GoogleAiError,
-        dualVerifyStatus = p.DualVerifyStatus,
-        finalStatus = p.FinalStatus,
-        finalActionPlan = p.FinalActionPlan,
-        originalAiActionPlan = p.OriginalAiActionPlan,
-    };
+    private static object MapPoint(NdAnalysisPoint p, string? pointSnapshotOverride = null, string? workflowEngine = null) =>
+        NdRegulApiProjection.MapPoint(p, workflowEngine, pointSnapshotOverride);
 }

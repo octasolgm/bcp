@@ -21,7 +21,7 @@ public static class NdRegulAnalysisPointSync
         point.DualVerifyStatus = "completed";
         point.DualVerifyRunAt = DateTimeOffset.UtcNow;
         point.FinalStatus = NdComplianceParser.NormalizeStatus(
-            NdRegulJudgmentFormatter.MapDisplayStatus(judgment.OverallStatus));
+            NdRegulJudgmentFormatter.MapDisplayStatus(judgment.OverallStatus, judgment.DesignStatus));
         var capFromMessage = NdComplianceParser.ExtractActionPlan(landingMessage);
         var capFromJudgment = !string.IsNullOrWhiteSpace(judgment.SuggestedAction)
             ? judgment.SuggestedAction.Trim()

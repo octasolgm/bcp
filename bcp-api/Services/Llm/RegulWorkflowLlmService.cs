@@ -6,6 +6,7 @@ namespace Reguliq.Api.Services.Llm;
 /// <summary>Routes Regul workflow analysis to the admin-selected LLM provider/model.</summary>
 public class RegulWorkflowLlmService(
     RegulWorkflowLlmSettingsService settings,
+    NdAnalysisPromptVersionService promptVersions,
     GeminiService gemini,
     OpenAiCompatibleLlmClient openAi,
     AnthropicLlmClient anthropic,
@@ -42,6 +43,7 @@ public class RegulWorkflowLlmService(
         CancellationToken ct = default)
     {
         var cfg = await settings.GetConfigAsync(ct);
+        var systemPrompt = await promptVersions.GetJudgmentSystemPromptAsync(ct);
         logger.LogInformation(
             "Regul judgment LLM using {Provider}/{Model} (structured={Structured})",
             cfg.Provider,
@@ -51,7 +53,7 @@ public class RegulWorkflowLlmService(
         if (cfg.Provider.Equals("anthropic", StringComparison.OrdinalIgnoreCase))
         {
             return await anthropic.StructuredToolCallAsync(
-                NdRegulPromptDefaults.JudgmentSystemPrompt.Trim(),
+                systemPrompt,
                 contextBlock,
                 queryBlock,
                 NdRegulLlmSchemas.JudgmentToolName,
@@ -63,7 +65,7 @@ public class RegulWorkflowLlmService(
 
         var prompt = string.Join("\n\n", new[]
         {
-            NdRegulPromptDefaults.JudgmentSystemPrompt.Trim(),
+            systemPrompt,
             contextBlock,
             queryBlock,
             JudgmentJsonInstruction,

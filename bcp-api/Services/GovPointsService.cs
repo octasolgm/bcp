@@ -298,6 +298,14 @@ public static class DualVerifyPromptBuilder
         sb.AppendLine("- Cite each source with: [Document Name], Section [X], Page [N]: \"verbatim quote\". One line per document/page when multiple sources apply.");
     }
 
+    /// <summary>Read-only Pass 2 V3 rules text for admin prompt review.</summary>
+    public static string GetPass2RulesV3Text()
+    {
+        var sb = new StringBuilder();
+        AppendPass2RulesV3(sb);
+        return sb.ToString().TrimEnd();
+    }
+
     /// <summary>Regul.ai judgment rules for Pass 2 (analyse-v9 / V3).</summary>
     private static void AppendPass2RulesV3(StringBuilder sb)
     {

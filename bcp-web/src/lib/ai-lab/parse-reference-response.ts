@@ -5,6 +5,8 @@ export type ReferenceComplianceBlock = {
   title: string;
   body: string;
   referencePdf: string;
+  /** Parsed Document Reference field (Regul forward / gap export). */
+  documentReference: string;
   outputResponse: string;
   fulfilledClauses: string;
   status: string;
@@ -22,7 +24,7 @@ export type ParsedReferenceCitation = {
 
 function parseComplianceBlock(block: string): Omit<
   ReferenceComplianceBlock,
-  'referencePdf' | 'outputResponse' | 'fulfilledClauses' | 'status' | 'confidence' | 'correctiveAction' | 'responsibility'
+  'referencePdf' | 'documentReference' | 'outputResponse' | 'fulfilledClauses' | 'status' | 'confidence' | 'correctiveAction' | 'responsibility'
 > & {
   fields: { label: string; value: string }[];
 } {
@@ -113,6 +115,140 @@ export function parseReferenceCitation(text: string): ParsedReferenceCitation {
   };
 }
 
+/** Full policy extract body for display/export — not short citation quotes. */
+export function resolvePolicyExtractText(block: ReferenceComplianceBlock | null): string {
+  if (!block?.outputResponse?.trim()) return '';
+  const text = block.outputResponse.trim();
+  if (/no corresponding procedure found/i.test(text)) return '';
+  if (/^see .+\.$/i.test(text) && text.length < 120) return '';
+  return text;
+}
+
+function isGenericDocReference(ref: string): boolean {
+  const s = ref.trim().toLowerCase();
+  return !s || s === 'internal policy manual' || s === 'n/a' || s === '—';
+}
+
+/** Score how likely text is a document location reference (not verbatim policy body). */
+export function scoreAsDocumentReference(text: string): number {
+  const t = text.trim();
+  if (!t) return 0;
+  let score = 0;
+  const pageCites =
+    (t.match(/\(p\.?\s*\d+\)/gi) ?? []).length + (t.match(/\bp\.?\s*\d+/gi) ?? []).length;
+  const sectionCites = (t.match(/\bsection\s+[\w./-]+/gi) ?? []).length;
+  score += pageCites * 2 + sectionCites;
+  if (t.length < 500) score += 1;
+  if (/^see .+\.$/i.test(t)) score += 3;
+  if (/—\s*["']/.test(t) && pageCites > 0) score += 2;
+  if (pageCites >= 2 && t.length < 700) score += 2;
+  return score;
+}
+
+/** Score how likely text is verbatim policy extract (narrative), not a ref list. */
+export function scoreAsPolicyExtract(text: string): number {
+  const t = text.trim();
+  if (!t) return 0;
+  if (/no corresponding procedure found/i.test(t)) return -5;
+  if (/^see .+\.$/i.test(t) && t.length < 120) return -3;
+  let score = 0;
+  if (t.length > 120) score += 1;
+  if (t.length > 250) score += 2;
+  if (t.length > 500) score += 2;
+  if (/how it works/i.test(t)) score += 3;
+  const pageCites = (t.match(/\(p\.?\s*\d+\)/gi) ?? []).length;
+  if (pageCites >= 3 && t.length < 450) score -= 3;
+  if (scoreAsDocumentReference(t) >= 4 && t.length < 600) score -= 2;
+  return score;
+}
+
+/** When parser or LLM swapped ref vs extract, put each column back in the right place. */
+export function reconcileDocumentRefAndExtract(
+  documentReference: string,
+  policyExtract: string,
+): { documentReference: string; policyExtract: string } {
+  const ref = documentReference.trim();
+  const extract = policyExtract.trim();
+  if (!ref && !extract) return { documentReference: '', policyExtract: '' };
+
+  const refAsRef = scoreAsDocumentReference(ref);
+  const extractAsRef = scoreAsDocumentReference(extract);
+  const refAsExtract = scoreAsPolicyExtract(ref);
+  const extractAsExtract = scoreAsPolicyExtract(extract);
+
+  const looksSwapped =
+    refAsExtract > refAsRef + 1 &&
+    extractAsRef > extractAsExtract + 1 &&
+    ref.length > 80 &&
+    extract.length > 0;
+
+  if (looksSwapped) return { documentReference: extract, policyExtract: ref };
+  return { documentReference: ref, policyExtract: extract };
+}
+
+/** Document reference for display/export — refs only, not policy body text. */
+export function resolveDocumentReferenceText(block: ReferenceComplianceBlock | null): string {
+  if (!block) return '';
+  const docRef = block.documentReference?.trim() ?? '';
+  const pdfRef = block.referencePdf?.trim() ?? '';
+  const candidates = [docRef, pdfRef].filter((c) => c && !isGenericDocReference(c));
+  if (!candidates.length) return '';
+
+  let best = candidates[0];
+  let bestScore = scoreAsDocumentReference(best);
+  for (const c of candidates.slice(1)) {
+    const score = scoreAsDocumentReference(c);
+    if (score > bestScore) {
+      best = c;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/** Best document reference + policy extract from landing / pass-2 blocks (Excel + UI). */
+export function resolvePolicyRefAndExtract(
+  landing: ReferenceComplianceBlock | null,
+  llm: ReferenceComplianceBlock | null,
+): { documentReference: string; policyExtract: string } {
+  const refCandidates: string[] = [];
+  const extractCandidates: string[] = [];
+
+  for (const block of [landing, llm]) {
+    if (!block) continue;
+    const docRef = resolveDocumentReferenceText(block);
+    if (docRef) refCandidates.push(docRef);
+    const extract = resolvePolicyExtractText(block);
+    if (extract) extractCandidates.push(extract);
+    const rawOut = block.outputResponse?.trim();
+    if (rawOut && !/no corresponding procedure found/i.test(rawOut)) {
+      extractCandidates.push(rawOut);
+    }
+  }
+
+  let bestRef = '';
+  let bestRefScore = -1;
+  for (const c of refCandidates) {
+    const score = scoreAsDocumentReference(c);
+    if (score > bestRefScore) {
+      bestRefScore = score;
+      bestRef = c;
+    }
+  }
+
+  let bestExtract = '';
+  let bestExtractScore = -1;
+  for (const c of extractCandidates) {
+    const score = scoreAsPolicyExtract(c);
+    if (score > bestExtractScore) {
+      bestExtractScore = score;
+      bestExtract = c;
+    }
+  }
+
+  return reconcileDocumentRefAndExtract(bestRef, bestExtract);
+}
+
 export function parseReferenceComplianceBlock(
   block: string,
 ): ReferenceComplianceBlock {
@@ -124,6 +260,7 @@ export function parseReferenceComplianceBlock(
     title: parsed.title,
     body: parsed.body,
     referencePdf: fieldValue(parsed.fields, 'Reference PDF'),
+    documentReference: fieldValue(parsed.fields, 'Document Reference'),
     outputResponse: fieldValue(parsed.fields, 'Output/Response'),
     fulfilledClauses: fieldValue(parsed.fields, 'Fulfilled clauses'),
     status,
@@ -381,6 +518,11 @@ export function referenceBlockToPlainText(
   if (block.body) parts.push(block.body);
 
   push(parts, 'Reference PDF', block.referencePdf || fieldValue('Reference PDF'));
+  push(
+    parts,
+    'Document Reference',
+    block.documentReference || fieldValue('Document Reference'),
+  );
   push(
     parts,
     'Output/Response',

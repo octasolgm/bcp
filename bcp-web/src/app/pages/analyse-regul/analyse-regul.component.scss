@@ -625,6 +625,28 @@
   container-name: v8-status-col;
 }
 
+.analyse-regul-page .analysing-int-section {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed var(--border-subtle, #e2e8f0);
+}
+
+.analyse-regul-page .analysing-int-heading {
+  margin: 0 0 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+}
+
+.analyse-regul-page .status-list-int .status-row.is-int-row {
+  border-left: 3px solid #7c3aed;
+}
+
+.analyse-regul-page .status-list-int .int-sid {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
 @container v8-status-col (max-width: 300px) {
   .analyse-regul-page .status-row {
     grid-template-columns: auto 2.75rem minmax(0, 1fr);

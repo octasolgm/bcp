@@ -58,7 +58,7 @@ import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
 import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
-import { exportGapAnalysisPdfFromPoints } from '../../../lib/nd/export/gap-analysis-export';
+import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints, exportRegulGapAnalysisExcelFromPoints } from '../../../lib/nd/export/gap-analysis-export';
 
 type PointsSource = 'regulation' | 'library';
 
@@ -361,6 +361,24 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   override clearSelection(): void {
     this.selected = new Set();
+  }
+
+  /**
+   * Base class auto-selects every loaded point using `point_id`, but Regul checkboxes key off
+   * `regulationPointId` (see selectableRegPointId). That mismatch made the panel footer show
+   * "N selected" while every checkbox rendered unchecked. Start unselected instead so the count
+   * always matches what's actually checked.
+   */
+  protected override applyGovPoints(
+    points: GovPoint[],
+    note: string,
+    selectionOnly?: Set<string> | null,
+    regulationDisplayDocs?: LibraryPointDisplayDoc[],
+  ): void {
+    super.applyGovPoints(points, note, selectionOnly, regulationDisplayDocs);
+    if (this.pointsSource === 'regulation' && !selectionOnly?.size) {
+      this.selected = new Set();
+    }
   }
 
   override toggle(id: string): void {
@@ -803,8 +821,12 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     status: string;
     workflowEngine?: string;
     regulPipelinePhase?: string;
+    regulClauseTotal?: number;
+    regulClauseCompleted?: number;
+    regulClauseFailed?: number;
     regulReverseSectionTotal?: number | null;
     regulReverseSectionCompleted?: number | null;
+    regulReverseSectionFailed?: number | null;
     regulReverseSections?: Array<{ sectionRef: string; title: string; status: string }>;
     totalPointsCount: number;
     processedPointsCount: number;
@@ -820,7 +842,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     ) {
       this.lastLoggedReverseDone = done;
       console.info(
-        `[Regul] run ${this.ndRunId} phase=${phase} reverseSections=${done}/${total} intFindings=${this.regulReverseIntRows.length} points=${data.processedPointsCount}/${data.totalPointsCount}`,
+        `[Regul] run ${this.ndRunId} phase=${phase} clauses=${data.regulClauseCompleted ?? data.processedPointsCount}/${data.regulClauseTotal ?? data.totalPointsCount} failed=${data.regulClauseFailed ?? 0} reverseSections=${done}/${total} intFindings=${this.regulReverseIntRows.length}`,
       );
     }
     this.cdr.markForCheck();
@@ -1067,7 +1089,16 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   override getPointPhaseStatus(pointId: string): PointPhaseDisplay | null {
     const ap = this.analysisPointForPointId(pointId);
-    if (ap && !ap.regulationPointId) return null;
+    if (ap && !ap.regulationPointId) {
+      const reverseDone = ap.landingAiStatus === 'completed';
+      return {
+        phase1: { label: 'Forward', state: 'skip' },
+        phase2: {
+          label: 'Reverse',
+          state: reverseDone ? 'ok' : ap.landingAiStatus === 'failed' ? 'fail' : 'idle',
+        },
+      };
+    }
 
     if (this.isRegulPipelineRun()) {
       const forwardDone = ap?.landingAiStatus === 'completed';
@@ -1131,6 +1162,37 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   get regulRerunReverseLabel(): string {
     const n = this.phase2RetryCount;
     return n > 0 ? `Rerun reverse (${n})` : 'Rerun reverse (0)';
+  }
+
+  get canRerunForwardOnly(): boolean {
+    if (!this.isRegulPipelineRun() || !this.hasResumableRun || !this.ndRunId) return false;
+    const phase = (this.ndRegulPipelinePhase || '').toLowerCase();
+    const reverseTotal = this.ndRegulReverseSectionTotal;
+    const reverseDone = this.ndRegulReverseSectionCompleted;
+    const reverseComplete = reverseTotal > 0 && reverseDone >= reverseTotal;
+    return reverseComplete || phase === 'done' || this.regulReverseIntRows.length > 0;
+  }
+
+  rerunForwardOnlyWithConfirm(): void {
+    this.requestNdRunConfirm(
+      'Rerun forward only (keep reverse)',
+      'Type start to rerun forward judgments for all regulatory clauses. Reverse mappings and INT rows stay in the database.',
+      () => this.rerunForwardOnly(),
+    );
+  }
+
+  protected async rerunForwardOnly(): Promise<void> {
+    if (!this.ndRunId) return;
+    this.retryingPointId = '__batch__';
+    this.analysisState = 'running';
+    const res = await this.ndApi.rerunForwardOnly(this.ndRunId);
+    this.retryingPointId = null;
+    if (!res.success) {
+      this.toast.show(res.message ?? 'Could not start forward-only rerun', 'error');
+      return;
+    }
+    this.toast.show('Forward-only rerun started (reverse preserved)', 'success', 2200);
+    this.pollNdRun(this.ndRunId);
   }
 
   override analysingDisplayId(pointId: string): string {
@@ -1362,6 +1424,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     status: string;
     selected: boolean;
     displayId: string;
+    isInt?: boolean;
   }> {
     const filtered = this.analysingListRows.filter((row) => {
       if (this.analysingStatusFilter === 'all') return true;
@@ -1377,6 +1440,102 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       (row) => row.displayId || row.pointId,
       (row) => this.getPointGapSeverity(row.pointId) ?? '',
     ).filter((row, index, arr) => arr.findIndex((r) => r.pointId === row.pointId) === index);
+  }
+
+  /** Reverse INT rows for the analysing list (below regulatory clauses). */
+  get analysingListIntRows(): Array<{
+    pointId: string;
+    title: string;
+    status: string;
+    selected: boolean;
+    displayId: string;
+    isInt: boolean;
+  }> {
+    return this.ndIntReversePoints().map((p) => {
+      const meta = this.metaForAnalysisPoint(p);
+      const status =
+        analysisPointCoverageStatus(p, this.ndRunStatus, this.regulCoverageContext());
+      return {
+        pointId: p.id,
+        title: meta.title,
+        status,
+        selected: false,
+        displayId: meta.clause || meta.govKey,
+        isInt: true,
+      };
+    });
+  }
+
+  get sortedAnalysingIntRows(): Array<{
+    pointId: string;
+    title: string;
+    status: string;
+    selected: boolean;
+    displayId: string;
+    isInt: boolean;
+  }> {
+    const filtered = this.analysingListIntRows.filter((row) => {
+      if (this.analysingStatusFilter === 'all') return true;
+      if (this.analysingStatusFilter === 'running') {
+        return row.status === 'running' || row.status === 'processing';
+      }
+      return row.status === this.analysingStatusFilter;
+    });
+    return sortByPointKey(
+      filtered,
+      this.analysingPointSort,
+      this.analysingPointSortDir,
+      (row) => row.displayId || row.pointId,
+      (row) => this.getPointGapSeverity(row.pointId) ?? '',
+    ).filter((row, index, arr) => arr.findIndex((r) => r.pointId === row.pointId) === index);
+  }
+
+  get exportableRegGapPointCount(): number {
+    if (!this.ndRunId || !this.ndRunDetailPoints.length) return 0;
+    return buildGapAnalysisExportRows(this.collectRegulatoryDonePointsForExport()).length;
+  }
+
+  get exportableAllGapPointCount(): number {
+    if (!this.ndRunId || !this.ndRunDetailPoints.length) return 0;
+    return buildGapAnalysisExportRows(this.collectAllDonePointsForExport()).length;
+  }
+
+  async exportRegGapAnalysisExcel(): Promise<void> {
+    await this.exportGapAnalysisExcelForPoints(
+      this.collectRegulatoryDonePointsForExport(),
+      'regulatory',
+    );
+  }
+
+  async exportAllGapAnalysisExcel(): Promise<void> {
+    await this.exportGapAnalysisExcelForPoints(
+      this.collectAllDonePointsForExport(),
+      'all',
+    );
+  }
+
+  private async exportGapAnalysisExcelForPoints(
+    points: AnalysisPoint[],
+    scope: 'regulatory' | 'all',
+  ): Promise<void> {
+    if (this.exportingGapReport || !this.ndRunId) return;
+    const rows = buildGapAnalysisExportRows(points);
+    if (!rows.length) {
+      this.toast.show('No completed points with AI results to export yet', 'info');
+      return;
+    }
+    this.exportingGapReport = true;
+    this.cdr.markForCheck();
+    try {
+      await exportRegulGapAnalysisExcelFromPoints(points);
+      const label = scope === 'all' ? 'regulatory + INT clauses' : 'regulatory clauses';
+      this.toast.show(`Exported ${rows.length} ${label} to Excel`, 'success');
+    } catch {
+      this.toast.show('Export failed — try again', 'error');
+    } finally {
+      this.exportingGapReport = false;
+      this.cdr.markForCheck();
+    }
   }
 
   setAnalysingStatusFilter(filter: 'all' | 'running' | 'queued' | 'failed' | 'completed'): void {
@@ -1655,8 +1814,15 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       await this.loadNdRunPoints(this.ndRunId);
       const selectedIds = this.ndRunPointsInScope().map((p) => this.metaForAnalysisPoint(p).govKey);
       if (selectedIds.length) {
-        this.toast.show('Clauses confirmed — starting forward/reverse analysis…', 'success', 4000);
-        await this.launchNdAnalysisRun(this.ndRunId, selectedIds);
+        const forwardOnly = this.pendingNdRunForwardOnly;
+        this.pendingNdRunForwardOnly = false;
+        if (forwardOnly) {
+          this.toast.show('Clauses confirmed — starting forward-only analysis…', 'success', 4000);
+          await this.launchNdAnalysisRunForwardOnly(this.ndRunId, selectedIds);
+        } else {
+          this.toast.show('Clauses confirmed — starting forward/reverse analysis…', 'success', 4000);
+          await this.launchNdAnalysisRun(this.ndRunId, selectedIds);
+        }
         this.scrollToWorkspace();
       } else {
         this.toast.show('Clauses confirmed — select points and Run analysis', 'success', 4000);
@@ -1668,8 +1834,29 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   protected override collectDoneAnalysisPointsForExport(): AnalysisPoint[] {
+    return this.collectRegulatoryDonePointsForExport();
+  }
+
+  protected collectRegulatoryDonePointsForExport(): AnalysisPoint[] {
     const done = super.collectDoneAnalysisPointsForExport();
     return done.filter((p) => this.isRegulatoryAnalysisPoint(p));
+  }
+
+  protected collectAllDonePointsForExport(): AnalysisPoint[] {
+    const reg = this.collectRegulatoryDonePointsForExport();
+    const seen = new Set(reg.map((p) => p.id));
+    const intDone = this.ndIntReversePoints().filter((p) => {
+      if (seen.has(p.id)) return false;
+      if (p.landingAiStatus !== 'completed') return false;
+      return Boolean(p.landingAiResult?.trim());
+    });
+    const combined = [...reg, ...intDone];
+    combined.sort((a, b) => {
+      const sa = parsePointSnapshot(a.pointSnapshot).pointNumber || a.id;
+      const sb = parsePointSnapshot(b.pointSnapshot).pointNumber || b.id;
+      return sa.localeCompare(sb, undefined, { numeric: true });
+    });
+    return combined;
   }
 
   override exportDoneGapAnalysisPdf(): void {
@@ -2336,6 +2523,8 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   ndRunConfirmTitle = 'Start analysis';
   ndRunConfirmHint = 'This run uses the Regul.ai workflow pipeline.';
   private pendingNdRunAction: (() => void | Promise<void>) | null = null;
+  /** After clause confirm, start forward-only instead of full pipeline. */
+  private pendingNdRunForwardOnly = false;
 
   get ndRunConfirmReady(): boolean {
     return this.ndRunConfirmInput.trim().toLowerCase() === this.ndRunConfirmPhrase;
@@ -2384,6 +2573,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   runAnalysisAndScroll(): void {
     if (this.isNdShell) {
+      this.pendingNdRunForwardOnly = false;
       this.requestNdRunConfirm(
         'Start Regul workflow analysis',
         this.regulRunConfirmHint(),
@@ -2397,6 +2587,16 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     }
     this.runAnalysis();
     this.scrollToWorkspace();
+  }
+
+  runForwardOnlyAndScroll(): void {
+    if (!this.isNdShell) return;
+    this.pendingNdRunForwardOnly = true;
+    this.requestNdRunConfirm(
+      'Start forward-only analysis',
+      'Runs regulatory clause judgment only — skips reverse coverage (internal sections) and qualitative review.',
+      () => this.runNdShellForwardOnlyAnalysis().then(() => this.scrollToWorkspace()),
+    );
   }
 
   override get canRun(): boolean {
@@ -2500,6 +2700,74 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.showRegulClauseReview = true;
     this.buildRegulClauseRows();
     this.toast.show('Review clauses and confirm before running analysis', 'info', 5000);
+  }
+
+  /** ND shell: forward judgment only — no reverse or qualitative phases. */
+  private async runNdShellForwardOnlyAnalysis(): Promise<void> {
+    const blocked = this.runBlockedReason;
+    if (blocked) {
+      this.error = blocked;
+      this.toast.show(blocked, 'error', 3000);
+      return;
+    }
+
+    const selectedIds = this.comparableSelectedIds();
+    if (!selectedIds.length) {
+      this.error = 'Select at least one comparable regulation point.';
+      this.toast.show(this.error, 'error', 3000);
+      return;
+    }
+
+    if (this.ndRunId && this.ndRunStatus === 'draft') {
+      const synced = await this.ensureDraftRunMatchesSelection(selectedIds);
+      if (!synced) return;
+    }
+
+    if (this.ndRunId) {
+      const statusRes = await this.ndApi.getAnalysisRunStatus(this.ndRunId);
+      if (statusRes.success && statusRes.data) {
+        const data = statusRes.data as {
+          status: string;
+          processedPointsCount: number;
+          totalPointsCount: number;
+        };
+        const st = String(data.status).toLowerCase();
+        const incomplete =
+          data.totalPointsCount > 0 && data.processedPointsCount < data.totalPointsCount;
+        if (st === 'draft' || incomplete || st === 'failed') {
+          await this.loadNdRunPoints(this.ndRunId);
+          if (!this.regulClausesConfirmed) {
+            this.pendingNdRunForwardOnly = true;
+            this.showRegulClauseReview = true;
+            this.buildRegulClauseRows();
+            this.toast.show('Review and confirm clauses, then Run forward only again', 'info', 5000);
+            return;
+          }
+          await this.launchNdAnalysisRunForwardOnly(this.ndRunId, selectedIds);
+          return;
+        }
+      }
+    }
+
+    this.pendingNdRunForwardOnly = true;
+    const createRes = await this.ndApi.createAnalysisRun(this.buildNdCreateRunPayload(selectedIds));
+    if (!createRes.success || !createRes.data?.id) {
+      this.pendingNdRunForwardOnly = false;
+      this.error = createRes.message ?? 'Could not create analysis run';
+      this.toast.show(this.error, 'error', 5000);
+      return;
+    }
+
+    const runId = createRes.data.id;
+    this.ndRunId = runId;
+    await this.router.navigate(['/nd/analyse-regul'], {
+      queryParams: { run: runId },
+      replaceUrl: true,
+    });
+    await this.loadNdRunPoints(runId);
+    this.showRegulClauseReview = true;
+    this.buildRegulClauseRows();
+    this.toast.show('Review clauses and confirm before running forward-only analysis', 'info', 5000);
   }
 
   private buildNdCreateRunPayload(selectedIds: string[]): Record<string, unknown> {

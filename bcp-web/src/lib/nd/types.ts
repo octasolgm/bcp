@@ -32,6 +32,58 @@ export type ActiveDualVerifyLlm = {
   providerLabel: string;
 };
 
+export type AnalysisPromptSuggestion = {
+  id: string;
+  promptKey: string;
+  comment: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string | null;
+  createdByName?: string | null;
+  updatedBy?: string | null;
+  updatedByName?: string | null;
+  appliedInVersionId?: string | null;
+};
+
+export type AnalysisPromptCoverage = {
+  suggestionId: string;
+  covered: boolean;
+};
+
+export type AnalysisPromptGenerateResult = {
+  promptText: string;
+  coverage: AnalysisPromptCoverage[];
+};
+
+export type AnalysisPromptVersion = {
+  id: string;
+  promptKey: string;
+  versionNumber: number;
+  label: string;
+  promptText: string;
+  isCurrent: boolean;
+  createdAt: string;
+  createdBy?: string | null;
+  createdByName?: string | null;
+};
+
+export type AnalysisPromptDefinition = {
+  key: string;
+  label: string;
+  workflow: string;
+  description: string;
+  text: string;
+  currentVersionId?: string | null;
+  versions: AnalysisPromptVersion[];
+  suggestions: AnalysisPromptSuggestion[];
+};
+
+export type AnalysisPromptsCatalog = {
+  workflows: { workflow: string; prompts: AnalysisPromptDefinition[] }[];
+  prompts: AnalysisPromptDefinition[];
+};
+
 export type RegulationDocument = {
   id: string;
   source?: 'legacy' | 'nd' | 'manual';
@@ -160,12 +212,22 @@ export type AnalysisRunSummary = {
   totalReviews?: number;
   workflowEngine?: string | null;
   regulPipelinePhase?: string | null;
+  regulClauseTotal?: number;
+  regulClauseCompleted?: number;
+  regulClauseFailed?: number;
+  regulReverseSectionFailed?: number;
+  regulLlmProvider?: string | null;
+  regulLlmModel?: string | null;
 };
 
 export type AnalysisPoint = {
   id: string;
   regulationPointId?: string | null;
   pointSnapshot: string;
+  /** Regul forward judgment status (API primary name when workflowEngine=regul_pipeline). */
+  regulForwardStatus?: string | null;
+  regulForwardResult?: string | null;
+  regulForwardError?: string | null;
   landingAiStatus: string;
   landingAiResult?: string | null;
   landingAiError?: string | null;

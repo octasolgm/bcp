@@ -17,8 +17,20 @@ const RERUN_API_TIMEOUT_MS = 60_000;
 const LIBRARY_WRITE_TIMEOUT_MS = 120_000;
 /** Landing AI policy-clause extract (multi-chunk) — align with Bcp:HttpTimeoutMinutes (15). */
 const SECTION_EXTRACT_TIMEOUT_MS = 900_000;
+/** Landing AI PDF/Word parse — large manuals can take several minutes. */
+const INTERNAL_PARSE_TIMEOUT_MS = 900_000;
 
 function friendlyNdApiError(raw: string, status?: number): string {
+  if (
+    status === 0 ||
+    raw.includes('Unknown Error') ||
+    raw.includes('Http failure response')
+  ) {
+    return (
+      'Cannot reach the API at http://localhost:5100. ' +
+      'Start it in PowerShell: cd bcp-api; .\\scripts\\restart-api.ps1 — then refresh this page.'
+    );
+  }
   if (
     raw.includes('EMAXCONNSESSION') ||
     raw.includes('max clients reached in session mode')
@@ -235,6 +247,74 @@ export class NdApiService {
     );
   }
 
+  getAnalysisPrompts() {
+    return this.request<import('../../../lib/nd/types').AnalysisPromptsCatalog>(
+      'GET',
+      '/nd/admin/prompts',
+    );
+  }
+
+  createAnalysisPromptSuggestion(body: { promptKey: string; comment: string }) {
+    return this.request<import('../../../lib/nd/types').AnalysisPromptSuggestion>(
+      'POST',
+      '/nd/admin/prompts/suggestions',
+      body,
+    );
+  }
+
+  updateAnalysisPromptSuggestion(id: string, body: { comment: string }) {
+    return this.request<import('../../../lib/nd/types').AnalysisPromptSuggestion>(
+      'PUT',
+      `/nd/admin/prompts/suggestions/${id}`,
+      body,
+    );
+  }
+
+  deleteAnalysisPromptSuggestion(id: string) {
+    return this.request<unknown>('DELETE', `/nd/admin/prompts/suggestions/${id}`);
+  }
+
+  createAnalysisPromptVersion(body: {
+    promptKey: string;
+    promptText: string;
+    label?: string;
+    appliedSuggestionIds?: string[];
+  }) {
+    return this.request<import('../../../lib/nd/types').AnalysisPromptVersion>(
+      'POST',
+      '/nd/admin/prompts/versions',
+      body,
+    );
+  }
+
+  getAnalysisPromptLlmProviders() {
+    return this.request<import('../../../lib/nd/types').DualVerifyLlmProviderOption[]>(
+      'GET',
+      '/nd/admin/prompts/llm-providers',
+    );
+  }
+
+  generateAnalysisPromptVersion(body: {
+    promptKey: string;
+    suggestionIds: string[];
+    provider: string;
+    model?: string;
+    instruction?: string;
+  }) {
+    return this.request<import('../../../lib/nd/types').AnalysisPromptGenerateResult>(
+      'POST',
+      '/nd/admin/prompts/generate',
+      body,
+    );
+  }
+
+  setCurrentAnalysisPromptVersion(versionId: string) {
+    return this.request<import('../../../lib/nd/types').AnalysisPromptVersion>(
+      'POST',
+      `/nd/admin/prompts/versions/${versionId}/set-current`,
+    );
+  }
+
   getActiveRegulWorkflowLlm() {
     return this.request<import('../../../lib/nd/types').ActiveDualVerifyLlm>(
       'GET',
@@ -408,6 +488,9 @@ export class NdApiService {
     return this.request<{ parseStatus?: string; parsedAt?: string }>(
       'POST',
       `/nd/internal-documents/${docId}/parse`,
+      undefined,
+      true,
+      INTERNAL_PARSE_TIMEOUT_MS,
     );
   }
 
@@ -582,6 +665,16 @@ export class NdApiService {
     return this.request<unknown>('POST', `/nd/analysis-runs/${id}/start`);
   }
 
+  startForwardOnlyAnalysis(id: string) {
+    return this.request<unknown>(
+      'POST',
+      `/nd/analysis-runs/${id}/start-forward`,
+      undefined,
+      true,
+      RERUN_API_TIMEOUT_MS,
+    );
+  }
+
   confirmRegulClauses(
     id: string,
     clauses: Array<{
@@ -630,6 +723,16 @@ export class NdApiService {
     return this.request<unknown>(
       'POST',
       `/nd/analysis-runs/${runId}/rerun-dual-verify/all`,
+      undefined,
+      true,
+      RERUN_API_TIMEOUT_MS,
+    );
+  }
+
+  rerunForwardOnly(runId: string) {
+    return this.request<unknown>(
+      'POST',
+      `/nd/analysis-runs/${runId}/rerun-forward`,
       undefined,
       true,
       RERUN_API_TIMEOUT_MS,

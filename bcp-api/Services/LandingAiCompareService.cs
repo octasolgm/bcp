@@ -77,6 +77,12 @@ public class LandingAiCompareService(
             internalDocs.Count,
             compositeHash);
 
+        logger.LogInformation(
+            "Landing AI compare for {Point} using prompt {PromptVersion} ({PromptKey}) — fixed template, not admin-editable at runtime (see Admin \u2192 Analysis prompts for reference text only)",
+            point.PointId,
+            promptVersion,
+            promptVersion == ComparePromptVersion.V3 ? "dual_verify_pass1_v3" : promptVersion.ToString());
+
         var promptMarkdown = LandingAiComparePromptBuilder.Build(
             point,
             internalDocs.Select(d => (d.FileName, d.Markdown)).ToList(),

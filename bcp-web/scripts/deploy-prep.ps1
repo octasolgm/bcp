@@ -25,10 +25,12 @@ if (-not (Test-Path $distConfig)) {
 }
 
 $zipPath = Join-Path $webRoot "bcp-web-dist.zip"
-if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+$tempZip = Join-Path $env:TEMP "bcp-web-dist.zip"
 
 Write-Host "`n[3/4] Zipping dist for Azure..." -ForegroundColor Cyan
-Compress-Archive -Path (Join-Path $distBrowser "*") -DestinationPath $zipPath -Force
+& (Join-Path $PSScriptRoot "write-deploy-zip.ps1") -SourceDir $distBrowser -ZipPath $zipPath
+& (Join-Path $PSScriptRoot "write-deploy-zip.ps1") -SourceDir $distBrowser -ZipPath $tempZip
+Write-Host "  Also copied to: $tempZip (no spaces - use for Portal / VS Code deploy)"
 
 Write-Host "`n[4/4] Done." -ForegroundColor Cyan
 Write-Host "  Dist folder: $distBrowser"
@@ -38,19 +40,12 @@ Write-Host @"
 
 Deploy options:
 
-  A) Visual Studio / Azure Portal ZIP deploy
-     Upload: bcp-web-dist.zip to your bcp-web-dev App Service
+  A) VS Code Azure: Deploy to Web App on the ZIP file (not the browser folder)
+     $tempZip
 
-  B) Deploy dist folder contents directly
-     Copy everything inside dist\reguliq-web\browser\ to wwwroot
-     (include web.config for SPA routing on Windows App Service)
+  B) Azure Portal ZIP deploy - upload bcp-web-dist.zip
 
-Before deploy, confirm environment.production.ts has Supabase + API URLs,
-or set Azure App Settings and use startup command: node server.js
-
-Azure App Settings (supabaseUrl, supabaseAnonKey, ndApiUrl, appUrl) only work
-at runtime when Startup Command is: node server.js
-(Static IIS ZIP deploy does NOT read Application settings into the browser.)
+  C) Do NOT deploy dist\browser folder when repo path has a space (bcp new).
 
 After deploy, add CORS on API (appsettings.Production.json):
   https://bcp-web-dev.azurewebsites.net

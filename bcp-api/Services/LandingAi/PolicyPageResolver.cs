@@ -214,6 +214,10 @@ public static partial class PolicyPageResolver
         return segments.Count > 0 ? segments.Max(s => s.Page) : null;
     }
 
+    /// <summary>Split parsed internal-doc markdown into PDF viewer page segments (BCP markers, ---, or monolithic).</summary>
+    public static IReadOnlyList<(int Page, string Text)> SplitMarkdownIntoPageSegments(string markdown) =>
+        SplitByPageMarkers(markdown);
+
     private static int? SanitizeAiPageHint(int? aiPageHint, int? maxPage)
     {
         if (aiPageHint is not > 0) return null;

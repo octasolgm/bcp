@@ -52,9 +52,9 @@ Contains `index.html`, `web.config` (SPA routing), and hashed JS/CSS.
 
 ### Option A — ZIP deploy (easiest)
 
-1. `deploy-prep.ps1` creates `bcp-web/bcp-web-dist.zip`
-2. Azure Portal → **bcp-web-dev** → **Deployment Center** → ZIP deploy  
-   Or Advanced Tools (Kudu) → drag zip to `site/wwwroot`
+1. `deploy-prep.ps1` creates `bcp-web/bcp-web-dist.zip` (and `%TEMP%\bcp-web-dist.zip`)
+2. Azure Portal → **bcp-web-dev** → **Deployment Center** → ZIP deploy → upload the **zip file**
+3. **Do not** use VS Code “Deploy to Web App” on `dist/browser` if your repo path contains spaces (e.g. `bcp new`) — it can produce a corrupt zip (`Offset to Central Directory cannot be held in an Int64` on Azure).
 
 ### Option B — Visual Studio / FTP
 

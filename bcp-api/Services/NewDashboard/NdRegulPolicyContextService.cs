@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services.LandingAi;
 
@@ -10,63 +11,135 @@ namespace Reguliq.Api.Services.NewDashboard;
 public static class NdRegulPolicyContextService
 {
     public const int FullManualMaxPages = 50;
-    public const int RetrievalTopChunks = 8;
+    public const int RetrievalTopChunks = 12;
 
-    private static readonly Regex PageMarkerRegex = new(
-        @"<!--\s*Page\s+(\d+)\s*-->",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    public sealed record PolicyChunk(
+        string Label,
+        string Text,
+        string? SourceDoc,
+        string? SectionRef,
+        int? SourcePage);
 
-    public sealed record PolicyDoc(string FileName, string Markdown, int PageCount);
-
-    public sealed record PolicyBundle(IReadOnlyList<PolicyDoc> Docs, int TotalPages, string SourceTextForQuotes)
+    public sealed record PolicyBundle(
+        IReadOnlyList<PolicyChunk> Chunks,
+        int TotalPages,
+        string SourceTextForQuotes,
+        IReadOnlyDictionary<string, string> MarkdownByFile)
     {
-        public string BuildFullContext() =>
-            string.Join(
-                "\n\n",
-                Docs.Select(d => $"=== DOCUMENT: {d.FileName} ===\n{d.Markdown}"));
+        public string BuildFullContext()
+        {
+            if (MarkdownByFile.Count > 0)
+                return string.Join(
+                    "\n\n",
+                    MarkdownByFile.Select(kv => $"=== DOCUMENT: {kv.Key} ===\n{kv.Value}"));
+
+            return string.Join("\n\n", Chunks.Select(c => $"[{c.Label}]\n{c.Text}"));
+        }
 
         public string BuildContextForClause(string clauseText) =>
             TotalPages <= FullManualMaxPages
                 ? BuildFullContext()
                 : BuildRetrievedContext(clauseText);
 
-        private string BuildRetrievedContext(string clauseText)
+        public IReadOnlyList<PolicyChunk> GetChunksForClause(string clauseText) =>
+            TotalPages <= FullManualMaxPages
+                ? Chunks
+                : RankPolicyChunks(Chunks, clauseText).Take(RetrievalTopChunks).ToList();
+
+        public PolicyBundle WithMarkdownFromPayloads(IReadOnlyList<InternalDocPayload> payloads)
         {
-            var chunks = new List<(string Label, string Text)>();
-            foreach (var doc in Docs)
+            var dict = new Dictionary<string, string>(MarkdownByFile, StringComparer.OrdinalIgnoreCase);
+            foreach (var p in payloads)
             {
-                foreach (var (page, text) in SplitIntoPageChunks(doc.Markdown))
-                {
-                    var label = $"{doc.FileName} p.{page}";
-                    chunks.Add((label, text));
-                }
+                var fileName = (p.FileName ?? "").Trim();
+                if (fileName.Length > 0 && !string.IsNullOrWhiteSpace(p.Markdown))
+                    dict[fileName] = p.Markdown;
             }
 
-            if (chunks.Count == 0)
+            return new PolicyBundle(Chunks, TotalPages, SourceTextForQuotes, dict);
+        }
+
+        private string BuildRetrievedContext(string clauseText)
+        {
+            var ranked = GetChunksForClause(clauseText);
+            if (ranked.Count == 0)
                 return BuildFullContext();
 
-            var ranked = RankChunks(chunks, clauseText).Take(RetrievalTopChunks).ToList();
-            return string.Join(
-                "\n\n",
-                ranked.Select(c => $"[{c.Label}]\n{c.Text}"));
+            return string.Join("\n\n", ranked.Select(c => $"[{c.Label}]\n{c.Text}"));
         }
     }
 
     public static PolicyBundle FromPayloads(IReadOnlyList<InternalDocPayload> payloads)
     {
-        var docs = payloads.Select(p =>
-        {
-            var pages = PolicyPageResolver.EstimatePageCount(p.Markdown) ?? 1;
-            return new PolicyDoc(p.FileName, p.Markdown, Math.Max(1, pages));
-        }).ToList();
+        var chunks = new List<PolicyChunk>();
+        var markdownByFile = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var totalPages = 0;
 
-        var totalPages = docs.Sum(d => d.PageCount);
-        var sourceText = string.Join("\n\n", docs.Select(d => d.Markdown));
-        return new PolicyBundle(docs, totalPages, sourceText);
+        foreach (var p in payloads)
+        {
+            var fileName = string.IsNullOrWhiteSpace(p.FileName) ? "internal policy" : p.FileName.Trim();
+            var markdown = p.Markdown ?? "";
+            if (markdown.Length > 0)
+                markdownByFile[fileName] = markdown;
+
+            var pages = PolicyPageResolver.EstimatePageCount(markdown) ?? 1;
+            totalPages += Math.Max(1, pages);
+
+            foreach (var (page, text) in PolicyPageResolver.SplitMarkdownIntoPageSegments(markdown))
+            {
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                chunks.Add(new PolicyChunk($"{fileName} p.{page}", text.Trim(), fileName, null, page));
+            }
+        }
+
+        if (chunks.Count == 0 && markdownByFile.Count > 0)
+        {
+            foreach (var kv in markdownByFile)
+                chunks.Add(new PolicyChunk(kv.Key, kv.Value.Trim(), kv.Key, null, null));
+        }
+
+        var sourceText = string.Join("\n\n", markdownByFile.Values);
+        return new PolicyBundle(chunks, totalPages, sourceText, markdownByFile);
     }
 
-    private static List<(string Label, string Text)> RankChunks(
-        IReadOnlyList<(string Label, string Text)> chunks,
+    /// <summary>
+    /// Forward judgment context from per-run internal sections (same corpus reverse uses).
+    /// Each section is its own retrieval chunk so keyword ranking can surface relevant text.
+    /// </summary>
+    public static PolicyBundle FromInternalSections(IReadOnlyList<NdRegulInternalSection> sections)
+    {
+        if (sections.Count == 0)
+            return FromPayloads([
+                new InternalDocPayload("", "policy", "No internal policy text was attached to this run.", null),
+            ]);
+
+        var chunks = sections
+            .Where(s => !string.IsNullOrWhiteSpace(s.SectionText))
+            .OrderBy(s => s.SourceDoc, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(s => s.SectionRef, StringComparer.Ordinal)
+            .Select(s =>
+            {
+                var fileName = s.SourceDoc ?? "internal policy";
+                var sectionRef = string.IsNullOrWhiteSpace(s.SectionRef) ? "Section" : s.SectionRef.Trim();
+                var pageLabel = s.SourcePage.HasValue ? $" p.{s.SourcePage}" : "";
+                var label = $"{fileName} — {sectionRef}{pageLabel}";
+                return new PolicyChunk(label, s.SectionText!.Trim(), fileName, sectionRef, s.SourcePage);
+            })
+            .ToList();
+
+        if (chunks.Count == 0)
+            return FromPayloads([
+                new InternalDocPayload("", "policy", "Internal sections exist but contain no extractable text.", null),
+            ]);
+
+        var maxPage = sections.Where(s => s.SourcePage is > 0).Select(s => s.SourcePage!.Value).DefaultIfEmpty(0).Max();
+        var totalPages = Math.Max(chunks.Count, maxPage);
+        var sourceText = string.Join("\n\n", sections.Select(s => s.SectionText ?? ""));
+        return new PolicyBundle(chunks, totalPages, sourceText, new Dictionary<string, string>());
+    }
+
+    private static List<PolicyChunk> RankPolicyChunks(
+        IReadOnlyList<PolicyChunk> chunks,
         string clauseText)
     {
         var keywords = ExtractKeywords(clauseText);
@@ -115,45 +188,5 @@ public static class NdRegulPolicyContextService
         s = Regex.Replace(s, @"[^\w\s'""-]", " ");
         s = Regex.Replace(s, @"\s+", " ").Trim();
         return s;
-    }
-
-    private static List<(int Page, string Text)> SplitIntoPageChunks(string markdown)
-    {
-        var matches = PageMarkerRegex.Matches(markdown);
-        if (matches.Count == 0)
-        {
-            return ChunkBySize(markdown, 1);
-        }
-
-        var segments = new List<(int Page, string Text)>();
-        for (var i = 0; i < matches.Count; i++)
-        {
-            var page = int.TryParse(matches[i].Groups[1].Value, out var p) ? p : i + 1;
-            var start = matches[i].Index + matches[i].Length;
-            var end = i + 1 < matches.Count ? matches[i + 1].Index : markdown.Length;
-            var slice = markdown.Substring(start, end - start).Trim();
-            if (!string.IsNullOrWhiteSpace(slice))
-                segments.Add((page, slice));
-        }
-
-        return segments.Count > 0 ? segments : ChunkBySize(markdown, 1);
-    }
-
-    private static List<(int Page, string Text)> ChunkBySize(string markdown, int startPage)
-    {
-        const int chunkSize = 3500;
-        var list = new List<(int, string)>();
-        var text = markdown.Trim();
-        if (string.IsNullOrEmpty(text))
-            return list;
-
-        var page = startPage;
-        for (var i = 0; i < text.Length; i += chunkSize)
-        {
-            var slice = text.Substring(i, Math.Min(chunkSize, text.Length - i)).Trim();
-            if (!string.IsNullOrWhiteSpace(slice))
-                list.Add((page++, slice));
-        }
-        return list;
     }
 }

@@ -638,6 +638,67 @@ public class NdAnalysisStatusHistory
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+[Table("nd_analysis_prompt_suggestions")]
+public class NdAnalysisPromptSuggestion
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("prompt_key")]
+    public string PromptKey { get; set; } = "";
+
+    [Column("comment")]
+    public string Comment { get; set; } = "";
+
+    [Column("created_by")]
+    public Guid? CreatedBy { get; set; }
+
+    [Column("updated_by")]
+    public Guid? UpdatedBy { get; set; }
+
+    [Column("sort_order")]
+    public int SortOrder { get; set; }
+
+    [Column("applied_in_version_id")]
+    public Guid? AppliedInVersionId { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    [Column("updated_at")]
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+[Table("nd_analysis_prompt_versions")]
+public class NdAnalysisPromptVersion
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("prompt_key")]
+    public string PromptKey { get; set; } = "";
+
+    [Column("version_number")]
+    public int VersionNumber { get; set; }
+
+    [Column("label")]
+    public string Label { get; set; } = "Base";
+
+    [Column("prompt_text")]
+    public string PromptText { get; set; } = "";
+
+    [Column("is_current")]
+    public bool IsCurrent { get; set; }
+
+    [Column("created_by")]
+    public Guid? CreatedBy { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 [Table("nd_system_settings")]
 public class NdSystemSetting
 {

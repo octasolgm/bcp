@@ -23,7 +23,7 @@ Rules:
 - overall_status: same as design_status in MVP.
 - confidence: your calibrated confidence (0-1) in this judgment given the available text.
 - policy_extract: copy the supporting text VERBATIM, character-for-character, from the internal policy documents provided below. Do not paraphrase, summarize, or fix typos. If you cannot find any directly relevant text, return an empty list and lower your design_status/confidence accordingly.
-- document_reference: name the specific internal document and, if identifiable, section or page.
+- document_reference: name the specific internal document and section/page using the exact [bracket label] from the excerpts that contain your policy_extract (e.g. Manual.pdf — 6.2.2 p.45). Never invent page or section numbers.
 - gap_description: MANDATORY non-empty text whenever overall_status is partial or non_compliant -- never leave this blank for a finding that isn't fully compliant. State two things explicitly: (1) exactly what is missing, and (2) which document it was found in (if partially covered) or was not found in (if absent). For a clause with multiple discrete elements (see element-level checking above), list each element's covered/not-covered status with its evidence rather than one vague sentence. Leave as an empty string only when overall_status is compliant.
 - suggested_action: required whenever status is partial or non_compliant; leave as an empty string when fully compliant.
 - gap_direction: set to "missing_in_internal" whenever overall_status is partial or non_compliant -- the regulatory requirement is not (fully) covered in the internal policy text. Leave as an empty string when overall_status is compliant.
@@ -64,6 +64,14 @@ Also give an overall_rating (strong/adequate/weak), 2-5 strengths, and 2-5 concr
 
     public static string BuildJudgmentRetryNote(string overallStatus) =>
         $"--- RETRY ---\nYour overall_status was '{overallStatus}' but gap_description was empty. A partial or non_compliant finding MUST have a non-empty gap_description stating exactly what is missing and naming the document it was/was not found in. Provide that now.";
+
+    /// <summary>Template shown in admin UI — actual call uses retrieved policy excerpts.</summary>
+    public static string JudgmentUserContextTemplate =>
+        BuildJudgmentContextText("{policy_context}");
+
+    /// <summary>Template shown in admin UI — actual call uses the clause being judged.</summary>
+    public static string JudgmentUserQueryTemplate =>
+        BuildJudgmentQueryText("{clause_no}", "{clause_text}");
 
     public static string BuildReverseMappingContextText(IReadOnlyList<(string ClauseNo, string ClauseText)> regulatoryClauses)
     {

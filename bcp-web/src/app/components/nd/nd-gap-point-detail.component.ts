@@ -17,6 +17,8 @@ import {
   parseCapGaps,
   parseReferenceCitation,
   parseReferenceComplianceBlock,
+  resolvePolicyExtractText,
+  resolvePolicyRefAndExtract,
   serializeCapGaps,
   type CapGap,
   type ReferenceComplianceBlock,
@@ -151,6 +153,7 @@ export class NdGapPointDetailComponent implements OnChanges {
   pointHeading = '';
   regulatoryText = '';
   policyExtract = '';
+  documentReference = '';
   policyPage: string | null = null;
   policySection: string | null = null;
   policyRefLabel = '';
@@ -265,9 +268,7 @@ export class NdGapPointDetailComponent implements OnChanges {
         ? this.primaryBlock.responsibility
         : '';
 
-    // Policy extract must be the cited quote from the policy document, never a
-    // raw AI message dump. Pass 1 (landing) usually carries the citation; fall
-    // back to pass 2 only if it also has a structured Output/Response.
+    // Policy extract is the full Output/Response body (same as Excel export), not short citation quotes.
     this.policyPage = null;
     this.policySection = null;
     this.policyExtract = '';
@@ -285,20 +286,36 @@ export class NdGapPointDetailComponent implements OnChanges {
       this.policySection = first.section;
     }
 
+    let bestExtract = '';
     for (const msg of [this.landingMessage, this.llmMessage]) {
       if (!msg?.trim()) continue;
       const structured = parseReferenceComplianceBlock(msg);
-      const source = structured.outputResponse?.trim() ?? '';
-      if (!source) continue;
-      const cite = parseReferenceCitation(source);
-      if (!this.policyExtract) {
-        this.policyExtract = cite.quote?.trim() || source;
+      const extract = resolvePolicyExtractText(structured);
+      if (extract.length > bestExtract.length) {
+        bestExtract = extract;
+        const cite = parseReferenceCitation(extract);
         if (!this.policyPage) {
           this.policyPage = cite.page;
           this.policySection = cite.section;
         }
       }
     }
+    this.policyExtract = bestExtract;
+
+    const { documentReference: resolvedDocRef } = resolvePolicyRefAndExtract(
+      parseReferenceComplianceBlock(this.landingMessage),
+      parseReferenceComplianceBlock(this.llmMessage),
+    );
+    if (resolvedDocRef) {
+      this.documentReference = resolvedDocRef;
+    }
+
+    const resolvedDocId =
+      resolvePolicyDocId(resolvedDocRef || this.primaryBlock.documentReference, catalog) ??
+      resolvePolicyDocId(this.primaryBlock.referencePdf, catalog) ??
+      this.policyRefs.find((r) => r.docId)?.docId ??
+      this.policyDocId;
+
     if (!this.policyExtract) {
       const notStarted =
         !this.landingMessage?.trim() &&
@@ -310,10 +327,23 @@ export class NdGapPointDetailComponent implements OnChanges {
         : 'No corresponding policy extract found.';
     }
 
-    const resolvedDocId =
-      resolvePolicyDocId(this.primaryBlock.referencePdf, catalog) ??
-      this.policyRefs.find((r) => r.docId)?.docId ??
-      this.policyDocId;
+    const refPdf =
+      resolvedDocRef ||
+      this.primaryBlock.documentReference?.trim() ||
+      this.primaryBlock.referencePdf?.trim() ||
+      '';
+    if (refPdf && refPdf.toLowerCase() !== 'internal policy manual' && refPdf !== 'N/A' && refPdf !== '—') {
+      if (!this.documentReference) this.documentReference = refPdf;
+      if (!this.policyRefLabel) this.policyRefLabel = refPdf;
+      if (!this.policyPage) {
+        const ppMatch = refPdf.match(/\bpp\.?\s*(\d+(?:\s*[-–]\s*\d+)?)/i);
+        if (ppMatch?.[1]) this.policyPage = ppMatch[1].trim();
+      }
+      const sectionParen = refPdf.match(/\(([^)]+)\)\s*$/);
+      if (!this.policySection && sectionParen?.[1]) {
+        this.policySection = sectionParen[1].trim();
+      }
+    }
 
     const refParts: string[] = [];
     if (catalog.length > 1 && resolvedDocId) {
@@ -567,9 +597,6 @@ export class NdGapPointDetailComponent implements OnChanges {
     this.openPdf.emit({ docId: storedDocumentId });
   }
 
-  get policyRefsHaveInlineQuotes(): boolean {
-    return this.policyRefs.some((r) => Boolean(r.quote?.trim()));
-  }
 
   formatPolicyRefLabel(ref: PolicyRefProof): string {
     return formatPolicyRefLabel(ref, this.policyDocCatalog.length > 1);

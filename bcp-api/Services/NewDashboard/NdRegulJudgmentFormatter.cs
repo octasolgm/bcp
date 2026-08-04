@@ -5,11 +5,9 @@ public static class NdRegulJudgmentFormatter
 {
     public static string FormatLandingMessage(string clauseNo, string clauseText, RegulJudgmentResult judgment)
     {
-        var status = MapDisplayStatus(judgment.OverallStatus);
+        var status = MapDisplayStatus(judgment.OverallStatus, judgment.DesignStatus);
         var confidencePct = (int)Math.Round(Math.Clamp(judgment.Confidence, 0, 1) * 100);
-        var policyResponse = judgment.PolicyExtract.Count > 0
-            ? string.Join("\n", judgment.PolicyExtract.Where(s => !string.IsNullOrWhiteSpace(s)))
-            : "No corresponding procedure found.";
+        var policyResponse = BuildPolicyResponse(judgment);
         var fulfilled = status == "Compliant" ? "All required elements addressed." : "None";
         var corrective = !string.IsNullOrWhiteSpace(judgment.SuggestedAction)
             ? judgment.SuggestedAction.Trim()
@@ -31,6 +29,9 @@ public static class NdRegulJudgmentFormatter
             "Reference PDF :",
             reference,
             "",
+            "Document Reference :",
+            reference,
+            "",
             "Output/Response :",
             policyResponse,
             "",
@@ -46,12 +47,28 @@ public static class NdRegulJudgmentFormatter
         });
     }
 
-    public static string MapDisplayStatus(string? overallStatus)
+    public static string MapDisplayStatus(string? overallStatus, string? designStatus = null)
     {
         var s = (overallStatus ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(s) && !string.IsNullOrWhiteSpace(designStatus))
+            s = designStatus.Trim().ToLowerInvariant();
         if (s == "compliant") return "Compliant";
         if (s.Contains("partial")) return "Partial compliant";
         if (s.Contains("non")) return "Non-Compliant";
-        return "Non-Compliant";
+        return string.IsNullOrEmpty(s) ? "Non-Compliant" : overallStatus!.Trim();
+    }
+
+    private static string BuildPolicyResponse(RegulJudgmentResult judgment)
+    {
+        if (judgment.PolicyExtract.Count > 0)
+            return string.Join("\n", judgment.PolicyExtract.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        if (!string.IsNullOrWhiteSpace(judgment.Interpretation))
+            return judgment.Interpretation.Trim();
+
+        if (!string.IsNullOrWhiteSpace(judgment.DocumentReference))
+            return $"See {judgment.DocumentReference.Trim()}.";
+
+        return "No corresponding procedure found.";
     }
 }

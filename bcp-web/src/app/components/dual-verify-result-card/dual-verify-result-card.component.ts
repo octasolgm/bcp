@@ -6,6 +6,7 @@ import { agreementBadgeClass, type AgreementStatus } from '../../../lib/landing-
 import {
   parseReferenceCitation,
   parseReferenceComplianceBlock,
+  resolvePolicyExtractText,
 } from '../../../lib/ai-lab/parse-reference-response';
 import {
   formatPointPageRef,
@@ -42,8 +43,7 @@ export class DualVerifyResultCardComponent implements OnChanges {
     this.policyPage = cite.page;
     this.policySection = cite.section;
     this.policyExtract =
-      cite.quote?.trim() ||
-      structured.outputResponse?.trim() ||
+      resolvePolicyExtractText(structured) ||
       this.item.llmMessage?.trim() ||
       '';
     const label = (this.complianceLabel || structured.status || '').toLowerCase();

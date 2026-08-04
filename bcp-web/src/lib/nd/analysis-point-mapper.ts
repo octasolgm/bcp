@@ -7,6 +7,7 @@ import { normalizeSessionPointStatus } from '../session-point-status';
 import { reportItemsToGapItems } from '../../app/services/gap-analysis-mapper';
 import type { GapItemData } from '../../app/services/reguliq-store';
 import type { AnalysisPoint } from './types';
+import { normalizeRegulPoint, regulForwardError, regulForwardStatus } from './regul-fields';
 import { parsePointSnapshot } from './utils';
 
 function comparePointIds(a: string, b: string): number {
@@ -40,23 +41,25 @@ export function analysisPointCoverageStatus(
   runStatus?: string | null,
   regul?: RegulCoverageContext,
 ): string {
-  const landing = parseNdAiPayload(p.landingAiResult);
-  const google = parseNdAiPayload(p.googleAiResult);
+  const point = normalizeRegulPoint(p);
+  const landing = parseNdAiPayload(point.landingAiResult);
+  const google = parseNdAiPayload(point.googleAiResult);
   const landingMessage = landing.message;
   const llmMessage = google.message;
   const run = (runStatus ?? '').toLowerCase();
   const isRegul = regul?.workflowEngine === 'regul_pipeline';
   const phase = (regul?.regulPipelinePhase ?? '').toLowerCase();
   const runActive = run === 'running' || run === 'processing';
+  const forwardStatus = regulForwardStatus(point);
 
   // Regul V3: forward-complete regulatory rows stay in-flight until pipeline phase is done.
-  if (isRegul && p.regulationPointId && runActive && phase !== 'done') {
-    if (p.landingAiStatus === 'failed') return 'failed';
-    if (p.landingAiStatus !== 'completed') return 'running';
+  if (isRegul && point.regulationPointId && runActive && phase !== 'done') {
+    if (forwardStatus === 'failed') return 'failed';
+    if (forwardStatus !== 'completed') return 'running';
     return 'running';
   }
 
-  if (p.landingAiStatus === 'cancelled' || p.dualVerifyStatus === 'cancelled') return 'cancelled';
+  if (point.landingAiStatus === 'cancelled' || point.dualVerifyStatus === 'cancelled') return 'cancelled';
   if (p.dualVerifyStatus === 'completed' || p.finalStatus) return 'completed';
   if (p.landingAiStatus === 'failed') return 'failed';
   if (
@@ -142,7 +145,7 @@ export function analysisPointToReportItem(p: AnalysisPoint): DualVerifyReportIte
     landingMessage: landing.message || undefined,
     llmMessage: google.message || undefined,
     agreementJson: google.agreement,
-    errorMessage: p.landingAiError ?? p.googleAiError ?? undefined,
+    errorMessage: regulForwardError(p) ?? p.googleAiError ?? undefined,
   });
 }
 

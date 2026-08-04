@@ -45,6 +45,9 @@ REQUIREMENT POINT TO CHECK:
 """;
     }
 
+  /// <summary>Read-only V3 compare template for admin prompt review.</summary>
+    public static string GetPromptTemplateV3() => PromptTemplateV3;
+
     private static bool UsesEnhancedSearchHints(ComparePromptVersion version) =>
         version is ComparePromptVersion.V2 or ComparePromptVersion.V3;
 

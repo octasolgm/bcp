@@ -308,6 +308,37 @@ public static class NdSchemaBootstrap
               deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
               UNIQUE (source, legacy_id)
             );
+
+            CREATE TABLE IF NOT EXISTS nd_analysis_prompt_suggestions (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              prompt_key TEXT NOT NULL,
+              comment TEXT NOT NULL,
+              created_by UUID,
+              updated_by UUID,
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_prompt_suggestions_key
+              ON nd_analysis_prompt_suggestions (prompt_key);
+            ALTER TABLE nd_analysis_prompt_suggestions
+              ADD COLUMN IF NOT EXISTS applied_in_version_id UUID;
+
+            CREATE TABLE IF NOT EXISTS nd_analysis_prompt_versions (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              prompt_key TEXT NOT NULL,
+              version_number INTEGER NOT NULL,
+              label TEXT NOT NULL DEFAULT 'Base',
+              prompt_text TEXT NOT NULL,
+              is_current BOOLEAN NOT NULL DEFAULT false,
+              created_by UUID,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              UNIQUE (prompt_key, version_number)
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_prompt_versions_key
+              ON nd_analysis_prompt_versions (prompt_key);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_nd_prompt_versions_current
+              ON nd_analysis_prompt_versions (prompt_key) WHERE is_current = true;
             """,
             ct);
     }

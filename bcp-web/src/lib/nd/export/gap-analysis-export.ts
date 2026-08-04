@@ -10,7 +10,7 @@ import {
   type GapAnalysisExcelRow,
 } from './gap-analysis-export-rows';
 
-const BASE_COL_WIDTHS = [12, 50, 60, 16, 14, 40, 14];
+const BASE_COL_WIDTHS = [12, 50, 32, 50, 16, 14, 40, 14];
 
 function defaultFilename(prefix: string): string {
   return `${prefix}-${new Date().toISOString().slice(0, 10)}.xlsx`;
@@ -18,9 +18,10 @@ function defaultFilename(prefix: string): string {
 
 function buildHeaders(includePhases: boolean, requirementHeader: string): string[] {
   const headers = [
-    'Point #',
+    'Clause #',
     requirementHeader,
-    'UAE Response / Compliance Level',
+    'Document Reference',
+    'Policy Extract',
     'Status',
     'Comply Yes/No',
     'Gaps Identified',
@@ -50,7 +51,8 @@ function rowsToMatrix(rows: GapAnalysisExcelRow[], includePhases: boolean): stri
     const base = [
       r.pointNumber,
       r.requirement,
-      r.policyResponse,
+      r.documentReference,
+      r.policyExtract || r.policyResponse,
       r.status,
       r.complyYesNo,
       r.gapsIdentified,
@@ -67,6 +69,38 @@ function rowsToMatrix(rows: GapAnalysisExcelRow[], includePhases: boolean): stri
       r.phase2?.gapsIdentified ?? '',
     ];
   });
+}
+
+/** Regul.ai Book 6 gap sheet — clause no, rule, gaps, document ref, policy extract. */
+export async function exportRegulGapAnalysisExcelFromPoints(
+  points: AnalysisPoint[],
+  filename = defaultFilename('reguliq-gap-analysis'),
+  requirementColumnHeader = DEFAULT_EXCEL_REQUIREMENT_HEADER,
+): Promise<void> {
+  const rows = buildGapAnalysisExportRows(points);
+  if (!rows.length) return;
+  const headers = [
+    'Clause No.',
+    requirementColumnHeader,
+    'Interpretation and expected action (Identified Gaps)',
+    'Document Reference',
+    'Policy Extract',
+    'Compliance Status',
+    'Comply Yes/No',
+    'Confidence %',
+  ];
+  const matrix = rows.map((r) => [
+    r.pointNumber,
+    r.requirement,
+    r.gapsIdentified,
+    r.documentReference,
+    r.policyExtract || r.policyResponse,
+    r.status,
+    r.complyYesNo,
+    r.confidence,
+  ]);
+  const colWidths = [12, 50, 45, 36, 50, 16, 14, 12];
+  await downloadExcelRows(filename, 'Gap Analysis', headers, matrix, colWidths);
 }
 
 /** Client gap analysis Excel (sample layout + confidence, gaps, optional Phase 1/2). */
@@ -143,9 +177,13 @@ export function exportGapAnalysisPdfFromPoints(
     const heading = [r.pointNumber, titleLine].filter(Boolean).join(' — ') || 'Point';
     write(heading, 11, true);
     write(`Status: ${r.status} · Confidence: ${r.confidence} · Comply: ${r.complyYesNo}`, 9);
-    if (r.policyResponse?.trim()) {
-      write('UAE response / compliance level:', 8, true);
-      write(r.policyResponse.trim(), 8);
+    if (r.policyExtract?.trim() || r.policyResponse?.trim()) {
+      write('Policy extract:', 8, true);
+      write((r.policyExtract || r.policyResponse).trim(), 8);
+    }
+    if (r.documentReference?.trim()) {
+      write('Document reference:', 8, true);
+      write(r.documentReference.trim(), 8);
     }
     if (r.gapsIdentified?.trim()) {
       write('Gaps identified:', 8, true);

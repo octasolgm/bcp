@@ -19,6 +19,10 @@ public class NdInternalParseService(
     ILogger<NdInternalParseService> logger)
 {
     private readonly LandingAiOptions _opts = options.Value;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> RunningParses = new();
+    /// <summary>Mark <c>processing</c> as failed after this — hung Landing calls hold status until cleared.</summary>
+    private static readonly TimeSpan StaleProcessingAfter = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan OrphanedProcessingAfter = TimeSpan.FromMinutes(2);
 
     public async Task<bool> HasParsedMarkdownAsync(string fileHash, CancellationToken ct = default)
     {
@@ -29,12 +33,77 @@ public class NdInternalParseService(
 
     public async Task<string> ResolveDisplayParseStatusAsync(StoredDocument doc, CancellationToken ct = default)
     {
-        var status = (doc.ParseStatus ?? "").Trim().ToLowerInvariant();
+        var recovered = await RecoverStaleParseIfNeededAsync(doc.Id, ct);
+        var status = (recovered?.ParseStatus ?? doc.ParseStatus ?? "").Trim().ToLowerInvariant();
         return status switch
         {
             "parsed" or "processing" or "failed" or "pending" => status,
             _ => "pending",
         };
+    }
+
+    /// <summary>
+    /// If parse was left in <c>processing</c> after API restart or a hung Landing call, mark failed (or parsed if cache exists).
+    /// </summary>
+    public async Task<StoredDocument?> RecoverStaleParseIfNeededAsync(
+        Guid documentId,
+        CancellationToken ct = default)
+    {
+        var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == documentId, ct);
+        if (doc == null) return null;
+
+        if (!string.Equals(doc.ParseStatus, "processing", StringComparison.OrdinalIgnoreCase))
+            return doc;
+
+        var hash = doc.FileHash?.Trim();
+        if (!string.IsNullOrWhiteSpace(hash))
+        {
+            var cacheKey = await NdStoredDocumentExtractionCache.EnsureKeyAsync(db, doc, ct);
+            var cached = await cache.ResolveParseCacheAsync(cacheKey, hash, _opts.ParseModel, ct);
+            if (!string.IsNullOrWhiteSpace(cached?.Markdown))
+            {
+                await MarkParsedAsync(doc, hash, null, ct);
+                logger.LogInformation(
+                    "Recovered stale parse as parsed for doc {DocId} (markdown already in cache)",
+                    documentId);
+                return doc;
+            }
+        }
+
+        var orphaned = !RunningParses.ContainsKey(documentId);
+        var tooOld = doc.UpdatedAt <= DateTimeOffset.UtcNow - StaleProcessingAfter;
+        var hungOrRestarted = orphaned && doc.UpdatedAt <= DateTimeOffset.UtcNow - OrphanedProcessingAfter;
+
+        if (!tooOld && !hungOrRestarted)
+            return doc;
+
+        RunningParses.TryRemove(documentId, out _);
+        var ageMin = (DateTimeOffset.UtcNow - doc.UpdatedAt).TotalMinutes;
+        doc.ParseStatus = "failed";
+        doc.ParseError =
+            "Parse did not finish (Landing AI slow, timeout, or API restart). Retry parse once.";
+        doc.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        logger.LogWarning(
+            "Recovered stale parse as failed for doc {DocId} (orphaned={Orphaned}, ageMin={Age:F1})",
+            documentId,
+            orphaned,
+            ageMin);
+        return doc;
+    }
+
+    public async Task RecoverAllStaleParsesAsync(CancellationToken ct = default)
+    {
+        var processingIds = await db.StoredDocuments
+            .Where(d =>
+                (d.DocKind == "document" || d.DocKind == "internal")
+                && d.ParseStatus != null
+                && d.ParseStatus.ToLower() == "processing")
+            .Select(d => d.Id)
+            .ToListAsync(ct);
+
+        foreach (var id in processingIds)
+            await RecoverStaleParseIfNeededAsync(id, ct);
     }
 
     public async Task<InternalDocPayload> ParseByIdAsync(
@@ -87,6 +156,20 @@ public class NdInternalParseService(
                 pdfBytes);
         }
 
+        if (string.Equals(doc.ParseStatus, "processing", StringComparison.OrdinalIgnoreCase)
+            && !RunningParses.ContainsKey(doc.Id)
+            && doc.UpdatedAt > DateTimeOffset.UtcNow - OrphanedProcessingAfter)
+        {
+            throw new InvalidOperationException(
+                "Parse is already running for this document. Landing AI may take several minutes — do not click Parse again.");
+        }
+
+        if (!RunningParses.TryAdd(doc.Id, 0))
+        {
+            throw new InvalidOperationException(
+                "Parse is already running for this document. Wait for the current run to finish.");
+        }
+
         doc.ParseStatus = "processing";
         doc.ParseError = null;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
@@ -108,6 +191,15 @@ public class NdInternalParseService(
             await MarkParsedAsync(doc, hash, parsedBy, ct);
             return new InternalDocPayload(cacheKey, doc.OriginalFileName ?? fileName, markdown, pdfBytes);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            doc.ParseStatus = "failed";
+            doc.ParseError =
+                "Parse was cancelled (browser closed, tab left, or request timeout). Retry parse once.";
+            doc.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(CancellationToken.None);
+            throw;
+        }
         catch (Exception ex)
         {
             doc.ParseStatus = "failed";
@@ -115,6 +207,10 @@ public class NdInternalParseService(
             doc.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
             throw;
+        }
+        finally
+        {
+            RunningParses.TryRemove(doc.Id, out _);
         }
     }
 

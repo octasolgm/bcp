@@ -147,6 +147,23 @@
 .col-label-reg { color: #60a5fa; }
 .col-label-policy { color: #34d399; }
 
+.document-ref-line {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.document-ref-label {
+  display: block;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  margin-bottom: 0.15rem;
+}
+
+.document-ref-value {
+  color: var(--text-primary);
+}
+
 :host-context([data-theme='light']) {
   .col-label-reg { color: #1e40af; }
   .col-label-policy { color: #047857; }
@@ -216,6 +233,26 @@
     font-size: 0.75rem;
     font-weight: 600;
   }
+}
+
+.policy-ref-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.policy-ref-chip {
+  margin: 0;
+}
+
+.policy-quote.policy-quote-full {
+  margin: 0;
+  padding: 0;
+  border: none;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .policy-ref-row {

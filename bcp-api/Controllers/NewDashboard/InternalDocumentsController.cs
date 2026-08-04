@@ -33,6 +33,7 @@ public class InternalDocumentsController(
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
         await sectionService.RecoverAllStaleSectionExtractsAsync(ct);
+        await parseService.RecoverAllStaleParsesAsync(ct);
 
         var docs = await appDb.StoredDocuments.AsNoTracking()
             .Where(d => (d.DocKind == "document" || d.DocKind == "internal") && d.IsHidden == hiddenOnly)
@@ -47,7 +48,9 @@ public class InternalDocumentsController(
         var items = new List<object>();
         foreach (var d in docs)
         {
-            var parseStatus = await parseService.ResolveDisplayParseStatusAsync(d, ct);
+            var recovered = await parseService.RecoverStaleParseIfNeededAsync(d.Id, ct);
+            var live = recovered ?? d;
+            var parseStatus = await parseService.ResolveDisplayParseStatusAsync(live, ct);
             items.Add(new
             {
                 id = d.Id,
@@ -61,8 +64,8 @@ public class InternalDocumentsController(
                 sizeBytes = d.SizeBytes,
                 department = d.Category,
                 parseStatus,
-                parsedAt = d.ParsedAt,
-                parseError = d.ParseError,
+                parsedAt = live.ParsedAt,
+                parseError = live.ParseError,
                 uploadedBy = d.UploadedBy,
                 uploadedByName = ProfileName(profileNames, d.UploadedBy),
                 parsedBy = d.ParsedBy,
@@ -413,6 +416,7 @@ public class InternalDocumentsController(
 
         try
         {
+            await parseService.RecoverStaleParseIfNeededAsync(id, ct);
             await parseService.ParseByIdAsync(id, profile!.Id, ct);
             var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
             return Ok(new

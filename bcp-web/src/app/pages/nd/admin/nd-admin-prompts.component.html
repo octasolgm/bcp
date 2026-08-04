@@ -1,0 +1,403 @@
+<div class="page-header">
+  <div>
+    <h1>Analysis prompts</h1>
+    <p class="subtitle">
+      Each prompt part (system, user block 1, user block 2) has its own version history. Select a part on the
+      left or use the switcher in the right panel to view and manage its versions independently.
+    </p>
+  </div>
+</div>
+
+<div class="nd-page-body">
+  <div class="nd-page nd-page-fill">
+    @if (!isSuperAdmin) {
+      <p class="nd-error">Access denied</p>
+    } @else if (loading) {
+      <p class="nd-muted">Loading prompts…</p>
+    } @else {
+      @if (error) {
+        <p class="nd-error">{{ error }}</p>
+      }
+      @if (message) {
+        <p class="nd-success">{{ message }}</p>
+      }
+
+      @if (workflows.length > 1) {
+        <nav class="workflow-tabs" aria-label="Prompt workflows">
+          @for (group of workflows; track group.workflow) {
+            <button
+              type="button"
+              class="workflow-tab"
+              [class.workflow-tab-active]="selectedWorkflow === group.workflow"
+              (click)="selectWorkflow(group.workflow)"
+            >
+              {{ group.workflow }}
+            </button>
+          }
+        </nav>
+      }
+
+      <div class="prompts-layout" [style.grid-template-columns]="layoutColumns">
+        <div class="prompts-main">
+          <div class="prompt-list">
+            @for (prompt of activePrompts; track prompt.key) {
+              <section class="nd-card prompt-card" [class.prompt-card-selected]="selectedPromptKey === prompt.key">
+                <button
+                  type="button"
+                  class="prompt-card-header"
+                  (click)="togglePrompt(prompt)"
+                  [attr.aria-expanded]="isExpanded(prompt.key)"
+                >
+                  <div class="prompt-card-title">
+                    <h2>{{ prompt.label }}</h2>
+                    <p class="nd-muted">{{ prompt.description }}</p>
+                    @if (requiredTags(prompt).length > 0) {
+                      <div class="required-tags" aria-label="Mandatory tags">
+                        @for (tag of requiredTags(prompt); track tag) {
+                          <code class="required-tag" [class.required-tag-missing]="selectedPromptKey === prompt.key && missingTags(prompt, draftText).includes(tag)">
+                            {{ tag }}
+                          </code>
+                        }
+                        <span class="required-tags-label">required</span>
+                      </div>
+                    }
+                  </div>
+                  <div class="prompt-card-meta">
+                    @if (currentVersion(prompt); as current) {
+                      <span class="version-badge">
+                        v{{ current.versionNumber }}
+                        @if (current.isCurrent) {
+                          · current
+                        }
+                      </span>
+                    }
+                    @if (suggestionCount(prompt) > 0) {
+                      <span class="suggestion-badge">
+                        {{ suggestionCount(prompt) }} suggestion{{ suggestionCount(prompt) === 1 ? '' : 's' }}
+                      </span>
+                    }
+                    <span class="expand-icon" [class.expand-icon-open]="isExpanded(prompt.key)">▾</span>
+                  </div>
+                </button>
+
+                @if (isExpanded(prompt.key)) {
+                  <div class="prompt-card-body">
+                    <div class="prompt-text-block">
+                      <div class="prompt-text-header">
+                        <h3>Prompt text</h3>
+                        @if (selectedPromptKey === prompt.key && selectedVersion; as version) {
+                          <span class="nd-muted prompt-version-label">
+                            Viewing {{ version.label }} (v{{ version.versionNumber }})
+                            @if (version.isCurrent) {
+                              · current
+                            }
+                          </span>
+                        }
+                      </div>
+                      <textarea
+                        class="nd-input prompt-editor"
+                        [class.prompt-editor-invalid]="selectedPromptKey === prompt.key && hasTagValidationErrors(prompt, draftText)"
+                        rows="14"
+                        [ngModel]="selectedPromptKey === prompt.key ? draftText : (currentVersion(prompt)?.promptText ?? prompt.text)"
+                        (ngModelChange)="onDraftChange(prompt, $event)"
+                        [readonly]="selectedPromptKey !== prompt.key"
+                        [attr.aria-label]="'Prompt text for ' + prompt.label"
+                      ></textarea>
+                      @if (selectedPromptKey === prompt.key && hasTagValidationErrors(prompt, draftText)) {
+                        <p class="nd-error tag-validation-error">
+                          Missing mandatory tags:
+                          @for (tag of missingTags(prompt, draftText); track tag; let last = $last) {
+                            <code>{{ tag }}</code>@if (!last) {, }
+                          }
+                        </p>
+                      }
+                      @if (selectedPromptKey === prompt.key) {
+                        <div class="prompt-editor-actions">
+                          <button
+                            type="button"
+                            class="nd-btn-primary"
+                            [disabled]="savingVersion || !draftDirty || hasTagValidationErrors(prompt, draftText)"
+                            (click)="saveNewVersion(prompt)"
+                          >
+                            {{ savingVersion ? 'Saving…' : 'Save as new version' }}
+                          </button>
+                          @if (draftDirty) {
+                            <button
+                              type="button"
+                              class="nd-btn-secondary"
+                              (click)="selectVersion(selectedVersion!)"
+                            >
+                              Discard changes
+                            </button>
+                          }
+                        </div>
+                      }
+                      @if (selectedPromptKey !== prompt.key) {
+                        <p class="nd-muted prompt-select-hint">Click this card header to edit and version this prompt part.</p>
+                      }
+                      @if (placeholderHint(prompt); as hint) {
+                        <p class="nd-muted prompt-hint">{{ hint }}</p>
+                      }
+                      @if (prompt.key.startsWith('regul_judgment') && isRegulWorkflow && selectedPromptKey === prompt.key) {
+                        <p class="nd-muted prompt-hint">
+                          Current version is used live on Analysis V3 runs. Required placeholders cannot be removed.
+                        </p>
+                      }
+                    </div>
+
+                    <div class="suggestions-block">
+                      <header class="suggestions-header">
+                        <h3>Improvement suggestions</h3>
+                        <p class="nd-muted">Add multiple comments on how to improve this prompt.</p>
+                      </header>
+
+                      @if (prompt.suggestions.length === 0) {
+                        <p class="nd-muted suggestions-empty">No suggestions yet. Be the first to add one.</p>
+                      } @else {
+                        <p class="nd-muted suggestions-hint">
+                          Check the suggestions you want the AI to merge into a new version, then use "Generate with AI" below.
+                        </p>
+                        <ul class="suggestion-list">
+                          @for (suggestion of prompt.suggestions; track suggestion.id) {
+                            <li class="suggestion-item" [class.suggestion-item-selected]="isSuggestionSelected(suggestion)">
+                              @if (editingId === suggestion.id) {
+                                <textarea
+                                  class="nd-input suggestion-edit"
+                                  rows="3"
+                                  [(ngModel)]="editingText"
+                                  aria-label="Edit suggestion"
+                                ></textarea>
+                                <div class="suggestion-actions">
+                                  <button
+                                    type="button"
+                                    class="nd-btn-primary nd-btn-sm"
+                                    [disabled]="savingKey === prompt.key || !editingText.trim()"
+                                    (click)="saveEdit(suggestion, prompt)"
+                                  >
+                                    {{ savingKey === prompt.key ? 'Saving…' : 'Save' }}
+                                  </button>
+                                  <button type="button" class="nd-btn-secondary nd-btn-sm" (click)="cancelEdit()">
+                                    Cancel
+                                  </button>
+                                </div>
+                              } @else {
+                                <div class="suggestion-row">
+                                  <label class="suggestion-checkbox" [attr.aria-label]="'Select suggestion for AI generation'">
+                                    <input
+                                      type="checkbox"
+                                      [checked]="isSuggestionSelected(suggestion)"
+                                      (change)="toggleSuggestionSelected(suggestion)"
+                                    />
+                                  </label>
+                                  <div class="suggestion-body">
+                                    <p class="suggestion-comment">{{ suggestion.comment }}</p>
+                                    <div class="suggestion-meta nd-muted">
+                                      <span>
+                                        {{ suggestion.createdByName || 'Unknown' }}
+                                        · {{ suggestion.createdAt | date: 'short' }}
+                                      </span>
+                                      @if (suggestion.updatedAt !== suggestion.createdAt) {
+                                        <span> · edited {{ suggestion.updatedAt | date: 'short' }}</span>
+                                      }
+                                      @if (suggestion.appliedInVersionId) {
+                                        <span class="applied-pill">✓ applied</span>
+                                      }
+                                      @if (coverageFor(suggestion); as coverage) {
+                                        <span
+                                          class="coverage-pill"
+                                          [class.coverage-pill-covered]="coverage.covered"
+                                          [class.coverage-pill-missing]="!coverage.covered"
+                                        >
+                                          {{ coverage.covered ? '✓ in new draft' : '✗ not detected' }}
+                                        </span>
+                                      }
+                                    </div>
+                                  </div>
+                                  <div class="suggestion-actions">
+                                    <button
+                                      type="button"
+                                      class="nd-btn-secondary nd-btn-sm"
+                                      (click)="startEdit(suggestion)"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      class="nd-btn-danger nd-btn-sm"
+                                      [disabled]="deletingId === suggestion.id"
+                                      (click)="deleteSuggestion(suggestion, prompt)"
+                                    >
+                                      {{ deletingId === suggestion.id ? 'Deleting…' : 'Delete' }}
+                                    </button>
+                                  </div>
+                                </div>
+                              }
+                            </li>
+                          }
+                        </ul>
+
+                        <div class="ai-generate-panel">
+                          <h4>Generate new version with AI</h4>
+                          <p class="nd-muted">
+                            Pick a model, optionally add an instruction to optimize/modify the result, then generate a
+                            draft that merges the {{ selectedSuggestionIds.size }} selected suggestion(s) into the base prompt.
+                          </p>
+                          <div class="ai-generate-row">
+                            <label class="nd-label">
+                              AI model
+                              <select
+                                class="nd-input"
+                                [(ngModel)]="generateProvider"
+                                (ngModelChange)="onProviderChange()"
+                                aria-label="Select AI provider"
+                              >
+                                @for (p of llmProviders; track p.id) {
+                                  <option [value]="p.id" [disabled]="!p.apiKeyConfigured">
+                                    {{ p.label }}{{ !p.apiKeyConfigured ? ' (no API key)' : '' }}
+                                  </option>
+                                }
+                              </select>
+                            </label>
+                            @if (selectedProviderOption; as opt) {
+                              <label class="nd-label">
+                                Model
+                                <select class="nd-input" [(ngModel)]="generateModel" aria-label="Select model">
+                                  @for (m of opt.models; track m) {
+                                    <option [value]="m">{{ m }}</option>
+                                  }
+                                </select>
+                              </label>
+                            }
+                          </div>
+                          <label class="nd-label">
+                            Optimize / modify instruction (optional)
+                            <textarea
+                              class="nd-input"
+                              rows="2"
+                              [(ngModel)]="generateInstruction"
+                              placeholder="e.g. Keep it concise, prioritize the multi-part clause guidance…"
+                              aria-label="Optimize or modify instruction"
+                            ></textarea>
+                          </label>
+                          <button
+                            type="button"
+                            class="nd-btn-primary"
+                            [disabled]="!canGenerate"
+                            (click)="generateWithAi(prompt)"
+                          >
+                            {{ generating ? 'Generating…' : 'Generate with AI (' + selectedSuggestionIds.size + ' selected)' }}
+                          </button>
+                          @if (selectedSuggestionIds.size === 0) {
+                            <p class="nd-muted ai-generate-hint">Select at least one suggestion above to enable generation.</p>
+                          } @else if (selectedProviderOption && !selectedProviderOption.apiKeyConfigured) {
+                            <p class="nd-error ai-generate-hint">API key for {{ selectedProviderOption.label }} is not configured on the server.</p>
+                          }
+                        </div>
+                      }
+
+                      <div class="add-suggestion">
+                        <label class="nd-label">
+                          New suggestion
+                          <textarea
+                            class="nd-input"
+                            rows="3"
+                            [(ngModel)]="newCommentByKey[prompt.key]"
+                            placeholder="e.g. Add clearer guidance on element-level checking for multi-part clauses…"
+                            [attr.aria-label]="'New suggestion for ' + prompt.label"
+                          ></textarea>
+                        </label>
+                        <button
+                          type="button"
+                          class="nd-btn-primary"
+                          [disabled]="savingKey === prompt.key || !(newCommentByKey[prompt.key] || '').trim()"
+                          (click)="addSuggestion(prompt)"
+                        >
+                          {{ savingKey === prompt.key ? 'Adding…' : 'Add suggestion' }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </section>
+            }
+          </div>
+        </div>
+
+        @if (selectedPrompt; as prompt) {
+          <div
+            class="panel-resize-handle"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize versions panel"
+            (mousedown)="startVersionsResize($event)"
+          ></div>
+
+          <aside class="versions-panel nd-card">
+            <header class="versions-panel-header">
+              <h2>Versions</h2>
+              <p class="nd-muted versions-panel-subtitle">
+                Showing versions for the selected prompt part. Each part is versioned separately.
+              </p>
+            </header>
+
+            @if (judgmentPromptParts.length > 1) {
+              <nav class="prompt-part-switcher" aria-label="Switch prompt part">
+                @for (part of judgmentPromptParts; track part.key) {
+                  <button
+                    type="button"
+                    class="prompt-part-btn"
+                    [class.prompt-part-btn-active]="selectedPromptKey === part.key"
+                    (click)="selectPrompt(part, true)"
+                  >
+                    <span class="prompt-part-btn-label">{{ partShortLabel(part) }}</span>
+                    @if (currentVersion(part); as cv) {
+                      <span class="prompt-part-btn-meta">v{{ cv.versionNumber }}</span>
+                    }
+                  </button>
+                }
+              </nav>
+            }
+
+            <p class="versions-panel-active nd-muted">{{ prompt.label }}</p>
+
+            @if (prompt.versions.length === 0) {
+              <p class="nd-muted">No versions yet.</p>
+            } @else {
+              <ul class="version-list">
+                @for (version of prompt.versions; track version.id) {
+                  <li
+                    class="version-item"
+                    [class.version-item-active]="selectedVersionId === version.id"
+                    [class.version-item-current]="version.isCurrent"
+                  >
+                    <button type="button" class="version-item-select" (click)="selectVersion(version)">
+                      <span class="version-item-title">
+                        v{{ version.versionNumber }} · {{ version.label }}
+                        @if (version.isCurrent) {
+                          <span class="current-pill">Current</span>
+                        }
+                      </span>
+                      <span class="version-item-meta nd-muted">
+                        {{ version.createdByName || 'Unknown' }} · {{ version.createdAt | date: 'medium' }}
+                      </span>
+                    </button>
+                    @if (!version.isCurrent) {
+                      <button
+                        type="button"
+                        class="nd-btn-secondary nd-btn-sm version-set-current"
+                        [disabled]="settingCurrentId === version.id"
+                        (click)="setCurrentVersion(prompt, version)"
+                      >
+                        {{ settingCurrentId === version.id ? 'Setting…' : 'Set as current' }}
+                      </button>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </aside>
+        }
+      </div>
+    }
+  </div>
+</div>

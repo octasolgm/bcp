@@ -33,40 +33,40 @@
         Policy extract
         <span class="ai-tag">AI extracted</span>
       </p>
+      @if (documentReference) {
+        <p class="document-ref-line">
+          <span class="document-ref-label">Document reference</span>
+          <span class="document-ref-value">{{ documentReference }}</span>
+        </p>
+      }
       @if (policyRefs.length) {
-        @for (ref of policyRefs; track (ref.page + '|' + (ref.section ?? '') + '|' + (ref.docId ?? '') + '|' + (ref.quote ?? '').slice(0, 40))) {
-          <div class="policy-ref-row">
+        <div class="policy-ref-nav">
+          @for (ref of policyRefs; track (ref.page + '|' + (ref.section ?? '') + '|' + (ref.docId ?? '') + '|' + (ref.quote ?? '').slice(0, 40))) {
             @if (canOpenPolicyRef(ref)) {
               <button
                 type="button"
-                class="source-ref-link"
+                class="source-ref-link policy-ref-chip"
                 [attr.title]="policySourceTooltip(ref.page || null, ref.docLabel)"
                 (click)="onViewPolicyPage(ref.page, ref.docId)"
               >
-                {{ formatPolicyRefLabel(ref) }}:
+                {{ formatPolicyRefLabel(ref) }}
               </button>
             } @else {
-              <span class="policy-ref">{{ formatPolicyRefLabel(ref) }}:</span>
+              <span class="policy-ref policy-ref-chip">{{ formatPolicyRefLabel(ref) }}</span>
             }
-            @if (ref.quote) {
-              <blockquote class="policy-quote inline">&ldquo;{{ ref.quote }}&rdquo;</blockquote>
-            }
-          </div>
-        }
-        @if (!policyRefsHaveInlineQuotes) {
-          <blockquote class="policy-quote">&ldquo;{{ policyExtract }}&rdquo;</blockquote>
-        }
-      } @else {
-        @if (policyRefLabel) {
-          @if (policyDocId || policyDocCatalog.length) {
-            <button type="button" class="source-ref-link" [attr.title]="policySourceTooltip()" (click)="onViewPolicyPdf()">
-              {{ policyRefLabel }}:
-            </button>
-          } @else {
-            <p class="policy-ref">{{ policyRefLabel }}:</p>
           }
+        </div>
+      } @else if (policyRefLabel) {
+        @if (policyDocId || policyDocCatalog.length) {
+          <button type="button" class="source-ref-link" [attr.title]="policySourceTooltip()" (click)="onViewPolicyPdf()">
+            {{ policyRefLabel }}
+          </button>
+        } @else {
+          <p class="policy-ref">{{ policyRefLabel }}</p>
         }
-        <blockquote class="policy-quote">&ldquo;{{ policyExtract }}&rdquo;</blockquote>
+      }
+      @if (policyExtract) {
+        <blockquote class="policy-quote policy-quote-full">{{ policyExtract }}</blockquote>
       }
     </section>
   </div>

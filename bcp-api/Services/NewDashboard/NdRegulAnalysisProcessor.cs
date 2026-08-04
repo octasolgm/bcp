@@ -20,6 +20,7 @@ public class NdRegulAnalysisProcessor(
     AppDbContext db,
     RegulWorkflowLlmSettingsService llmSettings,
     RegulWorkflowLlmService regulLlm,
+    NdAnalysisPromptVersionService promptVersions,
     NdInternalParseService internalParse,
     NdInternalDocumentSectionService internalSectionService,
     SupabaseStorageService storage,
@@ -73,6 +74,14 @@ public class NdRegulAnalysisProcessor(
             run.EnableQualitative,
             run.RegulLlmProvider,
             run.RegulLlmModel);
+
+        var promptVersionsForRun = await promptVersions.GetJudgmentPromptVersionsAsync(ct);
+        logger.LogInformation(
+            "Regul V3 forward judgment for run {RunId} will use the CURRENT admin prompt versions (Admin \u2192 Analysis prompts): {PromptVersions}",
+            runId,
+            string.Join(
+                " | ",
+                promptVersionsForRun.Select(v => $"{v.PromptKey}=v{v.VersionNumber} \"{v.Label}\"")));
 
         try
         {
@@ -132,6 +141,78 @@ public class NdRegulAnalysisProcessor(
         }
     }
 
+    /// <summary>Forward judgment only — skips reverse coverage and qualitative phases.</summary>
+    public async Task ProcessForwardOnlyRunAsync(Guid runId, CancellationToken ct)
+    {
+        var run = await db.NdAnalysisRuns
+            .Include(r => r.Points)
+            .FirstOrDefaultAsync(r => r.Id == runId, ct)
+            ?? throw new InvalidOperationException("Analysis run not found.");
+
+        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            throw new InvalidOperationException("Run is not a Regul workflow analysis.");
+
+        if (run.RegulClausesConfirmedAt == null)
+            throw new InvalidOperationException(
+                "Regul clauses must be confirmed before analysis. Call POST /nd/analysis-runs/{id}/confirm-clauses first.");
+
+        if (runCancellation.IsStopRequested(runId))
+        {
+            await MarkCancelledAsync(run, ct);
+            return;
+        }
+
+        var llm = await llmSettings.GetConfigAsync(ct);
+        run.RegulLlmProvider = llm.Provider;
+        run.RegulLlmModel = llm.Model;
+        run.Status = "running";
+        run.RegulPipelinePhase = "forward";
+        run.RegulPipelineError = null;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Regul forward-only run started for run {RunId} (llm={Provider}/{Model})",
+            runId,
+            run.RegulLlmProvider,
+            run.RegulLlmModel);
+
+        try
+        {
+            await EnsureInternalSectionsForRunAsync(run, ct);
+            await EnsureForwardFindingsAsync(run, ct);
+            await RunForwardPhaseAsync(run, ct);
+            if (runCancellation.IsStopRequested(runId))
+            {
+                await MarkCancelledAsync(run, ct);
+                return;
+            }
+
+            run.RegulPipelinePhase = "done";
+            run.Status = "completed";
+            await FinalizePointCountsAsync(run, ct);
+            run.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation(
+                "Regul forward-only run completed for run {RunId} (totalPoints={Total}, processed={Processed})",
+                runId,
+                run.TotalPointsCount,
+                run.ProcessedPointsCount);
+        }
+        catch (OperationCanceledException)
+        {
+            await MarkCancelledAsync(run, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Regul forward-only run failed for run {RunId}", runId);
+            run.Status = "failed";
+            run.RegulPipelineError = ex.Message;
+            run.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(CancellationToken.None);
+        }
+    }
+
     private async Task EnsureForwardFindingsAsync(NdAnalysisRun run, CancellationToken ct)
     {
         var existing = await db.NdRegulForwardFindings
@@ -140,7 +221,7 @@ public class NdRegulAnalysisProcessor(
             .ToListAsync(ct);
 
         var existingSet = existing.Where(id => id.HasValue).Select(id => id!.Value).ToHashSet();
-        foreach (var point in run.Points)
+        foreach (var point in run.Points.Where(p => p.RegulationPointId.HasValue))
         {
             if (existingSet.Contains(point.Id)) continue;
 
@@ -162,13 +243,24 @@ public class NdRegulAnalysisProcessor(
     {
         var policyBundle = await LoadPolicyBundleAsync(run, ct);
         var pending = await db.NdRegulForwardFindings
-            .Where(f => f.AnalysisRunId == run.Id && f.Status == "pending" && f.AnalysisPointId != null)
+            .Where(f => f.AnalysisRunId == run.Id
+                && f.Status == "pending"
+                && f.AnalysisPointId != null
+                && !f.ClauseNo.StartsWith(NdRegulReverseIntRows.IntClausePrefix))
             .ToListAsync(ct);
 
         var pointById = run.Points.ToDictionary(p => p.Id);
         var completed = 0;
         var total = pending.Count;
         var cacheContext = policyBundle.TotalPages <= NdRegulPolicyContextService.FullManualMaxPages;
+
+        var promptVersionsInUse = await promptVersions.GetJudgmentPromptVersionsAsync(ct);
+        logger.LogInformation(
+            "Regul forward phase using admin prompt versions for run {RunId}: {PromptVersions}",
+            run.Id,
+            string.Join(
+                ", ",
+                promptVersionsInUse.Select(v => $"{v.PromptKey}=v{v.VersionNumber} ({v.Label})")));
 
         logger.LogInformation(
             "Regul forward phase started for run {RunId}: {Total} clause(s), policyPages={Pages}, retrieval={Retrieval}",
@@ -211,13 +303,14 @@ public class NdRegulAnalysisProcessor(
                 NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, landingMessage);
                 completed++;
                 logger.LogInformation(
-                    "Regul forward judgment completed for run {RunId} clause {ClauseNo} ({Index}/{Total}) status={Status} confidence={Confidence}",
+                    "Regul forward judgment completed for run {RunId} clause {ClauseNo} ({Index}/{Total}) status={Status} confidence={Confidence} policyExtracts={ExtractCount}",
                     run.Id,
                     finding.ClauseNo,
                     index,
                     total,
                     judgment.OverallStatus,
-                    judgment.Confidence);
+                    judgment.Confidence,
+                    judgment.PolicyExtract.Count);
             }
             catch (Exception ex)
             {
@@ -255,8 +348,9 @@ public class NdRegulAnalysisProcessor(
         CancellationToken ct)
     {
         var policyContext = policyBundle.BuildContextForClause(clauseText);
-        var contextBlock = NdRegulPromptDefaults.BuildJudgmentContextText(policyContext);
-        var queryBlock = NdRegulPromptDefaults.BuildJudgmentQueryText(clauseNo, clauseText);
+        var contextChunks = policyBundle.GetChunksForClause(clauseText);
+        var contextBlock = await promptVersions.BuildJudgmentContextAsync(policyContext, ct);
+        var queryBlock = await promptVersions.BuildJudgmentQueryAsync(clauseNo, clauseText, ct);
 
         RegulJudgmentResult judgment = null!;
         for (var attempt = 0; attempt <= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries; attempt++)
@@ -266,11 +360,16 @@ public class NdRegulAnalysisProcessor(
                 : queryBlock + "\n\n" + NdRegulPromptDefaults.BuildJudgmentRetryNote(judgment.OverallStatus);
 
             var raw = await regulLlm.CallJudgmentAsync(contextBlock, query, cacheContextBlock, ct);
-            judgment = NdRegulLlmJsonHelper.ParseJsonObject<RegulJudgmentResult>(raw);
+            judgment = NdRegulLlmJsonHelper.ParseJudgmentResult(raw);
 
             judgment = NdRegulJudgmentPostProcessor.ApplyQuoteVerification(
                 judgment,
                 policyBundle.SourceTextForQuotes);
+
+            judgment = NdRegulJudgmentPostProcessor.ApplyGroundedDocumentReference(
+                judgment,
+                contextChunks,
+                policyBundle.MarkdownByFile);
 
             if (!NdRegulJudgmentPostProcessor.RequiresGapDescriptionRetry(judgment))
                 return judgment;
@@ -286,8 +385,25 @@ public class NdRegulAnalysisProcessor(
         NdAnalysisRun run,
         CancellationToken ct)
     {
+        var sections = await db.NdRegulInternalSections
+            .AsNoTracking()
+            .Where(s => s.AnalysisRunId == run.Id)
+            .OrderBy(s => s.SourceDoc)
+            .ThenBy(s => s.SectionRef)
+            .ToListAsync(ct);
+
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
         var payloads = await LoadInternalDocPayloadsAsync(internalDocIds, ct);
+
+        if (sections.Count > 0)
+        {
+            logger.LogDebug(
+                "Building forward policy bundle from {Count} internal section(s) for run {RunId}",
+                sections.Count,
+                run.Id);
+            return NdRegulPolicyContextService.FromInternalSections(sections).WithMarkdownFromPayloads(payloads);
+        }
+
         if (payloads.Count == 0)
             return NdRegulPolicyContextService.FromPayloads([
                 new InternalDocPayload("", "policy", "No internal policy text was attached to this run.", null),
@@ -656,11 +772,14 @@ public class NdRegulAnalysisProcessor(
         var points = await db.NdAnalysisPoints
             .Where(p => p.AnalysisRunId == run.Id)
             .ToListAsync(ct);
-        var completed = points.Count(p => p.LandingAiStatus == "completed");
-        run.TotalPointsCount = points.Count;
+        var regulatory = points.Where(p => p.RegulationPointId != null).ToList();
+        var completed = regulatory.Count(p => p.LandingAiStatus == "completed");
+        var failed = regulatory.Count(p => p.LandingAiStatus == "failed");
+        run.TotalPointsCount = regulatory.Count;
         run.ProcessedPointsCount = completed;
         run.LandingAiCompletedCount = completed;
         run.DualVerifyCompletedCount = completed;
+        run.DualVerifyFailedCount = failed;
     }
 
     private async Task MarkCancelledAsync(NdAnalysisRun run, CancellationToken ct)
@@ -687,6 +806,9 @@ public class NdRegulAnalysisProcessor(
 
         var point = run.Points.FirstOrDefault(p => p.Id == pointId)
             ?? throw new InvalidOperationException("Analysis point not found.");
+
+        if (!point.RegulationPointId.HasValue)
+            throw new InvalidOperationException("Forward rerun applies to regulatory clauses only, not INT rows.");
 
         if (runCancellation.IsStopRequested(runId))
         {
@@ -769,8 +891,91 @@ public class NdRegulAnalysisProcessor(
         }
 
         await FinalizePointCountsAsync(run, ct);
+        var reversePreserved = await db.NdRegulReverseMappings.AnyAsync(m => m.AnalysisRunId == runId, ct);
+        if (reversePreserved)
+        {
+            run.RegulPipelinePhase = "done";
+            run.Status = "completed";
+        }
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Re-run forward judgments for regulatory clauses only; reverse mappings and INT rows stay in DB.</summary>
+    public async Task RerunForwardPhaseAsync(Guid runId, CancellationToken ct)
+    {
+        var run = await db.NdAnalysisRuns
+            .Include(r => r.Points)
+            .FirstOrDefaultAsync(r => r.Id == runId, ct)
+            ?? throw new InvalidOperationException("Analysis run not found.");
+
+        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+            throw new InvalidOperationException("Not a Regul workflow run.");
+
+        if (runCancellation.IsStopRequested(runId))
+        {
+            await MarkCancelledAsync(run, ct);
+            return;
+        }
+
+        run.Status = "running";
+        run.RegulPipelinePhase = "forward";
+        run.RegulPipelineError = null;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        await EnsureInternalSectionsForRunAsync(run, ct);
+
+        var regulatoryPointIds = run.Points
+            .Where(p => p.RegulationPointId.HasValue)
+            .Select(p => p.Id)
+            .ToHashSet();
+
+        var forwardFindings = await db.NdRegulForwardFindings
+            .Where(f => f.AnalysisRunId == runId && f.AnalysisPointId != null)
+            .ToListAsync(ct);
+
+        foreach (var finding in forwardFindings)
+        {
+            if (!finding.AnalysisPointId.HasValue
+                || !regulatoryPointIds.Contains(finding.AnalysisPointId.Value))
+                continue;
+
+            finding.Status = "pending";
+            finding.ResultJson = null;
+            finding.ErrorMessage = null;
+            finding.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        foreach (var point in run.Points.Where(p => regulatoryPointIds.Contains(p.Id)))
+        {
+            point.LandingAiStatus = "pending";
+            point.LandingAiResult = null;
+            point.LandingAiError = null;
+            point.GoogleAiStatus = "pending";
+            point.GoogleAiResult = null;
+            point.GoogleAiError = null;
+            point.DualVerifyStatus = "pending";
+            point.FinalStatus = null;
+            point.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Regul forward-only rerun started for run {RunId} ({ClauseCount} regulatory clause(s), reverse preserved)",
+            runId,
+            regulatoryPointIds.Count);
+
+        await RunForwardPhaseAsync(run, ct);
+
+        run.RegulPipelinePhase = "done";
+        run.Status = "completed";
+        await FinalizePointCountsAsync(run, ct);
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation("Regul forward-only rerun completed for run {RunId} (reverse preserved)", runId);
     }
 
     /// <summary>Re-run reverse mapping for all internal sections (Regul workflow only).</summary>

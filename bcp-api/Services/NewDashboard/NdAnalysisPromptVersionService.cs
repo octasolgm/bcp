@@ -1,0 +1,194 @@
+using Microsoft.EntityFrameworkCore;
+using Reguliq.Api.Data;
+using Reguliq.Api.Data.NewDashboard.Entities;
+
+namespace Reguliq.Api.Services.NewDashboard;
+
+public class NdAnalysisPromptVersionService(AppDbContext db)
+{
+    public const string JudgmentSystemKey = "regul_judgment_system";
+    public const string JudgmentUserContextKey = "regul_judgment_user_context";
+    public const string JudgmentUserQueryKey = "regul_judgment_user_query";
+
+    private static readonly string[] JudgmentPromptKeys =
+        [JudgmentSystemKey, JudgmentUserContextKey, JudgmentUserQueryKey];
+
+    public record PromptVersionInfo(string PromptKey, Guid Id, int VersionNumber, string Label);
+
+    public static bool IsJudgmentPromptKey(string promptKey) =>
+        JudgmentPromptKeys.Contains(promptKey, StringComparer.Ordinal);
+
+    public async Task<IReadOnlyList<PromptVersionInfo>> GetJudgmentPromptVersionsAsync(CancellationToken ct = default)
+    {
+        await EnsureSeededAsync(ct);
+        var rows = await db.NdAnalysisPromptVersions.AsNoTracking()
+            .Where(v => JudgmentPromptKeys.Contains(v.PromptKey) && v.IsCurrent)
+            .ToListAsync(ct);
+
+        return JudgmentPromptKeys
+            .Select(key =>
+            {
+                var row = rows.FirstOrDefault(r => r.PromptKey == key)
+                    ?? throw new InvalidOperationException(
+                        $"No current version set for prompt '{key}'. Set a current version in Admin → Analysis prompts.");
+                return new PromptVersionInfo(key, row.Id, row.VersionNumber, row.Label);
+            })
+            .ToList();
+    }
+
+    public async Task EnsureSeededAsync(CancellationToken ct = default)
+    {
+        var changed = false;
+        foreach (var def in NdAnalysisPromptCatalog.AllV3Prompts)
+        {
+            var exists = await db.NdAnalysisPromptVersions.AsNoTracking()
+                .AnyAsync(v => v.PromptKey == def.Key, ct);
+            if (exists) continue;
+
+            db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+            {
+                PromptKey = def.Key,
+                VersionNumber = 1,
+                Label = "Base",
+                PromptText = def.Text,
+                IsCurrent = true,
+            });
+            changed = true;
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<NdAnalysisPromptVersion>> GetVersionsAsync(string promptKey, CancellationToken ct = default)
+    {
+        await EnsureSeededAsync(ct);
+        return await db.NdAnalysisPromptVersions.AsNoTracking()
+            .Where(v => v.PromptKey == promptKey)
+            .OrderByDescending(v => v.VersionNumber)
+            .ToListAsync(ct);
+    }
+
+    public async Task<string> GetCurrentTextAsync(string promptKey, CancellationToken ct = default)
+    {
+        await EnsureSeededAsync(ct);
+        var row = await db.NdAnalysisPromptVersions.AsNoTracking()
+            .FirstOrDefaultAsync(v => v.PromptKey == promptKey && v.IsCurrent, ct);
+        if (row != null) return row.PromptText;
+
+        if (IsJudgmentPromptKey(promptKey))
+        {
+            throw new InvalidOperationException(
+                $"No current version set for prompt '{promptKey}'. Set a current version in Admin → Analysis prompts.");
+        }
+
+        return NdAnalysisPromptCatalog.Find(promptKey)?.Text ?? "";
+    }
+
+    public async Task<string> GetJudgmentSystemPromptAsync(CancellationToken ct = default) =>
+        (await GetCurrentTextAsync(JudgmentSystemKey, ct)).Trim();
+
+    public async Task<string> BuildJudgmentContextAsync(string policyContext, CancellationToken ct = default)
+    {
+        var template = await GetCurrentTextAsync(JudgmentUserContextKey, ct);
+        ValidatePromptText(JudgmentUserContextKey, template);
+        return template.Replace("{policy_context}", policyContext, StringComparison.Ordinal);
+    }
+
+    public async Task<string> BuildJudgmentQueryAsync(string clauseNo, string clauseText, CancellationToken ct = default)
+    {
+        var template = await GetCurrentTextAsync(JudgmentUserQueryKey, ct);
+        ValidatePromptText(JudgmentUserQueryKey, template);
+        return template
+            .Replace("{clause_no}", clauseNo, StringComparison.Ordinal)
+            .Replace("{clause_text}", clauseText, StringComparison.Ordinal);
+    }
+
+    public static void ValidatePromptText(string promptKey, string text)
+    {
+        switch (promptKey)
+        {
+            case JudgmentUserContextKey:
+                if (!text.Contains("{policy_context}", StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "User block 1 must include {policy_context} where retrieved internal policy excerpts are inserted.");
+                break;
+            case JudgmentUserQueryKey:
+                if (!text.Contains("{clause_no}", StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "User block 2 must include {clause_no} for the regulatory clause number.");
+                if (!text.Contains("{clause_text}", StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "User block 2 must include {clause_text} for the regulatory clause text.");
+                break;
+        }
+    }
+
+    public async Task<NdAnalysisPromptVersion> CreateVersionAsync(
+        string promptKey,
+        string promptText,
+        Guid createdBy,
+        string? label = null,
+        IReadOnlyList<Guid>? appliedSuggestionIds = null,
+        CancellationToken ct = default)
+    {
+        if (NdAnalysisPromptCatalog.Find(promptKey) == null)
+            throw new InvalidOperationException("Unknown prompt key.");
+
+        var text = promptText?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(text))
+            throw new InvalidOperationException("Prompt text is required.");
+
+        ValidatePromptText(promptKey, text);
+
+        await EnsureSeededAsync(ct);
+
+        var maxVersion = await db.NdAnalysisPromptVersions
+            .Where(v => v.PromptKey == promptKey)
+            .Select(v => (int?)v.VersionNumber)
+            .MaxAsync(ct) ?? 0;
+
+        var versionNumber = maxVersion + 1;
+        var row = new NdAnalysisPromptVersion
+        {
+            PromptKey = promptKey,
+            VersionNumber = versionNumber,
+            Label = string.IsNullOrWhiteSpace(label) ? $"Version {versionNumber}" : label.Trim(),
+            PromptText = text,
+            IsCurrent = false,
+            CreatedBy = createdBy,
+        };
+        db.NdAnalysisPromptVersions.Add(row);
+        await db.SaveChangesAsync(ct);
+
+        if (appliedSuggestionIds is { Count: > 0 })
+        {
+            var suggestionRows = await db.NdAnalysisPromptSuggestions
+                .Where(s => s.PromptKey == promptKey && appliedSuggestionIds.Contains(s.Id))
+                .ToListAsync(ct);
+            foreach (var s in suggestionRows)
+                s.AppliedInVersionId = row.Id;
+            await db.SaveChangesAsync(ct);
+        }
+
+        return row;
+    }
+
+    public async Task<NdAnalysisPromptVersion> SetCurrentAsync(Guid versionId, CancellationToken ct = default)
+    {
+        var row = await db.NdAnalysisPromptVersions.FirstOrDefaultAsync(v => v.Id == versionId, ct)
+            ?? throw new InvalidOperationException("Version not found.");
+
+        ValidatePromptText(row.PromptKey, row.PromptText);
+
+        var siblings = await db.NdAnalysisPromptVersions
+            .Where(v => v.PromptKey == row.PromptKey)
+            .ToListAsync(ct);
+
+        foreach (var sibling in siblings)
+            sibling.IsCurrent = sibling.Id == versionId;
+
+        await db.SaveChangesAsync(ct);
+        return row;
+    }
+}

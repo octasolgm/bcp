@@ -69,6 +69,11 @@ import {
 import { parsePointSnapshot, resolveSnapshotDisplayNumber } from '../../../lib/nd/utils';
 import type { AnalysisPoint, AnalysisRunSummary, PointSnapshot, RegulationDocument } from '../../../lib/nd/types';
 import { analysisPointCoverageStatus } from '../../../lib/nd/analysis-point-mapper';
+import {
+  normalizeRegulPoint,
+  regulClauseFailedCount,
+  regulForwardError,
+} from '../../../lib/nd/regul-fields';
 import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
 import {
   exportGapAnalysisExcelFromPoints,
@@ -235,7 +240,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   private ndRunPollTimer: ReturnType<typeof setInterval> | null = null;
   private ndRunPollInFlight = false;
   /** Full points from last attach/detail load — status polls merge onto these. */
-  private ndRunDetailPoints: AnalysisPoint[] = [];
+  protected ndRunDetailPoints: AnalysisPoint[] = [];
   protected ndRunSelectedSnapshot = '';
   /** Prevents overlapping attach calls (queryParam subscribe can fire twice before ndRunId is set). */
   private ndRunAttachInFlight: string | null = null;
@@ -3686,7 +3691,7 @@ ${this.findingsPreview
     const merged = detailPoints.map((p) => {
       const live = byId.get(p.id);
       if (!live) return p;
-      return {
+      return normalizeRegulPoint({
         ...p,
         landingAiStatus: live.landingAiStatus ?? p.landingAiStatus,
         landingAiResult: live.landingAiResult ?? p.landingAiResult,
@@ -3696,13 +3701,16 @@ ${this.findingsPreview
         finalStatus: live.finalStatus ?? p.finalStatus,
         landingAiError: live.landingAiError ?? p.landingAiError,
         googleAiError: live.googleAiError ?? p.googleAiError,
+        regulForwardStatus: (live as AnalysisPoint).regulForwardStatus ?? p.regulForwardStatus,
+        regulForwardResult: (live as AnalysisPoint).regulForwardResult ?? p.regulForwardResult,
+        regulForwardError: (live as AnalysisPoint).regulForwardError ?? p.regulForwardError,
         pointSnapshot: p.pointSnapshot || (live as AnalysisPoint).pointSnapshot || p.pointSnapshot,
-      };
+      });
     });
 
     for (const live of statusPoints) {
       if (!detailIds.has(live.id)) {
-        merged.push(live as AnalysisPoint);
+        merged.push(normalizeRegulPoint(live as AnalysisPoint));
       }
     }
     return merged;
@@ -3864,6 +3872,53 @@ ${this.findingsPreview
     return true;
   }
 
+  /** ND shell — Regul forward judgment only (skips reverse + qualitative). */
+  protected async launchNdAnalysisRunForwardOnly(
+    runId: string,
+    selectedIds: string[],
+  ): Promise<boolean> {
+    this.stopDemoRun();
+    this.isDemoRun = false;
+    this.demoNdRunId = null;
+    this.analysisCompleteUiDone = false;
+    this.showInlineGapReport = false;
+    this.stopPolling();
+    this.sessionId = null;
+    this.ndRunId = runId;
+    this.analysisState = 'running';
+    this.pointsCollapsed = true;
+    this.sessionPointStatus.clear();
+    this.sessionPointResults.clear();
+    this.sessionSelectedPointIds = new Set(selectedIds);
+    this.selectedDetailPointId = null;
+    for (const id of selectedIds) this.sessionPointStatus.set(id, 'queued');
+    this.error = '';
+    this.progress = 8;
+    this.progressDone = 0;
+    this.progressTotal = selectedIds.length;
+    this.findingsPreview = [];
+    this.resetSteps();
+    this.markStep(0, true);
+    this.analysisSteps[1].label = `Loading regulation clauses (${this.govPoints.length} found)`;
+
+    const res = await this.ndApi.startForwardOnlyAnalysis(runId);
+    if (!res.success) {
+      this.analysisState = 'idle';
+      this.pointsCollapsed = false;
+      this.error = res.message ?? 'Failed to start forward-only analysis';
+      this.toast.show(this.error, 'error', 5000);
+      return false;
+    }
+
+    this.toast.show('Forward-only analysis started', 'success', 2000);
+    this.markStep(0, false);
+    this.markStep(1, true);
+    this.progress = 25;
+    this.activeSessions.refresh();
+    this.pollNdRun(runId);
+    return true;
+  }
+
   private isNdAnalyseRoute(): boolean {
     return this.router.url.includes('/nd/analyse-v8');
   }
@@ -3990,7 +4045,9 @@ ${this.findingsPreview
       (p) => p.landingAiStatus === 'pending' || p.landingAiStatus === 'failed',
     );
 
-    this.ndRunDualVerifyFailedCount = run.dualVerifyFailedCount ?? 0;
+    this.ndRunDualVerifyFailedCount = this.isRegulPipelineInFlight() || this.ndWorkflowEngine === 'regul_pipeline'
+      ? regulClauseFailedCount(run)
+      : run.dualVerifyFailedCount ?? 0;
 
     if (runStatus === 'cancelled') {
       this.analysisState = 'complete';
@@ -4197,7 +4254,7 @@ ${this.findingsPreview
       landingMessage: landingMessage || undefined,
       llmMessage: llmMessage || undefined,
       agreementJson: agreement,
-      errorMessage: p.landingAiError ?? p.googleAiError ?? undefined,
+      errorMessage: regulForwardError(p) ?? p.googleAiError ?? undefined,
       runningStage,
     };
   }

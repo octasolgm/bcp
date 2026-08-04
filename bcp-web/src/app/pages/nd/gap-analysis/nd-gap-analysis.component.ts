@@ -18,7 +18,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints } from '../../../../lib/nd/export/gap-analysis-export';
+import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints, exportRegulGapAnalysisExcelFromPoints } from '../../../../lib/nd/export/gap-analysis-export';
 import {
   progressPointToReportItem,
   savedResultToReportItem,
@@ -129,6 +129,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   selectedItemId: string | null = null;
   ndRunId: string | null = null;
   ndRunStatus = '';
+  ndRunWorkflowEngine: string | null = null;
   ndRunData: ResultsData | null = null;
   ndPolicyDocId: string | null = null;
   ndPolicyDocCatalog: PolicyDocCatalogEntry[] = [];
@@ -1138,7 +1139,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
     this.exporting = true;
     try {
-      await exportGapAnalysisExcelFromPoints(points);
+      if (this.ndRunWorkflowEngine === 'regul_pipeline') {
+        await exportRegulGapAnalysisExcelFromPoints(points);
+      } else {
+        await exportGapAnalysisExcelFromPoints(points);
+      }
       this.toast.show('Exported gap analysis Excel file', 'success');
     } catch {
       this.toast.show('Export failed — try again', 'error');
@@ -1215,6 +1220,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.ndRunId = null;
     this.ndRunData = null;
     this.ndRunStatus = '';
+    this.ndRunWorkflowEngine = null;
 
     if (session) {
       this.sessionKey = `session:${session}`;
@@ -1432,6 +1438,10 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
       const data = res.data as ResultsData;
       this.ndRunData = data;
+      this.ndRunWorkflowEngine =
+        runRes.success && runRes.data && typeof runRes.data === 'object'
+          ? ((runRes.data as { workflowEngine?: string | null }).workflowEngine ?? null)
+          : null;
       this.rebuildNdRunIndexes(data);
       this.ndRunStatus = data.run.status;
 

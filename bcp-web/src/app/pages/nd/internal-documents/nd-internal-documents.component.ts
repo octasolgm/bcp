@@ -80,7 +80,9 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   sortDir: SortDir = 'desc';
 
   private sectionExtractPollTimer: ReturnType<typeof setInterval> | null = null;
+  private parsePollTimer: ReturnType<typeof setInterval> | null = null;
   private readonly pollingSectionExtractIds = new Set<string>();
+  private readonly pollingParseIds = new Set<string>();
   private readonly sectionExtractPollStartedAt = new Map<string, number>();
   private static readonly SECTION_EXTRACT_POLL_MS = 11 * 60 * 1000;
 
@@ -95,6 +97,45 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopSectionExtractPolling();
+    this.stopParsePolling();
+  }
+
+  private stopParsePolling(): void {
+    if (this.parsePollTimer) {
+      clearInterval(this.parsePollTimer);
+      this.parsePollTimer = null;
+    }
+  }
+
+  private ensureParsePolling(): void {
+    if (this.parsePollTimer || !this.pollingParseIds.size) return;
+    this.parsePollTimer = setInterval(() => void this.pollParsingDocs(), 5000);
+  }
+
+  private syncParsePollingFromDocs(): void {
+    for (const doc of this.docs) {
+      if ((doc.parseStatus ?? '').toLowerCase() === 'processing') {
+        this.pollingParseIds.add(doc.id);
+      }
+    }
+    if (this.pollingParseIds.size) this.ensureParsePolling();
+  }
+
+  private async pollParsingDocs(): Promise<void> {
+    if (!this.pollingParseIds.size) {
+      this.stopParsePolling();
+      return;
+    }
+    await this.load(true);
+    for (const id of [...this.pollingParseIds]) {
+      const doc = this.docs.find((d) => d.id === id);
+      const st = (doc?.parseStatus ?? '').toLowerCase();
+      if (st !== 'processing') {
+        this.pollingParseIds.delete(id);
+        if (this.parsingId === id) this.parsingId = null;
+      }
+    }
+    if (!this.pollingParseIds.size) this.stopParsePolling();
   }
 
   private stopSectionExtractPolling(): void {
@@ -289,17 +330,24 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   }
 
   isParsingDoc(doc: InternalDocument): boolean {
-    return this.parsingId === doc.id || doc.parseStatus === 'processing';
+    return (
+      this.parsingId === doc.id ||
+      this.pollingParseIds.has(doc.id) ||
+      doc.parseStatus === 'processing'
+    );
   }
 
   async handleParse(doc: InternalDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
     this.parsingId = doc.id;
+    this.pollingParseIds.add(doc.id);
+    this.ensureParsePolling();
     this.error = '';
     this.message = '';
     const res = await this.api.parseInternalDocument(doc.id);
     this.parsingId = null;
     if (res.success) {
+      this.pollingParseIds.delete(doc.id);
       this.message = `Parse complete — "${doc.title}"`;
       const data = res.data as { parseStatus?: string; parsedAt?: string; parsedByName?: string };
       const idx = this.docs.findIndex((d) => d.id === doc.id);
@@ -315,6 +363,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       await this.load(true);
     } else {
       this.error = res.message ?? 'Parse failed';
+      await this.load(true);
     }
   }
 
@@ -325,6 +374,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     if (res.success && res.data) {
       this.docs = res.data as InternalDocument[];
       this.syncSectionExtractPollingFromDocs();
+      this.syncParsePollingFromDocs();
     } else if (!silent || this.docs.length === 0) {
       this.error = res.message ?? 'Failed to load documents';
     }

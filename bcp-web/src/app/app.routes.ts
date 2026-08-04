@@ -442,6 +442,15 @@ export const routes: Routes = [
                 (m) => m.NdAdminSettingsComponent,
               ),
           },
+          {
+            path: 'admin/prompts',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['super_admin'] },
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-prompts.component').then(
+                (m) => m.NdAdminPromptsComponent,
+              ),
+          },
         ],
       },
     ],

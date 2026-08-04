@@ -379,6 +379,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         { id: 'admin-users', path: '/nd/admin/users', label: 'User management', icon: 'users' },
         { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
         { id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' },
+        { id: 'admin-prompts', path: '/nd/admin/prompts', label: 'Analysis prompts', icon: 'file' },
         { id: 'admin-deleted-runs', path: '/nd/admin/deleted-runs', label: 'Deleted analyses', icon: 'trash' },
       ],
     };

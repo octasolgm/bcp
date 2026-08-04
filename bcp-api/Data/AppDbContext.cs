@@ -31,6 +31,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdAnalysisStatusHistory> NdAnalysisStatusHistories => Set<NdAnalysisStatusHistory>();
     public DbSet<NdHiddenLegacyRun> NdHiddenLegacyRuns => Set<NdHiddenLegacyRun>();
     public DbSet<NdSystemSetting> NdSystemSettings => Set<NdSystemSetting>();
+    public DbSet<NdAnalysisPromptSuggestion> NdAnalysisPromptSuggestions => Set<NdAnalysisPromptSuggestion>();
+    public DbSet<NdAnalysisPromptVersion> NdAnalysisPromptVersions => Set<NdAnalysisPromptVersion>();
     public DbSet<NdRegulForwardFinding> NdRegulForwardFindings => Set<NdRegulForwardFinding>();
     public DbSet<NdRegulInternalSection> NdRegulInternalSections => Set<NdRegulInternalSection>();
     public DbSet<NdRegulReverseMapping> NdRegulReverseMappings => Set<NdRegulReverseMapping>();

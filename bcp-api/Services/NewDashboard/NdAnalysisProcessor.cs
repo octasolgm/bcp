@@ -444,6 +444,12 @@ public class NdAnalysisProcessor(
         ComparePromptVersion promptVersion,
         CancellationToken ct)
     {
+        logger.LogInformation(
+            "Phase 2 (independent verifier) for {Point} using prompt {PromptVersion} ({PromptKey}) — fixed template, not admin-editable at runtime (see Admin \u2192 Analysis prompts for reference text only)",
+            govPoint.PointId,
+            promptVersion,
+            promptVersion == ComparePromptVersion.V3 ? "dual_verify_pass2_v3" : promptVersion.ToString());
+
         var markdownSupplement = BuildInternalMarkdownSupplement(internalDocs);
         var attachedNames = internalDocs.Select(d => d.FileName).ToList();
         var prompt = DualVerifyPromptBuilder.Build(

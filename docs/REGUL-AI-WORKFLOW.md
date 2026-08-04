@@ -18,6 +18,8 @@
 
 # BCP New Dashboard — V3 Regul workflow (this repo)
 
+**Code walkthrough:** see [`REGUL-AI-WORKFLOW-CODE.md`](REGUL-AI-WORKFLOW-CODE.md) (same steps with file paths, classes, and call flow).
+
 BCP **analyse-regul** (`workflow_engine = regul_pipeline`) follows the same **analysis** steps as Regul.ai (forward judgment → reverse map → optional qualitative) but uses **Landing AI** for structural extraction where BCP already parses documents.
 
 | Step | Regul.ai (original) | BCP V3 (`feat/nd-regul-workflow`) |
@@ -61,11 +63,53 @@ Regulation extraction does **not** run automatically on upload (`extractionStatu
 | `qualitative` | One LLM call (only if `enable_qualitative = true`) | `regul_qualitative_assessments` |
 | `done` | Run `status = completed` | — |
 
+**UI route:** `http://localhost:3002/nd/analyse-regul` (or `/analyse-regul`).
+
+**LLM settings (forward / reverse / qualitative):** ND Admin → System Settings → **Regul workflow LLM** (`GET/PUT /nd/admin/settings/regul-workflow-llm`). Analysis page reads active config via `GET /nd/settings/regul-workflow-llm`. Keys in `appsettings` / Azure: `Anthropic:ApiKey`, `Gemini:ApiKey`, etc.
+
+### API field names (Regul runs — prefer these in UI)
+
+Poll/resume/detail map legacy `landing_ai_*` / `dual_verify_*` columns to clearer names:
+
+| API field | Meaning | Legacy alias |
+|-----------|---------|--------------|
+| `regulPipelinePhase` | `forward` → `reverse` → `qualitative` → `done` | — |
+| `regulClauseTotal` | Selected regulatory clauses | `totalPointsCount` |
+| `regulClauseCompleted` | Forward judgments completed | `landingAiCompletedCount` |
+| `regulClauseFailed` | Forward judgments failed (e.g. API credits) | `dualVerifyFailedCount` |
+| `regulReverseSectionTotal` | Internal sections to map | — |
+| `regulReverseSectionCompleted` | Sections mapped (completed or failed) | — |
+| `regulReverseSectionFailed` | Section mappings that errored | — |
+| `regulForwardStatus` / `regulForwardError` / `regulForwardResult` | Per-point forward judgment | `landingAiStatus` / `landingAiError` / `landingAiResult` |
+| `regulPipelineError` | Run-level pipeline failure | — |
+
+**Status poll:** `GET /nd/analysis-runs/{id}/status?resume=true` (resume) or without `resume` (light poll with `regulReverseSections` list during reverse).
+
 **Start analysis:** `POST /nd/analysis-runs/{id}/start` when `workflow_engine = regul_pipeline` (requires `regul_clauses_confirmed_at`).
 
-**Results:** `GET /nd/results/{runId}` — same gap/action-plan surface as V8 (`points` from `analysis_points`) plus `regulQualitativeAssessment` for Regul runs.
+**Confirm clauses:** `POST /nd/analysis-runs/{id}/confirm-clauses` with optional clause edits.
 
-**UI route:** `http://localhost:3002/nd/analyse-regul` (or `/analyse-regul`).
+**Results:** `GET /nd/results/{runId}` — gap/action-plan surface plus `regulQualitativeAssessment` for Regul runs.
+
+### Verify analyse-regul (manual checklist)
+
+Run after Anthropic/Gemini credits are active and LLM is configured in System Settings.
+
+| # | Step | How to verify |
+|---|------|----------------|
+| 1 | Regulation library | `/nd/regulation-documents` — upload, **Run extraction**, viewpoints show points |
+| 2 | Internal library | `/nd/internal-documents` — upload, **Run parse**, optional **Extract sections**, Sections panel lists rows |
+| 3 | Create Regul run | `/nd/analyse-regul` — select **3** regulation points (not whole doc), one internal doc, enable qualitative if desired |
+| 4 | Confirm clauses | Inline panel → **Confirm clauses** → `regulClausesConfirmedAt` set; Run enabled |
+| 5 | Forward phase | Run → `regulPipelinePhase = forward` → clause rows complete; gaps in main list match selected clauses only (**no INT** in analysing list) |
+| 6 | Reverse phase | Phase → `reverse`; progress shows `regulReverseSectionCompleted` / `regulReverseSectionTotal`; INT rows appear in gap export but **not** in clause analysing list |
+| 7 | Qualitative | If enabled, phase → `qualitative` then `done`; Qualitative card on results |
+| 8 | Completed | `status = completed`, `regulPipelinePhase = done`; Excel/PDF export includes forward + INT rows |
+| 9 | Failed clauses | If LLM errors, `regulClauseFailed` &gt; 0 and `regulForwardError` on point (e.g. credit balance) — re-run after crediting |
+
+**Cost note:** Reverse runs **one LLM call per internal section** (not per selected clause). A 500+ section manual with 3 clauses still maps every section — expect high token use. Pre-extract sections in the library and use a smaller test doc for dev.
+
+**Anthropic credits:** Forward + reverse + qualitative all use **Regul workflow LLM** (not Landing AI). Low balance → all phases fail with provider error on each point/section.
 
 **Internal sections API (library):**
 - `POST /nd/internal-documents/{id}/extract-sections` — Landing policy-clause extract → `nd_internal_document_sections`
@@ -408,9 +452,9 @@ A numbering skeleton was detected automatically by scanning this text for labels
 - **Model:** admin `regul_workflow_llm` via `RegulWorkflowLlmService`
 - **System prompt:** `NdRegulPromptDefaults.JudgmentSystemPrompt` (same text as Regul `JUDGMENT_SYSTEM_PROMPT`)
 - **User content:** `BuildJudgmentContextText(policyContext)` + `BuildJudgmentQueryText(clause_no, clause_text)` + JSON instruction (not Anthropic tool schema — plain JSON object response)
-- **Policy context:** full internal markdown from selected internal docs (`BuildPolicyContextAsync`) — **no keyword retrieval yet** (Regul.ai uses retrieval when policy > 50 pages)
+- **Policy context:** `NdRegulPolicyContextService` — full internal markdown when total policy pages ≤ **50**; else **keyword retrieval** (top **8** page chunks per clause, same idea as Regul.ai)
 - **Save in DB:** `regul_forward_findings` + sync to `analysis_points` (`NdRegulAnalysisPointSync.ApplyForwardJudgment`)
-- **Post-process (Regul.ai only):** `verify_quotes()`, confidence downgrade — **not ported** to BCP yet
+- **Post-process (ported):** `NdRegulJudgmentPostProcessor` — `verify_quotes()` via normalized substring match, downgrade unverified quotes, gap_description retry (up to 2), low-confidence handling
 
 **Regul.ai (original):**
 - **Model:** `claude-sonnet-5`
@@ -700,14 +744,16 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 
 **Short path (BCP V3):** Regulation library: upload → **Run extraction** → viewpoints. Internal library: upload → **Run parse** → **Extract sections** (optional preview) → analyse-regul: select reg points + internal docs → confirm clauses → admin LLM forward + reverse + optional qualitative → gap report / Excel / PDF → maker-checker (V8 surfaces).
 
-### BCP vs Regul.ai — not yet ported
+### BCP vs Regul.ai — differences (not missing features)
 
 | Feature | Regul.ai | BCP V3 |
 |---------|----------|--------|
-| Quote verification (`verify_quotes`) | Yes | No |
-| Keyword retrieval when policy > 50 pages | Yes | No (full markdown sent) |
-| Judgment concurrency / rate limit | 5 parallel, 20/min | Sequential per clause/section |
-| Anthropic structured tool calls | Yes | Plain JSON object responses |
+| Quote verification | `verify_quotes()` | **Yes** — `NdRegulJudgmentPostProcessor.ApplyQuoteVerification` |
+| Keyword retrieval when policy > 50 pages | `retrieval.py` | **Yes** — `NdRegulPolicyContextService.BuildContextForClause` (top 8 chunks) |
+| Judgment concurrency / rate limit | 5 parallel, 20/min | Sequential per clause/section (simpler; slower on large runs) |
+| LLM response format | Anthropic structured tool calls | Plain JSON object in text (`NdRegulLlmJsonHelper`) |
+| Internal section extract | Claude at reverse | **Landing AI** `policy-clauses` schema (library + workflow reuse) |
+| Regulation extract | Claude at assessment | **Landing AI** `gov-requirement-points` (library manual Run) |
 
 ---
 
@@ -743,7 +789,9 @@ Assess the internal policy document per the rubric. Cover all of: clarity_and_to
 | Landing message format | Workbench display | `NdRegulJudgmentFormatter.FormatLandingMessage()` |
 | Pipeline | `pipeline.py` `run_pipeline()` | `NdRegulAnalysisProcessor.ProcessRunAsync()` |
 | LLM provider | `app/backend/llm/provider.py` (Anthropic) | `RegulWorkflowLlmSettingsService` + `ProviderLlmClients` |
-| Policy retrieval (>50 pages) | `app/backend/llm/retrieval.py` | **Not yet** — BCP sends full internal markdown today |
+| Policy retrieval (>50 pages) | `app/backend/llm/retrieval.py` | `NdRegulPolicyContextService` (keyword rank, 8 chunks) |
+| Quote verification | `pipeline.py` post-process | `NdRegulJudgmentPostProcessor` |
+| API projection (Regul fields) | N/A | `NdRegulApiProjection.cs` |
 | Clause confirm gate | `POST .../confirm-clauses` | `AnalysisRunsController` `confirm-clauses` |
 | Analyze API | `app/backend/api/analyze.py` | `AnalysisRunsController` `/start` → `regul_pipeline` |
 | Results / gap export | Workbench + Excel export | `ResultsController` + `nd-gap-analysis` + `buildGapAnalysisExportRows` |

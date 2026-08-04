@@ -131,6 +131,8 @@ builder.Services.Configure<NodeBridgeOptions>(o =>
 builder.Services.AddHttpClient<GeminiService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.DualVerifyLlmSettingsService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisPromptVersionService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdPromptAiGenerationService>();
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.RegulWorkflowLlmSettingsService>();
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.RegulWorkflowLlmService>();
 builder.Services.AddScoped<DualVerifyLlmService>();
