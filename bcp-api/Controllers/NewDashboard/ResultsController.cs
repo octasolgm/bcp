@@ -87,7 +87,7 @@ public class ResultsController(
             });
         }
 
-        var qualitativeRow = AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine)
+        var qualitativeRow = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
             ? await db.NdRegulQualitativeAssessments.AsNoTracking()
                 .FirstOrDefaultAsync(q => q.AnalysisRunId == runId, ct)
             : null;

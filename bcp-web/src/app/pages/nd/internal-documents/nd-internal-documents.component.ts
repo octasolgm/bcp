@@ -62,6 +62,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   uploading = false;
   parsingId: string | null = null;
   extractingSectionsId: string | null = null;
+  repairingSectionPagesId: string | null = null;
   deletingId: string | null = null;
   showDeleted = false;
   error = '';
@@ -80,11 +81,16 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   sortDir: SortDir = 'desc';
 
   private sectionExtractPollTimer: ReturnType<typeof setInterval> | null = null;
+  private sectionPageRepairPollTimer: ReturnType<typeof setInterval> | null = null;
   private parsePollTimer: ReturnType<typeof setInterval> | null = null;
   private readonly pollingSectionExtractIds = new Set<string>();
+  private readonly pollingSectionPageRepairIds = new Set<string>();
   private readonly pollingParseIds = new Set<string>();
   private readonly sectionExtractPollStartedAt = new Map<string, number>();
+  private readonly sectionPageRepairPollStartedAt = new Map<string, number>();
+  private readonly sectionPageRepairProgress = new Map<string, { label: string; pct: number | null }>();
   private static readonly SECTION_EXTRACT_POLL_MS = 11 * 60 * 1000;
+  private static readonly SECTION_PAGE_REPAIR_POLL_MS = 20 * 60 * 1000;
 
   async ngOnInit(): Promise<void> {
     if (this.route.snapshot.queryParamMap.get('deleted') === '1') {
@@ -97,6 +103,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopSectionExtractPolling();
+    this.stopSectionPageRepairPolling();
     this.stopParsePolling();
   }
 
@@ -244,6 +251,103 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       this.stopSectionExtractPolling();
       await this.load(true);
     }
+  }
+
+  private stopSectionPageRepairPolling(): void {
+    if (this.sectionPageRepairPollTimer) {
+      clearInterval(this.sectionPageRepairPollTimer);
+      this.sectionPageRepairPollTimer = null;
+    }
+  }
+
+  private ensureSectionPageRepairPolling(): void {
+    if (this.sectionPageRepairPollTimer || !this.pollingSectionPageRepairIds.size) return;
+    this.sectionPageRepairPollTimer = setInterval(() => void this.pollSectionPageRepairingDocs(), 3000);
+  }
+
+  private trackSectionPageRepair(docId: string): void {
+    this.pollingSectionPageRepairIds.add(docId);
+    this.sectionPageRepairPollStartedAt.set(docId, Date.now());
+    this.repairingSectionPagesId = docId;
+    this.sectionPageRepairProgress.set(docId, {
+      label: 'Starting page repair…',
+      pct: 0,
+    });
+    this.ensureSectionPageRepairPolling();
+  }
+
+  private async pollSectionPageRepairingDocs(): Promise<void> {
+    if (!this.pollingSectionPageRepairIds.size) {
+      this.stopSectionPageRepairPolling();
+      return;
+    }
+
+    for (const id of [...this.pollingSectionPageRepairIds]) {
+      const res = await this.api.getInternalDocumentSections(id);
+      if (!res.success || !res.data) continue;
+
+      const repairStatus = (res.data.sectionPageRepairStatus ?? '').toLowerCase();
+      const label = res.data.sectionPageRepairProgressLabel?.trim();
+      const pct = res.data.sectionPageRepairProgressPct ?? null;
+      if (label || pct != null) {
+        this.sectionPageRepairProgress.set(id, {
+          label: label || this.sectionPageRepairProgress.get(id)?.label || 'Repairing page references…',
+          pct,
+        });
+      }
+
+      if (repairStatus === 'processing') {
+        const started = this.sectionPageRepairPollStartedAt.get(id) ?? Date.now();
+        if (Date.now() - started > NdInternalDocumentsComponent.SECTION_PAGE_REPAIR_POLL_MS) {
+          this.pollingSectionPageRepairIds.delete(id);
+          this.sectionPageRepairPollStartedAt.delete(id);
+          this.sectionPageRepairProgress.delete(id);
+          if (this.repairingSectionPagesId === id) this.repairingSectionPagesId = null;
+          this.error =
+            'Page repair did not finish in time. Restart the API, refresh, then try Repair page refs again.';
+        }
+        continue;
+      }
+
+      this.sectionPageRepairPollStartedAt.delete(id);
+      this.pollingSectionPageRepairIds.delete(id);
+      this.sectionPageRepairProgress.delete(id);
+      if (this.repairingSectionPagesId === id) this.repairingSectionPagesId = null;
+
+      if (repairStatus === 'completed') {
+        const refreshed = res.data.sectionPageRepairPagesRefreshed ?? 0;
+        const total = res.data.sectionPageRepairSectionCount ?? res.data.sectionCount ?? 0;
+        const title = this.docs.find((d) => d.id === id)?.title ?? 'Document';
+        this.message =
+          refreshed > 0
+            ? `Updated PDF page references for ${refreshed} of ${total} sections in "${title}".`
+            : `Section page references already match the PDF (${total} sections).`;
+        this.error = '';
+        if (this.sectionsFor?.id === id) {
+          await this.loadSections(id);
+        }
+      } else if (repairStatus === 'failed') {
+        const detail = res.data.sectionPageRepairError?.trim();
+        this.error = detail ?? `Page repair failed for "${this.docs.find((d) => d.id === id)?.title ?? 'document'}".`;
+        this.toast.show(this.error, 'error');
+      }
+    }
+
+    if (!this.pollingSectionPageRepairIds.size) {
+      this.stopSectionPageRepairPolling();
+    }
+  }
+
+  sectionPageRepairStatusText(doc: InternalDocument): string {
+    if (!this.isRepairingSectionPages(doc)) return '';
+    return this.sectionPageRepairProgress.get(doc.id)?.label ?? 'Repairing page references…';
+  }
+
+  sectionPageRepairProgressPct(doc: InternalDocument): number | null {
+    if (!this.isRepairingSectionPages(doc)) return null;
+    const pct = this.sectionPageRepairProgress.get(doc.id)?.pct;
+    if (pct == null || Number.isNaN(pct)) return null;
+    return Math.max(0, Math.min(100, pct));
   }
 
   private syncDeletedFromRoute(): void {
@@ -558,6 +662,10 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     const force = doc.sectionExtractStatus === 'extracted';
     this.trackSectionExtractingDoc(doc.id);
     this.error = '';
+    void this.finishExtractSections(doc, force);
+  }
+
+  private async finishExtractSections(doc: InternalDocument, force: boolean): Promise<void> {
     const res = await this.api.extractInternalDocumentSections(doc.id, force);
     if (!res.success) {
       if ((res.message ?? '').toLowerCase().includes('timed out')) {
@@ -596,6 +704,71 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       this.sectionsFor = this.docs[idx] ?? doc;
       await this.loadSections(doc.id);
     }
+  }
+
+  async handleRepairSectionPages(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (doc.parseStatus !== 'parsed') {
+      this.toast.show('Parse the document first', 'warning', 4000);
+      return;
+    }
+    if (!doc.sectionCount && doc.sectionExtractStatus !== 'extracted') {
+      this.toast.show('Extract sections first', 'warning', 4000);
+      return;
+    }
+    this.error = '';
+    this.trackSectionPageRepair(doc.id);
+    this.toast.show('Repairing page references… large manuals may take several minutes.', 'info', 6000);
+    const res = await this.api.repairInternalDocumentSectionPages(doc.id);
+    if (!res.success) {
+      const msg = res.message ?? '';
+      if (msg.toLowerCase().includes('already running')) {
+        this.message = 'Page repair is already running — watching for completion…';
+        this.error = '';
+        return;
+      }
+      this.pollingSectionPageRepairIds.delete(doc.id);
+      this.repairingSectionPagesId = null;
+      this.sectionPageRepairProgress.delete(doc.id);
+      this.error = msg || 'Could not start section page repair';
+      this.toast.show(this.error, 'error');
+      return;
+    }
+    if (res.data?.repairStatus === 'processing') {
+      this.message = 'Page repair started — you can keep working; progress updates automatically.';
+      this.error = '';
+      return;
+    }
+    this.pollingSectionPageRepairIds.delete(doc.id);
+    this.repairingSectionPagesId = null;
+    this.sectionPageRepairProgress.delete(doc.id);
+    const refreshed = res.data?.pagesRefreshed ?? 0;
+    const total = res.data?.sectionCount ?? 0;
+    this.message =
+      refreshed > 0
+        ? `Updated PDF page references for ${refreshed} of ${total} sections in "${doc.title}".`
+        : `Section page references already match the parsed document (${total} sections).`;
+    if (this.sectionsFor?.id === doc.id) {
+      await this.loadSections(doc.id);
+    }
+  }
+
+  isRepairingSectionPages(doc: InternalDocument): boolean {
+    return this.repairingSectionPagesId === doc.id;
+  }
+
+  canRepairSectionPages(doc: InternalDocument): boolean {
+    return (
+      doc.parseStatus === 'parsed' &&
+      (doc.sectionExtractStatus === 'extracted' || (doc.sectionCount ?? 0) > 0) &&
+      !this.isExtractingSections(doc) &&
+      !this.isRepairingSectionPages(doc)
+    );
+  }
+
+  async openInternalSourcePage(docId: string, page: number): Promise<void> {
+    const ok = await this.api.openInternalDocumentPdf(docId, page);
+    if (!ok) this.toast.show('Could not open document PDF', 'error');
   }
 
   openHistory(doc: InternalDocument): void {

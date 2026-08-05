@@ -92,6 +92,7 @@ public class LandingAiGovExtractService(
                 await reportProgress(new ExtractionProgressUpdate("Loading cached regulation points…", 85));
             var cachedPoints = GovPointExtractNormalizer.DedupeAndFilter(
                 GovPointsParser.ParseFromExtractJson(cachedJson));
+            cachedPoints = GovPointMarkdownRecovery.MergeMissing(cachedPoints, markdown);
             cachedPoints = await ResolvePointPagesAsync(cacheKey, cachedPoints, ct);
             govPoints.SetPoints(cachedPoints, "db-cache");
             return new GovExtractResponse(
@@ -106,6 +107,7 @@ public class LandingAiGovExtractService(
         if (points.Count == 0)
             throw new InvalidOperationException("No requirement points found in document.");
 
+        points = GovPointMarkdownRecovery.MergeMissing(points, markdown);
         points = await ResolvePointPagesAsync(cacheKey, points, ct, markdown);
 
         var pointsJson = JsonSerializer.Serialize(new { points = ToApiPoints(points) });

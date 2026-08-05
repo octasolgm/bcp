@@ -40,5 +40,13 @@ export class NdAnalysisVersionsComponent {
       path: '/nd/analyse-regul',
       status: 'available',
     },
+    {
+      id: 'V4',
+      label: 'Analysis V4 — Regul Full Markdown',
+      description:
+        'Clone of V3 with full internal markdown sent to the LLM (all files, no top-20 retrieval), forward-only (no reverse), and prompt caching when supported.',
+      path: '/nd/analyse-regul-full',
+      status: 'available',
+    },
   ];
 }

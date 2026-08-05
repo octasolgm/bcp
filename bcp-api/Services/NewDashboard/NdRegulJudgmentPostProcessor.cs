@@ -77,20 +77,69 @@ public static class NdRegulJudgmentPostProcessor
         var refs = new List<string>();
         foreach (var quote in judgment.PolicyExtract.Where(q => !string.IsNullOrWhiteSpace(q)))
         {
-            var chunk = FindBestMatchingChunk(quote, contextChunks);
-            var page = ResolvePageForQuote(quote, chunk, markdownByFile);
-            var formatted = FormatGroundedReference(chunk, page);
-            if (!string.IsNullOrWhiteSpace(formatted))
-                refs.Add(formatted);
+            var grounded = GroundQuoteReference(quote, contextChunks, markdownByFile);
+            if (!string.IsNullOrWhiteSpace(grounded))
+                refs.Add(grounded);
         }
 
         if (refs.Count == 0)
             return judgment;
 
         judgment.DocumentReference = string.Join(
-            "; ",
+            "\n",
             refs.Distinct(StringComparer.OrdinalIgnoreCase));
         return judgment;
+    }
+
+    private static string GroundQuoteReference(
+        string quote,
+        IReadOnlyList<NdRegulPolicyContextService.PolicyChunk> chunks,
+        IReadOnlyDictionary<string, string> markdownByFile)
+    {
+        var located = LocateQuoteInMarkdown(quote, markdownByFile);
+        if (located is { Page: > 0 } or { Section: not null })
+            return FormatGroundedReference(located.DocName, located.Section, located.Page);
+
+        var chunk = FindBestMatchingChunk(quote, chunks);
+        if (chunk != null && ChunkContainsQuote(quote, chunk.Text))
+            return FormatGroundedReference(chunk.SourceDoc, chunk.SectionRef, chunk.SourcePage);
+
+        if (chunk != null)
+            return FormatGroundedReference(chunk.SourceDoc, null, chunk.SourcePage);
+
+        return "";
+    }
+
+    private sealed record LocatedQuote(string? DocName, string? Section, int? Page);
+
+    private static LocatedQuote LocateQuoteInMarkdown(
+        string quote,
+        IReadOnlyDictionary<string, string> markdownByFile)
+    {
+        LocatedQuote? best = null;
+        foreach (var kv in markdownByFile)
+        {
+            if (string.IsNullOrWhiteSpace(kv.Value)) continue;
+            var (page, section) = PolicyPageResolver.ResolveQuoteLocation(kv.Value, quote);
+            if (page is not > 0 && string.IsNullOrWhiteSpace(section))
+                continue;
+
+            var candidate = new LocatedQuote(kv.Key, section, page);
+            if (page is > 0 && !string.IsNullOrWhiteSpace(section))
+                return candidate;
+            best ??= candidate;
+        }
+
+        return best ?? new LocatedQuote(null, null, null);
+    }
+
+    private static bool ChunkContainsQuote(string quote, string chunkText)
+    {
+        var normQuote = NdRegulPolicyContextService.NormalizeForMatching(quote);
+        if (normQuote.Length < 8) return false;
+        var normChunk = NdRegulPolicyContextService.NormalizeForMatching(chunkText);
+        if (normChunk.Contains(normQuote, StringComparison.Ordinal)) return true;
+        return normQuote.Length >= 40 && normChunk.Contains(normQuote[..40], StringComparison.Ordinal);
     }
 
     private static NdRegulPolicyContextService.PolicyChunk? FindBestMatchingChunk(
@@ -104,10 +153,7 @@ public static class NdRegulJudgmentPostProcessor
 
         foreach (var chunk in chunks)
         {
-            var normChunk = NdRegulPolicyContextService.NormalizeForMatching(chunk.Text);
-            if (normChunk.Contains(normQuote, StringComparison.Ordinal))
-                return chunk;
-            if (normQuote.Length >= 40 && normChunk.Contains(normQuote[..40], StringComparison.Ordinal))
+            if (ChunkContainsQuote(quote, chunk.Text))
                 return chunk;
         }
 
@@ -126,52 +172,19 @@ public static class NdRegulJudgmentPostProcessor
             }
         }
 
-        return bestScore >= 2 ? best : null;
+        return bestScore >= 3 ? best : null;
     }
 
-    private static int? ResolvePageForQuote(
-        string quote,
-        NdRegulPolicyContextService.PolicyChunk? chunk,
-        IReadOnlyDictionary<string, string> markdownByFile)
+    private static string FormatGroundedReference(string? docName, string? section, int? page)
     {
-        string? markdown = null;
-        if (!string.IsNullOrWhiteSpace(chunk?.SourceDoc)
-            && markdownByFile.TryGetValue(chunk.SourceDoc, out var byFile))
-            markdown = byFile;
+        var doc = docName?.Trim() ?? "Internal policy manual";
+        var sectionRef = section?.Trim();
+        var resolvedPage = page is > 0 ? page : null;
 
-        if (!string.IsNullOrWhiteSpace(markdown))
-        {
-            var fromQuote = PolicyPageResolver.Resolve(markdown, quote);
-            if (fromQuote is > 0) return fromQuote;
-
-            var totalPages = PolicyPageResolver.EstimatePageCount(markdown);
-            var fromClause = PolicyPageResolver.ResolveGovPointPage(
-                markdown,
-                chunk?.SectionRef ?? "",
-                null,
-                null,
-                quote,
-                chunk?.SourcePage,
-                totalPages);
-            if (fromClause is > 0) return fromClause;
-        }
-
-        return chunk?.SourcePage is > 0 ? chunk.SourcePage : null;
-    }
-
-    private static string FormatGroundedReference(
-        NdRegulPolicyContextService.PolicyChunk? chunk,
-        int? page)
-    {
-        if (chunk == null) return "";
-        var doc = chunk.SourceDoc?.Trim() ?? "Internal policy manual";
-        var section = chunk.SectionRef?.Trim();
-        var resolvedPage = page is > 0 ? page : chunk.SourcePage is > 0 ? chunk.SourcePage : null;
-
-        if (!string.IsNullOrWhiteSpace(section) && resolvedPage.HasValue)
-            return $"{doc} — section {section}, p.{resolvedPage.Value}";
-        if (!string.IsNullOrWhiteSpace(section))
-            return $"{doc} — section {section}";
+        if (!string.IsNullOrWhiteSpace(sectionRef) && resolvedPage.HasValue)
+            return $"{doc} — section {sectionRef}, p.{resolvedPage.Value}";
+        if (!string.IsNullOrWhiteSpace(sectionRef))
+            return $"{doc} — section {sectionRef}";
         if (resolvedPage.HasValue)
             return $"{doc}, p.{resolvedPage.Value}";
         return doc;

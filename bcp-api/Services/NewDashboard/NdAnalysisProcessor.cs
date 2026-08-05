@@ -58,7 +58,7 @@ public class NdAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
-        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException(
                 "regul_pipeline runs use NdRegulAnalysisProcessor, not NdAnalysisProcessor (dual verify).");
 
@@ -210,7 +210,7 @@ public class NdAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
-        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException(
                 "regul_pipeline runs use NdRegulAnalysisProcessor, not NdAnalysisProcessor (dual verify).");
 
@@ -255,7 +255,7 @@ public class NdAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
-        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException(
                 "regul_pipeline runs use NdRegulAnalysisProcessor.RerunReversePhaseAsync.");
 

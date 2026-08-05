@@ -5,8 +5,10 @@ using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Models;
+using Reguliq.Api.Services;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.Llm;
+using Reguliq.Api.Services.Pdf;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard;
@@ -23,6 +25,7 @@ public class NdRegulAnalysisProcessor(
     NdAnalysisPromptVersionService promptVersions,
     NdInternalParseService internalParse,
     NdInternalDocumentSectionService internalSectionService,
+    NdRegulationPointRepairService regulationPointRepair,
     SupabaseStorageService storage,
     NdAnalysisRunCancellationTracker runCancellation,
     ILogger<NdRegulAnalysisProcessor> logger)
@@ -46,7 +49,7 @@ public class NdRegulAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
-        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException("Run is not a Regul workflow analysis.");
 
         if (run.RegulClausesConfirmedAt == null)
@@ -85,6 +88,7 @@ public class NdRegulAnalysisProcessor(
 
         try
         {
+            await PrepareLibraryDocumentsForAnalysisAsync(run, ct);
             await EnsureInternalSectionsForRunAsync(run, ct);
             await EnsureForwardFindingsAsync(run, ct);
             logger.LogInformation("Regul pipeline phase=forward for run {RunId}", runId);
@@ -92,6 +96,19 @@ public class NdRegulAnalysisProcessor(
             if (runCancellation.IsStopRequested(runId))
             {
                 await MarkCancelledAsync(run, ct);
+                return;
+            }
+
+            if (AnalysisWorkflowEngine.IsRegulPipelineFull(run.WorkflowEngine))
+            {
+                run.RegulPipelinePhase = "done";
+                run.Status = "completed";
+                await FinalizePointCountsAsync(run, ct);
+                run.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+                logger.LogInformation(
+                    "Regul full-markdown run completed for run {RunId} (forward only, no reverse)",
+                    runId);
                 return;
             }
 
@@ -149,7 +166,7 @@ public class NdRegulAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
-        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException("Run is not a Regul workflow analysis.");
 
         if (run.RegulClausesConfirmedAt == null)
@@ -179,6 +196,7 @@ public class NdRegulAnalysisProcessor(
 
         try
         {
+            await PrepareLibraryDocumentsForAnalysisAsync(run, ct);
             await EnsureInternalSectionsForRunAsync(run, ct);
             await EnsureForwardFindingsAsync(run, ct);
             await RunForwardPhaseAsync(run, ct);
@@ -241,7 +259,8 @@ public class NdRegulAnalysisProcessor(
 
     private async Task RunForwardPhaseAsync(NdAnalysisRun run, CancellationToken ct)
     {
-        var policyBundle = await LoadPolicyBundleAsync(run, ct);
+        var policyMode = NdRegulPolicyContextService.ResolveMode(run.WorkflowEngine);
+        var policyBundle = await LoadPolicyBundleAsync(run, policyMode, ct);
         var pending = await db.NdRegulForwardFindings
             .Where(f => f.AnalysisRunId == run.Id
                 && f.Status == "pending"
@@ -252,7 +271,7 @@ public class NdRegulAnalysisProcessor(
         var pointById = run.Points.ToDictionary(p => p.Id);
         var completed = 0;
         var total = pending.Count;
-        var cacheContext = policyBundle.TotalPages <= NdRegulPolicyContextService.FullManualMaxPages;
+        var cacheContext = policyBundle.UsesFullMarkdown;
 
         var promptVersionsInUse = await promptVersions.GetJudgmentPromptVersionsAsync(ct);
         logger.LogInformation(
@@ -267,7 +286,7 @@ public class NdRegulAnalysisProcessor(
             run.Id,
             total,
             policyBundle.TotalPages,
-            policyBundle.TotalPages > NdRegulPolicyContextService.FullManualMaxPages);
+            !policyBundle.UsesFullMarkdown);
 
         for (var i = 0; i < pending.Count; i++)
         {
@@ -337,7 +356,7 @@ public class NdRegulAnalysisProcessor(
             completed,
             pending.Count,
             policyBundle.TotalPages,
-            policyBundle.TotalPages > NdRegulPolicyContextService.FullManualMaxPages);
+            !policyBundle.UsesFullMarkdown);
     }
 
     private async Task<RegulJudgmentResult> CallForwardJudgmentAsync(
@@ -349,6 +368,14 @@ public class NdRegulAnalysisProcessor(
     {
         var policyContext = policyBundle.BuildContextForClause(clauseText);
         var contextChunks = policyBundle.GetChunksForClause(clauseText);
+        if (!policyBundle.UsesFullMarkdown)
+        {
+            logger.LogDebug(
+                "Regul forward retrieval for clause {ClauseNo}: {ChunkCount} chunk(s) — {ChunkLabels}",
+                clauseNo,
+                contextChunks.Count,
+                string.Join("; ", contextChunks.Select(c => c.Label)));
+        }
         var contextBlock = await promptVersions.BuildJudgmentContextAsync(policyContext, ct);
         var queryBlock = await promptVersions.BuildJudgmentQueryAsync(clauseNo, clauseText, ct);
 
@@ -383,34 +410,44 @@ public class NdRegulAnalysisProcessor(
 
     private async Task<NdRegulPolicyContextService.PolicyBundle> LoadPolicyBundleAsync(
         NdAnalysisRun run,
+        NdRegulPolicyContextService.RegulPolicyContextMode mode,
         CancellationToken ct)
     {
-        var sections = await db.NdRegulInternalSections
+        var existing = await db.NdRegulInternalSections
             .AsNoTracking()
             .Where(s => s.AnalysisRunId == run.Id)
-            .OrderBy(s => s.SourceDoc)
-            .ThenBy(s => s.SectionRef)
             .ToListAsync(ct);
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
         var payloads = await LoadInternalDocPayloadsAsync(internalDocIds, ct);
 
-        if (sections.Count > 0)
+        if (existing.Count > 0)
         {
+            var sections = PointNumberSort.OrderByPointNumber(existing, s => s.SectionRef).ToList();
             logger.LogDebug(
-                "Building forward policy bundle from {Count} internal section(s) for run {RunId}",
+                "Building forward policy bundle from {Count} internal section(s) for run {RunId} (mode={Mode})",
                 sections.Count,
-                run.Id);
-            return NdRegulPolicyContextService.FromInternalSections(sections).WithMarkdownFromPayloads(payloads);
+                run.Id,
+                mode);
+            return NdRegulPolicyContextService.FromInternalSections(sections, mode)
+                .WithMarkdownFromPayloads(payloads);
         }
 
         if (payloads.Count == 0)
             return NdRegulPolicyContextService.FromPayloads([
                 new InternalDocPayload("", "policy", "No internal policy text was attached to this run.", null),
-            ]);
+            ], mode);
 
-        return NdRegulPolicyContextService.FromPayloads(payloads);
+        return NdRegulPolicyContextService.FromPayloads(payloads, mode);
     }
+
+    private async Task<NdRegulPolicyContextService.PolicyBundle> LoadPolicyBundleAsync(
+        NdAnalysisRun run,
+        CancellationToken ct) =>
+        await LoadPolicyBundleAsync(
+            run,
+            NdRegulPolicyContextService.ResolveMode(run.WorkflowEngine),
+            ct);
 
     private async Task<string> BuildPolicyContextAsync(NdAnalysisRun run, CancellationToken ct)
     {
@@ -430,7 +467,15 @@ public class NdRegulAnalysisProcessor(
             if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath)) continue;
             if (!storage.IsConfigured) continue;
             var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
-            result.Add(await internalParse.EnsureParsedAsync(doc, bytes, ct));
+            var payload = await internalParse.EnsureParsedAsync(doc, bytes, ct);
+            var markdown = payload.Markdown;
+            if (payload.Pdf is { Length: > 16 })
+            {
+                markdown = PdfGroundedMarkdownBuilder.TryBuildResolveMarkdown(markdown, payload.Pdf)
+                    ?? markdown;
+            }
+
+            result.Add(payload with { Markdown = markdown });
         }
         return result;
     }
@@ -440,10 +485,11 @@ public class NdRegulAnalysisProcessor(
         await EnsureInternalSectionsForRunAsync(run, ct);
         await ClearIntReverseArtifactsAsync(run.Id, ct);
 
-        var sections = await db.NdRegulInternalSections
+        var sectionRows = await db.NdRegulInternalSections
             .Where(s => s.AnalysisRunId == run.Id)
-            .OrderBy(s => s.SectionRef)
             .ToListAsync(ct);
+
+        var sections = PointNumberSort.OrderByPointNumber(sectionRows, s => s.SectionRef).ToList();
 
         var regulatoryClauses = BuildSelectedRegulatoryClauses(run);
         if (regulatoryClauses.Count == 0)
@@ -630,11 +676,96 @@ public class NdRegulAnalysisProcessor(
         await db.SaveChangesAsync(ct);
     }
 
+    private async Task PrepareLibraryDocumentsForAnalysisAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
+        foreach (var idStr in internalDocIds)
+        {
+            if (!Guid.TryParse(idStr, out var docId)) continue;
+            var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == docId, ct);
+            if (doc == null) continue;
+            await internalSectionService.EnsureSectionsForWorkflowAsync(doc, ct);
+        }
+
+        var regDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedRegulationDocIds) ?? [];
+        foreach (var idStr in regDocIds)
+        {
+            if (!Guid.TryParse(idStr, out var regId)) continue;
+            try
+            {
+                await regulationPointRepair.RecoverMissingPointsAsync(regId, ct);
+                await regulationPointRepair.RefreshPagesAsync(regId, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Regulation library prep failed for doc {RegId} on run {RunId}", regId, run.Id);
+            }
+        }
+    }
+
     private async Task EnsureInternalSectionsForRunAsync(NdAnalysisRun run, CancellationToken ct)
     {
         var count = await db.NdRegulInternalSections.CountAsync(s => s.AnalysisRunId == run.Id, ct);
-        if (count > 0) return;
+        if (count > 0)
+        {
+            await SyncRunSectionsFromLibraryAsync(run, ct);
+            return;
+        }
+
         await ExtractAndStoreInternalSectionsAsync(run, ct);
+    }
+
+    private async Task SyncRunSectionsFromLibraryAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
+        var runSections = await db.NdRegulInternalSections
+            .Where(s => s.AnalysisRunId == run.Id)
+            .ToListAsync(ct);
+
+        foreach (var idStr in internalDocIds)
+        {
+            if (!Guid.TryParse(idStr, out var docId)) continue;
+            var doc = await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == docId, ct);
+            if (doc == null) continue;
+
+            var fileName = doc.Title ?? doc.OriginalFileName ?? "policy.pdf";
+            var librarySections = await internalSectionService.ListSectionsAsync(docId, ct);
+            var byRef = librarySections.ToDictionary(s => s.SectionRef, StringComparer.OrdinalIgnoreCase);
+            var runForDoc = runSections
+                .Where(s => string.Equals(s.SourceDoc, fileName, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(s.SourceDoc, doc.OriginalFileName, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(s.SourceDoc, doc.Title, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var existingRefs = runForDoc
+                .Select(s => s.SectionRef)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var lib in librarySections)
+            {
+                var match = runForDoc.FirstOrDefault(s =>
+                    string.Equals(s.SectionRef, lib.SectionRef, StringComparison.OrdinalIgnoreCase));
+                if (match is not null)
+                {
+                    match.SectionText = lib.SectionText;
+                    match.SourcePage = lib.SourcePage;
+                    continue;
+                }
+
+                if (existingRefs.Contains(lib.SectionRef)) continue;
+
+                db.NdRegulInternalSections.Add(new NdRegulInternalSection
+                {
+                    AnalysisRunId = run.Id,
+                    SectionRef = lib.SectionRef,
+                    SectionText = lib.SectionText,
+                    SourceDoc = fileName,
+                    SourcePage = lib.SourcePage,
+                });
+                existingRefs.Add(lib.SectionRef);
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     private async Task ExtractAndStoreInternalSectionsAsync(NdAnalysisRun run, CancellationToken ct)
@@ -801,7 +932,7 @@ public class NdRegulAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
-        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException("Not a Regul workflow run.");
 
         var point = run.Points.FirstOrDefault(p => p.Id == pointId)
@@ -862,7 +993,7 @@ public class NdRegulAnalysisProcessor(
             return;
 
         var policyBundle = await LoadPolicyBundleAsync(run, ct);
-        var cacheContext = policyBundle.TotalPages <= NdRegulPolicyContextService.FullManualMaxPages;
+        var cacheContext = policyBundle.UsesFullMarkdown;
         try
         {
             var judgment = await CallForwardJudgmentAsync(
@@ -909,7 +1040,7 @@ public class NdRegulAnalysisProcessor(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
-        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException("Not a Regul workflow run.");
 
         if (runCancellation.IsStopRequested(runId))

@@ -116,7 +116,7 @@ public class LandingAiPolicyClauseExtractService(
                 "Loaded {Count} cached policy clauses for {File}",
                 cachedClauses.Count,
                 fileName);
-            return await ResolveClausePagesAsync(markdown, cachedClauses.ToList(), ct);
+            return PolicyClauseMarkdownRecovery.MergeMissing(cachedClauses.ToList(), markdown);
         }
 
         logger.LogInformation(
@@ -128,7 +128,7 @@ public class LandingAiPolicyClauseExtractService(
         if (clauses.Count == 0)
             throw new InvalidOperationException("No policy sections found in internal document.");
 
-        clauses = await ResolveClausePagesAsync(markdown, clauses, ct);
+        clauses = PolicyClauseMarkdownRecovery.MergeMissing(clauses, markdown);
 
         var json = SerializeClausesJson(clauses);
 
@@ -380,22 +380,5 @@ public class LandingAiPolicyClauseExtractService(
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());
-    }
-
-    private Task<List<PolicyClause>> ResolveClausePagesAsync(
-        string markdown,
-        List<PolicyClause> clauses,
-        CancellationToken ct)
-    {
-        ct.ThrowIfCancellationRequested();
-        var totalPages = PolicyPageResolver.EstimatePageCount(markdown);
-        var resolved = clauses.Select(c =>
-        {
-            if (c.SourcePage > 0) return c;
-            var page = PolicyPageResolver.ResolveGovPointPage(
-                markdown, c.ClauseNo, null, null, c.ClauseText, null, totalPages);
-            return page is int p and > 0 ? c with { SourcePage = p } : c;
-        }).ToList();
-        return Task.FromResult(resolved);
     }
 }

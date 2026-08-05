@@ -21,8 +21,11 @@ public static partial class PolicyPageResolver
 
         if (!string.IsNullOrWhiteSpace(quote))
         {
-            // Prefer last match — TOC / front-matter often repeat short phrases on early pages.
+            var located = ResolveQuoteLocation(markdown, quote);
             var byQuote = FindInSegments(segments, quote, preferLast: true);
+            if (byQuote.HasValue && (located.Page is null || byQuote > located.Page))
+                return byQuote;
+            if (located.Page is > 0) return located.Page;
             if (byQuote.HasValue) return byQuote;
         }
 
@@ -33,6 +36,48 @@ public static partial class PolicyPageResolver
         }
 
         return aiPage is > 0 ? aiPage : null;
+    }
+
+    /// <summary>
+    /// Locate the PDF page and nearest numbered section heading for a verbatim policy quote in parse markdown.
+    /// Used to ground Regul judgment document_reference (avoids wrong section_ref from retrieval chunks).
+    /// </summary>
+    public static (int? Page, string? Section) ResolveQuoteLocation(string? markdown, string quote)
+    {
+        if (string.IsNullOrWhiteSpace(markdown) || string.IsNullOrWhiteSpace(quote))
+            return (null, null);
+
+        var rawIdx = FindLastQuoteIndex(markdown, quote);
+        if (rawIdx < 0) return (null, null);
+
+        var segments = SplitByPageMarkers(markdown);
+        var maxPage = ResolveMaxPage(segments, null);
+        var page = FindPageForMarkdownIndex(markdown, segments, rawIdx, maxPage);
+        var section = FindSectionHeadingBeforeIndex(markdown, rawIdx);
+        if (page is null or 1 && section is not null)
+        {
+            var bySection = FindSectionPageLast(markdown, segments, section);
+            if (bySection is > 0) page = bySection;
+        }
+
+        return (page, section);
+    }
+
+    /// <summary>Pre-split markdown once for batch page resolution (e.g. 800+ policy sections).</summary>
+    public readonly record struct PolicyPageResolveContext(
+        string Markdown,
+        IReadOnlyList<(int Page, string Text)> Segments,
+        int? MaxPage,
+        string NormalizedHay);
+
+    public static PolicyPageResolveContext CreateResolveContext(string markdown, int? maxPageOverride = null)
+    {
+        var segments = SplitByPageMarkers(markdown);
+        return new PolicyPageResolveContext(
+            markdown,
+            segments,
+            ResolveMaxPage(segments, maxPageOverride),
+            NormalizeForMatch(markdown));
     }
 
     /// <summary>Resolve PDF viewer page for a gov/regulation requirement point.</summary>
@@ -48,17 +93,42 @@ public static partial class PolicyPageResolver
         if (string.IsNullOrWhiteSpace(markdown))
             return SanitizeAiPageHint(aiPageHint, maxPageOverride);
 
-        var segments = SplitByPageMarkers(markdown);
-        var maxPage = ResolveMaxPage(segments, maxPageOverride);
+        var ctx = CreateResolveContext(markdown, maxPageOverride);
+        return ResolveGovPointPage(ctx, pointId, section, title, text, aiPageHint);
+    }
+
+    /// <summary>Resolve page using a pre-built context (avoids re-splitting markdown per section).</summary>
+    public static int? ResolveGovPointPage(
+        PolicyPageResolveContext ctx,
+        string pointId,
+        string? section,
+        string? title,
+        string text,
+        int? aiPageHint)
+    {
+        var markdown = ctx.Markdown;
+        var segments = ctx.Segments;
+        var maxPage = ctx.MaxPage;
         var preferLastMatch = LooksLikeNumberedClause(pointId);
         // Stored extract page hints are often printed/footer pages — ignore when markdown is available.
         var trustedAi = preferLastMatch ? null : SanitizeAiPageHint(aiPageHint, maxPage);
         var monolithic = IsMonolithicMarkdown(segments, maxPage);
+        var distinctiveText = text?.Trim();
+        var hasDistinctiveText = distinctiveText is { Length: >= 48 };
+        var sparseMarkers = segments.Count > 1;
+        var singleChunkCoversDoc = segments.Count == 1
+            && maxPage is > 10
+            && segments[0].Text.Length > 10_000;
 
         // Numbered clauses: refine page inside large ADE chunks (one marker per ~99 PDF pages).
         if (preferLastMatch && maxPage is > 10)
         {
-            var byClause = ResolveNumberedClausePageRefined(segments, pointId, title, maxPage.Value);
+            var byClause = ResolveNumberedClausePageRefined(
+                segments,
+                pointId,
+                title,
+                maxPage.Value,
+                hasDistinctiveText ? distinctiveText : null);
             if (byClause is > 0) return byClause;
         }
         else if (preferLastMatch)
@@ -69,20 +139,43 @@ public static partial class PolicyPageResolver
             if (byHeading.HasValue) return byHeading;
         }
 
-        if (!string.IsNullOrWhiteSpace(text))
+        // Multi-chunk markdown: body text pinpoints page better than a TOC clause repeat in an earlier chunk.
+        if (hasDistinctiveText && sparseMarkers && !singleChunkCoversDoc)
         {
+            var textNeedle = distinctiveText!.Length > 200 ? distinctiveText[..200] : distinctiveText;
             var byText = AcceptSegmentPage(
-                FindInSegments(segments, text.Length > 160 ? text[..160] : text, preferLastMatch),
+                FindInSegments(segments, textNeedle, preferLast: true, maxPage),
                 segments,
                 maxPage,
                 monolithic);
             if (byText.HasValue) return byText;
         }
 
+        if (!string.IsNullOrWhiteSpace(text) && !hasDistinctiveText)
+        {
+            var byText = AcceptSegmentPage(
+                FindInSegments(segments, text.Length > 160 ? text[..160] : text, preferLastMatch, maxPage),
+                segments,
+                maxPage,
+                monolithic);
+            if (byText.HasValue) return byText;
+        }
+        else if (hasDistinctiveText)
+        {
+            // Shorter prefix when OCR/extract truncates wording slightly.
+            var prefix = distinctiveText!.Length > 80 ? distinctiveText[..80] : distinctiveText;
+            var byPrefix = AcceptSegmentPage(
+                FindInSegments(segments, prefix, preferLast: true, maxPage),
+                segments,
+                maxPage,
+                monolithic);
+            if (byPrefix.HasValue) return byPrefix;
+        }
+
         if (!string.IsNullOrWhiteSpace(title) && title.Trim().Length >= 6)
         {
             var byTitle = AcceptSegmentPage(
-                FindInSegments(segments, title.Trim(), preferLastMatch),
+                FindInSegments(segments, title.Trim(), preferLastMatch, maxPage),
                 segments,
                 maxPage,
                 monolithic);
@@ -93,7 +186,7 @@ public static partial class PolicyPageResolver
         {
             var heading = $"{pointId.Trim()} {title.Trim()}";
             var byHeading = AcceptSegmentPage(
-                FindInSegments(segments, heading.Length > 120 ? heading[..120] : heading, preferLastMatch),
+                FindInSegments(segments, heading.Length > 120 ? heading[..120] : heading, preferLastMatch, maxPage),
                 segments,
                 maxPage,
                 monolithic);
@@ -265,17 +358,62 @@ public static partial class PolicyPageResolver
         var wrote = false;
         foreach (var split in splits.EnumerateArray())
         {
-            var page = ReadSplitPage(split);
-            if (page <= 0) continue;
+            if (!split.TryGetProperty("markdown", out var md) || md.ValueKind != System.Text.Json.JsonValueKind.String)
+                continue;
+            var markdown = md.GetString();
+            if (string.IsNullOrWhiteSpace(markdown)) continue;
 
-            sb.AppendLine($"{PageMarkerPrefix}{page} -->");
-            if (split.TryGetProperty("markdown", out var md) && md.ValueKind == System.Text.Json.JsonValueKind.String)
-                sb.AppendLine(md.GetString());
+            var pages = ReadSplitPages(split);
+            if (pages.Count == 0) continue;
+
+            if (pages.Count == 1)
+            {
+                sb.AppendLine($"{PageMarkerPrefix}{pages[0]} -->");
+                sb.AppendLine(markdown);
+            }
+            else
+            {
+                AppendProportionalPageMarkers(sb, markdown, pages);
+            }
+
             sb.AppendLine();
             wrote = true;
         }
 
         return wrote ? sb.ToString().Trim() : null;
+    }
+
+    private static void AppendProportionalPageMarkers(StringBuilder sb, string markdown, IReadOnlyList<int> pages)
+    {
+        var partLen = Math.Max(1, markdown.Length / pages.Count);
+        for (var i = 0; i < pages.Count; i++)
+        {
+            sb.AppendLine($"{PageMarkerPrefix}{pages[i]} -->");
+            var start = i * partLen;
+            var len = i == pages.Count - 1 ? markdown.Length - start : partLen;
+            sb.AppendLine(markdown.Substring(start, len));
+        }
+    }
+
+    private static List<int> ReadSplitPages(System.Text.Json.JsonElement split)
+    {
+        var pages = new List<int>();
+        if (split.TryGetProperty("pages", out var pagesProp) && pagesProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            foreach (var p in pagesProp.EnumerateArray())
+            {
+                if (p.ValueKind == System.Text.Json.JsonValueKind.Number && p.TryGetInt32(out var n))
+                    pages.Add(ZeroToOneIndexed(n));
+            }
+        }
+
+        if (pages.Count == 0)
+        {
+            var single = ReadSplitPageFromIdentifier(split);
+            if (single > 0) pages.Add(single);
+        }
+
+        return pages;
     }
 
     private static string? BuildFromChunks(System.Text.Json.JsonElement chunks)
@@ -308,15 +446,12 @@ public static partial class PolicyPageResolver
 
     private static int ReadSplitPage(System.Text.Json.JsonElement split)
     {
-        if (split.TryGetProperty("pages", out var pages) && pages.ValueKind == System.Text.Json.JsonValueKind.Array)
-        {
-            foreach (var p in pages.EnumerateArray())
-            {
-                if (p.ValueKind == System.Text.Json.JsonValueKind.Number && p.TryGetInt32(out var n))
-                    return ZeroToOneIndexed(n);
-            }
-        }
+        var pages = ReadSplitPages(split);
+        return pages.Count > 0 ? pages[0] : ReadSplitPageFromIdentifier(split);
+    }
 
+    private static int ReadSplitPageFromIdentifier(System.Text.Json.JsonElement split)
+    {
         if (split.TryGetProperty("identifier", out var idProp) && idProp.ValueKind == System.Text.Json.JsonValueKind.String)
         {
             var id = idProp.GetString() ?? "";
@@ -370,33 +505,129 @@ public static partial class PolicyPageResolver
         return segments;
     }
 
-    private static int? FindInSegments(IReadOnlyList<(int Page, string Text)> segments, string quote, bool preferLast = false)
+    private static int FindLastQuoteIndex(string markdown, string quote)
+    {
+        var trimmed = quote.Trim();
+        if (trimmed.Length < 8) return -1;
+
+        // Prefer verbatim match in raw markdown (normalized index mapping drifts across segments).
+        var rawIdx = markdown.LastIndexOf(trimmed, StringComparison.OrdinalIgnoreCase);
+        if (rawIdx >= 0) return rawIdx;
+
+        var needle = NormalizeForMatch(quote);
+        if (needle.Length < 8) return -1;
+
+        var hay = NormalizeForMatch(markdown);
+        var idx = hay.LastIndexOf(needle, StringComparison.Ordinal);
+        if (idx < 0 && needle.Length >= 40)
+            idx = hay.LastIndexOf(needle[..40], StringComparison.Ordinal);
+        if (idx < 0) return -1;
+
+        var ratio = idx / (double)Math.Max(hay.Length, 1);
+        return Math.Clamp((int)Math.Round(ratio * markdown.Length), 0, Math.Max(0, markdown.Length - 1));
+    }
+
+    private static int? FindPageForMarkdownIndex(
+        string markdown,
+        IReadOnlyList<(int Page, string Text)> segments,
+        int rawIndex,
+        int? maxPage = null)
+    {
+        if (segments.Count == 0) return null;
+        maxPage ??= ResolveMaxPage(segments, null);
+        var offset = 0;
+        for (var segIndex = 0; segIndex < segments.Count; segIndex++)
+        {
+            var (page, text) = segments[segIndex];
+            var segmentStart = markdown.IndexOf(text, offset, StringComparison.Ordinal);
+            if (segmentStart < 0) continue;
+            var segmentEnd = segmentStart + text.Length;
+            if (rawIndex >= segmentStart && rawIndex <= segmentEnd)
+            {
+                if (maxPage is > 10 && text.Length >= 6000)
+                {
+                    var segEnd = SegmentEndPage(segments, segIndex, maxPage.Value);
+                    var indexInSegment = rawIndex - segmentStart;
+                    return PageFromIndexInSegment(page, segEnd, indexInSegment, text.Length, clauseHeading: false);
+                }
+
+                return page;
+            }
+
+            offset = segmentEnd;
+        }
+
+        if (maxPage is > 10)
+        {
+            var estimated = EstimatePageByMarkdownPosition(markdown, markdown[Math.Min(rawIndex, markdown.Length - 1)..Math.Min(rawIndex + 80, markdown.Length)], maxPage.Value);
+            if (estimated is > 0) return estimated;
+        }
+
+        return segments.LastOrDefault(s => markdown.IndexOf(s.Text, StringComparison.Ordinal) <= rawIndex).Page;
+    }
+
+    internal static string? FindSectionHeadingBeforeIndex(string markdown, int quoteIndex)
+    {
+        if (quoteIndex <= 0) return null;
+        var before = markdown[..quoteIndex];
+        var window = before.Length > 5000 ? before[^5000..] : before;
+        string? last = null;
+        foreach (Match m in SectionHeadingBeforeQuoteRegex().Matches(window))
+            last = m.Groups[1].Value.Trim();
+        return SanitizeSectionLabel(last);
+    }
+
+    private static int? FindInSegments(
+        IReadOnlyList<(int Page, string Text)> segments,
+        string quote,
+        bool preferLast = false,
+        int? maxPage = null)
     {
         var needle = NormalizeForMatch(quote);
         if (needle.Length < 12) return null;
+        maxPage ??= ResolveMaxPage(segments, null);
 
-        int? MatchInSegment(string text)
+        int? MatchInSegment(int segIndex, int page, string text)
         {
             var hay = NormalizeForMatch(text);
-            if (hay.Contains(needle, StringComparison.Ordinal)) return 1;
-            var prefix = needle.Length > 48 ? needle[..48] : needle;
-            return hay.Contains(prefix, StringComparison.Ordinal) ? 1 : null;
+            var idx = preferLast ? hay.LastIndexOf(needle, StringComparison.Ordinal) : hay.IndexOf(needle, StringComparison.Ordinal);
+            if (idx < 0 && needle.Length > 48)
+            {
+                var prefix = needle[..48];
+                idx = preferLast
+                    ? hay.LastIndexOf(prefix, StringComparison.Ordinal)
+                    : hay.IndexOf(prefix, StringComparison.Ordinal);
+            }
+
+            if (idx < 0) return null;
+
+            if (maxPage is > 10)
+            {
+                var segEnd = SegmentEndPage(segments, segIndex, maxPage.Value);
+                return PageFromIndexInSegment(page, segEnd, idx, text.Length, clauseHeading: false);
+            }
+
+            return page;
         }
 
         if (preferLast)
         {
             int? last = null;
-            foreach (var (page, text) in segments)
+            for (var i = 0; i < segments.Count; i++)
             {
-                if (MatchInSegment(text) == 1) last = page;
+                var (page, text) = segments[i];
+                var matched = MatchInSegment(i, page, text);
+                if (matched.HasValue) last = matched;
             }
 
             return last;
         }
 
-        foreach (var (page, text) in segments)
+        for (var i = 0; i < segments.Count; i++)
         {
-            if (MatchInSegment(text) == 1) return page;
+            var (page, text) = segments[i];
+            var matched = MatchInSegment(i, page, text);
+            if (matched.HasValue) return matched;
         }
 
         return null;
@@ -443,13 +674,15 @@ public static partial class PolicyPageResolver
         IReadOnlyList<(int Page, string Text)> segments,
         string pointId,
         string? title,
-        int maxPage)
+        int maxPage,
+        string? sectionText = null)
     {
         var id = pointId.Trim().TrimEnd('.');
         if (string.IsNullOrEmpty(id)) return null;
 
         var escaped = Regex.Escape(id).Replace("\\.", "[.]");
         var idRegex = new Regex($@"\b{escaped}\b", RegexOptions.IgnoreCase);
+        var (anchorSegment, anchorIndex) = FindSectionTextAnchor(segments, sectionText);
 
         int? bestPage = null;
         for (var i = 0; i < segments.Count; i++)
@@ -461,10 +694,18 @@ public static partial class PolicyPageResolver
             Match? chosen = null;
             foreach (Match m in matches)
             {
-                if (IsLikelyClauseHeading(text, m, title))
+                if (!IsLikelyClauseHeading(text, m, title)) continue;
+                if (anchorIndex is int anchor && anchorSegment == i)
+                {
+                    if (m.Index > anchor + 120) continue;
+                    if (m.Index < anchor - 1200) continue;
+                }
+
+                if (chosen is null
+                    || (anchorIndex is int a && anchorSegment == i
+                        && Math.Abs(m.Index - a) < Math.Abs(chosen.Index - a)))
                 {
                     chosen = m;
-                    break;
                 }
             }
 
@@ -480,6 +721,26 @@ public static partial class PolicyPageResolver
         if (bestPage is > 0) return bestPage;
 
         return FindNumberedClauseHeadingPageLast(segments, pointId, title);
+    }
+
+    private static (int SegmentIndex, int Index) FindSectionTextAnchor(
+        IReadOnlyList<(int Page, string Text)> segments,
+        string? sectionText)
+    {
+        if (string.IsNullOrWhiteSpace(sectionText) || sectionText.Trim().Length < 40)
+            return (-1, -1);
+
+        var needle = NormalizeForMatch(sectionText.Length > 120 ? sectionText[..120] : sectionText);
+        for (var i = segments.Count - 1; i >= 0; i--)
+        {
+            var hay = NormalizeForMatch(segments[i].Text);
+            var idx = hay.LastIndexOf(needle, StringComparison.Ordinal);
+            if (idx < 0 && needle.Length > 48)
+                idx = hay.LastIndexOf(needle[..48], StringComparison.Ordinal);
+            if (idx >= 0) return (i, idx);
+        }
+
+        return (-1, -1);
     }
 
     private static int SegmentEndPage(IReadOnlyList<(int Page, string Text)> segments, int index, int maxPage)
@@ -656,7 +917,7 @@ public static partial class PolicyPageResolver
     [GeneratedRegex(@"^(\d+)")]
     private static partial Regex MajorSectionRegex();
 
-    [GeneratedRegex(@"^\d+(\.\d+)+$")]
+    [GeneratedRegex(@"^(?:\d+(?:\.\d+)*(?:-[a-z](?:\d+)?)?|\d+-\d+)$", RegexOptions.IgnoreCase)]
     private static partial Regex NumberedClauseRegex();
 
     [GeneratedRegex(@"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", RegexOptions.IgnoreCase)]
@@ -667,4 +928,9 @@ public static partial class PolicyPageResolver
 
     [GeneratedRegex(@"\b(\d+(?:\.\d+)*)\b")]
     private static partial Regex NumberedSectionAnywhereRegex();
+
+    [GeneratedRegex(
+        @"(?m)^[\s#>*-]*(?:(?:Rule|Section)\s+)?(\d+(?:\.\d+)*(?:-[a-z]\d*)?|\d+(?:-\d+)+)\s+\S",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex SectionHeadingBeforeQuoteRegex();
 }

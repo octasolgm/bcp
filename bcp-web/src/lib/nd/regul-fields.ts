@@ -1,6 +1,9 @@
 import type { AnalysisPoint } from './types';
 
-/** Regul pipeline run progress fields (API primary names for workflowEngine=regul_pipeline). */
+export const REGUL_PIPELINE_V3 = 'regul_pipeline';
+export const REGUL_PIPELINE_FULL = 'regul_pipeline_full';
+
+/** Regul pipeline run progress fields (API primary names for regul workflow engines). */
 export type RegulRunProgress = {
   regulClauseTotal?: number;
   regulClauseCompleted?: number;
@@ -13,7 +16,12 @@ export type RegulRunProgress = {
 };
 
 export function isRegulWorkflow(workflowEngine?: string | null): boolean {
-  return workflowEngine === 'regul_pipeline';
+  const engine = (workflowEngine ?? '').trim().toLowerCase();
+  return engine === REGUL_PIPELINE_V3 || engine === REGUL_PIPELINE_FULL;
+}
+
+export function isRegulFullMarkdownWorkflow(workflowEngine?: string | null): boolean {
+  return (workflowEngine ?? '').trim().toLowerCase() === REGUL_PIPELINE_FULL;
 }
 
 /** Normalize API point: prefer regulForward* when present. */

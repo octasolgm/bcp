@@ -1,4 +1,5 @@
 import type { AnalysisRunSummary } from './types';
+import { isRegulWorkflow } from './regul-fields';
 import { analysisRunNeedsExecutionView } from './run-links';
 
 export function normalizeRunStatus(status: string): string {
@@ -101,7 +102,7 @@ export function analysisRunDisplayStatusLabel(status: string): string {
 
 /** Next workflow step or in-progress hint for a run row. */
 export function analysisRunWorkflowLabel(run: AnalysisRunSummary): string {
-  if (run.workflowEngine === 'regul_pipeline') {
+  if (isRegulWorkflow(run.workflowEngine)) {
     const phase = (run.regulPipelinePhase ?? '').toLowerCase();
     if (phase === 'forward') return 'Forward judgment';
     if (phase === 'reverse') return 'Reverse coverage mapping';

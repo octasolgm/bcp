@@ -17,6 +17,12 @@ const RERUN_API_TIMEOUT_MS = 60_000;
 const LIBRARY_WRITE_TIMEOUT_MS = 120_000;
 /** Landing AI policy-clause extract (multi-chunk) — align with Bcp:HttpTimeoutMinutes (15). */
 const SECTION_EXTRACT_TIMEOUT_MS = 900_000;
+/** Kick off async page repair — job runs in background; poll GET /sections for status. */
+const REPAIR_SECTION_PAGES_START_TIMEOUT_MS = 60_000;
+/** Poll while background repair runs on large manuals. */
+const REPAIR_SECTION_PAGES_POLL_MS = 20 * 60 * 1000;
+/** Regulation repair / page refresh can touch hundreds of points. */
+const REGULATION_PAGE_REPAIR_TIMEOUT_MS = 300_000;
 /** Landing AI PDF/Word parse — large manuals can take several minutes. */
 const INTERNAL_PARSE_TIMEOUT_MS = 900_000;
 
@@ -393,6 +399,9 @@ export class NdApiService {
     return this.request<{ pointsUpdated: number }>(
       'POST',
       `/nd/regulation-documents/${docId}/refresh-page-references`,
+      undefined,
+      true,
+      REGULATION_PAGE_REPAIR_TIMEOUT_MS,
     );
   }
 
@@ -408,7 +417,7 @@ export class NdApiService {
         junkRemoved: number;
         pagesRefreshed: number;
       };
-    }>('POST', `/nd/regulation-documents/${docId}/points/repair`);
+    }>('POST', `/nd/regulation-documents/${docId}/points/repair`, undefined, true, REGULATION_PAGE_REPAIR_TIMEOUT_MS);
   }
 
   getDocumentPoints(docId: string) {
@@ -472,6 +481,26 @@ export class NdApiService {
     );
   }
 
+  async openRegulationDocumentPdf(docId: string, page?: number | null): Promise<boolean> {
+    const res = await this.getRegulationDocumentFileUrl(docId);
+    if (!res.success || !res.data?.url) return false;
+    this.openSignedPdfUrl(res.data.url, page);
+    return true;
+  }
+
+  async openInternalDocumentPdf(docId: string, page?: number | null): Promise<boolean> {
+    const res = await this.getInternalDocumentFileUrl(docId);
+    if (!res.success || !res.data?.url) return false;
+    this.openSignedPdfUrl(res.data.url, page);
+    return true;
+  }
+
+  private openSignedPdfUrl(url: string, page?: number | null): void {
+    const pdfPage = page != null && page > 0 ? page : null;
+    const full = pdfPage ? `${url}#page=${pdfPage}` : url;
+    window.open(full, '_blank', 'noopener');
+  }
+
   hideInternalDocument(id: string) {
     return this.request<unknown>('DELETE', `/nd/internal-documents/${id}`);
   }
@@ -501,6 +530,12 @@ export class NdApiService {
       sectionExtractError?: string | null;
       sectionExtractProgressLabel?: string | null;
       sectionExtractProgressPct?: number | null;
+      sectionPageRepairStatus?: string | null;
+      sectionPageRepairProgressLabel?: string | null;
+      sectionPageRepairProgressPct?: number | null;
+      sectionPageRepairPagesRefreshed?: number | null;
+      sectionPageRepairSectionCount?: number | null;
+      sectionPageRepairError?: string | null;
       sectionCount?: number;
       sections: Array<{
         id: string;
@@ -523,6 +558,14 @@ export class NdApiService {
       sectionExtractProgressPct?: number | null;
       reusedSaved?: boolean;
     }>('POST', `/nd/internal-documents/${docId}/extract-sections${q}`, undefined, true, SECTION_EXTRACT_TIMEOUT_MS);
+  }
+
+  repairInternalDocumentSectionPages(docId: string) {
+    return this.request<{
+      repairStatus?: string;
+      sectionCount?: number;
+      pagesRefreshed?: number;
+    }>('POST', `/nd/internal-documents/${docId}/repair-section-pages`, undefined, true, REPAIR_SECTION_PAGES_START_TIMEOUT_MS);
   }
 
   async uploadInternalDocument(file: File) {

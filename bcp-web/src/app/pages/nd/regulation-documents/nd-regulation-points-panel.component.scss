@@ -226,6 +226,13 @@
   min-width: 2.5rem;
 }
 
+.point-page-ref {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  align-self: center;
+}
+
 .point-tag {
   flex-shrink: 0;
   padding: 0.05rem 0.35rem;

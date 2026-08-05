@@ -1,4 +1,4 @@
-import { comparePointNumber, type SortDir } from './list-utils';
+import { comparePointNumber, sortByPointRef, type SortDir } from './list-utils';
 
 export type PointSortMode = 'default' | 'number' | 'status';
 
@@ -27,7 +27,10 @@ export function sortByPointKey<T>(
   pointKey: (item: T) => string,
   severityKey: (item: T) => string,
 ): T[] {
-  if (!items.length || sort === 'default') return [...items];
+  if (!items.length) return [];
+  if (sort === 'default') {
+    return sortByPointRef(items, pointKey, 'asc');
+  }
   const list = [...items];
   if (sort === 'number') {
     return list.sort((a, b) => comparePointNumber(pointKey(a), pointKey(b), dir));

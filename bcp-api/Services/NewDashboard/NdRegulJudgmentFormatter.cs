@@ -61,7 +61,15 @@ public static class NdRegulJudgmentFormatter
     private static string BuildPolicyResponse(RegulJudgmentResult judgment)
     {
         if (judgment.PolicyExtract.Count > 0)
-            return string.Join("\n", judgment.PolicyExtract.Where(s => !string.IsNullOrWhiteSpace(s)));
+        {
+            return judgment.PolicyExtract.Count == 1
+                ? judgment.PolicyExtract[0].Trim()
+                : string.Join(
+                    "\n\n",
+                    judgment.PolicyExtract
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .Select((s, i) => $"({i + 1}) {s.Trim()}"));
+        }
 
         if (!string.IsNullOrWhiteSpace(judgment.Interpretation))
             return judgment.Interpretation.Trim();

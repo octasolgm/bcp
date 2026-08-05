@@ -119,6 +119,7 @@ export type RegulationPoint = {
   pointTitle?: string | null;
   pointContent: string;
   pageReference?: string | null;
+  pdfPage?: number | null;
   isIntroductionPoint?: boolean;
   isAnnexPoint?: boolean;
 };

@@ -464,13 +464,27 @@
           (pointsChanged)="onManualPointsChanged()"
         />
       } @else {
-        <app-nd-regulation-points-panel
-          [docName]="selectedDoc?.name ?? ''"
-          [points]="selectedPoints"
-          [source]="pointsSource"
-          [loading]="pointsLoading"
-          [highlightPointNumber]="highlightPointNumber"
-        />
+        <div class="panel-busy-wrap points-panel-busy">
+          <app-nd-regulation-points-panel
+            [docName]="selectedDoc?.name ?? ''"
+            [points]="selectedPoints"
+            [source]="pointsSource"
+            [loading]="pointsLoading"
+            [highlightPointNumber]="highlightPointNumber"
+            [canOpenSource]="!isManualDoc(selectedDoc!)"
+            (openSourcePage)="openRegulationSourcePage(selectedDoc!, $event)"
+          />
+          @if (selectedDoc && (repairingPointsId === selectedDoc.id || refreshingPagesId === selectedDoc.id)) {
+            <div class="panel-busy-overlay" role="status" aria-live="polite">
+              <div class="panel-busy-spinner" aria-hidden="true"></div>
+              <p>
+                {{ repairingPointsId === selectedDoc.id ? 'Repairing points…' : 'Refreshing PDF pages…' }}
+                <br />
+                <span class="muted">This may take a minute for large documents.</span>
+              </p>
+            </div>
+          }
+        </div>
       }
     </aside>
   }

@@ -1084,7 +1084,7 @@ public class RegulationDocumentsController(
         }
     }
 
-    /// <summary>Update stored point page references from parse cache only — no Landing AI credits.</summary>
+    /// <summary>Update stored point page references from native PDF text (preferred) or parse cache — no Landing AI credits.</summary>
     [HttpPost("{id:guid}/refresh-page-references")]
     public async Task<IActionResult> RefreshPageReferences(Guid id, CancellationToken ct)
     {

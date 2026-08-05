@@ -20,7 +20,8 @@
   align-items: center;
   gap: 1.5rem;
   padding: 0 1.25rem;
-  height: 64px;
+  height: clamp(64px, 10vw, 72px);
+  min-height: 64px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
   flex-shrink: 0;
@@ -35,6 +36,8 @@
   text-decoration: none;
   color: var(--text-primary);
   flex-shrink: 0;
+  min-width: 0;
+  max-width: min(520px, 72vw);
 }
 
 .logo-icon {

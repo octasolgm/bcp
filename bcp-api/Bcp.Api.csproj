@@ -9,10 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <RuntimeHostConfigurationOption Include="Npgsql.EnableLegacyTimestampBehavior" Value="true" />
+    <InternalsVisibleTo Include="Reguliq.Api.Tests" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="PdfPig" Version="0.1.15" />
     <PackageReference Include="PdfSharpCore" Version="1.3.65" />
     <PackageReference Include="Confluent.Kafka" Version="2.6.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.1" />
@@ -38,8 +39,7 @@
   </ItemGroup>
 
   <Target Name="SyncAppSettingsSecrets" BeforeTargets="PrepareForPublish">
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)scripts\sync-secrets.ps1&quot;"
-          Condition="Exists('$(ProjectDir)appsettings.Development.json')" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)scripts\sync-secrets.ps1&quot;" Condition="Exists('$(ProjectDir)appsettings.Development.json')" />
   </Target>
 
 </Project>

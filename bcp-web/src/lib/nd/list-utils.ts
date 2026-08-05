@@ -48,25 +48,78 @@ export function hasListFilters(...filters: (string | boolean | undefined | null)
   return filters.some((f) => (typeof f === 'string' ? f.trim().length > 0 : Boolean(f)));
 }
 
-/** Numeric-friendly compare for regulation point ids (e.g. §2.7, 2.10). */
+/** Numeric-friendly compare for regulation point ids (e.g. §2.7, 2.10, 6.18-a). */
 export function comparePointNumber(a: string, b: string, dir: SortDir): number {
-  const partsA = parsePointNumberParts(a);
-  const partsB = parsePointNumberParts(b);
+  const partsA = parsePointRefTokens(a);
+  const partsB = parsePointRefTokens(b);
   const len = Math.max(partsA.length, partsB.length);
   for (let i = 0; i < len; i++) {
-    const va = partsA[i] ?? -1;
-    const vb = partsB[i] ?? -1;
-    if (va !== vb) return sortMultiplier(dir) * (va - vb);
+    const ta = partsA[i] ?? { num: -1, suffix: '' };
+    const tb = partsB[i] ?? { num: -1, suffix: '' };
+    if (ta.num >= 0 && tb.num >= 0) {
+      if (ta.num !== tb.num) return sortMultiplier(dir) * (ta.num - tb.num);
+      const suffixCmp = ta.suffix.localeCompare(tb.suffix);
+      if (suffixCmp !== 0) return sortMultiplier(dir) * suffixCmp;
+      continue;
+    }
+    if (ta.num >= 0) return -sortMultiplier(dir);
+    if (tb.num >= 0) return sortMultiplier(dir);
   }
-  return compareText(a, b, dir);
+  return sortMultiplier(dir) * a.trim().localeCompare(b.trim(), undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  });
 }
 
-function parsePointNumberParts(raw: string): number[] {
+export function sortByPointRef<T>(
+  items: T[],
+  key: (item: T) => string,
+  dir: SortDir = 'asc',
+): T[] {
+  return [...items].sort((x, y) => comparePointNumber(key(x), key(y), dir));
+}
+
+type PointRefToken = { num: number; suffix: string };
+
+function parseSegment(segment: string): PointRefToken {
+  const m = segment.match(/^(\d+)([a-z]*)$/i);
+  if (m) {
+    return { num: Number.parseInt(m[1], 10), suffix: (m[2] ?? '').toLowerCase() };
+  }
+  const digits = segment.replace(/\D/g, '');
+  if (digits) return { num: Number.parseInt(digits, 10), suffix: '' };
+  return { num: -1, suffix: segment.toLowerCase() };
+}
+
+function parsePointRefTokens(raw: string): PointRefToken[] {
   const cleaned = raw.replace(/^§\s*/, '').trim();
-  if (!cleaned) return [];
-  const head = cleaned.split(/\s+/)[0] ?? cleaned;
-  return head
+  const head = (cleaned.split(/\s+/)[0] ?? cleaned).replace(/\.$/, '');
+  if (!head) return [];
+
+  if (head.includes('.')) {
+    return head.split('.').filter(Boolean).map(parseSegment);
+  }
+
+  if (head.includes('-')) {
+    const dashParts = head.split('-').filter(Boolean);
+    if (dashParts.length > 1 && dashParts.every((p) => /^\d+[a-z]*$/i.test(p))) {
+      return dashParts.map(parseSegment);
+    }
+  }
+
+  const numPrefix = head.match(/^(\d+(?:\.\d+)*)/);
+  if (!numPrefix) return [parseSegment(head)];
+
+  const tokens = numPrefix[1]
     .split('.')
-    .map((p) => Number.parseInt(p.replace(/\D/g, ''), 10))
-    .filter((n) => Number.isFinite(n));
+    .filter(Boolean)
+    .map((p) => ({ num: Number.parseInt(p, 10), suffix: '' }));
+
+  const suffixPart = head.slice(numPrefix[0].length).replace(/^[-.]+/, '');
+  if (suffixPart.length > 0) {
+    const seg = parseSegment(suffixPart);
+    if (seg.num >= 0 || seg.suffix) tokens.push(seg);
+  }
+
+  return tokens;
 }

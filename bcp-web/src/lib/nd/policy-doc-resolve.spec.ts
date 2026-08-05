@@ -2,6 +2,7 @@ import {
   buildPolicyRefProofs,
   formatPolicyRefLabel,
   parsePolicyCitationFromLine,
+  parseRegulDocumentReferenceLines,
   sanitizePolicySection,
 } from './policy-doc-resolve';
 
@@ -60,6 +61,22 @@ describe('parsePolicyCitationFromLine', () => {
     );
     expect(parsed.page).toBe('2');
     expect(parsed.section).toBe('2');
+  });
+});
+
+describe('parseRegulDocumentReferenceLines', () => {
+  const catalog = [{ id: 'doc-1', originalFileName: 'Internal AML Manual 290626 (1).pdf' }];
+
+  it('parses Regul document_reference lines (semicolon or newline separated)', () => {
+    const refs = parseRegulDocumentReferenceLines(
+      'Internal AML Manual — section 6.2, p.12; Internal AML Manual — section 9.4.1, p.63',
+      catalog,
+    );
+    expect(refs.length).toBe(2);
+    expect(refs[0].section).toBe('6.2');
+    expect(refs[0].page).toBe('12');
+    expect(refs[1].section).toBe('9.4.1');
+    expect(refs[1].page).toBe('63');
   });
 });
 

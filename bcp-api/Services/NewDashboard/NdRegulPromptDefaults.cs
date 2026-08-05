@@ -13,9 +13,11 @@ You are a compliance analyst comparing a single regulatory requirement clause ag
 
 Document-perspective rule -- judge the internal manual as a bank IMPLEMENTING the regulator's requirements, never as a mirror expected to restate the regulatory document itself. Some regulatory clause content only makes sense coming from the regulator and has no implementing counterpart to look for: statements about which OTHER entity types the guidance applies to, "this document does not constitute legislation"/disclaimer-of-legal-force language, or instructions addressed to supervisors or the regulator's own staff rather than to the regulated entity. When a regulatory clause is this kind of regulator-only content, its correct and expected internal-policy counterpart is that the internal document says nothing about it -- this is NEVER a gap. Do not mark such a clause partial or non_compliant merely because the internal manual (correctly, as a bank-facing document) omits it; mark it compliant with an interpretation noting it is regulator-facing content with no implementing counterpart expected.
 
-Vendor/list-provider due diligence (AML-CFT domain term) -- when a regulatory clause requires "due diligence" on an external vendor or list provider used for sanctions/watchlist screening, this means verifying the accuracy and completeness of the data or list that vendor supplies (i.e. confirming the vendor's list actually contains all the required designated names) -- it does NOT mean a general vendor-selection, procurement, or onboarding vetting process. If the internal policy states it ensures/verifies the vendor-supplied list's completeness against the required source lists, that satisfies this kind of requirement even without a separately documented vendor assessment or selection procedure. Do not require a vendor-vetting procedure the clause never actually asked for.
+Domain-term interpretation -- interpret regulatory terms by the specific control or obligation the clause requires in its regulatory context, not by the broadest dictionary meaning. If the internal policy addresses the required control outcome using appropriate operational language (even when labels, headings, or section numbers differ from the regulation), count it as covered.
 
-Element-level checking -- when a regulatory clause enumerates multiple discrete required elements (e.g. a list of essential program components, a set of notification triggers, an enumerated list of factors to consider), do not form one holistic impression of the clause as a whole. Instead, go element by element: decide whether each individual element is covered in the internal policy text, and list every element's coverage (covered / not covered, with the specific supporting or missing evidence) in gap_description. Derive overall_status from the aggregate of the element results: compliant only if every element is covered, partial if some but not all are covered, non_compliant if none are covered.
+Element-level checking -- when a regulatory clause enumerates multiple discrete required elements (e.g. a list of essential program components, a set of notification triggers, an enumerated list of factors to consider), do not form one holistic impression of the clause as a whole. Instead, go element by element: decide whether each individual element is covered in the internal policy text, and list every element's coverage (covered / not covered, with the specific supporting or missing evidence) in gap_description. Derive overall_status from the aggregate of the element results: compliant only if every element is covered, partial if some but not all are covered, non_compliant if none are covered. When checking enumerated elements, search for operational equivalents under different headings or labels. Count an element as covered if the policy addresses the same control outcome, even if wording, section number, or document structure differs. Only mark an element not covered if no substantive procedural equivalent exists anywhere in the excerpts.
+
+Semantic matching -- compare by regulatory meaning and operational control outcome, not keyword overlap. Different wording, section numbers, headings, and document structure are acceptable when the control outcome is equivalent. Do not mark non_compliant when the internal policy clearly implements the regulatory intent with different terminology. Search ALL excerpts thoroughly before concluding non_compliant. Compliant if any excerpt fully addresses all elements/sub-obligations.
 
 Rules:
 - design_status: does the internal policy text address this requirement on paper? compliant = fully covered, partial = partially covered or covered with gaps, non_compliant = not addressed at all.
@@ -56,11 +58,23 @@ Also give an overall_rating (strong/adequate/weak), 2-5 strengths, and 2-5 concr
     public const string NoMatchingRegulatoryClause =
         "N/A — internal policy content with no matching regulatory clause";
 
+    public const string JudgmentSemanticV2Label = "Semantic matching v2";
+    public const string JudgmentSemanticV3Label = "Semantic matching";
+
     public static string BuildJudgmentContextText(string policyContext) =>
-        $"--- INTERNAL POLICY DOCUMENT EXCERPTS (retrieved as the sections most likely relevant to a clause -- they may not be the full manual, and if nothing here addresses a given clause it may still be covered elsewhere) ---\n{policyContext}\n--- END EXCERPTS ---";
+        $"--- INTERNAL POLICY DOCUMENT EXCERPTS (retrieved as the sections most likely relevant to a clause -- they may not be the full manual, and if nothing here addresses a given clause it may still be covered elsewhere) ---\n{policyContext}\n--- END EXCERPTS ---\n\nBefore concluding non_compliant, consider whether the requirement might be implemented elsewhere in the manual under different section titles, headings, or terminology than the regulator used. If excerpts are incomplete, prefer partial with low confidence over non_compliant.";
 
     public static string BuildJudgmentQueryText(string clauseNo, string clauseText) =>
-        $"REGULATORY CLAUSE {clauseNo}:\n{clauseText}\n\nJudge this clause against the excerpts above. If the excerpts don't clearly address the clause, prefer a lower confidence and non_compliant/partial design_status rather than assuming coverage that isn't shown.";
+        $"""
+REGULATORY CLAUSE {clauseNo}:
+{clauseText}
+
+Judge this clause against the excerpts above using semantic intent analysis, not keyword matching.
+Search all excerpts thoroughly before concluding non_compliant.
+Different wording, section numbers, headings, and document structure are acceptable when the control outcome is equivalent.
+If excerpts are incomplete or ambiguous, set low confidence and note that coverage may exist elsewhere in the manual — do not mark non_compliant solely because the excerpts are thin.
+Mark non_compliant only when no substantive procedural equivalent appears in the excerpts for the regulatory intent.
+""";
 
     public static string BuildJudgmentRetryNote(string overallStatus) =>
         $"--- RETRY ---\nYour overall_status was '{overallStatus}' but gap_description was empty. A partial or non_compliant finding MUST have a non-empty gap_description stating exactly what is missing and naming the document it was/was not found in. Provide that now.";

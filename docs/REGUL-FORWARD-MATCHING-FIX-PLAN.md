@@ -1,5 +1,7 @@
 # Regul forward matching — problem, fix plan, and runbook
 
+**Status:** Prompt **v2 (Semantic matching)** and retrieval synonym expansion are implemented in code. API startup auto-creates v2 and sets it current when missing.
+
 **Context:** CBUAE §8.4 (Independent Audit Function) marked **Non-Compliant** even though the internal AML Manual covers it under **Internal Audit AML Rule 9.4.1** with different wording (“internal audit” vs regulator “independent audit”). Same pattern affects other points where policy is covered under different section numbers or terminology.
 
 **Example docs:** `CBUAE_EN_3945_VER2.pdf` (regulation) · `Internal AML Manual 290626.pdf` (internal policy)
@@ -56,7 +58,7 @@ The gap text describes what **§8.4 asks for**, not what the manual **lacks** �
 
 ### Phase 1 — Prompt fixes (no deploy; Admin UI)
 
-**Goal:** Align Regul forward prompts with old Dual Verify V3 semantic rules; remove false-negative bias.
+**Status: DONE in code** — `NdRegulPromptDefaults` updated; API startup runs `EnsureJudgmentSemanticV2Async()` which creates **v2 "Semantic matching v2"** and sets it **current** for all three judgment prompts.
 
 | Block | Key | Change |
 |-------|-----|--------|
@@ -87,7 +89,7 @@ The gap text describes what **§8.4 asks for**, not what the manual **lacks** �
 
 ### Phase 3 — Retrieval code (deploy API)
 
-**Goal:** Forward pass includes 9.4.1 when judging §8.4 on large manuals.
+**Status: DONE** — synonym expansion, audit-section boost, `RetrievalTopChunks` raised to 20.
 
 | Change | File |
 |--------|------|

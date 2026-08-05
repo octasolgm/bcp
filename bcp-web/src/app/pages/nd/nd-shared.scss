@@ -927,3 +927,79 @@
   th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
   th { color: var(--text-muted); font-weight: 500; }
 }
+
+/* Clickable PDF page / clause refs (internal docs, regulation library, analysis). */
+.source-ref-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    color: color-mix(in srgb, var(--accent) 82%, var(--text-primary));
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: wait;
+    text-decoration: none;
+  }
+}
+
+.panel-busy-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-busy-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+  backdrop-filter: blur(2px);
+  border-radius: inherit;
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    line-height: 1.45;
+  }
+
+  .muted {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+  }
+}
+
+.panel-busy-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: nd-panel-spin 0.75s linear infinite;
+}
+
+@keyframes nd-panel-spin {
+  to { transform: rotate(360deg); }
+}

@@ -36,8 +36,40 @@
       @if (documentReference) {
         <p class="document-ref-line">
           <span class="document-ref-label">Document reference</span>
-          <span class="document-ref-value">{{ documentReference }}</span>
         </p>
+        @if (documentRefLines.length) {
+          <ul class="document-ref-list">
+            @for (refLine of documentRefLines; track refLine) {
+              <li>
+                @if (documentRefDocId) {
+                  <button
+                    type="button"
+                    class="source-ref-link document-ref-value"
+                    [attr.title]="refLine"
+                    (click)="onViewDocumentReferenceLine(refLine)"
+                  >
+                    {{ refLine }}
+                  </button>
+                } @else {
+                  <span class="document-ref-value">{{ refLine }}</span>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          @if (documentRefDocId) {
+            <button
+              type="button"
+              class="source-ref-link document-ref-value"
+              [attr.title]="documentReference"
+              (click)="onViewDocumentReference()"
+            >
+              {{ documentReference }}
+            </button>
+          } @else {
+            <span class="document-ref-value">{{ documentReference }}</span>
+          }
+        }
       }
       @if (policyRefs.length) {
         <div class="policy-ref-nav">

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
+using Reguliq.Api.Services;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.Storage;
 
@@ -17,6 +18,7 @@ public class NdInternalDocumentSectionService(
     LandingAiPolicyClauseExtractService policyClauseExtract,
     LandingAiCacheRepository cache,
     SupabaseStorageService storage,
+    NdInternalDocumentSectionPageService sectionPageService,
     ILogger<NdInternalDocumentSectionService> logger)
 {
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> RunningExtracts = new();
@@ -28,12 +30,12 @@ public class NdInternalDocumentSectionService(
         Guid storedDocumentId,
         CancellationToken ct = default)
     {
-        return await db.NdInternalDocumentSections
+        var rows = await db.NdInternalDocumentSections
             .AsNoTracking()
             .Where(s => s.StoredDocumentId == storedDocumentId)
-            .OrderBy(s => s.DisplayOrder)
-            .ThenBy(s => s.SectionRef)
             .ToListAsync(ct);
+
+        return PointNumberSort.OrderByPointNumber(rows, s => s.SectionRef).ToList();
     }
 
     /// <summary>
@@ -99,7 +101,6 @@ public class NdInternalDocumentSectionService(
 
         var existing = await db.NdInternalDocumentSections
             .Where(s => s.StoredDocumentId == storedDocumentId)
-            .OrderBy(s => s.DisplayOrder)
             .ToListAsync(ct);
 
         if (!force
@@ -110,7 +111,7 @@ public class NdInternalDocumentSectionService(
                 "Using {Count} saved library sections for {DocId} (no Landing AI call)",
                 existing.Count,
                 storedDocumentId);
-            return existing;
+            return PointNumberSort.OrderByPointNumber(existing, s => s.SectionRef).ToList();
         }
 
         if (!force && existing.Count == 0)
@@ -169,6 +170,8 @@ public class NdInternalDocumentSectionService(
             var clauses = await ExtractPolicyClausesAsync(doc, ReportProgress, ct);
             await ReportProgress(new ExtractionProgressUpdate($"Saving {clauses.Count} sections to library…", 95));
             var sections = await ReplaceLibrarySectionsAsync(doc, clauses, ct);
+            await ReportProgress(new ExtractionProgressUpdate("Resolving PDF page references…", 96));
+            await sectionPageService.RefreshSectionPagesAsync(doc.Id, ct);
 
             doc.SectionExtractStatus = "extracted";
             doc.SectionCount = sections.Count;
@@ -209,18 +212,47 @@ public class NdInternalDocumentSectionService(
         CancellationToken ct = default)
     {
         var existing = await db.NdInternalDocumentSections
-            .AsNoTracking()
             .Where(s => s.StoredDocumentId == doc.Id)
-            .OrderBy(s => s.DisplayOrder)
             .ToListAsync(ct);
+
+        string? markdown = null;
+        if (storage.IsConfigured && !string.IsNullOrWhiteSpace(doc.StoragePath))
+        {
+            var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
+            var payload = await internalParse.EnsureParsedAsync(doc, bytes, ct);
+            markdown = payload.Markdown;
+        }
 
         if (existing.Count > 0)
         {
+            var recovered = await TryRecoverMissingLibrarySectionsAsync(doc, existing, markdown, ct);
+            if (recovered > 0)
+            {
+                existing = await db.NdInternalDocumentSections
+                    .Where(s => s.StoredDocumentId == doc.Id)
+                    .ToListAsync(ct);
+                logger.LogInformation(
+                    "Recovered {Count} missing section(s) from markdown for doc {DocId}",
+                    recovered,
+                    doc.Id);
+            }
+
+            if (existing.Any(s => s.SourcePage is null or <= 0) || recovered > 0)
+                await sectionPageService.RefreshSectionPagesAsync(doc.Id, ct);
+
+            existing = await db.NdInternalDocumentSections
+                .AsNoTracking()
+                .Where(s => s.StoredDocumentId == doc.Id)
+                .ToListAsync(ct);
+
             logger.LogInformation(
                 "Using {Count} library sections for internal doc {DocId}",
                 existing.Count,
                 doc.Id);
-            return existing.Select(s => (s.SectionRef, s.SectionText, s.SourcePage)).ToList();
+            return PointNumberSort
+                .OrderByPointNumber(existing, s => s.SectionRef)
+                .Select(s => (s.SectionRef, s.SectionText, s.SourcePage))
+                .ToList();
         }
 
         var hydrated = await TryHydrateSectionsFromExtractCacheAsync(doc, null, ct);
@@ -241,6 +273,55 @@ public class NdInternalDocumentSectionService(
         return saved.Select(s => (s.SectionRef, s.SectionText, s.SourcePage)).ToList();
     }
 
+    private async Task<int> TryRecoverMissingLibrarySectionsAsync(
+        StoredDocument doc,
+        IReadOnlyList<NdInternalDocumentSection> existing,
+        string? markdown,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(markdown) || existing.Count == 0)
+            return 0;
+
+        var clauses = existing
+            .Select(s => new PolicyClause(s.SectionRef, s.SectionText, s.SourcePage ?? 0))
+            .ToList();
+        var merged = PolicyClauseMarkdownRecovery.MergeMissing(clauses, markdown);
+        if (merged.Count <= clauses.Count)
+            return 0;
+
+        var existingRefs = new HashSet<string>(
+            existing.Select(s => MarkdownSectionScanner.NormalizeRef(s.SectionRef)),
+            StringComparer.OrdinalIgnoreCase);
+        var added = 0;
+        var order = existing.Max(s => s.DisplayOrder) + 1;
+
+        foreach (var clause in merged)
+        {
+            var key = MarkdownSectionScanner.NormalizeRef(clause.ClauseNo);
+            if (existingRefs.Contains(key)) continue;
+
+            db.NdInternalDocumentSections.Add(new NdInternalDocumentSection
+            {
+                StoredDocumentId = doc.Id,
+                SectionRef = clause.ClauseNo,
+                SectionText = clause.ClauseText,
+                SourcePage = null,
+                DisplayOrder = order++,
+            });
+            existingRefs.Add(key);
+            added++;
+        }
+
+        if (added > 0)
+        {
+            doc.SectionCount = existing.Count + added;
+            doc.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+
+        return added;
+    }
+
     private async Task<List<NdInternalDocumentSection>> TryHydrateSectionsFromExtractCacheAsync(
         StoredDocument doc,
         Guid? extractedBy,
@@ -258,8 +339,18 @@ public class NdInternalDocumentSectionService(
             doc.SectionExtractProgressPct = 92;
             doc.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
-            var sections = await ReplaceLibrarySectionsAsync(doc, cachedClauses.Select(c =>
-                new PolicyClause(c.ClauseNo, c.ClauseText, c.SourcePage)).ToList(), ct);
+
+            var parseMarkdown = (await cache.GetParseCacheAsync(cacheKey, ct))?.Markdown;
+            if (string.IsNullOrWhiteSpace(parseMarkdown) && !string.IsNullOrWhiteSpace(doc.FileHash))
+                parseMarkdown = (await cache.GetParseCacheAsync(doc.FileHash, ct))?.Markdown;
+
+            var clauseList = cachedClauses
+                .Select(c => new PolicyClause(c.ClauseNo, c.ClauseText, 0))
+                .ToList();
+            clauseList = PolicyClauseMarkdownRecovery.MergeMissing(clauseList, parseMarkdown);
+
+            var sections = await ReplaceLibrarySectionsAsync(doc, clauseList, ct);
+            await sectionPageService.RefreshSectionPagesAsync(doc.Id, ct);
             doc.SectionExtractStatus = "extracted";
             doc.SectionCount = sections.Count;
             doc.SectionExtractedAt ??= DateTimeOffset.UtcNow;
@@ -323,16 +414,17 @@ public class NdInternalDocumentSectionService(
         if (existing.Count > 0)
             db.NdInternalDocumentSections.RemoveRange(existing);
 
+        var sortedClauses = PointNumberSort.OrderByPointNumber(clauses, c => c.ClauseNo).ToList();
         var sections = new List<NdInternalDocumentSection>();
-        for (var i = 0; i < clauses.Count; i++)
+        for (var i = 0; i < sortedClauses.Count; i++)
         {
-            var clause = clauses[i];
+            var clause = sortedClauses[i];
             sections.Add(new NdInternalDocumentSection
             {
                 StoredDocumentId = doc.Id,
                 SectionRef = clause.ClauseNo,
                 SectionText = clause.ClauseText,
-                SourcePage = clause.SourcePage > 0 ? clause.SourcePage : null,
+                SourcePage = null,
                 DisplayOrder = i,
             });
         }

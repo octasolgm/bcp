@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.NewDashboard;
 
@@ -32,7 +33,7 @@ public class AnalysisRunsController(
         List<string> SelectedRegulationDocIds,
         /// <summary>Optional prompt pack: v1 | v2 | v3. Analyse-v9 sends v3 (Regul.ai rules).</summary>
         string? ComparePromptVersion = null,
-        /// <summary>bcp_landing (default) or regul_pipeline (Regul workflow V3).</summary>
+        /// <summary>bcp_landing (default), regul_pipeline (V3), or regul_pipeline_full (V4 full markdown).</summary>
         string? WorkflowEngine = null,
         bool EnableQualitative = false);
 
@@ -353,14 +354,15 @@ public class AnalysisRunsController(
         int? regulReverseSectionCompleted = null;
         int? regulReverseSectionFailed = null;
         List<object>? regulReverseSections = null;
-        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
         {
-            var sections = await db.NdRegulInternalSections
+            var sectionRows = await db.NdRegulInternalSections
                 .AsNoTracking()
                 .Where(s => s.AnalysisRunId == id)
-                .OrderBy(s => s.SectionRef)
                 .Select(s => new { s.Id, s.SectionRef, s.SectionText })
                 .ToListAsync(ct);
+
+            var sections = PointNumberSort.OrderByPointNumber(sectionRows, s => s.SectionRef).ToList();
 
             regulReverseSectionTotal = sections.Count;
 
@@ -443,7 +445,7 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
-        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine) && run.RegulClausesConfirmedAt == null)
+        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine) && run.RegulClausesConfirmedAt == null)
             return BadRequest(new
             {
                 success = false,
@@ -451,7 +453,7 @@ public class AnalysisRunsController(
             });
 
         var linkedCt = runCancellation.Register(id);
-        var useRegul = AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine);
+        var useRegul = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine);
         _ = Task.Run(async () =>
         {
             using var scope = scopeFactory.CreateScope();
@@ -493,7 +495,7 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
-        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return BadRequest(new { success = false, message = "Forward-only start is for Regul workflow runs." });
 
         if (run.RegulClausesConfirmedAt == null)
@@ -542,7 +544,7 @@ public class AnalysisRunsController(
         if (run == null) return NotFound(new { success = false, message = "Not found" });
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
-        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return BadRequest(new { success = false, message = "Not a Regul workflow run." });
         if (run.Status is not "draft")
             return BadRequest(new { success = false, message = "Clauses can only be confirmed on draft runs." });
@@ -664,7 +666,7 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
 
-        if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return BadRequest(new { success = false, message = "Forward-only rerun is for Regul workflow runs." });
 
         _ = Task.Run(async () =>
@@ -692,7 +694,7 @@ public class AnalysisRunsController(
         bool evidenceOnly,
         int? actionIndex)
     {
-        var useRegul = AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine);
+        var useRegul = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine);
         if (useRegul && evidenceOnly)
             dualVerifyOnly = false;
 
@@ -768,7 +770,7 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
 
-        if (AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
+        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
         {
             _ = Task.Run(async () =>
             {
@@ -1047,7 +1049,7 @@ public class AnalysisRunsController(
     }
 
     private static string ResolveWorkflowEngine(string? raw) =>
-        AnalysisWorkflowEngine.IsRegulPipeline(raw)
+        AnalysisWorkflowEngine.IsRegulFamily(raw)
             ? AnalysisWorkflowEngine.RegulPipeline
             : AnalysisWorkflowEngine.BcpLanding;
 

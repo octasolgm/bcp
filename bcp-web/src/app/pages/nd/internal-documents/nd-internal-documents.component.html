@@ -292,6 +292,21 @@
                 </span>
               }
             </span>
+          } @else if (isRepairingSectionPages(sectionsFor)) {
+            <span class="extract-status-stack panel-extract-status">
+              <span>{{ sectionPageRepairStatusText(sectionsFor) }}</span>
+              @if (sectionPageRepairProgressPct(sectionsFor); as pct) {
+                <span
+                  class="extract-progress-track panel-progress"
+                  role="progressbar"
+                  [attr.aria-valuenow]="pct"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                >
+                  <span class="extract-progress-fill" [style.width.%]="pct"></span>
+                </span>
+              }
+            </span>
           } @else {
             {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
             @if (sectionsFor.sectionCount) {
@@ -312,12 +327,31 @@
         >
           {{ sectionExtractButtonLabel(sectionsFor) }}
         </button>
+        @if (canRepairSectionPages(sectionsFor)) {
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            [disabled]="isRepairingSectionPages(sectionsFor)"
+            (click)="handleRepairSectionPages(sectionsFor)"
+            title="Fix PDF page numbers from parsed document (no Landing AI credits; may take 1–2 min for large manuals)"
+          >
+            {{ isRepairingSectionPages(sectionsFor) ? 'Repairing pages…' : 'Repair page refs' }}
+          </button>
+        }
       </div>
     }
     <app-nd-internal-document-sections-panel
       [docTitle]="sectionsFor.title"
       [sections]="sectionRows"
       [loading]="loadingSections"
+      [extracting]="isExtractingSections(sectionsFor)"
+      [extractingLabel]="sectionExtractStatusText(sectionsFor)"
+      [extractingPct]="sectionExtractProgressPct(sectionsFor)"
+      [repairing]="isRepairingSectionPages(sectionsFor)"
+      [repairingLabel]="sectionPageRepairStatusText(sectionsFor)"
+      [repairingPct]="sectionPageRepairProgressPct(sectionsFor)"
+      [canOpenSource]="true"
+      (openSourcePage)="openInternalSourcePage(sectionsFor.id, $event)"
     />
   </aside>
 }

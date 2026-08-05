@@ -75,6 +75,9 @@ import {
   regulForwardError,
 } from '../../../lib/nd/regul-fields';
 import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
+import { sortByPointRef } from '../../../lib/nd/list-utils';
+import { resolveRegulationPdfPage } from '../../../lib/nd/regulation-pdf-page';
+import { isRegulWorkflow } from '../../../lib/nd/regul-fields';
 import {
   exportGapAnalysisExcelFromPoints,
   exportGapAnalysisPdfFromPoints,
@@ -270,7 +273,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }): void {}
 
   protected isRegulPipelineRun(): boolean {
-    return this.ndWorkflowEngine === 'regul_pipeline';
+    return isRegulWorkflow(this.ndWorkflowEngine);
   }
 
   protected isRegulPipelineInFlight(): boolean {
@@ -1201,6 +1204,11 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       },
       error: () => void this.openRegulationFileUrl(docId, page),
     });
+  }
+
+  openRegulationPageFromSnapshot(snap?: { pageReference?: string | null; pdfPage?: number | null } | null): void {
+    const page = resolveRegulationPdfPage(snap?.pageReference, snap?.pdfPage ?? null);
+    this.openPdfDocument(this.regulationPdfDocId, page != null ? String(page) : null);
   }
 
   private async openRegulationFileUrl(docId: string, page?: string | null): Promise<void> {
@@ -3965,7 +3973,10 @@ ${this.findingsPreview
       this.ndRegulReverseSectionCompleted = pollData.regulReverseSectionCompleted;
     }
     if (pollData.regulReverseSections) {
-      this.ndRegulReverseSections = pollData.regulReverseSections;
+      this.ndRegulReverseSections = sortByPointRef(
+        pollData.regulReverseSections,
+        (r) => r.sectionRef,
+      );
     }
     this.progressTotal = status?.totalPointsCount ?? run.totalPointsCount ?? points.length;
     this.progressDone = status?.processedPointsCount ?? run.processedPointsCount ?? 0;
@@ -4045,7 +4056,7 @@ ${this.findingsPreview
       (p) => p.landingAiStatus === 'pending' || p.landingAiStatus === 'failed',
     );
 
-    this.ndRunDualVerifyFailedCount = this.isRegulPipelineInFlight() || this.ndWorkflowEngine === 'regul_pipeline'
+    this.ndRunDualVerifyFailedCount = this.isRegulPipelineInFlight() || isRegulWorkflow(this.ndWorkflowEngine)
       ? regulClauseFailedCount(run)
       : run.dualVerifyFailedCount ?? 0;
 

@@ -118,4 +118,11 @@ export class NdRegulationDocumentDetailComponent implements OnInit {
     }
     this.extracting = false;
   }
+
+  async openRegulationSourcePage(page: number): Promise<void> {
+    if (!this.doc) return;
+    const fileDocId = this.doc.storedDocumentId ?? this.doc.id;
+    const ok = await this.api.openRegulationDocumentPdf(fileDocId, page);
+    if (!ok) this.error = 'Could not open document PDF';
+  }
 }

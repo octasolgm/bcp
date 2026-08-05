@@ -4,13 +4,15 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Services.LandingAi;
+using Reguliq.Api.Services.Pdf;
 
 namespace Reguliq.Api.Services.NewDashboard;
 
-/// <summary>Resolve PDF pages for regulation points using cached parse markdown (no Landing AI).</summary>
+/// <summary>Resolve PDF pages for regulation points using native PDF text (preferred) or cached parse markdown.</summary>
 public sealed class NdRegulationPointPageService(
     AppDbContext db,
-    LandingAiCacheRepository landingCache)
+    LandingAiCacheRepository landingCache,
+    NdDocumentPageReferenceResolver pageResolver)
 {
     private readonly Dictionary<Guid, string?> _markdownByStoredId = new();
 
@@ -161,45 +163,39 @@ public sealed class NdRegulationPointPageService(
         int? pageHint,
         CancellationToken ct)
     {
+        var stored = await db.StoredDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == storedDocumentId, ct);
+        if (stored is null) return null;
+
         if (!_markdownByStoredId.TryGetValue(storedDocumentId, out var markdown))
         {
             markdown = await LoadParsedMarkdownAsync(storedDocumentId, ct);
             _markdownByStoredId[storedDocumentId] = markdown;
         }
 
-        var markerPages = PolicyPageResolver.EstimatePageCount(markdown);
-        var storedPages = await LoadStoredDocumentPageCountAsync(storedDocumentId, ct);
-        if ((storedPages is null or < 15) && markdown is { Length: > 40_000 })
-            storedPages = Math.Clamp((int)Math.Round(markdown.Length / 4000.0), 20, 500);
-
-        int? maxPages = markerPages is > 0 && storedPages is > 0
-            ? Math.Max(markerPages.Value, storedPages.Value)
-            : markerPages ?? storedPages;
+        var resolved = await pageResolver.ResolveSectionPageAsync(
+            stored,
+            markdown,
+            pointId,
+            title,
+            content,
+            ct);
+        if (resolved is > 0) return resolved;
 
         if (!string.IsNullOrWhiteSpace(markdown))
         {
+            var maxPages = PolicyPageResolver.EstimatePageCount(markdown);
             var hintForResolve = IsNumberedClausePoint(pointId) ? null : pageHint;
-            var resolved = PolicyPageResolver.ResolveGovPointPage(
+            var fromMarkdown = PolicyPageResolver.ResolveGovPointPage(
                 markdown, pointId, section, title, content, hintForResolve, maxPages);
-            var refined = PolicyPageResolver.RefinePageGuess(resolved, pointId, maxPages);
+            var refined = PolicyPageResolver.RefinePageGuess(fromMarkdown, pointId, maxPages);
             if (refined is > 0) return refined;
         }
 
-        if (maxPages is > 10)
-        {
-            var byPoint = PolicyPageResolver.EstimatePageFromPointNumber(pointId, maxPages.Value);
-            if (byPoint is > 0) return byPoint;
-        }
-
-        var trustedHint = pageHint is > 0 && (maxPages is null or <= 0 || pageHint <= maxPages)
-            ? pageHint
-            : null;
-        if (trustedHint == 1 && maxPages is > 10)
-            trustedHint = null;
         return PolicyPageResolver.RefinePageGuess(
-            ResolvePdfPage(section, trustedHint),
+            ResolvePdfPage(section, pageHint is > 0 ? pageHint : null),
             pointId,
-            maxPages);
+            null);
     }
 
     private static bool IsNumberedClausePoint(string pointId) =>
@@ -213,17 +209,6 @@ public sealed class NdRegulationPointPageService(
 
         var row = await landingCache.GetParseCacheAsync(stored.FileHash, ct);
         return row?.Markdown;
-    }
-
-    private async Task<int?> LoadStoredDocumentPageCountAsync(Guid storedDocumentId, CancellationToken ct)
-    {
-        var stored = await db.StoredDocuments.AsNoTracking()
-            .FirstOrDefaultAsync(d => d.Id == storedDocumentId, ct);
-        if (stored == null) return null;
-        if (stored.Pages is > 1) return stored.Pages;
-        if (stored.SizeBytes is > 80_000)
-            return Math.Clamp((int)Math.Round(stored.SizeBytes / 45000.0), 30, 500);
-        return stored.Pages is > 0 ? stored.Pages : null;
     }
 
     private static int? ResolvePdfPage(string? pageReference, int? pageHint)

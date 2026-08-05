@@ -1,13 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
+using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Services.LandingAi;
+using Reguliq.Api.Services.Pdf;
 
 namespace Reguliq.Api.Services.NewDashboard;
 
 public sealed class NdRegulationPointRepairService(
     AppDbContext db,
     LandingAiCacheRepository cache,
+    NdDocumentPageReferenceResolver pageResolver,
     ILogger<NdRegulationPointRepairService> logger)
 {
     public sealed record RepairResult(
@@ -17,6 +20,115 @@ public sealed class NdRegulationPointRepairService(
         int DuplicateGroups,
         int JunkRemoved,
         int PagesRefreshed);
+
+    /// <summary>Scan parse markdown for numbered headings missing from the library and add them.</summary>
+    public async Task<int> RecoverMissingPointsAsync(Guid regulationDocumentId, CancellationToken ct = default)
+    {
+        var doc = await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regulationDocumentId, ct)
+            ?? await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.StoredDocumentId == regulationDocumentId, ct)
+            ?? throw new InvalidOperationException("Regulation document not found.");
+
+        if (doc.IsManual) return 0;
+
+        var points = await db.NdRegulationPoints
+            .Where(p => p.RegulationDocumentId == doc.Id && p.Status == NdRegulationPointStatus.Active)
+            .ToListAsync(ct);
+
+        var markdown = doc.ExtractionMarkdown;
+        if (string.IsNullOrWhiteSpace(markdown) && doc.StoredDocumentId is Guid storedId)
+        {
+            var stored = await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == storedId, ct);
+            if (!string.IsNullOrWhiteSpace(stored?.ExtractionCacheKey))
+                markdown = (await cache.GetParseCacheAsync(stored.ExtractionCacheKey, ct))?.Markdown;
+            if (string.IsNullOrWhiteSpace(markdown) && !string.IsNullOrWhiteSpace(stored?.FileHash))
+                markdown = (await cache.GetParseCacheAsync(stored.FileHash, ct))?.Markdown;
+        }
+
+        if (string.IsNullOrWhiteSpace(markdown)) return 0;
+
+        var govPoints = points.Select(p => new Models.GovPoint(
+            p.PointNumber,
+            p.PointTitle,
+            p.PointContent,
+            p.PageReference,
+            ParsePageFromReference(p.PageReference),
+            "mandatory")).ToList();
+
+        var merged = GovPointMarkdownRecovery.MergeMissing(govPoints, markdown);
+        if (merged.Count <= govPoints.Count) return 0;
+
+        var existing = new HashSet<string>(
+            points.Select(p => GovPointExtractNormalizer.NormalizePointNumberKey(p.PointNumber)),
+            StringComparer.OrdinalIgnoreCase);
+        var added = 0;
+
+        foreach (var point in merged)
+        {
+            var key = GovPointExtractNormalizer.NormalizePointNumberKey(point.PointId);
+            if (existing.Contains(key)) continue;
+
+            int? resolvedPage = null;
+            if (doc.StoredDocumentId is Guid sid)
+            {
+                var stored = await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == sid, ct);
+                if (stored is not null)
+                {
+                    resolvedPage = await pageResolver.ResolveSectionPageAsync(
+                        stored,
+                        markdown,
+                        point.PointId,
+                        point.Title,
+                        point.Text,
+                        ct);
+                }
+            }
+
+            db.NdRegulationPoints.Add(new NdRegulationPoint
+            {
+                RegulationDocumentId = doc.Id,
+                PointNumber = point.PointId,
+                PointTitle = point.Title,
+                PointContent = point.Text,
+                PageReference = FormatPointPageReference(point.Section, resolvedPage),
+                IsIntroductionPoint = GovPointClassifier.IsIntroductionPoint(
+                    point.PointId, point.Title, point.Text, point.Section, point.PointType),
+                IsAnnexPoint = GovPointClassifier.IsAnnexPoint(point.PointId, point.Title, point.Section),
+            });
+            existing.Add(key);
+            added++;
+        }
+
+        if (added > 0)
+        {
+            doc.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation(
+                "Recovered {Count} missing regulation point(s) from markdown for doc {DocId}",
+                added,
+                doc.Id);
+        }
+
+        return added;
+    }
+
+    /// <summary>Recompute point page references from native PDF text (preferred) or parse cache — no Landing AI credits.</summary>
+    public async Task<int> RefreshPagesAsync(Guid regulationDocumentId, CancellationToken ct = default)
+    {
+        var doc = await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regulationDocumentId, ct)
+            ?? await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.StoredDocumentId == regulationDocumentId, ct)
+            ?? throw new InvalidOperationException("Regulation document not found.");
+
+        var points = await db.NdRegulationPoints
+            .Where(p => p.RegulationDocumentId == doc.Id && p.Status == NdRegulationPointStatus.Active)
+            .ToListAsync(ct);
+        if (points.Count == 0)
+            return 0;
+
+        var refreshed = await RefreshPageReferencesAsync(doc, points, ct);
+        doc.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return refreshed;
+    }
 
     public async Task<RepairResult> RepairDocumentAsync(Guid regulationDocumentId, CancellationToken ct = default)
     {
@@ -86,44 +198,34 @@ public sealed class NdRegulationPointRepairService(
     {
         if (keepPoints.Count == 0) return 0;
 
-        string? markdown = doc.ExtractionMarkdown;
-        string? fileHash = null;
-
+        StoredDocument? stored = null;
         if (doc.StoredDocumentId is Guid storedId)
+            stored = await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == storedId, ct);
+
+        var markdown = doc.ExtractionMarkdown;
+        if (string.IsNullOrWhiteSpace(markdown) && stored is not null)
         {
-            var stored = await db.StoredDocuments.AsNoTracking()
-                .FirstOrDefaultAsync(d => d.Id == storedId, ct);
-            fileHash = stored?.FileHash;
-            if (string.IsNullOrWhiteSpace(markdown) && !string.IsNullOrWhiteSpace(stored?.ExtractionCacheKey))
-            {
-                var cached = await cache.GetParseCacheAsync(stored!.ExtractionCacheKey!, ct);
-                markdown = cached?.Markdown;
-            }
+            if (!string.IsNullOrWhiteSpace(stored.ExtractionCacheKey))
+                markdown = (await cache.GetParseCacheAsync(stored.ExtractionCacheKey, ct))?.Markdown;
+            if (string.IsNullOrWhiteSpace(markdown) && !string.IsNullOrWhiteSpace(stored.FileHash))
+                markdown = (await cache.GetParseCacheAsync(stored.FileHash, ct))?.Markdown;
         }
 
-        if (string.IsNullOrWhiteSpace(markdown) && !string.IsNullOrWhiteSpace(fileHash))
-        {
-            var cached = await cache.GetParseCacheAsync(fileHash, ct);
-            markdown = cached?.Markdown;
-        }
+        if (stored is null || string.IsNullOrWhiteSpace(markdown))
+            return 0;
 
-        if (string.IsNullOrWhiteSpace(markdown)) return 0;
-
-        int? pdfPageCount = PolicyPageResolver.EstimatePageCount(markdown);
         var refreshed = 0;
 
         foreach (var point in keepPoints)
         {
-            var pageHint = ParsePageFromReference(point.PageReference);
-            var resolved = PolicyPageResolver.ResolveGovPointPage(
+            var resolved = await pageResolver.ResolveSectionPageAsync(
+                stored,
                 markdown,
                 point.PointNumber,
-                ExtractSectionFromReference(point.PageReference),
                 point.PointTitle,
                 point.PointContent,
-                pageHint,
-                pdfPageCount);
-            resolved = PolicyPageResolver.RefinePageGuess(resolved, point.PointNumber, pdfPageCount);
+                ct);
+
             var formatted = FormatPointPageReference(
                 ExtractSectionFromReference(point.PageReference) ?? point.PointNumber,
                 resolved);

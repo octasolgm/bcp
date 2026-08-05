@@ -154,6 +154,8 @@ export class NdGapPointDetailComponent implements OnChanges {
   regulatoryText = '';
   policyExtract = '';
   documentReference = '';
+  documentRefLines: string[] = [];
+  documentRefDocId: string | null = null;
   policyPage: string | null = null;
   policySection: string | null = null;
   policyRefLabel = '';
@@ -308,6 +310,12 @@ export class NdGapPointDetailComponent implements OnChanges {
     );
     if (resolvedDocRef) {
       this.documentReference = resolvedDocRef;
+      this.documentRefLines = resolvedDocRef
+        .split(/[;\n]+/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+    } else {
+      this.documentRefLines = [];
     }
 
     const resolvedDocId =
@@ -315,6 +323,7 @@ export class NdGapPointDetailComponent implements OnChanges {
       resolvePolicyDocId(this.primaryBlock.referencePdf, catalog) ??
       this.policyRefs.find((r) => r.docId)?.docId ??
       this.policyDocId;
+    this.documentRefDocId = resolvedDocId ?? null;
 
     if (!this.policyExtract) {
       const notStarted =
@@ -588,9 +597,22 @@ export class NdGapPointDetailComponent implements OnChanges {
     if (this.policyDocId) this.openPdf.emit({ docId: this.policyDocId, page: this.policyPage });
   }
 
-  onViewPolicyPage(page: string, docId?: string | null): void {
+  onViewDocumentReference(): void {
+    if (!this.documentRefDocId) return;
+    const line = this.documentRefLines[0] ?? this.documentReference;
+    this.onViewDocumentReferenceLine(line);
+  }
+
+  onViewDocumentReferenceLine(line: string): void {
+    if (!this.documentRefDocId) return;
+    const pageMatch = line.match(/(?:p\.?|page)\s*(\d+)/i);
+    const page = pageMatch?.[1] ?? this.policyPage;
+    this.onViewPolicyPage(page, this.documentRefDocId);
+  }
+
+  onViewPolicyPage(page?: string | null, docId?: string | null): void {
     const id = docId ?? this.policyDocId;
-    if (id) this.openPdf.emit({ docId: id, page });
+    if (id) this.openPdf.emit({ docId: id, page: page ?? undefined });
   }
 
   onViewGapEvidence(storedDocumentId: string): void {

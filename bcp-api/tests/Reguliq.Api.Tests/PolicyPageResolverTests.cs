@@ -98,6 +98,60 @@ public class PolicyPageResolverTests
         Assert.True(page is >= 76 and <= 78, $"expected ~77, got {page}");
     }
 
+    [Fact]
+    public void ResolveGovPointPage_6_2_PrefersBodyTextInsideMultiPageChunk()
+    {
+        const int segLen = 20_000;
+        var tocAt = (int)(segLen * 0.05);
+        var bodyAt = (int)(segLen * 0.42);
+        var body =
+            "The department has complete independence in relation to the investigation of Anti-Money Laundering and Terrorist Financing cases";
+        var md = $"""
+            {PolicyPageResolver.PageMarkerPrefix}12 -->
+            {new string('a', tocAt)}
+            6.2 Independence of the Compliance / AML Department (contents)
+            {new string('b', bodyAt - tocAt - 60)}
+            6.2 Independence of the Compliance / AML Department:
+            * {body}
+            {new string('c', segLen - bodyAt - body.Length - 80)}
+            {PolicyPageResolver.PageMarkerPrefix}18 -->
+            next chapter
+            """;
+
+        var page = PolicyPageResolver.ResolveGovPointPage(
+            md,
+            "6.2",
+            section: "6.2",
+            title: null,
+            text: body,
+            aiPageHint: 12,
+            maxPageOverride: 63);
+
+        Assert.True(page is >= 14 and <= 15, $"expected ~14, got {page}");
+    }
+
+    [Fact]
+    public void InjectPageMarkersFromParseJson_SplitsMultiPageArraysProportionally()
+    {
+        var json = """
+            {
+              "splits": [
+                {
+                  "pages": [12, 13, 14],
+                  "markdown": "AAAAABBBBBCCCCC"
+                }
+              ]
+            }
+            """;
+
+        var md = PolicyPageResolver.InjectPageMarkersFromParseJson(json, "fallback");
+        Assert.Contains("<!-- BCP_PDF_PAGE:12 -->", md);
+        Assert.Contains("<!-- BCP_PDF_PAGE:13 -->", md);
+        Assert.Contains("<!-- BCP_PDF_PAGE:14 -->", md);
+        Assert.Contains("AAAAA", md);
+        Assert.Contains("CCCCC", md);
+    }
+
     [Theory]
     [InlineData("2).", "2")]
     [InlineData("7.2):", "7.2")]

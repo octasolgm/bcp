@@ -1563,7 +1563,18 @@
     </h2>
     @if (pointDetailModalSnapshot()?.pageReference) {
       <p class="point-detail-meta">
-        <strong>Clause / page:</strong> {{ pointDetailModalSnapshot()?.pageReference }}
+        <strong>Clause / page:</strong>
+        @if (regulationPdfDocId) {
+          <button
+            type="button"
+            class="source-ref-link"
+            (click)="openRegulationPageFromSnapshot(pointDetailModalSnapshot())"
+          >
+            {{ pointDetailModalSnapshot()?.pageReference }}
+          </button>
+        } @else {
+          {{ pointDetailModalSnapshot()?.pageReference }}
+        }
       </p>
     }
     @if (pointDetailModalGov()?.title && pointDetailModalGov()?.title !== pointDetailModalSnapshot()?.pointTitle) {

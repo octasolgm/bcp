@@ -109,4 +109,66 @@ public class NdAnalysisPromptVersionServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.GetJudgmentSystemPromptAsync(CancellationToken.None));
     }
+
+    [Fact]
+    public async Task EnsureJudgmentSemanticV2Async_creates_v2_and_sets_current()
+    {
+        await using var db = CreateDb();
+        var service = new NdAnalysisPromptVersionService(db);
+
+        db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+        {
+            PromptKey = NdAnalysisPromptVersionService.JudgmentSystemKey,
+            VersionNumber = 1,
+            Label = "Base",
+            PromptText = "OLD SYSTEM PROMPT",
+            IsCurrent = true,
+        });
+        await db.SaveChangesAsync();
+
+        await service.EnsureJudgmentSemanticV2Async(CancellationToken.None);
+
+        var versions = await db.NdAnalysisPromptVersions
+            .Where(v => v.PromptKey == NdAnalysisPromptVersionService.JudgmentSystemKey)
+            .OrderBy(v => v.VersionNumber)
+            .ToListAsync(CancellationToken.None);
+
+        Assert.Equal(2, versions.Count);
+        Assert.Equal(NdRegulPromptDefaults.JudgmentSemanticV2Label, versions[1].Label);
+        Assert.True(versions[1].IsCurrent);
+        Assert.False(versions[0].IsCurrent);
+    }
+
+    [Fact]
+    public async Task EnsureJudgmentSemanticV3Async_creates_v3_and_sets_current()
+    {
+        await using var db = CreateDb();
+        var service = new NdAnalysisPromptVersionService(db);
+
+        db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+        {
+            PromptKey = NdAnalysisPromptVersionService.JudgmentSystemKey,
+            VersionNumber = 2,
+            Label = "Semantic matching v2",
+            PromptText = "OLD AML-SPECIFIC PROMPT with independent audit 9.4.1",
+            IsCurrent = true,
+        });
+        await db.SaveChangesAsync();
+
+        await service.EnsureJudgmentSemanticV3Async(CancellationToken.None);
+
+        var versions = await db.NdAnalysisPromptVersions
+            .Where(v => v.PromptKey == NdAnalysisPromptVersionService.JudgmentSystemKey)
+            .OrderBy(v => v.VersionNumber)
+            .ToListAsync(CancellationToken.None);
+
+        Assert.Equal(2, versions.Count);
+        Assert.Equal(NdRegulPromptDefaults.JudgmentSemanticV3Label, versions[1].Label);
+        Assert.True(versions[1].IsCurrent);
+        Assert.False(versions[0].IsCurrent);
+        var system = await service.GetJudgmentSystemPromptAsync(CancellationToken.None);
+        Assert.DoesNotContain("9.4.1", system);
+        Assert.DoesNotContain("AML-CFT", system);
+        Assert.Contains("Semantic matching", system);
+    }
 }

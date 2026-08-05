@@ -20,6 +20,7 @@ public class InternalDocumentsController(
     NdStoredDocumentUploadService uploadPrep,
     NdInternalParseService parseService,
     NdInternalDocumentSectionService sectionService,
+    NdInternalDocumentSectionPageService sectionPageService,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
     [HttpGet]
@@ -456,6 +457,7 @@ public class InternalDocumentsController(
         if (doc == null) return NotFound(new { success = false, message = "Document not found." });
 
         var sections = await sectionService.ListSectionsAsync(id, ct);
+        var repair = sectionPageService.GetRepairJob(id);
         return Ok(new
         {
             success = true,
@@ -470,6 +472,12 @@ public class InternalDocumentsController(
                 sectionExtractProgressPct = ShowsSectionExtractProgress(doc.SectionExtractStatus)
                     ? doc.SectionExtractProgressPct
                     : null,
+                sectionPageRepairStatus = repair?.Status,
+                sectionPageRepairProgressLabel = repair?.Label,
+                sectionPageRepairProgressPct = repair?.Percent,
+                sectionPageRepairPagesRefreshed = repair?.PagesRefreshed,
+                sectionPageRepairSectionCount = repair?.SectionCount,
+                sectionPageRepairError = repair?.Error,
                 sectionCount = doc.SectionCount ?? sections.Count,
                 sections = sections.Select(s => new
                 {
@@ -527,6 +535,42 @@ public class InternalDocumentsController(
         catch (Exception ex)
         {
             return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
+    /// <summary>Recompute section PDF page numbers from native PDF text (preferred) or parse cache — no Landing AI credits.</summary>
+    [HttpPost("{id:guid}/repair-section-pages")]
+    public async Task<IActionResult> RepairSectionPages(Guid id, CancellationToken ct = default)
+    {
+        var (_, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        try
+        {
+            if (!sectionPageService.TryQueueRefreshSectionPages(id, out var queueError))
+                return BadRequest(new { success = false, message = queueError });
+
+            return Ok(new
+            {
+                success = true,
+                message = "Page repair started — large manuals may take several minutes.",
+                data = new
+                {
+                    repairStatus = "processing",
+                },
+            });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to repair section page references" });
         }
     }
 

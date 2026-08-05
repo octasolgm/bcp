@@ -18,6 +18,9 @@ export function normalizeRegulationPoint(raw: Record<string, unknown>): Regulati
     pointTitle: (raw['pointTitle'] ?? raw['point_title'] ?? null) as string | null,
     pointContent: String(raw['pointContent'] ?? raw['point_content'] ?? ''),
     pageReference: (raw['pageReference'] ?? raw['page_reference'] ?? null) as string | null,
+    pdfPage: (raw['pdfPage'] ?? raw['pdf_page'] ?? raw['pageHint'] ?? raw['page_hint'] ?? null) as
+      | number
+      | null,
     isIntroductionPoint: Boolean(raw['isIntroductionPoint'] ?? raw['is_introduction_point']),
     isAnnexPoint: Boolean(raw['isAnnexPoint'] ?? raw['is_annex_point']),
   };

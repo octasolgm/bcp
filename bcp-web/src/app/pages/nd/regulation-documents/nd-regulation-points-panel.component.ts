@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -17,6 +17,8 @@ import {
 } from '../../../../lib/library-points-utils';
 import { regulationPointToGovPoint } from '../../../../lib/regulation-catalog-utils';
 import type { RegulationPoint } from '../../../../lib/nd/types';
+import { sortByPointRef } from '../../../../lib/nd/list-utils';
+import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd/regulation-pdf-page';
 
 @Component({
   selector: 'app-nd-regulation-points-panel',
@@ -31,6 +33,8 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   @Input() source = '';
   @Input() loading = false;
   @Input() highlightPointNumber = '';
+  @Input() canOpenSource = false;
+  @Output() openSourcePage = new EventEmitter<number>();
 
   search = '';
   expandedChapters = new Set<string>();
@@ -272,8 +276,25 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     return pointId.trim().toLowerCase() === h.toLowerCase();
   }
 
+  pointPageLabel(pointId: string): string | null {
+    const p = this.pointMeta(pointId);
+    if (!p) return null;
+    return formatPointPageRef(p.pageReference, resolveRegulationPdfPage(p.pageReference, p.pdfPage ?? null));
+  }
+
+  openPointPage(pointId: string, event: Event): void {
+    event.stopPropagation();
+    const p = this.pointMeta(pointId);
+    if (!p) return;
+    const page = resolveRegulationPdfPage(p.pageReference, p.pdfPage ?? null);
+    if (page) this.openSourcePage.emit(page);
+  }
+
   private rebuildGroups(): void {
-    const rawGovPoints = this.points.map((p) => regulationPointToGovPoint(p));
+    const rawGovPoints = sortByPointRef(
+      this.points.map((p) => regulationPointToGovPoint(p)),
+      (p) => p.point_id || p.section || '',
+    );
     this.allGovPoints = buildGovPointDisplayCatalog(rawGovPoints);
     const analyzed = analyzeGovPointSet(rawGovPoints, { docName: this.docName });
     this.storedCount = analyzed.storedCount;

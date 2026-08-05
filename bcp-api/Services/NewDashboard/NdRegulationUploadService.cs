@@ -8,6 +8,7 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services.LandingAi;
+using Reguliq.Api.Services.Pdf;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard;
@@ -18,6 +19,8 @@ public class NdRegulationUploadService(
     NdStoredDocumentUploadService uploadPrep,
     LandingAiGovExtractService govExtract,
     LandingAiCacheRepository parseCache,
+    NdRegulationPointRepairService pointPageRepair,
+    NdDocumentPageReferenceResolver pageResolver,
     IOptions<LandingAiOptions> landingAiOptions,
     IServiceScopeFactory scopeFactory,
     ILogger<NdRegulationUploadService> logger)
@@ -83,76 +86,10 @@ public class NdRegulationUploadService(
     }
 
     /// <summary>
-    /// Recompute stored PDF page references from cached parse markdown — no Landing AI calls.
+    /// Recompute stored PDF page references from native PDF text (preferred) or parse cache — no Landing AI calls.
     /// </summary>
-    public async Task<int> RefreshPointPageReferencesAsync(Guid regulationId, CancellationToken ct)
-    {
-        var regDoc = await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regulationId, ct)
-            ?? await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.StoredDocumentId == regulationId, ct)
-            ?? throw new InvalidOperationException("Regulation document not found.");
-
-        if (regDoc.StoredDocumentId is not Guid storedId)
-            throw new InvalidOperationException("This regulation has no stored file.");
-
-        var stored = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct)
-            ?? throw new InvalidOperationException("Stored document not found.");
-
-        var fileHash = (stored.FileHash ?? "").Trim();
-        if (string.IsNullOrEmpty(fileHash))
-        {
-            var bytes = await storage.DownloadAsync(stored.StoragePath, ct);
-            fileHash = LandingAiCacheRepository.HashBuffer(bytes);
-        }
-
-        var cacheKey = await EnsureExtractionCacheKeyAsync(db, stored, ct);
-        var parseMarkdown = (await parseCache.GetParseCacheAsync(cacheKey, ct))?.Markdown;
-        if (string.IsNullOrWhiteSpace(parseMarkdown))
-            parseMarkdown = regDoc.ExtractionMarkdown;
-        if (string.IsNullOrWhiteSpace(parseMarkdown))
-            throw new InvalidOperationException(
-                "No cached document parse found. Run extract once for this regulation document.");
-
-        int? pdfPageCount = stored.Pages is > 1 ? stored.Pages : null;
-        if (pdfPageCount is null or <= 1)
-        {
-            try
-            {
-                var bytes = await storage.DownloadAsync(stored.StoragePath, ct);
-                var fileName = stored.OriginalFileName ?? Path.GetFileName(stored.StoragePath);
-                if (LandingAiDocumentFormats.IsPdf(fileName, bytes))
-                    pdfPageCount = LandingAiDocumentParseService.GetPdfPageCount(bytes);
-            }
-            catch
-            {
-                // optional
-            }
-        }
-
-        var points = await db.NdRegulationPoints
-            .Where(p => p.RegulationDocumentId == regDoc.Id)
-            .ToListAsync(ct);
-        if (points.Count == 0)
-            return 0;
-
-        foreach (var p in points)
-        {
-            int? pageHint = ParsePdfPageFromReference(p.PageReference);
-            var resolved = PolicyPageResolver.ResolveGovPointPage(
-                parseMarkdown,
-                p.PointNumber,
-                p.PointNumber,
-                p.PointTitle,
-                p.PointContent,
-                pageHint,
-                pdfPageCount);
-            resolved = PolicyPageResolver.RefinePageGuess(resolved, p.PointNumber, pdfPageCount);
-            p.PageReference = FormatPointPageReference(p.PointNumber, resolved);
-        }
-
-        regDoc.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
-        return points.Count;
-    }
+    public Task<int> RefreshPointPageReferencesAsync(Guid regulationId, CancellationToken ct)
+        => pointPageRepair.RefreshPagesAsync(regulationId, ct);
 
     private async Task<string> AllocateRegulationDisplayNameAsync(
         string baseTitle,
@@ -196,16 +133,6 @@ public class NdRegulationUploadService(
         }
 
         return $"{baseTitle} (v{maxVersion + 1})";
-    }
-
-    private static int? ParsePdfPageFromReference(string? pageReference)
-    {
-        if (string.IsNullOrWhiteSpace(pageReference)) return null;
-        var match = System.Text.RegularExpressions.Regex.Match(
-            pageReference,
-            @"\bp\.?\s*(\d+)\b",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        return match.Success && int.TryParse(match.Groups[1].Value, out var page) && page > 0 ? page : null;
     }
 
     /// <summary>Clear stuck <c>processing</c> when no background job is running (e.g. after API restart).</summary>
@@ -525,7 +452,11 @@ public class NdRegulationUploadService(
         if (!string.IsNullOrWhiteSpace(parseMarkdown))
             regDoc.ExtractionMarkdown = parseMarkdown;
 
-        await ReportProgress(new ExtractionProgressUpdate($"Saving {result.Points.Count} regulation points…", 92));
+        await ReportProgress(new ExtractionProgressUpdate($"Saving {result.Points.Count} regulation points…", 90));
+
+        var nativePdf = LandingAiDocumentFormats.IsPdf(fileName, bytes)
+            ? PdfNativePageDocument.TryCreate(bytes)
+            : null;
 
         var existingPoints = await dbCtx.NdRegulationPoints
             .IgnoreQueryFilters()
@@ -559,8 +490,26 @@ public class NdRegulationUploadService(
             if (root.TryGetProperty("page_hint", out var ph) && ph.ValueKind == JsonValueKind.Number && ph.TryGetInt32(out var hint) && hint > 0)
                 pageHint = hint;
 
-            int? resolvedPage = pageHint;
-            if (!string.IsNullOrWhiteSpace(parseMarkdown))
+            int? resolvedPage = null;
+            if (regDoc.StoredDocumentId is Guid storedId)
+            {
+                var stored = await dbCtx.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct);
+                if (stored is not null)
+                {
+                    resolvedPage = await pageResolver.ResolveSectionPageAsync(
+                        stored,
+                        parseMarkdown,
+                        pointId,
+                        title,
+                        text,
+                        ct);
+                }
+            }
+
+            if (resolvedPage is null or <= 0 && nativePdf is not null)
+                resolvedPage = nativePdf.ResolveSectionPage(pointId, title, text);
+
+            if (resolvedPage is null or <= 0 && !string.IsNullOrWhiteSpace(parseMarkdown))
             {
                 resolvedPage = PolicyPageResolver.ResolveGovPointPage(
                     parseMarkdown,
@@ -569,10 +518,9 @@ public class NdRegulationUploadService(
                     title,
                     text,
                     pageHint,
-                    pdfPageCount);
+                    nativePdf?.TotalPages ?? pdfPageCount);
+                resolvedPage = PolicyPageResolver.RefinePageGuess(resolvedPage, pointId, nativePdf?.TotalPages ?? pdfPageCount);
             }
-
-            resolvedPage = PolicyPageResolver.RefinePageGuess(resolvedPage, pointId, pdfPageCount);
 
             var isAnnex = GovPointClassifier.IsAnnexPoint(pointId, title, section);
             var isIntro = GovPointClassifier.IsIntroductionPoint(pointId, title, text, section, pointType);
@@ -597,7 +545,9 @@ public class NdRegulationUploadService(
             {
                 stored.FileHash = result.FileHash;
                 stored.PointCount = result.Points.Count;
-                if (pdfPageCount is > 0)
+                if (nativePdf?.TotalPages is > 0)
+                    stored.Pages = nativePdf.TotalPages;
+                else if (pdfPageCount is > 0)
                     stored.Pages = pdfPageCount.Value;
                 stored.UpdatedAt = DateTimeOffset.UtcNow;
             }

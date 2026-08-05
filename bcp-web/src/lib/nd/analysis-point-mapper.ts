@@ -7,7 +7,7 @@ import { normalizeSessionPointStatus } from '../session-point-status';
 import { reportItemsToGapItems } from '../../app/services/gap-analysis-mapper';
 import type { GapItemData } from '../../app/services/reguliq-store';
 import type { AnalysisPoint } from './types';
-import { normalizeRegulPoint, regulForwardError, regulForwardStatus } from './regul-fields';
+import { normalizeRegulPoint, regulForwardError, regulForwardStatus, isRegulWorkflow } from './regul-fields';
 import { parsePointSnapshot } from './utils';
 
 function comparePointIds(a: string, b: string): number {
@@ -47,7 +47,7 @@ export function analysisPointCoverageStatus(
   const landingMessage = landing.message;
   const llmMessage = google.message;
   const run = (runStatus ?? '').toLowerCase();
-  const isRegul = regul?.workflowEngine === 'regul_pipeline';
+  const isRegul = isRegulWorkflow(regul?.workflowEngine);
   const phase = (regul?.regulPipelinePhase ?? '').toLowerCase();
   const runActive = run === 'running' || run === 'processing';
   const forwardStatus = regulForwardStatus(point);

@@ -1,18 +1,61 @@
 <div class="sections-panel">
   <div class="panel-head">
     <p class="panel-status">{{ statusLabel }}</p>
-    @if (sections.length > 0) {
-      <input
-        type="search"
-        class="panel-search"
-        placeholder="Search sections…"
-        [(ngModel)]="search"
-        aria-label="Search sections"
-      />
+    @if (sections.length > 0 && !isBusy) {
+      <div class="panel-toolbar">
+        <input
+          type="search"
+          class="panel-search"
+          placeholder="Search by section ref or text…"
+          [(ngModel)]="search"
+          aria-label="Search sections"
+        />
+        @if (canExpandDetails) {
+          <div class="panel-expand-actions">
+            <button type="button" class="panel-link-btn" (click)="expandAllDetails()">Expand all text</button>
+            <span class="panel-expand-sep" aria-hidden="true">·</span>
+            <button type="button" class="panel-link-btn" (click)="collapseAllDetails()">Collapse all text</button>
+          </div>
+        }
+      </div>
     }
   </div>
 
-  <div class="panel-body">
+  <div class="panel-body panel-busy-wrap">
+    @if (isBusy) {
+      <div class="panel-busy-overlay" role="status" aria-live="polite">
+        <div class="panel-busy-spinner" aria-hidden="true"></div>
+        <p>
+          {{ busyTitle }}
+          @if (repairing && repairingPct != null) {
+            <span
+              class="extract-progress-track panel-progress"
+              role="progressbar"
+              [attr.aria-valuenow]="repairingPct"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <span class="extract-progress-fill" [style.width.%]="repairingPct"></span>
+            </span>
+          }
+          @if (extracting && extractingPct != null) {
+            <span
+              class="extract-progress-track panel-progress"
+              role="progressbar"
+              [attr.aria-valuenow]="extractingPct"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <span class="extract-progress-fill" [style.width.%]="extractingPct"></span>
+            </span>
+          }
+          @if (busyHint) {
+            <br />
+            <span class="muted">{{ busyHint }}</span>
+          }
+        </p>
+      </div>
+    }
     @if (loading) {
       <p class="empty">Loading…</p>
     } @else if (visibleSections.length === 0) {
@@ -24,26 +67,43 @@
         }
       </p>
     } @else {
-      @for (s of visibleSections; track s.id) {
-        <div class="section-line">
-          <span class="section-ref">{{ s.sectionRef }}</span>
-          @if (s.sourcePage) {
-            <span class="section-page">p. {{ s.sourcePage }}</span>
-          }
-          <div class="section-text-wrap">
-            @if (isExpanded(s.id) || !isLong(s.sectionText)) {
-              <span class="section-text">{{ s.sectionText }}</span>
-            } @else {
-              <span class="section-text">{{ preview(s.sectionText) }}</span>
-            }
-            @if (isLong(s.sectionText)) {
-              <button type="button" class="text-toggle" (click)="toggleExpanded(s.id)">
-                {{ isExpanded(s.id) ? 'Show less' : 'Show more' }}
+      <ul class="section-list">
+        @for (section of visibleSections; track section.id) {
+          <li class="section-row" [class.section-row-expanded]="isRowExpanded(section.id)">
+            <div class="section-head">
+              <button
+                type="button"
+                class="section-toggle"
+                (click)="toggleRow(section.id)"
+                [attr.aria-expanded]="isRowExpanded(section.id)"
+              >
+                <span class="chevron" [class.open]="isRowExpanded(section.id)">›</span>
+                <span class="section-ref">{{ formatSectionRef(section.sectionRef) }}</span>
               </button>
+              @if (section.sourcePage) {
+                @if (canOpenSource) {
+                  <button
+                    type="button"
+                    class="source-ref-link section-page"
+                    [attr.title]="'Open ' + docTitle + ' at page ' + section.sourcePage"
+                    (click)="openPage(section.sourcePage, $event)"
+                  >
+                    p. {{ section.sourcePage }}
+                  </button>
+                } @else {
+                  <span class="section-page">p. {{ section.sourcePage }}</span>
+                }
+              }
+            </div>
+            @if (!isRowExpanded(section.id) && isLong(section.sectionText)) {
+              <p class="section-preview">{{ preview(section.sectionText) }}</p>
             }
-          </div>
-        </div>
-      }
+            @if (isRowExpanded(section.id)) {
+              <blockquote class="section-text">{{ section.sectionText }}</blockquote>
+            }
+          </li>
+        }
+      </ul>
     }
   </div>
 </div>

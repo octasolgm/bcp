@@ -40,6 +40,7 @@ import {
 } from '../../../lib/nd/point-compliance-status';
 import { type SortDir } from '../../../lib/nd/list-utils';
 import { sortByPointKey, type PointSortMode } from '../../../lib/nd/point-sort';
+import { sortByPointRef } from '../../../lib/nd/list-utils';
 import {
   buildLibraryPointHierarchy,
   buildLibraryStoredPointDisplay,
@@ -80,8 +81,13 @@ const EMPTY_POINT_REVIEWS: ActionItemReviewEntry[] = [];
   styleUrl: './analyse-regul.component.scss',
 })
 export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDestroy {
-  readonly versionLabel = 'V3 — Regul Workflow';
-  readonly versionPath = '/analyse-regul';
+  readonly versionLabel: string = 'V3 — Regul Workflow';
+  readonly versionPath: string = '/analyse-regul';
+
+  /** Workflow engine stored on ND analysis runs created from this page. */
+  protected readonly regulWorkflowEngineId: string = 'regul_pipeline';
+  /** Canonical ND route for this analysis page. */
+  protected readonly regulAnalysisRoute: string = '/nd/analyse-regul';
 
   analysingPointSort: PointSortMode = 'number';
   analysingPointSortDir: SortDir = 'asc';
@@ -193,7 +199,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override ngOnInit(): void {
-    this.ndWorkflowEngine = 'regul_pipeline';
+    this.ndWorkflowEngine = this.regulWorkflowEngineId;
     this.refreshNdShellState();
     super.ngOnInit();
     this.canonicalizeNdAnalysisUrl();
@@ -228,7 +234,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.regulWorkflowLlmSummary = `${res.data.providerLabel} · ${res.data.model}`;
   }
 
-  private regulRunConfirmHint(): string {
+  protected regulRunConfirmHint(): string {
     const llm = this.regulWorkflowLlmSummary || 'admin-selected LLM';
     const qual = this.enableQualitativeAssessment
       ? 'Forward + reverse + qualitative assessment.'
@@ -258,7 +264,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   private canonicalizeNdAnalysisUrl(): void {
     if (!this.isNdShell) return;
     if (!/^\/nd\/run-analysis\/?$/.test(this.currentPathname())) return;
-    void this.router.navigate(['/nd/analyse-regul'], {
+    void this.router.navigate([this.regulAnalysisRoute], {
       replaceUrl: true,
       queryParamsHandling: 'merge',
     });
@@ -810,7 +816,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   private regulCoverageContext() {
     return {
-      workflowEngine: this.ndWorkflowEngine || 'regul_pipeline',
+      workflowEngine: this.ndWorkflowEngine || this.regulWorkflowEngineId,
       regulPipelinePhase: this.ndRegulPipelinePhase,
     };
   }
@@ -870,7 +876,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   get regulReverseSectionRows(): Array<{ sectionRef: string; title: string; status: string }> {
-    return this.ndRegulReverseSections;
+    return sortByPointRef(this.ndRegulReverseSections, (r) => r.sectionRef);
   }
 
   get regulReverseIntRows(): Array<{
@@ -879,16 +885,19 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     severity: string;
     status: string;
   }> {
-    return this.ndIntReversePoints().map((p) => {
-      const meta = this.metaForAnalysisPoint(p);
-      const severity = resolveAnalysisPointSeverity(p);
-      return {
-        clause: meta.clause || meta.govKey,
-        title: meta.title,
-        severity: severity ?? '',
-        status: p.landingAiStatus,
-      };
-    });
+    return sortByPointRef(
+      this.ndIntReversePoints().map((p) => {
+        const meta = this.metaForAnalysisPoint(p);
+        const severity = resolveAnalysisPointSeverity(p);
+        return {
+          clause: meta.clause || meta.govKey,
+          title: meta.title,
+          severity: severity ?? '',
+          status: p.landingAiStatus,
+        };
+      }),
+      (row) => row.clause,
+    );
   }
 
   formatReverseSectionStatus(status: string): string {
@@ -1783,15 +1792,18 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   private buildRegulClauseRows(): void {
-    this.regulClauseRows = this.ndRunPointsInScope().map((p) => {
-      const snap = parsePointSnapshot(p.pointSnapshot);
-      return {
-        pointId: p.id,
-        pointNumber: snap.pointNumber ?? '',
-        pointTitle: snap.pointTitle ?? '',
-        pointContent: snap.pointContent ?? '',
-      };
-    });
+    this.regulClauseRows = sortByPointRef(
+      this.ndRunPointsInScope().map((p) => {
+        const snap = parsePointSnapshot(p.pointSnapshot);
+        return {
+          pointId: p.id,
+          pointNumber: snap.pointNumber ?? '',
+          pointTitle: snap.pointTitle ?? '',
+          pointContent: snap.pointContent ?? '',
+        };
+      }),
+      (row) => row.pointNumber || row.pointId,
+    );
   }
 
   async confirmRegulClauses(): Promise<void> {
@@ -2692,7 +2704,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
     const runId = createRes.data.id;
     this.ndRunId = runId;
-    await this.router.navigate(['/nd/analyse-regul'], {
+    await this.router.navigate([this.regulAnalysisRoute], {
       queryParams: { run: runId },
       replaceUrl: true,
     });
@@ -2760,7 +2772,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
     const runId = createRes.data.id;
     this.ndRunId = runId;
-    await this.router.navigate(['/nd/analyse-regul'], {
+    await this.router.navigate([this.regulAnalysisRoute], {
       queryParams: { run: runId },
       replaceUrl: true,
     });
@@ -2810,7 +2822,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       selectedPointsSnapshot: selectedSnapshot,
       selectedInternalDocIds: intIds,
       selectedRegulationDocIds: [...regIds],
-      workflowEngine: 'regul_pipeline',
+      workflowEngine: this.regulWorkflowEngineId,
       enableQualitative: this.enableQualitativeAssessment,
     };
   }

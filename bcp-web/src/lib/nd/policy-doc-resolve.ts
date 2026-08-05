@@ -244,6 +244,66 @@ function pushPolicyRef(
   });
 }
 
+/** Parse Regul forward-judgment document_reference lines (one cite per policy_extract). */
+export function parseRegulDocumentReferenceLines(
+  documentReference: string | null | undefined,
+  catalog: PolicyDocCatalogEntry[],
+): PolicyRefProof[] {
+  const raw = documentReference?.trim();
+  if (!raw) return [];
+
+  const lines = raw
+    .split(/[;\n]+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const refs: PolicyRefProof[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    const regul = line.match(
+      /^(.+?)\s+—\s+section\s+([^,]+?),\s*p\.(\d+)\s*$/i,
+    );
+    if (regul) {
+      const docName = regul[1].trim();
+      const section = sanitizePolicySection(regul[2]);
+      const page = regul[3].trim();
+      const docId = resolvePolicyDocId(docName, catalog);
+      const key = `${docId ?? docName}:${page}:${section ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      refs.push({
+        page,
+        section,
+        docId,
+        docLabel: docLabelForId(docId, catalog) || docName,
+      });
+      continue;
+    }
+
+    const pageOnly = line.match(/^(.+?),\s*p\.(\d+)\s*$/i);
+    if (pageOnly) {
+      const docName = pageOnly[1].trim();
+      const page = pageOnly[2].trim();
+      const docId = resolvePolicyDocId(docName, catalog);
+      const key = `${docId ?? docName}:${page}:`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      refs.push({
+        page,
+        section: null,
+        docId,
+        docLabel: docLabelForId(docId, catalog) || docName,
+      });
+      continue;
+    }
+
+    pushPolicyRef(refs, seen, catalog, line, line);
+  }
+
+  return refs;
+}
+
 /** Build per-page policy refs from AI messages, resolving doc id from Reference PDF when possible. */
 export function buildPolicyRefProofs(
   landingMessage: string,
@@ -264,6 +324,14 @@ export function buildPolicyRefProofs(
         for (const line of splitCitationSourceLines(source)) {
           pushPolicyRef(refs, seen, catalog, line, refPdf);
         }
+      }
+
+      const docRefLines = parseRegulDocumentReferenceLines(block.documentReference, catalog);
+      for (const ref of docRefLines) {
+        const key = `${ref.docId ?? ref.docLabel}:${ref.page}:${ref.section ?? ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        refs.push(ref);
       }
 
       // Fallback: single citation parse for legacy v1 one-line output

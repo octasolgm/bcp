@@ -58,13 +58,25 @@
         </div>
       </div>
 
-      <aside class="reg-detail-points">
+      <aside class="reg-detail-points panel-busy-wrap">
         <app-nd-regulation-points-panel
           [docName]="doc.name"
           [points]="points"
           [source]="pointsSource"
           [loading]="loading"
+          [canOpenSource]="true"
+          (openSourcePage)="openRegulationSourcePage($event)"
         />
+        @if (repairing || refreshingPages) {
+          <div class="panel-busy-overlay" role="status" aria-live="polite">
+            <div class="panel-busy-spinner" aria-hidden="true"></div>
+            <p>
+              {{ repairing ? 'Repairing points…' : 'Refreshing PDF pages…' }}
+              <br />
+              <span class="muted">This may take a minute for large documents.</span>
+            </p>
+          </div>
+        }
       </aside>
     </div>
   }

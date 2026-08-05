@@ -18,6 +18,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
+import { isRegulWorkflow } from '../../../../lib/nd/regul-fields';
 import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints, exportRegulGapAnalysisExcelFromPoints } from '../../../../lib/nd/export/gap-analysis-export';
 import {
   progressPointToReportItem,
@@ -1139,7 +1140,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
     this.exporting = true;
     try {
-      if (this.ndRunWorkflowEngine === 'regul_pipeline') {
+      if (this.ndRunWorkflowEngine && isRegulWorkflow(this.ndRunWorkflowEngine)) {
         await exportRegulGapAnalysisExcelFromPoints(points);
       } else {
         await exportGapAnalysisExcelFromPoints(points);

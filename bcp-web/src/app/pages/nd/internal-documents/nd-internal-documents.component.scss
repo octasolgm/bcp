@@ -275,6 +275,9 @@
 
   .sections-panel-actions {
     margin-bottom: 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
   app-nd-internal-document-sections-panel {

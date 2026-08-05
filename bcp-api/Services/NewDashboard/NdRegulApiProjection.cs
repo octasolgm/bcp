@@ -9,7 +9,7 @@ namespace Reguliq.Api.Services.NewDashboard;
 public static class NdRegulApiProjection
 {
     public static object MapRunSummary(NdAnalysisRun run) =>
-        AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine)
+        AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
             ? new
             {
                 id = run.Id,
@@ -48,7 +48,7 @@ public static class NdRegulApiProjection
             };
 
     public static object MapRunDetail(NdAnalysisRun run, string? creatorName) =>
-        AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine)
+        AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
             ? new
             {
                 id = run.Id,
@@ -113,7 +113,7 @@ public static class NdRegulApiProjection
         int? regulReverseSectionTotal,
         int? regulReverseSectionCompleted,
         int? regulReverseSectionFailed) =>
-        AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine)
+        AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
             ? new
             {
                 id = run.Id,
@@ -153,7 +153,7 @@ public static class NdRegulApiProjection
             };
 
     public static object MapResumeRun(NdAnalysisRun run) =>
-        AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine)
+        AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
             ? new
             {
                 id = run.Id,
@@ -211,7 +211,7 @@ public static class NdRegulApiProjection
         string? originalAiActionPlan = null,
         string? workflowEngine = null)
     {
-        var isRegul = AnalysisWorkflowEngine.IsRegulPipeline(workflowEngine);
+        var isRegul = AnalysisWorkflowEngine.IsRegulFamily(workflowEngine);
         if (!isRegul)
         {
             return new

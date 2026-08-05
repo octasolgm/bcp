@@ -23,6 +23,7 @@ import type { Department, RegulationDocument, RegulationPoint } from '../../../.
 import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.component';
 import { NdManualRegulationPointsPanelComponent } from './nd-manual-regulation-points-panel.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
+import { ToastService } from '../../../services/toast.service';
 import { startPanelResize } from '../../shared/panel-resize';
 import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd/regulation-pdf-page';
 
@@ -59,6 +60,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   private readonly shellFocus = inject(NdShellFocusService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
   readonly auth = inject(NdAuthService);
   readonly formatPointPageRef = formatPointPageRef;
 
@@ -397,6 +399,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     event?.stopPropagation();
     this.repairingPointsId = doc.id;
     this.error = '';
+    this.toast.show('Repairing regulation points… this may take a minute.', 'info', 5000);
     try {
       const res = await this.api.repairRegulationPoints(doc.id);
       if (res.success && res.data) {
@@ -420,6 +423,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     event?.stopPropagation();
     this.refreshingPagesId = doc.id;
     this.error = '';
+    this.toast.show('Refreshing PDF page numbers…', 'info', 5000);
     try {
       const res = await this.api.refreshRegulationPageReferences(doc.id);
       if (res.success) {
@@ -720,14 +724,13 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   async openDocumentById(docId: string, event?: Event, page?: number | null): Promise<void> {
     event?.stopPropagation();
     this.error = '';
-    const res = await this.api.getRegulationDocumentFileUrl(docId);
-    if (res.success && res.data?.url) {
-      const pdfPage = page != null && page > 0 ? page : null;
-      const url = pdfPage ? `${res.data.url}#page=${pdfPage}` : res.data.url;
-      window.open(url, '_blank', 'noopener');
-      return;
-    }
-    this.error = res.message ?? 'Could not open regulation PDF';
+    const ok = await this.api.openRegulationDocumentPdf(docId, page ?? null);
+    if (!ok) this.error = 'Could not open document PDF';
+  }
+
+  async openRegulationSourcePage(doc: RegulationDocument, page: number): Promise<void> {
+    const fileDocId = doc.storedDocumentId ?? doc.id;
+    await this.openDocumentById(fileDocId, undefined, page);
   }
 
   docPointMeta(doc: RegulationDocument): string {

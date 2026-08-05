@@ -66,6 +66,20 @@
                     <div class="point-line" [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint || !isComparablePoint(p.point_id)" [class.point-highlight]="isHighlighted(p.point_id)">
                       <span class="point-check" [class.point-check-skip]="!isComparablePoint(p.point_id)" aria-hidden="true">{{ isComparablePoint(p.point_id) ? '✓' : '○' }}</span>
                       <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
+                      @if (pointPageLabel(p.point_id); as pref) {
+                        @if (canOpenSource) {
+                          <button
+                            type="button"
+                            class="source-ref-link point-page-ref"
+                            [attr.title]="'Open source at ' + pref"
+                            (click)="openPointPage(p.point_id, $event)"
+                          >
+                            {{ pref }}
+                          </button>
+                        } @else {
+                          <span class="point-page-ref muted">{{ pref }}</span>
+                        }
+                      }
                       @if (pointMeta(p.point_id)?.isIntroductionPoint || skipReason(p.point_id)?.includes('§1') || skipReason(p.point_id)?.includes('introduction')) {
                         <span class="point-tag">Intro</span>
                       }

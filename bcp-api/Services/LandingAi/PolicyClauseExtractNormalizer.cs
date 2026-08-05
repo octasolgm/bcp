@@ -16,7 +16,7 @@ public static class PolicyClauseExtractNormalizer
             if (counts[c.ClauseNo] > 1)
             {
                 seen[c.ClauseNo] = seen.GetValueOrDefault(c.ClauseNo) + 1;
-                deduped.Add(c with { ClauseNo = $"{c.ClauseNo}-{seen[c.ClauseNo]}" });
+                deduped.Add(c with { ClauseNo = BuildDedupedClauseNo(c.ClauseNo, seen[c.ClauseNo]) });
             }
             else
             {
@@ -25,5 +25,20 @@ public static class PolicyClauseExtractNormalizer
         }
 
         return deduped;
+    }
+
+    /// <summary>
+    /// Append a numeric suffix for duplicate clause numbers.
+    /// Uses dotted nesting (1. → 1.1, 6.2 → 6.2.1) — never `1.-1` style ids.
+    /// </summary>
+    internal static string BuildDedupedClauseNo(string clauseNo, int duplicateIndex)
+    {
+        var trimmed = clauseNo.Trim();
+        var withoutTrailingDot = trimmed.TrimEnd('.');
+
+        if (trimmed.EndsWith('.') || !withoutTrailingDot.Contains('.'))
+            return $"{withoutTrailingDot}.{duplicateIndex}";
+
+        return $"{trimmed}.{duplicateIndex}";
     }
 }
