@@ -49,9 +49,9 @@ public class NdAnalysisPromptVersionServiceTests
             });
         await db.SaveChangesAsync();
 
-        var context = await service.BuildJudgmentContextAsync("policy excerpt text", CancellationToken.None);
-        var query = await service.BuildJudgmentQueryAsync("2.1.1", "Banks must verify.", CancellationToken.None);
-        var system = await service.GetJudgmentSystemPromptAsync(CancellationToken.None);
+        var context = await service.BuildJudgmentContextAsync("policy excerpt text", ct: CancellationToken.None);
+        var query = await service.BuildJudgmentQueryAsync("2.1.1", "Banks must verify.", ct: CancellationToken.None);
+        var system = await service.GetJudgmentSystemPromptAsync(ct: CancellationToken.None);
 
         Assert.Equal("CUSTOM CONTEXT:\npolicy excerpt text\nEND", context);
         Assert.Equal("CLAUSE 2.1.1:\nBanks must verify.", query);
@@ -83,11 +83,11 @@ public class NdAnalysisPromptVersionServiceTests
         db.NdAnalysisPromptVersions.AddRange(v1, v2);
         await db.SaveChangesAsync();
 
-        Assert.Equal("V1 excerpt", await service.BuildJudgmentContextAsync("excerpt", CancellationToken.None));
+        Assert.Equal("V1 excerpt", await service.BuildJudgmentContextAsync("excerpt", ct: CancellationToken.None));
 
         await service.SetCurrentAsync(v2.Id, CancellationToken.None);
 
-        Assert.Equal("V2 excerpt", await service.BuildJudgmentContextAsync("excerpt", CancellationToken.None));
+        Assert.Equal("V2 excerpt", await service.BuildJudgmentContextAsync("excerpt", ct: CancellationToken.None));
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class NdAnalysisPromptVersionServiceTests
         await db.SaveChangesAsync();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.GetJudgmentSystemPromptAsync(CancellationToken.None));
+            service.GetJudgmentSystemPromptAsync(ct: CancellationToken.None));
     }
 
     [Fact]
@@ -166,9 +166,53 @@ public class NdAnalysisPromptVersionServiceTests
         Assert.Equal(NdRegulPromptDefaults.JudgmentSemanticV3Label, versions[1].Label);
         Assert.True(versions[1].IsCurrent);
         Assert.False(versions[0].IsCurrent);
-        var system = await service.GetJudgmentSystemPromptAsync(CancellationToken.None);
+        var system = await service.GetJudgmentSystemPromptAsync(ct: CancellationToken.None);
         Assert.DoesNotContain("9.4.1", system);
         Assert.DoesNotContain("AML-CFT", system);
         Assert.Contains("Semantic matching", system);
+    }
+
+    [Fact]
+    public async Task EnsureJudgmentFullMarkdownV1Async_creates_v4_prompts_separate_from_v3()
+    {
+        await using var db = CreateDb();
+        var service = new NdAnalysisPromptVersionService(db);
+
+        await service.EnsureJudgmentFullMarkdownV1Async(CancellationToken.None);
+
+        var v3Context = await db.NdAnalysisPromptVersions
+            .FirstOrDefaultAsync(v => v.PromptKey == NdAnalysisPromptVersionService.JudgmentUserContextKey && v.IsCurrent);
+        var v4Context = await db.NdAnalysisPromptVersions
+            .FirstOrDefaultAsync(v => v.PromptKey == NdAnalysisPromptVersionService.JudgmentFullUserContextKey && v.IsCurrent);
+
+        Assert.Null(v3Context);
+        Assert.NotNull(v4Context);
+        Assert.Equal(NdRegulPromptDefaults.JudgmentFullMarkdownV1Label, v4Context!.Label);
+        Assert.Contains("no page limit", v4Context.PromptText, StringComparison.OrdinalIgnoreCase);
+
+        var v4ContextBuilt = await service.BuildJudgmentContextAsync(
+            "manual text",
+            AnalysisWorkflowEngine.RegulPipelineFull,
+            CancellationToken.None);
+        Assert.Contains("complete parsed markdown", v4ContextBuilt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("manual text", v4ContextBuilt);
+
+        db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+        {
+            PromptKey = NdAnalysisPromptVersionService.JudgmentUserContextKey,
+            VersionNumber = 1,
+            Label = "Base",
+            PromptText = NdRegulPromptDefaults.JudgmentUserContextTemplate,
+            IsCurrent = true,
+        });
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var v3ContextBuilt = await service.BuildJudgmentContextAsync(
+            "excerpt text",
+            AnalysisWorkflowEngine.RegulPipeline,
+            CancellationToken.None);
+        Assert.Contains("END EXCERPTS", v3ContextBuilt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("no page limit", v3ContextBuilt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("excerpt text", v3ContextBuilt);
     }
 }

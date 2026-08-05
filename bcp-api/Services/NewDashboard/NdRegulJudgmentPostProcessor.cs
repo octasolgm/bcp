@@ -215,6 +215,68 @@ public static class NdRegulJudgmentPostProcessor
         return score;
     }
 
+    public static RegulJudgmentResult ApplyFalseAbsenceCorrection(
+        RegulJudgmentResult judgment,
+        string policySourceText)
+    {
+        var status = judgment.OverallStatus.Trim().ToLowerInvariant();
+        if (status is not ("partial" or "non_compliant" or "non-compliant" or "noncompliant"))
+            return judgment;
+
+        var gap = $"{judgment.GapDescription} {judgment.SuggestedAction}";
+        if (!SuggestsMissingDedicatedSection(gap))
+            return judgment;
+
+        if (!CorpusContainsOperationalEquivalent(policySourceText, gap))
+            return judgment;
+
+        judgment.DesignStatus = CapStatus(judgment.DesignStatus, "partial");
+        judgment.OperatingStatus = judgment.DesignStatus;
+        judgment.OverallStatus = judgment.DesignStatus;
+        judgment.Confidence = Math.Min(judgment.Confidence, 0.72);
+        judgment.GapDirection = "covered_under_different_label";
+
+        if (string.IsNullOrWhiteSpace(judgment.GapDescription)
+            || SuggestsMissingDedicatedSection(judgment.GapDescription))
+        {
+            judgment.GapDescription =
+                "The manual appears to address this requirement under a different section title or rule number " +
+                "(e.g. internal audit / AML Rule 9.4.x vs regulatory 'independent audit'). " +
+                "Verify whether the existing section fully covers all regulatory elements; do not assume absence solely from wording differences.";
+        }
+
+        if (SuggestsMissingDedicatedSection(judgment.SuggestedAction))
+            judgment.SuggestedAction =
+                "Review existing internal audit / AML audit sections for full coverage of each regulatory element before adding new policy text.";
+
+        return judgment;
+    }
+
+    private static bool SuggestsMissingDedicatedSection(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        return Regex.IsMatch(
+            text,
+            @"\b(add|create|establish|introduce|include)\b.{0,40}\b(dedicated|new|separate)\b.{0,40}\b(audit|section)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline)
+            || Regex.IsMatch(text, @"\bno\s+(dedicated\s+)?internal\s+audit\b", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(text, @"\bmanual\s+(does\s+not|lacks)\b.{0,30}\baudit\b", RegexOptions.IgnoreCase);
+    }
+
+    private static bool CorpusContainsOperationalEquivalent(string policySourceText, string gapText)
+    {
+        var haystack = NdRegulPolicyContextService.NormalizeForMatching(policySourceText);
+        if (haystack.Length < 20) return false;
+
+        if (Regex.IsMatch(gapText, @"\baudit\b", RegexOptions.IgnoreCase))
+        {
+            if (Regex.IsMatch(haystack, @"\binternal audit\b|audit division|audit committee|aml rule 9|9\.4\.1|9\.4\b"))
+                return true;
+        }
+
+        return false;
+    }
+
     private static RegulJudgmentResult DowngradeForUnverifiedQuotes(RegulJudgmentResult judgment)
     {
         judgment.DesignStatus = CapStatus(judgment.DesignStatus, "partial");

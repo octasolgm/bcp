@@ -1,6 +1,6 @@
 export const BRAND = {
-  name: 'Comply Solution',
-  shortName: 'Comply Solution',
+  name: 'Comply Solutions',
+  shortName: 'Comply Solutions',
   tagline: 'Regulatory compliance platform',
   /** Square-cropped mark (icon only) — use in header, login, favicon */
   logo: 'assets/brand/comply-solution-mark-192.png',

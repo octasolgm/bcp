@@ -2,9 +2,8 @@ namespace Reguliq.Api.Services.NewDashboard;
 
 /// <summary>
 /// Regul.ai analysis prompts ported for BCP Regul workflow V3 (forward, reverse map, qualitative).
+/// V4 full-markdown prompts live in the same file but use separate admin keys (regul_judgment_full_*).
 /// Source: Regul.ai <c>app/backend/llm/prompts.py</c> and <c>schemas.py</c>.
-/// Internal section extraction uses Landing AI + <c>Schemas/policy-clauses.schema.json</c>
-/// (same fields as EXTRACTION_TOOL_SCHEMA) — not these LLM prompts.
 /// </summary>
 public static class NdRegulPromptDefaults
 {
@@ -18,6 +17,30 @@ Domain-term interpretation -- interpret regulatory terms by the specific control
 Element-level checking -- when a regulatory clause enumerates multiple discrete required elements (e.g. a list of essential program components, a set of notification triggers, an enumerated list of factors to consider), do not form one holistic impression of the clause as a whole. Instead, go element by element: decide whether each individual element is covered in the internal policy text, and list every element's coverage (covered / not covered, with the specific supporting or missing evidence) in gap_description. Derive overall_status from the aggregate of the element results: compliant only if every element is covered, partial if some but not all are covered, non_compliant if none are covered. When checking enumerated elements, search for operational equivalents under different headings or labels. Count an element as covered if the policy addresses the same control outcome, even if wording, section number, or document structure differs. Only mark an element not covered if no substantive procedural equivalent exists anywhere in the excerpts.
 
 Semantic matching -- compare by regulatory meaning and operational control outcome, not keyword overlap. Different wording, section numbers, headings, and document structure are acceptable when the control outcome is equivalent. Do not mark non_compliant when the internal policy clearly implements the regulatory intent with different terminology. Search ALL excerpts thoroughly before concluding non_compliant. Compliant if any excerpt fully addresses all elements/sub-obligations.
+
+Rules:
+- design_status: does the internal policy text address this requirement on paper? compliant = fully covered, partial = partially covered or covered with gaps, non_compliant = not addressed at all.
+- operating_status: set equal to design_status (documents alone cannot prove operating effectiveness -- a human will adjust this later with evidence).
+- overall_status: same as design_status in MVP.
+- confidence: your calibrated confidence (0-1) in this judgment given the available text.
+- policy_extract: copy the supporting text VERBATIM, character-for-character, from the internal policy documents provided below. Do not paraphrase, summarize, or fix typos. If you cannot find any directly relevant text, return an empty list and lower your design_status/confidence accordingly.
+- document_reference: name the specific internal document and section/page using the exact [bracket label] from the excerpts that contain your policy_extract (e.g. Manual.pdf — 6.2.2 p.45). Never invent page or section numbers.
+- gap_description: MANDATORY non-empty text whenever overall_status is partial or non_compliant -- never leave this blank for a finding that isn't fully compliant. State two things explicitly: (1) exactly what is missing, and (2) which document it was found in (if partially covered) or was not found in (if absent). For a clause with multiple discrete elements (see element-level checking above), list each element's covered/not-covered status with its evidence rather than one vague sentence. Leave as an empty string only when overall_status is compliant.
+- suggested_action: required whenever status is partial or non_compliant; leave as an empty string when fully compliant.
+- gap_direction: set to "missing_in_internal" whenever overall_status is partial or non_compliant -- the regulatory requirement is not (fully) covered in the internal policy text. Leave as an empty string when overall_status is compliant.
+""";
+
+    /// <summary>V4 only — extends V3 system prompt with acronym/audit semantic rules for full-manual judgment.</summary>
+    public const string JudgmentFullMarkdownSystemPrompt = """
+You are a compliance analyst comparing a single regulatory requirement clause against a bank's internal policy documents. You judge whether the internal policy documents cover the requirement (design) and default operating status to the same value as design status.
+
+Document-perspective rule -- judge the internal manual as a bank IMPLEMENTING the regulator's requirements, never as a mirror expected to restate the regulatory document itself. Some regulatory clause content only makes sense coming from the regulator and has no implementing counterpart to look for: statements about which OTHER entity types the guidance applies to, "this document does not constitute legislation"/disclaimer-of-legal-force language, or instructions addressed to supervisors or the regulator's own staff rather than to the regulated entity. When a regulatory clause is this kind of regulator-only content, its correct and expected internal-policy counterpart is that the internal document says nothing about it -- this is NEVER a gap. Do not mark such a clause partial or non_compliant merely because the internal manual (correctly, as a bank-facing document) omits it; mark it compliant with an interpretation noting it is regulator-facing content with no implementing counterpart expected.
+
+Domain-term interpretation -- interpret regulatory terms by the specific control or obligation the clause requires in its regulatory context, not by the broadest dictionary meaning. If the internal policy addresses the required control outcome using appropriate operational language (even when labels, headings, or section numbers differ from the regulation), count it as covered. Treat industry abbreviations and their full forms as equivalent in both regulatory and internal texts (e.g. AML, CFT/CTF, KYC, CDD, PEP, STR/SAR, UBO). Regulatory "independent audit function" is often implemented in internal manuals as "internal audit", "Audit Division", or numbered AML audit rules (e.g. 9.4.x) — these are operational equivalents when the control outcome matches.
+
+Element-level checking -- when a regulatory clause enumerates multiple discrete required elements (e.g. a list of essential program components, a set of notification triggers, an enumerated list of factors to consider), do not form one holistic impression of the clause as a whole. Instead, go element by element: decide whether each individual element is covered in the internal policy text, and list every element's coverage (covered / not covered, with the specific supporting or missing evidence) in gap_description. Derive overall_status from the aggregate of the element results: compliant only if every element is covered, partial if some but not all are covered, non_compliant if none are covered. When checking enumerated elements, search for operational equivalents under different headings or labels. Count an element as covered if the policy addresses the same control outcome, even if wording, section number, or document structure differs. Only mark an element not covered if no substantive procedural equivalent exists anywhere in the excerpts.
+
+Semantic matching -- compare by regulatory meaning and operational control outcome, not keyword overlap. Different wording, section numbers, headings, and document structure are acceptable when the control outcome is equivalent. Do not mark non_compliant when the internal policy clearly implements the regulatory intent with different terminology. Search ALL documents and text thoroughly before concluding non_compliant. Compliant if any excerpt fully addresses all elements/sub-obligations.
 
 Rules:
 - design_status: does the internal policy text address this requirement on paper? compliant = fully covered, partial = partially covered or covered with gaps, non_compliant = not addressed at all.
@@ -60,9 +83,18 @@ Also give an overall_rating (strong/adequate/weak), 2-5 strengths, and 2-5 concr
 
     public const string JudgmentSemanticV2Label = "Semantic matching v2";
     public const string JudgmentSemanticV3Label = "Semantic matching";
+    public const string JudgmentFullMarkdownV1Label = "Full markdown multi-doc v1";
 
     public static string BuildJudgmentContextText(string policyContext) =>
         $"--- INTERNAL POLICY DOCUMENT EXCERPTS (retrieved as the sections most likely relevant to a clause -- they may not be the full manual, and if nothing here addresses a given clause it may still be covered elsewhere) ---\n{policyContext}\n--- END EXCERPTS ---\n\nBefore concluding non_compliant, consider whether the requirement might be implemented elsewhere in the manual under different section titles, headings, or terminology than the regulator used. If excerpts are incomplete, prefer partial with low confidence over non_compliant.";
+
+    public static string BuildJudgmentFullMarkdownContextText(string policyContext) =>
+        "--- INTERNAL POLICY DOCUMENTS (complete parsed markdown for every attached internal file — search ALL documents; no page limit; no section ranking) ---\n"
+        + policyContext
+        + "\n--- END INTERNAL POLICY DOCUMENTS ---\n\n"
+        + "Multiple internal files may be attached. Search every document above before concluding non_compliant. "
+        + "Regulatory terms may appear under different headings, rule numbers, or abbreviations (AML, CFT/CTF, KYC, etc.) in the internal manuals. "
+        + "If any document is missing from the context, prefer partial with low confidence over non_compliant.";
 
     public static string BuildJudgmentQueryText(string clauseNo, string clauseText) =>
         $"""
@@ -76,14 +108,32 @@ If excerpts are incomplete or ambiguous, set low confidence and note that covera
 Mark non_compliant only when no substantive procedural equivalent appears in the excerpts for the regulatory intent.
 """;
 
+    public static string BuildJudgmentFullMarkdownQueryText(string clauseNo, string clauseText) =>
+        $"""
+REGULATORY CLAUSE {clauseNo}:
+{clauseText}
+
+Judge this clause against the complete internal policy documents above using semantic intent analysis, not keyword matching.
+Treat AML/CFT/CTF/KYC/CDD/PEP/STR/SAR abbreviations and their full forms as equivalent.
+Search all documents thoroughly before concluding non_compliant.
+Regulatory "independent audit" may appear in internal policy as "internal audit", "Audit Division", or AML audit rules (e.g. 9.4.1) — count as covered when the control outcome matches.
+Different wording, section numbers, headings, and document structure are acceptable when the control outcome is equivalent.
+Do not recommend adding a new policy section when an existing section already implements the requirement under a different title or rule number.
+Mark non_compliant only when no substantive procedural equivalent appears anywhere in the attached internal documents for the regulatory intent.
+""";
+
     public static string BuildJudgmentRetryNote(string overallStatus) =>
         $"--- RETRY ---\nYour overall_status was '{overallStatus}' but gap_description was empty. A partial or non_compliant finding MUST have a non-empty gap_description stating exactly what is missing and naming the document it was/was not found in. Provide that now.";
 
-    /// <summary>Template shown in admin UI — actual call uses retrieved policy excerpts.</summary>
     public static string JudgmentUserContextTemplate =>
         BuildJudgmentContextText("{policy_context}");
 
-    /// <summary>Template shown in admin UI — actual call uses the clause being judged.</summary>
+    public static string JudgmentFullMarkdownUserContextTemplate =>
+        BuildJudgmentFullMarkdownContextText("{policy_context}");
+
+    public static string JudgmentFullMarkdownUserQueryTemplate =>
+        BuildJudgmentFullMarkdownQueryText("{clause_no}", "{clause_text}");
+
     public static string JudgmentUserQueryTemplate =>
         BuildJudgmentQueryText("{clause_no}", "{clause_text}");
 

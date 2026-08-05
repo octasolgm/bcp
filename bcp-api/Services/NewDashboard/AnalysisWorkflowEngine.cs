@@ -8,7 +8,7 @@ public static class AnalysisWorkflowEngine
     /// <summary>V3 — Regul forward/reverse/qualitative with ≤50-page full manual else keyword retrieval.</summary>
     public const string RegulPipeline = "regul_pipeline";
 
-    /// <summary>V4 — Regul forward-only with full markdown for all internal files (no retrieval cap).</summary>
+    /// <summary>V4 — Regul forward-only: always full parsed markdown per internal file (no page/section limit).</summary>
     public const string RegulPipelineFull = "regul_pipeline_full";
 
     public static bool IsRegulPipeline(string? raw) =>

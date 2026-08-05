@@ -43,7 +43,7 @@ export class AnalyseRegulFullComponent extends AnalyseRegulComponent {
     const llm = this.regulWorkflowLlmSummary || 'admin-selected LLM';
     return (
       `Regul full-markdown analysis using ${llm}. ` +
-      'Sends complete parsed markdown for every attached internal file (no section ranking). ' +
+      'Sends complete parsed markdown for every attached internal file (any page count, multiple files supported; no section ranking). ' +
       'Forward judgment only — reverse coverage is skipped. Type start to confirm.'
     );
   }

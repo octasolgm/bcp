@@ -140,7 +140,7 @@
                       }
                       @if (prompt.key.startsWith('regul_judgment') && isRegulWorkflow && selectedPromptKey === prompt.key) {
                         <p class="nd-muted prompt-hint">
-                          Current version is used live on Analysis V3 runs. Required placeholders cannot be removed.
+                          Current version is used live on {{ workflowLabelForPrompt(prompt) }} runs. Required placeholders cannot be removed.
                         </p>
                       }
                     </div>

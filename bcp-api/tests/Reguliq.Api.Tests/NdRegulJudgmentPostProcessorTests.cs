@@ -78,4 +78,26 @@ public class NdRegulJudgmentPostProcessorTests
         Assert.Contains("p.42", result.DocumentReference);
         Assert.DoesNotContain("6.8", result.DocumentReference);
     }
+
+    [Fact]
+    public void ApplyFalseAbsenceCorrection_downgrades_when_audit_section_exists_in_corpus()
+    {
+        var corpus =
+            "6.18 Internal Audit AML Rule 9.4.1: Carrying out an independent assessment to assess AML/CFT compliance.";
+        var judgment = new RegulJudgmentResult
+        {
+            OverallStatus = "non_compliant",
+            DesignStatus = "non_compliant",
+            OperatingStatus = "non_compliant",
+            Confidence = 0.69,
+            GapDescription = "The manual does not contain a dedicated Internal Audit section.",
+            SuggestedAction = "Add a dedicated Internal Audit section addressing independent audit requirements.",
+        };
+
+        var result = NdRegulJudgmentPostProcessor.ApplyFalseAbsenceCorrection(judgment, corpus);
+
+        Assert.Equal("partial", result.OverallStatus);
+        Assert.Contains("different section title", result.GapDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Review existing internal audit", result.SuggestedAction, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -40,10 +40,11 @@ public class RegulWorkflowLlmService(
         string contextBlock,
         string queryBlock,
         bool cacheContextBlock,
+        string? workflowEngine = null,
         CancellationToken ct = default)
     {
         var cfg = await settings.GetConfigAsync(ct);
-        var systemPrompt = await promptVersions.GetJudgmentSystemPromptAsync(ct);
+        var systemPrompt = await promptVersions.GetJudgmentSystemPromptAsync(workflowEngine, ct);
         logger.LogInformation(
             "Regul judgment LLM using {Provider}/{Model} (structured={Structured})",
             cfg.Provider,

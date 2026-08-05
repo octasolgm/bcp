@@ -9,11 +9,17 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public const string JudgmentSystemKey = "regul_judgment_system";
     public const string JudgmentUserContextKey = "regul_judgment_user_context";
     public const string JudgmentUserQueryKey = "regul_judgment_user_query";
+    public const string JudgmentFullSystemKey = "regul_judgment_full_system";
+    public const string JudgmentFullUserContextKey = "regul_judgment_full_user_context";
+    public const string JudgmentFullUserQueryKey = "regul_judgment_full_user_query";
     public const int JudgmentSemanticV2VersionNumber = 2;
     public const int JudgmentSemanticV3VersionNumber = 3;
 
     private static readonly string[] JudgmentPromptKeys =
         [JudgmentSystemKey, JudgmentUserContextKey, JudgmentUserQueryKey];
+
+    private static readonly string[] JudgmentFullPromptKeys =
+        [JudgmentFullSystemKey, JudgmentFullUserContextKey, JudgmentFullUserQueryKey];
 
     private static readonly Dictionary<string, Func<string>> JudgmentPromptTextByKey =
         new(StringComparer.Ordinal)
@@ -21,21 +27,36 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
             [JudgmentSystemKey] = () => NdRegulPromptDefaults.JudgmentSystemPrompt.Trim(),
             [JudgmentUserContextKey] = () => NdRegulPromptDefaults.JudgmentUserContextTemplate.Trim(),
             [JudgmentUserQueryKey] = () => NdRegulPromptDefaults.JudgmentUserQueryTemplate.Trim(),
+            [JudgmentFullSystemKey] = () => NdRegulPromptDefaults.JudgmentFullMarkdownSystemPrompt.Trim(),
+            [JudgmentFullUserContextKey] = () => NdRegulPromptDefaults.JudgmentFullMarkdownUserContextTemplate.Trim(),
+            [JudgmentFullUserQueryKey] = () => NdRegulPromptDefaults.JudgmentFullMarkdownUserQueryTemplate.Trim(),
         };
 
     public record PromptVersionInfo(string PromptKey, Guid Id, int VersionNumber, string Label);
 
     public static bool IsJudgmentPromptKey(string promptKey) =>
-        JudgmentPromptKeys.Contains(promptKey, StringComparer.Ordinal);
+        JudgmentPromptKeys.Contains(promptKey, StringComparer.Ordinal)
+        || JudgmentFullPromptKeys.Contains(promptKey, StringComparer.Ordinal);
 
-    public async Task<IReadOnlyList<PromptVersionInfo>> GetJudgmentPromptVersionsAsync(CancellationToken ct = default)
+    public static bool IsFullMarkdownJudgmentPromptKey(string promptKey) =>
+        JudgmentFullPromptKeys.Contains(promptKey, StringComparer.Ordinal);
+
+    private static string[] PromptKeysForWorkflow(string? workflowEngine) =>
+        AnalysisWorkflowEngine.IsRegulPipelineFull(workflowEngine)
+            ? JudgmentFullPromptKeys
+            : JudgmentPromptKeys;
+
+    public async Task<IReadOnlyList<PromptVersionInfo>> GetJudgmentPromptVersionsAsync(
+        string? workflowEngine = null,
+        CancellationToken ct = default)
     {
         await EnsureSeededAsync(ct);
+        var keys = PromptKeysForWorkflow(workflowEngine);
         var rows = await db.NdAnalysisPromptVersions.AsNoTracking()
-            .Where(v => JudgmentPromptKeys.Contains(v.PromptKey) && v.IsCurrent)
+            .Where(v => keys.Contains(v.PromptKey) && v.IsCurrent)
             .ToListAsync(ct);
 
-        return JudgmentPromptKeys
+        return keys
             .Select(key =>
             {
                 var row = rows.FirstOrDefault(r => r.PromptKey == key)
@@ -49,7 +70,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public async Task EnsureSeededAsync(CancellationToken ct = default)
     {
         var changed = false;
-        foreach (var def in NdAnalysisPromptCatalog.AllV3Prompts)
+        foreach (var def in NdAnalysisPromptCatalog.AllPrompts)
         {
             var exists = await db.NdAnalysisPromptVersions.AsNoTracking()
                 .AnyAsync(v => v.PromptKey == def.Key, ct);
@@ -71,6 +92,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
 
         await EnsureJudgmentSemanticV2Async(ct);
         await EnsureJudgmentSemanticV3Async(ct);
+        await EnsureJudgmentFullMarkdownV1Async(ct);
     }
 
     /// <summary>
@@ -155,6 +177,41 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
             await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Seeds V4-only judgment prompts (full markdown) when missing.
+    /// </summary>
+    public async Task EnsureJudgmentFullMarkdownV1Async(CancellationToken ct = default)
+    {
+        var changed = false;
+        foreach (var key in JudgmentFullPromptKeys)
+        {
+            var exists = await db.NdAnalysisPromptVersions.AsNoTracking()
+                .AnyAsync(v => v.PromptKey == key, ct);
+            if (exists) continue;
+
+            if (!JudgmentPromptTextByKey.TryGetValue(key, out var textFactory))
+                continue;
+
+            var text = textFactory();
+            ValidatePromptText(key, text);
+
+            db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+            {
+                PromptKey = key,
+                VersionNumber = 1,
+                Label = key == JudgmentFullUserContextKey
+                    ? NdRegulPromptDefaults.JudgmentFullMarkdownV1Label
+                    : "Base",
+                PromptText = text,
+                IsCurrent = true,
+            });
+            changed = true;
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
+    }
+
     public async Task<IReadOnlyList<NdAnalysisPromptVersion>> GetVersionsAsync(string promptKey, CancellationToken ct = default)
     {
         await EnsureSeededAsync(ct);
@@ -180,20 +237,39 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
         return NdAnalysisPromptCatalog.Find(promptKey)?.Text ?? "";
     }
 
-    public async Task<string> GetJudgmentSystemPromptAsync(CancellationToken ct = default) =>
-        (await GetCurrentTextAsync(JudgmentSystemKey, ct)).Trim();
+    public async Task<string> GetJudgmentSystemPromptAsync(
+        string? workflowEngine = null,
+        CancellationToken ct = default) =>
+        (await GetCurrentTextAsync(
+            AnalysisWorkflowEngine.IsRegulPipelineFull(workflowEngine)
+                ? JudgmentFullSystemKey
+                : JudgmentSystemKey,
+            ct)).Trim();
 
-    public async Task<string> BuildJudgmentContextAsync(string policyContext, CancellationToken ct = default)
+    public async Task<string> BuildJudgmentContextAsync(
+        string policyContext,
+        string? workflowEngine = null,
+        CancellationToken ct = default)
     {
-        var template = await GetCurrentTextAsync(JudgmentUserContextKey, ct);
-        ValidatePromptText(JudgmentUserContextKey, template);
+        var key = AnalysisWorkflowEngine.IsRegulPipelineFull(workflowEngine)
+            ? JudgmentFullUserContextKey
+            : JudgmentUserContextKey;
+        var template = await GetCurrentTextAsync(key, ct);
+        ValidatePromptText(key, template);
         return template.Replace("{policy_context}", policyContext, StringComparison.Ordinal);
     }
 
-    public async Task<string> BuildJudgmentQueryAsync(string clauseNo, string clauseText, CancellationToken ct = default)
+    public async Task<string> BuildJudgmentQueryAsync(
+        string clauseNo,
+        string clauseText,
+        string? workflowEngine = null,
+        CancellationToken ct = default)
     {
-        var template = await GetCurrentTextAsync(JudgmentUserQueryKey, ct);
-        ValidatePromptText(JudgmentUserQueryKey, template);
+        var key = AnalysisWorkflowEngine.IsRegulPipelineFull(workflowEngine)
+            ? JudgmentFullUserQueryKey
+            : JudgmentUserQueryKey;
+        var template = await GetCurrentTextAsync(key, ct);
+        ValidatePromptText(key, template);
         return template
             .Replace("{clause_no}", clauseNo, StringComparison.Ordinal)
             .Replace("{clause_text}", clauseText, StringComparison.Ordinal);
@@ -204,11 +280,13 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
         switch (promptKey)
         {
             case JudgmentUserContextKey:
+            case JudgmentFullUserContextKey:
                 if (!text.Contains("{policy_context}", StringComparison.Ordinal))
                     throw new InvalidOperationException(
-                        "User block 1 must include {policy_context} where retrieved internal policy excerpts are inserted.");
+                        "User block 1 must include {policy_context} where internal policy text is inserted.");
                 break;
             case JudgmentUserQueryKey:
+            case JudgmentFullUserQueryKey:
                 if (!text.Contains("{clause_no}", StringComparison.Ordinal))
                     throw new InvalidOperationException(
                         "User block 2 must include {clause_no} for the regulatory clause number.");

@@ -24,9 +24,9 @@ public class NdRegulPolicyContextServiceTests
     {
         var longMarkdown = string.Join(
             "\n",
-            Enumerable.Range(1, 60).Select(p =>
+            Enumerable.Range(1, 90).Select(p =>
                 $"<!-- Page {p} -->\nPage {p} content about topic {p % 7}."));
-        longMarkdown += "\n<!-- Page 61 -->\nBeneficial ownership threshold is fifty percent for all customers.";
+        longMarkdown += "\n<!-- Page 91 -->\nBeneficial ownership threshold is fifty percent for all customers.";
 
         var bundle = NdRegulPolicyContextService.FromPayloads([
             new InternalDocPayload("h", "BigManual.pdf", longMarkdown, null),
@@ -127,68 +127,64 @@ public class NdRegulPolicyContextServiceTests
     [Fact]
     public void FullMarkdown_mode_always_sends_complete_manual_regardless_of_page_count()
     {
-        var sections = Enumerable.Range(1, 200).Select(i => new Reguliq.Api.Data.NewDashboard.Entities.NdRegulInternalSection
-        {
-            SourceDoc = "Manual.pdf",
-            SectionRef = $"1.{i}",
-            SectionText = $"Section {i} about wire transfers.",
-            SourcePage = i,
-        }).ToArray();
-
         var markdown = string.Join(
             "\n",
             Enumerable.Range(1, 150).Select(p => $"<!-- BCP_PDF_PAGE:{p} -->\nPage {p} wire transfer controls."));
 
-        var bundle = NdRegulPolicyContextService.FromInternalSections(
-                sections,
-                NdRegulPolicyContextService.RegulPolicyContextMode.FullMarkdown)
-            .WithMarkdownFromPayloads([
-                new InternalDocPayload("h", "Manual.pdf", markdown, null),
-            ]);
+        var bundle = NdRegulPolicyContextService.FromPayloads(
+            [new InternalDocPayload("h", "Manual.pdf", markdown, null)],
+            NdRegulPolicyContextService.RegulPolicyContextMode.FullMarkdown);
 
         Assert.Equal(150, bundle.TotalPages);
         Assert.True(bundle.UsesFullMarkdown);
         var ctx = bundle.BuildContextForClause("wire transfer controls");
         Assert.Contains("=== DOCUMENT: Manual.pdf ===", ctx);
         Assert.Contains("Page 120 wire transfer", ctx);
-        Assert.DoesNotContain("[Manual.pdf — 1.1", ctx);
+        Assert.Contains("Page 1 wire transfer", ctx);
     }
 
     [Fact]
-    public void BuildContextForClause_retrieves_sections_matching_clause_phrases()
+    public void FullMarkdown_mode_sends_all_114_pages_not_truncated()
     {
-        var sections = new[]
-        {
-            new Reguliq.Api.Data.NewDashboard.Entities.NdRegulInternalSection
-            {
-                SourceDoc = "Internal AML Manual.pdf",
-                SectionRef = "14.4",
-                SectionText = "It constitutes an easy reference for internal and external auditors.",
-                SourcePage = 1,
-            },
-            new Reguliq.Api.Data.NewDashboard.Entities.NdRegulInternalSection
-            {
-                SourceDoc = "Internal AML Manual.pdf",
-                SectionRef = "9.4.1",
-                SectionText =
-                    "Internal Audit AML Rule 9.4.1: The internal audit function shall periodically test the AML/CFT programme, including staffing, competencies, subsidiaries, and audit frequency factors.",
-                SourcePage = 88,
-            },
-        };
+        var markdown = string.Join(
+            "\n",
+            Enumerable.Range(1, 114).Select(p =>
+                $"<!-- BCP_PDF_PAGE:{p} -->\nPage {p} internal audit controls for AML programme."));
 
-        var bundle = NdRegulPolicyContextService.FromInternalSections(sections);
-        bundle = new NdRegulPolicyContextService.PolicyBundle(
-            bundle.Chunks,
-            60,
-            bundle.SourceTextForQuotes,
-            bundle.MarkdownByFile,
-            NdRegulPolicyContextService.RegulPolicyContextMode.Standard);
+        var bundle = NdRegulPolicyContextService.FromPayloads(
+            [new InternalDocPayload("h", "Internal AML Manual.pdf", markdown, null)],
+            NdRegulPolicyContextService.RegulPolicyContextMode.FullMarkdown);
 
-        var clause =
-            "A robust and independent audit function is required to test the effectiveness and adequacy of AML/CFT policies, controls and procedures.";
-        var ctx = bundle.BuildContextForClause(clause);
+        Assert.Equal(114, bundle.TotalPages);
+        Assert.True(bundle.UsesFullMarkdown);
 
-        Assert.Contains("9.4.1", ctx, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Internal Audit AML", ctx, StringComparison.OrdinalIgnoreCase);
+        var ctx = bundle.BuildContextForClause("independent audit function AML/CFT programme");
+        Assert.Contains("=== DOCUMENT: Internal AML Manual.pdf ===", ctx);
+        Assert.Contains("Page 114 internal audit", ctx);
+        Assert.Contains("Page 1 internal audit", ctx);
+        Assert.DoesNotContain("p.1]", ctx);
+    }
+
+    [Fact]
+    public void FullMarkdown_mode_includes_every_attached_internal_file()
+    {
+        var manualA = "<!-- BCP_PDF_PAGE:1 -->\nManual A rule 9.4.1 internal audit testing.";
+        var manualB = "<!-- BCP_PDF_PAGE:1 -->\nManual B sanctions screening programme.";
+
+        var bundle = NdRegulPolicyContextService.FromPayloads(
+            [
+                new InternalDocPayload("h1", "Internal AML Manual.pdf", manualA, null),
+                new InternalDocPayload("h2", "Sanctions Policy.pdf", manualB, null),
+            ],
+            NdRegulPolicyContextService.RegulPolicyContextMode.FullMarkdown);
+
+        Assert.Equal(2, bundle.MarkdownByFile.Count);
+        Assert.True(bundle.UsesFullMarkdown);
+
+        var ctx = bundle.BuildContextForClause("independent audit and sanctions screening");
+        Assert.Contains("=== DOCUMENT: Internal AML Manual.pdf ===", ctx);
+        Assert.Contains("=== DOCUMENT: Sanctions Policy.pdf ===", ctx);
+        Assert.Contains("rule 9.4.1", ctx, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("sanctions screening", ctx, StringComparison.OrdinalIgnoreCase);
     }
 }

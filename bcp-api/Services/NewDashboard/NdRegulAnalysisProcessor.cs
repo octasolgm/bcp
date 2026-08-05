@@ -78,7 +78,7 @@ public class NdRegulAnalysisProcessor(
             run.RegulLlmProvider,
             run.RegulLlmModel);
 
-        var promptVersionsForRun = await promptVersions.GetJudgmentPromptVersionsAsync(ct);
+        var promptVersionsForRun = await promptVersions.GetJudgmentPromptVersionsAsync(run.WorkflowEngine, ct);
         logger.LogInformation(
             "Regul V3 forward judgment for run {RunId} will use the CURRENT admin prompt versions (Admin \u2192 Analysis prompts): {PromptVersions}",
             runId,
@@ -273,7 +273,7 @@ public class NdRegulAnalysisProcessor(
         var total = pending.Count;
         var cacheContext = policyBundle.UsesFullMarkdown;
 
-        var promptVersionsInUse = await promptVersions.GetJudgmentPromptVersionsAsync(ct);
+        var promptVersionsInUse = await promptVersions.GetJudgmentPromptVersionsAsync(run.WorkflowEngine, ct);
         logger.LogInformation(
             "Regul forward phase using admin prompt versions for run {RunId}: {PromptVersions}",
             run.Id,
@@ -282,11 +282,13 @@ public class NdRegulAnalysisProcessor(
                 promptVersionsInUse.Select(v => $"{v.PromptKey}=v{v.VersionNumber} ({v.Label})")));
 
         logger.LogInformation(
-            "Regul forward phase started for run {RunId}: {Total} clause(s), policyPages={Pages}, retrieval={Retrieval}",
+            "Regul forward phase started for run {RunId}: {Total} clause(s), policyPages={Pages}, retrieval={Retrieval}, fullMarkdownFiles={FileCount}, fullMarkdownChars={Chars}",
             run.Id,
             total,
             policyBundle.TotalPages,
-            !policyBundle.UsesFullMarkdown);
+            !policyBundle.UsesFullMarkdown,
+            policyBundle.MarkdownByFile.Count,
+            policyBundle.SourceTextForQuotes.Length);
 
         for (var i = 0; i < pending.Count; i++)
         {
@@ -310,6 +312,7 @@ public class NdRegulAnalysisProcessor(
                     finding.ClauseText,
                     policyBundle,
                     cacheContext,
+                    run.WorkflowEngine,
                     ct);
                 var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
                     finding.ClauseNo, finding.ClauseText, judgment);
@@ -364,6 +367,7 @@ public class NdRegulAnalysisProcessor(
         string clauseText,
         NdRegulPolicyContextService.PolicyBundle policyBundle,
         bool cacheContextBlock,
+        string? workflowEngine,
         CancellationToken ct)
     {
         var policyContext = policyBundle.BuildContextForClause(clauseText);
@@ -376,8 +380,8 @@ public class NdRegulAnalysisProcessor(
                 contextChunks.Count,
                 string.Join("; ", contextChunks.Select(c => c.Label)));
         }
-        var contextBlock = await promptVersions.BuildJudgmentContextAsync(policyContext, ct);
-        var queryBlock = await promptVersions.BuildJudgmentQueryAsync(clauseNo, clauseText, ct);
+        var contextBlock = await promptVersions.BuildJudgmentContextAsync(policyContext, workflowEngine, ct);
+        var queryBlock = await promptVersions.BuildJudgmentQueryAsync(clauseNo, clauseText, workflowEngine, ct);
 
         RegulJudgmentResult judgment = null!;
         for (var attempt = 0; attempt <= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries; attempt++)
@@ -386,7 +390,7 @@ public class NdRegulAnalysisProcessor(
                 ? queryBlock
                 : queryBlock + "\n\n" + NdRegulPromptDefaults.BuildJudgmentRetryNote(judgment.OverallStatus);
 
-            var raw = await regulLlm.CallJudgmentAsync(contextBlock, query, cacheContextBlock, ct);
+            var raw = await regulLlm.CallJudgmentAsync(contextBlock, query, cacheContextBlock, workflowEngine, ct);
             judgment = NdRegulLlmJsonHelper.ParseJudgmentResult(raw);
 
             judgment = NdRegulJudgmentPostProcessor.ApplyQuoteVerification(
@@ -397,6 +401,13 @@ public class NdRegulAnalysisProcessor(
                 judgment,
                 contextChunks,
                 policyBundle.MarkdownByFile);
+
+            if (AnalysisWorkflowEngine.IsRegulPipelineFull(workflowEngine))
+            {
+                judgment = NdRegulJudgmentPostProcessor.ApplyFalseAbsenceCorrection(
+                    judgment,
+                    policyBundle.SourceTextForQuotes);
+            }
 
             if (!NdRegulJudgmentPostProcessor.RequiresGapDescriptionRetry(judgment))
                 return judgment;
@@ -413,13 +424,36 @@ public class NdRegulAnalysisProcessor(
         NdRegulPolicyContextService.RegulPolicyContextMode mode,
         CancellationToken ct)
     {
+        var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
+        var payloads = await LoadInternalDocPayloadsAsync(internalDocIds, ct);
+
+        if (AnalysisWorkflowEngine.IsRegulPipelineFull(run.WorkflowEngine))
+        {
+            if (payloads.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "Full-markdown Regul analysis requires parsed internal documents. " +
+                    "Attach at least one internal file and run parse before starting analysis.");
+            }
+
+            var fullMarkdown = NdRegulPolicyContextService.FromPayloads(
+                payloads,
+                NdRegulPolicyContextService.RegulPolicyContextMode.FullMarkdown);
+
+            logger.LogInformation(
+                "Regul full-markdown bundle for run {RunId}: {FileCount} internal file(s), {TotalPages} total pages, {Chars} chars",
+                run.Id,
+                fullMarkdown.MarkdownByFile.Count,
+                fullMarkdown.TotalPages,
+                fullMarkdown.SourceTextForQuotes.Length);
+
+            return fullMarkdown;
+        }
+
         var existing = await db.NdRegulInternalSections
             .AsNoTracking()
             .Where(s => s.AnalysisRunId == run.Id)
             .ToListAsync(ct);
-
-        var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
-        var payloads = await LoadInternalDocPayloadsAsync(internalDocIds, ct);
 
         if (existing.Count > 0)
         {
@@ -460,12 +494,15 @@ public class NdRegulAnalysisProcessor(
         CancellationToken ct)
     {
         var result = new List<InternalDocPayload>();
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var idStr in internalDocIds)
         {
             if (!Guid.TryParse(idStr, out var docId)) continue;
             var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == docId, ct);
             if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath)) continue;
             if (!storage.IsConfigured) continue;
+
             var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
             var payload = await internalParse.EnsureParsedAsync(doc, bytes, ct);
             var markdown = payload.Markdown;
@@ -475,9 +512,26 @@ public class NdRegulAnalysisProcessor(
                     ?? markdown;
             }
 
-            result.Add(payload with { Markdown = markdown });
+            var fileName = ResolveUniquePayloadFileName(doc, docId, usedNames);
+            usedNames.Add(fileName);
+            result.Add(new InternalDocPayload(payload.FileHash, fileName, markdown, payload.Pdf));
         }
+
         return result;
+    }
+
+    private static string ResolveUniquePayloadFileName(
+        StoredDocument doc,
+        Guid docId,
+        IReadOnlySet<string> usedNames)
+    {
+        var baseName = (doc.Title ?? doc.OriginalFileName ?? "internal-policy").Trim();
+        if (baseName.Length == 0) baseName = "internal-policy";
+        if (!usedNames.Contains(baseName)) return baseName;
+
+        var suffix = docId.ToString("N")[..8];
+        var withSuffix = $"{baseName} ({suffix})";
+        return usedNames.Contains(withSuffix) ? $"{baseName} ({docId:N})" : withSuffix;
     }
 
     private async Task RunReversePhaseAsync(NdAnalysisRun run, CancellationToken ct)
@@ -1001,6 +1055,7 @@ public class NdRegulAnalysisProcessor(
                 finding.ClauseText,
                 policyBundle,
                 cacheContext,
+                run.WorkflowEngine,
                 ct);
             var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
                 finding.ClauseNo, finding.ClauseText, judgment);

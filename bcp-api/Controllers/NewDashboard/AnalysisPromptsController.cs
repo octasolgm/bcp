@@ -72,7 +72,7 @@ public class AnalysisPromptsController(
             .GroupBy(v => v.PromptKey)
             .ToDictionary(g => g.Key, g => g.Select(v => MapVersion(v, authorNames)).ToList());
 
-        var prompts = NdAnalysisPromptCatalog.AllV3Prompts
+        var prompts = NdAnalysisPromptCatalog.AllPrompts
             .Select(p =>
             {
                 var versions = versionsByKey.TryGetValue(p.Key, out var list) ? list : new List<object>();

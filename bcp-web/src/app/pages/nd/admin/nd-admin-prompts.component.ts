@@ -113,17 +113,23 @@ export class NdAdminPromptsComponent implements OnInit {
   }
 
   get isRegulWorkflow(): boolean {
-    return this.selectedWorkflow.includes('Regul workflow');
+    return this.selectedWorkflow.includes('Regul workflow') || this.selectedWorkflow.includes('Regul full markdown');
   }
 
   get judgmentPromptParts(): AnalysisPromptDefinition[] {
     return this.activePrompts.filter((p) => p.key.startsWith('regul_judgment'));
   }
 
+  workflowLabelForPrompt(prompt: AnalysisPromptDefinition): string {
+    return prompt.workflow.includes('V4') ? 'Analysis V4' : 'Analysis V3';
+  }
+
   partShortLabel(prompt: AnalysisPromptDefinition): string {
-    if (prompt.key === 'regul_judgment_system') return 'System';
-    if (prompt.key === 'regul_judgment_user_context') return 'User block 1';
-    if (prompt.key === 'regul_judgment_user_query') return 'User block 2';
+    if (prompt.key === 'regul_judgment_system' || prompt.key === 'regul_judgment_full_system') return 'System';
+    if (prompt.key === 'regul_judgment_user_context' || prompt.key === 'regul_judgment_full_user_context') {
+      return 'User block 1';
+    }
+    if (prompt.key === 'regul_judgment_user_query' || prompt.key === 'regul_judgment_full_user_query') return 'User block 2';
     return prompt.label;
   }
 
@@ -239,8 +245,12 @@ export class NdAdminPromptsComponent implements OnInit {
   }
 
   requiredTags(prompt: AnalysisPromptDefinition): string[] {
-    if (prompt.key === 'regul_judgment_user_context') return ['{policy_context}'];
-    if (prompt.key === 'regul_judgment_user_query') return ['{clause_no}', '{clause_text}'];
+    if (prompt.key === 'regul_judgment_user_context' || prompt.key === 'regul_judgment_full_user_context') {
+      return ['{policy_context}'];
+    }
+    if (prompt.key === 'regul_judgment_user_query' || prompt.key === 'regul_judgment_full_user_query') {
+      return ['{clause_no}', '{clause_text}'];
+    }
     return [];
   }
 
@@ -256,7 +266,10 @@ export class NdAdminPromptsComponent implements OnInit {
     const missing = this.missingTags(prompt, text);
     if (missing.length === 0) return null;
     if (prompt.key === 'regul_judgment_user_context') {
-      return 'User block 1 must include {policy_context} where policy excerpts are inserted at runtime.';
+      return 'User block 1 must include {policy_context} where retrieved policy excerpts are inserted at runtime.';
+    }
+    if (prompt.key === 'regul_judgment_full_user_context') {
+      return 'User block 1 must include {policy_context} where full parsed internal markdown is inserted at runtime.';
     }
     if (prompt.key === 'regul_judgment_user_query') {
       return `User block 2 must include mandatory tags: ${missing.join(', ')}.`;
@@ -266,7 +279,10 @@ export class NdAdminPromptsComponent implements OnInit {
 
   placeholderHint(prompt: AnalysisPromptDefinition): string | null {
     if (prompt.key === 'regul_judgment_user_context') {
-      return 'At runtime, {policy_context} is replaced with retrieved internal policy excerpts for each clause.';
+      return 'At runtime, {policy_context} is replaced with retrieved internal policy excerpts for each clause (V3).';
+    }
+    if (prompt.key === 'regul_judgment_full_user_context') {
+      return 'At runtime, {policy_context} is replaced with complete parsed markdown for every attached internal file (V4).';
     }
     if (prompt.key === 'regul_judgment_user_query') {
       return 'At runtime, {clause_no} and {clause_text} are replaced with the regulatory clause being judged.';
@@ -369,7 +385,7 @@ export class NdAdminPromptsComponent implements OnInit {
       );
     }
     this.resetGenerateState();
-    this.message = `Saved as version ${res.data.versionNumber}. Set it as current to use it in Analysis V3.`;
+    this.message = `Saved as version ${res.data.versionNumber}. Set it as current to use it in ${this.workflowLabelForPrompt(prompt)}.`;
   }
 
   async setCurrentVersion(prompt: AnalysisPromptDefinition, version: AnalysisPromptVersion): Promise<void> {
@@ -399,7 +415,7 @@ export class NdAdminPromptsComponent implements OnInit {
     prompt.text = version.promptText;
     this.message =
       prompt.key.startsWith('regul_judgment')
-        ? `Version ${version.versionNumber} is now current for Analysis V3.`
+        ? `Version ${version.versionNumber} is now current for ${this.workflowLabelForPrompt(prompt)}.`
         : `Version ${version.versionNumber} is now current.`;
   }
 
