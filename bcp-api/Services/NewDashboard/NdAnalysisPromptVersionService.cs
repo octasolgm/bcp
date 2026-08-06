@@ -14,6 +14,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public const string JudgmentFullUserQueryKey = "regul_judgment_full_user_query";
     public const int JudgmentSemanticV2VersionNumber = 2;
     public const int JudgmentSemanticV3VersionNumber = 3;
+    public const int JudgmentFullMarkdownV2VersionNumber = 2;
 
     private static readonly string[] JudgmentPromptKeys =
         [JudgmentSystemKey, JudgmentUserContextKey, JudgmentUserQueryKey];
@@ -93,6 +94,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
         await EnsureJudgmentSemanticV2Async(ct);
         await EnsureJudgmentSemanticV3Async(ct);
         await EnsureJudgmentFullMarkdownV1Async(ct);
+        await EnsureJudgmentFullMarkdownV2Async(ct);
     }
 
     /// <summary>
@@ -202,6 +204,49 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
                 Label = key == JudgmentFullUserContextKey
                     ? NdRegulPromptDefaults.JudgmentFullMarkdownV1Label
                     : "Base",
+                PromptText = text,
+                IsCurrent = true,
+            });
+            changed = true;
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Creates V4 judgment prompt v2 (abbreviation dictionary, functional equivalence, OCR
+    /// tolerance, per-element coverage list) and sets it current when missing.
+    /// Safe to call on every startup — skips keys that already have v2.
+    /// </summary>
+    public async Task EnsureJudgmentFullMarkdownV2Async(CancellationToken ct = default)
+    {
+        var textByKey = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [JudgmentFullSystemKey] = NdRegulPromptDefaults.JudgmentFullMarkdownSystemPromptV2.Trim(),
+            [JudgmentFullUserQueryKey] = NdRegulPromptDefaults.JudgmentFullMarkdownUserQueryTemplateV2.Trim(),
+        };
+
+        var changed = false;
+        foreach (var (key, text) in textByKey)
+        {
+            var hasV2 = await db.NdAnalysisPromptVersions.AsNoTracking()
+                .AnyAsync(v => v.PromptKey == key && v.VersionNumber >= JudgmentFullMarkdownV2VersionNumber, ct);
+            if (hasV2) continue;
+
+            ValidatePromptText(key, text);
+
+            var siblings = await db.NdAnalysisPromptVersions
+                .Where(v => v.PromptKey == key)
+                .ToListAsync(ct);
+            foreach (var sibling in siblings)
+                sibling.IsCurrent = false;
+
+            db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+            {
+                PromptKey = key,
+                VersionNumber = JudgmentFullMarkdownV2VersionNumber,
+                Label = NdRegulPromptDefaults.JudgmentFullMarkdownV2Label,
                 PromptText = text,
                 IsCurrent = true,
             });
