@@ -97,7 +97,7 @@ public class DevMaintenanceController(
         {
             byState = await db.Database.SqlQueryRaw<PgStateCount>(
                 """
-                SELECT state AS "State", COUNT(*)::int AS "Count"
+                SELECT COALESCE(state, '(null)') AS "State", COUNT(*)::int AS "Count"
                 FROM pg_stat_activity
                 WHERE datname = current_database()
                 GROUP BY state
@@ -107,7 +107,7 @@ public class DevMaintenanceController(
             sessions = await db.Database.SqlQueryRaw<PgSessionRow>(
                 """
                 SELECT pid AS "Pid",
-                       state AS "State",
+                       COALESCE(state, '(null)') AS "State",
                        COALESCE(wait_event_type, '') AS "WaitEvent",
                        query_start AS "QueryStart",
                        LEFT(query, 100) AS "QueryPreview"
