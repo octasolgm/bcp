@@ -14,6 +14,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public const string JudgmentFullUserQueryKey = "regul_judgment_full_user_query";
     public const int JudgmentSemanticV2VersionNumber = 2;
     public const int JudgmentSemanticV3VersionNumber = 3;
+    public const int JudgmentSemanticV4VersionNumber = 4;
     public const int JudgmentFullMarkdownV2VersionNumber = 2;
 
     private static readonly string[] JudgmentPromptKeys =
@@ -93,6 +94,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
 
         await EnsureJudgmentSemanticV2Async(ct);
         await EnsureJudgmentSemanticV3Async(ct);
+        await EnsureJudgmentSemanticV4Async(ct);
         await EnsureJudgmentFullMarkdownV1Async(ct);
         await EnsureJudgmentFullMarkdownV2Async(ct);
     }
@@ -204,6 +206,49 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
                 Label = key == JudgmentFullUserContextKey
                     ? NdRegulPromptDefaults.JudgmentFullMarkdownV1Label
                     : "Base",
+                PromptText = text,
+                IsCurrent = true,
+            });
+            changed = true;
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Creates V3-workflow judgment prompt v4 (v3 semantic matching + abbreviation dictionary,
+    /// functional equivalence, OCR tolerance, per-element coverage list) and sets it current
+    /// when missing. Safe to call on every startup — skips keys that already have v4.
+    /// </summary>
+    public async Task EnsureJudgmentSemanticV4Async(CancellationToken ct = default)
+    {
+        var textByKey = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV4.Trim(),
+            [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV4.Trim(),
+        };
+
+        var changed = false;
+        foreach (var (key, text) in textByKey)
+        {
+            var hasV4 = await db.NdAnalysisPromptVersions.AsNoTracking()
+                .AnyAsync(v => v.PromptKey == key && v.VersionNumber >= JudgmentSemanticV4VersionNumber, ct);
+            if (hasV4) continue;
+
+            ValidatePromptText(key, text);
+
+            var siblings = await db.NdAnalysisPromptVersions
+                .Where(v => v.PromptKey == key)
+                .ToListAsync(ct);
+            foreach (var sibling in siblings)
+                sibling.IsCurrent = false;
+
+            db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+            {
+                PromptKey = key,
+                VersionNumber = JudgmentSemanticV4VersionNumber,
+                Label = NdRegulPromptDefaults.JudgmentSemanticV4Label,
                 PromptText = text,
                 IsCurrent = true,
             });
