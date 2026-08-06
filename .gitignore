@@ -6,7 +6,16 @@ bcp-api/appsettings.Secrets.json
 bcp-api/bin/
 bcp-api/obj/
 bcp-api/publish/
+bcp-api/publish_old_*/
 bcp-api/publish-secrets-test/
+bcp-api/_buildcheck*/
+bcp-api/_buildlog/
+bcp-api/_publishcheck*/
+bcp-api/_runout/
+bcp-api/_testbuild/
+bcp-api/_testout/
+bcp-api/bcp-api.zip
+bcp-api/Properties/PublishProfiles/* - *1.pubxml
 bcp-api/.vs/
 bcp-api/TestResults/
 bcp-api/**/reguliq.db
@@ -20,6 +29,10 @@ bcp-api/**/dual-verify-kafka/
 bcp-web/node_modules/
 bcp-web/.angular/
 bcp-web/dist/
+bcp-web/bcp-web-dist.zip
+
+# Temp
+tmp-*.txt
 
 # IDE / OS
 .vscode/
