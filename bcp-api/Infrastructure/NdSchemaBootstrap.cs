@@ -8,6 +8,9 @@ public static class NdSchemaBootstrap
 {
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)
     {
+        if (await SupabaseSchemaBootstrap.NdSchemaAlreadyPresentAsync(db, ct))
+            return;
+
         await EnsureInlineAsync(db, ct);
     }
 

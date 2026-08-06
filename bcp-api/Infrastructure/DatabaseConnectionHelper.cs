@@ -76,11 +76,11 @@ public static class DatabaseConnectionHelper
         if (configuredMax <= 0)
             configuredMax = config?.GetValue("POSTGRES_MAX_POOL_SIZE", 0) ?? 0;
 
-        var sessionMax = configuredMax > 0 ? Math.Clamp(configuredMax, 2, 14) : 8;
+        var sessionMax = configuredMax > 0 ? Math.Clamp(configuredMax, 2, 30) : 8;
         var transactionMax = configuredMax > 0 ? Math.Clamp(configuredMax, 2, 20) : 12;
 
         builder.MinPoolSize = 0;
-        builder.ConnectionIdleLifetime = 30;
+        builder.ConnectionIdleLifetime = 15;
         builder.Timeout = Math.Clamp(builder.Timeout, 5, 30);
 
         if (builder.Port == 5432)

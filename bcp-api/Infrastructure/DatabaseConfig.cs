@@ -27,8 +27,10 @@ public sealed class DatabaseConfig
         if (string.IsNullOrWhiteSpace(pgRaw))
             pgRaw = null;
 
+        // Azure App Service has a 120s startup limit — never brute-force pooler hosts there.
         if (!string.IsNullOrWhiteSpace(pgRaw)
-            && string.IsNullOrWhiteSpace(BcpConfiguration.GetString(config, "Supabase:DbHost", "SUPABASE_DB_HOST")))
+            && string.IsNullOrWhiteSpace(BcpConfiguration.GetString(config, "Supabase:DbHost", "SUPABASE_DB_HOST"))
+            && !IsAppServiceEnvironment())
         {
             var working = SupabasePoolerResolver.ResolveWorkingConnection(pgRaw, config);
             if (!string.IsNullOrWhiteSpace(working))

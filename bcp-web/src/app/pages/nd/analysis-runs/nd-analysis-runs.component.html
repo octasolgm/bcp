@@ -30,7 +30,7 @@
 
 @if (loading) {
   <p class="muted-loading nd-shrink">Loading analysis runs…</p>
-} @else if (!allRuns.length) {
+} @else if (totalCount === 0) {
   <div class="card-surface empty-state nd-shrink">
     <strong>{{ correctionOnly ? 'No analyses pending correction' : 'No analysis runs yet' }}</strong>
     @if (correctionOnly) {
@@ -67,7 +67,7 @@
       <option value="legacy_analysis">Legacy</option>
       <option value="legacy_dual_verify">Legacy DV</option>
     </select>
-    <span class="filter-count">{{ visibleRuns.length }} of {{ allRuns.length }}</span>
+    <span class="filter-count">{{ visibleRuns.length }} on page · {{ pageRangeLabel }}</span>
     @if (hasActiveFilters) {
       <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
     }
@@ -176,6 +176,18 @@
       </tbody>
     </table>
   </div>
+
+  @if (totalPages > 1) {
+    <div class="nd-pagination nd-shrink">
+      <button type="button" class="btn-secondary" [disabled]="page <= 1 || loading" (click)="goToPage(page - 1)">
+        Previous
+      </button>
+      <span class="nd-pagination-label">Page {{ page }} of {{ totalPages }}</span>
+      <button type="button" class="btn-secondary" [disabled]="page >= totalPages || loading" (click)="goToPage(page + 1)">
+        Next
+      </button>
+    </div>
+  }
   }
 }
 </div>

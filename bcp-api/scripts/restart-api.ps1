@@ -83,10 +83,10 @@ Unblock-ApiBinaries
 if ($Detached) {
     Write-Host "Starting API in a new window..."
     if ($hasSdk) {
-        $runCmd = "Set-Location '$root'; Get-ChildItem .\bin\Debug\net8.0 -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue; & '$dotnet' run --project '$project' --no-build"
+        $runCmd = "Set-Location '$root'; `$env:ASPNETCORE_ENVIRONMENT='Development'; Get-ChildItem .\bin\Debug\net8.0 -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue; & '$dotnet' run --project '$project' --no-build"
     }
     else {
-        $runCmd = "Set-Location '$dllDir'; `$env:DOTNET_ROLL_FORWARD='Major'; `$env:DOTNET_ROLL_FORWARD_TO_PRERELEASE='1'; Get-ChildItem . -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue; & '$dotnet' Bcp.Api.dll"
+        $runCmd = "Set-Location '$dllDir'; `$env:ASPNETCORE_ENVIRONMENT='Development'; `$env:DOTNET_ROLL_FORWARD='Major'; `$env:DOTNET_ROLL_FORWARD_TO_PRERELEASE='1'; Get-ChildItem . -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue; & '$dotnet' Bcp.Api.dll"
     }
     Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", $runCmd
     Write-Host "API starting on http://localhost:$port (check the new PowerShell window)."
@@ -95,6 +95,7 @@ if ($Detached) {
 }
 
 Write-Host "Starting API (foreground). Ctrl+C to stop."
+$env:ASPNETCORE_ENVIRONMENT = "Development"
 if ($hasSdk) {
     Set-Location $root
     & $dotnet run --project $project --no-build

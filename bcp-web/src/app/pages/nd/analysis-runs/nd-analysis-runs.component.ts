@@ -52,6 +52,10 @@ export class NdAnalysisRunsComponent implements OnInit {
   correctionOnly = false;
   pageTitle = 'Analysis runs';
   subtitle = 'All compliance analysis runs';
+  page = 1;
+  pageSize = 20;
+  totalCount = 0;
+  totalPages = 0;
 
   searchQuery = '';
   statusFilter = '';
@@ -85,6 +89,7 @@ export class NdAnalysisRunsComponent implements OnInit {
         : this.mineOnly && role === 'maker'
           ? 'Runs you created'
           : 'All compliance analysis runs across the workspace';
+      this.page = 1;
       void this.load();
     });
 
@@ -104,20 +109,45 @@ export class NdAnalysisRunsComponent implements OnInit {
             ndOnly: true,
             summaryOnly: true,
             status: 'pulled_back',
+            page: this.page,
+            pageSize: this.pageSize,
             ...(this.mineOnly ? { mineOnly: true } : {}),
           }
         : this.mineOnly
-          ? { mineOnly: true, ndOnly: true, summaryOnly: true }
-          : { ndOnly: true, summaryOnly: true },
+          ? { mineOnly: true, ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize }
+          : { ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize },
     );
     if (res.success && res.data) {
       this.allRuns = res.data as AnalysisRunSummary[];
+      this.totalCount = res.pagination?.total ?? this.allRuns.length;
+      this.totalPages = res.pagination?.totalPages ?? 1;
+      if (this.page > this.totalPages && this.totalPages > 0) {
+        this.page = this.totalPages;
+        this.loading = false;
+        await this.load();
+        return;
+      }
     } else {
       this.allRuns = [];
+      this.totalCount = 0;
+      this.totalPages = 0;
       this.loadError = res.message ?? 'Could not load analysis runs from the API.';
       this.toast.show(this.loadError, 'error', 6000);
     }
     this.loading = false;
+  }
+
+  goToPage(next: number): void {
+    if (next < 1 || next > this.totalPages || next === this.page) return;
+    this.page = next;
+    void this.load();
+  }
+
+  get pageRangeLabel(): string {
+    if (!this.totalCount) return '0 runs';
+    const start = (this.page - 1) * this.pageSize + 1;
+    const end = Math.min(this.page * this.pageSize, this.totalCount);
+    return `${start}–${end} of ${this.totalCount}`;
   }
 
   get workspaceTabActive(): 'all_analysis' | 'pending_correction' {
@@ -310,7 +340,12 @@ export class NdAnalysisRunsComponent implements OnInit {
     const res = await this.api.softDeleteAnalysisRun(run.id);
     if (res.success) {
       this.allRuns = this.allRuns.filter((r) => r.id !== run.id);
+      this.totalCount = Math.max(0, this.totalCount - 1);
       this.deleteMessage = `"${run.name}" removed.`;
+      if (!this.allRuns.length && this.page > 1) {
+        this.page -= 1;
+        await this.load();
+      }
     } else {
       this.deleteError = res.message ?? 'Delete failed';
     }
@@ -325,13 +360,17 @@ export class NdAnalysisRunsComponent implements OnInit {
       return;
     }
     this.stoppingId = run.id;
+    this.allRuns = this.allRuns.map((r) =>
+      r.id === run.id ? { ...r, status: 'cancelled' as const } : r,
+    );
     const res = await this.api.stopAnalysisRun(run.id);
     this.stoppingId = null;
     if (res.success) {
       this.toast.show('Analysis stopped', 'warning');
       await this.load();
     } else {
-      this.toast.show(res.message ?? 'Could not stop analysis', 'error');
+      this.toast.show(res.message ?? 'Stop signalled — refresh in a moment', 'warning');
+      await this.load();
     }
   }
 }

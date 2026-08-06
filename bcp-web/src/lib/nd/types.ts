@@ -219,6 +219,8 @@ export type AnalysisRunSummary = {
   regulReverseSectionFailed?: number;
   regulLlmProvider?: string | null;
   regulLlmModel?: string | null;
+  runningPoints?: number;
+  isActive?: boolean;
 };
 
 export type AnalysisPoint = {

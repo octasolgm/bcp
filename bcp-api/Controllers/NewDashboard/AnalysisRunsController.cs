@@ -19,7 +19,9 @@ public class AnalysisRunsController(
     NdAnalysisProcessor processor,
     DemoAnalysisSeedService demoSeed,
     IServiceScopeFactory scopeFactory,
-    NdAnalysisRunCancellationTracker runCancellation) : NdControllerBase
+    NdAnalysisRunCancellationTracker runCancellation,
+    NdDashboardCacheService dashboardCache,
+    ILogger<AnalysisRunsController> logger) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
 
@@ -52,6 +54,9 @@ public class AnalysisRunsController(
         [FromQuery] bool deletedOnly = false,
         [FromQuery] bool ndOnly = false,
         [FromQuery] bool summaryOnly = false,
+        [FromQuery] bool skipGapStats = false,
+        [FromQuery] int? page = null,
+        [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct,
@@ -67,6 +72,7 @@ public class AnalysisRunsController(
                 .Where(r => r.Status == DeletedStatus)
                 .OrderByDescending(r => r.DeletedAt ?? r.UpdatedAt)
                 .Take(200)
+                .SelectListColumns()
                 .ToListAsync(ct);
 
             var deletedItems = deletedRuns.Select(r => NdLegacyDataQueries.MapNdRunSummary(r)).Cast<object>().ToList();
@@ -74,10 +80,14 @@ public class AnalysisRunsController(
             return Ok(new { success = true, data = deletedItems });
         }
 
-        var hiddenLegacy = await db.NdHiddenLegacyRuns.AsNoTracking()
-            .Select(h => h.LegacyId)
-            .ToListAsync(ct);
-        var hiddenLegacySet = hiddenLegacy.ToHashSet();
+        HashSet<Guid>? hiddenLegacySet = null;
+        if (!ndOnly)
+        {
+            var hiddenLegacy = await db.NdHiddenLegacyRuns.AsNoTracking()
+                .Select(h => h.LegacyId)
+                .ToListAsync(ct);
+            hiddenLegacySet = hiddenLegacy.ToHashSet();
+        }
 
         var q = db.NdAnalysisRuns.AsNoTracking()
             .Where(r => r.Status != DeletedStatus)
@@ -89,16 +99,62 @@ public class AnalysisRunsController(
         if (!string.IsNullOrWhiteSpace(status))
             q = q.Where(r => r.Status == status);
 
-        var runs = await q.OrderByDescending(r => r.CreatedAt).Take(100).ToListAsync(ct);
+        const int overviewPreviewLimit = 20;
 
-        if (ndOnly)
+        if (ndOnly && summaryOnly)
         {
-            if (summaryOnly)
+            if (page is null or < 1)
             {
-                var summaries = await NdRunEnrichmentHelper.MapSummariesLightAsync(db, runs, ct);
+                // Overview first paint — skip heavy point aggregation by default.
+                var overviewSkipGaps = skipGapStats || page is null;
+                var cacheScope =
+                    $"runs-summary:{profile!.Id}:{profile.Role}:{mineOnly}:{status ?? ""}:skipGap={overviewSkipGaps}";
+                var summaries = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>
+                {
+                    var cachedRuns = await q
+                        .OrderByDescending(r => r.CreatedAt)
+                        .Take(overviewPreviewLimit)
+                        .SelectListColumns()
+                        .ToListAsync(innerCt);
+                    return await NdRunEnrichmentHelper.MapSummariesLightAsync(db, cachedRuns, innerCt, overviewSkipGaps);
+                }, ct);
                 return Ok(new { success = true, data = summaries });
             }
 
+            var effectivePage = page.Value;
+            var effectivePageSize = Math.Clamp(pageSize, 1, 100);
+            var total = await q.CountAsync(ct);
+            var pagedRuns = await q
+                .OrderByDescending(r => r.CreatedAt)
+                .Skip((effectivePage - 1) * effectivePageSize)
+                .Take(effectivePageSize)
+                .SelectListColumns()
+                .ToListAsync(ct);
+            var pagedSummaries = await NdRunEnrichmentHelper.MapSummariesLightAsync(db, pagedRuns, ct);
+            var totalPages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)effectivePageSize);
+            return Ok(new
+            {
+                success = true,
+                data = pagedSummaries,
+                pagination = new
+                {
+                    page = effectivePage,
+                    pageSize = effectivePageSize,
+                    total,
+                    totalPages,
+                },
+            });
+        }
+
+        var listLimit = 100;
+        var runs = await q
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(listLimit)
+            .SelectListColumns()
+            .ToListAsync(ct);
+
+        if (ndOnly)
+        {
             var enriched = await NdRunEnrichmentHelper.EnrichRunsAsync(db, runs, ct);
             return Ok(new { success = true, data = enriched });
         }
@@ -118,7 +174,7 @@ public class AnalysisRunsController(
                 .Take(100)
                 .ToListAsync(ct);
             items.AddRange(legacyRuns
-                .Where(r => !hiddenLegacySet.Contains(r.Id))
+                .Where(r => hiddenLegacySet is null || !hiddenLegacySet.Contains(r.Id))
                 .Select(NdLegacyDataQueries.MapLegacyAnalysisRun));
 
             var standaloneDv = await db.DualVerifySessions.AsNoTracking()
@@ -127,7 +183,7 @@ public class AnalysisRunsController(
                 .Take(50)
                 .ToListAsync(ct);
             items.AddRange(standaloneDv
-                .Where(s => !hiddenLegacySet.Contains(s.Id))
+                .Where(s => hiddenLegacySet is null || !hiddenLegacySet.Contains(s.Id))
                 .Select(NdLegacyDataQueries.MapLegacyDualVerifySession));
         }
 
@@ -231,7 +287,7 @@ public class AnalysisRunsController(
             Name = body.Name.Trim(),
             Description = body.Description,
             ComparePromptVersion = storedPromptVersion,
-            WorkflowEngine = ResolveWorkflowEngine(body.WorkflowEngine),
+            WorkflowEngine = AnalysisWorkflowEngine.ResolveForCreate(body.WorkflowEngine),
             EnableQualitative = body.EnableQualitative,
             LibraryId = body.LibraryId,
             DepartmentId = body.DepartmentId,
@@ -260,6 +316,7 @@ public class AnalysisRunsController(
         }
 
         await db.SaveChangesAsync(ct);
+        dashboardCache.Invalidate();
         return Ok(new { success = true, data = new { id = run.Id } });
     }
 
@@ -326,6 +383,14 @@ public class AnalysisRunsController(
             return NotFound(new { success = false, message = "Not found" });
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
+
+        if (await NdStaleRunRecovery.TryRecoverRunAsync(id, db, runCancellation, logger, ct))
+        {
+            run = await db.NdAnalysisRuns
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == id, ct);
+            if (run == null) return NotFound(new { success = false, message = "Not found" });
+        }
 
         if (resume)
         {
@@ -445,6 +510,9 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
+        if (run.Status is "running" or "processing" && runCancellation.HasActiveWorker(id))
+            return Ok(new { success = true, message = "Analysis already in progress", id, status = run.Status });
+
         if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine) && run.RegulClausesConfirmedAt == null)
             return BadRequest(new
             {
@@ -497,6 +565,9 @@ public class AnalysisRunsController(
 
         if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return BadRequest(new { success = false, message = "Forward-only start is for Regul workflow runs." });
+
+        if (run.Status is "running" or "processing" && runCancellation.HasActiveWorker(id))
+            return Ok(new { success = true, message = "Analysis already in progress", id, status = run.Status });
 
         if (run.RegulClausesConfirmedAt == null)
             return BadRequest(new
@@ -588,49 +659,44 @@ public class AnalysisRunsController(
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
 
-        var run = await db.NdAnalysisRuns
-            .Include(r => r.Points)
-            .FirstOrDefaultAsync(r => r.Id == id, ct);
-        if (run == null) return NotFound(new { success = false, message = "Not found" });
-        if (run.Status == DeletedStatus)
+        var meta = await db.NdAnalysisRuns.AsNoTracking()
+            .Where(r => r.Id == id)
+            .Select(r => new { r.Status, r.CreatedBy })
+            .FirstOrDefaultAsync(ct);
+        if (meta == null || meta.Status == DeletedStatus)
             return NotFound(new { success = false, message = "Not found" });
-        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+        if (profile!.Role == "maker" && meta.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
-        var terminal = run.Status is "completed" or "cancelled" or "dual_verify_failed" or "landing_ai_complete";
-        if (terminal && run.Points.All(p =>
-                p.LandingAiStatus is not ("pending" or "running")
-                && p.DualVerifyStatus is not ("pending" or "running")))
-        {
-            return Ok(new { success = true, message = "Analysis already finished", id, status = run.Status });
-        }
+        var terminal = meta.Status is "completed" or "cancelled" or "dual_verify_failed" or "landing_ai_complete";
+        if (terminal)
+            return Ok(new { success = true, message = "Analysis already finished", id, status = meta.Status });
 
+        // Signal in-process worker first, then persist with fast SQL (avoid loading all points).
         runCancellation.RequestStop(id);
 
-        foreach (var point in run.Points)
-        {
-            if (point.LandingAiStatus is "pending" or "running")
-            {
-                point.LandingAiStatus = "cancelled";
-                point.LandingAiError = "Stopped by user";
-                point.DualVerifyStatus = "skipped";
-                point.UpdatedAt = DateTimeOffset.UtcNow;
-            }
-            else if (point.DualVerifyStatus is "pending" or "running")
-            {
-                point.DualVerifyStatus = "cancelled";
-                point.GoogleAiStatus = point.GoogleAiStatus is "running" or "pending" ? "cancelled" : point.GoogleAiStatus;
-                point.UpdatedAt = DateTimeOffset.UtcNow;
-            }
-        }
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE analysis_runs
+              SET status = 'cancelled', regul_pipeline_phase = 'done', updated_at = now()
+              WHERE id = {0} AND status NOT IN ('completed', 'cancelled', 'deleted');
+            UPDATE analysis_points
+              SET landing_ai_status = CASE WHEN landing_ai_status IN ('pending','running') THEN 'cancelled' ELSE landing_ai_status END,
+                  landing_ai_error = CASE WHEN landing_ai_status IN ('pending','running') THEN 'Stopped by user' ELSE landing_ai_error END,
+                  dual_verify_status = CASE
+                    WHEN landing_ai_status IN ('pending','running') THEN 'skipped'
+                    WHEN dual_verify_status IN ('pending','running') THEN 'cancelled'
+                    ELSE dual_verify_status END,
+                  google_ai_status = CASE WHEN google_ai_status IN ('pending','running') THEN 'cancelled' ELSE google_ai_status END,
+                  updated_at = now()
+              WHERE analysis_run_id = {0};
+            UPDATE regul_forward_findings
+              SET status = 'cancelled', error_message = 'Stopped by user', updated_at = now()
+              WHERE analysis_run_id = {0} AND status = 'pending';
+            """,
+            id);
 
-        run.Status = "cancelled";
-        run.ProcessedPointsCount = run.Points.Count(p =>
-            p.LandingAiStatus is "compliant" or "partial_compliant" or "non_compliant" or "failed" or "cancelled");
-        run.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
-
-        return Ok(new { success = true, message = "Analysis stopped", id, status = run.Status });
+        return Ok(new { success = true, message = "Analysis stopped", id, status = "cancelled" });
     }
 
     [HttpPost("{id:guid}/rerun-point/{pointId:guid}")]
@@ -835,6 +901,7 @@ public class AnalysisRunsController(
 
         await db.SaveChangesAsync(ct);
         await RecordStatusChangeAsync(db, id, from, run.Status, profile.Id, null, ct);
+        dashboardCache.Invalidate();
         return Ok(new { success = true });
     }
 
@@ -864,6 +931,7 @@ public class AnalysisRunsController(
 
         await db.SaveChangesAsync(ct);
         await RecordStatusChangeAsync(db, id, from, run.Status, profile.Id, "Resubmitted", ct);
+        dashboardCache.Invalidate();
         return Ok(new { success = true });
     }
 
@@ -888,6 +956,7 @@ public class AnalysisRunsController(
 
         await db.SaveChangesAsync(ct);
         await RecordStatusChangeAsync(db, id, from, DeletedStatus, profile.Id, "Soft deleted", ct);
+        dashboardCache.Invalidate();
 
         return Ok(new { success = true, message = "Analysis run removed from workspace." });
     }
@@ -905,6 +974,7 @@ public class AnalysisRunsController(
             if (hidden == null) return NotFound(new { success = false, message = "Not found" });
             db.NdHiddenLegacyRuns.Remove(hidden);
             await db.SaveChangesAsync(ct);
+            dashboardCache.Invalidate();
             return Ok(new { success = true, message = "Analysis run restored." });
         }
         if (run.Status != DeletedStatus)
@@ -919,6 +989,7 @@ public class AnalysisRunsController(
 
         await db.SaveChangesAsync(ct);
         await RecordStatusChangeAsync(db, id, from, restored, profile!.Id, "Restored", ct);
+        dashboardCache.Invalidate();
 
         return Ok(new { success = true, message = "Analysis run restored.", status = restored });
     }
@@ -1047,11 +1118,6 @@ public class AnalysisRunsController(
             node["pointContent"] = update.PointContent;
         return node.ToJsonString();
     }
-
-    private static string ResolveWorkflowEngine(string? raw) =>
-        AnalysisWorkflowEngine.IsRegulFamily(raw)
-            ? AnalysisWorkflowEngine.RegulPipeline
-            : AnalysisWorkflowEngine.BcpLanding;
 
     private static object MapPoint(NdAnalysisPoint p, string? pointSnapshotOverride = null, string? workflowEngine = null) =>
         NdRegulApiProjection.MapPoint(p, workflowEngine, pointSnapshotOverride);

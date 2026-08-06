@@ -130,6 +130,7 @@ builder.Services.Configure<NodeBridgeOptions>(o =>
 
 builder.Services.AddHttpClient<GeminiService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<Reguliq.Api.Services.NewDashboard.NdDashboardCacheService>();
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.DualVerifyLlmSettingsService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisPromptVersionService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdPromptAiGenerationService>();
@@ -202,8 +203,8 @@ var ndSupabaseUrl = BcpConfiguration.GetString(builder.Configuration, "Supabase:
 if (string.IsNullOrWhiteSpace(ndJwtSecret))
 {
     Console.WriteLine(
-        "WARNING: Supabase:JwtSecret is not set. ND auth will validate tokens via Supabase Auth API (slower). " +
-        "For local HS256 validation, copy JWT secret from Supabase Dashboard → Project Settings → API → JWT Settings " +
+        "WARNING: Supabase:JwtSecret is not set. In Development, ND auth parses JWT payload locally (no signature check). " +
+        "For production-like validation, copy JWT secret from Supabase Dashboard → Project Settings → API → JWT Settings " +
         "into appsettings.Development.json (Supabase:JwtSecret) and re-run scripts/sync-secrets.ps1.");
 }
 else
@@ -215,34 +216,14 @@ else
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+var bootstrapState = new StartupBootstrapState();
+app.Lifetime.ApplicationStarted.Register(() =>
 {
-    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-    try
+    _ = Task.Run(async () =>
     {
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await SupabaseSchemaBootstrap.EnsureAsync(db, dbConfig);
-        await NdSchemaBootstrap.EnsureAsync(db);
-        var migrator = scope.ServiceProvider.GetRequiredService<LocalDataMigrationService>();
-        await migrator.MigrateAsync();
-    }
-    catch (Exception ex)
-    {
-        PostgresConnectionDiagnostics.SetError(ex);
-        logger.LogError(ex, "Supabase bootstrap failed.");
-        if (dbConfig.RequireSupabase)
-        {
-            Console.Error.WriteLine();
-            Console.Error.WriteLine("FATAL: Bcp:RequireSupabase=true but Postgres is not reachable.");
-            Console.Error.WriteLine(PostgresConnectionDiagnostics.LastError);
-            Console.Error.WriteLine(
-                "Fix Supabase:DbPassword in appsettings.Development.json " +
-                "(reset in Supabase Dashboard → Database).");
-            Console.Error.WriteLine("If you see ECIRCUITBREAKER, wait 10 minutes with API stopped, then restart.");
-            throw;
-        }
-    }
-}
+        await StartupBootstrap.RunAsync(app.Services, dbConfig, bootstrapState, app.Environment);
+    });
+});
 
 if (app.Environment.IsDevelopment())
 {
@@ -259,6 +240,105 @@ app.MapGet("/", () => Results.Ok(new
     name = "BCP API",
     version = "1.0.0",
     persistence = dbConfig.UsePostgres ? "supabase" : "sqlite",
+    bootstrap = bootstrapState.Status,
 }));
 
+app.MapGet("/health/startup", () =>
+{
+    if (bootstrapState.IsReady)
+        return Results.Ok(new { status = "ready", bootstrap = bootstrapState.Status });
+    if (bootstrapState.Failed)
+        return Results.Json(new { status = "failed", bootstrap = bootstrapState.Status, error = bootstrapState.LastError }, statusCode: 503);
+    return Results.Json(new { status = "starting", bootstrap = bootstrapState.Status }, statusCode: 503);
+});
+
 app.Run();
+
+file sealed class StartupBootstrapState
+{
+    private volatile string _status = "pending";
+    public string Status => _status;
+    public string? LastError { get; private set; }
+    public bool IsReady => string.Equals(_status, "ready", StringComparison.OrdinalIgnoreCase);
+    public bool Failed => string.Equals(_status, "failed", StringComparison.OrdinalIgnoreCase);
+
+    public void SetStatus(string status, string? error = null)
+    {
+        _status = status;
+        LastError = error;
+    }
+}
+
+file static class StartupBootstrap
+{
+    public static async Task RunAsync(
+        IServiceProvider services,
+        DatabaseConfig dbConfig,
+        StartupBootstrapState state,
+        IWebHostEnvironment env)
+    {
+        state.SetStatus("running");
+        using var scope = services.CreateScope();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        try
+        {
+            var schemaPresent = await SupabaseSchemaBootstrap.NdSchemaAlreadyPresentAsync(db, CancellationToken.None);
+
+            if (schemaPresent)
+            {
+                state.SetStatus("ready");
+                logger.LogInformation("Live schema detected — API ready for login.");
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await using var bgScope = services.CreateAsyncScope();
+                        var bgDb = bgScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                        var bgTracker = bgScope.ServiceProvider
+                            .GetRequiredService<Reguliq.Api.Infrastructure.NewDashboard.NdAnalysisRunCancellationTracker>();
+                        var bgLog = bgScope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+                        var n = await Reguliq.Api.Services.NewDashboard.NdStaleRunRecovery
+                            .CancelAllRunningWithoutWorkerAsync(bgDb, bgTracker, bgLog, CancellationToken.None);
+                        if (n > 0)
+                            bgLog.LogInformation("Background: marked {Count} stuck run(s) as failed.", n);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Background stuck-run cleanup failed.");
+                    }
+                });
+
+                return;
+            }
+
+            await SupabaseSchemaBootstrap.EnsureAsync(db, dbConfig);
+            await NdSchemaBootstrap.EnsureAsync(db);
+            var migrator = scope.ServiceProvider.GetRequiredService<LocalDataMigrationService>();
+            await migrator.MigrateAsync();
+            state.SetStatus("ready");
+            logger.LogInformation("Startup bootstrap completed.");
+        }
+        catch (Exception ex)
+        {
+            PostgresConnectionDiagnostics.SetError(ex);
+            logger.LogError(ex, "Supabase bootstrap failed.");
+            if (dbConfig.RequireSupabase)
+            {
+                state.SetStatus("failed", ex.Message);
+                Console.Error.WriteLine();
+                Console.Error.WriteLine("FATAL: Bcp:RequireSupabase=true but Postgres is not reachable.");
+                Console.Error.WriteLine(PostgresConnectionDiagnostics.LastError);
+                Console.Error.WriteLine(
+                    "Fix Supabase:DbPassword in appsettings.Development.json " +
+                    "(reset in Supabase Dashboard → Database).");
+                Console.Error.WriteLine("If you see ECIRCUITBREAKER, wait 10 minutes with API stopped, then restart.");
+                return;
+            }
+
+            state.SetStatus("degraded", ex.Message);
+        }
+    }
+}

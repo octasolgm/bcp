@@ -56,7 +56,7 @@ public class NdRegulAnalysisProcessor(
             throw new InvalidOperationException(
                 "Regul clauses must be confirmed before analysis. Call POST /nd/analysis-runs/{id}/confirm-clauses first.");
 
-        if (runCancellation.IsStopRequested(runId))
+        if (runCancellation.IsStopRequested(runId) || run.Status == "cancelled")
         {
             await MarkCancelledAsync(run, ct);
             return;
@@ -65,8 +65,21 @@ public class NdRegulAnalysisProcessor(
         var llm = await llmSettings.GetConfigAsync(ct);
         run.RegulLlmProvider = llm.Provider;
         run.RegulLlmModel = llm.Model;
+        if (runCancellation.IsStopRequested(runId))
+        {
+            await MarkCancelledAsync(run, ct);
+            return;
+        }
+
+        await db.Entry(run).ReloadAsync(ct);
+        if (runCancellation.IsStopRequested(runId) || run.Status == "cancelled")
+        {
+            await MarkCancelledAsync(run, ct);
+            return;
+        }
+
         run.Status = "running";
-        run.RegulPipelinePhase = "forward";
+        run.RegulPipelinePhase = "parsing";
         run.RegulPipelineError = null;
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -88,9 +101,11 @@ public class NdRegulAnalysisProcessor(
 
         try
         {
-            await PrepareLibraryDocumentsForAnalysisAsync(run, ct);
-            await EnsureInternalSectionsForRunAsync(run, ct);
+            await PrepareRegulRunPreForwardAsync(run, ct);
             await EnsureForwardFindingsAsync(run, ct);
+            run.RegulPipelinePhase = "forward";
+            run.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
             logger.LogInformation("Regul pipeline phase=forward for run {RunId}", runId);
             await RunForwardPhaseAsync(run, ct);
             if (runCancellation.IsStopRequested(runId))
@@ -173,7 +188,7 @@ public class NdRegulAnalysisProcessor(
             throw new InvalidOperationException(
                 "Regul clauses must be confirmed before analysis. Call POST /nd/analysis-runs/{id}/confirm-clauses first.");
 
-        if (runCancellation.IsStopRequested(runId))
+        if (runCancellation.IsStopRequested(runId) || run.Status == "cancelled")
         {
             await MarkCancelledAsync(run, ct);
             return;
@@ -182,8 +197,14 @@ public class NdRegulAnalysisProcessor(
         var llm = await llmSettings.GetConfigAsync(ct);
         run.RegulLlmProvider = llm.Provider;
         run.RegulLlmModel = llm.Model;
+        if (runCancellation.IsStopRequested(runId))
+        {
+            await MarkCancelledAsync(run, ct);
+            return;
+        }
+
         run.Status = "running";
-        run.RegulPipelinePhase = "forward";
+        run.RegulPipelinePhase = "parsing";
         run.RegulPipelineError = null;
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -196,9 +217,11 @@ public class NdRegulAnalysisProcessor(
 
         try
         {
-            await PrepareLibraryDocumentsForAnalysisAsync(run, ct);
-            await EnsureInternalSectionsForRunAsync(run, ct);
+            await PrepareRegulRunPreForwardAsync(run, ct);
             await EnsureForwardFindingsAsync(run, ct);
+            run.RegulPipelinePhase = "forward";
+            run.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
             await RunForwardPhaseAsync(run, ct);
             if (runCancellation.IsStopRequested(runId))
             {
@@ -305,6 +328,14 @@ public class NdRegulAnalysisProcessor(
                 index,
                 total);
 
+            point.LandingAiStatus = "running";
+            point.LandingAiError = null;
+            point.UpdatedAt = DateTimeOffset.UtcNow;
+            finding.Status = "running";
+            finding.UpdatedAt = DateTimeOffset.UtcNow;
+            run.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+
             try
             {
                 var judgment = await CallForwardJudgmentAsync(
@@ -314,6 +345,9 @@ public class NdRegulAnalysisProcessor(
                     cacheContext,
                     run.WorkflowEngine,
                     ct);
+                if (runCancellation.IsStopRequested(run.Id) || ct.IsCancellationRequested)
+                    throw new OperationCanceledException();
+
                 var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
                     finding.ClauseNo, finding.ClauseText, judgment);
 
@@ -333,6 +367,22 @@ public class NdRegulAnalysisProcessor(
                     judgment.OverallStatus,
                     judgment.Confidence,
                     judgment.PolicyExtract.Count);
+            }
+            catch (OperationCanceledException)
+            {
+                finding.Status = "cancelled";
+                finding.ErrorMessage = "Stopped by user";
+                finding.UpdatedAt = DateTimeOffset.UtcNow;
+                if (point.LandingAiStatus is "pending" or "running")
+                {
+                    point.LandingAiStatus = "cancelled";
+                    point.LandingAiError = "Stopped by user";
+                    point.DualVerifyStatus = "skipped";
+                    point.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+
+                await db.SaveChangesAsync(ct);
+                throw;
             }
             catch (Exception ex)
             {
@@ -730,11 +780,38 @@ public class NdRegulAnalysisProcessor(
         await db.SaveChangesAsync(ct);
     }
 
+    private async Task PrepareRegulRunPreForwardAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        if (runCancellation.IsStopRequested(run.Id))
+            throw new OperationCanceledException();
+
+        if (AnalysisWorkflowEngine.IsRegulPipelineFull(run.WorkflowEngine))
+        {
+            // V4 full markdown: clauses are frozen in point snapshots and internal markdown is
+            // already parse-cached. Skip library repair/page-refresh here — RefreshPagesAsync
+            // re-resolves PDF pages for EVERY point in the regulation doc (storage download per
+            // point) and used to stall runs for many minutes before the first LLM call.
+            logger.LogInformation(
+                "Regul V4 pre-forward prep for run {RunId}: loading cached markdown only (no re-parse, no page refresh)",
+                run.Id);
+            var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
+            await LoadInternalDocPayloadsAsync(internalDocIds, ct);
+            return;
+        }
+
+        await PrepareLibraryDocumentsForAnalysisAsync(run, ct);
+        if (runCancellation.IsStopRequested(run.Id))
+            throw new OperationCanceledException();
+        await EnsureInternalSectionsForRunAsync(run, ct);
+    }
+
     private async Task PrepareLibraryDocumentsForAnalysisAsync(NdAnalysisRun run, CancellationToken ct)
     {
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
         foreach (var idStr in internalDocIds)
         {
+            if (runCancellation.IsStopRequested(run.Id))
+                throw new OperationCanceledException();
             if (!Guid.TryParse(idStr, out var docId)) continue;
             var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == docId, ct);
             if (doc == null) continue;
@@ -838,6 +915,8 @@ public class NdRegulAnalysisProcessor(
 
         foreach (var idStr in internalDocIds)
         {
+            if (runCancellation.IsStopRequested(run.Id))
+                throw new OperationCanceledException();
             if (!Guid.TryParse(idStr, out var docId)) continue;
 
             var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == docId, ct);
@@ -970,8 +1049,12 @@ public class NdRegulAnalysisProcessor(
     private async Task MarkCancelledAsync(NdAnalysisRun run, CancellationToken ct)
     {
         run.Status = "cancelled";
+        await NdRegulRunStopHelper.ApplyAsync(db, run, ct);
+        run.ProcessedPointsCount = run.Points.Count(p =>
+            p.LandingAiStatus is "compliant" or "partial_compliant" or "non_compliant" or "failed" or "cancelled");
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+        runCancellation.Clear(run.Id);
     }
 
     /// <summary>Re-run forward (or full reverse phase) for one point on a Regul workflow run.</summary>

@@ -119,12 +119,18 @@ public static class NdLegacyDataQueries
         int? nonCompliant = null,
         int? criticalGaps = null,
         int? mediumGaps = null,
-        int? lowGaps = null) => new
+        int? lowGaps = null,
+        int runningPoints = 0,
+        bool? isActive = null) => new
     {
         id = r.Id,
         source = "nd_analysis",
         name = r.Name,
         makerName,
+        workflowEngine = r.WorkflowEngine,
+        regulPipelinePhase = r.RegulPipelinePhase,
+        regulLlmProvider = r.RegulLlmProvider,
+        regulLlmModel = r.RegulLlmModel,
         status = r.Status,
         statusBeforeDelete = r.StatusBeforeDelete,
         deletedAt = r.DeletedAt,
@@ -145,5 +151,7 @@ public static class NdLegacyDataQueries
         criticalGaps = criticalGaps ?? 0,
         mediumGaps = mediumGaps ?? 0,
         lowGaps = lowGaps ?? 0,
+        runningPoints,
+        isActive,
     };
 }

@@ -14,7 +14,12 @@ export function isNdRunProcessing(run: {
   dualVerifyFailedCount?: number;
   createdAt?: string;
   updatedAt?: string;
+  runningPoints?: number;
+  isActive?: boolean;
 }): boolean {
+  if (run.isActive === false) return false;
+  if (run.isActive === true) return true;
+
   const st = (run.status || '').toLowerCase();
   if (st === 'deleted') return false;
   if (REVIEW_WORKFLOW.has(st)) return false;
@@ -27,5 +32,6 @@ export function isNdRunProcessing(run: {
     failedPoints: run.dualVerifyFailedCount,
     pointCount: run.totalPointsCount,
     updatedAt,
+    runningPoints: run.runningPoints,
   });
 }

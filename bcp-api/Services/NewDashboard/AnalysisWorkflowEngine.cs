@@ -19,4 +19,14 @@ public static class AnalysisWorkflowEngine
 
     public static bool IsRegulFamily(string? raw) =>
         IsRegulPipeline(raw) || IsRegulPipelineFull(raw);
+
+    /// <summary>Maps API create-run payload to a stored workflow engine id.</summary>
+    public static string ResolveForCreate(string? raw)
+    {
+        if (IsRegulPipelineFull(raw))
+            return RegulPipelineFull;
+        if (IsRegulPipeline(raw))
+            return RegulPipeline;
+        return BcpLanding;
+    }
 }

@@ -162,16 +162,15 @@ export class DashboardComponent implements OnInit {
   ngOnInit(): void {
     if (this.inNdShell) {
       this.ndRunsLoading = true;
+      // ND overview uses analysis-runs summaries — skip legacy dual-verify/demo loads that
+      // compete for the same Supabase connection pool and often 500 on missing seed data.
+      void this.loadNdRuns();
+      return;
     }
     this.loadHealth();
     this.loadMetrics();
-    if (!this.inNdShell) {
-      this.loadSessions();
-    }
+    this.loadSessions();
     this.loadRemediationFromCompliance();
-    if (this.inNdShell) {
-      void this.loadNdRuns();
-    }
   }
 
   private loadHealth(): void {
@@ -244,7 +243,9 @@ export class DashboardComponent implements OnInit {
     this.ndRunsLoading = true;
     this.ndRunsLoadError = '';
     try {
-      await this.ndAuth.refreshProfile();
+      if (!this.ndAuth.profile()) {
+        await this.ndAuth.refreshProfile();
+      }
       const role = this.ndAuth.getRole();
       const res = await this.ndApi.getAnalysisRuns(
         role === 'maker'

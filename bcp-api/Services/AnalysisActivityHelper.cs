@@ -17,6 +17,7 @@ public static class AnalysisActivityHelper
 
     private static readonly TimeSpan StaleQueuedThreshold = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan StaleRunningThreshold = TimeSpan.FromHours(2);
+    private static readonly TimeSpan StaleRunningNoProgressThreshold = TimeSpan.FromMinutes(15);
 
     public static bool IsStillActive(
         string status,
@@ -41,6 +42,15 @@ public static class AnalysisActivityHelper
         if ((st is "processing" or "running") && runningPoints > 0 && done < totalPoints && updatedAt.HasValue)
         {
             if (DateTimeOffset.UtcNow - updatedAt.Value > StaleRunningThreshold)
+                return false;
+        }
+
+        // Zombie run: status still "running" but no point is active and nothing is progressing
+        // (common after API restart or a failed Stop on Regul forward).
+        if ((st is "processing" or "running") && runningPoints == 0 && done < totalPoints && updatedAt.HasValue)
+        {
+            var threshold = done == 0 ? StaleRunningNoProgressThreshold : StaleRunningThreshold;
+            if (DateTimeOffset.UtcNow - updatedAt.Value > threshold)
                 return false;
         }
 

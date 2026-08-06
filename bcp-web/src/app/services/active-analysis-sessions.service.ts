@@ -1,16 +1,18 @@
 import { Injectable, OnDestroy, inject, signal } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { ApiService, type DualVerifySessionSummary } from './api.service';
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'archived', 'unavailable']);
 const ACTIVE_STATUS = new Set(['queued', 'processing', 'running', 'in_progress', 'in-progress']);
 const STALE_QUEUED_MS = 30 * 60 * 1000;
 const STALE_RUNNING_MS = 2 * 60 * 60 * 1000;
+const STALE_RUNNING_NO_PROGRESS_MS = 15 * 60 * 1000;
 /**
  * Background poll while ND shell is open.
- * Keep slow — each call hits Postgres and competes with /status + analysis processor
- * under a small Supabase session pool (often MaxPoolSize 5–8).
+ * Keep slow — each call hits Postgres and competes with dashboard list queries
+ * under a small Supabase session pool (often MaxPoolSize 8–15).
  */
-const SESSION_POLL_MS = 45_000;
+const SESSION_POLL_MS = 60_000;
 
 /** Shared rule for nav badge, in-progress page, and document analysis runs. */
 export function isAnalysisStillActive(opts: {
@@ -46,6 +48,19 @@ export function isAnalysisStillActive(opts: {
   ) {
     const age = Date.now() - new Date(opts.updatedAt).getTime();
     if (age > STALE_RUNNING_MS) return false;
+  }
+
+  // Zombie ND/Regul run: still "running" in DB but no point is active and nothing progressed.
+  if (
+    (st === 'processing' || st === 'running') &&
+    (opts.runningPoints ?? 0) === 0 &&
+    total > 0 &&
+    done < total &&
+    opts.updatedAt
+  ) {
+    const age = Date.now() - new Date(opts.updatedAt).getTime();
+    const staleMs = done === 0 ? STALE_RUNNING_NO_PROGRESS_MS : STALE_RUNNING_MS;
+    if (age > staleMs) return false;
   }
 
   if (ACTIVE_STATUS.has(st)) return true;
@@ -92,13 +107,14 @@ export function isActiveRunStatus(status: string): boolean {
 @Injectable({ providedIn: 'root' })
 export class ActiveAnalysisSessionsService implements OnDestroy {
   private readonly api = inject(ApiService);
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  private activeSub: Subscription | null = null;
   private watchers = 0;
   private visibilityBound = false;
   private inFlight = false;
   private lastRefreshAt = 0;
   /** Ignore duplicate refresh() bursts (nav + analyse + stop all call this). */
-  private readonly minRefreshGapMs = 8_000;
+  private readonly minRefreshGapMs = 30_000;
 
   readonly sessions = signal<DualVerifySessionSummary[]>([]);
   readonly loading = signal(false);
@@ -108,14 +124,15 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
     if (this.watchers === 1) {
       this.bindVisibility();
       this.refresh(true);
-      this.timer = setInterval(() => this.refresh(), SESSION_POLL_MS);
+      this.schedulePoll();
     }
   }
 
   unwatch(): void {
     this.watchers = Math.max(0, this.watchers - 1);
     if (this.watchers === 0) {
-      this.stopTimer();
+      this.clearPollTimer();
+      this.cancelInFlight();
       this.unbindVisibility();
     }
   }
@@ -127,10 +144,11 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
     const now = Date.now();
     if (!force && now - this.lastRefreshAt < this.minRefreshGapMs) return;
 
+    this.cancelInFlight();
     this.inFlight = true;
     this.lastRefreshAt = now;
     this.loading.set(true);
-    this.api.listActiveDualVerifySessions().subscribe({
+    this.activeSub = this.api.listActiveDualVerifySessions().subscribe({
       next: (r) => {
         const rows = Array.isArray(r.data) ? r.data : [];
         const active = rows.filter((s) => s?.id && isActiveAnalysisSession(s));
@@ -140,24 +158,42 @@ export class ActiveAnalysisSessionsService implements OnDestroy {
         this.sessions.set(active);
         this.loading.set(false);
         this.inFlight = false;
+        this.activeSub = null;
       },
       error: () => {
         this.loading.set(false);
         this.inFlight = false;
+        this.activeSub = null;
       },
     });
   }
 
   ngOnDestroy(): void {
-    this.stopTimer();
+    this.clearPollTimer();
+    this.cancelInFlight();
     this.unbindVisibility();
   }
 
-  private stopTimer(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+  private schedulePoll(): void {
+    this.clearPollTimer();
+    if (this.watchers === 0) return;
+    this.pollTimer = setTimeout(() => {
+      this.refresh();
+      this.schedulePoll();
+    }, SESSION_POLL_MS);
+  }
+
+  private clearPollTimer(): void {
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
     }
+  }
+
+  private cancelInFlight(): void {
+    this.activeSub?.unsubscribe();
+    this.activeSub = null;
+    this.inFlight = false;
   }
 
   private bindVisibility(): void {

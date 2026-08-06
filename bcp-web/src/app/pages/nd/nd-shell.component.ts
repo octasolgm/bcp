@@ -75,6 +75,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private navSub: Subscription | null = null;
   private badgeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private badgeRefreshInFlight = false;
+  private sessionsWatching = false;
 
   get profileInitial(): string {
     const name = this.profile()?.fullName?.trim();
@@ -103,21 +104,45 @@ export class NdShellComponent implements OnInit, OnDestroy {
     this.navEntries = this.navForRole(role);
     this.expandedGroups = new Set();
     this.syncExpandedGroupsToRoute();
-    void this.refreshPass2LlmSummary();
-    this.activeSessions.watch();
+    // Sidebar badges are non-critical — defer on overview so analysis-runs gets the DB pool first.
     this.scheduleNavBadgeRefresh();
+    if (!this.isOverviewRoute()) {
+      setTimeout(() => void this.refreshPass2LlmSummary(), 2500);
+    }
+    this.syncActiveSessionPolling();
     this.navSub = this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => {
         this.syncExpandedGroupsToRoute();
         this.scheduleNavBadgeRefresh();
+        this.syncActiveSessionPolling();
       });
   }
 
   ngOnDestroy(): void {
     this.navSub?.unsubscribe();
     if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
-    this.activeSessions.unwatch();
+    if (this.sessionsWatching) {
+      this.activeSessions.unwatch();
+      this.sessionsWatching = false;
+    }
+  }
+
+  /** Overview is DB-heavy — do not poll /sessions/active while it loads. */
+  private syncActiveSessionPolling(): void {
+    if (this.isOverviewRoute()) {
+      if (this.sessionsWatching) {
+        this.activeSessions.unwatch();
+        this.sessionsWatching = false;
+      }
+      return;
+    }
+    if (this.sessionsWatching) return;
+    setTimeout(() => {
+      if (this.isOverviewRoute() || this.sessionsWatching) return;
+      this.activeSessions.watch();
+      this.sessionsWatching = true;
+    }, 8000);
   }
 
   isGroupExpanded(groupId: string): boolean {
@@ -186,10 +211,15 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   private scheduleNavBadgeRefresh(): void {
     if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
+    const delayMs = this.isOverviewRoute() ? 15_000 : 8_000;
     this.badgeRefreshTimer = setTimeout(() => {
       this.badgeRefreshTimer = null;
       void this.refreshNavBadges();
-    }, 1200);
+    }, delayMs);
+  }
+
+  private isOverviewRoute(): boolean {
+    return this.router.url.split('?')[0].startsWith('/nd/overview');
   }
 
   badgeFor(item: NavItem): number | undefined {

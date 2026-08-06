@@ -4,13 +4,15 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Reguliq.Api.Infrastructure;
 
 namespace Reguliq.Api.Infrastructure.NewDashboard;
 
 public class SupabaseJwtValidator(
     IOptions<SupabaseJwtOptions> options,
     ILogger<SupabaseJwtValidator> logger,
-    IHttpClientFactory httpClientFactory)
+    IHttpClientFactory httpClientFactory,
+    IHostEnvironment hostEnvironment)
 {
     private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(2);
     private readonly SupabaseJwtOptions _opts = options.Value;
@@ -32,6 +34,17 @@ public class SupabaseJwtValidator(
 
         if (!_opts.IsConfigured)
         {
+            // Fast local path when JwtSecret is not set — parse claims without signature check.
+            if (hostEnvironment.IsDevelopment() || AzureHosting.IsAppService == false)
+            {
+                logger.LogWarning(
+                    "[ND JWT] Supabase:JwtSecret is not set — using payload parse (no signature check). " +
+                    "Set Supabase:JwtSecret for production-like validation.");
+                var parsed = ParseJwtPayloadWithoutSignature(bearerToken);
+                if (parsed != null)
+                    return parsed;
+            }
+
             logger.LogWarning(
                 "[ND JWT] Supabase:JwtSecret is not configured — falling back to Supabase Auth API validation");
             return await ValidateViaSupabaseAuthApiAsync(bearerToken, ct);
@@ -40,7 +53,13 @@ public class SupabaseJwtValidator(
         return ValidateLocally(bearerToken);
     }
 
-    private JwtUser? ValidateLocally(string bearerToken)
+    private JwtUser? ValidateLocally(string bearerToken) =>
+        ValidateJwtCore(bearerToken, verifySignature: true);
+
+    private JwtUser? ParseJwtPayloadWithoutSignature(string bearerToken) =>
+        ValidateJwtCore(bearerToken, verifySignature: false);
+
+    private JwtUser? ValidateJwtCore(string bearerToken, bool verifySignature)
     {
         var token = bearerToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
             ? bearerToken[7..].Trim()
@@ -57,11 +76,15 @@ public class SupabaseJwtValidator(
         {
             var headerJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[0]));
             using var header = JsonDocument.Parse(headerJson);
-            var alg = header.RootElement.GetProperty("alg").GetString();
-            if (!string.Equals(alg, "HS256", StringComparison.Ordinal))
+            var alg = header.RootElement.TryGetProperty("alg", out var algEl) ? algEl.GetString() : null;
+
+            if (verifySignature)
             {
-                logger.LogWarning("[ND JWT] Unsupported algorithm: {Alg} (expected HS256)", alg);
-                return null;
+                if (!string.Equals(alg, "HS256", StringComparison.Ordinal))
+                {
+                    logger.LogWarning("[ND JWT] Unsupported algorithm: {Alg} (expected HS256)", alg);
+                    return null;
+                }
             }
 
             var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
@@ -112,15 +135,18 @@ public class SupabaseJwtValidator(
                 }
             }
 
-            var signatureInput = Encoding.UTF8.GetBytes($"{parts[0]}.{parts[1]}");
-            var expectedSig = Base64UrlDecode(parts[2]);
-            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_opts.JwtSecret));
-            var actualSig = hmac.ComputeHash(signatureInput);
-            if (!CryptographicOperations.FixedTimeEquals(actualSig, expectedSig))
+            if (verifySignature)
             {
-                logger.LogWarning(
-                    "[ND JWT] Signature verification failed (check Supabase:JwtSecret matches dashboard JWT secret)");
-                return null;
+                var signatureInput = Encoding.UTF8.GetBytes($"{parts[0]}.{parts[1]}");
+                var expectedSig = Base64UrlDecode(parts[2]);
+                using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_opts.JwtSecret));
+                var actualSig = hmac.ComputeHash(signatureInput);
+                if (!CryptographicOperations.FixedTimeEquals(actualSig, expectedSig))
+                {
+                    logger.LogWarning(
+                        "[ND JWT] Signature verification failed (check Supabase:JwtSecret matches dashboard JWT secret)");
+                    return null;
+                }
             }
 
             var sub = root.TryGetProperty("sub", out var subEl) ? subEl.GetString() : null;

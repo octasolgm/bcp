@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
+using Reguliq.Api.Services;
 
 namespace Reguliq.Api.Services.NewDashboard;
 
@@ -135,15 +136,23 @@ public static class NdRunEnrichmentHelper
         return result;
     }
 
+    private sealed record RunPointStatusAggregate(
+        Guid RunId,
+        int Compliant,
+        int Partial,
+        int NonCompliant,
+        int Running);
+
     /// <summary>
     /// Fast list rows for nav, analysis-runs table, and dashboard cards.
-    /// Loads status + CAP text only (not Landing/LLM result blobs) so Critical/Medium/Low cards
-    /// can populate without a second full /nd/results download.
+    /// Uses SQL aggregation (no per-point hydration) so overview loads within Supabase pool limits.
+    /// Gap-risk cards use point-severity approximations (non-compliant → critical, partial → medium).
     /// </summary>
     public static async Task<List<object>> MapSummariesLightAsync(
         AppDbContext db,
         IReadOnlyList<NdAnalysisRun> runs,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool skipGapStats = false)
     {
         if (runs.Count == 0) return [];
 
@@ -155,37 +164,9 @@ public static class NdRunEnrichmentHelper
                 .Where(p => makerIds.Contains(p.Id))
                 .ToDictionaryAsync(p => p.Id, p => p.FullName ?? "", ct);
 
-        // Status + CAP only — avoid landing_ai_result / google_ai_result blobs.
-        var capRows = await db.NdAnalysisPoints.AsNoTracking()
-            .Where(p => runIds.Contains(p.AnalysisRunId))
-            .Select(p => new
-            {
-                p.Id,
-                p.AnalysisRunId,
-                p.FinalStatus,
-                p.LandingAiStatus,
-                p.FinalActionPlan,
-                p.OriginalAiActionPlan,
-                p.LandingAiActionPlan,
-            })
-            .ToListAsync(ct);
-
-        var pointIds = capRows.Select(p => p.Id).ToList();
-        var reviewPriorityRows = pointIds.Count == 0
-            ? []
-            : await db.NdActionPlanItemReviews.AsNoTracking()
-                .Where(r => pointIds.Contains(r.AnalysisPointId) && r.Priority != null && r.Priority != "")
-                .Select(r => new { r.AnalysisPointId, r.ActionIndex, r.Priority, r.CreatedAt, r.SortOrder })
-                .ToListAsync(ct);
-
-        // Latest review priority wins per (point, actionIndex).
-        var reviewPriority = reviewPriorityRows
-            .OrderByDescending(r => r.SortOrder)
-            .ThenByDescending(r => r.CreatedAt)
-            .GroupBy(r => (r.AnalysisPointId, r.ActionIndex))
-            .ToDictionary(g => g.Key, g => (string?)g.First().Priority);
-
-        var byRun = capRows.GroupBy(x => x.AnalysisRunId).ToDictionary(g => g.Key, g => g.ToList());
+        var aggByRun = skipGapStats || runIds.Count == 0
+            ? new Dictionary<Guid, RunPointStatusAggregate>()
+            : await LoadPointStatusAggregatesAsync(db, runIds, ct);
 
         var list = new List<object>(runs.Count);
         foreach (var run in runs)
@@ -194,37 +175,19 @@ public static class NdRunEnrichmentHelper
             if (run.CreatedBy is Guid mid && makers.TryGetValue(mid, out var name))
                 makerName = name;
 
-            byRun.TryGetValue(run.Id, out var rows);
-            rows ??= [];
-
-            var compliant = 0;
-            var partial = 0;
-            var nonCompliant = 0;
-            foreach (var row in rows)
-            {
-                switch (EffectiveComplianceStatus(row.FinalStatus, row.LandingAiStatus))
-                {
-                    case "compliant":
-                        compliant++;
-                        break;
-                    case "partial_compliant":
-                        partial++;
-                        break;
-                    case "non_compliant":
-                        nonCompliant++;
-                        break;
-                }
-            }
-
-            var gapRisk = NdGapRiskCounter.AggregateForCapRows(
-                rows.Select(r => new NdGapRiskCounter.CapRow(
-                    r.Id,
-                    r.FinalStatus,
-                    r.LandingAiStatus,
-                    r.FinalActionPlan,
-                    r.OriginalAiActionPlan,
-                    r.LandingAiActionPlan)),
-                reviewPriority);
+            aggByRun.TryGetValue(run.Id, out var agg);
+            var compliant = agg?.Compliant ?? 0;
+            var partial = agg?.Partial ?? 0;
+            var nonCompliant = agg?.NonCompliant ?? 0;
+            var gapRisk = new NdGapRiskCounter.Counts(nonCompliant, partial, 0);
+            var runningPoints = agg?.Running ?? 0;
+            var isActive = AnalysisActivityHelper.IsStillActive(
+                run.Status,
+                run.ProcessedPointsCount,
+                run.DualVerifyFailedCount,
+                run.TotalPointsCount,
+                run.UpdatedAt,
+                runningPoints);
 
             list.Add(NdLegacyDataQueries.MapNdRunSummary(
                 run,
@@ -234,10 +197,55 @@ public static class NdRunEnrichmentHelper
                 nonCompliant,
                 gapRisk.Critical,
                 gapRisk.Medium,
-                gapRisk.Low));
+                gapRisk.Low,
+                runningPoints,
+                isActive));
         }
 
         return list;
+    }
+
+    private static async Task<Dictionary<Guid, RunPointStatusAggregate>> LoadPointStatusAggregatesAsync(
+        AppDbContext db,
+        IReadOnlyList<Guid> runIds,
+        CancellationToken ct)
+    {
+        if (runIds.Count == 0) return [];
+
+        // Chunk to keep IN lists small and avoid long scans when many runs exist.
+        var result = new Dictionary<Guid, RunPointStatusAggregate>();
+        foreach (var chunk in runIds.Chunk(10))
+        {
+            var batch = chunk.ToArray();
+            var placeholders = string.Join(", ", batch.Select((_, i) => $"{{{i}}}"));
+            var sql = $"""
+                SELECT analysis_run_id AS "RunId",
+                  COUNT(*) FILTER (WHERE effective_status = 'compliant')::int AS "Compliant",
+                  COUNT(*) FILTER (WHERE effective_status = 'partial_compliant')::int AS "Partial",
+                  COUNT(*) FILTER (WHERE effective_status = 'non_compliant')::int AS "NonCompliant",
+                  COUNT(*) FILTER (WHERE landing_ai_status = 'running')::int AS "Running"
+                FROM (
+                  SELECT analysis_run_id, landing_ai_status,
+                    CASE
+                      WHEN final_status IN ('compliant','partial_compliant','non_compliant') THEN final_status
+                      WHEN landing_ai_status IN ('compliant','partial_compliant','non_compliant') THEN landing_ai_status
+                      ELSE NULL
+                    END AS effective_status
+                  FROM analysis_points
+                  WHERE analysis_run_id IN ({placeholders})
+                ) t
+                GROUP BY analysis_run_id
+                """;
+
+            var rows = await db.Database
+                .SqlQueryRaw<RunPointStatusAggregate>(sql, batch.Cast<object>().ToArray())
+                .ToListAsync(ct);
+
+            foreach (var row in rows)
+                result[row.RunId] = row;
+        }
+
+        return result;
     }
 
     /// <summary>Prefer dual-verify final status; fall back to Landing AI status for in-progress runs.</summary>

@@ -249,13 +249,18 @@ export class InProgressComponent implements OnInit, OnDestroy {
       return;
     }
     this.stoppingId = run.id;
+    // Optimistic — remove from in-progress list immediately.
+    this.allRuns = this.allRuns.map((r) =>
+      r.id === run.id ? { ...r, status: 'cancelled' as const } : r,
+    );
     const res = await this.ndApi.stopAnalysisRun(run.id);
     this.stoppingId = null;
     if (res.success) {
       this.toast.show('Analysis stopped', 'warning');
       await this.load();
     } else {
-      this.toast.show(res.message ?? 'Could not stop analysis', 'error');
+      this.toast.show(res.message ?? 'Stop signalled — refresh in a moment', 'warning');
+      await this.load();
     }
   }
 }

@@ -315,6 +315,10 @@ public static class SupabaseSchemaBootstrap
             return;
         }
 
+        // Existing live DB — skip 50+ patch round-trips on every restart (each can take 60s+ on Supabase).
+        if (await NdSchemaAlreadyPresentAsync(db, ct))
+            return;
+
         await db.Database.ExecuteSqlRawAsync(
             """
             CREATE OR REPLACE FUNCTION set_updated_at()
@@ -327,11 +331,25 @@ public static class SupabaseSchemaBootstrap
             """,
             ct);
 
-        // Existing DBs: EnsureCreated is a no-op when any table already exists,
-        // so explicitly create/patch stored_documents and dual_verify columns.
-        await db.Database.EnsureCreatedAsync(ct);
+        // EnsureCreated scans all pg_catalog tables — very slow on remote Supabase (~60–120s).
+        if (!await NdSchemaAlreadyPresentAsync(db, ct))
+            await db.Database.EnsureCreatedAsync(ct);
 
         foreach (var sql in PatchSql)
             await db.Database.ExecuteSqlRawAsync(sql, ct);
+    }
+
+    /// <summary>True when enterprise ND tables already exist (live Supabase).</summary>
+    public static async Task<bool> NdSchemaAlreadyPresentAsync(AppDbContext db, CancellationToken ct = default)
+    {
+        return await db.Database
+            .SqlQueryRaw<bool>(
+                """
+                SELECT EXISTS (
+                  SELECT 1 FROM information_schema.tables
+                  WHERE table_schema = 'public' AND table_name IN ('profiles', 'nd_system_settings')
+                ) AS "Value"
+                """)
+            .FirstAsync(ct);
     }
 }

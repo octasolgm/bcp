@@ -49,4 +49,36 @@ public class NdRegulApiProjectionTests
         Assert.Contains("regulReverseSectionTotal", json);
         Assert.Contains("regulReverseSectionFailed", json);
     }
+
+    [Fact]
+    public void MapPollResponse_RegulPoint_keeps_point_snapshot_when_regulation_point_id_set()
+    {
+        var runId = Guid.NewGuid();
+        var run = new NdAnalysisRun
+        {
+            Id = runId,
+            WorkflowEngine = AnalysisWorkflowEngine.RegulPipeline,
+            Status = "running",
+            RegulPipelinePhase = "forward",
+        };
+        var regPointId = Guid.NewGuid();
+        var snapshot = """{"pointNumber":"8.4","pointTitle":"Independent Audit Function"}""";
+        var points = new List<NdAnalysisPoint>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                AnalysisRunId = runId,
+                RegulationPointId = regPointId,
+                PointSnapshot = snapshot,
+                LandingAiStatus = "running",
+            },
+        };
+
+        var mapped = NdRegulApiProjection.MapPollResponse(run, points, 0, 0, 0, null);
+        var json = System.Text.Json.JsonSerializer.Serialize(mapped);
+        Assert.Contains("8.4", json);
+        Assert.Contains("Independent Audit Function", json);
+        Assert.DoesNotContain("\"pointSnapshot\":null", json.Replace(" ", ""));
+    }
 }

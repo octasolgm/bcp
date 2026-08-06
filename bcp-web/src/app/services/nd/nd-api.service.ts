@@ -4,13 +4,18 @@ import { firstValueFrom, timeout, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
 
-const API_TIMEOUT_MS = 25_000;
+/** Default ND API calls — Supabase pooler can exceed 25s under load (regul runs, cold start). */
+const API_TIMEOUT_MS = 60_000;
+/** Document/library catalog lists — first load after API restart can be slow on Supabase. */
+const CATALOG_LIST_TIMEOUT_MS = 60_000;
+/** Run list / nav badges — multiple DB aggregations while workers are active. */
+const ANALYSIS_RUNS_LIST_TIMEOUT_MS = 90_000;
 /** Status poll for large runs (~140 points) — allow slow DB without canceling mid-response. */
 const ANALYSIS_STATUS_TIMEOUT_MS = 90_000;
 /** Full run detail (points + snapshots) for resume — larger than status, still no PDF enrichment. */
 const ANALYSIS_RUN_DETAIL_TIMEOUT_MS = 90_000;
-/** Login / profile — allow slow first hit when DB pool or Supabase Auth API is busy. */
-const AUTH_API_TIMEOUT_MS = 60_000;
+/** Login / profile — DB pool can be busy while regul workers run. */
+const AUTH_API_TIMEOUT_MS = 30_000;
 /** Rerun should return quickly after queueing; allow headroom if API is under load. */
 const RERUN_API_TIMEOUT_MS = 60_000;
 /** Library create/update can persist many regulation points in one request. */
@@ -64,6 +69,12 @@ export type NdApiResult<T> = {
   requiresConversion?: boolean;
   originalFileName?: string;
   code?: string;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
 };
 
 export type NdUserProfile = {
@@ -119,8 +130,8 @@ export class NdApiService {
     return url.replace(/\/$/, '');
   }
 
-  private async headers(json = true): Promise<HttpHeaders> {
-    const token = await getNdAccessToken();
+  private async headers(json = true, accessToken?: string | null): Promise<HttpHeaders> {
+    const token = accessToken ?? (await getNdAccessToken());
     let h = new HttpHeaders();
     if (token) h = h.set('Authorization', `Bearer ${token}`);
     if (json) h = h.set('Content-Type', 'application/json');
@@ -133,9 +144,10 @@ export class NdApiService {
     body?: unknown,
     json = true,
     timeoutMs = API_TIMEOUT_MS,
+    accessToken?: string | null,
   ): Promise<NdApiResult<T>> {
     const url = `${this.baseUrl()}${path}`;
-    const options = { headers: await this.headers(json), body };
+    const options = { headers: await this.headers(json, accessToken), body };
     try {
       const obs =
         method === 'GET'
@@ -154,7 +166,7 @@ export class NdApiService {
                 () =>
                   new Error(
                     'Request timed out — is bcp-api running on http://localhost:5100? ' +
-                      'Use one API instance, Supabase DbPort 6543, and set Supabase:JwtSecret locally for fast login.',
+                      'Use one API instance and Supabase DbPort 6543. Wait for API bootstrap to finish, then retry.',
                   ),
               );
             }
@@ -177,12 +189,19 @@ export class NdApiService {
     }
   }
 
-  getProfile() {
-    return this.request<NdUserProfile>('GET', '/nd/auth/me', undefined, true, AUTH_API_TIMEOUT_MS);
+  getProfile(accessToken?: string | null) {
+    return this.request<NdUserProfile>(
+      'GET',
+      '/nd/auth/me',
+      undefined,
+      true,
+      AUTH_API_TIMEOUT_MS,
+      accessToken,
+    );
   }
 
   upsertProfile(body: { fullName?: string; role?: string; departmentId?: string }) {
-    return this.request<NdUserProfile>('POST', '/nd/auth/profile', body);
+    return this.request<NdUserProfile>('POST', '/nd/auth/profile', body, true, AUTH_API_TIMEOUT_MS);
   }
 
   forgotPassword(email: string, redirectTo?: string) {
@@ -354,7 +373,7 @@ export class NdApiService {
     if (params?.status) q.set('status', params.status);
     if (params?.hiddenOnly) q.set('hiddenOnly', 'true');
     const suffix = q.toString() ? `?${q}` : '';
-    return this.request<unknown[]>('GET', `/nd/regulation-documents${suffix}`);
+    return this.request<unknown[]>('GET', `/nd/regulation-documents${suffix}`, undefined, true, CATALOG_LIST_TIMEOUT_MS);
   }
 
   getRegulationDocument(id: string) {
@@ -471,7 +490,7 @@ export class NdApiService {
 
   getInternalDocuments(hiddenOnly = false) {
     const suffix = hiddenOnly ? '?hiddenOnly=true' : '';
-    return this.request<unknown[]>('GET', `/nd/internal-documents${suffix}`);
+    return this.request<unknown[]>('GET', `/nd/internal-documents${suffix}`, undefined, true, CATALOG_LIST_TIMEOUT_MS);
   }
 
   getInternalDocumentFileUrl(id: string) {
@@ -602,7 +621,7 @@ export class NdApiService {
 
   getLibraries(departmentId?: string) {
     const q = departmentId ? `?departmentId=${departmentId}` : '';
-    return this.request<unknown[]>('GET', `/nd/libraries${q}`);
+    return this.request<unknown[]>('GET', `/nd/libraries${q}`, undefined, true, CATALOG_LIST_TIMEOUT_MS);
   }
 
   getLibrary(id: string) {
@@ -622,7 +641,13 @@ export class NdApiService {
   }
 
   getWorkspaceNavCounts() {
-    return this.request<NdWorkspaceNavCounts>('GET', '/nd/workspace/nav-counts');
+    return this.request<NdWorkspaceNavCounts>(
+      'GET',
+      '/nd/workspace/nav-counts',
+      undefined,
+      true,
+      ANALYSIS_RUNS_LIST_TIMEOUT_MS,
+    );
   }
 
   getAnalysisRuns(params?: {
@@ -632,6 +657,11 @@ export class NdApiService {
     ndOnly?: boolean;
     /** Skip heavy gap/review aggregation (nav badges, dashboard list). */
     summaryOnly?: boolean;
+    /** When set with summaryOnly, returns paginated list + total count. Omit for overview preview (20 recent). */
+    page?: number;
+    pageSize?: number;
+    /** Skip per-point SQL aggregation (overview first paint — gap cards load separately). */
+    skipGapStats?: boolean;
   }) {
     const q = new URLSearchParams();
     if (params?.status) q.set('status', params.status);
@@ -639,8 +669,17 @@ export class NdApiService {
     if (params?.deletedOnly) q.set('deletedOnly', 'true');
     if (params?.ndOnly) q.set('ndOnly', 'true');
     if (params?.summaryOnly) q.set('summaryOnly', 'true');
+    if (params?.page != null) q.set('page', String(params.page));
+    if (params?.pageSize != null) q.set('pageSize', String(params.pageSize));
+    if (params?.skipGapStats) q.set('skipGapStats', 'true');
     const suffix = q.toString() ? `?${q}` : '';
-    return this.request<unknown[]>('GET', `/nd/analysis-runs${suffix}`);
+    return this.request<unknown[]>(
+      'GET',
+      `/nd/analysis-runs${suffix}`,
+      undefined,
+      true,
+      ANALYSIS_RUNS_LIST_TIMEOUT_MS,
+    );
   }
 
   createAnalysisRun(body: unknown) {
@@ -701,11 +740,23 @@ export class NdApiService {
   }
 
   stopAnalysisRun(id: string) {
-    return this.request<unknown>('POST', `/nd/analysis-runs/${id}/stop`);
+    return this.request<unknown>(
+      'POST',
+      `/nd/analysis-runs/${id}/stop`,
+      undefined,
+      true,
+      30_000,
+    );
   }
 
   startAnalysisRun(id: string) {
-    return this.request<unknown>('POST', `/nd/analysis-runs/${id}/start`);
+    return this.request<unknown>(
+      'POST',
+      `/nd/analysis-runs/${id}/start`,
+      undefined,
+      true,
+      RERUN_API_TIMEOUT_MS,
+    );
   }
 
   startForwardOnlyAnalysis(id: string) {

@@ -39,6 +39,16 @@ export class AnalyseRegulFullComponent extends AnalyseRegulComponent {
   protected override readonly regulWorkflowEngineId = REGUL_PIPELINE_FULL;
   protected override readonly regulAnalysisRoute = '/nd/analyse-regul-full';
 
+  /** V4 always runs forward-only (full markdown); reverse is not used on this page. */
+  override runAnalysisAndScroll(): void {
+    this.runForwardOnlyAndScroll();
+  }
+
+  override async loadNdRunPoints(runId: string): Promise<void> {
+    await super.loadNdRunPoints(runId);
+    this.validateV4RunEngine();
+  }
+
   protected override regulRunConfirmHint(): string {
     const llm = this.regulWorkflowLlmSummary || 'admin-selected LLM';
     return (
@@ -46,5 +56,35 @@ export class AnalyseRegulFullComponent extends AnalyseRegulComponent {
       'Sends complete parsed markdown for every attached internal file (any page count, multiple files supported; no section ranking). ' +
       'Forward judgment only — reverse coverage is skipped. Type start to confirm.'
     );
+  }
+
+  private validateV4RunEngine(): void {
+    if (!this.ndRunId || !this.ndWorkflowEngine) return;
+    if (this.ndWorkflowEngine === REGUL_PIPELINE_FULL) return;
+
+    const msg =
+      'This run is V3 (regul_pipeline), not V4 full markdown. ' +
+      'Click Stop, then open Analyse Regul Full without ?run= and start a new run.';
+    this.error = msg;
+    this.toast.show(msg, 'error', 12000);
+
+    if (this.ndRunStatus === 'running') {
+      this.toast.show(
+        'V3 runs on this page do slow section extraction before forward — Stop and create a new V4 run.',
+        'warning',
+        12000,
+      );
+    }
+  }
+
+  override get runBlockedReason(): string | null {
+    if (
+      this.ndRunId &&
+      this.ndWorkflowEngine &&
+      this.ndWorkflowEngine !== REGUL_PIPELINE_FULL
+    ) {
+      return 'Wrong workflow engine (V3). Stop this run and start fresh without ?run= in the URL.';
+    }
+    return super.runBlockedReason;
   }
 }

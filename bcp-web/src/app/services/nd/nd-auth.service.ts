@@ -96,16 +96,29 @@ export class NdAuthService {
   }
 
   async signIn(email: string, password: string): Promise<string | null> {
-    const { error } = await getNdSupabaseClient().auth.signInWithPassword({
+    const { data, error } = await getNdSupabaseClient().auth.signInWithPassword({
       email: email.trim(),
       password,
     });
     if (error) return error.message;
 
-    const profileRes = await this.api.getProfile();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      return 'Sign-in succeeded but no session token was returned. Try again.';
+    }
+
+    const profileRes = await this.api.getProfile(accessToken);
     if (!profileRes.success || !profileRes.data) {
       await this.signOut();
-      return profileRes.message ?? 'Could not load profile after sign in';
+      const msg = profileRes.message ?? 'Could not load profile after sign in';
+      if (msg.includes('timed out') || msg.includes('temporarily unreachable')) {
+        return (
+          'Sign-in succeeded but the database is slow or busy. ' +
+          'Wait 1 minute with only one API window open, then try again. ' +
+          'To cancel stuck runs without logging in: bcp-api\\scripts\\stop-stuck-runs.ps1'
+        );
+      }
+      return msg;
     }
     if (!profileRes.data.isActive) {
       await this.signOut();

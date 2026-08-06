@@ -31,14 +31,23 @@ public class AuthController(
 
         try
         {
-            var profile = await GetOrCreateProfileAsync(db, user, user.Email?.Split('@')[0], null, null, ct);
+            using var dbCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            dbCts.CancelAfter(TimeSpan.FromSeconds(20));
+
+            var profile = await db.NdProfiles.AsNoTracking()
+                .Include(p => p.Department)
+                .FirstOrDefaultAsync(p => p.Id == user.UserId, dbCts.Token);
+
+            if (profile == null)
+                profile = await GetOrCreateProfileAsync(db, user, user.Email?.Split('@')[0], null, null, dbCts.Token);
+
             if (!profile.IsActive)
                 return StatusCode(403, new { success = false, message = "Account deactivated" });
 
             return Ok(new { success = true, data = MapProfile(profile) });
         }
-        catch (Exception ex) when (ex is Npgsql.NpgsqlException or TimeoutException or SocketException
-            || ex.GetBaseException() is SocketException or TimeoutException)
+        catch (Exception ex) when (ex is Npgsql.NpgsqlException or TimeoutException or SocketException or OperationCanceledException
+            || ex.GetBaseException() is SocketException or TimeoutException or OperationCanceledException)
         {
             return StatusCode(503, new
             {

@@ -249,6 +249,8 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   private ndRunAttachInFlight: string | null = null;
   protected ndRunId: string | null = null;
   ndRunWorkflowStatus = '';
+  /** User confirmed Stop — keep UI cancelled until API/DB confirms. */
+  private ndRunUserStopped = false;
   /** Regul workflow V3 — forward | reverse | qualitative | done (from status poll). */
   protected ndRegulPipelinePhase = '';
   protected ndWorkflowEngine = '';
@@ -346,6 +348,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       if (sid && sid !== this.sessionId) {
         this.stopNdRunPolling();
         this.ndRunId = null;
+    this.ndRunUserStopped = false;
         this.attachToExistingSession(sid);
       } else if (runId && runId !== this.ndRunId) {
         this.stopPolling();
@@ -627,6 +630,9 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   get isSessionActive(): boolean {
     if (this.analysisState === 'running') return true;
     if (!this.sessionId && !this.ndRunId) return false;
+    // ND run reported running by the API (covers parsing/prep when all points are still pending).
+    const ndStatus = (this.ndRunWorkflowStatus || '').toLowerCase();
+    if (this.ndRunId && (ndStatus === 'running' || ndStatus === 'processing')) return true;
     if (this.analysisState === 'complete') {
       const active = [...this.sessionPointStatus.values()].some(
         (s) => s === 'queued' || s === 'running' || s === 'processing',
@@ -1232,6 +1238,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     this.isDemoRun = true;
     this.demoNdRunId = null;
     this.ndRunId = null;
+    this.ndRunUserStopped = false;
     this.ndRunWorkflowStatus = '';
     this.analysisCompleteUiDone = false;
     this.showInlineGapReport = false;
@@ -2972,10 +2979,12 @@ ${this.findingsPreview
     );
     if (!ok) return;
 
-    this.stopNdRunPolling();
+    this.ndRunUserStopped = true;
+    this.stopNdRunPolling(true);
     this.retryingPointId = null;
 
     // Optimistic UI — Stop must feel immediate even if the worker is mid-call.
+    this.ndRegulPipelinePhase = 'done';
     for (const [pointId, status] of this.sessionPointStatus) {
       if (status === 'queued' || status === 'processing' || status === 'running') {
         this.sessionPointStatus.set(pointId, 'cancelled');
@@ -2988,14 +2997,24 @@ ${this.findingsPreview
       st.done = true;
       st.active = false;
     });
+    this.onNdRunPollMerged({
+      status: 'cancelled',
+      workflowEngine: this.ndWorkflowEngine,
+      regulPipelinePhase: 'done',
+      regulReverseSectionTotal: this.ndRegulReverseSectionTotal,
+      regulReverseSectionCompleted: this.ndRegulReverseSectionCompleted,
+      regulReverseSections: this.ndRegulReverseSections,
+      totalPointsCount: this.progressTotal,
+      processedPointsCount: this.progressDone,
+    });
 
     const res = await this.ndApi.stopAnalysisRun(runId);
     if (!res.success) {
-      this.toast.show(res.message || 'Could not stop analysis', 'error', 4000);
-      if (this.ndRunId) this.pollNdRun(this.ndRunId);
+      this.toast.show(res.message || 'Stop requested — run may take a moment to fully halt', 'warning', 5000);
       return;
     }
 
+    this.ndRunUserStopped = false;
     this.toast.show('Analysis stopped', 'warning', 3500);
     this.activeSessions.refresh();
 
@@ -3687,7 +3706,7 @@ ${this.findingsPreview
   }
 
   /** Merge lightweight /status rows onto full detail points (keep snapshots + AI results). */
-  private mergeNdRunPoints(
+  protected mergeNdRunPoints(
     detailPoints: AnalysisPoint[],
     statusPoints?: AnalysisPoint[] | null,
   ): AnalysisPoint[] {
@@ -3846,6 +3865,8 @@ ${this.findingsPreview
     this.stopPolling();
     this.sessionId = null;
     this.ndRunId = runId;
+    this.ndRunWorkflowStatus = 'running';
+    this.ndRegulPipelinePhase = 'forward';
     this.analysisState = 'running';
     this.pointsCollapsed = true;
     this.sessionPointStatus.clear();
@@ -3893,6 +3914,8 @@ ${this.findingsPreview
     this.stopPolling();
     this.sessionId = null;
     this.ndRunId = runId;
+    this.ndRunWorkflowStatus = 'running';
+    this.ndRegulPipelinePhase = 'forward';
     this.analysisState = 'running';
     this.pointsCollapsed = true;
     this.sessionPointStatus.clear();
@@ -3987,6 +4010,29 @@ ${this.findingsPreview
 
     const runStatusLabel = (status?.status ?? run.status ?? '').toLowerCase();
 
+    // Do not let a stale poll revert Stop's optimistic cancelled UI.
+    const localCancelled =
+      (this.ndRunUserStopped ||
+        (this.ndRunWorkflowStatus || '').toLowerCase() === 'cancelled') &&
+      runStatusLabel !== 'cancelled';
+    if (localCancelled) {
+      this.analysisState = 'complete';
+      this.progress = 100;
+      this.stopNdRunPolling(true);
+      this.syncSelectionToGovPoints();
+      this.onNdRunPollMerged({
+        status: 'cancelled',
+        workflowEngine: this.ndWorkflowEngine,
+        regulPipelinePhase: 'done',
+        regulReverseSectionTotal: this.ndRegulReverseSectionTotal,
+        regulReverseSectionCompleted: this.ndRegulReverseSectionCompleted,
+        regulReverseSections: this.ndRegulReverseSections,
+        totalPointsCount: this.progressTotal,
+        processedPointsCount: this.progressDone,
+      });
+      return false;
+    }
+
     for (const p of points) {
       if (this.isRegulPipelineRun() && !p.regulationPointId) continue;
       const mapped = this.mapNdAnalysisPoint(p);
@@ -4061,11 +4107,23 @@ ${this.findingsPreview
       : run.dualVerifyFailedCount ?? 0;
 
     if (runStatus === 'cancelled') {
+      this.ndRunUserStopped = false;
       this.analysisState = 'complete';
       this.progress = 100;
       this.ndRunWorkflowStatus = runStatus;
-      this.stopNdRunPolling();
+      if (phaseFromPoll !== 'done') this.ndRegulPipelinePhase = 'done';
+      this.stopNdRunPolling(true);
       this.syncSelectionToGovPoints();
+      this.onNdRunPollMerged({
+        status: runStatusLabel,
+        workflowEngine: this.ndWorkflowEngine,
+        regulPipelinePhase: this.ndRegulPipelinePhase,
+        regulReverseSectionTotal: this.ndRegulReverseSectionTotal,
+        regulReverseSectionCompleted: this.ndRegulReverseSectionCompleted,
+        regulReverseSections: this.ndRegulReverseSections,
+        totalPointsCount: this.progressTotal,
+        processedPointsCount: this.progressDone,
+      });
       return false;
     }
 
@@ -4583,7 +4641,13 @@ ${this.findingsPreview
     }
   }
 
+  /** Points merged with /status poll rows (subclasses may override when they keep a separate list). */
+  protected getPollMergeBasePoints(): AnalysisPoint[] {
+    return this.ndRunDetailPoints;
+  }
+
   protected pollNdRun(runId: string): void {
+    if (this.ndRunUserStopped) return;
     this.stopNdRunPolling();
     this.ndRunPollInFlight = false;
     // Slow poll unless Regul reverse/forward is in flight (live section + INT rows).
@@ -4609,7 +4673,7 @@ ${this.findingsPreview
             regulReverseSections?: Array<{ sectionRef: string; title: string; status: string }> | null;
             points: AnalysisPoint[];
           };
-          const merged = this.mergeNdRunPoints(this.ndRunDetailPoints, data.points);
+          const merged = this.mergeNdRunPoints(this.getPollMergeBasePoints(), data.points);
           this.ndRunDetailPoints = merged.length ? merged : data.points ?? [];
           this.applyNdRunState(runId, data, this.ndRunDetailPoints, data);
           this.onNdRunPointsLiveUpdate(this.ndRunDetailPoints);

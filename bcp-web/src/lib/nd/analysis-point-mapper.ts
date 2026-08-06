@@ -52,8 +52,16 @@ export function analysisPointCoverageStatus(
   const runActive = run === 'running' || run === 'processing';
   const forwardStatus = regulForwardStatus(point);
 
+  if (run === 'cancelled') {
+    if (point.landingAiStatus === 'cancelled' || point.dualVerifyStatus === 'cancelled') return 'cancelled';
+    if (forwardStatus === 'completed') return 'completed';
+    if (forwardStatus === 'failed') return 'failed';
+    return 'cancelled';
+  }
+
   // Regul V3: forward-complete regulatory rows stay in-flight until pipeline phase is done.
   if (isRegul && point.regulationPointId && runActive && phase !== 'done') {
+    if (forwardStatus === 'cancelled') return 'cancelled';
     if (forwardStatus === 'failed') return 'failed';
     if (forwardStatus !== 'completed') return 'running';
     return 'running';

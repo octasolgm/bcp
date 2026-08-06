@@ -287,7 +287,7 @@ public static class NdRegulApiProjection
             points.Select(p => MapPoint(
                 p.Id,
                 p.RegulationPointId,
-                p.RegulationPointId == null ? p.PointSnapshot : null,
+                p.PointSnapshot,
                 p.LandingAiStatus,
                 p.LandingAiResult,
                 p.LandingAiError,

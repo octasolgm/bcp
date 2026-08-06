@@ -933,6 +933,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       phase === 'qualitative' ? 'Qualitative assessment' : 'Finalizing results',
     ];
     const activeByPhase: Record<string, number> = {
+      parsing: 0,
       forward: 1,
       reverse: 2,
       qualitative: 4,
@@ -953,7 +954,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       (p) => p.landingAiStatus === 'completed',
     ).length;
     let pct = 12;
-    if (phase === 'forward') {
+    if (phase === 'parsing') {
+      pct = 10;
+    } else if (phase === 'forward') {
       pct = 15 + Math.round((forwardDone / forwardTotal) * 35);
     } else if (phase === 'reverse') {
       const total = this.ndRegulReverseSectionTotal || 1;
@@ -1088,6 +1091,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   override formatCoverageStatus(status: string): string {
     if (status === 'running' && this.isRegulPipelineInFlight()) {
       const phase = (this.ndRegulPipelinePhase || '').toLowerCase();
+      if (phase === 'parsing') return 'Parsing docs…';
       if (phase === 'forward') return 'Forward…';
       if (phase === 'reverse') return 'Reverse…';
       if (phase === 'qualitative') return 'Qualitative…';
@@ -1755,6 +1759,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.regulClausesConfirmed = Boolean(data.run.regulClausesConfirmedAt);
     this.regulQualitativeAssessment = data.regulQualitativeAssessment ?? null;
     this.ndRunPointsList = data.points ?? [];
+    this.ndRunDetailPoints = this.ndRunPointsList;
     this.ndPointAttachments = data.pointAttachments ?? [];
     this.ndActionItemReviews = data.actionItemReviews ?? [];
     this.indexNdRunPoints(data.points ?? []);
@@ -1978,11 +1983,17 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     void this.loadNdRunPoints(runId);
   }
 
+  protected override getPollMergeBasePoints(): AnalysisPoint[] {
+    return this.ndRunDetailPoints.length ? this.ndRunDetailPoints : this.ndRunPointsList;
+  }
+
   /** Keep gap/severity badges in sync while /status poll merges live Landing results. */
   protected override onNdRunPointsLiveUpdate(points: AnalysisPoint[]): void {
     if (points.length) {
-      this.ndRunPointsList = points;
-      this.indexNdRunPoints(points);
+      this.ndRunPointsList = this.mergeNdRunPoints(this.ndRunPointsList, points);
+      this.ndRunDetailPoints = this.ndRunPointsList;
+      this.indexNdRunPoints(this.ndRunPointsList);
+      this.reconcileRunWithGovCatalog();
       this.fixSelectedDetailPointAfterReconcile();
     }
     this.sessionPointCache.clear();
