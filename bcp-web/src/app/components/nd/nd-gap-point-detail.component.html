@@ -134,6 +134,16 @@
     </dl>
   </div>
 
+  @if (runId && showTempReviewComments) {
+    <app-nd-temp-point-review-comments
+      [runId]="runId"
+      [analysisPointId]="point.id"
+      [comments]="tempReviewComments"
+      [canEdit]="canEditTempReviewComments"
+      (changed)="tempReviewCommentsChanged.emit($event)"
+    />
+  }
+
   @if (showReviewPanel && !dockPointReview) {
     <app-nd-item-review-section
       [actionIndex]="pointReviewActionIndex"
@@ -532,6 +542,15 @@
 
   @if (showReviewPanel && dockPointReview) {
     <div class="gap-point-review-dock">
+      @if (runId && showTempReviewComments) {
+        <app-nd-temp-point-review-comments
+          [runId]="runId"
+          [analysisPointId]="point.id"
+          [comments]="tempReviewComments"
+          [canEdit]="canEditTempReviewComments"
+          (changed)="tempReviewCommentsChanged.emit($event)"
+        />
+      }
       <app-nd-item-review-section
         [actionIndex]="pointReviewActionIndex"
         title="Compliance point review"

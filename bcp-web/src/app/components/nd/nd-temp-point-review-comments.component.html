@@ -1,0 +1,99 @@
+<button
+  type="button"
+  class="temp-review-trigger"
+  (click)="openPanel()"
+  [attr.aria-expanded]="panelOpen"
+  aria-haspopup="dialog"
+>
+  <span class="temp-review-trigger-label">Manual review notes</span>
+  <span class="temp-review-count">{{ displayComments.length }} {{ displayComments.length === 1 ? 'note' : 'notes' }}</span>
+</button>
+
+@if (panelOpen) {
+  <div class="temp-review-backdrop" (click)="closePanel()"></div>
+  <aside
+    class="temp-review-panel"
+    role="dialog"
+    aria-label="Manual review notes"
+    [style.width.px]="panelWidth"
+  >
+    <div
+      class="temp-review-panel-resize"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize panel"
+      (mousedown)="startPanelWidthResize($event)"
+    ></div>
+
+    <header class="temp-review-panel-head">
+      <div>
+        <h4>Manual review notes</h4>
+      </div>
+      <button type="button" class="temp-review-close" (click)="closePanel()" aria-label="Close">✕</button>
+    </header>
+
+    <div class="temp-review-panel-body">
+      @if (displayComments.length) {
+        <ul class="temp-comment-list">
+          @for (c of displayComments; track c.id) {
+            <li class="temp-comment-item">
+              <div class="temp-comment-meta">
+                <span class="temp-comment-author">{{ c.commentedByName || 'Reviewer' }}</span>
+                <span class="temp-comment-date">{{ formatDate(c.createdAt) }}</span>
+              </div>
+              @if (editingId === c.id) {
+                <textarea
+                  rows="3"
+                  class="temp-comment-edit"
+                  [(ngModel)]="editDraft"
+                  [disabled]="saving"
+                ></textarea>
+                <div class="temp-comment-actions">
+                  <button type="button" class="temp-comment-save" [disabled]="saving || !editDraft.trim()" (click)="saveEdit(c.id)">
+                    {{ saving ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button type="button" class="temp-comment-cancel" [disabled]="saving" (click)="cancelEdit()">Cancel</button>
+                </div>
+              } @else {
+                <p class="temp-comment-text">{{ c.comment }}</p>
+                @if (canEditComment(c)) {
+                  <div class="temp-comment-actions">
+                    <button type="button" class="temp-comment-edit-btn" (click)="startEdit(c)">Edit</button>
+                    <button
+                      type="button"
+                      class="temp-comment-delete"
+                      [disabled]="deletingId === c.id"
+                      (click)="deleteComment(c.id)"
+                    >
+                      {{ deletingId === c.id ? 'Deleting…' : 'Delete' }}
+                    </button>
+                  </div>
+                }
+              }
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="temp-comment-empty">No review notes yet.</p>
+      }
+    </div>
+
+    @if (canEdit) {
+      <footer class="temp-review-panel-foot">
+        <textarea
+          class="temp-comment-draft"
+          rows="4"
+          [(ngModel)]="draft"
+          placeholder="Add a manual review note for this point…"
+          [disabled]="saving"
+        ></textarea>
+        <button type="button" class="temp-comment-add-btn" [disabled]="saving || !draft.trim()" (click)="addComment()">
+          {{ saving ? 'Saving…' : 'Add note' }}
+        </button>
+        @if (error) {
+          <p class="temp-comment-error">{{ error }}</p>
+        }
+      </footer>
+    }
+  </aside>
+}

@@ -37,6 +37,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdRegulInternalSection> NdRegulInternalSections => Set<NdRegulInternalSection>();
     public DbSet<NdRegulReverseMapping> NdRegulReverseMappings => Set<NdRegulReverseMapping>();
     public DbSet<NdRegulQualitativeAssessment> NdRegulQualitativeAssessments => Set<NdRegulQualitativeAssessment>();
+    public DbSet<NdTempPointReviewComment> NdTempPointReviewComments => Set<NdTempPointReviewComment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -201,6 +201,16 @@ public static class NdSchemaBootstrap
             CREATE INDEX IF NOT EXISTS idx_analysis_point_attachments_point
               ON analysis_point_attachments (analysis_point_id);
 
+            CREATE TABLE IF NOT EXISTS temp_point_review_comments (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              analysis_point_id UUID NOT NULL REFERENCES analysis_points(id) ON DELETE CASCADE,
+              comment TEXT NOT NULL,
+              commented_by UUID,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_temp_point_review_comments_point
+              ON temp_point_review_comments (analysis_point_id);
+
             ALTER TABLE analysis_point_attachments
               ADD COLUMN IF NOT EXISTS action_index INTEGER;
 

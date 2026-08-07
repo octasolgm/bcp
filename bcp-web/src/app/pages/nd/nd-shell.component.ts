@@ -10,6 +10,7 @@ import {
 } from '../../services/active-analysis-sessions.service';
 import { NdShellFocusService } from '../../services/nd/nd-shell-focus.service';
 import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.component';
+import { startPanelResize } from '../shared/panel-resize';
 
 type NavIcon =
   | 'grid'
@@ -56,6 +57,8 @@ type NavEntry =
   styleUrl: './nd-shell.component.scss',
 })
 export class NdShellComponent implements OnInit, OnDestroy {
+  private static readonly SIDEBAR_WIDTH_KEY = 'nd-sidebar-width';
+
   readonly auth = inject(NdAuthService);
   private readonly router = inject(Router);
   private readonly api = inject(NdApiService);
@@ -72,6 +75,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   navBadges: Partial<Record<string, number>> = {};
   ndActiveRunCount = 0;
   pass2LlmSummary = '';
+  sidebarWidth = 240;
   private navSub: Subscription | null = null;
   private badgeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private badgeRefreshInFlight = false;
@@ -102,6 +106,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
       return;
     }
     this.navEntries = this.navForRole(role);
+    this.sidebarWidth = this.loadSidebarWidth();
     this.expandedGroups = new Set();
     this.syncExpandedGroupsToRoute();
     // Sidebar badges are non-critical — defer on overview so analysis-runs gets the DB pool first.
@@ -125,6 +130,44 @@ export class NdShellComponent implements OnInit, OnDestroy {
     if (this.sessionsWatching) {
       this.activeSessions.unwatch();
       this.sessionsWatching = false;
+    }
+    document.body.classList.remove('panel-resizing');
+  }
+
+  startSidebarResize(event: MouseEvent): void {
+    if (this.shellFocus.regulationPointsPanelOpen()) return;
+    startPanelResize(
+      {
+        kind: 'sidebar-width',
+        startX: event.clientX,
+        startY: event.clientY,
+        startVal: this.sidebarWidth,
+      },
+      event,
+      (_kind, value) => {
+        this.sidebarWidth = value;
+        this.saveSidebarWidth();
+        this.cdr.markForCheck();
+      },
+    );
+  }
+
+  private loadSidebarWidth(): number {
+    try {
+      const raw = localStorage.getItem(NdShellComponent.SIDEBAR_WIDTH_KEY);
+      const n = raw ? Number(raw) : NaN;
+      if (Number.isFinite(n)) return Math.min(380, Math.max(180, n));
+    } catch {
+      /* ignore */
+    }
+    return 240;
+  }
+
+  private saveSidebarWidth(): void {
+    try {
+      localStorage.setItem(NdShellComponent.SIDEBAR_WIDTH_KEY, String(this.sidebarWidth));
+    } catch {
+      /* ignore */
     }
   }
 

@@ -715,3 +715,26 @@ public class NdSystemSetting
     [Column("updated_by")]
     public Guid? UpdatedBy { get; set; }
 }
+
+/// <summary>
+/// Temporary manual review notes per analysis point (easy to drop once workflow is finalized).
+/// </summary>
+[Table("temp_point_review_comments")]
+public class NdTempPointReviewComment
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("analysis_point_id")]
+    public Guid AnalysisPointId { get; set; }
+
+    [Column("comment")]
+    public string Comment { get; set; } = "";
+
+    [Column("commented_by")]
+    public Guid? CommentedBy { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}

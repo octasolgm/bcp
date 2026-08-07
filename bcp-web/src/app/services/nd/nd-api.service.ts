@@ -892,6 +892,31 @@ export class NdApiService {
     return this.request<unknown>('DELETE', `/nd/results/${runId}/action-item-reviews/${reviewId}`);
   }
 
+  addTempPointReviewComment(runId: string, pointId: string, comment: string) {
+    return this.request<import('../../../lib/nd/temp-point-review-comment').TempPointReviewComment>(
+      'POST',
+      `/nd/results/${runId}/points/${pointId}/temp-review-comments`,
+      {
+        comment,
+      },
+    );
+  }
+
+  updateTempPointReviewComment(runId: string, pointId: string, commentId: string, comment: string) {
+    return this.request<import('../../../lib/nd/temp-point-review-comment').TempPointReviewComment>(
+      'PUT',
+      `/nd/results/${runId}/points/${pointId}/temp-review-comments/${commentId}`,
+      { comment },
+    );
+  }
+
+  deleteTempPointReviewComment(runId: string, pointId: string, commentId: string) {
+    return this.request<unknown>(
+      'DELETE',
+      `/nd/results/${runId}/points/${pointId}/temp-review-comments/${commentId}`,
+    );
+  }
+
   updateActionPlan(runId: string, pointId: string, content: string, revertToVersion?: number) {
     return this.request<unknown>('PUT', `/nd/results/${runId}/action-plan/${pointId}`, {
       content,

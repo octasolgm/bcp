@@ -1,4 +1,5 @@
 import type { ActionItemReviewEntry } from './action-item-review';
+import type { TempPointReviewComment } from './temp-point-review-comment';
 
 export type Department = {
   id: string;
@@ -270,6 +271,7 @@ export type ResultsData = {
   reviews: { id: string; reviewerRole: string; action: string; overallComment?: string; createdAt: string }[];
   comments: { id: string; analysisPointId: string; comment: string; createdAt: string }[];
   actionItemReviews?: ActionItemReviewEntry[];
+  tempReviewComments?: TempPointReviewComment[];
 };
 
 export type ActionPlanHistoryEntry = {

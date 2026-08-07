@@ -18,6 +18,7 @@ import { exportResultsExcel } from '../../../../lib/nd/export/export-excel';
 import { exportResultsPdf } from '../../../../lib/nd/export/export-pdf';
 import type { ActionPlanHistoryEntry, AnalysisPoint, PointGapAttachment, ResultsData } from '../../../../lib/nd/types';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus } from '../../../../lib/nd/action-item-review';
+import { tempCommentsForPoint, type TempPointReviewComment, type TempReviewCommentsChangeEvent } from '../../../../lib/nd/temp-point-review-comment';
 import { canAddActionItemReviews, isReviewRole, reviewDisabledHint } from '../../../../lib/nd/nd-review-run-helpers';
 import type { ComplianceSeverity } from '../../../../lib/nd/point-compliance-status';
 import { type SortDir } from '../../../../lib/nd/list-utils';
@@ -239,6 +240,23 @@ export class NdResultsComponent implements OnInit, OnChanges {
 
   savedReviewsForPoint(pointId: string): ActionItemReviewEntry[] {
     return reviewsForPoint(this.data?.actionItemReviews, pointId);
+  }
+
+  savedTempCommentsForPoint(pointId: string): TempPointReviewComment[] {
+    return tempCommentsForPoint(this.data?.tempReviewComments ?? [], pointId);
+  }
+
+  get canEditTempReviewComments(): boolean {
+    const role = this.auth.getRole();
+    return role === 'super_admin' || role === 'checker' || role === 'reviewer' || role === 'maker';
+  }
+
+  onTempReviewCommentsChanged(event: TempReviewCommentsChangeEvent): void {
+    if (!this.data) return;
+    const others = (this.data.tempReviewComments ?? []).filter(
+      (c) => c.analysisPointId !== event.analysisPointId,
+    );
+    this.data = { ...this.data, tempReviewComments: [...others, ...event.comments] };
   }
 
   get canReviewActionGaps(): boolean {

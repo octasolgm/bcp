@@ -32,6 +32,7 @@ import {
 import { ndComplianceSummaryFromPoints } from '../../../lib/nd/nd-run-display';
 import { countDisplayGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus } from '../../../lib/nd/action-item-review';
+import { tempCommentsForPoint, type TempPointReviewComment, type TempReviewCommentsChangeEvent } from '../../../lib/nd/temp-point-review-comment';
 import { canAddActionItemReviews, isReviewRole, reviewDisabledHint } from '../../../lib/nd/nd-review-run-helpers';
 import {
   resolveAnalysisPointSeverity,
@@ -72,6 +73,7 @@ type ApiLibraryPoint = {
 
 const EMPTY_POINT_ATTACHMENTS: PointGapAttachment[] = [];
 const EMPTY_POINT_REVIEWS: ActionItemReviewEntry[] = [];
+const EMPTY_TEMP_COMMENTS: TempPointReviewComment[] = [];
 
 @Component({
   selector: 'app-analyse-regul',
@@ -145,6 +147,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   resultDetailError = '';
   ndPointAttachments: PointGapAttachment[] = [];
   ndActionItemReviews: ActionItemReviewEntry[] = [];
+  ndTempReviewComments: TempPointReviewComment[] = [];
   evidenceUploadingPointId: string | null = null;
   savingActionReviewIndex: number | null = null;
   savingReviewId: string | null = null;
@@ -157,6 +160,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   private runPointMetaByGovKey = new Map<string, RunPointDisplayMeta>();
   private attachmentsByPointId = new Map<string, PointGapAttachment[]>();
   private reviewsByPointId = new Map<string, ActionItemReviewEntry[]>();
+  private tempCommentsByPointId = new Map<string, TempPointReviewComment[]>();
 
   setupRegSourcesPct = 58;
   setupRegInnerPct = 42;
@@ -1596,6 +1600,11 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return isReviewRole(this.ndAuth.getRole());
   }
 
+  get canEditTempReviewComments(): boolean {
+    const role = this.ndAuth.getRole();
+    return role === 'super_admin' || role === 'checker' || role === 'reviewer' || role === 'maker';
+  }
+
   get gapReviewDisabledHint(): string {
     return reviewDisabledHint(this.ndAuth.getRole(), this.ndRunStatus);
   }
@@ -1745,6 +1754,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       points: AnalysisPoint[];
       pointAttachments?: PointGapAttachment[];
       actionItemReviews?: ActionItemReviewEntry[];
+      tempReviewComments?: TempPointReviewComment[];
       regulQualitativeAssessment?: {
         status: string;
         result?: Record<string, unknown>;
@@ -1762,11 +1772,13 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.ndRunDetailPoints = this.ndRunPointsList;
     this.ndPointAttachments = data.pointAttachments ?? [];
     this.ndActionItemReviews = data.actionItemReviews ?? [];
+    this.ndTempReviewComments = data.tempReviewComments ?? [];
     this.indexNdRunPoints(data.points ?? []);
     this.reconcileRunWithGovCatalog();
     this.fixSelectedDetailPointAfterReconcile();
     this.attachmentsByPointId.clear();
     this.reviewsByPointId.clear();
+    this.tempCommentsByPointId.clear();
 
     for (const attachment of this.ndPointAttachments) {
       const list = this.attachmentsByPointId.get(attachment.analysisPointId);
@@ -1777,6 +1789,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     for (const p of data.points) {
       if (!p.id) continue;
       this.reviewsByPointId.set(p.id, reviewsForPoint(this.ndActionItemReviews, p.id));
+      this.tempCommentsByPointId.set(p.id, tempCommentsForPoint(this.ndTempReviewComments, p.id));
     }
     this.syncInlineGapSeveritiesFromNdRun();
     this.hydrateNdSessionFromPoints(data.points ?? [], {
@@ -2026,6 +2039,20 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     const ndPoint = this.analysisPointForPointId(pointId);
     if (!ndPoint) return EMPTY_POINT_REVIEWS;
     return this.reviewsByPointId.get(ndPoint.id) ?? EMPTY_POINT_REVIEWS;
+  }
+
+  savedTempCommentsForPoint(pointId: string): TempPointReviewComment[] {
+    const ndPoint = this.analysisPointForPointId(pointId);
+    if (!ndPoint) return EMPTY_TEMP_COMMENTS;
+    return this.tempCommentsByPointId.get(ndPoint.id) ?? EMPTY_TEMP_COMMENTS;
+  }
+
+  onTempReviewCommentsChanged(event: TempReviewCommentsChangeEvent): void {
+    this.tempCommentsByPointId.set(event.analysisPointId, event.comments);
+    const merged: TempPointReviewComment[] = [];
+    for (const list of this.tempCommentsByPointId.values()) merged.push(...list);
+    this.ndTempReviewComments = merged;
+    this.cdr.markForCheck();
   }
 
   get nonComplianceGapPoints(): { pointId: string; label: string; gapCount: number; severity: GapSeverity }[] {

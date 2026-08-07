@@ -3,7 +3,9 @@ export type PanelResizeKind =
   | 'docs-height'
   | 'col-left'
   | 'col-right'
-  | 'result-split';
+  | 'result-split'
+  | 'sidebar-width'
+  | 'review-panel-width';
 
 export interface PanelResizeStart {
   kind: PanelResizeKind;
@@ -24,6 +26,8 @@ const DEFAULT_LIMITS: Record<PanelResizeKind, PanelResizeLimits> = {
   'col-left': { min: 200, max: 560 },
   'col-right': { min: 200, max: 560 },
   'result-split': { min: 96, max: 420 },
+  'sidebar-width': { min: 180, max: 380 },
+  'review-panel-width': { min: 280, max: 560 },
 };
 
 /** Pointer-driven panel resize with body cursor lock and clamped values. */
@@ -48,6 +52,8 @@ export function startPanelResize(
 
     if (start.kind === 'docs-height' || start.kind === 'result-split') {
       next = start.startVal + (e.clientY - start.startY);
+    } else if (start.kind === 'review-panel-width') {
+      next = start.startVal + (start.startX - e.clientX);
     } else if (start.kind === 'setup-split' && start.containerWidth) {
       const deltaPct = ((e.clientX - start.startX) / start.containerWidth) * 100;
       next = start.startVal + deltaPct;

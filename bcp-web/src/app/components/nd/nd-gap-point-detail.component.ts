@@ -64,11 +64,15 @@ import {
   type PolicyRefProof,
 } from '../../../lib/nd/policy-doc-resolve';
 import { NdItemReviewSectionComponent, type ItemReviewSaveEvent } from './nd-item-review-section.component';
+import {
+  NdTempPointReviewCommentsComponent,
+} from './nd-temp-point-review-comments.component';
+import type { TempPointReviewComment, TempReviewCommentsChangeEvent } from '../../../lib/nd/temp-point-review-comment';
 
 @Component({
   selector: 'app-nd-gap-point-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReferenceComplianceCardComponent, NdItemReviewSectionComponent],
+  imports: [CommonModule, FormsModule, ReferenceComplianceCardComponent, NdItemReviewSectionComponent, NdTempPointReviewCommentsComponent],
   templateUrl: './nd-gap-point-detail.component.html',
   styleUrl: './nd-gap-point-detail.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -122,6 +126,9 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Input() dockPointReview = false;
   /** Regul workflow V3 — forward/reverse labels, no V8 dual-verify pass 2 block. */
   @Input() isRegulWorkflow = false;
+  /** Temporary manual review notes for this point. */
+  @Input() tempReviewComments: TempPointReviewComment[] = [];
+  @Input() canEditTempReviewComments = true;
 
   @Output() startEdit = new EventEmitter<void>();
   @Output() cancelEdit = new EventEmitter<void>();
@@ -143,6 +150,7 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Output() deleteGapEvidence = new EventEmitter<{ actionIndex: number; attachmentId: string }>();
   @Output() rerunWithEvidence = new EventEmitter<'full' | 'dual'>();
   @Output() rerunGapEvidence = new EventEmitter<{ actionIndex: number; mode: 'full' | 'dual' }>();
+  @Output() tempReviewCommentsChanged = new EventEmitter<TempReviewCommentsChangeEvent>();
 
   readonly actionReviewStatusLabel = actionReviewStatusLabel;
   readonly pointReviewActionIndex = POINT_REVIEW_ACTION_INDEX;
@@ -193,6 +201,10 @@ export class NdGapPointDetailComponent implements OnChanges {
 
   get pointLevelReviews(): ActionItemReviewEntry[] {
     return reviewsForPointLevel(this.savedActionItemReviews);
+  }
+
+  get showTempReviewComments(): boolean {
+    return Boolean(this.runId?.trim());
   }
 
   ngOnChanges(changes: SimpleChanges): void {

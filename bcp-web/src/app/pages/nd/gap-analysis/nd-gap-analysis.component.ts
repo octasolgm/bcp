@@ -72,6 +72,7 @@ import { parseReferenceComplianceBlock } from '../../../../lib/ai-lab/parse-refe
 import { internalDocCatalogFromRunDetail } from '../../../../lib/nd/run-internal-docs';
 import type { PolicyDocCatalogEntry } from '../../../../lib/nd/policy-doc-resolve';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus, validateSavedActionReviewsComplete, countSavedReviewProgress } from '../../../../lib/nd/action-item-review';
+import { tempCommentsForPoint, type TempPointReviewComment, type TempReviewCommentsChangeEvent } from '../../../../lib/nd/temp-point-review-comment';
 import { canAddActionItemReviews, isReviewRole, reviewDisabledHint, reviewWorkspaceLink, attachmentCountsByPoint } from '../../../../lib/nd/nd-review-run-helpers';
 import { computeRunGapStats, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 import { buildNdGapListItems, ndComplianceSummaryFromPoints } from '../../../../lib/nd/nd-run-display';
@@ -83,6 +84,7 @@ const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
 
 const EMPTY_GAP_ATTACHMENTS: PointGapAttachment[] = [];
 const EMPTY_ACTION_REVIEWS: ActionItemReviewEntry[] = [];
+const EMPTY_TEMP_COMMENTS: TempPointReviewComment[] = [];
 
 @Component({
   selector: 'app-nd-gap-analysis',
@@ -166,6 +168,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   private attachmentsByPointId = new Map<string, PointGapAttachment[]>();
   private snapshotByPointId = new Map<string, PointSnapshot>();
   private reviewsByPointId = new Map<string, ActionItemReviewEntry[]>();
+  private tempCommentsByPointId = new Map<string, TempPointReviewComment[]>();
   private lastLoadKey = '';
   private loadGeneration = 0;
   /** Display id of the row whose detail panel is open — at most one. */
@@ -316,6 +319,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.attachmentsByPointId.clear();
     this.snapshotByPointId.clear();
     this.reviewsByPointId.clear();
+    this.tempCommentsByPointId.clear();
 
     for (const attachment of data.pointAttachments ?? []) {
       const count = this.attachmentCountByPointId.get(attachment.analysisPointId) ?? 0;
@@ -340,6 +344,10 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       this.reviewsByPointId.set(
         point.id,
         reviewsForPoint(data.actionItemReviews, point.id),
+      );
+      this.tempCommentsByPointId.set(
+        point.id,
+        tempCommentsForPoint(data.tempReviewComments ?? [], point.id),
       );
     }
   }
@@ -439,6 +447,20 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   savedReviewsForPoint(pointId: string): ActionItemReviewEntry[] {
     return this.reviewsByPointId.get(pointId) ?? EMPTY_ACTION_REVIEWS;
+  }
+
+  savedTempCommentsForPoint(pointId: string): TempPointReviewComment[] {
+    return this.tempCommentsByPointId.get(pointId) ?? EMPTY_TEMP_COMMENTS;
+  }
+
+  get canEditTempReviewComments(): boolean {
+    const role = this.auth.getRole();
+    return role === 'super_admin' || role === 'checker' || role === 'reviewer' || role === 'maker';
+  }
+
+  onTempReviewCommentsChanged(event: TempReviewCommentsChangeEvent): void {
+    this.tempCommentsByPointId.set(event.analysisPointId, event.comments);
+    this.cdr.markForCheck();
   }
 
   get canReviewActionGaps(): boolean {

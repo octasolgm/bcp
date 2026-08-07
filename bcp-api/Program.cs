@@ -288,6 +288,7 @@ file static class StartupBootstrap
 
             if (schemaPresent)
             {
+                await NdIncrementalSchemaBootstrap.EnsureAsync(db, CancellationToken.None);
                 state.SetStatus("ready");
                 logger.LogInformation("Live schema detected — API ready for login.");
 

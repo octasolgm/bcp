@@ -16,7 +16,7 @@
 
   &.sidebar-collapsed {
     .sidebar {
-      width: 56px;
+      width: 56px !important;
       min-width: 56px;
       padding: 0.75rem 0.35rem;
 
@@ -144,6 +144,7 @@
 }
 
 .sidebar {
+  position: relative;
   width: 240px;
   flex-shrink: 0;
   align-self: stretch;
@@ -156,13 +157,11 @@
   min-height: 0;
   overflow: hidden;
   transition:
-    width 0.2s ease,
     padding 0.2s ease,
     opacity 0.2s ease,
     border-color 0.2s ease;
 
   @media (max-width: 640px) {
-    width: 200px;
     padding: 0.75rem 0.45rem;
   }
 
@@ -185,6 +184,39 @@
     &:first-child {
       margin-top: 0;
     }
+  }
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -6px;
+  bottom: 0;
+  width: 12px;
+  cursor: col-resize;
+  z-index: 20;
+  touch-action: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 8%;
+    bottom: 8%;
+    left: 50%;
+    width: 4px;
+    transform: translateX(-50%);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--text-muted, #9ca3af) 35%, transparent);
+    transition:
+      background 0.12s,
+      box-shadow 0.12s;
+  }
+
+  &:hover::after,
+  &:active::after,
+  body.panel-resizing &::after {
+    background: color-mix(in srgb, var(--accent) 65%, #fff);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
   }
 }
 

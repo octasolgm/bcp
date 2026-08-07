@@ -53,6 +53,22 @@ public class ResultsController(
             .ThenByDescending(r => r.CreatedAt)
             .ToListAsync(ct);
 
+        var tempReviewComments = await db.NdTempPointReviewComments.AsNoTracking()
+            .Where(c => pointIds.Contains(c.AnalysisPointId))
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(ct);
+
+        var tempCommentAuthorIds = tempReviewComments
+            .Where(c => c.CommentedBy.HasValue)
+            .Select(c => c.CommentedBy!.Value)
+            .Distinct()
+            .ToList();
+        var tempCommentAuthors = tempCommentAuthorIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.NdProfiles.AsNoTracking()
+                .Where(p => tempCommentAuthorIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.FullName, ct);
+
         var history = await db.NdAnalysisStatusHistories.AsNoTracking()
             .Where(h => h.AnalysisRunId == runId)
             .OrderBy(h => h.CreatedAt)
@@ -159,6 +175,17 @@ public class ResultsController(
                     priority = r.Priority,
                     sortOrder = r.SortOrder,
                     r.CreatedAt,
+                }),
+                tempReviewComments = tempReviewComments.Select(c => new
+                {
+                    c.Id,
+                    analysisPointId = c.AnalysisPointId,
+                    comment = c.Comment,
+                    commentedBy = c.CommentedBy,
+                    commentedByName = c.CommentedBy.HasValue && tempCommentAuthors.TryGetValue(c.CommentedBy.Value, out var name)
+                        ? name
+                        : null,
+                    c.CreatedAt,
                 }),
                 statusHistory = history,
                 regulQualitativeAssessment,
