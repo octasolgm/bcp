@@ -9,7 +9,7 @@ import {
   DualVerifyHealth,
   DualVerifySessionSummary,
 } from '../../services/api.service';
-import { NdApiService } from '../../services/nd/nd-api.service';
+import { NdApiService, type NdDashboardStats } from '../../services/nd/nd-api.service';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { environment } from '../../../environments/environment';
 import { shellRoute, shellRouteSegments } from '../../services/app-route-prefix';
@@ -24,12 +24,10 @@ import {
   sortAnalysisRunsByRecent,
 } from '../../../lib/nd/analysis-run-status';
 import { formatDate } from '../../../lib/nd/utils';
-import type { AnalysisRunSummary, AnalysisPoint } from '../../../lib/nd/types';
+import type { AnalysisRunSummary } from '../../../lib/nd/types';
 import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../lib/nd/run-gap-stats';
 import {
-  aggregateGapRiskCounts,
   mergeGapRiskCounts,
-  type ActionItemReviewRow,
 } from '../../../lib/nd/dashboard-gap-risk';
 import {
   emptyGapRiskCounts,
@@ -133,8 +131,11 @@ export class DashboardComponent implements OnInit {
 
   remediationItems: Array<{ item: string; severity: string; target: string; status: string }> = [];
   ndRuns: AnalysisRunSummary[] = [];
+  ndRunsTotal = 0;
   ndRunsLoading = false;
   ndRunsLoadError = '';
+  ndDashboardStats: NdDashboardStats | null = null;
+  ndStatsLoading = false;
   gapRiskCounts: GapRiskCounts = emptyGapRiskCounts();
   gapRiskLoading = false;
   historyOpen = false;
@@ -242,19 +243,21 @@ export class DashboardComponent implements OnInit {
   private async loadNdRuns(): Promise<void> {
     this.ndRunsLoading = true;
     this.ndRunsLoadError = '';
+    void this.loadNdDashboardStats();
     try {
       if (!this.ndAuth.profile()) {
         await this.ndAuth.refreshProfile();
       }
       const role = this.ndAuth.getRole();
+      const listParams = { ndOnly: true, summaryOnly: true, skipGapStats: true };
       const res = await this.ndApi.getAnalysisRuns(
-        role === 'maker'
-          ? { mineOnly: true, ndOnly: true, summaryOnly: true }
-          : { ndOnly: true, summaryOnly: true },
+        role === 'maker' ? { ...listParams, mineOnly: true } : listParams,
       );
       if (res.success && res.data) {
         this.ndRuns = sortAnalysisRunsByRecent(res.data as AnalysisRunSummary[]);
-        void this.loadNdGapRiskCounts();
+        if (!this.ndDashboardStats) {
+          this.ndRunsTotal = this.ndRuns.length;
+        }
       } else {
         this.ndRuns = [];
         this.ndRunsLoadError = res.message ?? 'Could not load analysis runs from the API.';
@@ -267,68 +270,34 @@ export class DashboardComponent implements OnInit {
     }
   }
 
-  private async loadNdGapRiskCounts(): Promise<void> {
-    if (!this.inNdShell || !this.ndRuns.length) {
-      this.gapRiskCounts = emptyGapRiskCounts();
-      return;
-    }
-    // Prefer server-side tallies from summaryOnly (CAP text only — no full /nd/results).
-    // Local getResults used to time out at 25s and leave Critical/Medium stuck at 0.
-    const hasServerGapRisk = this.ndRuns.some(
-      (r) => r.criticalGaps != null || r.mediumGaps != null || r.lowGaps != null,
-    );
-    if (hasServerGapRisk) {
-      this.gapRiskCounts = this.aggregateGapRiskFromRunSummaries(this.ndRuns);
-      this.gapRiskLoading = false;
-      return;
-    }
+  private async loadNdDashboardStats(): Promise<void> {
+    if (!this.inNdShell) return;
+    this.ndStatsLoading = true;
     this.gapRiskLoading = true;
     try {
-      const scored = this.ndRuns.filter(
-        (r) =>
-          (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0) > 0 ||
-          (r.totalGaps ?? 0) > 0 ||
-          (r.processedPointsCount ?? 0) > 0,
-      );
-      const runs = (scored.length ? scored : this.ndRuns).slice(0, 3);
-      let merged = emptyGapRiskCounts();
-      for (const run of runs) {
-        const res = await this.ndApi.getResults(run.id);
-        if (!res.success || !res.data) continue;
-        const data = res.data as {
-          points?: AnalysisPoint[];
-          actionItemReviews?: ActionItemReviewRow[];
-        };
-        const counts = aggregateGapRiskCounts(
-          (data.points ?? []) as AnalysisPoint[],
-          data.actionItemReviews ?? [],
-        );
-        merged = mergeGapRiskCounts(merged, counts);
+      if (!this.ndAuth.profile()) {
+        await this.ndAuth.refreshProfile();
       }
-      this.gapRiskCounts = merged;
+      const role = this.ndAuth.getRole();
+      const res = await this.ndApi.getDashboardStats(role === 'maker' ? { mineOnly: true } : undefined);
+      if (res.success && res.data) {
+        const stats = res.data;
+        this.ndDashboardStats = stats;
+        this.ndRunsTotal = stats.totalRuns;
+        this.gapRiskCounts = mergeGapRiskCounts(emptyGapRiskCounts(), {
+          critical: stats.criticalGaps,
+          medium: stats.mediumGaps,
+          low: stats.lowGaps,
+          total: stats.criticalGaps + stats.mediumGaps + stats.lowGaps,
+        });
+      }
     } catch {
+      this.ndDashboardStats = null;
       this.gapRiskCounts = emptyGapRiskCounts();
     } finally {
+      this.ndStatsLoading = false;
       this.gapRiskLoading = false;
     }
-  }
-
-  /** Sum Critical/Medium/Low from light analysis-run summaries (all scored runs). */
-  private aggregateGapRiskFromRunSummaries(runs: AnalysisRunSummary[]): GapRiskCounts {
-    let merged = emptyGapRiskCounts();
-    for (const r of runs) {
-      if (r.criticalGaps == null && r.mediumGaps == null && r.lowGaps == null) continue;
-      const c = r.criticalGaps ?? 0;
-      const m = r.mediumGaps ?? 0;
-      const l = r.lowGaps ?? 0;
-      merged = mergeGapRiskCounts(merged, {
-        critical: c,
-        medium: m,
-        low: l,
-        total: c + m + l,
-      });
-    }
-    return merged;
   }
 
   readonly riskStandardLabel = RISK_STANDARD_SUMMARY;
@@ -393,7 +362,7 @@ export class DashboardComponent implements OnInit {
 
   get criticalGapCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading || this.gapRiskLoading) return -1;
+      if (this.ndStatsLoading) return -1;
       return this.gapRiskCounts.critical;
     }
     return this.criticalCount;
@@ -401,7 +370,7 @@ export class DashboardComponent implements OnInit {
 
   get mediumGapCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading || this.gapRiskLoading) return -1;
+      if (this.ndStatsLoading) return -1;
       return this.gapRiskCounts.medium;
     }
     return this.highCount;
@@ -409,7 +378,7 @@ export class DashboardComponent implements OnInit {
 
   get lowGapCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading || this.gapRiskLoading) return -1;
+      if (this.ndStatsLoading) return -1;
       return this.gapRiskCounts.low;
     }
     return 0;
@@ -417,8 +386,8 @@ export class DashboardComponent implements OnInit {
 
   get criticalCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading) return 0;
-      return this.aggregatedNdMetrics.nonCompliant;
+      if (this.ndStatsLoading) return 0;
+      return this.ndDashboardStats?.nonCompliant ?? 0;
     }
     const nd = this.primaryNdRun;
     if (nd) return nd.nonCompliant ?? 0;
@@ -427,8 +396,8 @@ export class DashboardComponent implements OnInit {
 
   get highCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading) return 0;
-      return this.aggregatedNdMetrics.partial;
+      if (this.ndStatsLoading) return 0;
+      return this.ndDashboardStats?.partial ?? 0;
     }
     const nd = this.primaryNdRun;
     if (nd) return nd.partial ?? 0;
@@ -447,8 +416,8 @@ export class DashboardComponent implements OnInit {
 
   get compliantCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading) return 0;
-      return this.aggregatedNdMetrics.compliant;
+      if (this.ndStatsLoading) return 0;
+      return this.ndDashboardStats?.compliant ?? 0;
     }
     const nd = this.primaryNdRun;
     if (nd) return nd.compliant ?? 0;
@@ -457,8 +426,8 @@ export class DashboardComponent implements OnInit {
 
   get partialCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading) return 0;
-      return this.aggregatedNdMetrics.partial;
+      if (this.ndStatsLoading) return 0;
+      return this.ndDashboardStats?.partial ?? 0;
     }
     const nd = this.primaryNdRun;
     if (nd) return nd.partial ?? 0;
@@ -467,8 +436,8 @@ export class DashboardComponent implements OnInit {
 
   get nonCompliantCount(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading) return 0;
-      return this.aggregatedNdMetrics.nonCompliant;
+      if (this.ndStatsLoading) return 0;
+      return this.ndDashboardStats?.nonCompliant ?? 0;
     }
     const nd = this.primaryNdRun;
     if (nd) return nd.nonCompliant ?? 0;
@@ -477,9 +446,10 @@ export class DashboardComponent implements OnInit {
 
   get totalFindings(): number {
     if (this.inNdShell) {
-      if (this.ndRunsLoading) return 0;
-      const m = this.aggregatedNdMetrics;
-      return m.compliant + m.partial + m.nonCompliant;
+      if (this.ndStatsLoading) return 0;
+      const stats = this.ndDashboardStats;
+      if (!stats) return 0;
+      return stats.compliant + stats.partial + stats.nonCompliant;
     }
     const nd = this.primaryNdRun;
     if (nd) {
@@ -492,8 +462,8 @@ export class DashboardComponent implements OnInit {
   }
 
   get analysisCountLabel(): string {
-    if (this.inNdShell && this.ndRunsLoading) return '…';
-    if (this.inNdShell) return String(this.ndRuns.length);
+    if (this.inNdShell && this.ndStatsLoading) return '…';
+    if (this.inNdShell) return String(this.ndRunsTotal || this.ndRuns.length);
     const ndCount = this.ndRuns.filter(
       (r) => (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0) > 0,
     ).length;
@@ -502,7 +472,14 @@ export class DashboardComponent implements OnInit {
   }
 
   get lastAnalysisLabel(): string {
-    if (this.inNdShell && this.ndRunsLoading) return 'Loading…';
+    if (this.inNdShell && this.ndStatsLoading) return 'Loading…';
+    if (this.inNdShell && this.ndDashboardStats?.lastAnalysisAt) {
+      return new Date(this.ndDashboardStats.lastAnalysisAt).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    }
     const nd = this.primaryNdRun ?? this.ndRuns[0];
     if (nd?.createdAt) {
       return new Date(nd.createdAt).toLocaleDateString(undefined, {
@@ -546,6 +523,13 @@ export class DashboardComponent implements OnInit {
 
   /** Runs with compliance breakdown on the summary row. */
   get ndRunsWithMetricsCount(): number {
+    if (this.inNdShell && this.ndDashboardStats) {
+      const total =
+        this.ndDashboardStats.compliant +
+        this.ndDashboardStats.partial +
+        this.ndDashboardStats.nonCompliant;
+      return total > 0 ? 1 : 0;
+    }
     return this.ndRuns.filter(
       (r) => (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0) > 0,
     ).length;

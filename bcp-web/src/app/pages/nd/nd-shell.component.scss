@@ -444,13 +444,22 @@
 .content {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
   overflow-x: hidden;
   padding: 1.25rem 1.5rem;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 
   > router-outlet {
     display: none;
+  }
+
+  > :not(router-outlet) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .page-header {

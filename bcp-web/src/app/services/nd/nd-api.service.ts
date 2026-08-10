@@ -120,6 +120,17 @@ export type NdWorkspaceNavCounts = {
   reviewerQueue: number;
 };
 
+export type NdDashboardStats = {
+  compliant: number;
+  partial: number;
+  nonCompliant: number;
+  criticalGaps: number;
+  mediumGaps: number;
+  lowGaps: number;
+  totalRuns: number;
+  lastAnalysisAt?: string | null;
+};
+
 @Injectable({ providedIn: 'root' })
 export class NdApiService {
   private readonly http = inject(HttpClient);
@@ -644,6 +655,19 @@ export class NdApiService {
     return this.request<NdWorkspaceNavCounts>(
       'GET',
       '/nd/workspace/nav-counts',
+      undefined,
+      true,
+      ANALYSIS_RUNS_LIST_TIMEOUT_MS,
+    );
+  }
+
+  getDashboardStats(params?: { mineOnly?: boolean }) {
+    const q = new URLSearchParams();
+    if (params?.mineOnly) q.set('mineOnly', 'true');
+    const suffix = q.toString() ? `?${q}` : '';
+    return this.request<NdDashboardStats>(
+      'GET',
+      `/nd/workspace/dashboard-stats${suffix}`,
       undefined,
       true,
       ANALYSIS_RUNS_LIST_TIMEOUT_MS,
