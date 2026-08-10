@@ -141,4 +141,38 @@ public class WorkspaceController(
 
         return Ok(new { success = true, data });
     }
+
+    [HttpGet("dashboard-stats")]
+    public async Task<IActionResult> DashboardStats(
+        [FromQuery] bool mineOnly = false,
+        CancellationToken ct = default)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var role = profile!.Role;
+        var effectiveMineOnly = mineOnly || role == "maker";
+        var cacheScope = $"dashboard-stats:{profile.Id}:{role}:{effectiveMineOnly}";
+
+        var stats = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>
+            await NdRunEnrichmentHelper.LoadWorkspaceDashboardStatsAsync(
+                db, effectiveMineOnly, profile.Id, innerCt), ct);
+
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                compliant = stats.Compliant,
+                partial = stats.Partial,
+                nonCompliant = stats.NonCompliant,
+                criticalGaps = stats.CriticalGaps,
+                mediumGaps = stats.MediumGaps,
+                lowGaps = stats.LowGaps,
+                totalRuns = stats.TotalRuns,
+                lastAnalysisAt = stats.LastAnalysisAt,
+            },
+        });
+    }
 }

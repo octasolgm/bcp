@@ -35,8 +35,9 @@ bcp-web/bcp-web-dist.zip
 tmp-*.txt
 
 # IDE / OS
-.vscode/
 .idea/
 .DS_Store
 Thumbs.db
 *.log
+config.bat
+node_modules

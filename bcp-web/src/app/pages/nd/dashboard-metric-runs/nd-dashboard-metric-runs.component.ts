@@ -89,10 +89,9 @@ export class NdDashboardMetricRunsComponent implements OnInit, OnDestroy {
     try {
       await this.auth.refreshProfile();
       const role = this.auth.getRole();
+      const listParams = { ndOnly: true, summaryOnly: true, page: 1, pageSize: 20 };
       const res = await this.api.getAnalysisRuns(
-        role === 'maker'
-          ? { mineOnly: true, ndOnly: true, summaryOnly: true }
-          : { ndOnly: true, summaryOnly: true },
+        role === 'maker' ? { ...listParams, mineOnly: true } : listParams,
       );
       if (!res.success || !res.data) {
         this.loadError = res.message ?? 'Could not load analysis runs.';
