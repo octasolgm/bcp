@@ -38,7 +38,7 @@ public static class NdGapRiskCounter
         foreach (var point in points)
         {
             var status = NdRunEnrichmentHelper.EffectiveComplianceStatus(
-                point.FinalStatus, point.LandingAiStatus);
+                point.FinalStatus, point.LandingAiStatus, point.GoogleAiStatus);
             // Skip queued / pending — do not invent Critical/Medium gaps before scoring.
             if (status is null or "compliant") continue;
 

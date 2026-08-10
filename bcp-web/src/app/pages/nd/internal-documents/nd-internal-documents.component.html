@@ -1,6 +1,26 @@
-<div class="page-header">
-  <div>
-    <h1>{{ showDeleted ? 'Deleted documents' : 'Document Library' }}</h1>
+<div class="nd-catalog-page">
+<div class="page-header page-header--catalog nd-catalog-toolbar">
+  <div class="page-header-title-block">
+    <div class="page-header-row">
+      <h1>{{ showDeleted ? 'Deleted documents' : 'Document Library' }}</h1>
+      @if (canUpload || canViewDeleted) {
+        <div class="header-actions">
+          <button type="button" class="btn-secondary btn-refresh" (click)="load()" [disabled]="loading">
+            <span>Refresh</span>
+            <svg class="btn-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+              <path d="M21 3v6h-6"/>
+            </svg>
+          </button>
+          @if (canUpload && !showDeleted) {
+            <button type="button" class="btn-primary" [disabled]="uploading" (click)="fileInput.click()">
+              {{ uploading ? 'Uploading…' : '+ Upload' }}
+            </button>
+            <input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
+          }
+        </div>
+      }
+    </div>
     <p class="subtitle">
       @if (showDeleted) {
         Soft-deleted documents are hidden from the library but kept in the database — parse credits and file data are preserved. Restore to make them visible again.
@@ -9,20 +29,9 @@
       }
     </p>
   </div>
-  @if (canUpload || canViewDeleted) {
-    <div class="header-actions">
-      <button type="button" class="btn-secondary" (click)="load()" [disabled]="loading">Refresh</button>
-      @if (canUpload && !showDeleted) {
-        <button type="button" class="btn-primary" [disabled]="uploading" (click)="fileInput.click()">
-          {{ uploading ? 'Uploading…' : '+ Upload' }}
-        </button>
-        <input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
-      }
-    </div>
-  }
 </div>
 
-<div class="nd-page-body">
+<div class="nd-catalog-toolbar">
 @if (message) {
   <div class="alert success nd-shrink">{{ message }}</div>
 }
@@ -84,7 +93,8 @@
       <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
     </div>
   } @else {
-  <div class="card-surface table-wrap">
+  <div class="nd-catalog-body">
+  <div class="card-surface table-wrap table-scroll-body">
     <table>
       <thead>
         <tr>
@@ -266,8 +276,10 @@
       </tbody>
     </table>
   </div>
+  </div>
   }
 }
+</div>
 </div>
 
 @if (sectionsFor) {

@@ -1,14 +1,23 @@
-<div class="page-header">
-  <div>
-    <h1>Regulation Points Libraries</h1>
+<div class="nd-catalog-page">
+<div class="page-header page-header--catalog">
+  <div class="page-header-title-block">
+    <div class="page-header-row">
+      <h1>Regulation Points Libraries</h1>
+      @if (canEdit) {
+        <div class="header-actions">
+          <button type="button" class="btn-secondary btn-refresh" (click)="loadLibraries()" [disabled]="loading">
+            <span>Refresh</span>
+            <svg class="btn-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+              <path d="M21 3v6h-6"/>
+            </svg>
+          </button>
+          <a routerLink="/nd/libraries/new" class="btn-primary">+ New library</a>
+        </div>
+      }
+    </div>
     <p class="subtitle">Curated regulation points · view shows full structure (2 → 2.1 → 2.1.1); gap analysis compares leaf points only</p>
   </div>
-  @if (canEdit) {
-    <div class="header-actions">
-      <button type="button" class="btn-secondary" (click)="loadLibraries()" [disabled]="loading">Refresh</button>
-      <a routerLink="/nd/libraries/new" class="btn-primary">+ New library</a>
-    </div>
-  }
 </div>
 
 <div class="nd-page-body nd-fill-panel libs-fill">
@@ -45,7 +54,7 @@
           <p>Try a different term or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
         </div>
       } @else {
-        <div class="card-surface table-wrap">
+        <div class="card-surface table-wrap table-scroll-body">
           <table>
             <thead>
               <tr>
@@ -119,4 +128,5 @@
     }
   </div>
 }
+</div>
 </div>

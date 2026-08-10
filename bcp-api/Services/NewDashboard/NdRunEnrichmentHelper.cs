@@ -143,6 +143,18 @@ public static class NdRunEnrichmentHelper
         int NonCompliant,
         int Running);
 
+  public sealed record WorkspaceDashboardStats(
+        int Compliant,
+        int Partial,
+        int NonCompliant,
+        int CriticalGaps,
+        int MediumGaps,
+        int LowGaps,
+        int TotalRuns,
+        DateTimeOffset? LastAnalysisAt);
+
+    private sealed record WorkspaceComplianceTotals(int Compliant, int Partial, int NonCompliant);
+
     /// <summary>
     /// Fast list rows for nav, analysis-runs table, and dashboard cards.
     /// Uses SQL aggregation (no per-point hydration) so overview loads within Supabase pool limits.
@@ -205,6 +217,82 @@ public static class NdRunEnrichmentHelper
         return list;
     }
 
+    /// <summary>One SQL scan for workspace dashboard cards (cached on WorkspaceController).</summary>
+    public static async Task<WorkspaceDashboardStats> LoadWorkspaceDashboardStatsAsync(
+        AppDbContext db,
+        bool mineOnly,
+        Guid? profileId,
+        CancellationToken ct)
+    {
+        const string deleted = "deleted";
+        var runsQ = db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != deleted);
+        if (mineOnly && profileId.HasValue)
+            runsQ = runsQ.Where(r => r.CreatedBy == profileId.Value);
+
+        var runMeta = await runsQ
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Count(), LastAt = g.Max(r => r.CreatedAt) })
+            .FirstOrDefaultAsync(ct);
+
+        WorkspaceComplianceTotals totals;
+        if (mineOnly && profileId.HasValue)
+        {
+            totals = await db.Database.SqlQueryRaw<WorkspaceComplianceTotals>(
+                """
+                SELECT
+                  COUNT(*) FILTER (WHERE effective_status = 'compliant')::int AS "Compliant",
+                  COUNT(*) FILTER (WHERE effective_status = 'partial_compliant')::int AS "Partial",
+                  COUNT(*) FILTER (WHERE effective_status = 'non_compliant')::int AS "NonCompliant"
+                FROM (
+                  SELECT
+                    CASE
+                      WHEN p.final_status IN ('compliant','partial_compliant','non_compliant') THEN p.final_status
+                      WHEN p.landing_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.landing_ai_status
+                      WHEN p.google_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.google_ai_status
+                      ELSE NULL
+                    END AS effective_status
+                  FROM analysis_points p
+                  INNER JOIN analysis_runs r ON r.id = p.analysis_run_id
+                  WHERE r.status <> 'deleted' AND r.created_by = {0}
+                ) t
+                """,
+                profileId.Value).FirstOrDefaultAsync(ct) ?? new WorkspaceComplianceTotals(0, 0, 0);
+        }
+        else
+        {
+            totals = await db.Database.SqlQueryRaw<WorkspaceComplianceTotals>(
+                """
+                SELECT
+                  COUNT(*) FILTER (WHERE effective_status = 'compliant')::int AS "Compliant",
+                  COUNT(*) FILTER (WHERE effective_status = 'partial_compliant')::int AS "Partial",
+                  COUNT(*) FILTER (WHERE effective_status = 'non_compliant')::int AS "NonCompliant"
+                FROM (
+                  SELECT
+                    CASE
+                      WHEN p.final_status IN ('compliant','partial_compliant','non_compliant') THEN p.final_status
+                      WHEN p.landing_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.landing_ai_status
+                      WHEN p.google_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.google_ai_status
+                      ELSE NULL
+                    END AS effective_status
+                  FROM analysis_points p
+                  INNER JOIN analysis_runs r ON r.id = p.analysis_run_id
+                  WHERE r.status <> 'deleted'
+                ) t
+                """).FirstOrDefaultAsync(ct) ?? new WorkspaceComplianceTotals(0, 0, 0);
+        }
+
+        var gapRisk = new NdGapRiskCounter.Counts(totals.NonCompliant, totals.Partial, 0);
+        return new WorkspaceDashboardStats(
+            totals.Compliant,
+            totals.Partial,
+            totals.NonCompliant,
+            gapRisk.Critical,
+            gapRisk.Medium,
+            gapRisk.Low,
+            runMeta?.Total ?? 0,
+            runMeta?.LastAt);
+    }
+
     private static async Task<Dictionary<Guid, RunPointStatusAggregate>> LoadPointStatusAggregatesAsync(
         AppDbContext db,
         IReadOnlyList<Guid> runIds,
@@ -229,6 +317,7 @@ public static class NdRunEnrichmentHelper
                     CASE
                       WHEN final_status IN ('compliant','partial_compliant','non_compliant') THEN final_status
                       WHEN landing_ai_status IN ('compliant','partial_compliant','non_compliant') THEN landing_ai_status
+                      WHEN google_ai_status IN ('compliant','partial_compliant','non_compliant') THEN google_ai_status
                       ELSE NULL
                     END AS effective_status
                   FROM analysis_points
@@ -248,8 +337,11 @@ public static class NdRunEnrichmentHelper
         return result;
     }
 
-    /// <summary>Prefer dual-verify final status; fall back to Landing AI status for in-progress runs.</summary>
-    public static string? EffectiveComplianceStatus(string? finalStatus, string? landingAiStatus)
+    /// <summary>Prefer dual-verify final status; fall back to Landing / LLM pass for in-progress runs.</summary>
+    public static string? EffectiveComplianceStatus(
+        string? finalStatus,
+        string? landingAiStatus,
+        string? googleAiStatus = null)
     {
         if (!string.IsNullOrWhiteSpace(finalStatus)
             && finalStatus is "compliant" or "partial_compliant" or "non_compliant")
@@ -258,6 +350,10 @@ public static class NdRunEnrichmentHelper
         if (!string.IsNullOrWhiteSpace(landingAiStatus)
             && landingAiStatus is "compliant" or "partial_compliant" or "non_compliant")
             return landingAiStatus;
+
+        if (!string.IsNullOrWhiteSpace(googleAiStatus)
+            && googleAiStatus is "compliant" or "partial_compliant" or "non_compliant")
+            return googleAiStatus;
 
         return null;
     }

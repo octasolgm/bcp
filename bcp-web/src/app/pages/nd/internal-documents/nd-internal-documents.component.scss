@@ -1,3 +1,11 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 .filter-pills.tabs {
   display: flex;
   gap: 0.5rem;
@@ -31,6 +39,10 @@
 .table-wrap {
   padding: 0;
   overflow-x: auto;
+
+  &.table-scroll-body {
+    overflow: auto;
+  }
 
   table {
     width: 100%;

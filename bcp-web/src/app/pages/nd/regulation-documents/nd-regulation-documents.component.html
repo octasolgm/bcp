@@ -1,6 +1,43 @@
-<div class="page-header">
-  <div>
-    <h1>{{ showDeleted ? 'Deleted regulations' : 'Regulation Docs Library' }}</h1>
+<div class="nd-catalog-page">
+<div class="page-header page-header--catalog">
+  <div class="page-header-title-block">
+    <div class="page-header-row">
+      <h1>{{ showDeleted ? 'Deleted regulations' : 'Regulation Docs Library' }}</h1>
+      @if (canUpload || canViewDeleted) {
+        <div class="header-actions">
+          @if (canUpload && !showDeleted) {
+            <label class="upload-dept">
+              <span class="upload-dept-label">Department</span>
+              <select class="upload-dept-select" [(ngModel)]="uploadDept" name="uploadDept" aria-label="Department for upload">
+                <option value="">Uncategorized</option>
+                @for (d of departments; track d.id) {
+                  <option [value]="d.id">{{ d.name }}</option>
+                }
+              </select>
+            </label>
+            <button type="button" class="btn-secondary btn-refresh" (click)="loadDocs()" [disabled]="loading">
+              <span>Refresh</span>
+              <svg class="btn-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+                <path d="M21 3v6h-6"/>
+              </svg>
+            </button>
+            <button type="button" class="btn-primary" [disabled]="uploading" (click)="uploadInput.click()">
+              {{ uploading ? 'Uploading…' : '+ Upload regulation' }}
+            </button>
+            <input #uploadInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
+          } @else {
+            <button type="button" class="btn-secondary btn-refresh" (click)="loadDocs()" [disabled]="loading">
+              <span>Refresh</span>
+              <svg class="btn-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+                <path d="M21 3v6h-6"/>
+              </svg>
+            </button>
+          }
+        </div>
+      }
+    </div>
     <p class="subtitle">
       @if (showDeleted) {
         Soft-deleted regulations are hidden from the library but kept in the database — extraction credits and points are preserved. Restore to make them visible again.
@@ -9,50 +46,62 @@
       }
     </p>
   </div>
-  @if (canUpload || canViewDeleted) {
-  <div class="header-actions">
-    @if (canUpload && !showDeleted) {
-      <label class="upload-dept field">
-        <span>Department</span>
-        <select [(ngModel)]="uploadDept" name="uploadDept">
-          <option value="">Uncategorized</option>
-          @for (d of departments; track d.id) {
-            <option [value]="d.id">{{ d.name }}</option>
-          }
-        </select>
-      </label>
-      <button type="button" class="btn-secondary" (click)="loadDocs()" [disabled]="loading">Refresh</button>
-      <button type="button" class="btn-primary" [disabled]="uploading" (click)="uploadInput.click()">
-        {{ uploading ? 'Uploading…' : '+ Upload regulation' }}
-      </button>
-      <input #uploadInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
-    } @else {
-      <button type="button" class="btn-secondary" (click)="loadDocs()" [disabled]="loading">Refresh</button>
-    }
-  </div>
-  }
 </div>
 
 <div class="nd-fill-panel reg-docs-fill">
 @if (!showDeleted) {
-<div class="filter-pills nd-list-toolbar nd-shrink point-search-toolbar">
-  <input
-    type="search"
-    class="filter-search point-global-search"
-    [(ngModel)]="globalPointSearch"
-    (ngModelChange)="onGlobalPointSearch($event)"
-    placeholder="Search points across all files (e.g. 3.2.1, liquidity)…"
-    aria-label="Search regulation points across all files"
-  />
+<div class="filter-pills nd-list-toolbar nd-shrink reg-docs-toolbar">
+  <div class="point-search-wrap">
+    <input
+      type="search"
+      class="filter-search point-global-search"
+      [(ngModel)]="globalPointSearch"
+      (ngModelChange)="onGlobalPointSearch($event)"
+      placeholder="Search points across all files (e.g. 3.2.1, liquidity)…"
+      aria-label="Search regulation points across all files"
+      [attr.aria-busy]="pointSearchLoading"
+    />
+    @if (pointSearchLoading) {
+      <span class="point-search-spinner" aria-hidden="true"></span>
+      <span class="point-search-loading-label">Searching…</span>
+    }
+  </div>
   @if (globalPointSearch.trim().length >= 2) {
     <button type="button" class="filter-clear" (click)="clearGlobalPointSearch()">Clear point search</button>
+  }
+  @if (!loading && docs.length) {
+    <input
+      type="search"
+      class="filter-search reg-doc-search"
+      [(ngModel)]="searchQuery"
+      placeholder="Search regulations…"
+      aria-label="Search regulations"
+    />
+    <select class="filter-select" [(ngModel)]="deptFilter" (ngModelChange)="onFiltersChange()">
+      <option value="">All departments</option>
+      @for (d of departments; track d.id) {
+        <option [value]="d.id">{{ d.name }}</option>
+      }
+    </select>
+    <select class="filter-select" [(ngModel)]="statusFilter" (ngModelChange)="onFiltersChange()">
+      <option value="">All statuses</option>
+      <option value="extracted">Extracted</option>
+      <option value="pending">Pending</option>
+    </select>
+    <span class="filter-count">{{ visibleDocs.length }} of {{ docs.length }}</span>
+    @if (hasActiveFilters) {
+      <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+    }
   }
 </div>
 
 @if (globalPointSearch.trim().length >= 2) {
   <div class="point-search-results nd-shrink card-surface">
     @if (pointSearchLoading) {
-      <p class="muted-loading">Searching points in all regulation files…</p>
+      <div class="point-search-loading-row">
+        <span class="point-search-spinner" aria-hidden="true"></span>
+        <p class="muted-loading">Searching points in all regulation files…</p>
+      </div>
     } @else if (pointSearchError) {
       <p class="muted-loading point-search-error">{{ pointSearchError }}</p>
     } @else if (!pointSearchResults.length) {
@@ -115,33 +164,6 @@
 }
 }
 
-@if (!loading && docs.length) {
-<div class="filter-pills nd-list-toolbar nd-shrink">
-  <input
-    type="search"
-    class="filter-search"
-    [(ngModel)]="searchQuery"
-    placeholder="Search regulations…"
-    aria-label="Search regulations"
-  />
-  <select class="filter-select" [(ngModel)]="deptFilter" (ngModelChange)="onFiltersChange()">
-    <option value="">All departments</option>
-    @for (d of departments; track d.id) {
-      <option [value]="d.id">{{ d.name }}</option>
-    }
-  </select>
-  <select class="filter-select" [(ngModel)]="statusFilter" (ngModelChange)="onFiltersChange()">
-    <option value="">All statuses</option>
-    <option value="extracted">Extracted</option>
-    <option value="pending">Pending</option>
-  </select>
-  <span class="filter-count">{{ visibleDocs.length }} of {{ docs.length }}</span>
-  @if (hasActiveFilters) {
-    <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
-  }
-</div>
-}
-
 @if (message) {
   <div class="alert success nd-shrink">{{ message }}</div>
 }
@@ -173,7 +195,7 @@
         <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
       </div>
     } @else {
-      <div class="card-surface table-wrap">
+      <div class="card-surface table-wrap table-scroll-body">
         <table>
           <thead>
             <tr>
