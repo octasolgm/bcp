@@ -1,5 +1,9 @@
 import type { AnalysisRunSummary } from './types';
 import { isPulledBackRun, normalizeRunStatus } from './run-status';
+import {
+  ndExecutionAnalysisRoute,
+  type NdAnalysisRunLinkOpts,
+} from './demo-analysis-routes';
 
 export type NdRouteTarget = {
   routerLink: string[];
@@ -92,7 +96,13 @@ export function isAnalysisRunAwaitingReview(status: string): boolean {
  */
 export function analysisRunNeedsExecutionView(run: AnalysisRunSummary): boolean {
   const s = (run.status ?? '').toLowerCase();
-  if (['submitted_for_review', 'checker_approved', 'reviewer_approved', 'pulled_back'].includes(s)) {
+  if (
+    s === 'cancelled' ||
+    ['submitted_for_review', 'checker_approved', 'reviewer_approved', 'pulled_back'].includes(s)
+  ) {
+    return false;
+  }
+  if (s === 'completed' || s === 'dual_verify_failed' || s === 'landing_ai_complete') {
     return false;
   }
   if (isAnalysisRunInProgress(s)) return true;
@@ -110,6 +120,7 @@ export function analysisRunNeedsExecutionView(run: AnalysisRunSummary): boolean 
 export function ndAnalysisRunLink(
   run: AnalysisRunSummary,
   role?: string | null,
+  opts?: NdAnalysisRunLinkOpts,
 ): string[] {
   const status = normalizeRunStatus(run.status);
   if (role === 'checker') {
@@ -132,7 +143,7 @@ export function ndAnalysisRunLink(
   }
 
   if (analysisRunNeedsExecutionView(run)) {
-    return ['/nd/analyse-v8'];
+    return ndExecutionAnalysisRoute(run, opts?.demoViewer ?? false);
   }
 
   if (!isLegacyAnalysisRun(run)) {
@@ -152,6 +163,7 @@ export function ndAnalysisRunLink(
 export function ndAnalysisRunQuery(
   run: AnalysisRunSummary,
   role?: string | null,
+  opts?: NdAnalysisRunLinkOpts,
 ): Record<string, string> | undefined {
   const status = normalizeRunStatus(run.status);
   if (role === 'checker') {
@@ -198,10 +210,11 @@ export function ndAnalysisRunQuery(
 export function ndAnalysisRunTarget(
   run: AnalysisRunSummary,
   role?: string | null,
+  opts?: NdAnalysisRunLinkOpts,
 ): NdRouteTarget {
   return {
-    routerLink: ndAnalysisRunLink(run, role),
-    queryParams: ndAnalysisRunQuery(run, role),
+    routerLink: ndAnalysisRunLink(run, role, opts),
+    queryParams: ndAnalysisRunQuery(run, role, opts),
   };
 }
 

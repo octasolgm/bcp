@@ -4,6 +4,7 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -11,16 +12,21 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 [Route("nd/checker")]
 public class CheckerController(
     AppDbContext db,
-    SupabaseJwtValidator jwt) : NdControllerBase
+    SupabaseJwtValidator jwt,
+    NdDemoUserDirectory demoDirectory) : NdControllerBase
 {
     [HttpGet("queue")]
     public async Task<IActionResult> Queue(CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "checker", "reviewer");
+        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "checker", "reviewer");
         if (error != null) return error;
 
-        var runs = await db.NdAnalysisRuns.AsNoTracking()
-            .Where(r => r.Status == "submitted_for_review")
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var runsQ = db.NdAnalysisRuns.AsNoTracking()
+            .Where(r => r.Status == "submitted_for_review");
+        if (demoCtx.Enabled)
+            runsQ = NdDemoDataFilters.ApplyToAnalysisRuns(runsQ, demoCtx);
+        var runs = await runsQ
             .OrderByDescending(r => r.SubmittedToCheckerAt)
             .ToListAsync(ct);
 
@@ -30,11 +36,15 @@ public class CheckerController(
     [HttpGet("history")]
     public async Task<IActionResult> History(CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "checker");
+        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "checker");
         if (error != null) return error;
 
-        var runs = await db.NdAnalysisRuns.AsNoTracking()
-            .Where(r => r.Status == "checker_approved" || r.Status == "reviewer_approved")
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var runsQ = db.NdAnalysisRuns.AsNoTracking()
+            .Where(r => r.Status == "checker_approved" || r.Status == "reviewer_approved");
+        if (demoCtx.Enabled)
+            runsQ = NdDemoDataFilters.ApplyToAnalysisRuns(runsQ, demoCtx);
+        var runs = await runsQ
             .OrderByDescending(r => r.CheckerReviewedAt ?? r.UpdatedAt)
             .Take(50)
             .ToListAsync(ct);

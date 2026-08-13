@@ -20,7 +20,7 @@ import type {
   PointSnapshot,
   InternalDocument,
 } from '../../../lib/nd/types';
-import { parseReferenceComplianceBlock } from '../../../lib/ai-lab/parse-reference-response';
+import { parseReferenceComplianceBlock, resolvePolicyExtractText } from '../../../lib/ai-lab/parse-reference-response';
 import type { GapSeverity, GapItemData } from '../../services/reguliq-store';
 import { parsePointSnapshot, normalizePointSnapshotLabels, hydratePointSnapshotFromGov, resolveSnapshotDisplayNumber, resolveRunPointDisplayMeta, isUuidLike, type RunPointDisplayMeta } from '../../../lib/nd/utils';
 import {
@@ -28,14 +28,21 @@ import {
   formatSectionGroupLabel,
   isJunkExtractPointId,
   resolveGovPointDisplayNumber,
+  resolveGovPointListTitle,
+  type GovPointWithNumber,
 } from '../../../lib/gov-point-filter';
 import { ndComplianceSummaryFromPoints } from '../../../lib/nd/nd-run-display';
-import { countDisplayGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
+import {
+  policySnippetFromAnalysisPoint,
+  railConfidenceForCoverageStatus,
+} from '../../../lib/nd/analysis-point-rail-meta';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus } from '../../../lib/nd/action-item-review';
 import { tempCommentsForPoint, type TempPointReviewComment, type TempReviewCommentsChangeEvent } from '../../../lib/nd/temp-point-review-comment';
 import { canAddActionItemReviews, isReviewRole, reviewDisabledHint } from '../../../lib/nd/nd-review-run-helpers';
+import { normalizeRunStatus } from '../../../lib/nd/run-status';
 import {
   resolveAnalysisPointSeverity,
+  resolveDisplayConfidence,
   resolvePointComplianceLabel,
   type ComplianceSeverity,
 } from '../../../lib/nd/point-compliance-status';
@@ -45,6 +52,7 @@ import { sortByPointRef } from '../../../lib/nd/list-utils';
 import {
   buildLibraryPointHierarchy,
   buildLibraryStoredPointDisplay,
+  buildRegulationDocPointDisplay,
   formatStoredAnalyseMeta,
   mapLibrarySnapshotToSourced,
   prepareLibraryPointsForAnalysis,
@@ -56,11 +64,18 @@ import {
   type LibraryPointDisplayTree,
   type SourcedGovPoint,
 } from '../../../lib/library-points-utils';
-import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
 import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
 import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints, exportRegulGapAnalysisExcelFromPoints } from '../../../lib/nd/export/gap-analysis-export';
+import {
+  DEMO_CBUAE_ANALYSIS_POINT_COUNT,
+  DEMO_CBUAE_SEED_CLAUSES,
+  matchGovPointsToDemoCbuaeScope,
+  normalizeDemoClauseKey,
+  buildDemoCbuaeJudgmentKeySet,
+} from '../../../lib/nd/demo-cbuae-seed-clauses';
+import { countDisplayGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
 
 type PointsSource = 'regulation' | 'library';
 
@@ -98,8 +113,22 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   @ViewChild('workspaceEl') workspaceEl?: ElementRef<HTMLElement>;
   @ViewChild('gapReportEl') gapReportEl?: ElementRef<HTMLElement>;
+  @ViewChild('clauseReviewEl') clauseReviewEl?: ElementRef<HTMLElement>;
 
-  private readonly ndAuth = inject(NdAuthService);
+  get isDemoViewer(): boolean {
+    return this.ndAuth.isDemoViewer();
+  }
+  /** Demo: background draft run prep (does not block clause confirm). */
+  demoRunPreparing = false;
+  private demoRunPrepPromise: Promise<boolean> | null = null;
+  private demoAnalysingPreviewTimer: ReturnType<typeof setInterval> | null = null;
+  private demoAnalysingPreviewBatchEnd = 0;
+  private demoPreviewAnimating = false;
+  private demoPreviewFinishScheduled = false;
+  private static readonly DEMO_ANALYSING_PREVIEW_MS_PER_POINT = 650;
+  private static readonly DEMO_ANALYSING_PREVIEW_BATCH = 6;
+  /** Bumped after run completes so embedded gap report reloads fresh results. */
+  gapEmbedReloadToken = 0;
   workflowLoading = false;
   /** Include Regul.ai qualitative assessment phase when running analysis. */
   enableQualitativeAssessment = false;
@@ -139,7 +168,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     pointContent: string;
   }> = [];
   ndRunPointsByNumber = new Map<string, AnalysisPoint>();
-  ndRunStatus = '';
+  override ndRunStatus = '';
   resultEditingPointId: string | null = null;
   resultCapSavingPointId: string | null = null;
   resultHistory: ActionPlanHistoryEntry[] = [];
@@ -188,6 +217,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   ndInternalParseStatus = new Map<string, string>();
   /** Loaded from GET /nd/results — same source as gap-analysis. */
   private ndRunPointsList: AnalysisPoint[] = [];
+  /** Unmasked run points for stable rail preview while demo run is in flight. */
+  private ndRunPointsSourceList: AnalysisPoint[] = [];
+  private ndRunPointsSourceByKey = new Map<string, AnalysisPoint>();
 
   override readonly formatChapterLabel = formatChapterLabel;
   override readonly formatSectionGroupLabel = formatSectionGroupLabel;
@@ -202,6 +234,12 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return this.libraries.filter((lib) => lib.name.toLowerCase().includes(q));
   }
 
+  protected override shouldUseLiteAnalysisRunLoad(): boolean {
+    // Demo result panel needs full landingAiResult (policy extract, confidence, CAP).
+    if (this.ndAuth.isDemoViewer()) return false;
+    return super.shouldUseLiteAnalysisRunLoad();
+  }
+
   override ngOnInit(): void {
     this.ndWorkflowEngine = this.regulWorkflowEngineId;
     this.refreshNdShellState();
@@ -211,7 +249,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       void this.ensureLibrariesLoaded();
       void this.refreshRegulWorkflowLlmSummary();
     }
-    if (this.activeNdRunId) void this.loadNdRunPoints(this.activeNdRunId);
+    const pendingRun = this.route.snapshot.queryParamMap.get('run');
+    if (this.activeNdRunId && !pendingRun) {
+      void this.loadNdRunPoints(this.activeNdRunId);
+    }
 
     this.navSub = this.router.events
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
@@ -225,7 +266,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   private refreshNdShellState(): void {
-    this.isNdShell = this.isUnderNdRoute() || this.currentPathname().startsWith('/nd/');
+    this.isNdShell = this.isNdShellRoute() || this.currentPathname().startsWith('/nd/');
     this.useNdRegulationCatalog = this.isNdShell;
   }
 
@@ -235,22 +276,22 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       this.regulWorkflowLlmSummary = '';
       return;
     }
-    this.regulWorkflowLlmSummary = `${res.data.providerLabel} · ${res.data.model}`;
+    this.regulWorkflowLlmSummary = (res.data.model ?? '').trim();
   }
 
   protected regulRunConfirmHint(): string {
-    const llm = this.regulWorkflowLlmSummary || 'admin-selected LLM';
+    const model = this.regulWorkflowLlmSummary || 'admin-selected model';
     const qual = this.enableQualitativeAssessment
       ? 'Forward + reverse + qualitative assessment.'
       : 'Forward + reverse coverage (qualitative skipped).';
-    return `Regul workflow using ${llm}. ${qual} Type start to confirm.`;
+    return `Regul workflow using ${model}. ${qual} Type start to confirm.`;
   }
 
   get needsComplianceDocumentSelection(): boolean {
     return this.selectedComplianceIds.size === 0 && !this.complianceFile;
   }
 
-  private isUnderNdRoute(): boolean {
+  private isNdShellRoute(): boolean {
     let route: ActivatedRouteSnapshot | null = this.route.snapshot;
     while (route) {
       if (route.routeConfig?.path === 'nd') return true;
@@ -352,6 +393,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   get allPointsSelected(): boolean {
+    if (this.isDemoViewer) {
+      const scoped = this.demoSelectablePointIds();
+      return scoped.length > 0 && scoped.every((id) => this.selected.has(id));
+    }
     const pool = this.selectableRegulationPoints();
     return pool.length > 0 && pool.every((p) => this.selected.has(p.point_id));
   }
@@ -362,6 +407,13 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override selectAll(): void {
+    if (this.isDemoViewer) {
+      const scoped = this.matchDemoScopedGovIdsFromPool();
+      if (scoped.length) {
+        this.selected = new Set(scoped);
+        return;
+      }
+    }
     if (this.pointsSource === 'regulation' && this.rawGovPoints.length) {
       this.selected = new Set(this.rawGovPoints.map((p) => p.point_id));
       return;
@@ -385,8 +437,35 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     selectionOnly?: Set<string> | null,
     regulationDisplayDocs?: LibraryPointDisplayDoc[],
   ): void {
+    if (this.isDemoViewer && points.length) {
+      points = this.filterGovPointsToDemoScope(points);
+      if (regulationDisplayDocs?.length) {
+        regulationDisplayDocs = this.rebuildDemoRegulationDisplayDocs(
+          points as SourcedGovPoint[],
+          regulationDisplayDocs,
+        );
+      } else if (this.useNdRegulationCatalog && this.selectedRegDocs.length) {
+        const doc = this.selectedRegDocs[0];
+        const scopedSet = new Set(points.map((p) => p.point_id));
+        const display = buildRegulationDocPointDisplay(
+          points as SourcedGovPoint[],
+          doc.isNdManual === true,
+          scopedSet,
+        );
+        regulationDisplayDocs = [
+          {
+            key: doc.id,
+            docId: doc.id,
+            docName: doc.title || doc.originalFileName || 'Regulation document',
+            ...display,
+          },
+        ];
+      }
+    }
     super.applyGovPoints(points, note, selectionOnly, regulationDisplayDocs);
-    if (this.pointsSource === 'regulation' && !selectionOnly?.size) {
+    if (this.isDemoViewer && this.pointsSource === 'regulation' && !selectionOnly?.size) {
+      this.selectAll();
+    } else if (this.pointsSource === 'regulation' && !selectionOnly?.size) {
       this.selected = new Set();
     }
   }
@@ -588,19 +667,58 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override get selectedCount(): number {
-    if (this.pointsSource === 'regulation' && this.rawGovPoints.length) {
+    if (this.isDemoViewer) {
+      return this.demoSelectedIdsForDisplay().length;
+    }
+    if (this.pointsSource === 'regulation') {
+      if (!this.selectedRegFileCount || !this.rawGovPoints.length) return 0;
       return this.comparableSelectedIds().length;
     }
     return super.selectedCount;
   }
 
   get regulationPointPoolCount(): number {
+    if (this.isDemoViewer) {
+      const scoped = this.demoSelectablePointIds();
+      if (scoped.length) return scoped.length;
+      if (this.regulClauseRows.length) return this.regulClauseRows.length;
+      return DEMO_CBUAE_ANALYSIS_POINT_COUNT;
+    }
     return this.pointsSource === 'regulation' && this.rawGovPoints.length
       ? this.rawGovPoints.length
       : this.govPoints.length;
   }
 
+  override regPointsFootnote(): string {
+    if (!this.isDemoViewer) return super.regPointsFootnote();
+    if (!this.govPoints.length || this.useLibraryPoints) return '';
+    return `${this.regulationPointPoolCount} demo clause${this.regulationPointPoolCount === 1 ? '' : 's'} for gap analysis`;
+  }
+
+  displayDocAnalyseCount(doc: LibraryPointDisplayDoc): number {
+    if (!this.isDemoViewer) return doc.analyseCount;
+    if (doc.useChapters) {
+      return doc.chapters.reduce((n, ch) => n + this.displayChapterAnalyseCount(ch), 0);
+    }
+    return doc.flatRows.filter((r) => r.forAnalysis).length;
+  }
+
+  displayChapterAnalyseCount(ch: LibraryPointDisplayChapter): number {
+    if (!this.isDemoViewer) return ch.analyseCount;
+    return this.displayChapterAnalyseRows(ch).filter((r) => r.forAnalysis).length;
+  }
+
   override displayDocSelectedCount(doc: LibraryPointDisplayDoc): number {
+    if (this.isDemoViewer) {
+      const scopedSet = new Set(this.demoSelectablePointIds());
+      if (doc.useChapters) {
+        return doc.chapters.reduce((n, ch) => n + this.displayChapterSelectedCount(ch), 0);
+      }
+      return doc.flatRows.filter((r) => {
+        const pid = this.selectableRegPointId(r);
+        return pid != null && scopedSet.has(pid) && this.selected.has(pid);
+      }).length;
+    }
     if (this.pointsSource === 'library') return super.displayDocSelectedCount(doc);
     if (doc.useChapters) {
       return doc.chapters.reduce((n, ch) => n + this.displayChapterSelectedCount(ch), 0);
@@ -612,6 +730,13 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override displayChapterSelectedCount(ch: LibraryPointDisplayChapter): number {
+    if (this.isDemoViewer) {
+      const scopedSet = new Set(this.demoSelectablePointIds());
+      return this.displayChapterAnalyseRows(ch).filter((r) => {
+        const pid = this.selectableRegPointId(r);
+        return pid != null && scopedSet.has(pid) && this.selected.has(pid);
+      }).length;
+    }
     if (this.pointsSource === 'library') return super.displayChapterSelectedCount(ch);
     return this.displayChapterAnalyseRows(ch).filter((r) => {
       const pid = this.selectableRegPointId(r);
@@ -661,7 +786,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   protected override onNdRunSaved(runId: string): void {
     void this.loadNdRunPoints(runId).then(() => {
+      this.mergeDemoGovSelectionSession(true);
       this.ndRunStatus = this.ndRunWorkflowStatus || 'completed';
+      this.cdr.markForCheck();
     });
   }
 
@@ -674,9 +801,23 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     for (const key of this.sessionLookupKeysForPointId(pointId)) {
       const saved = this.ndRunPointsByNumber.get(key);
       if (saved) {
+        const session = this.resolveSessionPoint(pointId);
+        const sessionMsg = (session?.landingMessage ?? session?.llmMessage ?? '').trim();
+        const rawLanding = saved.landingAiResult?.trim() ?? '';
+        const hasUsefulLanding =
+          rawLanding.length > 80 && rawLanding.includes('Output/Response');
+        if (!hasUsefulLanding && sessionMsg) {
+          break;
+        }
+        const hasPersistedResult = Boolean(rawLanding || saved.googleAiResult?.trim());
+        if (
+          !hasPersistedResult &&
+          (session?.landingMessage || session?.llmMessage)
+        ) {
+          break;
+        }
         // Prefer session-built view when the saved row isn't scored yet but session has output
         if (!resolveAnalysisPointSeverity(saved)) {
-          const session = this.resolveSessionPoint(pointId);
           if (session?.landingMessage || session?.llmMessage) {
             break;
           }
@@ -765,14 +906,19 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   private isRegulatoryAnalysisPoint(p: AnalysisPoint): boolean {
-    if (!p.regulationPointId) return false;
     const clause = parsePointSnapshot(p.pointSnapshot).pointNumber?.trim() ?? '';
     if (clause.toUpperCase().startsWith('INT')) return false;
-    return true;
+    if (p.regulationPointId) return true;
+    if (clause.length > 0) return true;
+    const snap = parsePointSnapshot(p.pointSnapshot) as Record<string, unknown>;
+    const pid = String(snap['pointId'] ?? snap['regulationPointId'] ?? p.regulationPointId ?? '').trim();
+    return pid.length > 0 && this.looksLikeUuid(pid);
   }
 
   protected override filterPointsForRunScope(points: AnalysisPoint[]): AnalysisPoint[] {
-    return points.filter((p) => this.isRegulatoryAnalysisPoint(p));
+    const reg = points.filter((p) => this.isRegulatoryAnalysisPoint(p));
+    if (this.isDemoViewer) return this.filterAnalysisPointsToDemoSeedScope(reg);
+    return reg;
   }
 
   /** Points in the current run that match checkbox selection (or active session scope). */
@@ -783,7 +929,17 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   /** Selected regulatory clauses only — excludes INT reverse rows from the analysing list. */
   private ndRegulatoryPointsInScope(): AnalysisPoint[] {
-    return this.ndRunPointsInScope().filter((p) => this.isRegulatoryAnalysisPoint(p));
+    const reg = this.ndRunPointsInScope().filter((p) => this.isRegulatoryAnalysisPoint(p));
+    if (!this.isDemoViewer) return reg;
+    return this.filterAnalysisPointsToDemoSeedScope(reg);
+  }
+
+  private filterAnalysisPointsToDemoSeedScope(points: AnalysisPoint[]): AnalysisPoint[] {
+    const keys = buildDemoCbuaeJudgmentKeySet();
+    return points.filter((p) => {
+      const num = parsePointSnapshot(p.pointSnapshot).pointNumber?.trim() ?? '';
+      return num.length > 0 && keys.has(normalizeDemoClauseKey(num));
+    });
   }
 
   private regulatoryGovKeysFromSnapshot(): Set<string> {
@@ -810,12 +966,516 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     selected: boolean;
     displayId: string;
   }> {
-    return this.coverageRows.filter(
-      (r) =>
-        r.selected &&
-        !r.displayId?.toUpperCase().startsWith('INT') &&
-        !r.pointId.toUpperCase().startsWith('INT'),
+    const scope = this.runScopeGovKeys();
+    return this.coverageRows.filter((r) => {
+      if (r.displayId?.toUpperCase().startsWith('INT') || r.pointId.toUpperCase().startsWith('INT')) {
+        return false;
+      }
+      if (scope.size) {
+        return (
+          scope.has(r.pointId) ||
+          (r.displayId && scope.has(r.displayId))
+        );
+      }
+      return r.selected;
+    });
+  }
+
+  /** Demo analysing list — keyed to run scope, not checkbox state alone. */
+  private demoAnalysingScopeIds(): string[] {
+    const scope = this.runScopeGovKeys();
+    const ordered = new Set<string>();
+    for (const g of this.govPoints) {
+      const pid = g.point_id;
+      const canon = this.resolveCanonicalRegPointId(pid) ?? pid;
+      const num = resolveGovPointDisplayNumber(g as SourcedGovPoint);
+      if (
+        scope.has(pid) ||
+        scope.has(canon) ||
+        (num && scope.has(num)) ||
+        (g.section?.trim() && scope.has(g.section.trim()))
+      ) {
+        ordered.add(pid);
+      }
+    }
+    if (ordered.size) return [...ordered];
+
+    if (this.ndRunPointsList.length) {
+      for (const p of this.ndRegulatoryPointsInScope()) {
+        const meta = this.metaForAnalysisPoint(p);
+        if (meta.govKey && !meta.govKey.toUpperCase().startsWith('INT')) {
+          ordered.add(meta.govKey);
+        }
+      }
+      if (ordered.size) return [...ordered];
+    }
+
+    if (this.sessionSelectedPointIds?.size) {
+      return [...this.sessionSelectedPointIds].filter((k) => !k.toUpperCase().startsWith('INT'));
+    }
+    return this.demoSelectedRegulationIds();
+  }
+
+  private demoAnalysingRowForGovId(id: string): {
+    pointId: string;
+    title: string;
+    status: string;
+    selected: boolean;
+    displayId: string;
+  } {
+    const gov =
+      this.govPointForAnalysis(id) ?? this.govPoints.find((g) => g.point_id === id);
+    let displayId = gov
+      ? resolveGovPointDisplayNumber(gov as SourcedGovPoint)
+      : this.analysingDisplayId(id);
+    let title = gov ? resolveGovPointListTitle(gov as GovPointWithNumber) : '';
+
+    if (!title || !displayId) {
+      const ap = this.analysisPointForPointId(id);
+      if (ap) {
+        const meta = this.metaForAnalysisPoint(ap);
+        const snap = parsePointSnapshot(ap.pointSnapshot);
+        if (!displayId) displayId = meta.clause || snap.pointNumber || id;
+        if (!title) title = snap.pointTitle || meta.title || displayId || id;
+      }
+    }
+    if (!title) {
+      const clauseRow = this.regulClauseRows.find(
+        (r) => r.pointId === id || r.pointNumber === id || r.pointNumber === displayId,
+      );
+      if (clauseRow) {
+        if (!displayId) displayId = clauseRow.pointNumber || id;
+        title = clauseRow.pointTitle || clauseRow.pointNumber || id;
+      }
+    }
+    if (!title) title = displayId || id;
+    if (!displayId) displayId = id;
+
+    const status = this.demoRowCoverageStatus(id, displayId);
+    return {
+      pointId: id,
+      title,
+      status,
+      selected: true,
+      displayId,
+    };
+  }
+
+  /** Demo run still simulating queued → running → done (not settled). */
+  private isDemoRunInFlight(): boolean {
+    if (!this.isDemoViewer) return false;
+    if (this.demoPreviewAnimating) return true;
+    const run = (this.ndRunStatus || this.ndRunWorkflowStatus || '').toLowerCase();
+    if (run === 'completed' || run === 'cancelled') return false;
+    if (this.analysisState === 'running') return true;
+    if (
+      run === 'running' ||
+      run === 'processing' ||
+      run === 'queued' ||
+      run === 'draft'
+    ) {
+      const phase = (this.ndRegulPipelinePhase || '').toLowerCase();
+      if (phase && phase !== 'done') return true;
+      if (this.progressTotal > 0 && this.progressDone < this.progressTotal) return true;
+    }
+    return false;
+  }
+
+  protected override shouldPreserveDemoAnalyzingPreview(): boolean {
+    return this.isDemoViewer && this.demoPreviewAnimating;
+  }
+
+  private demoForwardStatusLabel(status: string): string {
+    const s = status.toLowerCase();
+    if (s === 'queued' || s === 'pending') return 'Queued';
+    if (s === 'running' || s === 'processing') return 'Running';
+    if (s === 'completed') return 'Done';
+    if (s === 'failed') return 'Failed';
+    if (s === 'cancelled') return 'Cancelled';
+    if (s === 'not-run') return 'Not run';
+    return this.formatCoverageStatus(status);
+  }
+
+  private demoForwardStatusClass(status: string): string {
+    const s = status.toLowerCase();
+    if (s === 'running' || s === 'processing') return 'fwd-running';
+    if (s === 'completed') return 'fwd-done';
+    if (s === 'failed' || s === 'cancelled') return 'fwd-failed';
+    if (s === 'queued' || s === 'pending') return 'fwd-queued';
+    return 'fwd-idle';
+  }
+
+  private maskDemoPendingRunPoints(points: AnalysisPoint[]): AnalysisPoint[] {
+    return points.map((p) => {
+      const landing = (p.landingAiStatus ?? '').toLowerCase();
+      if (landing === 'completed' || landing === 'failed') return p;
+      return {
+        ...p,
+        finalStatus: null,
+        landingAiResult: null,
+        googleAiResult: null,
+        regulForwardResult: null,
+        landingAiStatus:
+          landing === 'running' ? 'running' : 'pending',
+        dualVerifyStatus:
+          (p.dualVerifyStatus ?? '').toLowerCase() === 'running' ? 'running' : 'pending',
+        googleAiStatus: 'pending',
+      };
+    });
+  }
+
+  private demoRowCoverageStatus(id: string, displayId: string): string {
+    if (this.isDemoRunInFlight()) {
+      for (const key of this.sessionLookupKeysForPointId(id)) {
+        const s = (this.sessionPointStatus.get(key) ?? '').toLowerCase();
+        if (s === 'running' || s === 'processing') return s;
+        if (s === 'completed' || s === 'failed' || s === 'cancelled') return s;
+        if (s === 'queued' || s === 'pending') return 'queued';
+      }
+      return 'queued';
+    }
+    const resolved =
+      this.resolveSessionPointStatus(id) ?? this.resolveSessionPointStatus(displayId);
+    if (resolved) return resolved;
+    return 'not-run';
+  }
+
+  /** Compliance badges only after a point has finished forward judgment. */
+  analysingPointShowsCompliance(pointId: string): boolean {
+    const s = this.analysingPointCoverageStatus(pointId).toLowerCase();
+    return s === 'completed' || s === 'failed';
+  }
+
+  analysingPointCoverageStatus(pointId: string): string {
+    return this.demoRowCoverageStatus(pointId, this.analysingDisplayId(pointId));
+  }
+
+  analysisPointRailSource(pointId: string): AnalysisPoint | undefined {
+    for (const key of this.sessionLookupKeysForPointId(pointId)) {
+      const fromSource = this.ndRunPointsSourceByKey.get(key);
+      if (fromSource) return fromSource;
+    }
+    return this.analysisPointForPointId(pointId) ?? undefined;
+  }
+
+  analysingPointRailSeverity(pointId: string): GapSeverity | null {
+    const ap = this.analysisPointRailSource(pointId);
+    if (!ap) return null;
+    const uiStatus = this.analysingPointCoverageStatus(pointId).toLowerCase();
+    if (
+      this.isDemoRunInFlight() ||
+      uiStatus === 'completed' ||
+      uiStatus === 'failed'
+    ) {
+      return resolveAnalysisPointSeverity(ap) ?? null;
+    }
+    return null;
+  }
+
+  analysingPointRailGapCount(pointId: string): number {
+    const ap = this.analysisPointRailSource(pointId);
+    if (!ap) return 0;
+    const uiStatus = this.analysingPointCoverageStatus(pointId).toLowerCase();
+    if (
+      !this.isDemoRunInFlight() &&
+      uiStatus !== 'completed' &&
+      uiStatus !== 'failed'
+    ) {
+      return 0;
+    }
+    const sev = resolveAnalysisPointSeverity(ap);
+    if (!sev || sev === 'compliant') return 0;
+    return countDisplayGapsForAnalysisPoint(ap, this.attachmentsForPoint(pointId).length);
+  }
+
+  analysingPointRailShowsForwardChip(pointId: string): boolean {
+    if (!this.usesForwardOnlyRunUi()) return false;
+    return !this.analysingPointRailSeverity(pointId);
+  }
+
+  /** Forward chip only while queued / running — not when outcome is shown. */
+  analysingRowShowsForwardChip(pointId: string): boolean {
+    if (!this.usesForwardOnlyRunUi()) return false;
+    const s = this.demoRowCoverageStatus(pointId, this.analysingDisplayId(pointId)).toLowerCase();
+    return s !== 'completed' && s !== 'failed';
+  }
+
+  analysingForwardTileClass(pointId: string): string {
+    const s = this.demoRowCoverageStatus(pointId, this.analysingDisplayId(pointId)).toLowerCase();
+    if (s === 'running' || s === 'processing') return 'tile-running';
+    if (s === 'completed') return 'tile-done';
+    if (s === 'failed' || s === 'cancelled') return 'tile-failed';
+    if (s === 'queued' || s === 'pending') return 'tile-queued';
+    return 'tile-idle';
+  }
+
+  /** Condensed row meta for forward-only run points rail (matches gap-analysis list view). */
+  analysingPointRailMeta(pointId: string): {
+    policySnippet: string;
+    confidence: string;
+  } {
+    const ap = this.analysisPointRailSource(pointId);
+    const uiStatus = this.analysingPointCoverageStatus(pointId);
+    let policySnippet = '—';
+    if (ap) {
+      const raw = parsePointSnapshot(ap.pointSnapshot);
+      const gov = this.govPointForAnalysis(
+        ap.regulationPointId ?? raw.regulationPointId ?? ap.id ?? pointId,
+      );
+      const snap = hydratePointSnapshotFromGov(
+        raw,
+        gov,
+        ap.regulationPointId ?? raw.regulationPointId,
+      );
+      policySnippet = policySnippetFromAnalysisPoint(ap, snap.pointContent);
+    }
+    const confidence = railConfidenceForCoverageStatus(
+      uiStatus,
+      uiStatus === 'completed' ? ap : null,
     );
+    return { policySnippet, confidence };
+  }
+
+  private extractAiComplianceMessage(raw?: string | null): string {
+    if (!raw?.trim()) return '';
+    try {
+      const parsed = JSON.parse(raw) as { message?: string };
+      return parsed.message?.trim() ?? raw.trim();
+    } catch {
+      return raw.trim();
+    }
+  }
+
+  coverageTileClass(status: string): string {
+    const s = (status ?? '').toLowerCase();
+    if (s === 'running' || s === 'processing') return 'tile-running';
+    if (s === 'completed') return 'tile-done';
+    if (s === 'failed' || s === 'cancelled') return 'tile-failed';
+    if (s === 'queued' || s === 'pending') return 'tile-queued';
+    if (s === 'not-run') return 'tile-idle';
+    return 'tile-idle';
+  }
+
+  override forwardPointStatusLabel(pointId: string): string {
+    if (this.isDemoViewer) {
+      return this.demoForwardStatusLabel(
+        this.demoRowCoverageStatus(pointId, this.analysingDisplayId(pointId)),
+      );
+    }
+    return super.forwardPointStatusLabel(pointId);
+  }
+
+  override forwardPointStatusClass(pointId: string): string {
+    if (this.isDemoViewer) {
+      return this.demoForwardStatusClass(
+        this.demoRowCoverageStatus(pointId, this.analysingDisplayId(pointId)),
+      );
+    }
+    return super.forwardPointStatusClass(pointId);
+  }
+
+  protected override async launchNdAnalysisRunForwardOnly(
+    runId: string,
+    selectedIds: string[],
+  ): Promise<boolean> {
+    if (this.isDemoViewer) {
+      this.prepareDemoRunUiForLaunch(selectedIds);
+    }
+    const started = await super.launchNdAnalysisRunForwardOnly(runId, selectedIds);
+    if (started && this.isDemoViewer) {
+      this.mergeDemoGovSelectionSession(false);
+      this.startDemoAnalysingPreview();
+      this.syncRegulProgressSteps();
+      this.selectFirstDemoAnalysingPoint();
+      this.cdr.markForCheck();
+    }
+    return started;
+  }
+
+  /** Demo analysing list — staged queued → running → done (independent of fast API poll). */
+  private startDemoAnalysingPreview(): void {
+    this.stopDemoAnalysingPreview();
+    this.demoPreviewAnimating = true;
+    this.demoPreviewFinishScheduled = false;
+    const ids = this.demoAnalysingScopeIds();
+    if (!ids.length) {
+      this.demoPreviewAnimating = false;
+      return;
+    }
+
+    this.progressTotal = ids.length;
+    this.progressDone = 0;
+    this.demoAnalysingPreviewBatchEnd = Math.min(
+      AnalyseRegulComponent.DEMO_ANALYSING_PREVIEW_BATCH,
+      ids.length,
+    );
+
+    this.demoAnalysingPreviewTimer = setInterval(() => {
+      if (!this.demoPreviewAnimating) {
+        this.stopDemoAnalysingPreview();
+        return;
+      }
+      const scopeIds = this.demoAnalysingScopeIds();
+      if (!scopeIds.length) return;
+
+      if (this.demoAnalysingPreviewBatchEnd < scopeIds.length) {
+        this.demoAnalysingPreviewBatchEnd = Math.min(
+          this.demoAnalysingPreviewBatchEnd + AnalyseRegulComponent.DEMO_ANALYSING_PREVIEW_BATCH,
+          scopeIds.length,
+        );
+      }
+
+      this.applyDemoAnalysingPreviewToSession(scopeIds);
+      this.syncRegulProgressSteps();
+      this.cdr.markForCheck();
+    }, AnalyseRegulComponent.DEMO_ANALYSING_PREVIEW_MS_PER_POINT);
+
+    this.applyDemoAnalysingPreviewToSession(ids);
+    this.syncRegulProgressSteps();
+    this.cdr.markForCheck();
+  }
+
+  private ensureDemoAnalysingPreviewRunning(): void {
+    if (!this.demoAnalysingPreviewTimer) this.startDemoAnalysingPreview();
+    else this.applyDemoAnalysingPreviewToSession(this.demoAnalysingScopeIds());
+  }
+
+  private stopDemoAnalysingPreview(): void {
+    if (this.demoAnalysingPreviewTimer) {
+      clearInterval(this.demoAnalysingPreviewTimer);
+      this.demoAnalysingPreviewTimer = null;
+    }
+  }
+
+  private demoPointLandingStatus(id: string): string {
+    const ap = this.analysisPointForPointId(id);
+    return (ap?.landingAiStatus ?? '').toLowerCase();
+  }
+
+  private applyDemoAnalysingPreviewToSession(ids: string[]): void {
+    const batchSize = AnalyseRegulComponent.DEMO_ANALYSING_PREVIEW_BATCH;
+    const batchEnd = this.demoAnalysingPreviewBatchEnd;
+    const batchStart = Math.max(0, batchEnd - batchSize);
+    const allVisualDone = batchEnd >= ids.length;
+
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const landing = this.demoPointLandingStatus(id);
+      let status: string;
+      if (allVisualDone) {
+        status =
+          landing === 'failed' || landing === 'cancelled'
+            ? landing
+            : 'completed';
+      } else if (landing === 'completed' || landing === 'failed' || landing === 'cancelled') {
+        status = landing;
+      } else if (i < batchStart) {
+        status = 'completed';
+      } else if (i < batchEnd) {
+        status = 'running';
+      } else {
+        status = 'queued';
+      }
+      for (const key of this.sessionLookupKeysForPointId(id)) {
+        this.sessionPointStatus.set(key, status);
+      }
+    }
+
+    const done = allVisualDone
+      ? ids.length
+      : ids.filter((id, i) => {
+          const landing = this.demoPointLandingStatus(id);
+          return landing === 'completed' || landing === 'failed' || i < batchStart;
+        }).length;
+    this.progressDone = done;
+
+    if (allVisualDone && !this.demoPreviewFinishScheduled) {
+      this.demoPreviewFinishScheduled = true;
+      window.setTimeout(() => this.finishDemoPreviewAnimation(), 500);
+    }
+  }
+
+  private finishDemoPreviewAnimation(): void {
+    if (!this.demoPreviewAnimating) return;
+    this.demoPreviewAnimating = false;
+    this.stopDemoAnalysingPreview();
+
+    const ids = this.demoAnalysingScopeIds();
+    for (const id of ids) {
+      const landing = this.demoPointLandingStatus(id);
+      const status =
+        landing === 'failed' || landing === 'cancelled' ? landing : 'completed';
+      for (const key of this.sessionLookupKeysForPointId(id)) {
+        this.sessionPointStatus.set(key, status);
+      }
+    }
+
+    this.progressDone = ids.length;
+    this.progress = 100;
+
+    if (this.ndRunPointsSourceList.length) {
+      this.ndRunPointsList = [...this.ndRunPointsSourceList];
+      this.ndRunDetailPoints = this.ndRunPointsList;
+      this.indexNdRunPoints(this.ndRunPointsList);
+    }
+
+    const backendStatus = (this.ndRunStatus || this.ndRunWorkflowStatus || '').toLowerCase();
+    if (backendStatus === 'completed' || backendStatus === 'cancelled') {
+      this.analysisState = 'complete';
+      this.ndRunWorkflowStatus = backendStatus;
+      this.onAnalysisComplete();
+    } else {
+      this.analysisState = 'running';
+      this.syncRegulProgressSteps();
+    }
+
+    this.cdr.markForCheck();
+  }
+
+  private prepareDemoRunUiForLaunch(selectedIds: string[]): void {
+    this.demoPreviewAnimating = false;
+    this.demoPreviewFinishScheduled = false;
+    this.demoAnalysingPreviewBatchEnd = 0;
+    this.sessionPointCache.clear();
+    this.sessionPointResults.clear();
+    this.sessionPointStatus.clear();
+    for (const id of selectedIds) {
+      this.sessionPointStatus.set(id, 'queued');
+      this.selected.add(id);
+    }
+    this.progressTotal = selectedIds.length;
+    this.progressDone = 0;
+    this.progress = Math.max(10, Math.round((this.progressDone / Math.max(1, this.progressTotal)) * 100));
+    for (const p of this.ndRunPointsList) {
+      if (!this.isRegulatoryAnalysisPoint(p)) continue;
+      const meta = this.metaForAnalysisPoint(p);
+      const keys = [meta.govKey, meta.clause, p.id, p.regulationPointId ?? ''].filter(Boolean);
+      for (const key of keys) {
+        this.sessionPointStatus.set(key, 'queued');
+      }
+    }
+    if (this.ndRunPointsList.length) {
+      this.ndRunPointsList = this.maskDemoPendingRunPoints(this.ndRunPointsList);
+      this.ndRunDetailPoints = this.ndRunPointsList;
+      this.indexNdRunPoints(this.ndRunPointsList);
+    }
+    this.cdr.markForCheck();
+  }
+
+  private demoAnalysingScopeRows(): Array<{
+    pointId: string;
+    title: string;
+    status: string;
+    selected: boolean;
+    displayId: string;
+  }> {
+    const ids = this.demoAnalysingScopeIds();
+    return sortByPointRef(ids.map((id) => this.demoAnalysingRowForGovId(id)), (r) => r.displayId || r.pointId);
+  }
+
+  private selectFirstDemoAnalysingPoint(): void {
+    const first = this.analysingListRows[0];
+    if (first) this.selectPointForDetail(first.pointId);
   }
 
   private regulCoverageContext() {
@@ -868,6 +1528,58 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         this.ndRegulReverseSections.length > 0 ||
         this.regulReverseIntRows.length > 0)
     );
+  }
+
+  /** Middle column: live per-clause forward progress (V4 / demo). */
+  get showLiveProgressColumn(): boolean {
+    return this.analysisState === 'running' || (this.isDemoViewer && this.isDemoRunInFlight());
+  }
+
+  get showForwardClauseProgress(): boolean {
+    return (
+      this.usesForwardOnlyRunUi() &&
+      this.analysingListRows.length > 0 &&
+      (this.showLiveProgressColumn || this.analysisState === 'complete')
+    );
+  }
+
+  get forwardClauseProgressSummary(): string {
+    const done = this.analysingListDone;
+    const total = this.analysingListTotal;
+    if (!total) return 'Forward judgment';
+    const counts = this.analysingStatusCounts;
+    if (counts.running > 0 || counts.queued > 0) {
+      return `Forward judgment (${done}/${total} done · ${counts.running} running · ${counts.queued} queued)`;
+    }
+    return `Forward judgment (${done}/${total})`;
+  }
+
+  get forwardClauseProgressRows(): Array<{
+    displayId: string;
+    title: string;
+    status: string;
+    statusLabel: string;
+  }> {
+    return sortByPointRef(
+      this.analysingListRows.map((row) => ({
+        displayId: row.displayId || row.pointId,
+        title: row.title,
+        status: row.status,
+        statusLabel: this.formatForwardClauseProgressStatus(row.status),
+      })),
+      (r) => r.displayId,
+    );
+  }
+
+  formatForwardClauseProgressStatus(status: string): string {
+    const s = (status ?? '').toLowerCase();
+    if (s === 'queued' || s === 'pending') return 'Queued';
+    if (s === 'running' || s === 'processing') return 'Running';
+    if (s === 'completed') return 'Done';
+    if (s === 'failed') return 'Failed';
+    if (s === 'cancelled') return 'Cancelled';
+    if (s === 'not-run') return 'Not run';
+    return this.formatCoverageStatus(status);
   }
 
   get regulReverseProgressLabel(): string {
@@ -925,6 +1637,38 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   private syncRegulProgressSteps(): void {
+    if (this.usesForwardOnlyRunUi()) {
+      const running =
+        this.showLiveProgressColumn ||
+        this.isRegulPipelineInFlight() ||
+        (this.isDemoViewer && this.isDemoRunInFlight());
+      const total = this.analysingListTotal || this.progressTotal || 1;
+      const done = this.analysingListDone;
+      const runningCount = this.analysingStatusCounts.running;
+      this.analysisSteps.forEach((step, i) => {
+        if (i === 0) {
+          step.label = 'Clause review confirmed';
+          step.done = running || this.analysisState === 'complete';
+          step.active = false;
+        } else if (i === 1) {
+          step.label = `Forward judgment (${done}/${total})`;
+          step.done = !running && this.analysisState === 'complete';
+          step.active = running;
+        } else {
+          step.label = 'Finalizing results';
+          step.done = this.analysisState === 'complete';
+          step.active = false;
+        }
+      });
+      if (!running) {
+        this.progress = this.analysisState === 'complete' ? 100 : this.progress;
+        return;
+      }
+      const pct = 12 + Math.round(((done + runningCount * 0.45) / total) * 80);
+      this.progress = Math.min(95, Math.max(12, pct));
+      return;
+    }
+
     const phase = (this.ndRegulPipelinePhase || 'forward').toLowerCase();
     const running = this.isRegulPipelineInFlight();
     const labels = [
@@ -976,6 +1720,16 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   private runScopeGovKeys(): Set<string> {
     const fromSnapshot = this.regulatoryGovKeysFromSnapshot();
     if (fromSnapshot.size > 0 && this.ndRunId && this.ndRunStatus !== 'draft') {
+      if (
+        this.ndAuth.isDemoViewer() &&
+        (this.sessionSelectedPointIds?.size ?? 0) > fromSnapshot.size &&
+        (this.analysisState === 'running' || this.analysisState === 'complete')
+      ) {
+        const fromSession = new Set(
+          [...(this.sessionSelectedPointIds ?? [])].filter((k) => !k.toUpperCase().startsWith('INT')),
+        );
+        if (fromSession.size) return fromSession;
+      }
       return fromSnapshot;
     }
     const fromCheckboxes = this.comparableSelectedIds();
@@ -984,6 +1738,16 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       (this.ndRunStatus === 'draft' || !this.ndRunId || this.analysisState === 'idle')
     ) {
       return new Set(fromCheckboxes);
+    }
+    if (
+      this.ndAuth.isDemoViewer() &&
+      this.sessionSelectedPointIds?.size &&
+      (this.analysisState === 'running' || this.analysisState === 'complete')
+    ) {
+      const fromSession = new Set(
+        [...(this.sessionSelectedPointIds ?? [])].filter((k) => !k.toUpperCase().startsWith('INT')),
+      );
+      if (fromSession.size) return fromSession;
     }
     const regulatory = this.ndRegulatoryPointsInScope();
     if (regulatory.length) {
@@ -997,7 +1761,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     }
     if (this.sessionSelectedPointIds?.size) {
       return new Set(
-        [...this.sessionSelectedPointIds].filter((k) => !k.toUpperCase().startsWith('INT')),
+        [...(this.sessionSelectedPointIds ?? [])].filter((k) => !k.toUpperCase().startsWith('INT')),
       );
     }
     const keys = new Set<string>();
@@ -1010,6 +1774,15 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   private async ensureDraftRunMatchesSelection(selectedIds: string[]): Promise<boolean> {
     if (!this.ndRunId || this.ndRunStatus !== 'draft') return true;
+
+    if (this.ndAuth.isDemoViewer() && this.pendingNdRunForwardOnly) {
+      if (!this.ndRunPointsList.length) await this.loadNdRunLight(this.ndRunId);
+      return this.ndRunPointsList.length > 0 || selectedIds.length > 0;
+    }
+
+    if (!this.ndRunPointsList.length) {
+      await this.loadNdRunLight(this.ndRunId);
+    }
 
     const runKeys = new Set(
       this.ndRunPointsList.map((p) => this.metaForAnalysisPoint(p).govKey),
@@ -1028,9 +1801,15 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     }
 
     this.ndRunId = createRes.data.id;
+    this.notifyNewAnalysisRunCreated();
     this.regulClausesConfirmed = false;
-    this.showRegulClauseReview = false;
-    await this.loadNdRunPoints(this.ndRunId);
+    if (this.ndAuth.isDemoViewer() && this.pendingNdRunForwardOnly) {
+      await this.loadNdRunLight(this.ndRunId);
+      this.revealRegulClauseReview(false);
+    } else {
+      this.showRegulClauseReview = false;
+      await this.loadNdRunPoints(this.ndRunId);
+    }
     this.toast.show(
       `Run updated to ${selectedIds.length} selected clause(s)`,
       'success',
@@ -1052,6 +1831,18 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     selected: boolean;
     displayId: string;
   }> {
+    if (this.isDemoViewer) {
+      const showDemoAnalysingList =
+        this.isDemoRunInFlight() ||
+        this.analysisState === 'complete' ||
+        this.analysisState === 'running' ||
+        (this.ndRunStatus ?? '').toLowerCase() === 'completed';
+      if (showDemoAnalysingList) {
+        const demoRows = this.demoAnalysingScopeRows();
+        if (demoRows.length) return demoRows;
+      }
+    }
+
     const regulatoryPoints = this.ndRegulatoryPointsInScope();
     if (!regulatoryPoints.length) {
       const govRows = this.regulatoryRowsFromGovSelection();
@@ -1079,6 +1870,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override get analysingListDone(): number {
+    if (this.isDemoViewer && this.analysingListRows.length) {
+      return this.analysingListRows.filter((r) => r.status === 'completed').length;
+    }
     if (this.isRegulPipelineInFlight()) {
       return this.ndRegulatoryPointsInScope().filter((p) => p.landingAiStatus === 'completed').length;
     }
@@ -1086,6 +1880,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override canShowPointRerunActions(pointId: string): boolean {
+    if (this.isDemoViewer) return false;
     if (this.isRegulPipelineInFlight()) return false;
     const ap = this.analysisPointForPointId(pointId);
     if (ap && !ap.regulationPointId) return false;
@@ -1172,6 +1967,12 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override get analysingListTotal(): number {
+    if (this.isDemoViewer) {
+      const scoped = this.demoSelectablePointIds();
+      if (scoped.length) return scoped.length;
+      if (this.regulClauseRows.length) return this.regulClauseRows.length;
+      return DEMO_CBUAE_ANALYSIS_POINT_COUNT;
+    }
     if (this.ndRunPointsList.length) return this.ndRegulatoryPointsInScope().length;
     return super.analysingListTotal;
   }
@@ -1304,11 +2105,49 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     }
 
     if (govKeys.size) {
-      this.sessionSelectedPointIds = new Set(govKeys);
-      if (this.ndRunStatus !== 'draft' || this.selected.size === 0) {
-        this.selected = new Set(govKeys);
+      if (this.ndAuth.isDemoViewer()) {
+        const preserve = this.demoSelectedRegulationIds();
+        this.sessionSelectedPointIds = this.sessionSelectedPointIds ?? new Set<string>();
+        if (preserve.length) {
+          for (const id of preserve) {
+            this.sessionSelectedPointIds.add(id);
+            this.selected.add(id);
+          }
+        } else {
+          for (const k of govKeys) {
+            this.sessionSelectedPointIds.add(k);
+            this.selected.add(k);
+          }
+        }
+      } else {
+        this.sessionSelectedPointIds = new Set(govKeys);
+        if (
+          this.ndRunStatus !== 'draft' ||
+          this.selected.size === 0 ||
+          this.ndAuth.isDemoViewer()
+        ) {
+          this.selected = new Set(govKeys);
+        }
       }
     }
+  }
+
+  /** Keep full gov catalog in demo session after hydrate/load from run points only. */
+  private mergeDemoGovSelectionSession(runSettled = false): void {
+    if (!this.isDemoViewer) return;
+    const ids = this.demoSelectedRegulationIds();
+    if (!ids.length) return;
+    this.sessionSelectedPointIds = new Set(ids);
+    this.selected = new Set(ids);
+    for (const id of ids) {
+      const existing = this.sessionPointStatus.get(id);
+      if (!existing) {
+        this.sessionPointStatus.set(id, runSettled ? 'completed' : 'queued');
+      } else if (runSettled && existing === 'queued') {
+        this.sessionPointStatus.set(id, 'completed');
+      }
+    }
+    this.progressTotal = ids.length;
   }
 
   openPointDetailModal(pointId: string, event: Event): void {
@@ -1402,6 +2241,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   gapCountForPointId(pointId: string): number {
+    if (!this.analysingPointShowsCompliance(pointId)) return 0;
     const point = this.analysisPointForPointId(pointId);
     if (!point) return 0;
     if (this.isRegulPipelineInFlight() && point.regulationPointId) return 0;
@@ -1426,6 +2266,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override getPointGapSeverity(pointId: string): GapSeverity | null {
+    if (!this.analysingPointShowsCompliance(pointId)) return null;
     for (const key of this.sessionLookupKeysForPointId(pointId)) {
       const saved = this.ndRunPointsByNumber.get(key);
       if (!saved) continue;
@@ -1510,6 +2351,20 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   get exportableRegGapPointCount(): number {
     if (!this.ndRunId || !this.ndRunDetailPoints.length) return 0;
     return buildGapAnalysisExportRows(this.collectRegulatoryDonePointsForExport()).length;
+  }
+
+  get showHeaderExportActions(): boolean {
+    return this.exportableRegGapPointCount > 0;
+  }
+
+  private bumpGapEmbedReload(): void {
+    this.gapEmbedReloadToken++;
+  }
+
+  get showGapReportSection(): boolean {
+    if (!this.activeNdRunId) return false;
+    if (this.analysisState === 'complete') return true;
+    return this.exportableRegGapPointCount > 0 && this.analysingListDone > 0;
   }
 
   get exportableAllGapPointCount(): number {
@@ -1741,6 +2596,48 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return super.inlineGapSummary;
   }
 
+  /** Fast run load for demo prep (no per-point enrich). */
+  private async loadNdRunLight(runId: string): Promise<boolean> {
+    const res = await this.ndApi.getAnalysisRun(runId, { lite: true });
+    if (!res.success || !res.data) return false;
+    const data = res.data as {
+      run: {
+        status: string;
+        workflowEngine?: string;
+        regulPipelinePhase?: string | null;
+        regulClausesConfirmedAt?: string | null;
+        processedPointsCount?: number;
+        totalPointsCount?: number;
+      };
+      points: AnalysisPoint[];
+    };
+    this.ndRunStatus = data.run.status;
+    if (data.run.workflowEngine) this.ndWorkflowEngine = data.run.workflowEngine;
+    if (data.run.regulPipelinePhase != null) {
+      this.ndRegulPipelinePhase = data.run.regulPipelinePhase;
+    }
+    this.regulClausesConfirmed = Boolean(data.run.regulClausesConfirmedAt);
+    this.ndRunPointsSourceList = data.points ?? [];
+    this.indexNdRunPointsSource(this.ndRunPointsSourceList);
+    this.ndRunPointsList = data.points ?? [];
+    this.ndRunDetailPoints = this.ndRunPointsList;
+    this.indexNdRunPoints(data.points ?? []);
+    this.reconcileRunWithGovCatalog();
+    this.fixSelectedDetailPointAfterReconcile();
+    this.hydrateNdSessionFromPoints(data.points ?? [], {
+      status: data.run.status,
+      processedPointsCount: data.run.processedPointsCount,
+      totalPointsCount:
+        this.ndRegulatoryPointsInScope().length || data.run.totalPointsCount || data.points?.length,
+    });
+    this.mergeDemoGovSelectionSession(
+      (data.run.status ?? '').toLowerCase() === 'completed' ||
+        (data.run.status ?? '').toLowerCase() === 'cancelled',
+    );
+    this.cdr.markForCheck();
+    return true;
+  }
+
   async loadNdRunPoints(runId: string): Promise<void> {
     const res = await this.ndApi.getResults(runId);
     if (!res.success || !res.data) return;
@@ -1768,12 +2665,29 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     }
     this.regulClausesConfirmed = Boolean(data.run.regulClausesConfirmedAt);
     this.regulQualitativeAssessment = data.regulQualitativeAssessment ?? null;
-    this.ndRunPointsList = data.points ?? [];
+    const loadedPoints = data.points ?? [];
+    const runStatus = (data.run.status ?? '').toLowerCase();
+    if (
+      this.isDemoViewer &&
+      (runStatus === 'running' ||
+        runStatus === 'processing' ||
+        runStatus === 'queued' ||
+        runStatus === 'draft')
+    ) {
+      this.analysisState = 'running';
+      this.isDemoRun = true;
+    }
+    this.ndRunPointsSourceList = loadedPoints;
+    this.indexNdRunPointsSource(loadedPoints);
+    this.ndRunPointsList =
+      this.isDemoViewer && this.isDemoRunInFlight()
+        ? this.maskDemoPendingRunPoints(loadedPoints)
+        : loadedPoints;
     this.ndRunDetailPoints = this.ndRunPointsList;
     this.ndPointAttachments = data.pointAttachments ?? [];
     this.ndActionItemReviews = data.actionItemReviews ?? [];
     this.ndTempReviewComments = data.tempReviewComments ?? [];
-    this.indexNdRunPoints(data.points ?? []);
+    this.indexNdRunPoints(this.ndRunPointsList);
     this.reconcileRunWithGovCatalog();
     this.fixSelectedDetailPointAfterReconcile();
     this.attachmentsByPointId.clear();
@@ -1786,73 +2700,315 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       else this.attachmentsByPointId.set(attachment.analysisPointId, [attachment]);
     }
 
-    for (const p of data.points) {
+    for (const p of this.ndRunPointsList) {
       if (!p.id) continue;
       this.reviewsByPointId.set(p.id, reviewsForPoint(this.ndActionItemReviews, p.id));
       this.tempCommentsByPointId.set(p.id, tempCommentsForPoint(this.ndTempReviewComments, p.id));
     }
     this.syncInlineGapSeveritiesFromNdRun();
-    this.hydrateNdSessionFromPoints(data.points ?? [], {
-      status: data.run.status,
-      processedPointsCount: (data.run as { processedPointsCount?: number }).processedPointsCount,
-      totalPointsCount: this.ndRegulatoryPointsInScope().length || data.points?.length,
-    });
+    const preserveDemoRunSession = this.isDemoViewer && this.isDemoRunInFlight();
+    if (!preserveDemoRunSession) {
+      this.hydrateNdSessionFromPoints(this.ndRunPointsList, {
+        status: data.run.status,
+        processedPointsCount: (data.run as { processedPointsCount?: number }).processedPointsCount,
+        totalPointsCount: this.ndRegulatoryPointsInScope().length || data.points?.length,
+      });
+    }
+    if (this.isDemoViewer && this.isDemoRunInFlight() && this.ndRunId) {
+      this.pollNdRun(this.ndRunId);
+    }
+    this.mergeDemoGovSelectionSession(
+      (data.run.status ?? '').toLowerCase() === 'completed' ||
+        (data.run.status ?? '').toLowerCase() === 'cancelled',
+    );
+    if (this.isDemoViewer && this.isDemoRunInFlight()) {
+      this.ensureDemoAnalysingPreviewRunning();
+      if (!this.selectedDetailPointId && this.analysingListRows.length) {
+        this.selectFirstDemoAnalysingPoint();
+      }
+    }
     this.syncRegulProgressSteps();
+    if (
+      (data.run.status ?? '').toLowerCase() === 'completed' ||
+      (data.run.status ?? '').toLowerCase() === 'cancelled'
+    ) {
+      this.bumpGapEmbedReload();
+    }
     if (
       this.ndRunStatus === 'draft' &&
       !this.regulClausesConfirmed &&
-      this.ndRunPointsList.length > 0
+      this.ndRunPointsList.length > 0 &&
+      !this.ndAuth.isDemoViewer()
     ) {
-      this.showRegulClauseReview = true;
-      this.buildRegulClauseRows();
+      this.revealRegulClauseReview();
     }
     this.cdr.markForCheck();
   }
 
+  get regulClauseReviewTotal(): number {
+    if (this.isDemoViewer) {
+      if (this.regulClauseRows.length) return this.regulClauseRows.length;
+      const scoped = this.demoScopedRegulationPointIds();
+      if (scoped.length) return scoped.length;
+      const pool = this.demoSelectablePointIds();
+      if (pool.length) return pool.length;
+      return DEMO_CBUAE_ANALYSIS_POINT_COUNT;
+    }
+    return this.regulClauseRows.length;
+  }
+
+  get regulClauseConfirmButtonLabel(): string {
+    if (this.regulClauseConfirmLoading) return 'Confirming…';
+    if (this.regulClausesConfirmed) return 'Confirmed';
+    return 'Confirm';
+  }
+
+  private hasDemoRegulationSelectionIntent(): boolean {
+    return (
+      this.demoSelectedIdsForDisplay().length > 0 ||
+      this.selectedRegIds.size > 0 ||
+      this.ndRegulatoryPointsInScope().length > 0
+    );
+  }
+
+  /** Checkbox-selected ids within the 55-clause demo scope. */
+  private demoSelectedIdsForDisplay(): string[] {
+    const scoped = this.demoSelectablePointIds();
+    if (!scoped.length) return [];
+    const scopedSet = new Set(scoped);
+    return this.comparableSelectedIds().filter((id) => {
+      const canonical = this.resolveCanonicalRegPointId(id) ?? id;
+      return scopedSet.has(id) || scopedSet.has(canonical);
+    });
+  }
+
+  /** All gov point ids in the CBUAE demo judgment scope (94 clauses). */
+  private demoSelectablePointIds(): string[] {
+    const pool = this.selectableRegulationPoints();
+    if (!pool.length) return [];
+    return matchGovPointsToDemoCbuaeScope(pool, (p) =>
+      resolveGovPointDisplayNumber(p as GovPointWithNumber),
+    );
+  }
+
+  private filterGovPointsToDemoScope(points: GovPoint[]): GovPoint[] {
+    const scopedSet = new Set(
+      matchGovPointsToDemoCbuaeScope(points, (p) =>
+        resolveGovPointDisplayNumber(p as GovPointWithNumber),
+      ),
+    );
+    return points.filter((p) => scopedSet.has(p.point_id));
+  }
+
+  private rebuildDemoRegulationDisplayDocs(
+    points: SourcedGovPoint[],
+    templates: LibraryPointDisplayDoc[],
+  ): LibraryPointDisplayDoc[] {
+    const scopedSet = new Set(points.map((p) => p.point_id));
+    return templates.map((doc) => {
+      const regDoc = this.regulationDocs.find((d) => d.id === doc.docId);
+      const display = buildRegulationDocPointDisplay(
+        points,
+        regDoc?.isNdManual === true,
+        scopedSet,
+      );
+      return {
+        ...doc,
+        ...display,
+        analyseCount: display.analyseCount,
+        storedCount: points.length,
+      };
+    });
+  }
+
+  /** Gov point ids in the CBUAE demo judgment scope (94 clauses), not the full regulation catalog. */
+  private matchDemoScopedGovIdsFromPool(): string[] {
+    return this.demoSelectablePointIds();
+  }
+
+  private demoScopedRegulationPointIds(): string[] {
+    const fromRun = this.ndRegulatoryPointsInScope()
+      .map((p) => this.metaForAnalysisPoint(p).govKey)
+      .filter((id) => id && !id.toUpperCase().startsWith('INT'));
+    if (fromRun.length) return [...new Set(fromRun)];
+
+    const selected = this.demoSelectedIdsForDisplay();
+    if (selected.length) return selected;
+
+    const scopedPool = this.demoSelectablePointIds();
+    if (scopedPool.length && this.selectedRegIds.size > 0 && this.govPoints.length) {
+      return scopedPool;
+    }
+    return [];
+  }
+
+  private buildDemoFallbackClauseRows(): Array<{
+    pointId: string;
+    pointNumber: string;
+    pointTitle: string;
+    pointContent: string;
+  }> {
+    return DEMO_CBUAE_SEED_CLAUSES.map((row) => ({
+      pointId: row.clauseNo,
+      pointNumber: row.clauseNo,
+      pointTitle: row.clauseTitle,
+      pointContent: '',
+    }));
+  }
+
+  private analysisPointsForClauseReview(): AnalysisPoint[] {
+    if (this.ndAuth.isDemoViewer()) return [];
+    const scoped = this.ndRunPointsInScope();
+    if (scoped.length) return scoped;
+    const allReg = this.ndRunPointsList.filter((p) => this.isRegulatoryAnalysisPoint(p));
+    if (allReg.length) return allReg;
+    return [];
+  }
+
   private buildRegulClauseRows(): void {
+    if (this.ndAuth.isDemoViewer()) {
+      const demoIds = this.demoScopedRegulationPointIds();
+      if (demoIds.length) {
+        this.regulClauseRows = sortByPointRef(
+          demoIds.map((id) => {
+            const gov =
+              this.govPointForAnalysis(id) ??
+              this.govPoints.find((g) => g.point_id === id);
+            const num =
+              gov
+                ? resolveGovPointDisplayNumber(gov as SourcedGovPoint)
+                : this.displayLabelForPoint(id);
+            return {
+              pointId: id,
+              pointNumber: num || id,
+              pointTitle: gov?.title ?? '',
+              pointContent: gov?.text ?? '',
+            };
+          }),
+          (row) => row.pointNumber || row.pointId,
+        );
+        return;
+      }
+      this.regulClauseRows = sortByPointRef(
+        this.buildDemoFallbackClauseRows(),
+        (row) => row.pointNumber || row.pointId,
+      );
+      return;
+    }
+
+    const points = this.analysisPointsForClauseReview();
+    if (points.length) {
+      this.regulClauseRows = sortByPointRef(
+        points.map((p) => {
+          const snap = parsePointSnapshot(p.pointSnapshot);
+          return {
+            pointId: p.id,
+            pointNumber: snap.pointNumber ?? '',
+            pointTitle: snap.pointTitle ?? '',
+            pointContent: snap.pointContent ?? '',
+          };
+        }),
+        (row) => row.pointNumber || row.pointId,
+      );
+      return;
+    }
+
+    const ids = this.effectiveComparableSelectedIds();
     this.regulClauseRows = sortByPointRef(
-      this.ndRunPointsInScope().map((p) => {
-        const snap = parsePointSnapshot(p.pointSnapshot);
+      ids.map((id) => {
+        const gov =
+          this.govPointForAnalysis(id) ??
+          this.govPoints.find((g) => g.point_id === id);
+        const num =
+          gov
+            ? resolveGovPointDisplayNumber(gov as SourcedGovPoint)
+            : this.displayLabelForPoint(id);
         return {
-          pointId: p.id,
-          pointNumber: snap.pointNumber ?? '',
-          pointTitle: snap.pointTitle ?? '',
-          pointContent: snap.pointContent ?? '',
+          pointId: id,
+          pointNumber: num || id,
+          pointTitle: gov?.title ?? '',
+          pointContent: gov?.text ?? '',
         };
       }),
       (row) => row.pointNumber || row.pointId,
     );
   }
 
+  private revealRegulClauseReview(scroll = true): void {
+    this.showRegulClauseReview = true;
+    this.buildRegulClauseRows();
+    if (scroll) this.scrollToRegulClauseReview();
+    this.cdr.markForCheck();
+  }
+
+  closeRegulClauseReview(): void {
+    this.showRegulClauseReview = false;
+    this.pendingNdRunForwardOnly = false;
+    this.cdr.markForCheck();
+  }
+
   async confirmRegulClauses(): Promise<void> {
-    if (!this.ndRunId || this.regulClauseConfirmLoading) return;
+    if (this.regulClauseConfirmLoading) return;
+
+    if (!this.ndRunId && this.isDemoViewer && this.pendingNdRunForwardOnly) {
+      const ok = await this.ensureDemoRunPreparedForClauseReview();
+      if (!ok || !this.ndRunId) return;
+    }
+
+    if (!this.ndRunId) return;
+
+    const forwardOnly = this.pendingNdRunForwardOnly;
+
     this.regulClauseConfirmLoading = true;
     try {
-      const clauses = this.regulClauseRows.map((row) => ({
-        analysisPointId: row.pointId,
-        pointNumber: row.pointNumber,
-        pointTitle: row.pointTitle,
-        pointContent: row.pointContent,
-      }));
-      const res = await this.ndApi.confirmRegulClauses(this.ndRunId, clauses);
-      if (!res.success) {
-        this.toast.show(res.message ?? 'Could not confirm clauses', 'error', 5000);
-        return;
+      if (!this.isDemoViewer || !forwardOnly) {
+        const clauses = this.regulClauseRows.map((row) => ({
+          analysisPointId: row.pointId,
+          pointNumber: row.pointNumber,
+          pointTitle: row.pointTitle,
+          pointContent: row.pointContent,
+        }));
+        const res = await this.ndApi.confirmRegulClauses(this.ndRunId, clauses);
+        if (!res.success) {
+          this.toast.show(res.message ?? 'Could not confirm clauses', 'error', 5000);
+          return;
+        }
       }
+
       this.regulClausesConfirmed = true;
       this.showRegulClauseReview = false;
+
+      let selectedIds = this.isDemoViewer
+        ? this.demoSelectedRegulationIds()
+        : this.effectiveComparableSelectedIds();
+      if (!selectedIds.length && this.ndRunPointsList.length) {
+        selectedIds = this.ndRunPointsList
+          .filter((p) => this.isRegulatoryAnalysisPoint(p))
+          .map((p) => this.metaForAnalysisPoint(p).govKey);
+      }
+      if (!selectedIds.length && this.isDemoViewer) {
+        selectedIds = this.demoSelectedRegulationIds();
+      }
+      if (!selectedIds.length) {
+        selectedIds = this.ndRunPointsInScope().map((p) => this.metaForAnalysisPoint(p).govKey);
+      }
+
+      this.pendingNdRunForwardOnly = false;
+
+      if (forwardOnly) {
+        this.toast.show('Clauses confirmed — starting analysis…', 'success', 3000);
+        const started = await this.launchNdAnalysisRunForwardOnly(this.ndRunId, selectedIds);
+        if (started) this.scrollToWorkspace();
+        return;
+      }
+
       await this.loadNdRunPoints(this.ndRunId);
-      const selectedIds = this.ndRunPointsInScope().map((p) => this.metaForAnalysisPoint(p).govKey);
+      const fromRun = this.ndRunPointsInScope().map((p) => this.metaForAnalysisPoint(p).govKey);
+      if (fromRun.length) selectedIds = fromRun;
+
       if (selectedIds.length) {
-        const forwardOnly = this.pendingNdRunForwardOnly;
-        this.pendingNdRunForwardOnly = false;
-        if (forwardOnly) {
-          this.toast.show('Clauses confirmed — starting forward-only analysis…', 'success', 4000);
-          await this.launchNdAnalysisRunForwardOnly(this.ndRunId, selectedIds);
-        } else {
-          this.toast.show('Clauses confirmed — starting forward/reverse analysis…', 'success', 4000);
-          await this.launchNdAnalysisRun(this.ndRunId, selectedIds);
-        }
+        this.toast.show('Clauses confirmed — starting forward/reverse analysis…', 'success', 4000);
+        await this.launchNdAnalysisRun(this.ndRunId, selectedIds);
         this.scrollToWorkspace();
       } else {
         this.toast.show('Clauses confirmed — select points and Run analysis', 'success', 4000);
@@ -1957,6 +3113,43 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     }
   }
 
+  /** Same keys as indexNdRunPoints — unmasked data for stable rail preview during demo runs. */
+  private indexNdRunPointsSource(points: AnalysisPoint[]): void {
+    this.ndRunPointsSourceByKey.clear();
+    for (const p of points) {
+      const raw = parsePointSnapshot(p.pointSnapshot);
+      const gov = this.govPointForAnalysis(
+        p.regulationPointId ?? raw.regulationPointId ?? p.id ?? '',
+      );
+      const snap = hydratePointSnapshotFromGov(
+        raw,
+        gov,
+        p.regulationPointId ?? raw.regulationPointId,
+      );
+      const keys = new Set<string>();
+      const displayNum = resolveSnapshotDisplayNumber(snap, p.regulationPointId);
+      if (displayNum) keys.add(displayNum);
+      if (snap.pointNumber?.trim() && !this.looksLikeUuid(snap.pointNumber)) {
+        keys.add(snap.pointNumber.trim());
+      }
+      if (snap.regulationPointId?.trim()) keys.add(snap.regulationPointId.trim());
+      if (snap.pageReference?.trim()) keys.add(snap.pageReference.trim());
+      if (p.regulationPointId?.trim()) keys.add(p.regulationPointId.trim());
+      if (p.id) keys.add(p.id);
+      for (const key of keys) this.ndRunPointsSourceByKey.set(key, p);
+      for (const g of this.govPoints) {
+        const gNum = resolveGovPointDisplayNumber(g as SourcedGovPoint);
+        const sourced = g as SourcedGovPoint;
+        const matches =
+          (displayNum && gNum === displayNum) ||
+          g.point_id === p.id ||
+          (p.regulationPointId &&
+            (g.point_id === p.regulationPointId || sourced.regulationPointId === p.regulationPointId));
+        if (matches) this.ndRunPointsSourceByKey.set(g.point_id, p);
+      }
+    }
+  }
+
   private fixSelectedDetailPointAfterReconcile(): void {
     const current = this.selectedDetailPointId;
     if (!current) return;
@@ -1987,17 +3180,57 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   protected override onNdRunAttached(runId: string, points: AnalysisPoint[]): void {
+    if (this.isDemoViewer || this.isDemoRun) {
+      void this.loadNdRunPoints(runId).then(() => {
+        const settled =
+          (this.ndRunStatus ?? '').toLowerCase() === 'completed' ||
+          (this.ndRunStatus ?? '').toLowerCase() === 'cancelled';
+        this.mergeDemoGovSelectionSession(settled);
+        if (!settled && this.isDemoRunInFlight()) {
+          this.ensureDemoAnalysingPreviewRunning();
+        }
+        if (!this.selectedDetailPointId && this.analysingListRows.length) {
+          this.selectFirstDemoAnalysingPoint();
+        }
+        this.cdr.markForCheck();
+      });
+      return;
+    }
+
     if (points.length) {
       this.ndRunPointsList = points;
+      this.ndRunStatus = this.ndRunStatus || 'draft';
       this.indexNdRunPoints(points);
       this.reconcileRunWithGovCatalog();
       this.fixSelectedDetailPointAfterReconcile();
+      this.hydrateNdSessionFromPoints(points, {
+        status: this.ndRunStatus,
+        processedPointsCount: this.progressDone,
+        totalPointsCount: this.ndRegulatoryPointsInScope().length || points.length,
+      });
+      this.cdr.markForCheck();
     }
-    void this.loadNdRunPoints(runId);
   }
 
   protected override getPollMergeBasePoints(): AnalysisPoint[] {
     return this.ndRunDetailPoints.length ? this.ndRunDetailPoints : this.ndRunPointsList;
+  }
+
+  protected override mergeNdRunPoints(
+    detailPoints: AnalysisPoint[],
+    statusPoints?: AnalysisPoint[] | null,
+  ): AnalysisPoint[] {
+    const merged = super.mergeNdRunPoints(detailPoints, statusPoints);
+    if (statusPoints?.length) {
+      const base = this.ndRunPointsSourceList.length ? this.ndRunPointsSourceList : detailPoints;
+      this.ndRunPointsSourceList = super.mergeNdRunPoints(base, statusPoints);
+      this.indexNdRunPointsSource(this.ndRunPointsSourceList);
+    } else if (!this.ndRunPointsSourceList.length && merged.length) {
+      this.ndRunPointsSourceList = [...merged];
+      this.indexNdRunPointsSource(this.ndRunPointsSourceList);
+    }
+    if (!this.isDemoViewer || !this.isDemoRunInFlight()) return merged;
+    return this.maskDemoPendingRunPoints(merged);
   }
 
   /** Keep gap/severity badges in sync while /status poll merges live Landing results. */
@@ -2009,8 +3242,15 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       this.reconcileRunWithGovCatalog();
       this.fixSelectedDetailPointAfterReconcile();
     }
+    if (this.isDemoViewer && this.isDemoRunInFlight()) {
+      this.mergeDemoGovSelectionSession(false);
+      this.ensureDemoAnalysingPreviewRunning();
+      if (!this.selectedDetailPointId) this.selectFirstDemoAnalysingPoint();
+    } else if (this.isDemoViewer) {
+      this.stopDemoAnalysingPreview();
+    }
     this.sessionPointCache.clear();
-    if (this.isRegulPipelineRun()) {
+    if (this.isRegulPipelineRun() || this.usesForwardOnlyRunUi()) {
       this.syncRegulProgressSteps();
     }
     this.cdr.markForCheck();
@@ -2286,7 +3526,19 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   get canSubmitForChecker(): boolean {
-    return false;
+    if (!this.activeNdRunId) return false;
+    const role = this.ndAuth.getRole();
+    if (role !== 'maker' && role !== 'super_admin') return false;
+    const status = normalizeRunStatus(this.ndRunWorkflowStatus || this.ndRunStatus);
+    return ['completed', 'dual_verify_failed', 'landing_ai_complete', 'pulled_back'].includes(status);
+  }
+
+  /** Show export / submit workflow chrome when analysis finished or run is already settled. */
+  get showPostAnalysisWorkflow(): boolean {
+    if (this.analysisState === 'complete') return true;
+    if (!this.activeNdRunId) return false;
+    const status = normalizeRunStatus(this.ndRunWorkflowStatus || this.ndRunStatus);
+    return ['completed', 'dual_verify_failed', 'landing_ai_complete', 'pulled_back'].includes(status);
   }
 
   get showWorkflowStatusBadge(): boolean {
@@ -2313,7 +3565,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   openGapReport(): void {
-    this.openFullReport();
+    this.scrollToInlineGapReport();
   }
 
   onEmbeddedRunStatusChange(status: string): void {
@@ -2328,6 +3580,16 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   protected override onAnalysisComplete(): void {
     super.onAnalysisComplete();
+    if (this.ndRunId && this.isDemoViewer) {
+      void this.loadNdRunPoints(this.ndRunId).then(() => {
+        this.mergeDemoGovSelectionSession(true);
+        this.ndRunStatus = this.ndRunWorkflowStatus || 'completed';
+        this.bumpGapEmbedReload();
+        this.cdr.markForCheck();
+      });
+    } else {
+      this.bumpGapEmbedReload();
+    }
     this.scrollToInlineGapReport();
   }
 
@@ -2577,6 +3839,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   private pendingNdRunForwardOnly = false;
 
   get ndRunConfirmReady(): boolean {
+    if (this.isDemoViewer) return true;
     return this.ndRunConfirmInput.trim().toLowerCase() === this.ndRunConfirmPhrase;
   }
 
@@ -2641,6 +3904,20 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   runForwardOnlyAndScroll(): void {
     if (!this.isNdShell) return;
+    if (this.ndAuth.isDemoViewer()) {
+      this.pendingNdRunForwardOnly = true;
+      this.buildRegulClauseRows();
+      this.revealRegulClauseReview();
+      void this.ensureDemoRunPreparedForClauseReview().then((ok) => {
+        if (!ok) {
+          this.pendingNdRunForwardOnly = false;
+          return;
+        }
+        this.buildRegulClauseRows();
+        this.cdr.markForCheck();
+      });
+      return;
+    }
     this.pendingNdRunForwardOnly = true;
     this.requestNdRunConfirm(
       'Start forward-only analysis',
@@ -2649,11 +3926,43 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     );
   }
 
+  private hasNdPointSelectionForRun(): boolean {
+    if (this.selected.size > 0) return true;
+    if (this.ndAuth.isDemoViewer()) {
+      if (this.demoSelectedIdsForDisplay().length > 0) return true;
+      if (this.ndRegulatoryPointsInScope().length > 0) return true;
+      return false;
+    }
+    return false;
+  }
+
+  /** Demo: scoped regulation ids (55 CBUAE clauses), not the full catalog. */
+  private demoSelectedRegulationIds(): string[] {
+    return this.demoScopedRegulationPointIds();
+  }
+
+  private effectiveComparableSelectedIds(): string[] {
+    const fromCheckboxes = this.comparableSelectedIds();
+    if (fromCheckboxes.length) return fromCheckboxes;
+    if (this.ndAuth.isDemoViewer()) {
+      if (this.ndRunId && this.ndRunPointsList.length) {
+        const fromRun = this.ndRegulatoryPointsInScope().map((p) => this.metaForAnalysisPoint(p).govKey);
+        if (fromRun.length) return fromRun;
+        const allReg = this.ndRunPointsList
+          .filter((p) => this.isRegulatoryAnalysisPoint(p))
+          .map((p) => this.metaForAnalysisPoint(p).govKey);
+        if (allReg.length) return allReg;
+      }
+      return this.demoSelectedRegulationIds();
+    }
+    return fromCheckboxes;
+  }
+
   override get canRun(): boolean {
     if (this.isNdShell) {
       return (
         (this.selectedComplianceIds.size > 0 || !!this.complianceFile) &&
-        this.selected.size > 0 &&
+        this.hasNdPointSelectionForRun() &&
         this.govPoints.length > 0 &&
         this.analysisState !== 'running' &&
         !this.loadingPoints &&
@@ -2667,6 +3976,20 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override get runBlockedReason(): string | null {
+    if (this.isNdShell && this.ndAuth.isDemoViewer()) {
+      if (this.uploadingCompliance || this.attachingCompliance) {
+        return 'Wait for the compliance document to finish attaching.';
+      }
+      if (this.selectedComplianceIds.size === 0 && !this.complianceFile) {
+        return 'Select or upload at least one internal (policy) document.';
+      }
+      if (!this.hasNdPointSelectionForRun()) return 'Select at least one regulation point.';
+      if (this.govPoints.length === 0) return 'Load regulation points first.';
+      if (this.loadingPoints) return 'Regulation points are still loading.';
+      if (this.uploadingReg) return 'Wait for the regulation upload to finish.';
+      if (this.loadingCompliance) return 'Internal documents are still loading.';
+      return null;
+    }
     if (this.isNdShell) {
       if (this.uploadingCompliance || this.attachingCompliance) {
         return 'Wait for the compliance document to finish attaching.';
@@ -2674,7 +3997,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       if (this.selectedComplianceIds.size === 0 && !this.complianceFile) {
         return 'Select or upload at least one internal (policy) document.';
       }
-      if (this.selected.size === 0) return 'Select at least one regulation point.';
+      if (!this.hasNdPointSelectionForRun()) return 'Select at least one regulation point.';
       if (this.govPoints.length === 0) return 'Load regulation points first.';
       if (this.loadingPoints) return 'Regulation points are still loading.';
       if (this.uploadingReg) return 'Wait for the regulation upload to finish.';
@@ -2720,13 +4043,17 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         const incomplete =
           data.totalPointsCount > 0 && data.processedPointsCount < data.totalPointsCount;
         if (st === 'draft' || incomplete || st === 'failed') {
-          await this.loadNdRunPoints(this.ndRunId);
+          this.buildRegulClauseRows();
           if (!this.regulClausesConfirmed) {
-            this.showRegulClauseReview = true;
-            this.buildRegulClauseRows();
+            this.revealRegulClauseReview();
             this.toast.show('Review and confirm clauses, then Run again', 'info', 5000);
+            void this.loadNdRunPoints(this.ndRunId).then(() => {
+              this.buildRegulClauseRows();
+              this.cdr.markForCheck();
+            });
             return;
           }
+          await this.loadNdRunPoints(this.ndRunId);
           await this.launchNdAnalysisRun(this.ndRunId, selectedIds);
           return;
         }
@@ -2742,14 +4069,18 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
     const runId = createRes.data.id;
     this.ndRunId = runId;
+    this.notifyNewAnalysisRunCreated();
     await this.router.navigate([this.regulAnalysisRoute], {
       queryParams: { run: runId },
       replaceUrl: true,
     });
-    await this.loadNdRunPoints(runId);
-    this.showRegulClauseReview = true;
     this.buildRegulClauseRows();
+    this.revealRegulClauseReview();
     this.toast.show('Review clauses and confirm before running analysis', 'info', 5000);
+    void this.loadNdRunPoints(runId).then(() => {
+      this.buildRegulClauseRows();
+      this.cdr.markForCheck();
+    });
   }
 
   /** ND shell: forward judgment only — no reverse or qualitative phases. */
@@ -2785,14 +4116,18 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         const incomplete =
           data.totalPointsCount > 0 && data.processedPointsCount < data.totalPointsCount;
         if (st === 'draft' || incomplete || st === 'failed') {
-          await this.loadNdRunPoints(this.ndRunId);
+          this.buildRegulClauseRows();
           if (!this.regulClausesConfirmed) {
             this.pendingNdRunForwardOnly = true;
-            this.showRegulClauseReview = true;
-            this.buildRegulClauseRows();
+            this.revealRegulClauseReview();
             this.toast.show('Review and confirm clauses, then Run forward only again', 'info', 5000);
+            void this.loadNdRunPoints(this.ndRunId).then(() => {
+              this.buildRegulClauseRows();
+              this.cdr.markForCheck();
+            });
             return;
           }
+          await this.loadNdRunPoints(this.ndRunId);
           await this.launchNdAnalysisRunForwardOnly(this.ndRunId, selectedIds);
           return;
         }
@@ -2810,14 +4145,92 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
     const runId = createRes.data.id;
     this.ndRunId = runId;
+    this.notifyNewAnalysisRunCreated();
     await this.router.navigate([this.regulAnalysisRoute], {
       queryParams: { run: runId },
       replaceUrl: true,
     });
-    await this.loadNdRunPoints(runId);
-    this.showRegulClauseReview = true;
     this.buildRegulClauseRows();
+    this.revealRegulClauseReview();
     this.toast.show('Review clauses and confirm before running forward-only analysis', 'info', 5000);
+    void this.loadNdRunPoints(runId).then(() => {
+      this.buildRegulClauseRows();
+      this.cdr.markForCheck();
+    });
+  }
+
+  /** Demo: attach to seeded CBUAE run (fast), then show clause overview (confirm starts simulation). */
+  private ensureDemoRunPreparedForClauseReview(): Promise<boolean> {
+    if (this.ndRunId && this.ndRunPointsList.length) return Promise.resolve(true);
+    if (this.demoRunPrepPromise) return this.demoRunPrepPromise;
+    this.demoRunPreparing = true;
+    this.demoRunPrepPromise = this.prepareDemoRunForClauseReview()
+      .finally(() => {
+        this.demoRunPreparing = false;
+        this.demoRunPrepPromise = null;
+        this.cdr.markForCheck();
+      });
+    return this.demoRunPrepPromise;
+  }
+
+  private async prepareDemoRunForClauseReview(): Promise<boolean> {
+    const blocked = this.runBlockedReason;
+    if (blocked) {
+      this.error = blocked;
+      this.toast.show(blocked, 'error', 3000);
+      return false;
+    }
+
+    try {
+      if (this.ndRunId && this.ndRunStatus === 'draft') {
+        if (!this.ndRunPointsList.length) await this.loadNdRunLight(this.ndRunId);
+        if (this.ndRunPointsList.length) {
+          this.regulClausesConfirmed = false;
+          this.buildRegulClauseRows();
+          return this.regulClauseRows.length > 0;
+        }
+      }
+
+      const seedRes = await this.ndApi.createDemoAnalysisFromCbuaeSeed();
+      if (!seedRes.success || !seedRes.data?.id) {
+        this.error = seedRes.message ?? 'Could not prepare demo analysis run';
+        this.toast.show(this.error, 'error', 5000);
+        return false;
+      }
+
+      const runId = seedRes.data.id;
+      this.ndRunId = runId;
+      this.notifyNewAnalysisRunCreated();
+      this.ndRunStatus = seedRes.data.status ?? 'draft';
+      this.ndWorkflowEngine = this.regulWorkflowEngineId;
+      await this.router.navigate([this.regulAnalysisRoute], {
+        queryParams: { run: runId },
+        replaceUrl: true,
+      });
+      this.regulClausesConfirmed = false;
+      this.buildRegulClauseRows();
+      if (this.regulClauseRows.length) return true;
+      await this.loadNdRunLight(runId);
+      this.buildRegulClauseRows();
+      if (!this.regulClauseRows.length) {
+        this.toast.show('Could not load clauses for this run', 'error', 4000);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not prepare analysis run';
+      this.error = msg;
+      this.toast.show(msg, 'error', 5000);
+      return false;
+    }
+  }
+
+  private scrollToRegulClauseReview(): void {
+    this.cdr.detectChanges();
+    window.setTimeout(() => {
+      const el = this.clauseReviewEl?.nativeElement ?? document.querySelector('.regul-clause-review');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
   }
 
   private buildNdCreateRunPayload(selectedIds: string[]): Record<string, unknown> {
@@ -2888,7 +4301,15 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
     return selectedIds.map((id) => {
       const p = byPointId.get(id) ?? (this.govPoints.find((g) => g.point_id === id) as SourcedGovPoint | undefined);
-      if (!p) return { pointNumber: this.displayLabelForPoint(id) || null };
+      const regPointId =
+        p?.regulationPointId ?? (this.looksLikeUuid(id) ? id : null);
+      if (!p) {
+        return {
+          pointNumber: this.displayLabelForPoint(id) || null,
+          pointId: regPointId ?? id,
+          regulationPointId: regPointId,
+        };
+      }
       const pointNumber =
         resolveGovPointDisplayNumber(p) ||
         (p.pointNumber && !this.looksLikeUuid(p.pointNumber) && !isJunkExtractPointId(p.pointNumber)
@@ -2910,11 +4331,11 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         : p.text;
       return {
         pointNumber,
-        pointId: p.regulationPointId ?? id,
+        pointId: regPointId ?? id,
         pointTitle: p.title ?? gov?.title ?? undefined,
         pointContent: content,
         pageReference: p.section ?? undefined,
-        regulationPointId: p.regulationPointId ?? null,
+        regulationPointId: regPointId,
         regulationDocumentId:
           p.docId ??
           docIdByPoint.get(id) ??
@@ -3093,9 +4514,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   private scrollToWorkspace(): void {
+    this.cdr.detectChanges();
     window.setTimeout(() => {
       this.workspaceEl?.nativeElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 80);
+    }, 120);
   }
 
   protected override onRunResumeAttached(): void {
@@ -3103,6 +4525,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override ngOnDestroy(): void {
+    this.stopDemoAnalysingPreview();
     this.navSub?.unsubscribe();
     document.body.classList.remove('panel-resizing');
     super.ngOnDestroy();

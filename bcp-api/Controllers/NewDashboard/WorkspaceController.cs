@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -12,26 +13,29 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class WorkspaceController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
-    NdDashboardCacheService dashboardCache) : NdControllerBase
+    NdDashboardCacheService dashboardCache,
+    NdDemoUserDirectory demoDirectory) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
 
     [HttpGet("nav-counts")]
     public async Task<IActionResult> NavCounts(CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
         var role = profile!.Role;
-        var cacheScope = $"nav-counts:{profile.Id}:{role}";
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var cacheScope = $"nav-counts:{profile.Id}:{role}:demo={demoCtx.ViewerIsDemo}";
 
         var data = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>
         {
             var mineOnly = role == "maker";
 
-            IQueryable<Data.NewDashboard.Entities.NdAnalysisRun> runs = db.NdAnalysisRuns.AsNoTracking()
-                .Where(r => r.Status != DeletedStatus);
+            IQueryable<Data.NewDashboard.Entities.NdAnalysisRun> runs = NdDemoDataFilters.ApplyToAnalysisRuns(
+                db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != DeletedStatus),
+                demoCtx);
             if (mineOnly)
                 runs = runs.Where(r => r.CreatedBy == profile.Id);
 
@@ -78,23 +82,36 @@ public class WorkspaceController(
             int regulationDocumentsDeleted = 0;
             int adminUsers = 0;
             int adminDepartments = 0;
-            int checkerQueue = 0;
+            var checkerQueue = 0;
             int reviewerQueue = 0;
+            int deletedAnalysisRuns = 0;
 
             if (role is "maker" or "super_admin")
             {
-                internalDocuments = await db.StoredDocuments.AsNoTracking()
-                    .CountAsync(
-                        d => (d.DocKind == "document" || d.DocKind == "internal") && !d.IsHidden,
-                        innerCt);
-                regulationDocuments = await db.NdRegulationDocuments.AsNoTracking().CountAsync(innerCt);
-                libraries = await db.NdLibraries.AsNoTracking().CountAsync(innerCt);
+                internalDocuments = await NdDemoDataFilters.ApplyToStoredDocuments(
+                        db.StoredDocuments.AsNoTracking()
+                            .Where(d => (d.DocKind == "document" || d.DocKind == "internal") && !d.IsHidden),
+                        demoCtx)
+                    .CountAsync(innerCt);
+                regulationDocuments = await NdDemoDataFilters.ApplyToRegulationDocuments(
+                        db.NdRegulationDocuments.AsNoTracking()
+                            .Where(d =>
+                                d.Status != -1
+                                && (d.IsManual
+                                    || !d.StoredDocumentId.HasValue
+                                    || !string.IsNullOrWhiteSpace(d.FilePath))),
+                        demoCtx)
+                    .CountAsync(innerCt);
+                libraries = await NdDemoDataFilters.ApplyToLibraries(
+                        db.NdLibraries.AsNoTracking(),
+                        demoCtx)
+                    .CountAsync(innerCt);
             }
 
             if (role == "super_admin")
             {
                 var adminCounts = await (
-                    from d in db.StoredDocuments.AsNoTracking()
+                    from d in NdDemoDataFilters.ApplyToStoredDocuments(db.StoredDocuments.AsNoTracking(), demoCtx)
                     group d by 1 into g
                     select new
                     {
@@ -106,8 +123,25 @@ public class WorkspaceController(
                 internalDocumentsDeleted = adminCounts?.InternalDeleted ?? 0;
                 regulationDocumentsDeleted = adminCounts?.RegulationDeleted ?? 0;
 
-                adminUsers = await db.NdProfiles.AsNoTracking().CountAsync(innerCt);
-                adminDepartments = await db.NdDepartments.AsNoTracking().CountAsync(innerCt);
+                var profiles = await db.NdProfiles.AsNoTracking().ToListAsync(innerCt);
+                if (demoCtx.Enabled)
+                {
+                    var authEmails = await demoDirectory.GetDemoProfileIdsAsync(innerCt);
+                    adminUsers = profiles.Count(p =>
+                        demoCtx.ViewerIsDemo
+                            ? authEmails.Contains(p.Id)
+                            : !authEmails.Contains(p.Id));
+                }
+                else
+                    adminUsers = profiles.Count;
+                adminDepartments = await NdDemoDataFilters.ApplyToDepartments(
+                        db.NdDepartments.AsNoTracking(), demoCtx)
+                    .CountAsync(innerCt);
+
+                deletedAnalysisRuns = await NdDemoDataFilters.ApplyToAnalysisRuns(
+                        db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status == DeletedStatus),
+                        demoCtx)
+                    .CountAsync(innerCt);
 
                 checkerQueue = runCounts?.Checker ?? 0;
                 reviewerQueue = runCounts?.Reviewer ?? 0;
@@ -136,6 +170,7 @@ public class WorkspaceController(
                 adminDepartments,
                 checkerQueue,
                 reviewerQueue,
+                deletedAnalysisRuns,
             };
         }, ct);
 
@@ -147,17 +182,18 @@ public class WorkspaceController(
         [FromQuery] bool mineOnly = false,
         CancellationToken ct = default)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
         var role = profile!.Role;
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
         var effectiveMineOnly = mineOnly || role == "maker";
-        var cacheScope = $"dashboard-stats:{profile.Id}:{role}:{effectiveMineOnly}";
+        var cacheScope = $"dashboard-stats:{profile.Id}:{role}:{effectiveMineOnly}:demo={demoCtx.ViewerIsDemo}";
 
         var stats = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>
             await NdRunEnrichmentHelper.LoadWorkspaceDashboardStatsAsync(
-                db, effectiveMineOnly, profile.Id, innerCt), ct);
+                db, effectiveMineOnly, profile.Id, innerCt, demoCtx), ct);
 
         return Ok(new
         {

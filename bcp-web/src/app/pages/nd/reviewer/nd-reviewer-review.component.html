@@ -120,9 +120,10 @@
         }
         @if (reviewProgress.total > 0) {
           <p class="nd-review-progress" [class.complete]="reviewProgress.reviewed >= reviewProgress.total">
-            Action reviews: {{ reviewProgress.reviewed }}/{{ reviewProgress.total }}
+            <strong>Action reviews: {{ reviewProgress.reviewed }}/{{ reviewProgress.total }}</strong>
             @if (reviewProgress.reviewed < reviewProgress.total) {
-              — set status on each action before finalize or pull back
+              <span>Open each point, expand its corrective action, click <strong>+ Add review</strong>, choose
+              <strong>Approve</strong> or <strong>Need modify</strong>, then save — or use Full results for the gap view.</span>
             }
           </p>
         }

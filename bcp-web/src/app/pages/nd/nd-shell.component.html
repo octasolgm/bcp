@@ -6,7 +6,7 @@
 
     <div class="topbar-actions">
       @if (showNewAnalysis) {
-        <a routerLink="/nd/analyse-v8" class="btn-new-analysis">New analysis</a>
+        <a [routerLink]="newAnalysisLink" class="btn-new-analysis">New analysis</a>
       }
       @if (profile(); as p) {
         <span class="role-badge">{{ roleLabel }}</span>
@@ -72,7 +72,7 @@
 
               @if (isGroupExpanded(entry.group.id)) {
                 <div class="nav-children">
-                  @for (child of entry.group.children; track child.id) {
+                  @for (child of navGroupChildren(entry.group); track child.id) {
                     <a
                       [routerLink]="child.path"
                       [queryParams]="child.queryParams"
@@ -84,7 +84,7 @@
                       <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: child.icon }" />
                       <span class="nav-label-wrap">
                         <span class="nav-label-text">{{ child.label }}</span>
-                        @if (child.id === 'analyse-v8' && pass2LlmSummary) {
+                        @if (showNavPass2Subtitle(child)) {
                           <span class="nav-pass2-llm">Pass 2: {{ pass2LlmSummary }}</span>
                         }
                       </span>
@@ -173,6 +173,22 @@
       }
     </aside>
   }
+
+  <div class="toast-stack" aria-live="polite">
+    @for (msg of toast.messages(); track msg.id) {
+      <div class="toast" [class]="msg.kind">
+        <span class="toast-text">{{ msg.text }}</span>
+        <button
+          type="button"
+          class="toast-close"
+          aria-label="Dismiss notification"
+          (click)="toast.dismiss(msg.id)"
+        >
+          ×
+        </button>
+      </div>
+    }
+  </div>
 </div>
 
 <ng-template #navIcon let-icon>

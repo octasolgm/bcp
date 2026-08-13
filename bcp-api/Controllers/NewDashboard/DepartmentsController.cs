@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -10,21 +11,25 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 [Route("nd/departments")]
 public class DepartmentsController(
     AppDbContext db,
-    SupabaseJwtValidator jwt) : NdControllerBase
+    SupabaseJwtValidator jwt,
+    NdDemoUserDirectory demoDirectory) : NdControllerBase
 {
     public record DepartmentRequest(string Name, string? Description, bool? IsActive);
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct,
+        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var rows = new List<NdDepartment>();
         try
         {
-            rows = await db.NdDepartments.AsNoTracking()
+            rows = await NdDemoDataFilters.ApplyToDepartments(
+                    db.NdDepartments.AsNoTracking(), demoCtx)
                 .OrderBy(d => d.Name)
                 .ToListAsync(ct);
         }
@@ -37,7 +42,8 @@ public class DepartmentsController(
         var libCountMap = new Dictionary<Guid?, int>();
         try
         {
-            var docCounts = await db.NdRegulationDocuments.AsNoTracking()
+            var docCounts = await NdDemoDataFilters.ApplyToRegulationDocuments(
+                    db.NdRegulationDocuments.AsNoTracking(), demoCtx)
                 .GroupBy(d => d.DepartmentId)
                 .Select(g => new { g.Key, Count = g.Count() })
                 .ToListAsync(ct);
@@ -47,7 +53,8 @@ public class DepartmentsController(
 
         try
         {
-            var libCounts = await db.NdLibraries.AsNoTracking()
+            var libCounts = await NdDemoDataFilters.ApplyToLibraries(
+                    db.NdLibraries.AsNoTracking(), demoCtx)
                 .GroupBy(l => l.DepartmentId)
                 .Select(g => new { g.Key, Count = g.Count() })
                 .ToListAsync(ct);
@@ -91,11 +98,16 @@ public class DepartmentsController(
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] DepartmentRequest body, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var row = await db.NdDepartments.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (row == null) return NotFound(new { success = false, message = "Not found" });
+
+        if (!NdDemoDataFilters.CanAccessCreatedBy(row.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Not found" });
 
         row.Name = body.Name.Trim();
         row.Description = body.Description;
@@ -108,11 +120,16 @@ public class DepartmentsController(
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var row = await db.NdDepartments.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (row == null) return NotFound(new { success = false, message = "Not found" });
+
+        if (!NdDemoDataFilters.CanAccessCreatedBy(row.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Not found" });
 
         db.NdDepartments.Remove(row);
         await db.SaveChangesAsync(ct);

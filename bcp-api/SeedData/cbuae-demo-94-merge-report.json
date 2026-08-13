@@ -1,0 +1,671 @@
+{
+  "summary": {
+    "regulation_points_source": "cache",
+    "regulation_points_count": 592,
+    "excel_non_int_rows": 94,
+    "output_count": 94,
+    "matched_to_regulation": 94,
+    "not_matched_to_regulation": 0
+  },
+  "not_matched_to_regulation": [],
+  "rows": [
+    {
+      "clause_no": "1.1",
+      "excel_row": 11,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Purpose and Scope"
+    },
+    {
+      "clause_no": "1.2",
+      "excel_row": 12,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Applicability"
+    },
+    {
+      "clause_no": "1.3",
+      "excel_row": 13,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Legal Status"
+    },
+    {
+      "clause_no": "1.4",
+      "excel_row": 14,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Organisation of the Guidelines"
+    },
+    {
+      "clause_no": "2.1",
+      "excel_row": 15,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "National Legislative and Regulatory Framework"
+    },
+    {
+      "clause_no": "2.2",
+      "excel_row": 16,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "International Legislative and Regulatory Framework"
+    },
+    {
+      "clause_no": "2.3",
+      "excel_row": 17,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "AML/CFT National Strategy Framework"
+    },
+    {
+      "clause_no": "3.1",
+      "excel_row": 18,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Summary of Minimum Statutory Obligations of Supervised Institutions"
+    },
+    {
+      "clause_no": "3.2",
+      "excel_row": 19,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Confidentiality and Data Protection"
+    },
+    {
+      "clause_no": "3.3",
+      "excel_row": 20,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Protection against Liability for Reporting Persons"
+    },
+    {
+      "clause_no": "3.4-a",
+      "excel_row": 21,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "Statutory Prohibitions"
+    },
+    {
+      "clause_no": "3.4-b",
+      "excel_row": 22,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "Statutory Prohibitions"
+    },
+    {
+      "clause_no": "3.4-c",
+      "excel_row": 23,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "Statutory Prohibitions"
+    },
+    {
+      "clause_no": "3.4-d",
+      "excel_row": 24,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "Statutory Prohibitions"
+    },
+    {
+      "clause_no": "3.4-e",
+      "excel_row": 25,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "Statutory Prohibitions"
+    },
+    {
+      "clause_no": "3.5",
+      "excel_row": 26,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Money Laundering"
+    },
+    {
+      "clause_no": "3.6",
+      "excel_row": 27,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Predicate Offences"
+    },
+    {
+      "clause_no": "3.7",
+      "excel_row": 28,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Financing of Terrorism"
+    },
+    {
+      "clause_no": "3.8",
+      "excel_row": 29,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Financing of Illegal Organisations"
+    },
+    {
+      "clause_no": "3.9",
+      "excel_row": 30,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "The ML Phases"
+    },
+    {
+      "clause_no": "3.10",
+      "excel_row": 31,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "ML/FT Typologies"
+    },
+    {
+      "clause_no": "3.11",
+      "excel_row": 32,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Sanctions against Persons Violating Reporting Obligations"
+    },
+    {
+      "clause_no": "4",
+      "excel_row": 33,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Identification and Assessment of ML/FT Risks"
+    },
+    {
+      "clause_no": "4.1",
+      "excel_row": 34,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Risk-Based Approach (RBA)"
+    },
+    {
+      "clause_no": "4.1.1",
+      "excel_row": 35,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Assessing Business-wide Risks"
+    },
+    {
+      "clause_no": "4.1.2",
+      "excel_row": 36,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Risk Factors"
+    },
+    {
+      "clause_no": "4.1.3",
+      "excel_row": 37,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Customer Risk"
+    },
+    {
+      "clause_no": "4.1.4",
+      "excel_row": 38,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Geographic Risk"
+    },
+    {
+      "clause_no": "4.1.5",
+      "excel_row": 39,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Product-, Service-, Transaction-Related Risk"
+    },
+    {
+      "clause_no": "4.1.6",
+      "excel_row": 40,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Delivery Channel-Related Risk"
+    },
+    {
+      "clause_no": "4.1.7",
+      "excel_row": 41,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Other Risk Factors"
+    },
+    {
+      "clause_no": "4.1.8",
+      "excel_row": 42,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Assessing New Product and New Technologies Risks"
+    },
+    {
+      "clause_no": "4.2",
+      "excel_row": 43,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Risk Assessment Methodology and Documentation"
+    },
+    {
+      "clause_no": "4.2.1",
+      "excel_row": 44,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Risk Assessment Methodology"
+    },
+    {
+      "clause_no": "4.2.2",
+      "excel_row": 45,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Documentation and Updating"
+    },
+    {
+      "clause_no": "5",
+      "excel_row": 46,
+      "reg_matched": true,
+      "match_kind": "alias",
+      "reg_title": "Mitigation of ML/FT Risks"
+    },
+    {
+      "clause_no": "6",
+      "excel_row": 47,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Customer Due Diligence (CDD)"
+    },
+    {
+      "clause_no": "6.1",
+      "excel_row": 48,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Risk-Based Application of CDD Measures"
+    },
+    {
+      "clause_no": "6.1.1",
+      "excel_row": 49,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Assessing Customer and Business Relationship Risk"
+    },
+    {
+      "clause_no": "6.1.2",
+      "excel_row": 50,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Establishing a Customer Risk Profile"
+    },
+    {
+      "clause_no": "6.2",
+      "excel_row": 51,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Circumstances and Timing for Undertaking CDD Measures"
+    },
+    {
+      "clause_no": "6.2.1",
+      "excel_row": 52,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Establishment of a Business Relationship"
+    },
+    {
+      "clause_no": "6.2.2",
+      "excel_row": 53,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Occasional Transactions"
+    },
+    {
+      "clause_no": "6.2.3-a",
+      "excel_row": 54,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "Exceptional Circumstances"
+    },
+    {
+      "clause_no": "6.2.3-b",
+      "excel_row": 55,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "Exceptional Circumstances"
+    },
+    {
+      "clause_no": "6.2.3-c",
+      "excel_row": 56,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "Exceptional Circumstances"
+    },
+    {
+      "clause_no": "6.2.3-d",
+      "excel_row": 57,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "Exceptional Circumstances"
+    },
+    {
+      "clause_no": "6.3",
+      "excel_row": 58,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Customer Due Diligence (CDD) Measures"
+    },
+    {
+      "clause_no": "6.3.1",
+      "excel_row": 59,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Customer and Beneficial Owner Identification and Verification of the Identity"
+    },
+    {
+      "clause_no": "6.3.2",
+      "excel_row": 60,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "CDD Measures Concerning Wire Transfers"
+    },
+    {
+      "clause_no": "6.3.3",
+      "excel_row": 61,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "CDD Measures Concerning Legal Persons and Arrangements"
+    },
+    {
+      "clause_no": "6.3.4-a",
+      "excel_row": 62,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "CDD Measures for life insurance activities"
+    },
+    {
+      "clause_no": "6.3.4-b",
+      "excel_row": 63,
+      "reg_matched": true,
+      "match_kind": "subclause",
+      "reg_title": "CDD Measures for life insurance activities"
+    },
+    {
+      "clause_no": "6.3.5",
+      "excel_row": 64,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Ongoing Monitoring of the Business Relationship"
+    },
+    {
+      "clause_no": "6.3.6",
+      "excel_row": 65,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Reviewing and Updating the Customer Due Diligence Information"
+    },
+    {
+      "clause_no": "6.4",
+      "excel_row": 66,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Enhanced Due Diligence (EDD) Measures"
+    },
+    {
+      "clause_no": "6.4.1",
+      "excel_row": 67,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Requirements for Politically Exposed Persons (PEPs)"
+    },
+    {
+      "clause_no": "6.4.2",
+      "excel_row": 68,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "EDD Measures for High-Risk Customers or Transactions"
+    },
+    {
+      "clause_no": "6.4.3",
+      "excel_row": 69,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Requirements for High-Risk Countries"
+    },
+    {
+      "clause_no": "6.4.4",
+      "excel_row": 70,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Requirements for Correspondent Relationships"
+    },
+    {
+      "clause_no": "6.4.5",
+      "excel_row": 71,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Requirements for Money or Value Transfer Services"
+    },
+    {
+      "clause_no": "6.4.6",
+      "excel_row": 72,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Requirements for Non-Profit Organisations"
+    },
+    {
+      "clause_no": "6.5",
+      "excel_row": 73,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Simplified Due Diligence (SDD) Measures"
+    },
+    {
+      "clause_no": "6.6",
+      "excel_row": 74,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Reliance on a Third Party"
+    },
+    {
+      "clause_no": "7",
+      "excel_row": 75,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Suspicious Transaction Reporting"
+    },
+    {
+      "clause_no": "7.1",
+      "excel_row": 76,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Role of the Financial Intelligence Unit"
+    },
+    {
+      "clause_no": "7.2",
+      "excel_row": 77,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Processing of STRs by the FIU"
+    },
+    {
+      "clause_no": "7.3",
+      "excel_row": 78,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Meaning of Suspicious Transaction"
+    },
+    {
+      "clause_no": "7.4",
+      "excel_row": 79,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Identification of Suspicious Transactions"
+    },
+    {
+      "clause_no": "7.5",
+      "excel_row": 80,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Requirement to Report"
+    },
+    {
+      "clause_no": "7.6",
+      "excel_row": 81,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Procedures for the Reporting of Suspicious Transactions"
+    },
+    {
+      "clause_no": "7.7",
+      "excel_row": 82,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Timing of Suspicious Transaction Reports (STRs)"
+    },
+    {
+      "clause_no": "7.8",
+      "excel_row": 83,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Confidentiality and Prohibition against “Tipping Off”"
+    },
+    {
+      "clause_no": "7.9",
+      "excel_row": 84,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Protection against Liability for Reporting Persons"
+    },
+    {
+      "clause_no": "7.10",
+      "excel_row": 85,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Handling of Transactions and Business Relationships after Filing of STRs"
+    },
+    {
+      "clause_no": "8",
+      "excel_row": 86,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Governance"
+    },
+    {
+      "clause_no": "8.1.1",
+      "excel_row": 87,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Appointment and Approval"
+    },
+    {
+      "clause_no": "8.1.2",
+      "excel_row": 88,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Responsibilities"
+    },
+    {
+      "clause_no": "8.2",
+      "excel_row": 89,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Staff Screening and Training"
+    },
+    {
+      "clause_no": "8.3",
+      "excel_row": 90,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Group Oversight"
+    },
+    {
+      "clause_no": "8.4",
+      "excel_row": 91,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Independent Audit Function"
+    },
+    {
+      "clause_no": "8.5",
+      "excel_row": 92,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Responsibilities of Senior Management"
+    },
+    {
+      "clause_no": "8.6",
+      "excel_row": 93,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Governance Issues of Small Organisations"
+    },
+    {
+      "clause_no": "9.1",
+      "excel_row": 94,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Obligations and Timeframe for the Retention and Availability of Records"
+    },
+    {
+      "clause_no": "9.2",
+      "excel_row": 95,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Required Record Types"
+    },
+    {
+      "clause_no": "9.2.1",
+      "excel_row": 96,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Transactions"
+    },
+    {
+      "clause_no": "9.2.2",
+      "excel_row": 97,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Customer Information"
+    },
+    {
+      "clause_no": "9.2.3",
+      "excel_row": 98,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Company Information"
+    },
+    {
+      "clause_no": "9.2.4",
+      "excel_row": 99,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Reliance on Third Parties to Undertake CDD"
+    },
+    {
+      "clause_no": "9.2.5",
+      "excel_row": 100,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Ongoing Monitoring of Business Relationships"
+    },
+    {
+      "clause_no": "9.2.6",
+      "excel_row": 101,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Suspicious Transaction Reports (STRs)"
+    },
+    {
+      "clause_no": "10",
+      "excel_row": 102,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "International Financial Sanctions"
+    },
+    {
+      "clause_no": "11.1",
+      "excel_row": 103,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Glossary of Terms"
+    },
+    {
+      "clause_no": "11.2",
+      "excel_row": 104,
+      "reg_matched": true,
+      "match_kind": "exact",
+      "reg_title": "Useful Links"
+    }
+  ]
+}

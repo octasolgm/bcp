@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Reguliq.Api.Data.NewDashboard.Entities;
 
 namespace Reguliq.Api.Services.NewDashboard;
@@ -33,7 +34,24 @@ public static class NdRegulAnalysisPointSync
             point.LandingAiActionPlan = capFromJudgment;
             point.OriginalAiActionPlan ??= capFromJudgment;
         }
+        else
+        {
+            point.LandingAiActionPlan = null;
+            if (LooksLikeRegulElementAssessment(point.OriginalAiActionPlan))
+                point.OriginalAiActionPlan = null;
+            if (LooksLikeRegulElementAssessment(point.FinalActionPlan))
+                point.FinalActionPlan = null;
+        }
         point.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    private static bool LooksLikeRegulElementAssessment(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        var t = text.Trim();
+        return Regex.IsMatch(t, @"^Element\s+\d+\s*\(", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(t, @"\bElement\s+\d+.*(partially\s+covered|NOT\s+covered)", RegexOptions.IgnoreCase);
     }
 
     public static void ApplyIntReverseFinding(

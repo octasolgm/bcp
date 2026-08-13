@@ -790,9 +790,11 @@
         <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || coverageCounts.notRun === 0" (click)="runRemainingPoints()">
           Run remaining ({{ coverageCounts.notRun }})
         </button>
+        @if (!usesForwardOnlyRunUi()) {
         <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || phase2RetryCount === 0" (click)="retryFailedOnly()">
           {{ ndRunId ? ('Rerun dual verify (' + phase2RetryCount + ')') : ('Retry Phase 2 (' + phase2RetryCount + ')') }}
         </button>
+        }
       </div>
     }
 
@@ -825,7 +827,26 @@
               <span class="sid" [title]="displayLabelForPoint(row.pointId)">{{ row.displayId || displayLabelForPoint(row.pointId) }}</span>
               <div class="status-main">
                 <span class="stitle" [title]="row.title">{{ truncate(row.title, 40) }}</span>
-                @if (getPointPhaseStatus(row.pointId); as phases) {
+                @if (usesForwardOnlyRunUi()) {
+                  <div class="forward-status-row">
+                    <span class="forward-status-chip" [class]="forwardPointStatusClass(row.pointId)">
+                      {{ forwardPointStatusLabel(row.pointId) }}
+                    </span>
+                    @if (canShowPointRerunActions(row.pointId)) {
+                      <button
+                        type="button"
+                        class="phase-action"
+                        [class.phase-action-busy]="isPointRerunInFlight(row.pointId) && pointRerunMode(row.pointId) === 'all'"
+                        title="Rerun this point"
+                        [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                        (click)="rerunPointAll(row.pointId); $event.stopPropagation()"
+                      >
+                        {{ pointRerunButtonLabel(row.pointId, 'Rerun', 'all') }}
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  @if (getPointPhaseStatus(row.pointId); as phases) {
                   <div class="phase-row">
                     <div class="phase-chips">
                       <span class="phase-chip" [class]="'phase-' + phases.phase1.state">
@@ -905,6 +926,7 @@
                     }
                     </div>
                   </div>
+                }
                 }
               </div>
               <div class="status-badges">

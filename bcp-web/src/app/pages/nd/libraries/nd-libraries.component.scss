@@ -1,17 +1,9 @@
 :host {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-:host {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: min-content;
+  min-width: 0;
 }
 
 .header-actions {
@@ -22,11 +14,7 @@
 }
 
 .table-wrap {
-  padding: 0;
-  overflow-x: auto;
-
   table {
-    width: 100%;
     border-collapse: collapse;
     font-size: 0.8125rem;
   }

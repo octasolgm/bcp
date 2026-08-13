@@ -33,11 +33,12 @@ import { AnalyseRegulComponent } from '../analyse-regul/analyse-regul.component'
   styleUrl: '../analyse-regul/analyse-regul.component.scss',
 })
 export class AnalyseRegulFullComponent extends AnalyseRegulComponent {
-  override readonly versionLabel = 'V4 — Regul Full Markdown';
+  override readonly versionLabel = '';
   override readonly versionPath = '/analyse-regul-full';
 
   protected override readonly regulWorkflowEngineId = REGUL_PIPELINE_FULL;
   protected override readonly regulAnalysisRoute = '/nd/analyse-regul-full';
+  protected override showReversePipelineUi = false;
 
   /** V4 always runs forward-only (full markdown); reverse is not used on this page. */
   override runAnalysisAndScroll(): void {
@@ -50,9 +51,12 @@ export class AnalyseRegulFullComponent extends AnalyseRegulComponent {
   }
 
   protected override regulRunConfirmHint(): string {
-    const llm = this.regulWorkflowLlmSummary || 'admin-selected LLM';
+    if (this.ndAuth.isDemoViewer()) {
+      return 'Demo analysis replays saved CBUAE results — queued, running, and done states update quickly with no live AI.';
+    }
+    const model = this.regulWorkflowLlmSummary || 'admin-selected model';
     return (
-      `Regul full-markdown analysis using ${llm}. ` +
+      `Regul full-markdown analysis using ${model}. ` +
       'Sends complete parsed markdown for every attached internal file (any page count, multiple files supported; no section ranking). ' +
       'Forward judgment only — reverse coverage is skipped. Type start to confirm.'
     );
@@ -78,6 +82,9 @@ export class AnalyseRegulFullComponent extends AnalyseRegulComponent {
   }
 
   override get runBlockedReason(): string | null {
+    if (this.ndAuth.isDemoViewer() && this.isNdShell) {
+      return super.runBlockedReason;
+    }
     if (
       this.ndRunId &&
       this.ndWorkflowEngine &&

@@ -8,6 +8,7 @@ using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -21,6 +22,8 @@ public class AnalysisRunsController(
     IServiceScopeFactory scopeFactory,
     NdAnalysisRunCancellationTracker runCancellation,
     NdDashboardCacheService dashboardCache,
+    NdDemoUserDirectory demoDirectory,
+    NdDemoWorkspaceService demoWorkspace,
     ILogger<AnalysisRunsController> logger) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
@@ -59,17 +62,41 @@ public class AnalysisRunsController(
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+
+        if (demoCtx.Enabled && demoCtx.ViewerIsDemo)
+        {
+            var previewQ = NdDemoDataFilters.ApplyToAnalysisRuns(
+                db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != DeletedStatus),
+                demoCtx);
+            if (profile!.Role == "maker")
+                previewQ = previewQ.Where(r => r.CreatedBy == profile.Id);
+            if (!await previewQ.AnyAsync(ct))
+            {
+                try
+                {
+                    await demoSeed.GetOrCreateDemoCbuaeRunAsync(profile.Id, ct);
+                    dashboardCache.Invalidate();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Auto-seed CBUAE demo analysis failed for profile {ProfileId}", profile.Id);
+                }
+            }
+        }
 
         if (deletedOnly)
         {
             if (profile!.Role != "super_admin")
                 return StatusCode(403, new { success = false, message = "Forbidden" });
 
-            var deletedRuns = await db.NdAnalysisRuns.AsNoTracking()
-                .Where(r => r.Status == DeletedStatus)
+            var deletedRuns = await NdDemoDataFilters.ApplyToAnalysisRuns(
+                    db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status == DeletedStatus),
+                    demoCtx)
                 .OrderByDescending(r => r.DeletedAt ?? r.UpdatedAt)
                 .Take(200)
                 .SelectListColumns()
@@ -89,9 +116,9 @@ public class AnalysisRunsController(
             hiddenLegacySet = hiddenLegacy.ToHashSet();
         }
 
-        var q = db.NdAnalysisRuns.AsNoTracking()
-            .Where(r => r.Status != DeletedStatus)
-            .AsQueryable();
+        var q = NdDemoDataFilters.ApplyToAnalysisRuns(
+            db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != DeletedStatus),
+            demoCtx);
 
         if (profile!.Role == "maker" || mineOnly)
             q = q.Where(r => r.CreatedBy == profile.Id);
@@ -100,6 +127,10 @@ public class AnalysisRunsController(
             q = q.Where(r => r.Status == status);
 
         const int overviewPreviewLimit = 20;
+
+        var demoProfileIds = demoCtx.Enabled
+            ? await demoDirectory.GetDemoProfileIdsAsync(ct)
+            : null;
 
         if (ndOnly && summaryOnly)
         {
@@ -116,7 +147,8 @@ public class AnalysisRunsController(
                         .Take(overviewPreviewLimit)
                         .SelectListColumns()
                         .ToListAsync(innerCt);
-                    return await NdRunEnrichmentHelper.MapSummariesLightAsync(db, cachedRuns, innerCt, overviewSkipGaps);
+                    return await NdRunEnrichmentHelper.MapSummariesLightAsync(
+                        db, cachedRuns, innerCt, overviewSkipGaps, demoProfileIds);
                 }, ct);
                 return Ok(new { success = true, data = summaries });
             }
@@ -130,7 +162,8 @@ public class AnalysisRunsController(
                 .Take(effectivePageSize)
                 .SelectListColumns()
                 .ToListAsync(ct);
-            var pagedSummaries = await NdRunEnrichmentHelper.MapSummariesLightAsync(db, pagedRuns, ct);
+            var pagedSummaries = await NdRunEnrichmentHelper.MapSummariesLightAsync(
+                db, pagedRuns, ct, skipGapStats: false, demoProfileIds);
             var totalPages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)effectivePageSize);
             return Ok(new
             {
@@ -267,11 +300,86 @@ public class AnalysisRunsController(
         }
     }
 
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateRunRequest body, CancellationToken ct)
+    /// <summary>Persist a completed Regul V4 demo run from Arena / external judgment JSON.</summary>
+    [HttpPost("demo-save-regul")]
+    public async Task<IActionResult> DemoSaveRegul(
+        [FromBody] DemoAnalysisSeedService.DemoRegulSaveRequest? body,
+        CancellationToken ct)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        try
+        {
+            var request = body ?? new DemoAnalysisSeedService.DemoRegulSaveRequest(UseSeedFile: true);
+            var run = await demoSeed.CreateDemoRegulRunFromJudgmentsAsync(profile!.Id, request, ct);
+            dashboardCache.Invalidate();
+            return Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    id = run.Id,
+                    pointCount = run.TotalPointsCount,
+                    status = run.Status,
+                    name = run.Name,
+                    workflowEngine = run.WorkflowEngine,
+                },
+                message = "Demo Regul analysis saved to analysis runs.",
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            var detail = ex.InnerException?.Message ?? ex.Message;
+            return StatusCode(500, new { success = false, message = $"Demo Regul save failed: {detail}" });
+        }
+    }
+
+    /// <summary>Load CBUAE × AML Manual Arena judgments from SeedData and create a demo Regul run.</summary>
+    [HttpPost("demo-from-cbuae-seed")]
+    public async Task<IActionResult> DemoFromCbuaeSeed(CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        try
+        {
+            var run = await demoSeed.GetOrCreateDemoCbuaeRunAsync(profile!.Id, ct);
+            dashboardCache.Invalidate();
+            return Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    id = run.Id,
+                    pointCount = run.TotalPointsCount,
+                    status = run.Status,
+                    name = run.Name,
+                },
+                message = "Demo CBUAE × AML Manual analysis run ready (seeded judgments).",
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = $"Demo CBUAE seed failed: {ex.Message}" });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateRunRequest body, CancellationToken ct)
+    {
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var points = body.SelectedPointsSnapshot ?? [];
         string? storedPromptVersion = null;
@@ -298,6 +406,14 @@ public class AnalysisRunsController(
             Status = "draft",
             CreatedBy = profile!.Id,
         };
+
+        if (demoCtx.ViewerIsDemo)
+        {
+            if (!run.Name.StartsWith("[Demo]", StringComparison.OrdinalIgnoreCase))
+                run.Name = $"[Demo] {run.Name}".Trim();
+            if (string.IsNullOrWhiteSpace(run.Description))
+                run.Description = "Demonstration analysis run — simulated workflow, no AI credits.";
+        }
         db.NdAnalysisRuns.Add(run);
 
         foreach (var pt in points)
@@ -305,7 +421,11 @@ public class AnalysisRunsController(
             var json = JsonSerializer.Serialize(pt);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            Guid? regPointId = root.TryGetProperty("regulationPointId", out var rpid) && Guid.TryParse(rpid.GetString(), out var g1) ? g1 : null;
+            Guid? regPointId = null;
+            if (root.TryGetProperty("regulationPointId", out var rpid) && Guid.TryParse(rpid.GetString(), out var g1))
+                regPointId = g1;
+            else if (root.TryGetProperty("pointId", out var pid) && Guid.TryParse(pid.GetString(), out var g2))
+                regPointId = g2;
 
             db.NdAnalysisPoints.Add(new NdAnalysisPoint
             {
@@ -321,9 +441,9 @@ public class AnalysisRunsController(
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> Get(Guid id, CancellationToken ct)
+    public async Task<IActionResult> Get(Guid id, [FromQuery] bool lite, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
@@ -338,28 +458,65 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        if (!NdDemoDataFilters.CanAccessCreatedBy(run.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Not found" });
+
         var creator = run.CreatedBy.HasValue
             ? await db.NdProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == run.CreatedBy, ct)
             : null;
 
-        var history = await db.NdAnalysisStatusHistories.AsNoTracking()
-            .Where(h => h.AnalysisRunId == id)
-            .OrderBy(h => h.CreatedAt)
-            .ToListAsync(ct);
+        var history = lite
+            ? []
+            : await db.NdAnalysisStatusHistories.AsNoTracking()
+                .Where(h => h.AnalysisRunId == id)
+                .OrderBy(h => h.CreatedAt)
+                .ToListAsync(ct);
 
-        var points = await db.NdAnalysisPoints
-            .AsNoTracking()
-            .Where(p => p.AnalysisRunId == id)
-            .OrderBy(p => p.CreatedAt)
-            .ToListAsync(ct);
+        List<NdAnalysisPoint> points;
+        if (lite)
+        {
+            points = await db.NdAnalysisPoints
+                .AsNoTracking()
+                .Where(p => p.AnalysisRunId == id)
+                .OrderBy(p => p.CreatedAt)
+                .Select(p => new NdAnalysisPoint
+                {
+                    Id = p.Id,
+                    AnalysisRunId = p.AnalysisRunId,
+                    RegulationPointId = p.RegulationPointId,
+                    PointSnapshot = p.PointSnapshot,
+                    LandingAiStatus = p.LandingAiStatus,
+                    LandingAiError = p.LandingAiError,
+                    GoogleAiStatus = p.GoogleAiStatus,
+                    DualVerifyStatus = p.DualVerifyStatus,
+                    FinalStatus = p.FinalStatus,
+                    CreatedAt = p.CreatedAt,
+                    UpdatedAt = p.UpdatedAt,
+                })
+                .ToListAsync(ct);
+        }
+        else
+        {
+            points = await db.NdAnalysisPoints
+                .AsNoTracking()
+                .Where(p => p.AnalysisRunId == id)
+                .OrderBy(p => p.CreatedAt)
+                .ToListAsync(ct);
+        }
+
+        var createdByIsDemo = run.CreatedBy is Guid creatorId
+            && await demoDirectory.IsDemoProfileAsync(creatorId, ct);
 
         return Ok(new
         {
             success = true,
             data = new
             {
-                run = NdRegulApiProjection.MapRunDetail(run, creator?.FullName),
-                points = points.Select(p => NdRegulApiProjection.MapPoint(p, run.WorkflowEngine)).ToList(),
+                run = NdRegulApiProjection.MapRunDetail(run, creator?.FullName, createdByIsDemo),
+                points = lite
+                    ? points.Select(p => NdRegulApiProjection.MapPointLite(p, run.WorkflowEngine)).ToList()
+                    : points.Select(p => NdRegulApiProjection.MapPoint(p, run.WorkflowEngine)).ToList(),
                 history,
             },
         });
@@ -371,7 +528,7 @@ public class AnalysisRunsController(
         [FromQuery] bool resume = false,
         CancellationToken ct = default)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
@@ -409,11 +566,37 @@ public class AnalysisRunsController(
         }
 
         // Poll payload: lightweight status; include INT snapshots + reverse section rows for Regul live UI.
-        var pointRows = await db.NdAnalysisPoints
-            .AsNoTracking()
-            .Where(p => p.AnalysisRunId == id)
-            .OrderBy(p => p.CreatedAt)
-            .ToListAsync(ct);
+        var litePoll = run.TotalPointsCount >= 150;
+        List<NdAnalysisPoint> pointRows;
+        if (litePoll)
+        {
+            pointRows = await db.NdAnalysisPoints
+                .AsNoTracking()
+                .Where(p => p.AnalysisRunId == id)
+                .OrderBy(p => p.CreatedAt)
+                .Select(p => new NdAnalysisPoint
+                {
+                    Id = p.Id,
+                    RegulationPointId = p.RegulationPointId,
+                    PointSnapshot = p.PointSnapshot,
+                    LandingAiStatus = p.LandingAiStatus,
+                    LandingAiResult = p.LandingAiResult,
+                    LandingAiError = p.LandingAiError,
+                    GoogleAiStatus = p.GoogleAiStatus,
+                    DualVerifyStatus = p.DualVerifyStatus,
+                    FinalStatus = p.FinalStatus,
+                    CreatedAt = p.CreatedAt,
+                })
+                .ToListAsync(ct);
+        }
+        else
+        {
+            pointRows = await db.NdAnalysisPoints
+                .AsNoTracking()
+                .Where(p => p.AnalysisRunId == id)
+                .OrderBy(p => p.CreatedAt)
+                .ToListAsync(ct);
+        }
 
         int? regulReverseSectionTotal = null;
         int? regulReverseSectionCompleted = null;
@@ -474,14 +657,15 @@ public class AnalysisRunsController(
                 regulReverseSectionTotal,
                 regulReverseSectionCompleted,
                 regulReverseSectionFailed,
-                regulReverseSections),
+                regulReverseSections,
+                litePoll),
         });
     }
 
     [HttpGet("{id:guid}/history")]
     public async Task<IActionResult> History(Guid id, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
@@ -495,6 +679,10 @@ public class AnalysisRunsController(
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        if (!NdDemoDataFilters.CanAccessCreatedBy(run.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Not found" });
+
         var timeline = await NdRunHistoryHelper.BuildTimelineAsync(db, run, ct);
         return Ok(new { success = true, data = timeline });
     }
@@ -502,32 +690,53 @@ public class AnalysisRunsController(
     [HttpPost("{id:guid}/start")]
     public async Task<IActionResult> Start(Guid id, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
+        if (!NdDemoDataFilters.CanAccessCreatedBy(run.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Not found" });
 
         if (run.Status is "running" or "processing" && runCancellation.HasActiveWorker(id))
             return Ok(new { success = true, message = "Analysis already in progress", id, status = run.Status });
 
-        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine) && run.RegulClausesConfirmedAt == null)
-            return BadRequest(new
+        var useDemoSimulation = await ShouldUseDemoSimulationAsync(demoCtx, run, ct);
+        var useRegul = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine);
+
+        if (useRegul && run.RegulClausesConfirmedAt == null)
+        {
+            if (useDemoSimulation)
             {
-                success = false,
-                message = "Confirm regulatory clauses before starting Regul workflow analysis.",
-            });
+                run.RegulClausesConfirmedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+            else
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Confirm regulatory clauses before starting Regul workflow analysis.",
+                });
+            }
+        }
 
         var linkedCt = runCancellation.Register(id);
-        var useRegul = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine);
         _ = Task.Run(async () =>
         {
             using var scope = scopeFactory.CreateScope();
             try
             {
-                if (useRegul)
+                if (useDemoSimulation)
+                {
+                    var demoInterception = scope.ServiceProvider.GetRequiredService<NdDemoInterceptionService>();
+                    await demoInterception.SimulateDemoAnalysisRunAsync(id, profile.Id, useRegul, linkedCt);
+                }
+                else if (useRegul)
                 {
                     var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
                     await regulProc.ProcessRunAsync(id, linkedCt);
@@ -555,13 +764,17 @@ public class AnalysisRunsController(
     [HttpPost("{id:guid}/start-forward")]
     public async Task<IActionResult> StartForwardOnly(Guid id, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
+        if (!NdDemoDataFilters.CanAccessCreatedBy(run.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Not found" });
 
         if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return BadRequest(new { success = false, message = "Forward-only start is for Regul workflow runs." });
@@ -569,12 +782,39 @@ public class AnalysisRunsController(
         if (run.Status is "running" or "processing" && runCancellation.HasActiveWorker(id))
             return Ok(new { success = true, message = "Analysis already in progress", id, status = run.Status });
 
+        var useDemoSimulation = await ShouldUseDemoSimulationAsync(demoCtx, run, ct);
+        const bool useRegul = true;
+
         if (run.RegulClausesConfirmedAt == null)
-            return BadRequest(new
+        {
+            if (useDemoSimulation)
             {
-                success = false,
-                message = "Confirm regulatory clauses before starting forward analysis.",
-            });
+                run.RegulClausesConfirmedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+            else
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Confirm regulatory clauses before starting forward analysis.",
+                });
+            }
+        }
+
+        if (useDemoSimulation)
+        {
+            run.Status = "running";
+            run.RegulPipelinePhase = "queued";
+        }
+        else
+        {
+            run.Status = "running";
+            run.RegulPipelinePhase = "forward";
+        }
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        dashboardCache.Invalidate();
 
         var linkedCt = runCancellation.Register(id);
         _ = Task.Run(async () =>
@@ -582,8 +822,16 @@ public class AnalysisRunsController(
             using var scope = scopeFactory.CreateScope();
             try
             {
-                var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
-                await regulProc.ProcessForwardOnlyRunAsync(id, linkedCt);
+                if (useDemoSimulation)
+                {
+                    var demoInterception = scope.ServiceProvider.GetRequiredService<NdDemoInterceptionService>();
+                    await demoInterception.SimulateDemoAnalysisRunAsync(id, profile.Id, useRegul, linkedCt);
+                }
+                else
+                {
+                    var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
+                    await regulProc.ProcessForwardOnlyRunAsync(id, linkedCt);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -656,8 +904,10 @@ public class AnalysisRunsController(
     [HttpPost("{id:guid}/stop")]
     public async Task<IActionResult> Stop(Guid id, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var meta = await db.NdAnalysisRuns.AsNoTracking()
             .Where(r => r.Id == id)
@@ -667,12 +917,13 @@ public class AnalysisRunsController(
             return NotFound(new { success = false, message = "Not found" });
         if (profile!.Role == "maker" && meta.CreatedBy != profile.Id)
             return StatusCode(403, new { success = false, message = "Forbidden" });
+        if (!NdDemoDataFilters.CanAccessCreatedBy(meta.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Not found" });
 
         var terminal = meta.Status is "completed" or "cancelled" or "dual_verify_failed" or "landing_ai_complete";
         if (terminal)
             return Ok(new { success = true, message = "Analysis already finished", id, status = meta.Status });
 
-        // Signal in-process worker first, then persist with fast SQL (avoid loading all points).
         runCancellation.RequestStop(id);
 
         await db.Database.ExecuteSqlRawAsync(
@@ -692,11 +943,18 @@ public class AnalysisRunsController(
               WHERE analysis_run_id = {0};
             UPDATE regul_forward_findings
               SET status = 'cancelled', error_message = 'Stopped by user', updated_at = now()
-              WHERE analysis_run_id = {0} AND status = 'pending';
+              WHERE analysis_run_id = {0} AND status IN ('pending', 'running');
             """,
             id);
 
-        return Ok(new { success = true, message = "Analysis stopped", id, status = "cancelled" });
+        runCancellation.Clear(id);
+
+        var updatedStatus = await db.NdAnalysisRuns.AsNoTracking()
+            .Where(r => r.Id == id)
+            .Select(r => r.Status)
+            .FirstOrDefaultAsync(ct) ?? "cancelled";
+
+        return Ok(new { success = true, message = "Analysis stopped", id, status = updatedStatus });
     }
 
     [HttpPost("{id:guid}/rerun-point/{pointId:guid}")]
@@ -707,13 +965,21 @@ public class AnalysisRunsController(
         [FromQuery] int? actionIndex = null,
         CancellationToken ct = default)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var demoAiBlock = NdDemoIsolationHelper.ForbidDemoAiOperations(demoCtx);
+        if (demoAiBlock != null) return demoAiBlock;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound();
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
+
+        var demoOwnedBlock = await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(
+            demoDirectory, run.CreatedBy, ct);
+        if (demoOwnedBlock != null) return demoOwnedBlock;
 
         var pointExists = await db.NdAnalysisPoints.AnyAsync(p => p.Id == pointId && p.AnalysisRunId == id, ct);
         if (!pointExists) return NotFound(new { success = false, message = "Analysis point not found" });
@@ -724,13 +990,21 @@ public class AnalysisRunsController(
     [HttpPost("{id:guid}/rerun-forward")]
     public async Task<IActionResult> RerunForwardOnly(Guid id, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var demoAiBlock = NdDemoIsolationHelper.ForbidDemoAiOperations(demoCtx);
+        if (demoAiBlock != null) return demoAiBlock;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound();
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
+
+        var demoOwnedBlock = await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(
+            demoDirectory, run.CreatedBy, ct);
+        if (demoOwnedBlock != null) return demoOwnedBlock;
 
         if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return BadRequest(new { success = false, message = "Forward-only rerun is for Regul workflow runs." });
@@ -811,13 +1085,21 @@ public class AnalysisRunsController(
         [FromQuery] int? actionIndex = null,
         CancellationToken ct = default)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var demoAiBlock = NdDemoIsolationHelper.ForbidDemoAiOperations(demoCtx);
+        if (demoAiBlock != null) return demoAiBlock;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound();
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
+
+        var demoOwnedBlock = await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(
+            demoDirectory, run.CreatedBy, ct);
+        if (demoOwnedBlock != null) return demoOwnedBlock;
 
         var pointExists = await db.NdAnalysisPoints.AnyAsync(p => p.Id == pointId && p.AnalysisRunId == id, ct);
         if (!pointExists) return NotFound(new { success = false, message = "Analysis point not found" });
@@ -828,13 +1110,21 @@ public class AnalysisRunsController(
     [HttpPost("{id:guid}/rerun-dual-verify/all")]
     public async Task<IActionResult> RerunAllFailedDualVerify(Guid id, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var demoAiBlock = NdDemoIsolationHelper.ForbidDemoAiOperations(demoCtx);
+        if (demoAiBlock != null) return demoAiBlock;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound();
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
+
+        var demoOwnedBlock = await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(
+            demoDirectory, run.CreatedBy, ct);
+        if (demoOwnedBlock != null) return demoOwnedBlock;
 
         if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
         {
@@ -938,11 +1228,36 @@ public class AnalysisRunsController(
     [HttpPost("{id:guid}/soft-delete")]
     public async Task<IActionResult> SoftDelete(Guid id, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return await SoftDeleteLegacyAsync(id, profile!, ct);
+
+        var isDemoOwned = run.CreatedBy is Guid createdBy && demoCtx.DemoProfileIds.Contains(createdBy);
+        var isDemoMarked = NdDemoDataFilters.IsDemoMarkedAnalysisRun(run);
+        if (demoCtx.Enabled && !demoCtx.ViewerIsDemo && (isDemoOwned || isDemoMarked))
+        {
+            runCancellation.RequestStop(id);
+            runCancellation.Clear(id);
+            var removed = await demoWorkspace.PermanentlyDeleteAnalysisRunAsync(id, ct);
+            if (!removed)
+                return NotFound(new { success = false, message = "Not found" });
+            dashboardCache.Invalidate();
+            logger.LogInformation(
+                "Production admin permanently deleted demo analysis run {RunId} (created by demo profile {CreatedBy})",
+                id,
+                run.CreatedBy);
+            return Ok(new
+            {
+                success = true,
+                permanentlyDeleted = true,
+                message = "Demo analysis run permanently removed.",
+            });
+        }
+
         if (run.Status == DeletedStatus)
             return BadRequest(new { success = false, message = "Analysis run is already deleted." });
         if (profile!.Role == "maker" && run.CreatedBy != null && run.CreatedBy != profile.Id)
@@ -954,8 +1269,16 @@ public class AnalysisRunsController(
         run.DeletedAt = DateTimeOffset.UtcNow;
         run.UpdatedAt = DateTimeOffset.UtcNow;
 
+        db.NdAnalysisStatusHistories.Add(new NdAnalysisStatusHistory
+        {
+            AnalysisRunId = id,
+            FromStatus = from,
+            ToStatus = DeletedStatus,
+            ChangedBy = profile.Id,
+            Comment = "Soft deleted",
+        });
+
         await db.SaveChangesAsync(ct);
-        await RecordStatusChangeAsync(db, id, from, DeletedStatus, profile.Id, "Soft deleted", ct);
         dashboardCache.Invalidate();
 
         return Ok(new { success = true, message = "Analysis run removed from workspace." });
@@ -1017,6 +1340,18 @@ public class AnalysisRunsController(
         await db.SaveChangesAsync(ct);
 
         return Ok(new { success = true, message = "Analysis run removed from workspace." });
+    }
+
+    private async Task<bool> ShouldUseDemoSimulationAsync(
+        NdDemoIsolationContext demoCtx,
+        NdAnalysisRun run,
+        CancellationToken ct)
+    {
+        if (!demoCtx.Enabled) return false;
+        if (demoCtx.ViewerIsDemo) return true;
+        if (run.CreatedBy is Guid createdBy && await demoDirectory.IsDemoProfileAsync(createdBy, ct))
+            return true;
+        return false;
     }
 
     private async Task<List<object>> LoadHiddenLegacyRunsAsync(CancellationToken ct)

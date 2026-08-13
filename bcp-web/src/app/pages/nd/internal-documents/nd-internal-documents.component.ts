@@ -4,9 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
+import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
 import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.service';
 import { ToastService } from '../../../services/toast.service';
-import { formatBytes, formatDate } from '../../../../lib/nd/utils';
+import { startPanelResize } from '../../shared/panel-resize';
+import { formatBytes, formatDate, formatTableDate } from '../../../../lib/nd/utils';
 import {
   compareDateIso,
   compareNumber,
@@ -45,7 +48,7 @@ type InternalDocAnalysisRun = {
 @Component({
   selector: 'app-nd-internal-documents',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdInternalDocumentSectionsPanelComponent],
+  imports: [CommonModule, FormsModule, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent],
   templateUrl: './nd-internal-documents.component.html',
   styleUrls: ['./nd-internal-documents.component.scss', '../nd-shared.scss'],
 })
@@ -55,6 +58,9 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
   readonly auth = inject(NdAuthService);
+  private readonly shellFocus = inject(NdShellFocusService);
+
+  private static readonly PANEL_SPLIT_KEY = 'nd-internal-docs-sections-panel-split';
 
   docs: InternalDocument[] = [];
   file: File | null = null;
@@ -64,6 +70,8 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   extractingSectionsId: string | null = null;
   repairingSectionPagesId: string | null = null;
   deletingId: string | null = null;
+  exportingMarkdownId: string | null = null;
+  exportingFileId: string | null = null;
   showDeleted = false;
   error = '';
   message = '';
@@ -74,11 +82,14 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   analysisFor: InternalDocument | null = null;
   analysisRuns: InternalDocAnalysisRun[] = [];
   loadingAnalysisRuns = false;
+  selectedDocId: string | null = null;
   searchQuery = '';
   parseFilter = '';
   sourceFilter = '';
   sortColumn: DocSortColumn = 'uploaded';
   sortDir: SortDir = 'desc';
+  /** Left (table) share when sections panel is open. */
+  leftPanelPct = 20;
 
   private sectionExtractPollTimer: ReturnType<typeof setInterval> | null = null;
   private sectionPageRepairPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -93,6 +104,8 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   private static readonly SECTION_PAGE_REPAIR_POLL_MS = 20 * 60 * 1000;
 
   async ngOnInit(): Promise<void> {
+    this.restorePanelSplit();
+    await this.auth.refreshProfile();
     if (this.route.snapshot.queryParamMap.get('deleted') === '1') {
       await this.router.navigate(['/nd/internal-documents/deleted'], { replaceUrl: true });
       return;
@@ -102,9 +115,61 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.shellFocus.setRegulationPointsPanelOpen(false);
     this.stopSectionExtractPolling();
     this.stopSectionPageRepairPolling();
     this.stopParsePolling();
+  }
+
+  get showSectionsPanel(): boolean {
+    return !!this.sectionsFor;
+  }
+
+  get panelGridColumns(): string | null {
+    if (!this.showSectionsPanel) return null;
+    const left = this.leftPanelPct;
+    const right = 100 - left;
+    return `minmax(0, ${left}%) 10px minmax(0, ${right}%)`;
+  }
+
+  startSectionsPanelResize(event: MouseEvent): void {
+    const layout = (event.target as HTMLElement).closest('.library-layout');
+    const containerWidth = layout?.clientWidth ?? 1200;
+    startPanelResize(
+      {
+        kind: 'setup-split',
+        startX: event.clientX,
+        startY: event.clientY,
+        startVal: this.leftPanelPct,
+        containerWidth,
+      },
+      event,
+      (_kind, value) => {
+        this.leftPanelPct = value;
+      },
+      { 'setup-split': { min: 14, max: 40 } },
+    );
+    const onUp = () => {
+      window.removeEventListener('mouseup', onUp);
+      localStorage.setItem(
+        NdInternalDocumentsComponent.PANEL_SPLIT_KEY,
+        String(this.leftPanelPct),
+      );
+    };
+    window.addEventListener('mouseup', onUp);
+  }
+
+  private restorePanelSplit(): void {
+    try {
+      const saved = localStorage.getItem(NdInternalDocumentsComponent.PANEL_SPLIT_KEY);
+      if (!saved) return;
+      const pct = Number.parseFloat(saved);
+      if (Number.isFinite(pct) && pct >= 14 && pct <= 40) {
+        this.leftPanelPct = pct;
+      }
+    } catch {
+      /* ignore storage errors */
+    }
   }
 
   private stopParsePolling(): void {
@@ -114,9 +179,17 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     }
   }
 
+  private get parsePollMs(): number {
+    return this.auth.isDemoViewer() ? 400 : 5000;
+  }
+
+  private get sectionExtractPollMs(): number {
+    return this.auth.isDemoViewer() ? 400 : 5000;
+  }
+
   private ensureParsePolling(): void {
     if (this.parsePollTimer || !this.pollingParseIds.size) return;
-    this.parsePollTimer = setInterval(() => void this.pollParsingDocs(), 5000);
+    this.parsePollTimer = setInterval(() => void this.pollParsingDocs(), this.parsePollMs);
   }
 
   private syncParsePollingFromDocs(): void {
@@ -140,6 +213,11 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       if (st !== 'processing') {
         this.pollingParseIds.delete(id);
         if (this.parsingId === id) this.parsingId = null;
+        if (st === 'parsed') {
+          const docTitle = doc?.title ?? 'Document';
+          this.message = `Parse complete — "${docTitle}"`;
+          this.toast.show(this.message, 'success', 4000);
+        }
       }
     }
     if (!this.pollingParseIds.size) this.stopParsePolling();
@@ -154,7 +232,10 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
 
   private ensureSectionExtractPolling(): void {
     if (this.sectionExtractPollTimer || !this.pollingSectionExtractIds.size) return;
-    this.sectionExtractPollTimer = setInterval(() => void this.pollSectionExtractingDocs(), 5000);
+    this.sectionExtractPollTimer = setInterval(
+      () => void this.pollSectionExtractingDocs(),
+      this.sectionExtractPollMs,
+    );
   }
 
   private trackSectionExtractingDoc(docId: string): void {
@@ -372,6 +453,42 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     return this.canUpload && !this.showDeleted;
   }
 
+  showRowParseButton(doc: InternalDocument): boolean {
+    return this.canParse;
+  }
+
+  showRowExtractButton(doc: InternalDocument): boolean {
+    return this.canParse;
+  }
+
+  isDocParsed(doc: InternalDocument): boolean {
+    return (doc.parseStatus ?? '').toLowerCase() === 'parsed';
+  }
+
+  hasExtractedSections(doc: InternalDocument): boolean {
+    return (
+      (doc.sectionExtractStatus ?? '').toLowerCase() === 'extracted' ||
+      (doc.sectionCount ?? 0) > 0
+    );
+  }
+
+  showRowSectionsButton(doc: InternalDocument): boolean {
+    return !this.showDeleted;
+  }
+
+  showRowRepairButton(doc: InternalDocument): boolean {
+    return this.canRepairSectionPages(doc);
+  }
+
+  showRowMarkdownButton(doc: InternalDocument): boolean {
+    if (this.auth.isDemoViewer()) return false;
+    return this.isDocParsed(doc);
+  }
+
+  canClickRowExtract(doc: InternalDocument): boolean {
+    return this.isDocParsed(doc) && !this.isExtractingSections(doc);
+  }
+
   parseClass(status?: string): string {
     if (status === 'parsed') return 'completed';
     if (status === 'processing') return 'running';
@@ -427,10 +544,10 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   }
 
   sectionExtractButtonLabel(doc: InternalDocument): string {
-    if (this.extractingSectionsId === doc.id) return 'Extracting…';
+    if (this.extractingSectionsId === doc.id || this.isExtractingSections(doc)) return 'Extracting…';
     if (doc.sectionExtractStatus === 'failed') return 'Retry extract';
-    if (doc.sectionExtractStatus === 'extracted') return 'Re-extract';
-    return 'Extract sections';
+    if (this.hasExtractedSections(doc)) return 'Re-extract';
+    return 'Extract';
   }
 
   isParsingDoc(doc: InternalDocument): boolean {
@@ -448,13 +565,21 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.ensureParsePolling();
     this.error = '';
     this.message = '';
+    const idx = this.docs.findIndex((d) => d.id === doc.id);
+    if (idx >= 0) {
+      this.docs[idx] = { ...this.docs[idx], parseStatus: 'processing', parseError: null };
+    }
     const res = await this.api.parseInternalDocument(doc.id);
-    this.parsingId = null;
     if (res.success) {
+      const data = res.data as { parseStatus?: string; parsedAt?: string; parsedByName?: string };
+      const status = (data?.parseStatus ?? '').toLowerCase();
+      if (status === 'processing') {
+        this.message = `Parsing "${doc.title}"…`;
+        return;
+      }
+      this.parsingId = null;
       this.pollingParseIds.delete(doc.id);
       this.message = `Parse complete — "${doc.title}"`;
-      const data = res.data as { parseStatus?: string; parsedAt?: string; parsedByName?: string };
-      const idx = this.docs.findIndex((d) => d.id === doc.id);
       if (idx >= 0) {
         this.docs[idx] = {
           ...this.docs[idx],
@@ -466,6 +591,8 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       }
       await this.load(true);
     } else {
+      this.parsingId = null;
+      this.pollingParseIds.delete(doc.id);
       this.error = res.message ?? 'Parse failed';
       await this.load(true);
     }
@@ -494,6 +621,36 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       return;
     }
     this.error = res.message ?? 'Could not open document';
+  }
+
+  async exportMarkdown(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (this.exportingMarkdownId) return;
+    this.exportingMarkdownId = doc.id;
+    this.error = '';
+    this.toast.show('Preparing markdown download…', 'info', 4000);
+    const res = await this.api.downloadInternalMarkdownExport(doc.id);
+    if (!res.success) {
+      this.error = res.message ?? 'Failed to export markdown';
+      this.toast.show(res.message ?? 'Download failed', 'error', 5000);
+    } else {
+      this.message = `Exported markdown for "${doc.title}"`;
+    }
+    this.exportingMarkdownId = null;
+  }
+
+  async downloadInternalFile(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (this.exportingFileId) return;
+    this.exportingFileId = doc.id;
+    this.error = '';
+    this.toast.show('Preparing PDF download…', 'info', 4000);
+    const res = await this.api.downloadInternalFileExport(doc.id);
+    if (!res.success) {
+      this.error = res.message ?? 'Failed to download file';
+      this.toast.show(res.message ?? 'Download failed', 'error', 5000);
+    }
+    this.exportingFileId = null;
   }
 
   async handleDelete(doc: InternalDocument, event?: Event): Promise<void> {
@@ -566,9 +723,10 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   }
 
   parseButtonLabel(doc: InternalDocument): string {
-    if (this.parsingId === doc.id) return 'Parsing…';
+    if (this.parsingId === doc.id || this.isParsingDoc(doc)) return 'Parsing…';
     if (doc.parseStatus === 'failed') return 'Retry parse';
-    return 'Run parse';
+    if (this.isDocParsed(doc)) return 'Re-parse';
+    return 'Parse';
   }
 
   toggleSort(column: DocSortColumn): void {
@@ -592,6 +750,31 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.file = input.files?.[0] ?? null;
   }
 
+  private upsertUploadedInternalDoc(
+    data: {
+      id?: string;
+      title?: string;
+      originalFileName?: string;
+      parseStatus?: string;
+    },
+    file: File,
+  ): void {
+    if (!data?.id) return;
+    const now = new Date().toISOString();
+    const optimistic: InternalDocument = {
+      id: data.id,
+      source: 'nd',
+      title: data.title ?? file.name,
+      originalFileName: data.originalFileName ?? file.name,
+      uploaded: now,
+      uploadedAt: now,
+      sizeBytes: file.size,
+      parseStatus: data.parseStatus ?? 'pending',
+      sectionExtractStatus: 'pending',
+    };
+    this.docs = [optimistic, ...this.docs.filter((d) => d.id !== optimistic.id)];
+  }
+
   async handleUpload(): Promise<void> {
     if (!this.file) return;
     this.uploading = true;
@@ -599,11 +782,17 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     const file = this.file;
     const res = await this.api.uploadInternalDocument(file);
     if (res.success) {
-      this.file = null;
+      const data = res.data as {
+        id?: string;
+        title?: string;
+        originalFileName?: string;
+        parseStatus?: string;
+      };
       this.message =
         'Uploaded — status is Pending parse. Click Run parse when ready (Landing AI supports PDF and Word).';
       this.error = '';
-      await this.load(true);
+      this.toast.show(this.message, 'success', 4000);
+      void this.load(true);
     } else {
       this.error = res.message ?? 'Upload failed';
     }
@@ -612,8 +801,10 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
 
   async openSections(doc: InternalDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
+    this.selectedDocId = doc.id;
     this.sectionsFor = doc;
     this.sectionRows = [];
+    this.shellFocus.setRegulationPointsPanelOpen(true);
     await this.loadSections(doc.id);
   }
 
@@ -621,6 +812,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.sectionsFor = null;
     this.sectionRows = [];
     this.loadingSections = false;
+    this.shellFocus.setRegulationPointsPanelOpen(false);
   }
 
   private async loadSections(docId: string): Promise<void> {
@@ -677,6 +869,11 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       this.extractingSectionsId = null;
       this.pollingSectionExtractIds.delete(doc.id);
       this.error = res.message ?? 'Section extract failed';
+      return;
+    }
+    const status = (res.data?.sectionExtractStatus ?? '').toLowerCase();
+    if (status === 'processing') {
+      this.message = res.data?.sectionExtractProgressLabel?.trim() || `Extracting "${doc.title}"…`;
       return;
     }
     this.pollingSectionExtractIds.delete(doc.id);
@@ -781,6 +978,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
 
   async viewAnalysis(doc: InternalDocument): Promise<void> {
     this.loadingAnalysisRuns = true;
+    this.selectedDocId = doc.id;
     this.analysisFor = doc;
     this.analysisRuns = [];
 
@@ -863,6 +1061,15 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     return formatDate(iso);
   }
 
+  isSelected(doc: InternalDocument): boolean {
+    return (
+      this.selectedDocId === doc.id ||
+      this.sectionsFor?.id === doc.id ||
+      this.analysisFor?.id === doc.id
+    );
+  }
+
   formatDate = formatDate;
+  formatTableDate = formatTableDate;
   formatBytes = formatBytes;
 }

@@ -149,6 +149,18 @@ export function formatDate(iso?: string | null): string {
   return new Date(iso).toLocaleString();
 }
 
+/** Compact date/time for dense data tables. */
+export function formatTableDate(iso?: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString(undefined, {
+    month: "numeric",
+    day: "numeric",
+    year: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function formatBytes(bytes?: number): string {
   if (!bytes) return "—";
   if (bytes < 1024) return `${bytes} B`;

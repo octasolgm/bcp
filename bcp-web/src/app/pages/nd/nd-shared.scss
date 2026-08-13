@@ -103,12 +103,25 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  flex: 1 1 auto;
+  min-height: min-content;
+}
+
+.nd-page-body--fill {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  min-height: min-content;
 }
 
 .nd-fill-panel {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-height: 0;
 }
 
 /* Internal scroll only inside fixed-height panels (library builder, split views) */
@@ -144,10 +157,27 @@
 .nd-catalog-page {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  height: 100%;
   gap: 0.75rem;
+}
+
+.nd-catalog-page > .nd-fill-panel,
+.nd-catalog-page > .nd-catalog-toolbar:not(.page-header--catalog) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nd-catalog-page .nd-catalog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nd-catalog-page .table-wrap.table-scroll-body {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .nd-catalog-toolbar {
@@ -158,7 +188,7 @@
 }
 
 .nd-catalog-body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -215,12 +245,35 @@
   }
 }
 
-.table-wrap.table-scroll-body {
-  flex: 1;
-  min-height: 0;
+/* Scrollable data tables — horizontal + vertical overflow, sticky header */
+.table-wrap,
+.table-wrap.table-scroll-body,
+.nd-table-wrap {
+  padding: 0;
+  max-width: 100%;
+  min-width: 0;
   overflow: auto;
   display: block;
   -webkit-overflow-scrolling: touch;
+
+  &.table-scroll-body,
+  &.nd-table-wrap--scroll {
+    flex: 1 1 auto;
+    min-height: 12rem;
+  }
+
+  table {
+    width: 100%;
+    min-width: max-content;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  th,
+  td {
+    white-space: nowrap;
+    vertical-align: middle;
+  }
 
   thead th {
     position: sticky;
@@ -228,6 +281,63 @@
     z-index: 2;
     background: var(--bg-card, var(--surface, #fff));
     box-shadow: 0 1px 0 var(--border);
+  }
+
+  th.col-actions,
+  td.col-actions,
+  td.row-actions {
+    min-width: 9rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  th.reg-doc-actions-cell,
+  td.reg-doc-actions-cell,
+  th.internal-doc-actions-cell,
+  td.internal-doc-actions-cell {
+    min-width: 24rem;
+    text-align: right;
+    white-space: nowrap;
+    background: var(--bg-card, var(--surface, #fff));
+  }
+
+  &.nd-table-fit {
+    overflow-x: auto;
+
+    table {
+      width: max-content;
+      min-width: 100%;
+      table-layout: auto;
+    }
+
+    th.reg-doc-actions-cell,
+    td.reg-doc-actions-cell,
+    th.internal-doc-actions-cell,
+    td.internal-doc-actions-cell {
+      min-width: 24rem;
+    }
+  }
+
+  tbody tr.selected-row td {
+    background: var(--accent-tint);
+  }
+
+  tbody tr.selected-row:hover td {
+    background: color-mix(in srgb, var(--accent) 14%, var(--bg-card, var(--surface, #fff)));
+  }
+
+  tbody tr:hover td.col-actions,
+  tbody tr:hover td.row-actions,
+  tbody tr:hover td.reg-doc-actions-cell,
+  tbody tr:hover td.internal-doc-actions-cell {
+    background: var(--bg-muted);
+  }
+
+  tbody tr.selected-row:hover td.col-actions,
+  tbody tr.selected-row:hover td.row-actions,
+  tbody tr.selected-row:hover td.reg-doc-actions-cell,
+  tbody tr.selected-row:hover td.internal-doc-actions-cell {
+    background: color-mix(in srgb, var(--accent) 14%, var(--bg-card, var(--surface, #fff)));
   }
 }
 
@@ -323,17 +433,12 @@
   font-size: 0.75rem;
 }
 
+/* nd-table-wrap base scroll rules live in unified .table-wrap / .nd-table-wrap block above */
 .nd-table-wrap {
-  padding: 0;
-  overflow-x: auto;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   min-width: 0;
-  max-width: 100%;
   width: 100%;
 
   &.nd-table-wrap--scroll {
-    /* Vertical scroll for long lists; horizontal scroll when columns need room. */
     overflow-x: auto;
     overflow-y: auto;
 
@@ -390,7 +495,7 @@
     .col-workflow { min-width: 9rem; }
     .col-gaps { min-width: 3.5rem; white-space: nowrap; }
     .col-status { min-width: 5.5rem; white-space: nowrap; }
-    .col-actions { min-width: 5.5rem; white-space: nowrap; }
+    .col-actions { min-width: 8rem; white-space: nowrap; }
 
     .workflow-badge {
       max-width: 14rem;
@@ -658,11 +763,12 @@
 
 .row-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.35rem;
   align-items: center;
   justify-content: flex-end;
-  min-width: 7rem;
+  width: 100%;
+  min-width: max-content;
   white-space: nowrap;
   vertical-align: middle;
 }
@@ -686,15 +792,16 @@
 
 .row-actions-labeled {
   width: 100%;
+  min-width: max-content;
 }
 
 .row-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.32rem 0.65rem;
+  padding: 0.4rem 0.75rem;
   border-radius: 6px;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 650;
   line-height: 1.2;
   border: 1px solid var(--border-strong, var(--border));
@@ -750,8 +857,8 @@
   }
 
   &.icon-only {
-    width: 2rem;
-    height: 2rem;
+    width: 2.25rem;
+    height: 2.25rem;
     padding: 0;
     flex-shrink: 0;
 
@@ -761,13 +868,70 @@
   }
 
   &.compact {
-    padding: 0.28rem 0.55rem;
-    font-size: 0.6875rem;
-    min-width: 0;
-    flex: 1 1 auto;
-    max-width: 6.5rem;
+    padding: 0.42rem 0.7rem;
+    font-size: 0.75rem;
+    flex: 0 0 auto;
+    min-width: 3.25rem;
+    max-width: none;
     text-align: center;
   }
+}
+
+.nd-catalog-actions-cell {
+  vertical-align: middle;
+  white-space: nowrap;
+  text-align: right;
+  max-width: none;
+}
+
+.nd-catalog-row-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  max-width: none;
+
+  .row-action-btn {
+    flex-shrink: 0;
+  }
+
+  .row-action-btn.compact {
+    min-width: 4rem;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+}
+
+.row-export-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  padding-left: 0.2rem;
+  margin-left: 0.05rem;
+  border-left: 1px solid var(--border);
+
+  .export-btn {
+    min-width: 1.85rem;
+    font-weight: 700;
+  }
+}
+
+.export-glyph {
+  font-size: 0.5625rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.panel-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .danger-link {
@@ -973,11 +1137,33 @@
 
 .nd-review-progress {
   margin: 0;
+  padding: 0.55rem 0.75rem;
   font-size: 0.8125rem;
-  color: #b45309;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--info) 22%, var(--border));
+  background: color-mix(in srgb, var(--info) 6%, var(--bg-card));
+
+  strong {
+    display: block;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.2rem;
+  }
+
+  span {
+    display: block;
+  }
 
   &.complete {
-    color: #047857;
+    color: var(--low);
+    border-color: color-mix(in srgb, var(--low) 28%, var(--border));
+    background: color-mix(in srgb, var(--low) 8%, var(--bg-card));
+
+    strong {
+      color: var(--low);
+    }
   }
 }
 
@@ -1021,21 +1207,6 @@
   font-weight: 500;
 }
 
-/* Generic ND list tables — always allow horizontal scroll instead of clipping. */
-.table-wrap {
-  overflow-x: auto;
-  max-width: 100%;
-  min-width: 0;
-  -webkit-overflow-scrolling: touch;
-
-  table {
-    width: 100%;
-    min-width: 640px;
-    border-collapse: collapse;
-  }
-}
-
-.nd-table-wrap { overflow-x: auto; }
 .nd-table { width: 100%; font-size: 0.875rem; border-collapse: collapse;
   th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
   th { color: var(--text-muted); font-weight: 500; }
@@ -1102,6 +1273,22 @@
     font-size: 0.8125rem;
     color: var(--text-muted);
   }
+}
+
+.row-action-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: nd-panel-spin 0.75s linear infinite;
+  display: block;
+  flex-shrink: 0;
+}
+
+.row-action-btn.is-loading {
+  opacity: 0.9;
+  cursor: wait;
 }
 
 .panel-busy-spinner {

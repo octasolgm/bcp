@@ -212,8 +212,16 @@
 
   <div class="toast-stack" aria-live="polite">
     @for (msg of toast.messages(); track msg.id) {
-      <div class="toast" [class]="msg.kind" (click)="toast.dismiss(msg.id)">
-        {{ msg.text }}
+      <div class="toast" [class]="msg.kind">
+        <span class="toast-text">{{ msg.text }}</span>
+        <button
+          type="button"
+          class="toast-close"
+          aria-label="Dismiss notification"
+          (click)="toast.dismiss(msg.id)"
+        >
+          ×
+        </button>
       </div>
     }
   </div>

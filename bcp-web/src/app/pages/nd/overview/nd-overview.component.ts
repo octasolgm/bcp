@@ -10,6 +10,7 @@ import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-
 import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badge.component';
 import { formatDate } from '../../../../lib/nd/utils';
 import { isLegacyAnalysisRun, ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../../lib/nd/run-links';
+import { ndNewAnalysisRoute } from '../../../../lib/nd/demo-analysis-routes';
 import { analysisRunWorkflowLabel, sortAnalysisRunsByRecent } from '../../../../lib/nd/analysis-run-status';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
 import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
@@ -82,11 +83,15 @@ export class NdOverviewComponent implements OnInit {
   }
 
   runLink(run: AnalysisRunSummary): string[] {
-    return ndAnalysisRunLink(run, this.auth.getRole());
+    return ndAnalysisRunLink(run, this.auth.getRole(), { demoViewer: this.auth.isDemoViewer() });
+  }
+
+  get newAnalysisLink(): string[] {
+    return ndNewAnalysisRoute();
   }
 
   runQuery(run: AnalysisRunSummary): Record<string, string> | undefined {
-    return ndAnalysisRunQuery(run, this.auth.getRole());
+    return ndAnalysisRunQuery(run, this.auth.getRole(), { demoViewer: this.auth.isDemoViewer() });
   }
 
   isLegacy(run: AnalysisRunSummary): boolean {

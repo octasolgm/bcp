@@ -6,6 +6,14 @@ import { getNdSupabaseClient } from './nd-supabase-client';
 
 const PROFILE_CACHE_KEY = 'reguliq-nd-profile-cache';
 
+function normalizeNdProfile(profile: NdUserProfile): NdUserProfile {
+  const email = (profile.email ?? '').toLowerCase();
+  const name = (profile.fullName ?? '').toLowerCase();
+  const isDemo =
+    profile.isDemo === true || name.includes('demo') || email.includes('demo');
+  return { ...profile, isDemo };
+}
+
 @Injectable({ providedIn: 'root' })
 export class NdAuthService {
   private readonly api = inject(NdApiService);
@@ -26,6 +34,18 @@ export class NdAuthService {
 
   getRole(): NdUserProfile['role'] | null {
     return this.profileSignal()?.role ?? null;
+  }
+
+  isDemoViewer(): boolean {
+    return this.profileSignal()?.isDemo === true;
+  }
+
+  /** Demo tenant admin (super_admin role, or profile name containing "admin"). */
+  isDemoAdmin(): boolean {
+    if (!this.isDemoViewer()) return false;
+    if (this.getRole() === 'super_admin') return true;
+    const name = (this.profileSignal()?.fullName ?? '').toLowerCase();
+    return name.includes('admin');
   }
 
   async refreshProfile(force = false): Promise<NdUserProfile | null> {
@@ -64,7 +84,7 @@ export class NdAuthService {
     try {
       const raw = sessionStorage.getItem(PROFILE_CACHE_KEY);
       if (!raw) return null;
-      return JSON.parse(raw) as NdUserProfile;
+      return normalizeNdProfile(JSON.parse(raw) as NdUserProfile);
     } catch {
       return null;
     }
@@ -86,9 +106,18 @@ export class NdAuthService {
   private async loadProfile(): Promise<NdUserProfile | null> {
     const res = await this.api.getProfile();
     if (res.success && res.data) {
-      this.profileSignal.set(res.data);
-      this.writeCachedProfile(res.data);
-      return res.data;
+      let profile = res.data;
+      if (!profile.email) {
+        const { data } = await getNdSupabaseClient().auth.getUser();
+        const sessionEmail = data.user?.email?.trim();
+        if (sessionEmail) {
+          profile = { ...profile, email: sessionEmail };
+        }
+      }
+      const normalized = normalizeNdProfile(profile);
+      this.profileSignal.set(normalized);
+      this.writeCachedProfile(normalized);
+      return normalized;
     }
     this.profileSignal.set(null);
     this.writeCachedProfile(null);
@@ -124,7 +153,7 @@ export class NdAuthService {
       await this.signOut();
       return 'Account deactivated';
     }
-    this.profileSignal.set(profileRes.data);
+    this.profileSignal.set(normalizeNdProfile(profileRes.data));
     return null;
   }
 

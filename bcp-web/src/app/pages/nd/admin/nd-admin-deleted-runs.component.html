@@ -36,7 +36,7 @@
       <p>When users delete a run from the analysis list, it will appear here.</p>
     </div>
   } @else {
-    <div class="card-surface table-wrap">
+    <div class="card-surface table-wrap table-scroll-body">
       <table>
         <thead>
           <tr>
@@ -44,7 +44,7 @@
             <th>Points</th>
             <th>Previous status</th>
             <th>Deleted</th>
-            <th></th>
+            <th class="col-actions">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -60,15 +60,26 @@
                 </span>
               </td>
               <td class="muted">{{ formatDate(run.deletedAt ?? run.createdAt) }}</td>
-              <td class="row-actions">
-                <button
-                  type="button"
-                  class="btn-restore"
-                  [disabled]="restoringId === run.id"
-                  (click)="restore(run)"
-                >
-                  {{ restoringId === run.id ? 'Restoring…' : 'Restore' }}
-                </button>
+              <td class="col-actions row-actions">
+                @if (isDemoRun(run)) {
+                  <button
+                    type="button"
+                    class="btn-delete"
+                    [disabled]="deletingId === run.id"
+                    (click)="permanentlyDelete(run)"
+                  >
+                    {{ deletingId === run.id ? 'Deleting…' : 'Delete permanently' }}
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn-restore"
+                    [disabled]="restoringId === run.id"
+                    (click)="restore(run)"
+                  >
+                    {{ restoringId === run.id ? 'Restoring…' : 'Restore' }}
+                  </button>
+                }
               </td>
             </tr>
           }

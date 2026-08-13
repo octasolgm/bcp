@@ -479,7 +479,7 @@
     <p class="resp-line"><strong>Responsibility:</strong> {{ responsibility }}</p>
   }
 
-  @if (landingMessage || llmMessage || googleAiError || pass1ErrorMessage || phase2Running || phase1Running) {
+  @if (false && (landingMessage || llmMessage || googleAiError || pass1ErrorMessage || phase2Running || phase1Running)) {
     <details class="pass-details" [attr.open]="phaseOutputDefaultOpen || phase2Running || phase1Running ? '' : null">
       <summary>{{ isRegulWorkflow ? 'Forward analysis detail' : 'Full phase 1 &amp; 2 AI output' }}</summary>
       <div class="passes">

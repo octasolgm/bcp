@@ -7,17 +7,27 @@
   </div>
   @if (canExtract && doc) {
     <div class="header-actions">
-      @if (hasPoints) {
-        <button type="button" class="nd-btn-secondary" [disabled]="repairing" (click)="handleRepair()">
+      @if (needsParse()) {
+        <button type="button" class="nd-btn-primary" [disabled]="parsing" (click)="handleParse()">
+          {{ parsing ? 'Parsing…' : 'Parse document' }}
+        </button>
+      }
+      @if (showRepair) {
+        <button type="button" class="nd-btn-secondary" [disabled]="repairing" (click)="handleRepair()"
+          title="Optional cleanup. Demo flow is Upload → Parse → Extract — repair is not required.">
           {{ repairing ? 'Repairing…' : 'Repair points' }}
         </button>
+      }
+      @if (hasPoints && !isDemoViewer) {
         <button type="button" class="nd-btn-secondary" [disabled]="refreshingPages" (click)="handleRefreshPages()">
           {{ refreshingPages ? 'Refreshing…' : 'Refresh PDF pages' }}
         </button>
       }
-      <button type="button" class="nd-btn-primary" [disabled]="extracting" (click)="handleExtract()">
-        {{ extracting ? 'Extracting…' : 'Run extraction' }}
-      </button>
+      @if (canShowExtract()) {
+        <button type="button" class="nd-btn-primary" [disabled]="extracting" (click)="handleExtract()">
+          {{ extracting ? 'Extracting…' : 'Run extraction' }}
+        </button>
+      }
     </div>
   }
 </div>
@@ -33,7 +43,7 @@
       <div class="reg-detail-main">
         <div class="nd-card reg-detail-meta">
           <app-nd-status-badge [status]="doc.extractionStatus" />
-          <span class="nd-muted">{{ doc.pointCount ?? points.length }} pts</span>
+          <span class="nd-muted">{{ doc.pointCount ?? 0 }} pts</span>
           @if (doc.departmentName) {
             <span class="nd-muted">· {{ doc.departmentName }}</span>
           }
@@ -64,6 +74,7 @@
           [points]="points"
           [source]="pointsSource"
           [loading]="loading"
+          [reportedPointCount]="doc.pointCount ?? null"
           [canOpenSource]="true"
           (openSourcePage)="openRegulationSourcePage($event)"
         />

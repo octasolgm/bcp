@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -110,6 +111,23 @@ public abstract class NdControllerBase : ControllerBase
         return (profile, null);
     }
 
+    protected async Task<(NdProfile Profile, JwtUser User, IActionResult? Error)> RequireAuthWithUserAsync(
+        AppDbContext db,
+        SupabaseJwtValidator jwt,
+        CancellationToken ct,
+        params string[] allowedRoles)
+    {
+        var user = ValidateJwt(jwt);
+        if (user == null)
+            return (null!, null!, Unauthorized(new { success = false, message = "Unauthorized" }));
+
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, allowedRoles);
+        if (error != null)
+            return (null!, null!, error);
+
+        return (profile, user, null);
+    }
+
     protected static async Task<Dictionary<Guid, string>> LoadProfileNamesAsync(
         AppDbContext db,
         IEnumerable<Guid?> profileIds,
@@ -173,15 +191,22 @@ public abstract class NdControllerBase : ControllerBase
         return profile;
     }
 
-    protected static object MapProfile(NdProfile p) => new
+    protected static object MapProfile(
+        NdProfile p,
+        string? email = null,
+        IReadOnlySet<Guid>? demoProfileIds = null) => new
     {
         id = p.Id,
         fullName = p.FullName,
+        email,
         role = p.Role,
         departmentId = p.DepartmentId,
         departmentName = p.Department?.Name,
         isActive = p.IsActive,
         createdAt = p.CreatedAt,
+        isDemo = NdDemoIsolationHelper.IsDemoEmail(email)
+            || NdDemoIsolationHelper.IsDemoName(p.FullName)
+            || (demoProfileIds != null && demoProfileIds.Contains(p.Id)),
     };
 
     protected static async Task SavePointCommentsAsync(

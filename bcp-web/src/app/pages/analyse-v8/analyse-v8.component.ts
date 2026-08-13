@@ -52,7 +52,6 @@ import {
   type LibraryPointDisplayTree,
   type SourcedGovPoint,
 } from '../../../lib/library-points-utils';
-import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
 
@@ -87,10 +86,9 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   @ViewChild('workspaceEl') workspaceEl?: ElementRef<HTMLElement>;
   @ViewChild('gapReportEl') gapReportEl?: ElementRef<HTMLElement>;
 
-  private readonly ndAuth = inject(NdAuthService);
   workflowLoading = false;
   ndRunPointsByNumber = new Map<string, AnalysisPoint>();
-  ndRunStatus = '';
+  override ndRunStatus = '';
   resultEditingPointId: string | null = null;
   resultCapSavingPointId: string | null = null;
   resultHistory: ActionPlanHistoryEntry[] = [];
@@ -153,11 +151,18 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
 
   override ngOnInit(): void {
     this.refreshNdShellState();
+    if (this.isNdShell && this.ndAuth.isDemoViewer()) {
+      void this.router.navigate(['/nd/analyse-regul-full'], {
+        queryParams: this.route.snapshot.queryParams,
+        replaceUrl: true,
+      });
+      return;
+    }
     super.ngOnInit();
     this.canonicalizeNdAnalysisUrl();
     if (this.isNdShell) {
       void this.ensureLibrariesLoaded();
-      void this.refreshPass2LlmSummary();
+      if (!this.ndAuth.isDemoViewer()) void this.refreshPass2LlmSummary();
     }
     if (this.activeNdRunId) void this.loadNdRunPoints(this.activeNdRunId);
 
@@ -167,13 +172,13 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
         const hadNdCatalog = this.useNdRegulationCatalog;
         this.refreshNdShellState();
         if (this.isNdShell) void this.ensureLibrariesLoaded();
-        if (this.isNdShell) void this.refreshPass2LlmSummary();
+        if (this.isNdShell && !this.ndAuth.isDemoViewer()) void this.refreshPass2LlmSummary();
         if (this.useNdRegulationCatalog !== hadNdCatalog) this.refreshRegulations();
       });
   }
 
   private refreshNdShellState(): void {
-    this.isNdShell = this.isUnderNdRoute() || this.currentPathname().startsWith('/nd/');
+    this.isNdShell = this.isNdShellRoute() || this.currentPathname().startsWith('/nd/');
     this.useNdRegulationCatalog = this.isNdShell;
   }
 
@@ -190,7 +195,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
     return this.selectedComplianceIds.size === 0 && !this.complianceFile;
   }
 
-  private isUnderNdRoute(): boolean {
+  private isNdShellRoute(): boolean {
     let route: ActivatedRouteSnapshot | null = this.route.snapshot;
     while (route) {
       if (route.routeConfig?.path === 'nd') return true;
@@ -1669,9 +1674,12 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
 
   runAnalysisAndScroll(): void {
     if (this.isNdShell) {
+      const demo = this.ndAuth.isDemoViewer();
       this.requestNdRunConfirm(
-        'Start analysis',
-        'Type start to run Landing AI + dual verify on all selected points.',
+        demo ? 'Start demo analysis' : 'Start analysis',
+        demo
+          ? 'Type start to play through saved CBUAE demo results (no live AI).'
+          : 'Type start to run Landing AI + dual verify on all selected points.',
         () => this.runNdShellAnalysis().then(() => this.scrollToWorkspace()),
       );
       return;
@@ -1747,7 +1755,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
         const incomplete =
           data.totalPointsCount > 0 && data.processedPointsCount < data.totalPointsCount;
         if (st === 'draft' || incomplete || st === 'failed') {
-          await this.launchNdAnalysisRun(this.ndRunId, selectedIds);
+          await this.launchNdShellAnalysisRun(this.ndRunId, selectedIds);
           return;
         }
       }
@@ -1762,10 +1770,20 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
 
     const runId = createRes.data.id;
     this.ndRunId = runId;
+    this.ndWorkflowEngine = 'regul_pipeline_full';
     await this.router.navigate(['/nd/analyse-v8'], {
       queryParams: { run: runId },
       replaceUrl: true,
     });
+    await this.launchNdShellAnalysisRun(runId, selectedIds);
+  }
+
+  /** Demo: simulated CBUAE seed run (no live AI). Production: full ND processor. */
+  private async launchNdShellAnalysisRun(runId: string, selectedIds: string[]): Promise<void> {
+    if (this.ndAuth.isDemoViewer()) {
+      await this.launchNdAnalysisRunForwardOnly(runId, selectedIds);
+      return;
+    }
     await this.launchNdAnalysisRun(runId, selectedIds);
   }
 
@@ -1809,6 +1827,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
       selectedPointsSnapshot: selectedSnapshot,
       selectedInternalDocIds: intIds,
       selectedRegulationDocIds: [...regIds],
+      workflowEngine: 'regul_pipeline_full',
     };
   }
 

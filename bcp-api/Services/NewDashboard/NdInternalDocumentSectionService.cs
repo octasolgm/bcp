@@ -4,6 +4,7 @@ using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Services;
 using Reguliq.Api.Services.LandingAi;
+using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard;
@@ -19,6 +20,7 @@ public class NdInternalDocumentSectionService(
     LandingAiCacheRepository cache,
     SupabaseStorageService storage,
     NdInternalDocumentSectionPageService sectionPageService,
+    NdDemoUserDirectory demoDirectory,
     ILogger<NdInternalDocumentSectionService> logger)
 {
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> RunningExtracts = new();
@@ -98,6 +100,8 @@ public class NdInternalDocumentSectionService(
     {
         var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedDocumentId, ct)
             ?? throw new InvalidOperationException("Internal document not found.");
+
+        await ThrowIfLiveAiForbiddenAsync(extractedBy, doc.UploadedBy, ct);
 
         var existing = await db.NdInternalDocumentSections
             .Where(s => s.StoredDocumentId == storedDocumentId)
@@ -435,5 +439,18 @@ public class NdInternalDocumentSectionService(
         db.NdInternalDocumentSections.AddRange(sections);
         await db.SaveChangesAsync(ct);
         return sections;
+    }
+
+    private async Task ThrowIfLiveAiForbiddenAsync(
+        Guid? actingUserId,
+        Guid? resourceOwnerId,
+        CancellationToken ct)
+    {
+        if (!demoDirectory.IsEnabled) return;
+        var demoIds = await demoDirectory.GetDemoProfileIdsAsync(ct);
+        if ((actingUserId is Guid actor && demoIds.Contains(actor))
+            || (resourceOwnerId is Guid owner && demoIds.Contains(owner)))
+            throw new InvalidOperationException(
+                "Demo accounts and demo-owned documents use simulated processing only (no live AI).");
     }
 }

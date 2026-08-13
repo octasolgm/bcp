@@ -848,8 +848,10 @@ export function formatStoredAnalyseMeta(
 }
 
 export function formatPointCountSummary(analysis: GovPointSetAnalysis): string {
-  if (analysis.analyseCount === analysis.storedCount) {
-    return `${analysis.storedCount} points`;
+  const stored = analysis.storedCount;
+  const analyse = Math.min(analysis.analyseCount, stored);
+  if (analyse === stored) {
+    return `${stored} points`;
   }
-  return `${analysis.storedCount} stored · ${analysis.analyseCount} compared in gap analysis`;
+  return `${stored} stored · ${analyse} compared in gap analysis`;
 }

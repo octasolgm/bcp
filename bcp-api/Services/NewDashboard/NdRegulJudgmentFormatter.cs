@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Reguliq.Api.Services.NewDashboard;
 
 /// <summary>Formats Regul judgment JSON into the reference-compliance message shape used by gap UI + export.</summary>
@@ -9,11 +11,10 @@ public static class NdRegulJudgmentFormatter
         var confidencePct = (int)Math.Round(Math.Clamp(judgment.Confidence, 0, 1) * 100);
         var policyResponse = BuildPolicyResponse(judgment);
         var fulfilled = status == "Compliant" ? "All required elements addressed." : "None";
+        var gapAnalysis = BuildGapAnalysisText(judgment, status);
         var corrective = !string.IsNullOrWhiteSpace(judgment.SuggestedAction)
             ? judgment.SuggestedAction.Trim()
-            : !string.IsNullOrWhiteSpace(judgment.GapDescription)
-                ? judgment.GapDescription.Trim()
-                : status == "Compliant" ? "N/A" : "";
+            : status == "Compliant" ? "N/A" : "";
         if (string.IsNullOrWhiteSpace(corrective))
             corrective = status == "Compliant" ? "N/A" : "—";
 
@@ -40,6 +41,8 @@ public static class NdRegulJudgmentFormatter
             "",
             $"Comply Yes/No (Status) : {status}",
             $"Compliance Confidence % : {confidencePct}%",
+            "Gap analysis :",
+            string.IsNullOrWhiteSpace(gapAnalysis) ? (status == "Compliant" ? "N/A" : "—") : gapAnalysis,
             "Corrective Action Plan :",
             corrective,
             "Responsibility :",
@@ -58,6 +61,46 @@ public static class NdRegulJudgmentFormatter
         return string.IsNullOrEmpty(s) ? "Non-Compliant" : overallStatus!.Trim();
     }
 
+    private static string BuildGapAnalysisText(RegulJudgmentResult judgment, string status)
+    {
+        if (!string.IsNullOrWhiteSpace(judgment.GapDescription))
+            return judgment.GapDescription.Trim();
+
+        if (status == "Compliant")
+            return "";
+
+        if (!string.IsNullOrWhiteSpace(judgment.Interpretation))
+            return ExtractGapFromInterpretation(judgment.Interpretation);
+
+        return "";
+    }
+
+    /// <summary>Derive gap text for demo seed rows (interpretation holds element-level gaps).</summary>
+    public static string ResolveGapDescriptionForSeedRow(
+        string? gapDescription,
+        string? interpretation,
+        string? overallStatus,
+        string? designStatus = null)
+    {
+        if (!string.IsNullOrWhiteSpace(gapDescription))
+            return gapDescription.Trim();
+
+        var status = MapDisplayStatus(overallStatus, designStatus);
+        if (status == "Compliant")
+            return "";
+
+        return ExtractGapFromInterpretation(interpretation);
+    }
+
+    /// <summary>
+    /// Demo seed interpretation: return the full assessment text (regulator preamble + elements),
+    /// matching Excel / cbuae-aml-demo-judgments.json exports.
+    /// </summary>
+    public static string ExtractGapFromInterpretation(string? interpretation)
+    {
+        return string.IsNullOrWhiteSpace(interpretation) ? "" : interpretation.Trim();
+    }
+
     private static string BuildPolicyResponse(RegulJudgmentResult judgment)
     {
         if (judgment.PolicyExtract.Count > 0)
@@ -70,9 +113,6 @@ public static class NdRegulJudgmentFormatter
                         .Where(s => !string.IsNullOrWhiteSpace(s))
                         .Select((s, i) => $"({i + 1}) {s.Trim()}"));
         }
-
-        if (!string.IsNullOrWhiteSpace(judgment.Interpretation))
-            return judgment.Interpretation.Trim();
 
         if (!string.IsNullOrWhiteSpace(judgment.DocumentReference))
             return $"See {judgment.DocumentReference.Trim()}.";

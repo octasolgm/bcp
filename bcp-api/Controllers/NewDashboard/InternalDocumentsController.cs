@@ -7,7 +7,9 @@ using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services;
+using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -21,14 +23,19 @@ public class InternalDocumentsController(
     NdInternalParseService parseService,
     NdInternalDocumentSectionService sectionService,
     NdInternalDocumentSectionPageService sectionPageService,
+    LandingAiCacheRepository landingCache,
+    NdDemoUserDirectory demoDirectory,
+    NdDemoInterceptionService demoInterception,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] bool hiddenOnly = false, CancellationToken ct = default)
     {
-        var (profile, error) = await RequireAuthAsync(appDb, jwt, ct,
+        var (profile, user, error) = await RequireAuthWithUserAsync(appDb, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         if (hiddenOnly && profile!.Role != "super_admin")
             return StatusCode(403, new { success = false, message = "Forbidden" });
@@ -36,8 +43,10 @@ public class InternalDocumentsController(
         await sectionService.RecoverAllStaleSectionExtractsAsync(ct);
         await parseService.RecoverAllStaleParsesAsync(ct);
 
-        var docs = await appDb.StoredDocuments.AsNoTracking()
-            .Where(d => (d.DocKind == "document" || d.DocKind == "internal") && d.IsHidden == hiddenOnly)
+        var docs = await NdDemoDataFilters.ApplyToStoredDocuments(
+                appDb.StoredDocuments.AsNoTracking()
+                    .Where(d => (d.DocKind == "document" || d.DocKind == "internal") && d.IsHidden == hiddenOnly),
+                demoCtx)
             .OrderByDescending(d => hiddenOnly ? d.HiddenAt ?? d.UpdatedAt : d.CreatedAt)
             .ToListAsync(ct);
 
@@ -337,6 +346,68 @@ public class InternalDocumentsController(
         });
     }
 
+    [HttpGet("{id:guid}/export/markdown")]
+    public async Task<IActionResult> ExportMarkdown(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(appDb, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var doc = await appDb.StoredDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+        if (doc == null)
+            return NotFound(new { success = false, message = "Document not found." });
+
+        var markdown = await LoadInternalParsedMarkdownAsync(doc, ct);
+        if (string.IsNullOrWhiteSpace(markdown))
+            return BadRequest(new { success = false, message = "Document has no parsed markdown. Run Parse first." });
+
+        byte[]? fileBytes = null;
+        if (!string.IsNullOrWhiteSpace(doc.StoragePath) && storage.IsConfigured)
+        {
+            try
+            {
+                fileBytes = await storage.DownloadAsync(doc.StoragePath, ct);
+            }
+            catch
+            {
+                // Fall back to raw parse cache markdown.
+            }
+        }
+
+        var fileName = doc.OriginalFileName ?? Path.GetFileName(doc.StoragePath) ?? doc.Title ?? "internal-document.pdf";
+        markdown = NdDocumentExportHelper.ResolveInternalMarkdownForV4(markdown, fileBytes, fileName);
+
+        var label = doc.Title ?? doc.OriginalFileName ?? "internal-document.pdf";
+        var wrapped = NdDocumentExportHelper.WrapInternalMarkdownForV4(label, markdown);
+        var baseName = NdDocumentExportHelper.SafeExportBaseName(label, "internal-document");
+        return File(
+            NdDocumentExportHelper.Utf8Bytes(wrapped),
+            "text/markdown; charset=utf-8",
+            $"{baseName}.md");
+    }
+
+    [HttpGet("{id:guid}/export/file")]
+    public async Task<IActionResult> ExportFile(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(appDb, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        if (!storage.IsConfigured)
+            return StatusCode(503, new { success = false, message = "Supabase Storage not configured." });
+
+        var doc = await appDb.StoredDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+        if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath))
+            return NotFound(new { success = false, message = "Document file not found." });
+
+        var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
+        var fileName = doc.OriginalFileName ?? Path.GetFileName(doc.StoragePath);
+        var contentType = ResolveInternalContentType(doc.FileType, fileName);
+        return File(bytes, contentType, fileName);
+    }
+
     [HttpGet("{id:guid}/source-file-url")]
     public async Task<IActionResult> SourceFileUrl(Guid id, CancellationToken ct)
     {
@@ -412,26 +483,78 @@ public class InternalDocumentsController(
     [HttpPost("{id:guid}/parse")]
     public async Task<IActionResult> Parse(Guid id, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(appDb, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         try
         {
+            var doc = await appDb.StoredDocuments.FirstOrDefaultAsync(d => d.Id == id, ct);
+            if (doc == null)
+                return NotFound(new { success = false, message = "Internal document not found." });
+            if (!NdDemoDataFilters.CanAccessCreatedBy(doc.UploadedBy, demoCtx))
+                return NotFound(new { success = false, message = "Internal document not found." });
+
             await parseService.RecoverStaleParseIfNeededAsync(id, ct);
-            await parseService.ParseByIdAsync(id, profile!.Id, ct);
-            var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+
+            if (NdDemoIsolationHelper.ShouldSimulateAi(demoCtx, doc.UploadedBy))
+            {
+                var parseStatus = (doc.ParseStatus ?? "").Trim().ToLowerInvariant();
+                if (parseStatus is "processing")
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        data = new { id, parseStatus = "processing" },
+                    });
+                }
+
+                if (parseStatus is "parsed")
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        data = new
+                        {
+                            id,
+                            parseStatus = "parsed",
+                            parsedAt = doc.ParsedAt,
+                            parsedByName = doc.ParsedBy != null
+                                ? ProfileName(
+                                    await LoadProfileNamesAsync(appDb, [doc.ParsedBy], ct),
+                                    doc.ParsedBy)
+                                : null,
+                        },
+                    });
+                }
+
+                doc.ParseStatus = "processing";
+                doc.ParseError = null;
+                doc.UpdatedAt = DateTimeOffset.UtcNow;
+                await appDb.SaveChangesAsync(ct);
+
+                if (!demoInterception.TryQueueInternalParse(id, profile!.Id))
+                    return BadRequest(new { success = false, message = "Parse is already running for this document." });
+            }
+            else
+            {
+                await parseService.ParseByIdAsync(id, profile!.Id, ct);
+            }
+
+            var refreshed = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
             return Ok(new
             {
                 success = true,
                 data = new
                 {
                     id,
-                    parseStatus = doc?.ParseStatus ?? "parsed",
-                    parsedAt = doc?.ParsedAt,
-                    parsedByName = doc?.ParsedBy != null
+                    parseStatus = refreshed?.ParseStatus ?? "parsed",
+                    parsedAt = refreshed?.ParsedAt,
+                    parsedByName = refreshed?.ParsedBy != null
                         ? ProfileName(
-                            await LoadProfileNamesAsync(appDb, [doc.ParsedBy], ct),
-                            doc.ParsedBy)
+                            await LoadProfileNamesAsync(appDb, [refreshed.ParsedBy], ct),
+                            refreshed.ParsedBy)
                         : null,
                 },
             });
@@ -497,12 +620,86 @@ public class InternalDocumentsController(
         [FromQuery] bool force = false,
         CancellationToken ct = default)
     {
-        var (profile, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(appDb, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         try
         {
-            var sections = await sectionService.ExtractAndSaveSectionsAsync(id, profile!.Id, force, ct);
+            var trackedDoc = await appDb.StoredDocuments.FirstOrDefaultAsync(d => d.Id == id, ct);
+            if (trackedDoc == null)
+                return NotFound(new { success = false, message = "Document not found." });
+            if (!NdDemoDataFilters.CanAccessCreatedBy(trackedDoc.UploadedBy, demoCtx))
+                return NotFound(new { success = false, message = "Document not found." });
+
+            IReadOnlyList<NdInternalDocumentSection> sections;
+            if (NdDemoIsolationHelper.ShouldSimulateAi(demoCtx, trackedDoc.UploadedBy))
+            {
+                var extractStatus = (trackedDoc.SectionExtractStatus ?? "").Trim().ToLowerInvariant();
+                if (extractStatus is "processing")
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        message = "Section extract in progress.",
+                        data = new
+                        {
+                            id,
+                            sectionExtractStatus = "processing",
+                            sectionCount = trackedDoc.SectionCount,
+                            sectionExtractProgressLabel = trackedDoc.SectionExtractProgressLabel,
+                            sectionExtractProgressPct = trackedDoc.SectionExtractProgressPct,
+                        },
+                    });
+                }
+
+                if (!force && extractStatus is "extracted")
+                {
+                    sections = await sectionService.ListSectionsAsync(id, ct);
+                    return Ok(new
+                    {
+                        success = true,
+                        message = $"Using {sections.Count} saved policy sections (no new Landing AI call).",
+                        data = new
+                        {
+                            id,
+                            sectionExtractStatus = "extracted",
+                            sectionCount = sections.Count,
+                            sectionExtractedAt = trackedDoc.SectionExtractedAt,
+                            reusedSaved = true,
+                        },
+                    });
+                }
+
+                trackedDoc.SectionExtractStatus = "processing";
+                trackedDoc.SectionExtractError = null;
+                trackedDoc.SectionExtractProgressLabel = "Starting section extract…";
+                trackedDoc.SectionExtractProgressPct = 5;
+                trackedDoc.UpdatedAt = DateTimeOffset.UtcNow;
+                await appDb.SaveChangesAsync(ct);
+
+                if (!demoInterception.TryQueueInternalSectionExtract(id, profile!.Id, force))
+                    return BadRequest(new { success = false, message = "Section extract is already running." });
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Section extract started.",
+                    data = new
+                    {
+                        id,
+                        sectionExtractStatus = "processing",
+                        sectionCount = trackedDoc.SectionCount,
+                        sectionExtractProgressLabel = trackedDoc.SectionExtractProgressLabel,
+                        sectionExtractProgressPct = trackedDoc.SectionExtractProgressPct,
+                        reusedSaved = false,
+                    },
+                });
+            }
+
+            sections = await sectionService.ExtractAndSaveSectionsAsync(id, profile!.Id, force, ct);
+
             var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
             return Ok(new
             {
@@ -611,4 +808,32 @@ public class InternalDocumentsController(
 
     private static bool ShowsSectionExtractProgress(string? status) =>
         string.Equals(status, "processing", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<string?> LoadInternalParsedMarkdownAsync(StoredDocument doc, CancellationToken ct)
+    {
+        var hash = doc.FileHash?.Trim();
+        if (string.IsNullOrWhiteSpace(hash))
+            return null;
+
+        var cacheKey = await NdStoredDocumentExtractionCache.EnsureKeyAsync(appDb, doc, ct);
+        var row = await landingCache.GetParseCacheAsync(cacheKey, ct);
+        if (string.IsNullOrWhiteSpace(row?.Markdown) && !string.Equals(cacheKey, hash, StringComparison.OrdinalIgnoreCase))
+            row = await landingCache.GetParseCacheAsync(hash, ct);
+        return row?.Markdown;
+    }
+
+    private static string ResolveInternalContentType(string? fileType, string fileName)
+    {
+        if (!string.IsNullOrWhiteSpace(fileType))
+            return DefaultContentType(fileType.Trim().ToUpperInvariant());
+
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".pdf" => "application/pdf",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            _ => "application/octet-stream",
+        };
+    }
 }

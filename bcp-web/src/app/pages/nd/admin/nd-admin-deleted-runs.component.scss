@@ -1,9 +1,5 @@
 .table-wrap {
-  padding: 0;
-  overflow-x: auto;
-
   table {
-    width: 100%;
     border-collapse: collapse;
     font-size: 0.8125rem;
   }
@@ -69,11 +65,19 @@
 }
 
 .row-actions {
-  text-align: right;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: max-content;
   white-space: nowrap;
+  text-align: right;
 }
 
-.btn-restore {
+.btn-restore,
+.btn-delete {
   display: inline-flex;
   align-items: center;
   padding: 0.35rem 0.75rem;
@@ -82,18 +86,31 @@
   font-size: 0.75rem;
   font-weight: 600;
   font-family: inherit;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.btn-restore {
   background: var(--bg-elevated);
   color: var(--accent);
-  cursor: pointer;
 
   &:hover:not(:disabled) {
     background: var(--accent-tint);
     border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
   }
+}
 
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+.btn-delete {
+  background: color-mix(in srgb, var(--danger, #c62828) 8%, var(--bg-elevated));
+  color: var(--danger, #c62828);
+  border-color: color-mix(in srgb, var(--danger, #c62828) 25%, var(--border));
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger, #c62828) 14%, var(--bg-elevated));
   }
 }
 

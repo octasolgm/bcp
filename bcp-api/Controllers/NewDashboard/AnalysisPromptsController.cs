@@ -5,6 +5,7 @@ using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services.Llm;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -15,6 +16,7 @@ public class AnalysisPromptsController(
     SupabaseJwtValidator jwt,
     NdAnalysisPromptVersionService promptVersions,
     NdPromptAiGenerationService aiGeneration,
+    NdDemoUserDirectory demoDirectory,
     IConfiguration config) : NdControllerBase
 {
     public record CreateSuggestionRequest(string PromptKey, string Comment);
@@ -34,18 +36,22 @@ public class AnalysisPromptsController(
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
 
         await promptVersions.EnsureSeededAsync(ct);
 
-        var suggestions = await db.NdAnalysisPromptSuggestions.AsNoTracking()
+        var suggestions = await NdDemoDataFilters.ApplyToPromptSuggestions(
+                db.NdAnalysisPromptSuggestions.AsNoTracking(), demoCtx)
             .OrderBy(s => s.PromptKey)
             .ThenBy(s => s.SortOrder)
             .ThenBy(s => s.CreatedAt)
             .ToListAsync(ct);
 
-        var versionRows = await db.NdAnalysisPromptVersions.AsNoTracking()
+        var versionRows = await NdDemoDataFilters.ApplyToPromptVersions(
+                db.NdAnalysisPromptVersions.AsNoTracking(), demoCtx)
             .OrderBy(v => v.PromptKey)
             .ThenByDescending(v => v.VersionNumber)
             .ToListAsync(ct);
@@ -134,8 +140,14 @@ public class AnalysisPromptsController(
         [FromBody] GeneratePromptRequest body,
         CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
+        var demoAiBlock = NdDemoIsolationHelper.ForbidDemoAiOperations(
+            demoCtx,
+            "Demo accounts cannot use AI to generate prompt versions.");
+        if (demoAiBlock != null) return demoAiBlock;
 
         var promptKey = body.PromptKey?.Trim() ?? "";
         var promptDef = NdAnalysisPromptCatalog.Find(promptKey);
@@ -151,14 +163,15 @@ public class AnalysisPromptsController(
 
         try
         {
-            var basePromptText = await promptVersions.GetCurrentTextAsync(promptKey, ct);
-            var suggestions = await db.NdAnalysisPromptSuggestions.AsNoTracking()
+            var basePromptText = await GetIsolatedCurrentTextAsync(promptKey, demoCtx, ct);
+            var suggestions = await NdDemoDataFilters.ApplyToPromptSuggestions(
+                    db.NdAnalysisPromptSuggestions.AsNoTracking(), demoCtx)
                 .Where(s => s.PromptKey == promptKey && suggestionIds.Contains(s.Id))
                 .OrderBy(s => s.SortOrder)
                 .ToListAsync(ct);
 
             if (suggestions.Count == 0)
-                return BadRequest(new { success = false, message = "Selected suggestions were not found." });
+                return NotFound(new { success = false, message = "Selected suggestions were not found." });
 
             var result = await aiGeneration.GenerateAsync(
                 basePromptText,
@@ -195,8 +208,21 @@ public class AnalysisPromptsController(
         [FromBody] CreatePromptVersionRequest body,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (profile, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
+
+        if (body.AppliedSuggestionIds is { Count: > 0 })
+        {
+            var accessibleIds = await NdDemoDataFilters.ApplyToPromptSuggestions(
+                    db.NdAnalysisPromptSuggestions.AsNoTracking(), demoCtx)
+                .Where(s => body.AppliedSuggestionIds.Contains(s.Id))
+                .Select(s => s.Id)
+                .ToListAsync(ct);
+            if (accessibleIds.Count != body.AppliedSuggestionIds.Count)
+                return NotFound(new { success = false, message = "One or more suggestions were not found." });
+        }
 
         try
         {
@@ -219,12 +245,35 @@ public class AnalysisPromptsController(
     [HttpPost("versions/{versionId:guid}/set-current")]
     public async Task<IActionResult> SetCurrentVersion(Guid versionId, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
+
+        var row = await db.NdAnalysisPromptVersions.FirstOrDefaultAsync(v => v.Id == versionId, ct);
+        if (row == null)
+            return NotFound(new { success = false, message = "Version not found." });
+
+        if (!NdDemoDataFilters.CanAccessCreatedBy(row.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Version not found." });
 
         try
         {
-            var row = await promptVersions.SetCurrentAsync(versionId, ct);
+            if (demoCtx.Enabled)
+            {
+                NdAnalysisPromptVersionService.ValidatePromptText(row.PromptKey, row.PromptText);
+                var siblings = await NdDemoDataFilters.ApplyToPromptVersions(
+                        db.NdAnalysisPromptVersions.Where(v => v.PromptKey == row.PromptKey), demoCtx)
+                    .ToListAsync(ct);
+                foreach (var sibling in siblings)
+                    sibling.IsCurrent = sibling.Id == versionId;
+                await db.SaveChangesAsync(ct);
+            }
+            else
+            {
+                row = await promptVersions.SetCurrentAsync(versionId, ct);
+            }
+
             var authorNames = row.CreatedBy.HasValue
                 ? await AuthorNamesAsync([row.CreatedBy.Value], ct)
                 : new Dictionary<Guid, string>();
@@ -278,11 +327,16 @@ public class AnalysisPromptsController(
         [FromBody] UpdateSuggestionRequest body,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (profile, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
 
         var row = await db.NdAnalysisPromptSuggestions.FirstOrDefaultAsync(s => s.Id == suggestionId, ct);
         if (row == null)
+            return NotFound(new { success = false, message = "Suggestion not found." });
+
+        if (!NdDemoDataFilters.CanAccessCreatedBy(row.CreatedBy, demoCtx))
             return NotFound(new { success = false, message = "Suggestion not found." });
 
         var comment = body.Comment?.Trim() ?? "";
@@ -302,16 +356,42 @@ public class AnalysisPromptsController(
     [HttpDelete("suggestions/{suggestionId:guid}")]
     public async Task<IActionResult> DeleteSuggestion(Guid suggestionId, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
 
         var row = await db.NdAnalysisPromptSuggestions.FirstOrDefaultAsync(s => s.Id == suggestionId, ct);
         if (row == null)
             return NotFound(new { success = false, message = "Suggestion not found." });
 
+        if (!NdDemoDataFilters.CanAccessCreatedBy(row.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Suggestion not found." });
+
         db.NdAnalysisPromptSuggestions.Remove(row);
         await db.SaveChangesAsync(ct);
         return Ok(new { success = true, message = "Suggestion deleted." });
+    }
+
+    private async Task<string> GetIsolatedCurrentTextAsync(
+        string promptKey,
+        NdDemoIsolationContext demoCtx,
+        CancellationToken ct)
+    {
+        if (!demoCtx.Enabled)
+            return await promptVersions.GetCurrentTextAsync(promptKey, ct);
+
+        var row = await NdDemoDataFilters.ApplyToPromptVersions(
+                db.NdAnalysisPromptVersions.AsNoTracking(), demoCtx)
+            .FirstOrDefaultAsync(v => v.PromptKey == promptKey && v.IsCurrent, ct);
+        if (row != null)
+            return row.PromptText;
+
+        if (NdAnalysisPromptVersionService.IsJudgmentPromptKey(promptKey))
+            throw new InvalidOperationException(
+                $"No current version set for prompt '{promptKey}'. Set a current version in Admin → Analysis prompts.");
+
+        return NdAnalysisPromptCatalog.Find(promptKey)?.Text ?? "";
     }
 
     private async Task<Dictionary<Guid, string>> AuthorNamesAsync(IEnumerable<Guid> ids, CancellationToken ct)

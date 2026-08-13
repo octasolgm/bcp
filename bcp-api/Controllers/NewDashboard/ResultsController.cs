@@ -13,7 +13,8 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class ResultsController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
-    NdRegulationPointPageService pointPages) : NdControllerBase
+    NdRegulationPointPageService pointPages,
+    DemoAnalysisSeedService demoSeed) : NdControllerBase
 {
     public record UpdateActionPlanRequest(string Content, int? RevertToVersion);
 
@@ -32,6 +33,16 @@ public class ResultsController(
 
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
+
+        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
+        {
+            // Never block gap-analysis on template refresh — sync in background if needed.
+            _ = demoSeed.SyncRegulDemoRunFromTemplateAsync(
+                runId,
+                profile.Id,
+                preserveWorkflowStatus: true,
+                CancellationToken.None);
+        }
 
         var creator = run.CreatedBy.HasValue
             ? await db.NdProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == run.CreatedBy, ct)
@@ -80,28 +91,22 @@ public class ResultsController(
             .ToListAsync(ct);
 
         var runRegDocIds = ParseSelectedRegulationDocIds(run.SelectedRegulationDocIds);
-        var enrichedPoints = new List<object>();
-        foreach (var p in run.Points)
+        var enrichedPoints = run.Points.Select(p => new
         {
-            var snapshot = await pointPages.EnrichAnalysisPointSnapshotAsync(
-                p.PointSnapshot, p.RegulationPointId, runRegDocIds, ct);
-            enrichedPoints.Add(new
-            {
-                p.Id,
-                regulationPointId = p.RegulationPointId,
-                pointSnapshot = snapshot,
-                landingAiStatus = p.LandingAiStatus,
-                landingAiResult = p.LandingAiResult,
-                landingAiError = p.LandingAiError,
-                googleAiStatus = p.GoogleAiStatus,
-                googleAiResult = p.GoogleAiResult,
-                googleAiError = p.GoogleAiError,
-                dualVerifyStatus = p.DualVerifyStatus,
-                finalStatus = p.FinalStatus,
-                finalActionPlan = p.FinalActionPlan,
-                originalAiActionPlan = p.OriginalAiActionPlan,
-            });
-        }
+            p.Id,
+            regulationPointId = p.RegulationPointId,
+            pointSnapshot = p.PointSnapshot,
+            landingAiStatus = p.LandingAiStatus,
+            landingAiResult = p.LandingAiResult,
+            landingAiError = p.LandingAiError,
+            googleAiStatus = p.GoogleAiStatus,
+            googleAiResult = p.GoogleAiResult,
+            googleAiError = p.GoogleAiError,
+            dualVerifyStatus = p.DualVerifyStatus,
+            finalStatus = p.FinalStatus,
+            finalActionPlan = p.FinalActionPlan,
+            originalAiActionPlan = p.OriginalAiActionPlan,
+        }).ToList();
 
         var qualitativeRow = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
             ? await db.NdRegulQualitativeAssessments.AsNoTracking()

@@ -58,9 +58,13 @@ import {
 } from '../../../lib/dual-verify-report';
 import { parseReferenceComplianceBlock } from '../../../lib/ai-lab/parse-reference-response';
 import { NdApiService } from '../../services/nd/nd-api.service';
+import { NdAuthService } from '../../services/nd/nd-auth.service';
+import { NdWorkspaceNavService } from '../../services/nd/nd-workspace-nav.service';
 import {
   dedupeRegulationDocuments,
   normalizeRegulationPoint,
+  ndGovPointToRegulationPoint,
+  prepareRegulationPointsResponse,
   regulationPointToGovPoint,
   regulationPointToNdGovPoint,
   sortRegulationDocuments,
@@ -77,7 +81,12 @@ import {
 import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
 import { sortByPointRef } from '../../../lib/nd/list-utils';
 import { resolveRegulationPdfPage } from '../../../lib/nd/regulation-pdf-page';
-import { isRegulWorkflow } from '../../../lib/nd/regul-fields';
+import { isRegulWorkflow, isRegulFullMarkdownWorkflow } from '../../../lib/nd/regul-fields';
+import { ND_DEMO_NEW_ANALYSIS_PATH } from '../../../lib/nd/demo-analysis-routes';
+import {
+  DEMO_CBUAE_ANALYSIS_POINT_COUNT,
+  isCbuaeRegulationName,
+} from '../../../lib/nd/demo-cbuae-seed-clauses';
 import {
   exportGapAnalysisExcelFromPoints,
   exportGapAnalysisPdfFromPoints,
@@ -148,6 +157,8 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   protected readonly router = inject(Router);
   protected readonly api = inject(ApiService);
   protected readonly ndApi = inject(NdApiService);
+  protected readonly ndAuth = inject(NdAuthService);
+  protected readonly workspaceNav = inject(NdWorkspaceNavService);
 
   /** When true, load regulations from the ND catalog (DB-backed points). */
   protected useNdRegulationCatalog = false;
@@ -248,6 +259,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   /** Prevents overlapping attach calls (queryParam subscribe can fire twice before ndRunId is set). */
   private ndRunAttachInFlight: string | null = null;
   protected ndRunId: string | null = null;
+  ndRunStatus = '';
   ndRunWorkflowStatus = '';
   /** User confirmed Stop — keep UI cancelled until API/DB confirms. */
   private ndRunUserStopped = false;
@@ -278,10 +290,52 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     return isRegulWorkflow(this.ndWorkflowEngine);
   }
 
+  /** Forward-only Regul runs — hide legacy Phase 1 / Phase 2 dual-verify UI. */
+  protected usesForwardOnlyRunUi(): boolean {
+    return isRegulWorkflow(this.ndWorkflowEngine);
+  }
+
+  /** V4 full-markdown page hides reverse / INT pipeline chrome. */
+  protected showReversePipelineUi = true;
+
+  forwardPointStatusLabel(pointId: string): string {
+    const s = (this.resolveSessionPointStatus(pointId) ?? '').toLowerCase();
+    if (s === 'running' || s === 'processing') return 'Running';
+    if (s === 'queued' || s === 'pending') return 'Queued';
+    if (s === 'failed') return 'Failed';
+    if (s === 'cancelled') return 'Cancelled';
+    if (s === 'completed') return 'Done';
+    if (s === 'not-run') return 'Not run';
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Not run';
+  }
+
+  forwardPointStatusClass(pointId: string): string {
+    const s = (this.resolveSessionPointStatus(pointId) ?? '').toLowerCase();
+    if (s === 'running' || s === 'processing') return 'fwd-running';
+    if (s === 'completed') return 'fwd-done';
+    if (s === 'failed' || s === 'cancelled') return 'fwd-failed';
+    if (s === 'queued' || s === 'pending') return 'fwd-queued';
+    return 'fwd-idle';
+  }
+
+  protected isUnderNdRoute(): boolean {
+    return this.router.url.includes('/nd/');
+  }
+
+  protected maybeRedirectRegulFullShell(): void {
+    if (!this.isUnderNdRoute()) return;
+    if (!isRegulFullMarkdownWorkflow(this.ndWorkflowEngine)) return;
+    if (this.router.url.includes('/analyse-regul-full')) return;
+    void this.router.navigate([ND_DEMO_NEW_ANALYSIS_PATH], {
+      queryParams: this.ndRunId ? { run: this.ndRunId } : undefined,
+      replaceUrl: true,
+    });
+  }
+
   protected isRegulPipelineInFlight(): boolean {
     if (!this.isRegulPipelineRun()) return false;
     const run = (this.ndRunWorkflowStatus || '').toLowerCase();
-    if (run !== 'running' && run !== 'processing') return false;
+    if (run !== 'running' && run !== 'processing' && run !== 'queued') return false;
     const phase = (this.ndRegulPipelinePhase || '').toLowerCase();
     return phase !== 'done';
   }
@@ -310,6 +364,8 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   private pointPhaseRerun = new Map<string, PointPhaseRerunEntry>();
   isDemoRun = false;
   demoNdRunId: string | null = null;
+  /** Demo accounts: poll ND run status every ~500ms while simulated analysis plays out. */
+  private ndDemoFastPoll = false;
   demoSaveInProgress = false;
   demoSaveError = '';
   private demoTimer: ReturnType<typeof setTimeout> | null = null;
@@ -337,10 +393,14 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     const pendingSession = this.route.snapshot.queryParamMap.get('session');
     const pendingRun = this.route.snapshot.queryParamMap.get('run');
     this.refreshRegulations(() => {
-      if (!pendingSession && !pendingRun) this.autoSelectTfs();
+      if (!pendingSession && !pendingRun && !this.useNdRegulationCatalog) {
+        this.autoSelectTfs();
+      }
     });
     this.refreshComplianceDocs(() => {
-      if (!pendingSession && !pendingRun) this.autoSelectImptfs();
+      if (!pendingSession && !pendingRun && !this.useNdRegulationCatalog) {
+        this.autoSelectImptfs();
+      }
     });
     this.sessionParamSub = this.route.queryParamMap.subscribe((params) => {
       const sid = params.get('session');
@@ -807,6 +867,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
 
     /** True when this analysing-list row can show per-point rerun actions. */
   canShowPointRerunActions(pointId: string): boolean {
+    if (this.ndAuth.isDemoViewer()) return false;
     if (!this.hasResumableRun) return false;
     if (this.isPointRerunInFlight(pointId)) return true;
     const status = this.resolveSessionPointStatus(pointId) ?? '';
@@ -815,6 +876,9 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       return this.isNdRunStuck || this.analysisState !== 'running';
     }
   if (status === 'not-run') return true;
+    if (this.usesForwardOnlyRunUi()) {
+      return status === 'completed' || status === 'failed' || status === 'cancelled';
+    }
     return status === 'completed' || status === 'failed' || status === 'cancelled' || this.needsPhase2RerunForPoint(pointId);
   }
 
@@ -1052,6 +1116,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   getPointPhaseStatus(pointId: string): PointPhaseDisplay | null {
+    if (this.usesForwardOnlyRunUi()) return null;
     const p = this.resolveSessionPoint(pointId);
     const status = this.resolveSessionPointStatus(pointId);
     const rerunMode = this.resolvePointRerunMode(pointId);
@@ -1327,7 +1392,14 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       void this.router.navigate(['/nd/gap-analysis'], { queryParams: { run: this.demoNdRunId } });
       return;
     }
-    void this.ndApi.createDemoAnalysisFromSeed().then((res) => {
+    const useCbuaeSeed =
+      this.versionPath.includes('v9') ||
+      this.versionPath.includes('v8') ||
+      isRegulWorkflow(this.ndWorkflowEngine);
+    const seedRequest = useCbuaeSeed
+      ? this.ndApi.createDemoAnalysisFromCbuaeSeed()
+      : this.ndApi.createDemoAnalysisFromSeed();
+    void seedRequest.then((res) => {
       if (res.success && res.data?.id) {
         this.demoNdRunId = res.data.id;
         this.ndRunId = res.data.id;
@@ -1600,7 +1672,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   get dropdownSummary(): string {
-    const n = this.selectedRegIds.size;
+    const n = this.selectedRegFileCount;
     if (!n) return 'Select regulation files…';
     if (n === 1) {
       const d = this.selectedRegDocs[0];
@@ -1984,10 +2056,37 @@ ${this.findingsPreview
     if (!res.success || !res.data) return [];
 
     const deduped = sortRegulationDocuments(dedupeRegulationDocuments(res.data as RegulationDocument[]));
-    return deduped.map((nd) => this.ndRegulationToStoredDoc(nd));
+    const docs = deduped.map((nd) => this.ndRegulationToStoredDoc(nd));
+
+    if (this.ndAuth.isDemoViewer()) {
+      this.regulationDocs = docs;
+      await this.preloadDemoCbuaeRegulationPoints(docs);
+    }
+
+    return docs;
+  }
+
+  /** Demo: load CBUAE points on page open so sidebar shows 94 pts without clicking the row. */
+  private async preloadDemoCbuaeRegulationPoints(docs: StoredDocumentDto[]): Promise<void> {
+    const cbuaeDocs = docs.filter((d) => isCbuaeRegulationName(d.title ?? d.originalFileName));
+    for (const doc of cbuaeDocs) {
+      try {
+        await this.fetchNdRegulationPoints(doc.id);
+      } catch {
+        // List still works; user can retry by selecting the document.
+      }
+    }
+    this.syncHighlightedCards();
+    this.selectedRegDocs = this.regulationDocs.filter((d) => this.selectedRegIds.has(d.id));
   }
 
   private ndRegulationToStoredDoc(nd: RegulationDocument): StoredDocumentDto {
+    const name = nd.name ?? '';
+    const apiCount = nd.pointCount ?? 0;
+    const demoCbuaeCount =
+      this.ndAuth.isDemoViewer() && isCbuaeRegulationName(name) && apiCount === 0
+        ? DEMO_CBUAE_ANALYSIS_POINT_COUNT
+        : apiCount;
     return {
       id: nd.id,
       title: nd.name,
@@ -2003,7 +2102,7 @@ ${this.findingsPreview
       history: [],
       originalFileName: nd.name,
       sizeBytes: 0,
-      pointCount: nd.pointCount ?? 0,
+      pointCount: demoCbuaeCount,
       isNdManual: nd.isManual === true || nd.source === 'manual',
       ndStoredDocumentId: nd.storedDocumentId ?? null,
     };
@@ -2016,31 +2115,31 @@ ${this.findingsPreview
     document?: StoredDocumentDto;
   }> {
     const doc = this.regulationDocs.find((d) => d.id === id);
-    const res = await this.ndApi.getDocumentPoints(id);
-    const raw = (res.success && res.data ? res.data : []) as Record<string, unknown>[];
-    const points = raw
-      .map(normalizeRegulationPoint)
-      .filter((p) => p.pointNumber)
-      .map((p) =>
-        regulationPointToNdGovPoint(p, {
-          docId: id,
-          docName: doc?.title ?? 'Regulation document',
-          isManual: doc?.isNdManual === true,
-        }),
-      );
+    const lite = this.shouldUseLiteRegulationPoints();
+    const demoScope = this.shouldUseDemoScopedRegulationPoints();
+    const res = await this.ndApi.getDocumentPoints(id, { lite, demoScope });
+    const docName = doc?.title ?? 'Regulation document';
+    const prepared = prepareRegulationPointsResponse(
+      (res.success && res.data ? res.data : []) as unknown[],
+      { docName, apiPointCount: res.pointCount },
+    );
+    const points = prepared.points.map((p) =>
+      regulationPointToNdGovPoint(p, {
+        docId: id,
+        docName,
+        isManual: doc?.isNdManual === true,
+      }),
+    );
 
     if (doc) {
-      doc.pointCount = points.length;
-      const analysed = analyzeGovPointSet(
-        points.map((p) => ({
-          point_id: p.pointNumber,
-          title: p.title,
-          text: p.text,
-          section: p.section,
-        })),
-        { docName: doc.title },
-      );
-      this.regComparableCounts.set(id, analysed.analyseCount);
+      const listCount = doc.pointCount ?? 0;
+      doc.pointCount =
+        listCount > 0 && prepared.storedCount > listCount ? listCount : prepared.storedCount;
+      if (this.shouldAnalyzeFetchedRegulationPoints()) {
+        this.regComparableCounts.set(id, prepared.stats.analyseCount);
+      } else {
+        this.regComparableCounts.set(id, prepared.storedCount);
+      }
     }
 
     return {
@@ -2049,6 +2148,32 @@ ${this.findingsPreview
       message: res.message,
       document: doc,
     };
+  }
+
+  /** ND analyse pages: truncated clause payloads for fast catalog load (full text on result drill-down). */
+  protected shouldUseLiteRegulationPoints(): boolean {
+    return this.useNdRegulationCatalog || this.ndAuth.isDemoViewer();
+  }
+
+  /** Demo loads only scoped clauses in the UI — skip heavy catalog analyze on fetch. */
+  protected shouldAnalyzeFetchedRegulationPoints(): boolean {
+    return !this.ndAuth.isDemoViewer();
+  }
+
+  /** Demo analyse: fetch only CBUAE demo clause subset (94 clauses) from API. */
+  protected shouldUseDemoScopedRegulationPoints(): boolean {
+    return this.ndAuth.isDemoViewer();
+  }
+
+  /** Attach / prep: skip heavy judgment JSON until results are needed. */
+  protected shouldUseLiteAnalysisRunLoad(): boolean {
+    return this.useNdRegulationCatalog || this.ndAuth.isDemoViewer();
+  }
+
+  /** Sidebar + All analysis list should pick up a newly created run. */
+  protected notifyNewAnalysisRunCreated(): void {
+    this.workspaceNav.requestNavBadgeRefresh();
+    this.workspaceNav.bumpNavBadges({ analysisRunsAll: 1 });
   }
 
   private autoSelectTfs(): void {
@@ -2275,6 +2400,12 @@ ${this.findingsPreview
     if (this.selectedRegIds.has(id)) this.selectedRegIds.delete(id);
     else this.selectedRegIds.add(id);
     this.syncSelectedDocs();
+    if (this.shouldUseLiteRegulationPoints() && this.selectedRegDocs.length) {
+      const stored = this.selectedRegDocs.reduce((sum, d) => sum + (d.pointCount ?? 0), 0);
+      if (stored > 0) {
+        this.govSourceLabel = formatStoredAnalyseMeta(stored);
+      }
+    }
     this.loadPointsForSelectedFiles();
   }
 
@@ -2283,8 +2414,17 @@ ${this.findingsPreview
   }
 
   private syncSelectedDocs(): void {
+    const catalogIds = new Set(this.regulationDocs.map((d) => d.id));
+    for (const id of [...this.selectedRegIds]) {
+      if (!catalogIds.has(id)) this.selectedRegIds.delete(id);
+    }
     this.selectedRegDocs = this.regulationDocs.filter((d) => this.selectedRegIds.has(d.id));
     this.syncHighlightedCards();
+  }
+
+  /** Regulation files currently selected in the catalog list (not stale ids). */
+  get selectedRegFileCount(): number {
+    return this.selectedRegDocs.length;
   }
 
   private syncHighlightedCards(): void {
@@ -2331,8 +2471,15 @@ ${this.findingsPreview
       this.rawGovPoints = [];
       this.govPoints = [];
       this.chapterGroups = [];
-      this.selected.clear();
+      this.regulationDisplayDocs = [];
+      this.regulationDisplayUseDocGroups = false;
+      this.pointDisplayChapters = [];
+      this.pointDisplayFlatRows = [];
+      this.pointDisplayUseChapters = false;
+      this.regStoredCount = 0;
+      this.regSkippedCount = 0;
       this.govSourceLabel = '';
+      this.selected.clear();
       this.selectedDetailPointId = null;
       onLoaded?.();
       return;
@@ -2401,21 +2548,21 @@ ${this.findingsPreview
             const idx = this.regulationDocs.findIndex((d) => d.id === r.document!.id);
             if (idx >= 0) {
               const updated = { ...r.document };
-              if (r.points?.length) updated.pointCount = r.points.length;
+              const ndPoints = (r.points ?? []) as NdGovPoint[];
+              const prepared = prepareRegulationPointsResponse(
+                ndPoints.map((p) => ndGovPointToRegulationPoint(p)),
+                { docName: updated.title, apiPointCount: updated.pointCount },
+              );
+              updated.pointCount = prepared.storedCount;
               this.regulationDocs[idx] = updated;
             }
-            if (r.points?.length) {
-              const ndPoints = r.points as NdGovPoint[];
-              const analysed = analyzeGovPointSet(
-                ndPoints.map((p) => ({
-                  point_id: p.pointNumber ?? p.point_id,
-                  title: p.title,
-                  text: p.text,
-                  section: p.section,
-                })),
-                { docName: r.document.title },
+            if (r.points?.length && this.shouldAnalyzeFetchedRegulationPoints()) {
+              const ndPoints = (r.points ?? []) as NdGovPoint[];
+              const prepared = prepareRegulationPointsResponse(
+                ndPoints.map((p) => ndGovPointToRegulationPoint(p)),
+                { docName: r.document?.title, apiPointCount: r.document?.pointCount },
               );
-              this.regComparableCounts.set(r.document.id, analysed.analyseCount);
+              this.regComparableCounts.set(r.document.id, prepared.stats.analyseCount);
             }
           }
 
@@ -2426,7 +2573,12 @@ ${this.findingsPreview
           }
           if (r.message) labels.push(r.message);
 
-          if (this.useNdRegulationCatalog && doc && docPoints.length) {
+          if (
+            this.useNdRegulationCatalog &&
+            doc &&
+            docPoints.length &&
+            this.shouldAnalyzeFetchedRegulationPoints()
+          ) {
             useNdDocGroups = true;
             const grouping = docPoints.map((p) => ({
               point_id: p.pointNumber,
@@ -2458,23 +2610,28 @@ ${this.findingsPreview
         }
         this.syncSelectedDocs();
         const merged = [...byId.values()];
+        if (loadGen === this.pointsLoadGen) this.loadingPoints = false;
         const fileNames = this.selectedRegDocs.map((d) => d.title || d.originalFileName).join(', ');
-        this.applyGovPoints(
-          merged,
-          fileNames ? `Regulation: ${fileNames}` : labels.join(' · ') || `${merged.length} points from selected files`,
-          selectionOverride,
-          useNdDocGroups ? regulationDisplayDocs : undefined,
-        );
-        if (!merged.length) {
-          this.error = 'No extract points for the selected file(s). Upload/extract the regulation first.';
-        } else if (!opts?.silent) {
-          this.toast.show(
-            `Loaded ${this.govPoints.length} points for gap analysis (${this.regStoredCount} stored)`,
-            'success',
-            2800,
+        const finishLoad = () => {
+          this.applyGovPoints(
+            merged,
+            fileNames ? `Regulation: ${fileNames}` : labels.join(' · ') || `${merged.length} points from selected files`,
+            selectionOverride,
+            useNdDocGroups ? regulationDisplayDocs : undefined,
           );
-        }
-        onLoaded?.();
+          if (!merged.length) {
+            this.error = 'No extract points for the selected file(s). Upload/extract the regulation first.';
+          } else if (!opts?.silent) {
+            this.toast.show(
+              `Loaded ${this.govPoints.length} points for gap analysis (${this.regStoredCount} stored)`,
+              'success',
+              2800,
+            );
+          }
+          onLoaded?.();
+        };
+        if (merged.length > 200 && !this.shouldUseDemoScopedRegulationPoints()) window.setTimeout(finishLoad, 0);
+        else finishLoad();
       });
   }
 
@@ -2662,7 +2819,8 @@ ${this.findingsPreview
 
   regPointsFootnote(): string {
     if (!this.regStoredCount || this.useLibraryPoints) return '';
-    return `${this.regStoredCount} stored · ${this.govPoints.length} compared in gap analysis`;
+    const compared = Math.min(this.govPoints.length, this.regStoredCount);
+    return `${this.regStoredCount} stored · ${compared} compared in gap analysis`;
   }
 
   onComplianceSelect(event: Event): void {
@@ -3510,12 +3668,14 @@ ${this.findingsPreview
     }
   }
 
-  private stopNdRunPolling(force = false): void {
+  private stopNdRunPolling(force = false, clearDemoFastPoll = true): void {
     if (!force && this.pointPhaseRerun.size > 0) return;
     if (this.ndRunPollTimer) {
       clearInterval(this.ndRunPollTimer);
       this.ndRunPollTimer = null;
     }
+    // Keep demo fast-poll flag when restarting the interval (pollNdRun), clear only when stopping for real.
+    if (clearDemoFastPoll) this.ndDemoFastPoll = false;
   }
 
   private ensureNdRunPolling(runId: string): void {
@@ -3533,67 +3693,83 @@ ${this.findingsPreview
     this.isDemoRun = false;
 
     try {
-      // Prefer /status?resume=true — one projected query, avoids slow GET /{id} under pool pressure.
-      const resumeRes = await this.ndApi.getAnalysisRunStatus(runId, { resume: true });
-      if (!resumeRes.success || !resumeRes.data) {
-        this.toast.show(resumeRes.message ?? 'Could not load analysis run', 'error');
+      // Use GET /analysis-runs/{id} — lite mode skips judgment payloads for fast demo/ND attach.
+      const detailRes = await this.ndApi.getAnalysisRun(runId, {
+        lite: this.shouldUseLiteAnalysisRunLoad(),
+      });
+      if (!detailRes.success || !detailRes.data) {
+        this.toast.show(detailRes.message ?? 'Could not load analysis run', 'error');
         if (this.ndRunId === runId) this.ndRunId = null;
         return;
       }
 
-      const resume = resumeRes.data as {
-        id?: string;
-        name: string;
-        status: string;
-        libraryId?: string | null;
-        workflowEngine?: string;
-        regulPipelinePhase?: string | null;
-        enableQualitative?: boolean;
-        selectedPointsSnapshot: string;
-        selectedInternalDocIds: string;
-        selectedRegulationDocIds: string;
-        totalPointsCount: number;
-        processedPointsCount: number;
-        dualVerifyFailedCount?: number;
+      const payload = detailRes.data as {
+        run: {
+          name: string;
+          status: string;
+          libraryId?: string | null;
+          workflowEngine?: string;
+          regulPipelinePhase?: string | null;
+          enableQualitative?: boolean;
+          selectedPointsSnapshot?: string;
+          selectedInternalDocIds?: string;
+          selectedRegulationDocIds?: string;
+          totalPointsCount: number;
+          processedPointsCount: number;
+          dualVerifyFailedCount?: number;
+          createdByIsDemo?: boolean;
+          makerName?: string;
+          createdByName?: string;
+        };
         points: AnalysisPoint[];
       };
 
       const detail = {
         run: {
-          name: resume.name,
-          status: resume.status,
-          libraryId: resume.libraryId,
-          selectedPointsSnapshot: resume.selectedPointsSnapshot ?? '',
-          selectedInternalDocIds: resume.selectedInternalDocIds ?? '',
-          selectedRegulationDocIds: resume.selectedRegulationDocIds ?? '',
-          totalPointsCount: resume.totalPointsCount,
-          processedPointsCount: resume.processedPointsCount,
-          dualVerifyFailedCount: resume.dualVerifyFailedCount,
+          name: payload.run.name,
+          status: payload.run.status,
+          libraryId: payload.run.libraryId,
+          selectedPointsSnapshot: payload.run.selectedPointsSnapshot ?? '',
+          selectedInternalDocIds: payload.run.selectedInternalDocIds ?? '',
+          selectedRegulationDocIds: payload.run.selectedRegulationDocIds ?? '',
+          totalPointsCount: payload.run.totalPointsCount,
+          processedPointsCount: payload.run.processedPointsCount,
+          dualVerifyFailedCount: payload.run.dualVerifyFailedCount,
+          createdByIsDemo: payload.run.createdByIsDemo,
+          makerName: payload.run.makerName,
+          createdByName: payload.run.createdByName,
         },
-        points: resume.points ?? [],
+        points: payload.points ?? [],
       };
 
       this.ndRunLibraryId = detail.run.libraryId ? String(detail.run.libraryId) : null;
-      if (resume.workflowEngine) this.ndWorkflowEngine = resume.workflowEngine;
-      if (resume.regulPipelinePhase != null) this.ndRegulPipelinePhase = resume.regulPipelinePhase;
+      if (payload.run.workflowEngine) this.ndWorkflowEngine = payload.run.workflowEngine;
+      if (payload.run.regulPipelinePhase != null) {
+        this.ndRegulPipelinePhase = payload.run.regulPipelinePhase;
+      }
       this.ndRunDualVerifyFailedCount = detail.run.dualVerifyFailedCount ?? 0;
       this.ndRunSelectedSnapshot = detail.run.selectedPointsSnapshot ?? '';
 
       const status = {
-        status: resume.status,
-        totalPointsCount: resume.totalPointsCount,
-        processedPointsCount: resume.processedPointsCount,
-        dualVerifyFailedCount: resume.dualVerifyFailedCount,
-        points: resume.points ?? [],
+        status: payload.run.status,
+        totalPointsCount: payload.run.totalPointsCount,
+        processedPointsCount: payload.run.processedPointsCount,
+        dualVerifyFailedCount: payload.run.dualVerifyFailedCount,
+        points: payload.points ?? [],
       };
 
       const points = detail.points;
       const scopePoints = this.filterPointsForRunScope(points);
       this.ndRunDetailPoints = points;
-      const isDemoRun = (detail.run.name ?? '').startsWith('[Demo]');
+      const isDemoRun =
+        (detail.run as { createdByIsDemo?: boolean }).createdByIsDemo === true ||
+        (detail.run.name ?? '').startsWith('[Demo]') ||
+        ((detail.run as { makerName?: string }).makerName ?? '').toLowerCase().includes('demo') ||
+        (detail.run as { createdByName?: string }).createdByName?.toLowerCase().includes('demo');
       if (isDemoRun) {
         this.isDemoRun = true;
         this.demoNdRunId = runId;
+        this.ndDemoFastPoll = true;
       } else {
         this.demoNdRunId = null;
       }
@@ -3626,7 +3802,11 @@ ${this.findingsPreview
           );
           if (doc) this.selectedRegIds.add(doc.id);
         }
-        if (!this.selectedRegIds.size && this.regulationDocs.length) {
+        if (
+          !this.selectedRegIds.size &&
+          this.regulationDocs.length &&
+          !this.useNdRegulationCatalog
+        ) {
           const tfs =
             this.regulationDocs.find(
               (d) => (d.fileHash ?? '').toLowerCase() === this.TFS_HASH.toLowerCase(),
@@ -3718,12 +3898,19 @@ ${this.findingsPreview
     const merged = detailPoints.map((p) => {
       const live = byId.get(p.id);
       if (!live) return p;
+      const pickLanding = (a?: string | null, b?: string | null): string | null | undefined => {
+        const left = a?.trim() ?? '';
+        const right = b?.trim() ?? '';
+        if (!left) return b ?? a;
+        if (!right) return a;
+        return right.length >= left.length ? b : a;
+      };
       return normalizeRegulPoint({
         ...p,
         landingAiStatus: live.landingAiStatus ?? p.landingAiStatus,
-        landingAiResult: live.landingAiResult ?? p.landingAiResult,
+        landingAiResult: pickLanding(p.landingAiResult, live.landingAiResult),
         googleAiStatus: live.googleAiStatus ?? p.googleAiStatus,
-        googleAiResult: live.googleAiResult ?? p.googleAiResult,
+        googleAiResult: pickLanding(p.googleAiResult, live.googleAiResult),
         dualVerifyStatus: live.dualVerifyStatus ?? p.dualVerifyStatus,
         finalStatus: live.finalStatus ?? p.finalStatus,
         landingAiError: live.landingAiError ?? p.landingAiError,
@@ -3860,6 +4047,7 @@ ${this.findingsPreview
     this.stopDemoRun();
     this.isDemoRun = false;
     this.demoNdRunId = null;
+    this.ndDemoFastPoll = this.isNdDemoSimulation();
     this.analysisCompleteUiDone = false;
     this.showInlineGapReport = false;
     this.stopPolling();
@@ -3892,11 +4080,17 @@ ${this.findingsPreview
       return false;
     }
 
-    this.toast.show('Analysis started', 'success', 2000);
+    this.toast.show(
+      this.ndDemoFastPoll ? 'Demo analysis started (saved results)' : 'Analysis started',
+      'success',
+      2000,
+    );
+    this.notifyNewAnalysisRunCreated();
     this.markStep(0, false);
     this.markStep(1, true);
     this.progress = 25;
     this.activeSessions.refresh();
+    if (this.ndDemoFastPoll) this.flushNdRunPoll(runId);
     this.pollNdRun(runId);
     return true;
   }
@@ -3907,8 +4101,14 @@ ${this.findingsPreview
     selectedIds: string[],
   ): Promise<boolean> {
     this.stopDemoRun();
-    this.isDemoRun = false;
-    this.demoNdRunId = null;
+    if (this.isNdDemoSimulation()) {
+      this.isDemoRun = true;
+      this.demoNdRunId = runId;
+    } else {
+      this.isDemoRun = false;
+      this.demoNdRunId = null;
+    }
+    this.ndDemoFastPoll = this.isNdDemoSimulation();
     this.analysisCompleteUiDone = false;
     this.showInlineGapReport = false;
     this.stopPolling();
@@ -3916,13 +4116,19 @@ ${this.findingsPreview
     this.ndRunId = runId;
     this.ndRunWorkflowStatus = 'running';
     this.ndRegulPipelinePhase = 'forward';
+    if (!isRegulWorkflow(this.ndWorkflowEngine)) {
+      this.ndWorkflowEngine = 'regul_pipeline_full';
+    }
     this.analysisState = 'running';
     this.pointsCollapsed = true;
     this.sessionPointStatus.clear();
     this.sessionPointResults.clear();
     this.sessionSelectedPointIds = new Set(selectedIds);
     this.selectedDetailPointId = null;
-    for (const id of selectedIds) this.sessionPointStatus.set(id, 'queued');
+    for (const id of selectedIds) {
+      this.sessionPointStatus.set(id, 'queued');
+      this.selected.add(id);
+    }
     this.error = '';
     this.progress = 8;
     this.progressDone = 0;
@@ -3941,17 +4147,55 @@ ${this.findingsPreview
       return false;
     }
 
-    this.toast.show('Forward-only analysis started', 'success', 2000);
+    this.toast.show('Analysis started', 'success', 2000);
+    this.notifyNewAnalysisRunCreated();
     this.markStep(0, false);
     this.markStep(1, true);
     this.progress = 25;
     this.activeSessions.refresh();
+    if (this.ndDemoFastPoll) this.flushNdRunPoll(runId);
     this.pollNdRun(runId);
     return true;
   }
 
   private isNdAnalyseRoute(): boolean {
     return this.router.url.includes('/nd/analyse-v8');
+  }
+
+  /** Demo runs list the full gov catalog while the backend simulates seed points only. */
+  /** Demo analyse: skip poll-driven session rebuild while staged queued → running → done plays. */
+  protected shouldPreserveDemoAnalyzingPreview(): boolean {
+    return false;
+  }
+
+  protected preserveDemoSessionSelection(): { ids: Set<string>; progressTotal: number } | null {
+    if (!this.isDemoRun && !this.isNdDemoSimulation()) return null;
+    if (!this.sessionSelectedPointIds?.size && this.progressTotal <= 0) return null;
+    return {
+      ids: new Set(this.sessionSelectedPointIds ?? []),
+      progressTotal: this.progressTotal,
+    };
+  }
+
+  protected restoreDemoSessionSelection(
+    preserved: { ids: Set<string>; progressTotal: number } | null,
+    runSettled: boolean,
+  ): void {
+    if (!preserved) return;
+    this.sessionSelectedPointIds = this.sessionSelectedPointIds ?? new Set<string>();
+    for (const id of preserved.ids) {
+      this.sessionSelectedPointIds.add(id);
+      this.selected.add(id);
+      const existing = this.sessionPointStatus.get(id);
+      if (!existing) {
+        this.sessionPointStatus.set(id, runSettled ? 'completed' : 'queued');
+      } else if (runSettled && existing === 'queued') {
+        this.sessionPointStatus.set(id, 'completed');
+      }
+    }
+    if (preserved.progressTotal > this.progressTotal) {
+      this.progressTotal = preserved.progressTotal;
+    }
   }
 
   private applyNdRunState(
@@ -3984,6 +4228,7 @@ ${this.findingsPreview
     this.sessionId = null;
     if (run.workflowEngine) this.ndWorkflowEngine = run.workflowEngine;
     if (status?.workflowEngine) this.ndWorkflowEngine = status.workflowEngine;
+    this.maybeRedirectRegulFullShell();
     const phaseFromPoll = status?.regulPipelinePhase ?? run.regulPipelinePhase;
     if (phaseFromPoll !== undefined && phaseFromPoll !== null) {
       this.ndRegulPipelinePhase = phaseFromPoll;
@@ -4001,6 +4246,59 @@ ${this.findingsPreview
         (r) => r.sectionRef,
       );
     }
+    const demoPreserve = this.preserveDemoSessionSelection();
+
+    if (this.shouldPreserveDemoAnalyzingPreview()) {
+      if (run.workflowEngine) this.ndWorkflowEngine = run.workflowEngine;
+      if (status?.workflowEngine) this.ndWorkflowEngine = status.workflowEngine;
+      this.maybeRedirectRegulFullShell();
+      const phaseFromPoll = status?.regulPipelinePhase ?? run.regulPipelinePhase;
+      if (phaseFromPoll !== undefined && phaseFromPoll !== null) {
+        this.ndRegulPipelinePhase = phaseFromPoll;
+      }
+      const pollData = status ?? run;
+      if (pollData.regulReverseSectionTotal != null) {
+        this.ndRegulReverseSectionTotal = pollData.regulReverseSectionTotal;
+      }
+      if (pollData.regulReverseSectionCompleted != null) {
+        this.ndRegulReverseSectionCompleted = pollData.regulReverseSectionCompleted;
+      }
+      if (pollData.regulReverseSections) {
+        this.ndRegulReverseSections = sortByPointRef(
+          pollData.regulReverseSections,
+          (r) => r.sectionRef,
+        );
+      }
+      this.progressTotal = status?.totalPointsCount ?? run.totalPointsCount ?? points.length;
+      const backendStatus = (status?.status ?? run.status ?? '').toLowerCase();
+      if (backendStatus) this.ndRunStatus = status?.status ?? run.status;
+      this.restoreDemoSessionSelection(demoPreserve, false);
+      this.analysisState = 'running';
+      this.showInlineGapReport = false;
+      this.analysisCompleteUiDone = false;
+      this.ndRunWorkflowStatus = 'running';
+      this.progress =
+        this.progressTotal > 0
+          ? Math.min(
+              95,
+              Math.max(12, Math.round((this.progressDone / this.progressTotal) * 100)),
+            )
+          : 12;
+      this.ensureNdRunPolling(runId);
+      this.syncSelectionToGovPoints();
+      this.onNdRunPollMerged({
+        status: 'running',
+        workflowEngine: this.ndWorkflowEngine,
+        regulPipelinePhase: this.ndRegulPipelinePhase,
+        regulReverseSectionTotal: this.ndRegulReverseSectionTotal,
+        regulReverseSectionCompleted: this.ndRegulReverseSectionCompleted,
+        regulReverseSections: this.ndRegulReverseSections,
+        totalPointsCount: this.progressTotal,
+        processedPointsCount: this.progressDone,
+      });
+      return true;
+    }
+
     this.progressTotal = status?.totalPointsCount ?? run.totalPointsCount ?? points.length;
     this.progressDone = status?.processedPointsCount ?? run.processedPointsCount ?? 0;
     this.sessionPointStatus.clear();
@@ -4069,6 +4367,12 @@ ${this.findingsPreview
       }
     }
 
+    const runSettled =
+      runStatusLabel === 'completed' ||
+      runStatusLabel === 'cancelled' ||
+      (this.progressTotal > 0 && this.progressDone >= this.progressTotal);
+    this.restoreDemoSessionSelection(demoPreserve, runSettled);
+
     this.settlePointRerunsFromNdPoints(points);
     if (this.pointPhaseRerun.size > 0) this.touchPointRerunUi();
 
@@ -4129,7 +4433,10 @@ ${this.findingsPreview
 
     const needsExecutionView = inFlight || !allPointsProcessed || hasLandingPendingOrFailed;
     const activelyProcessing =
-      runStatus === 'running' || runStatus === 'processing' || runStatus === 'draft';
+      runStatus === 'running' ||
+      runStatus === 'processing' ||
+      runStatus === 'draft' ||
+      runStatus === 'queued';
 
     if (needsExecutionView) {
       this.analysisState = 'running';
@@ -4646,13 +4953,67 @@ ${this.findingsPreview
     return this.ndRunDetailPoints;
   }
 
+  protected isNdDemoSimulation(): boolean {
+    return this.ndAuth.isDemoViewer() || this.isDemoRun;
+  }
+
+  /** Immediate status pull (demo runs should not wait for the 10s poll interval). */
+  protected flushNdRunPoll(runId: string): void {
+    if (this.ndRunPollInFlight) return;
+    this.ndRunPollInFlight = true;
+    void this.ndApi
+      .getAnalysisRunStatus(runId)
+      .then((res) => {
+        if (!res.success || !res.data) return;
+        const data = res.data as {
+          status: string;
+          totalPointsCount: number;
+          processedPointsCount: number;
+          dualVerifyFailedCount?: number;
+          workflowEngine?: string;
+          regulPipelinePhase?: string | null;
+          regulReverseSectionTotal?: number | null;
+          regulReverseSectionCompleted?: number | null;
+          regulReverseSections?: Array<{ sectionRef: string; title: string; status: string }> | null;
+          points: AnalysisPoint[];
+        };
+        const merged = this.mergeNdRunPoints(this.getPollMergeBasePoints(), data.points);
+        this.ndRunDetailPoints = merged.length ? merged : data.points ?? [];
+        this.applyNdRunState(
+          runId,
+          data,
+          this.ndRunDetailPoints,
+          data,
+          this.isDemoRun || this.isNdDemoSimulation(),
+        );
+        this.onNdRunPointsLiveUpdate(this.ndRunDetailPoints);
+        if (
+          this.ndRunSelectedSnapshot &&
+          !this.isDemoRun &&
+          !this.isNdDemoSimulation()
+        ) {
+          this.restoreNdRunSelection(
+            this.ndRunSelectedSnapshot,
+            this.filterPointsForRunScope(this.ndRunDetailPoints),
+          );
+        }
+      })
+      .finally(() => {
+        this.ndRunPollInFlight = false;
+      });
+  }
+
   protected pollNdRun(runId: string): void {
     if (this.ndRunUserStopped) return;
-    this.stopNdRunPolling();
+    const fastPoll = this.ndDemoFastPoll || this.isNdDemoSimulation();
+    this.stopNdRunPolling(false, false);
+    this.ndDemoFastPoll = fastPoll;
     this.ndRunPollInFlight = false;
-    // Slow poll unless Regul reverse/forward is in flight (live section + INT rows).
-    const intervalMs =
-      this.pointPhaseRerun.size > 0 || this.isRegulPipelineInFlight() ? 3_000 : 10_000;
+    const intervalMs = fastPoll
+      ? 150
+      : this.pointPhaseRerun.size > 0 || this.isRegulPipelineInFlight()
+        ? 3_000
+        : 10_000;
     const tick = () => {
       if (typeof document !== 'undefined' && document.hidden) return;
       if (this.ndRunPollInFlight) return;
@@ -4675,9 +5036,19 @@ ${this.findingsPreview
           };
           const merged = this.mergeNdRunPoints(this.getPollMergeBasePoints(), data.points);
           this.ndRunDetailPoints = merged.length ? merged : data.points ?? [];
-          this.applyNdRunState(runId, data, this.ndRunDetailPoints, data);
+          this.applyNdRunState(
+            runId,
+            data,
+            this.ndRunDetailPoints,
+            data,
+            this.isDemoRun || this.isNdDemoSimulation(),
+          );
           this.onNdRunPointsLiveUpdate(this.ndRunDetailPoints);
-          if (this.ndRunSelectedSnapshot) {
+          if (
+            this.ndRunSelectedSnapshot &&
+            !this.isDemoRun &&
+            !this.isNdDemoSimulation()
+          ) {
             this.restoreNdRunSelection(
               this.ndRunSelectedSnapshot,
               this.filterPointsForRunScope(this.ndRunDetailPoints),

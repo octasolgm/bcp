@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs/operators';
+import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
+import { bumpsForAnalysisRunSoftDelete } from '../../../../lib/nd/nav-badge-bumps';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
@@ -12,6 +14,11 @@ import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badg
 import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
 import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-actions.component';
 import { formatDate } from '../../../../lib/nd/utils';
+import { ndNewAnalysisRoute, isDemoOwnedAnalysisRun } from '../../../../lib/nd/demo-analysis-routes';
+import {
+  isPermanentDemoAnalysisDelete,
+  wasAnalysisRunPermanentlyDeleted,
+} from '../../../../lib/nd/analysis-run-delete';
 import {
   canDeleteRun,
   canEditRunPlans,
@@ -27,6 +34,7 @@ import {
   analysisRunSubmittedDate,
 } from '../../../../lib/nd/analysis-run-status';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
+import { isNdRunProcessing } from '../../../../lib/nd/nd-run-activity';
 import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 
 type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'status' | 'maker';
@@ -40,6 +48,7 @@ type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'st
 })
 export class NdAnalysisRunsComponent implements OnInit {
   private readonly api = inject(NdApiService);
+  private readonly workspaceNav = inject(NdWorkspaceNavService);
   private readonly auth = inject(NdAuthService);
   private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -96,8 +105,18 @@ export class NdAnalysisRunsComponent implements OnInit {
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe(() => {
-        if (this.router.url.includes('/nd/analysis-runs')) void this.load();
+        if (this.router.url.includes('/nd/analysis-runs')) {
+          this.page = 1;
+          void this.load();
+        }
       });
+
+    this.workspaceNav.refreshRequested.subscribe(() => {
+      if (this.router.url.includes('/nd/analysis-runs')) {
+        this.page = 1;
+        void this.load();
+      }
+    });
   }
 
   async load(): Promise<void> {
@@ -118,9 +137,31 @@ export class NdAnalysisRunsComponent implements OnInit {
           : { ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize },
     );
     if (res.success && res.data) {
-      this.allRuns = res.data as AnalysisRunSummary[];
-      this.totalCount = res.pagination?.total ?? this.allRuns.length;
-      this.totalPages = res.pagination?.totalPages ?? 1;
+      let finalRes = res;
+      const rows = Array.isArray(res.data) ? res.data : [];
+      if (rows.length === 0 && this.auth.isDemoViewer()) {
+        const seed = await this.api.createDemoAnalysisFromCbuaeSeed();
+        if (seed.success) {
+          const retry = await this.api.getAnalysisRuns(
+            this.correctionOnly
+              ? {
+                  ndOnly: true,
+                  summaryOnly: true,
+                  status: 'pulled_back',
+                  page: this.page,
+                  pageSize: this.pageSize,
+                  ...(this.mineOnly ? { mineOnly: true } : {}),
+                }
+              : this.mineOnly
+                ? { mineOnly: true, ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize }
+                : { ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize },
+          );
+          if (retry.success && retry.data) finalRes = retry;
+        }
+      }
+      this.allRuns = finalRes.data as AnalysisRunSummary[];
+      this.totalCount = finalRes.pagination?.total ?? this.allRuns.length;
+      this.totalPages = finalRes.pagination?.totalPages ?? 1;
       if (this.page > this.totalPages && this.totalPages > 0) {
         this.page = this.totalPages;
         this.loading = false;
@@ -254,16 +295,24 @@ export class NdAnalysisRunsComponent implements OnInit {
     return role === 'maker' || role === 'super_admin';
   }
 
+  get newAnalysisLink(): string[] {
+    return ndNewAnalysisRoute();
+  }
+
+  private runLinkOpts(): { demoViewer: boolean } {
+    return { demoViewer: this.auth.isDemoViewer() };
+  }
+
   isLegacy(run: AnalysisRunSummary): boolean {
     return isLegacyAnalysisRun(run);
   }
 
   runLink(run: AnalysisRunSummary): string[] {
-    return ndAnalysisRunLink(run, this.auth.getRole());
+    return ndAnalysisRunLink(run, this.auth.getRole(), this.runLinkOpts());
   }
 
   runQuery(run: AnalysisRunSummary): Record<string, string> | undefined {
-    return ndAnalysisRunQuery(run, this.auth.getRole());
+    return ndAnalysisRunQuery(run, this.auth.getRole(), this.runLinkOpts());
   }
 
   needsExecutionView(run: AnalysisRunSummary): boolean {
@@ -324,6 +373,7 @@ export class NdAnalysisRunsComponent implements OnInit {
     if (res.success) {
       this.toast.show('Submitted to checker for review', 'success');
       await this.load();
+      this.workspaceNav.requestNavBadgeRefresh();
     } else {
       this.toast.show(res.message ?? 'Could not submit for review', 'error');
     }
@@ -331,23 +381,52 @@ export class NdAnalysisRunsComponent implements OnInit {
 
   async deleteRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
     event?.stopPropagation();
-    if (!confirm(`Delete "${run.name}"? It will be hidden from the workspace but can be restored by a super admin.`)) {
+    const permanentDemoDelete = isPermanentDemoAnalysisDelete(run, this.auth.isDemoViewer());
+    const confirmMsg = permanentDemoDelete
+      ? `Permanently delete demo analysis "${run.name}"? It will be removed from the database and cannot be restored.`
+      : `Delete "${run.name}"? It will be hidden from the workspace but can be restored by a super admin.`;
+    if (!confirm(confirmMsg)) {
       return;
     }
     this.deletingId = run.id;
     this.deleteMessage = '';
     this.deleteError = '';
+    const bumps = bumpsForAnalysisRunSoftDelete(
+      run,
+      this.auth.getRole() === 'super_admin',
+      !permanentDemoDelete,
+    );
+    this.workspaceNav.bumpNavBadges(bumps);
+    this.allRuns = this.allRuns.filter((r) => r.id !== run.id);
+    this.totalCount = Math.max(0, this.totalCount - 1);
+    this.deletingId = null;
     const res = await this.api.softDeleteAnalysisRun(run.id);
     if (res.success) {
-      this.allRuns = this.allRuns.filter((r) => r.id !== run.id);
-      this.totalCount = Math.max(0, this.totalCount - 1);
-      this.deleteMessage = `"${run.name}" removed.`;
+      const permanentlyDeleted =
+        permanentDemoDelete || wasAnalysisRunPermanentlyDeleted(res);
+      this.deleteMessage = permanentlyDeleted
+        ? `"${run.name}" permanently removed.`
+        : `"${run.name}" removed.`;
+      if (permanentlyDeleted) {
+        this.workspaceNav.notifyAnalysisRunPermanentlyDeleted(run);
+      } else {
+        this.workspaceNav.notifyAnalysisRunSoftDeleted(run);
+      }
+      window.setTimeout(() => this.workspaceNav.requestNavBadgeRefresh(), 2500);
       if (!this.allRuns.length && this.page > 1) {
         this.page -= 1;
         await this.load();
       }
     } else {
       this.deleteError = res.message ?? 'Delete failed';
+      this.allRuns = [...this.allRuns, run].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      this.totalCount += 1;
+      this.workspaceNav.bumpNavBadges({
+        analysisRunsAll: bumps.analysisRunsAll ? -bumps.analysisRunsAll : undefined,
+        analysisRunsInProgress: bumps.analysisRunsInProgress ? -bumps.analysisRunsInProgress : undefined,
+        analysisRunsCorrection: bumps.analysisRunsCorrection ? -bumps.analysisRunsCorrection : undefined,
+        adminDeletedRuns: bumps.adminDeletedRuns ? -bumps.adminDeletedRuns : undefined,
+      });
     }
     this.deletingId = null;
   }
@@ -367,7 +446,11 @@ export class NdAnalysisRunsComponent implements OnInit {
     this.stoppingId = null;
     if (res.success) {
       this.toast.show('Analysis stopped', 'warning');
+      this.workspaceNav.bumpNavBadges({
+        analysisRunsInProgress: isNdRunProcessing(run) ? -1 : undefined,
+      });
       await this.load();
+      this.workspaceNav.requestNavBadgeRefresh();
     } else {
       this.toast.show(res.message ?? 'Stop signalled — refresh in a moment', 'warning');
       await this.load();

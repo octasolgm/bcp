@@ -1,8 +1,7 @@
 <div class="analyse-v-page analyse-regul-page">
 <header class="page-header-v with-actions">
   <div>
-    <h1>Gap Analysis <span class="ver-tag">{{ versionLabel }}</span></h1>
-    <p class="subtitle">Regulation library + points setup (V8), then Regul.ai forward/reverse pipeline</p>
+    <h1>Gap Analysis@if (versionLabel) { <span class="ver-tag">{{ versionLabel }}</span> }</h1>
   </div>
   <app-in-progress-nav-button />
 </header>
@@ -119,8 +118,8 @@
                 </ul>
               }
 
-              @if (selectedRegIds.size) {
-                <p class="panel-foot">{{ selectedRegIds.size }} selected</p>
+              @if (selectedRegFileCount) {
+                <p class="panel-foot">{{ selectedRegFileCount }} selected</p>
               }
             </div>
 
@@ -275,7 +274,7 @@
                               <button type="button" class="acc-head acc-head-nested" (click)="toggleLibraryDoc(doc.key)">
                                 <span class="chevron" [class.open]="isLibraryDocExpanded(doc.key)">›</span>
                                 <span>{{ doc.docName }}</span>
-                                <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ doc.analyseCount }}</span>
+                                <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ displayDocAnalyseCount(doc) }}</span>
                               </button>
                               @if (isLibraryDocExpanded(doc.key)) {
                                 <div class="acc-body">
@@ -289,8 +288,8 @@
                                         >
                                           <span class="chevron" [class.open]="isLibraryChapterExpanded(doc.key, ch.chapter)">›</span>
                                           <span>{{ ch.label }}</span>
-                                          <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ ch.analyseCount }}</span>
-                                          @if (ch.analyseCount > 0) {
+                                          <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ displayChapterAnalyseCount(ch) }}</span>
+                                          @if (displayChapterAnalyseCount(ch) > 0) {
                                             <button
                                               type="button"
                                               class="acc-action"
@@ -397,7 +396,7 @@
                       <button type="button" class="acc-head acc-head-nested" (click)="toggleRegDoc(doc.key)">
                         <span class="chevron" [class.open]="isRegDocExpanded(doc.key)">›</span>
                         <span>{{ doc.docName }}</span>
-                        <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ doc.analyseCount }}</span>
+                        <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ displayDocAnalyseCount(doc) }}</span>
                       </button>
                       @if (isRegDocExpanded(doc.key)) {
                         <div class="acc-body">
@@ -407,8 +406,8 @@
                                 <button type="button" class="acc-head tree-chapter-head" (click)="toggleRegChapter(doc.key, ch.chapter)">
                                   <span class="chevron" [class.open]="isRegChapterExpanded(doc.key, ch.chapter)">›</span>
                                   <span>{{ ch.label }}</span>
-                                  <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ ch.analyseCount }}</span>
-                                  @if (ch.analyseCount > 0) {
+                                  <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ displayChapterAnalyseCount(ch) }}</span>
+                                  @if (displayChapterAnalyseCount(ch) > 0) {
                                     <button
                                       type="button"
                                       class="acc-action"
@@ -477,7 +476,7 @@
                       <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
                         <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
                         <span>{{ ch.label }}</span>
-                        <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ ch.analyseCount }}</span>
+                        <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ displayChapterAnalyseCount(ch) }}</span>
                         <button type="button" class="acc-action" (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)">
                           {{ displayChapterAllSelected(ch) ? '−' : '+' }}
                         </button>
@@ -615,7 +614,7 @@
                 }
               </p>
               @if (isNdShell && regulWorkflowLlmSummary) {
-                <p class="pass2-llm-foot">Reverse pass: {{ regulWorkflowLlmSummary }}</p>
+                <p class="pass2-llm-foot">{{ regulWorkflowLlmSummary }}</p>
               }
             </div>
           }
@@ -625,7 +624,7 @@
   </section>
 
   <section class="action-strip" aria-label="Analysis summary and run">
-    @if (showDualVerifyFailedBanner) {
+    @if (showDualVerifyFailedBanner && showReversePipelineUi && !isDemoViewer) {
       <div class="dv-failed-banner" role="status">
         <strong>Reverse pass failed</strong>
         <span>
@@ -666,34 +665,28 @@
       @if (isSessionActive) {
         <button type="button" class="btn-stop v8-stop" (click)="stopAnalysis()">Stop</button>
         <span class="run-progress-pill v8-run-progress" aria-live="polite">{{ sessionProgressLabel }}</span>
-        @if (exportableRegGapPointCount > 0) {
-          <button type="button" class="btn-secondary btn-sm run-workflow-btn" [disabled]="exportingGapReport" (click)="exportRegGapAnalysisExcel()">
-            {{ exportingGapReport ? 'Exporting…' : ('Export reg clauses (' + exportableRegGapPointCount + ')') }}
-          </button>
-        }
-        @if (exportableAllGapPointCount > 0) {
-          <button type="button" class="btn-secondary btn-sm run-workflow-btn" [disabled]="exportingGapReport" (click)="exportAllGapAnalysisExcel()">
-            {{ exportingGapReport ? 'Exporting…' : ('Export all (' + exportableAllGapPointCount + ')') }}
-          </button>
-        }
-      } @else if (analysisState === 'complete') {
+      } @else if (showPostAnalysisWorkflow) {
         @if (showWorkflowStatusBadge) {
           <app-nd-status-badge [status]="ndRunWorkflowStatus" />
         }
-        @if (exportableRegGapPointCount > 0) {
-          <button type="button" class="btn-secondary btn-sm run-workflow-btn" [disabled]="exportingGapReport" (click)="exportRegGapAnalysisExcel()">
-            {{ exportingGapReport ? 'Exporting…' : ('Export reg clauses (' + exportableRegGapPointCount + ')') }}
+        @if (showHeaderExportActions) {
+          <button
+            type="button"
+            class="btn-secondary btn-sm run-workflow-btn"
+            [disabled]="exportingGapReport"
+            (click)="exportRegGapAnalysisExcel()"
+          >
+            {{ exportingGapReport ? 'Exporting…' : 'Export XLS' }}
+          </button>
+          <button
+            type="button"
+            class="btn-secondary btn-sm run-workflow-btn"
+            [disabled]="exportingGapReport"
+            (click)="exportDoneGapAnalysisPdf()"
+          >
+            {{ exportingGapReport ? 'Exporting…' : 'Export PDF' }}
           </button>
         }
-        @if (exportableAllGapPointCount > 0) {
-          <button type="button" class="btn-secondary btn-sm run-workflow-btn" [disabled]="exportingGapReport" (click)="exportAllGapAnalysisExcel()">
-            {{ exportingGapReport ? 'Exporting…' : ('Export all (' + exportableAllGapPointCount + ')') }}
-          </button>
-          <button type="button" class="btn-secondary btn-sm run-workflow-btn" [disabled]="exportingGapReport" (click)="exportDoneGapAnalysisPdf()">
-            Export PDF
-          </button>
-        }
-        <button type="button" class="btn-secondary btn-sm run-workflow-btn" (click)="openGapReport()">Gap report</button>
         @if (canSubmitForChecker) {
           <button type="button" class="btn-primary btn-sm run-workflow-btn" [disabled]="workflowLoading" (click)="submitForChecker()">
             {{ workflowLoading ? 'Submitting…' : (ndRunWorkflowStatus === 'pulled_back' ? 'Resubmit for review' : 'Submit for review') }}
@@ -704,38 +697,54 @@
         <button
           type="button"
           class="btn-run v8-run"
-          [disabled]="!canRun"
+          [disabled]="!canRun || demoRunPreparing"
           (click)="runForwardOnlyAndScroll()"
         >
-          Run forward only
+          @if (demoRunPreparing) {
+            Preparing…
+          } @else {
+            {{ isDemoViewer ? 'Run analysis' : 'Run forward only' }}
+          }
         </button>
-        @if (isNdShell) {
+        @if (isNdShell && !isDemoViewer) {
           <span class="run-confirm-hint">Confirm with <strong>start</strong></span>
         }
       }
     </div>
   </section>
 
-  @if (!isSessionActive && !canRun && (runBlockedReason || (isNdShell && regulWorkflowLlmSummary))) {
+  @if (!isSessionActive && !canRun && (runBlockedReason || (isNdShell && regulWorkflowLlmSummary && showReversePipelineUi && !isDemoViewer))) {
     <div class="run-hint-row">
       @if (runBlockedReason) {
         <p class="run-hint">{{ runBlockedReason }}</p>
       } @else {
         <span></span>
       }
-      @if (isNdShell && regulWorkflowLlmSummary) {
-        <p class="run-hint run-hint-llm">Reverse pass LLM: {{ regulWorkflowLlmSummary }}</p>
+      @if (isNdShell && regulWorkflowLlmSummary && showReversePipelineUi && !isDemoViewer) {
+        <p class="run-hint run-hint-llm">Analysis model: {{ regulWorkflowLlmSummary }}</p>
       }
     </div>
   }
 </div>
 
-@if (showRegulClauseReview && ndRunId) {
-  <section class="card-surface regul-clause-review" aria-label="Review regulatory clauses">
-    <h2>Review clauses before analysis</h2>
+@if (showRegulClauseReview && (ndRunId || regulClauseRows.length)) {
+  <section #clauseReviewEl class="card-surface regul-clause-review" aria-label="Review regulatory clauses">
+    <h2>{{ isDemoViewer ? 'Clause overview' : 'Review clauses before analysis' }}</h2>
     <p class="muted-small">
-      Same as Regul.ai clause review — edit clause text if needed, then confirm. Analysis starts only after confirm.
+      @if (isDemoViewer) {
+        Edit clause text if needed, then confirm. {{ regulClauseReviewTotal }} regulatory clause{{ regulClauseReviewTotal === 1 ? '' : 's' }} in this demo run.
+      } @else {
+        Edit clause text if needed, then confirm. Analysis starts only after confirm.
+      }
     </p>
+    @if (demoRunPreparing) {
+      <p class="muted-small regul-clause-preparing">Preparing run in the background…</p>
+    }
+    @if (regulClauseReviewTotal > 0) {
+      <p class="regul-clause-summary">
+        <strong>{{ regulClauseReviewTotal }}</strong> regulatory clause{{ regulClauseReviewTotal === 1 ? '' : 's' }} in this run
+      </p>
+    }
     <div class="regul-clause-list">
       @for (row of regulClauseRows; track row.pointId) {
         <div class="regul-clause-row">
@@ -753,18 +762,22 @@
           </label>
         </div>
       }
+      @if (!regulClauseRows.length) {
+        <p class="empty-msg">Loading clauses…</p>
+      }
     </div>
     <div class="regul-clause-actions">
+      <button type="button" class="btn-secondary btn-sm" (click)="closeRegulClauseReview()">Close</button>
       <button
         type="button"
         class="btn-primary btn-sm"
-        [disabled]="regulClauseConfirmLoading || regulClausesConfirmed"
+        [disabled]="regulClauseConfirmLoading || regulClausesConfirmed || regulClauseReviewTotal === 0"
         (click)="confirmRegulClauses()"
       >
-        {{ regulClauseConfirmLoading ? 'Confirming…' : regulClausesConfirmed ? 'Clauses confirmed' : 'Confirm clauses' }}
+        {{ regulClauseConfirmButtonLabel }}
       </button>
       @if (regulClausesConfirmed) {
-        <span class="muted-small">Ready — click <strong>Run</strong> and type <strong>start</strong>.</span>
+        <span class="muted-small">Clauses confirmed — analysis is starting…</span>
       }
     </div>
   </section>
@@ -774,8 +787,13 @@
 <div #workspaceEl class="workspace-3col workspace-resizable v8-workspace">
   <div class="col-panel col-status" [style.width.px]="colLeftWidth">
     <div class="col-head">
-      <h3>Analysing list</h3>
-      <span class="count">{{ analysingListDone }}/{{ analysingListTotal }}</span>
+      @if (usesForwardOnlyRunUi()) {
+        <h3>Points <span class="rail-count">({{ sortedAnalysingRows.length }})</span></h3>
+        <span class="count">{{ analysingListDone }}/{{ analysingListTotal }}</span>
+      } @else {
+        <h3>Analysing list</h3>
+        <span class="count">{{ analysingListDone }}/{{ analysingListTotal }}</span>
+      }
     </div>
 
     @if (selectedCoverageRows.length) {
@@ -819,16 +837,18 @@
         >
           Queued ({{ analysingStatusCounts.queued }})
         </button>
-        <button
-          type="button"
-          role="tab"
-          class="status-tab"
-          [class.active]="analysingStatusFilter === 'failed'"
-          [attr.aria-selected]="analysingStatusFilter === 'failed'"
-          (click)="setAnalysingStatusFilter('failed')"
-        >
-          Failed ({{ analysingStatusCounts.failed }})
-        </button>
+        @if (!usesForwardOnlyRunUi()) {
+          <button
+            type="button"
+            role="tab"
+            class="status-tab"
+            [class.active]="analysingStatusFilter === 'failed'"
+            [attr.aria-selected]="analysingStatusFilter === 'failed'"
+            (click)="setAnalysingStatusFilter('failed')"
+          >
+            Failed ({{ analysingStatusCounts.failed }})
+          </button>
+        }
         <button
           type="button"
           role="tab"
@@ -841,41 +861,12 @@
         </button>
       </div>
       <div class="coverage-actions">
-        @if (ndRunId && exportableRegGapPointCount > 0) {
-          <button
-            type="button"
-            class="btn-sm"
-            [disabled]="exportingGapReport"
-            (click)="exportRegGapAnalysisExcel()"
-            title="Export regulatory clause rows only"
-          >
-            {{ exportingGapReport ? 'Exporting…' : ('Export reg clauses (' + exportableRegGapPointCount + ')') }}
-          </button>
-        }
-        @if (ndRunId && exportableAllGapPointCount > 0) {
-          <button
-            type="button"
-            class="btn-sm"
-            [disabled]="exportingGapReport"
-            (click)="exportAllGapAnalysisExcel()"
-            title="Export regulatory clauses plus INT reverse rows"
-          >
-            {{ exportingGapReport ? 'Exporting…' : ('Export all (' + exportableAllGapPointCount + ')') }}
-          </button>
-          <button
-            type="button"
-            class="btn-sm"
-            [disabled]="exportingGapReport"
-            (click)="exportDoneGapAnalysisPdf()"
-            title="Export regulatory points as PDF"
-          >
-            Export PDF ({{ exportableRegGapPointCount }})
-          </button>
-        }
+        @if (!isDemoViewer) {
         <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || ndQueuedOrNotRunCount === 0" (click)="runRemainingPoints()">
           Run remaining ({{ ndQueuedOrNotRunCount }})
         </button>
-        @if (ndQueuedOrNotRunCount > 0) {
+        }
+        @if (!isDemoViewer && ndQueuedOrNotRunCount > 0) {
           <button
             type="button"
             class="btn-sm"
@@ -885,7 +876,7 @@
             Rerun forward ({{ ndQueuedOrNotRunCount }})
           </button>
         }
-        @if (canRerunForwardOnly) {
+        @if (showReversePipelineUi && canRerunForwardOnly) {
           <button
             type="button"
             class="btn-sm"
@@ -895,6 +886,7 @@
             {{ retryingPointId === '__batch__' ? 'Rerunning…' : 'Rerun forward only (keep reverse)' }}
           </button>
         }
+        @if (showReversePipelineUi) {
         <button
           type="button"
           class="btn-sm"
@@ -903,6 +895,7 @@
         >
           Rerun reverse pass
         </button>
+        }
       </div>
     }
 
@@ -917,6 +910,54 @@
         <p class="empty-msg">No points in “{{ analysingStatusFilter }}”.</p>
       } @else {
         @if (sortedAnalysingRows.length) {
+        @if (usesForwardOnlyRunUi()) {
+        <div class="analysing-points-rail nd-analysis-point-rail" aria-label="Run points">
+          @for (row of sortedAnalysingRows; track row.pointId) {
+            @let meta = analysingPointRailMeta(row.pointId);
+            <div
+              class="rail-point"
+              [class.active]="selectedDetailPointId === row.pointId"
+              role="button"
+              tabindex="0"
+              (click)="selectPointForDetail(row.pointId)"
+              (keydown.enter)="selectPointForDetail(row.pointId)"
+              (keydown.space)="$event.preventDefault(); selectPointForDetail(row.pointId)"
+            >
+              <span class="rail-point-head">
+                <button
+                  type="button"
+                  class="point-info-btn"
+                  title="View full clause"
+                  aria-label="View full clause"
+                  (click)="openPointDetailModal(row.pointId, $event)"
+                >
+                  ⓘ
+                </button>
+                <span class="rail-point-num">{{ row.displayId || displayLabelForPoint(row.pointId) }}</span>
+                @if (analysingPointRailSeverity(row.pointId); as sev) {
+                  <span class="severity-badge sm" [class]="sev">{{ gapComplianceLabel(sev) }}</span>
+                } @else if (analysingPointRailShowsForwardChip(row.pointId)) {
+                  <span class="forward-status-chip" [class]="forwardPointStatusClass(row.pointId)">
+                    {{ forwardPointStatusLabel(row.pointId) }}
+                  </span>
+                }
+              </span>
+              <span class="rail-point-title" [title]="row.title">{{ row.title }}</span>
+              @if (analysingPointRailGapCount(row.pointId) > 0) {
+                <span class="gap-count-badge rail-gap-inline">
+                  {{ analysingPointRailGapCount(row.pointId) }} gap{{ analysingPointRailGapCount(row.pointId) === 1 ? '' : 's' }}
+                </span>
+              }
+              <div class="rail-meta-slim">
+                @if (meta.policySnippet && meta.policySnippet !== '—') {
+                  <span class="rail-policy-line"><em>Policy</em> {{ meta.policySnippet }}</span>
+                }
+                <span class="rail-confidence-line"><em>Conf.</em> {{ meta.confidence }}</span>
+              </div>
+            </div>
+          }
+        </div>
+        } @else {
         <ul class="status-list">
           @for (row of sortedAnalysingRows; track row.pointId) {
             <li
@@ -935,8 +976,9 @@
               </button>
               <span class="sid" [title]="displayLabelForPoint(row.pointId)">{{ row.displayId || displayLabelForPoint(row.pointId) }}</span>
               <div class="status-main">
-                <span class="stitle" [title]="row.title">{{ truncate(row.title, 40) }}</span>
-                @if (getPointPhaseStatus(row.pointId); as phases) {
+                <span class="stitle" [title]="row.title">{{ truncate(row.title, 52) }}</span>
+                @if (!usesForwardOnlyRunUi()) {
+                  @if (getPointPhaseStatus(row.pointId); as phases) {
                   <div class="phase-row">
                     <div class="phase-chips">
                       <span class="phase-chip" [class]="'phase-' + phases.phase1.state">
@@ -993,25 +1035,70 @@
                     </div>
                   </div>
                 }
-              </div>
-              <div class="status-badges">
-                <span class="sstatus" [class]="row.status">{{ formatCoverageStatus(row.status) }}</span>
-                @if (gapCountForPointId(row.pointId); as gapCount) {
-                  @if (gapCount > 0) {
-                    <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
-                  }
                 }
-                @if (getPointGapSeverity(row.pointId); as sev) {
-                  <span class="compliance-pill" [class]="sev" [title]="gapComplianceLabel(sev)">
-                    {{ gapComplianceShortLabel(sev) }}
-                  </span>
+              </div>
+              <div class="status-outcome" [class.has-result]="usesForwardOnlyRunUi() && analysingPointShowsCompliance(row.pointId)">
+                @if (usesForwardOnlyRunUi()) {
+                  @if (analysingPointShowsCompliance(row.pointId)) {
+                    <div class="status-tile-stack">
+                      @if (getPointGapSeverity(row.pointId); as sev) {
+                        <span
+                          class="status-tile tile-compliance"
+                          [class]="sev"
+                          [title]="gapComplianceLabel(sev)"
+                        >
+                          <span class="status-tile-dot" aria-hidden="true"></span>
+                          <span class="status-tile-label">{{ gapComplianceShortLabel(sev) }}</span>
+                        </span>
+                      }
+                      @if (gapCountForPointId(row.pointId); as gapCount) {
+                        @if (gapCount > 0) {
+                          <span class="status-tile tile-gap">
+                            <span class="status-tile-label">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+                          </span>
+                        }
+                      }
+                    </div>
+                  } @else if (analysingRowShowsForwardChip(row.pointId)) {
+                    <span class="status-tile" [class]="analysingForwardTileClass(row.pointId)">
+                      <span class="status-tile-dot" aria-hidden="true"></span>
+                      <span class="status-tile-label">{{ forwardPointStatusLabel(row.pointId) }}</span>
+                    </span>
+                  }
+                } @else {
+                  @if (row.status) {
+                    <span class="status-tile" [class]="coverageTileClass(row.status)">
+                      <span class="status-tile-dot" aria-hidden="true"></span>
+                      <span class="status-tile-label">{{ formatCoverageStatus(row.status) }}</span>
+                    </span>
+                  }
+                  @if (analysingPointShowsCompliance(row.pointId)) {
+                    @if (getPointGapSeverity(row.pointId); as sev) {
+                      <span
+                        class="status-tile tile-compliance"
+                        [class]="sev"
+                        [title]="gapComplianceLabel(sev)"
+                      >
+                        <span class="status-tile-dot" aria-hidden="true"></span>
+                        <span class="status-tile-label">{{ gapComplianceShortLabel(sev) }}</span>
+                      </span>
+                    }
+                    @if (gapCountForPointId(row.pointId); as gapCount) {
+                      @if (gapCount > 0) {
+                        <span class="status-tile tile-gap">
+                          <span class="status-tile-label">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
+                        </span>
+                      }
+                    }
+                  }
                 }
               </div>
             </li>
           }
         </ul>
         }
-        @if (sortedAnalysingIntRows.length) {
+        }
+        @if (showReversePipelineUi && sortedAnalysingIntRows.length) {
           <div class="analysing-int-section">
             <h4 class="analysing-int-heading">INT findings ({{ sortedAnalysingIntRows.length }})</h4>
             <ul class="status-list status-list-int" aria-label="Reverse INT findings">
@@ -1084,10 +1171,30 @@
       <span class="count">{{ analysingListDone }}/{{ analysingListTotal }}</span>
     </div>
     <div class="col-body progress-col-body">
-      @if (analysisState === 'running') {
+      @if (showLiveProgressColumn) {
         <div class="progress-block">
           <h4>Analysing against {{ selectedRegLabel }}…</h4>
-          @if (showRegulReverseProgress) {
+          @if (showForwardClauseProgress) {
+            <div class="regul-forward-panel">
+              <p class="regul-reverse-summary">{{ forwardClauseProgressSummary }}</p>
+              <ul class="regul-section-list regul-forward-clause-list" aria-label="Forward clause progress">
+                @for (row of forwardClauseProgressRows; track row.displayId) {
+                  <li
+                    class="regul-section-row"
+                    [class.is-queued]="row.status === 'queued' || row.status === 'pending'"
+                    [class.is-running]="row.status === 'running' || row.status === 'processing'"
+                    [class.is-done]="row.status === 'completed'"
+                    [class.is-failed]="row.status === 'failed' || row.status === 'cancelled'"
+                  >
+                    <span class="regul-section-ref">{{ row.displayId }}</span>
+                    <span class="regul-section-title" [title]="row.title">{{ truncate(row.title, 42) }}</span>
+                    <span class="regul-section-status">{{ row.statusLabel }}</span>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+          @if (showReversePipelineUi && showRegulReverseProgress) {
             <div class="regul-reverse-panel">
               <p class="regul-reverse-summary">{{ regulReverseProgressLabel }}</p>
               @if (regulReverseSectionRows.length) {
@@ -1132,12 +1239,11 @@
           </ul>
           <div class="progress-bar"><div class="progress-fill" [style.width.%]="progress"></div></div>
         </div>
-      } @else if (analysisState === 'complete') {
+      } @else if (showPostAnalysisWorkflow) {
         <div class="progress-complete-block">
           <p class="progress-complete-title">Analysis complete</p>
           <p class="progress-complete-meta">{{ analysingListDone }}/{{ analysingListTotal }} points analysed</p>
           <div class="progress-complete-actions">
-            <button type="button" class="btn-secondary btn-sm" (click)="openGapReport()">Gap report</button>
             @if (canSubmitForChecker) {
               <button type="button" class="btn-primary btn-sm" [disabled]="workflowLoading" (click)="submitForChecker()">
                 {{ workflowLoading ? 'Submitting…' : 'Submit for review' }}
@@ -1167,9 +1273,6 @@
     <div class="col-head">
       <h3>Result</h3>
       <span class="count">{{ resultClauseLabel }}</span>
-      @if (analysisState === 'complete') {
-        <button type="button" class="btn-secondary btn-sm" (click)="openGapReport()">Gap report</button>
-      }
     </div>
     <div class="result-detail result-detail-only">
       @if (!selectedCoverageRows.length) {
@@ -1210,8 +1313,8 @@
             [snapshot]="selectedPointSnapshot"
             [displayClause]="resultClauseLabel !== '—' ? resultClauseLabel : null"
             [hideReportHeader]="true"
-            [phase2Running]="pointPhaseChipRunning(selectedDetailPointId!, 2)"
-            [phase1Running]="pointPhaseChipRunning(selectedDetailPointId!, 1)"
+            [phase2Running]="!usesForwardOnlyRunUi() && pointPhaseChipRunning(selectedDetailPointId!, 2)"
+            [phase1Running]="!usesForwardOnlyRunUi() && pointPhaseChipRunning(selectedDetailPointId!, 1)"
             [phaseOutputDefaultOpen]="isPointRerunInFlight(selectedDetailPointId!)"
             [canEdit]="canEditResultCap"
             [editing]="resultEditingPointId === ndPoint.id"
@@ -1318,7 +1421,7 @@
   </div>
 </div>
 
-@if (analysisState === 'complete' && activeNdRunId) {
+@if (showGapReportSection) {
   @if (showRegulQualitativeCard) {
     <section class="regul-qualitative-card" aria-label="Qualitative document assessment">
       <div class="regul-qualitative-head">
@@ -1359,6 +1462,7 @@
     <app-nd-gap-analysis
       [embedMode]="true"
       [embedRunId]="activeNdRunId"
+      [embedReloadToken]="gapEmbedReloadToken"
       (runStatusChange)="onEmbeddedRunStatusChange($event)"
     />
   </section>
@@ -1528,30 +1632,39 @@
   <dialog class="run-confirm-dialog" open aria-labelledby="run-confirm-title">
     <h2 id="run-confirm-title">{{ ndRunConfirmTitle }}</h2>
     <p class="run-confirm-lead">{{ ndRunConfirmHint }}</p>
-    @if (regulWorkflowLlmSummary) {
-      <p class="run-confirm-llm nd-muted">LLM: {{ regulWorkflowLlmSummary }}</p>
+    @if (regulWorkflowLlmSummary && showReversePipelineUi && !isDemoViewer) {
+      <p class="run-confirm-llm nd-muted">Analysis model: {{ regulWorkflowLlmSummary }}</p>
     }
-    <label class="run-confirm-checkbox">
-      <input type="checkbox" [(ngModel)]="enableQualitativeAssessment" />
-      Include qualitative assessment (holistic policy writing review)
-    </label>
-    <p class="run-confirm-label">
-      Type <code>{{ ndRunConfirmPhrase }}</code> to continue:
-    </p>
-    <input
-      type="text"
-      class="run-confirm-input"
-      [(ngModel)]="ndRunConfirmInput"
-      (keydown)="onNdRunConfirmKeydown($event)"
-      autocomplete="off"
-      spellcheck="false"
-      [attr.placeholder]="ndRunConfirmPhrase"
-      aria-label="Confirmation word"
-    />
+    @if (showReversePipelineUi && !isDemoViewer) {
+      <label class="run-confirm-checkbox">
+        <input type="checkbox" [(ngModel)]="enableQualitativeAssessment" />
+        Include qualitative assessment (holistic policy writing review)
+      </label>
+    }
+    @if (!isDemoViewer) {
+      <p class="run-confirm-label">
+        Type <code>{{ ndRunConfirmPhrase }}</code> to continue:
+      </p>
+      <input
+        type="text"
+        class="run-confirm-input"
+        [(ngModel)]="ndRunConfirmInput"
+        (keydown)="onNdRunConfirmKeydown($event)"
+        autocomplete="off"
+        spellcheck="false"
+        [attr.placeholder]="ndRunConfirmPhrase"
+        aria-label="Confirmation word"
+      />
+    }
     <div class="run-confirm-actions">
-      <button type="button" class="btn-secondary btn-sm" (click)="cancelNdRunConfirm()">Cancel</button>
-      <button type="button" class="btn-primary btn-sm" [disabled]="!ndRunConfirmReady" (click)="confirmNdRun()">
-        Confirm &amp; run
+      <button type="button" class="btn-secondary btn-sm" (click)="cancelNdRunConfirm()">Close</button>
+      <button
+        type="button"
+        class="btn-primary btn-sm"
+        [disabled]="!ndRunConfirmReady"
+        (click)="confirmNdRun()"
+      >
+        Start
       </button>
     </div>
   </dialog>

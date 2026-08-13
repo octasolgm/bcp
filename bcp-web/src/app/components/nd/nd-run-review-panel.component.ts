@@ -81,6 +81,12 @@ export class NdRunReviewPanelComponent implements OnInit {
     return this.reviewProgress.reviewed >= this.reviewProgress.total;
   }
 
+  /** Makers cannot add per-action reviews — only checker/reviewer need this progress. */
+  get showActionReviewProgress(): boolean {
+    if (this.mode === 'maker') return false;
+    return !!this.reviewProgress && this.reviewProgress.total > 0;
+  }
+
   setStatus(status: RunReviewStatus): void {
     this.draft = { ...this.draft, status };
   }

@@ -58,7 +58,7 @@
       <strong>No analysis runs yet</strong>
       <p>Compliance analysis runs will appear here once created.</p>
       @if (auth.getRole() === 'maker' || auth.getRole() === 'super_admin') {
-        <a routerLink="/nd/analyse-v8" class="btn-primary">New analysis</a>
+        <a [routerLink]="newAnalysisLink" class="btn-primary">New analysis</a>
       }
     </div>
   }

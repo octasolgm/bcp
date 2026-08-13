@@ -75,7 +75,7 @@ REQUIREMENT POINT TO CHECK:
 `;
 
 export const REFERENCE_FIELD_REGEX =
-  /^(Reference PDF|Document Reference|Output\/Response|Fulfilled clauses|Comply Yes\/No \(Status\)|Compliance Confidence %|Corrective Action Plan|Responsibility)\s*:\s*(.*)$/;
+  /^(Reference PDF|Document Reference|Output\/Response|Fulfilled clauses|Comply Yes\/No \(Status\)|Compliance Confidence %|Gap analysis|Corrective Action Plan|Responsibility)\s*:\s*(.*)$/;
 
 /** Safe delimiter when joining batch reference-mapper results (avoids PDF --- clashes) */
 export const BATCH_MESSAGE_SEP = '<<<BCP_BATCH_SEP>>>';

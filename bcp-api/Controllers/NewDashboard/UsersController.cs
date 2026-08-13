@@ -7,6 +7,7 @@ using Reguliq.Api.Data;
 using Microsoft.Extensions.Options;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -16,7 +17,8 @@ public class UsersController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
     IOptions<SupabaseJwtOptions> jwtOptions,
-    IHttpClientFactory httpClientFactory) : NdControllerBase
+    IHttpClientFactory httpClientFactory,
+    NdDemoUserDirectory demoDirectory) : NdControllerBase
 {
     public record UpdateUserRequest(string? FullName, string? Role, bool? IsActive);
     public record InviteUserRequest(string FullName, string Email, string Role, string? Password);
@@ -27,8 +29,14 @@ public class UsersController(
     [HttpPost("{id:guid}/set-password")]
     public async Task<IActionResult> SetPassword(Guid id, [FromBody] SetPasswordRequest body, CancellationToken ct)
     {
-        var (admin, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
+        var authById = await FetchAuthUsersAsync(ct);
+        var profileEmail = authById.TryGetValue(id, out var auth) ? auth.Email : null;
+        var isolationError = GuardProfileAccess(demoCtx, profileEmail);
+        if (isolationError != null) return isolationError;
 
         var password = body.Password?.Trim();
         if (string.IsNullOrWhiteSpace(password) || password.Length < MinPasswordLength)
@@ -58,14 +66,19 @@ public class UsersController(
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var authById = await FetchAuthUsersAsync(ct);
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var users = await db.NdProfiles.AsNoTracking()
             .OrderBy(p => p.FullName)
             .ToListAsync(ct);
-
-        var authById = await FetchAuthUsersAsync(ct);
+        users = NdDemoDataFilters.FilterProfilesForUserManagement(
+            users,
+            demoCtx,
+            authById.ToDictionary(kv => kv.Key, kv => kv.Value.Email));
 
         return Ok(new
         {
@@ -156,8 +169,14 @@ public class UsersController(
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserRequest body, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
+        var authById = await FetchAuthUsersAsync(ct);
+        var profileEmail = authById.TryGetValue(id, out var auth) ? auth.Email : null;
+        var isolationError = GuardProfileAccess(demoCtx, profileEmail);
+        if (isolationError != null) return isolationError;
 
         var user = await db.NdProfiles.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (user == null) return NotFound(new { success = false, message = "Not found" });
@@ -173,8 +192,14 @@ public class UsersController(
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
+        var authById = await FetchAuthUsersAsync(ct);
+        var profileEmail = authById.TryGetValue(id, out var auth) ? auth.Email : null;
+        var isolationError = GuardProfileAccess(demoCtx, profileEmail);
+        if (isolationError != null) return isolationError;
 
         var user = await db.NdProfiles.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (user == null) return NotFound(new { success = false, message = "Not found" });
@@ -187,8 +212,14 @@ public class UsersController(
     [HttpPost("{id:guid}/activate")]
     public async Task<IActionResult> Activate(Guid id, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
+        var authById = await FetchAuthUsersAsync(ct);
+        var profileEmail = authById.TryGetValue(id, out var auth) ? auth.Email : null;
+        var isolationError = GuardProfileAccess(demoCtx, profileEmail);
+        if (isolationError != null) return isolationError;
 
         var user = await db.NdProfiles.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (user == null) return NotFound(new { success = false, message = "Not found" });
@@ -201,8 +232,14 @@ public class UsersController(
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var (admin, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (admin, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
+        var authById = await FetchAuthUsersAsync(ct);
+        var profileEmail = authById.TryGetValue(id, out var auth) ? auth.Email : null;
+        var isolationError = GuardProfileAccess(demoCtx, profileEmail);
+        if (isolationError != null) return isolationError;
 
         if (admin!.Id == id)
             return BadRequest(new { success = false, message = "You cannot delete your own account." });
@@ -232,13 +269,18 @@ public class UsersController(
     [HttpPost("invite")]
     public async Task<IActionResult> Invite([FromBody] InviteUserRequest body, CancellationToken ct)
     {
-        var (admin, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (admin, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var email = body.Email?.Trim();
         var fullName = body.FullName?.Trim();
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
             return BadRequest(new { success = false, message = "Full name and email are required." });
+
+        var inviteIsolationError = GuardInviteEmail(demoCtx, email);
+        if (inviteIsolationError != null) return inviteIsolationError;
 
         var password = body.Password?.Trim();
         if (!string.IsNullOrWhiteSpace(password) && password.Length < MinPasswordLength)
@@ -289,6 +331,7 @@ public class UsersController(
                 existing.Role = body.Role;
             }
             await db.SaveChangesAsync(ct);
+            demoDirectory.InvalidateProfileCache();
         }
 
         var message = string.IsNullOrWhiteSpace(password)
@@ -325,5 +368,26 @@ public class UsersController(
             // fall through
         }
         return raw.Length > 240 ? raw[..240] + "…" : raw;
+    }
+
+    private static IActionResult? GuardProfileAccess(NdDemoIsolationContext demoCtx, string? email)
+    {
+        if (!demoCtx.Enabled) return null;
+        if (!demoCtx.ViewerIsDemo) return null;
+        if (!NdDemoDataFilters.CanAccessProfileEmail(email, demoCtx))
+            return new NotFoundObjectResult(new { success = false, message = "Not found" });
+        return null;
+    }
+
+    private static IActionResult? GuardInviteEmail(NdDemoIsolationContext demoCtx, string email)
+    {
+        if (!demoCtx.Enabled) return null;
+        var isDemoEmail = NdDemoIsolationHelper.IsDemoEmail(email);
+        if (demoCtx.ViewerIsDemo && !isDemoEmail)
+            return new ObjectResult(new { success = false, message = "Demo administrators can only invite users whose email contains \"demo\"." })
+            {
+                StatusCode = StatusCodes.Status403Forbidden,
+            };
+        return null;
     }
 }

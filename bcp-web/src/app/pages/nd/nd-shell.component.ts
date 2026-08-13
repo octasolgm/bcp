@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectorRef, effect } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
@@ -8,7 +8,9 @@ import { ThemeService, type ThemeMode } from '../../services/theme.service';
 import {
   ActiveAnalysisSessionsService,
 } from '../../services/active-analysis-sessions.service';
+import { ToastService } from '../../services/toast.service';
 import { NdShellFocusService } from '../../services/nd/nd-shell-focus.service';
+import { NdWorkspaceNavService } from '../../services/nd/nd-workspace-nav.service';
 import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.component';
 import { startPanelResize } from '../shared/panel-resize';
 
@@ -60,11 +62,13 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private static readonly SIDEBAR_WIDTH_KEY = 'nd-sidebar-width';
 
   readonly auth = inject(NdAuthService);
+  readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly api = inject(NdApiService);
   readonly theme = inject(ThemeService);
   readonly activeSessions = inject(ActiveAnalysisSessionsService);
   readonly shellFocus = inject(NdShellFocusService);
+  private readonly workspaceNav = inject(NdWorkspaceNavService);
   private readonly cdr = inject(ChangeDetectorRef);
 
   readonly profile = this.auth.profile;
@@ -77,8 +81,25 @@ export class NdShellComponent implements OnInit, OnDestroy {
   pass2LlmSummary = '';
   sidebarWidth = 240;
   private navSub: Subscription | null = null;
+  private navRefreshSub: Subscription | null = null;
   private badgeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private badgeRefreshInFlight = false;
+  private badgeRefreshQueued = false;
+  private badgeApplyGeneration = 0;
+  private lastBadgeBumpMs = 0;
+
+  /** Demo accounts: hide legacy version picker only (sidebar New analysis stays). */
+  private static readonly DEMO_HIDDEN_NAV_IDS = new Set(['analysis-versions', 'analyse-v8']);
+
+  private readonly rebuildNavOnProfile = effect(() => {
+    const profile = this.auth.profile();
+    const role = profile?.role;
+    if (!role) return;
+    // Track isDemo so nav rebuilds when demo flag is normalized after profile load.
+    void profile?.isDemo;
+    this.navEntries = this.navForRole(role);
+    this.cdr.markForCheck();
+  });
   private sessionsWatching = false;
 
   get profileInitial(): string {
@@ -96,10 +117,21 @@ export class NdShellComponent implements OnInit, OnDestroy {
     return role === 'maker' || role === 'super_admin';
   }
 
+  navGroupChildren(group: NavGroup): NavItem[] {
+    if (!this.auth.isDemoViewer()) return group.children;
+    return group.children.filter((child) => !NdShellComponent.DEMO_HIDDEN_NAV_IDS.has(child.id));
+  }
+
+  showNavPass2Subtitle(child: NavItem): boolean {
+    return !this.auth.isDemoViewer() && child.id === 'analyse-v8' && !!this.pass2LlmSummary;
+  }
+
+  get newAnalysisLink(): string[] {
+    return ['/nd/analyse-regul-full'];
+  }
+
   async ngOnInit(): Promise<void> {
-    if (!this.auth.profile()) {
-      await this.auth.refreshProfile();
-    }
+    await this.auth.refreshProfile(true);
     const role = this.auth.getRole();
     if (!role) {
       await this.router.navigate(['/nd/auth/login']);
@@ -111,10 +143,25 @@ export class NdShellComponent implements OnInit, OnDestroy {
     this.syncExpandedGroupsToRoute();
     // Sidebar badges are non-critical — defer on overview so analysis-runs gets the DB pool first.
     this.scheduleNavBadgeRefresh();
-    if (!this.isOverviewRoute()) {
+    if (!this.isOverviewRoute() && !this.auth.isDemoViewer()) {
       setTimeout(() => void this.refreshPass2LlmSummary(), 2500);
     }
     this.syncActiveSessionPolling();
+    this.navRefreshSub = this.workspaceNav.refreshRequested.subscribe(() => {
+      if (this.badgeRefreshTimer) {
+        clearTimeout(this.badgeRefreshTimer);
+        this.badgeRefreshTimer = null;
+      }
+      const sinceBump = Date.now() - this.lastBadgeBumpMs;
+      const delayMs = sinceBump < 2500 ? 2500 - sinceBump : 0;
+      this.badgeRefreshTimer = setTimeout(() => {
+        this.badgeRefreshTimer = null;
+        void this.refreshNavBadges();
+      }, delayMs);
+    });
+    this.navRefreshSub.add(
+      this.workspaceNav.bumps.subscribe((bumps) => this.applyNavBadgeBumps(bumps)),
+    );
     this.navSub = this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => {
@@ -126,6 +173,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.navSub?.unsubscribe();
+    this.navRefreshSub?.unsubscribe();
     if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
     if (this.sessionsWatching) {
       this.activeSessions.unwatch();
@@ -254,7 +302,12 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   private scheduleNavBadgeRefresh(): void {
     if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
-    const delayMs = this.isOverviewRoute() ? 15_000 : 8_000;
+    const path = this.router.url.split('?')[0];
+    const delayMs = this.isOverviewRoute()
+      ? 15_000
+      : path.includes('/nd/analysis-runs') || path.includes('/nd/in-progress')
+        ? 0
+        : 8_000;
     this.badgeRefreshTimer = setTimeout(() => {
       this.badgeRefreshTimer = null;
       void this.refreshNavBadges();
@@ -277,6 +330,10 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   private async refreshPass2LlmSummary(): Promise<void> {
+    if (this.auth.isDemoViewer()) {
+      this.pass2LlmSummary = '';
+      return;
+    }
     const res = await this.api.getActiveDualVerifyLlm();
     if (!res.success || !res.data) {
       this.pass2LlmSummary = '';
@@ -287,13 +344,20 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   private async refreshNavBadges(): Promise<void> {
-    if (this.badgeRefreshInFlight) return;
+    if (this.badgeRefreshInFlight) {
+      this.badgeRefreshQueued = true;
+      return;
+    }
     this.badgeRefreshInFlight = true;
+    const genAtStart = this.badgeApplyGeneration;
     try {
       const role = this.auth.getRole();
       if (!role) return;
 
       const res = await this.api.getWorkspaceNavCounts();
+      if (genAtStart !== this.badgeApplyGeneration) return;
+      if (this.badgeRefreshQueued) return;
+      if (Date.now() - this.lastBadgeBumpMs < 1500) return;
       if (!res.success || !res.data) {
         this.ndActiveRunCount = 0;
         this.cdr.markForCheck();
@@ -311,6 +375,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         'regulation-documents-deleted': c.regulationDocumentsDeleted,
         'admin-users': c.adminUsers,
         'admin-departments': c.adminDepartments,
+        'admin-deleted-runs': c.deletedAnalysisRuns,
         'checker-queue': c.checkerQueue,
         'reviewer-queue': c.reviewerQueue,
       };
@@ -319,7 +384,39 @@ export class NdShellComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     } finally {
       this.badgeRefreshInFlight = false;
+      if (this.badgeRefreshQueued) {
+        this.badgeRefreshQueued = false;
+        void this.refreshNavBadges();
+      }
     }
+  }
+
+  private applyNavBadgeBumps(bumps: {
+    analysisRunsAll?: number;
+    analysisRunsInProgress?: number;
+    analysisRunsCorrection?: number;
+    adminDeletedRuns?: number;
+  }): void {
+    this.badgeApplyGeneration++;
+    this.lastBadgeBumpMs = Date.now();
+    const next = { ...this.navBadges };
+    if (bumps.analysisRunsAll) {
+      next['analysis-runs-all'] = Math.max(0, (next['analysis-runs-all'] ?? 0) + bumps.analysisRunsAll);
+    }
+    if (bumps.analysisRunsCorrection) {
+      next['analysis-runs-correction'] = Math.max(
+        0,
+        (next['analysis-runs-correction'] ?? 0) + bumps.analysisRunsCorrection,
+      );
+    }
+    if (bumps.adminDeletedRuns) {
+      next['admin-deleted-runs'] = Math.max(0, (next['admin-deleted-runs'] ?? 0) + bumps.adminDeletedRuns);
+    }
+    this.navBadges = next;
+    if (bumps.analysisRunsInProgress) {
+      this.ndActiveRunCount = Math.max(0, this.ndActiveRunCount + bumps.analysisRunsInProgress);
+    }
+    this.cdr.markForCheck();
   }
 
   toggleSettings(): void {
@@ -376,6 +473,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   private analysisGroup(role: string): NavGroup {
+    const demo = this.auth.isDemoViewer();
     const children: NavItem[] = [
       { id: 'in-progress', path: '/nd/in-progress', label: 'In progress', icon: 'clock', badgeAlways: true },
       {
@@ -388,22 +486,22 @@ export class NdShellComponent implements OnInit, OnDestroy {
       },
     ];
     if (role === 'maker' || role === 'super_admin') {
-      children.push(
-        {
-          id: 'analyse-v8',
-          path: '/nd/analyse-v8',
-          label: 'New analysis',
-          icon: 'plus',
-          cta: true,
-        },
-        {
+      children.push({
+        id: 'analyse-regul-full',
+        path: '/nd/analyse-regul-full',
+        label: 'New analysis',
+        icon: 'plus',
+        cta: true,
+      });
+      if (!demo) {
+        children.push({
           id: 'analysis-versions',
           path: '/nd/analysis-versions',
           label: 'Analysis Version',
           icon: 'list',
           cta: true,
-        },
-      );
+        });
+      }
     }
     return { id: 'analysis', label: 'Analysis', icon: 'list', children };
   }
@@ -444,17 +542,30 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   private adminGroup(): NavGroup {
+    const children: NavItem[] = [
+      { id: 'admin-users', path: '/nd/admin/users', label: 'User management', icon: 'users' },
+      { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
+      { id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' },
+    ];
+    // Demo workspace tools are for real (non-demo) super admins only.
+    if (!this.auth.isDemoViewer()) {
+      children.push({ id: 'admin-demo', path: '/nd/admin/demo', label: 'Demo group', icon: 'users' });
+    }
+    children.push(
+      { id: 'admin-prompts', path: '/nd/admin/prompts', label: 'Analysis prompts', icon: 'file' },
+      {
+        id: 'admin-deleted-runs',
+        path: '/nd/admin/deleted-runs',
+        label: 'Deleted analyses',
+        icon: 'trash',
+        badgeAlways: true,
+      },
+    );
     return {
       id: 'admin',
       label: 'Administration',
       icon: 'settings',
-      children: [
-        { id: 'admin-users', path: '/nd/admin/users', label: 'User management', icon: 'users' },
-        { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
-        { id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' },
-        { id: 'admin-prompts', path: '/nd/admin/prompts', label: 'Analysis prompts', icon: 'file' },
-        { id: 'admin-deleted-runs', path: '/nd/admin/deleted-runs', label: 'Deleted analyses', icon: 'trash' },
-      ],
+      children,
     };
   }
 

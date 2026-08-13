@@ -6,6 +6,7 @@ using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -16,6 +17,7 @@ public class AnalysisPointAttachmentsController(
     AppDbContext db,
     SupabaseStorageService storage,
     NdInternalParseService parseService,
+    NdDemoUserDirectory demoDirectory,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
     [HttpGet]
@@ -71,6 +73,11 @@ public class AnalysisPointAttachmentsController(
         var point = await RequirePointAsync(runId, pointId, profile!, ct);
         if (point == null) return NotFound(new { success = false, message = "Point not found." });
 
+        var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct);
+        var skipLiveParse = run != null
+            && await NdDemoIsolationHelper.ShouldSimulateAiAsync(
+                demoDirectory, profile!.Id, run.CreatedBy, ct);
+
         if (!storage.IsConfigured)
             return BadRequest(new { success = false, message = "Supabase Storage not configured." });
         if (files == null || files.Count == 0)
@@ -106,13 +113,23 @@ public class AnalysisPointAttachmentsController(
             db.StoredDocuments.Add(row);
             await db.SaveChangesAsync(ct);
 
-            try
+            if (skipLiveParse)
             {
-                await parseService.EnsureParsedAsync(row, bytes, ct);
+                row.ParseStatus = "skipped";
+                row.ParseError = "Demo mode — evidence upload stored without live AI parse.";
+                row.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
             }
-            catch
+            else
             {
-                /* parse can be retried at rerun */
+                try
+                {
+                    await parseService.EnsureParsedAsync(row, bytes, ct, profile!.Id);
+                }
+                catch
+                {
+                    /* parse can be retried at rerun */
+                }
             }
 
             var link = new NdAnalysisPointAttachment

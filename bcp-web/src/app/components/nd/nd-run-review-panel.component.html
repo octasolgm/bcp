@@ -81,11 +81,16 @@
     <p class="run-review-error">{{ error }}</p>
   }
 
-  @if (reviewProgress && reviewProgress.total > 0) {
+  @if (showActionReviewProgress) {
     <p class="run-review-progress" [class.complete]="reviewProgressComplete">
-      Action reviews: {{ reviewProgress.reviewed }}/{{ reviewProgress.total }}
+      <span class="run-review-progress-count">
+        Action reviews: {{ reviewProgress!.reviewed }}/{{ reviewProgress!.total }}
+      </span>
       @if (!reviewProgressComplete) {
-        — set status on each action before submitting the report
+        <span class="run-review-progress-hint">
+          Open each point below, expand its corrective action, click <strong>+ Add review</strong>, choose
+          <strong>Approve</strong> or <strong>Need modify</strong>, then save.
+        </span>
       }
     </p>
   }

@@ -34,6 +34,9 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
   ngOnChanges(): void {
     this.sortedSections = sortInternalSectionsByPointRef(this.sections);
     this.expandedRows.clear();
+    if (this.sortedSections.length > 0) {
+      this.expandAll();
+    }
   }
 
   get isBusy(): boolean {
@@ -86,12 +89,19 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
     else this.expandedRows.add(id);
   }
 
-  expandAllDetails(): void {
+  expandAll(): void {
     for (const section of this.sortedSections) {
-      if (this.isLong(section.sectionText)) {
-        this.expandedRows.add(section.id);
-      }
+      this.expandedRows.add(section.id);
     }
+  }
+
+  collapseAll(): void {
+    this.search = '';
+    this.expandedRows.clear();
+  }
+
+  expandAllDetails(): void {
+    this.expandAll();
   }
 
   collapseAllDetails(): void {
@@ -105,6 +115,16 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
   preview(text: string): string {
     if (text.length <= this.previewLen) return text;
     return text.slice(0, this.previewLen).trimEnd() + '…';
+  }
+
+  sectionParagraphs(text: string): string[] {
+    const t = text.trim();
+    if (!t) return [];
+    const byBlank = t.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean);
+    if (byBlank.length > 1) return byBlank;
+    const byLine = t.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    if (byLine.length > 4) return byLine;
+    return [t];
   }
 
   openPage(page: number | null | undefined, event: Event): void {

@@ -26,6 +26,8 @@ const SECTION_EXTRACT_TIMEOUT_MS = 900_000;
 const REPAIR_SECTION_PAGES_START_TIMEOUT_MS = 60_000;
 /** Poll while background repair runs on large manuals. */
 const REPAIR_SECTION_PAGES_POLL_MS = 20 * 60 * 1000;
+/** Regulation PDF upload to Supabase — allow headroom for large files on slow links. */
+const REGULATION_UPLOAD_TIMEOUT_MS = 180_000;
 /** Regulation repair / page refresh can touch hundreds of points. */
 const REGULATION_PAGE_REPAIR_TIMEOUT_MS = 300_000;
 /** Landing AI PDF/Word parse — large manuals can take several minutes. */
@@ -52,7 +54,14 @@ function friendlyNdApiError(raw: string, status?: number): string {
       'For local dev, set Supabase:DbPort to 6543 (transaction pooler) in appsettings.Development.json.'
     );
   }
-  if (raw.includes('Npgsql.PostgresException') || raw.length > 320) {
+  if (
+    raw.includes('Npgsql.PostgresException') ||
+    (raw.includes('relation') && raw.includes('does not exist')) ||
+    raw.length > 320
+  ) {
+    if (raw.startsWith('Could not load demo templates:')) {
+      return raw.length > 420 ? `${raw.slice(0, 420)}…` : raw;
+    }
     return status === 500
       ? 'Server error — the API could not reach the database. Restart the API and try again.'
       : raw.slice(0, 280);
@@ -64,6 +73,10 @@ export type NdApiResult<T> = {
   success: boolean;
   data?: T;
   message?: string;
+  pointCount?: number;
+  source?: string;
+  returnedCount?: number;
+  permanentlyDeleted?: boolean;
   status?: number;
   totalMatches?: number;
   requiresConversion?: boolean;
@@ -80,11 +93,13 @@ export type NdApiResult<T> = {
 export type NdUserProfile = {
   id: string;
   fullName: string;
+  email?: string;
   role: 'super_admin' | 'maker' | 'checker' | 'reviewer';
   departmentId?: string | null;
   departmentName?: string | null;
   isActive: boolean;
   createdAt?: string;
+  isDemo?: boolean;
 };
 
 export type NdRunReviewBody = {
@@ -118,6 +133,7 @@ export type NdWorkspaceNavCounts = {
   adminDepartments: number;
   checkerQueue: number;
   reviewerQueue: number;
+  deletedAnalysisRuns: number;
 };
 
 export type NdDashboardStats = {
@@ -134,6 +150,8 @@ export type NdDashboardStats = {
 @Injectable({ providedIn: 'root' })
 export class NdApiService {
   private readonly http = inject(HttpClient);
+  /** Share in-flight GETs so duplicate route loads don't queue duplicate API calls. */
+  private readonly inflightGets = new Map<string, Promise<NdApiResult<unknown>>>();
 
   private baseUrl(): string {
     const url = environment.ndApiUrl || environment.apiUrl;
@@ -147,6 +165,17 @@ export class NdApiService {
     if (token) h = h.set('Authorization', `Bearer ${token}`);
     if (json) h = h.set('Content-Type', 'application/json');
     return h;
+  }
+
+  private requestDedupedGet<T>(path: string, timeoutMs: number): Promise<NdApiResult<T>> {
+    const inflight = this.inflightGets.get(path);
+    if (inflight) return inflight as Promise<NdApiResult<T>>;
+
+    const promise = this.request<T>('GET', path, undefined, true, timeoutMs).finally(() => {
+      this.inflightGets.delete(path);
+    });
+    this.inflightGets.set(path, promise as Promise<NdApiResult<unknown>>);
+    return promise;
   }
 
   private async request<T>(
@@ -250,6 +279,78 @@ export class NdApiService {
     return this.request<import('../../../lib/nd/types').DualVerifyLlmSettings>(
       'GET',
       '/nd/admin/settings/dual-verify-llm',
+    );
+  }
+
+  getDemoAdminOverview() {
+    return this.request<{
+      templates: unknown[];
+      note?: string;
+    }>('GET', '/nd/admin/demo/overview');
+  }
+
+  clearDemoWorkspace(body: {
+    clearAll?: boolean;
+    clearInternalDocuments?: boolean;
+    clearRegulationDocuments?: boolean;
+    clearLibraries?: boolean;
+    clearAnalysisRuns?: boolean;
+    clearUsers?: boolean;
+  }) {
+    return this.request<{
+      internalDocuments: number;
+      regulationDocuments: number;
+      libraries: number;
+      analysisRuns: number;
+      usersDeactivated: number;
+    }>('POST', '/nd/admin/demo/clear', body);
+  }
+
+  getDemoAnalysisTemplate(id: string) {
+    return this.request<unknown>('GET', `/nd/admin/demo/templates/${id}`);
+  }
+
+  updateDemoAnalysisTemplate(
+    id: string,
+    body: {
+      name?: string;
+      description?: string;
+      regulationNameHint?: string;
+      internalNameHint?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    },
+  ) {
+    return this.request<unknown>('PUT', `/nd/admin/demo/templates/${id}`, body);
+  }
+
+  addDemoAnalysisTemplatePoint(templateId: string, body: Record<string, unknown>) {
+    return this.request<unknown>('POST', `/nd/admin/demo/templates/${templateId}/points`, body);
+  }
+
+  updateDemoAnalysisTemplatePoint(
+    templateId: string,
+    pointId: string,
+    body: Record<string, unknown>,
+  ) {
+    return this.request<unknown>(
+      'PUT',
+      `/nd/admin/demo/templates/${templateId}/points/${pointId}`,
+      body,
+    );
+  }
+
+  deleteDemoAnalysisTemplatePoint(templateId: string, pointId: string) {
+    return this.request<unknown>(
+      'DELETE',
+      `/nd/admin/demo/templates/${templateId}/points/${pointId}`,
+    );
+  }
+
+  reloadDemoAnalysisTemplateFromSeed(templateId: string) {
+    return this.request<unknown>(
+      'POST',
+      `/nd/admin/demo/templates/${templateId}/reload-from-seed-file`,
     );
   }
 
@@ -414,7 +515,11 @@ export class NdApiService {
     const form = new FormData();
     form.append('file', file);
     if (departmentId) form.append('departmentId', departmentId);
-    return this.postMultipart<unknown>('/nd/regulation-documents/upload', form);
+    return this.postMultipart<unknown>('/nd/regulation-documents/upload', form, REGULATION_UPLOAD_TIMEOUT_MS);
+  }
+
+  parseRegulationDocument(docId: string) {
+    return this.request<unknown>('POST', `/nd/regulation-documents/${docId}/parse`);
   }
 
   extractRegulationDocument(docId: string) {
@@ -450,8 +555,12 @@ export class NdApiService {
     }>('POST', `/nd/regulation-documents/${docId}/points/repair`, undefined, true, REGULATION_PAGE_REPAIR_TIMEOUT_MS);
   }
 
-  getDocumentPoints(docId: string) {
-    return this.request<unknown[]>('GET', `/nd/regulation-documents/${docId}/points`);
+  getDocumentPoints(docId: string, opts?: { lite?: boolean; demoScope?: boolean }) {
+    const params = new URLSearchParams();
+    if (opts?.lite) params.set('lite', 'true');
+    if (opts?.demoScope) params.set('demoScope', 'true');
+    const q = params.toString();
+    return this.request<unknown[]>('GET', `/nd/regulation-documents/${docId}/points${q ? `?${q}` : ''}`);
   }
 
   searchRegulationPoints(query: string, limit = 80) {
@@ -531,6 +640,82 @@ export class NdApiService {
     window.open(full, '_blank', 'noopener');
   }
 
+  private parseDownloadFilename(header: string | null, fallback: string): string {
+    if (!header) return fallback;
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+    if (star?.[1]) {
+      try {
+        return decodeURIComponent(star[1].trim());
+      } catch {
+        return star[1].trim();
+      }
+    }
+    const quoted = /filename="([^"]+)"/i.exec(header);
+    if (quoted?.[1]) return quoted[1].trim();
+    const plain = /filename=([^;]+)/i.exec(header);
+    if (plain?.[1]) return plain[1].trim().replace(/^"|"$/g, '');
+    return fallback;
+  }
+
+  async downloadNdExport(path: string, fallbackFilename: string): Promise<NdApiResult<void>> {
+    const url = `${this.baseUrl()}${path}`;
+    try {
+      const token = await getNdAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        const raw = await res.text();
+        let message = raw;
+        try {
+          const parsed = JSON.parse(raw) as { message?: string };
+          if (parsed.message) message = parsed.message;
+        } catch {
+          /* keep raw */
+        }
+        return {
+          success: false,
+          message: friendlyNdApiError(message, res.status),
+          status: res.status,
+        };
+      }
+      const blob = await res.blob();
+      const filename = this.parseDownloadFilename(res.headers.get('Content-Disposition'), fallbackFilename);
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      anchor.rel = 'noopener';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+      return { success: true };
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      return { success: false, message: e.message ?? 'Download failed' };
+    }
+  }
+
+  downloadRegulationPointsExport(docId: string) {
+    return this.downloadNdExport(
+      `/nd/regulation-documents/${docId}/export/points`,
+      'regulation-points.json',
+    );
+  }
+
+  downloadRegulationFileExport(docId: string) {
+    return this.downloadNdExport(`/nd/regulation-documents/${docId}/export/file`, 'regulation.pdf');
+  }
+
+  downloadInternalMarkdownExport(docId: string) {
+    return this.downloadNdExport(`/nd/internal-documents/${docId}/export/markdown`, 'internal-document.md');
+  }
+
+  downloadInternalFileExport(docId: string) {
+    return this.downloadNdExport(`/nd/internal-documents/${docId}/export/file`, 'internal-document.pdf');
+  }
+
   hideInternalDocument(id: string) {
     return this.request<unknown>('DELETE', `/nd/internal-documents/${id}`);
   }
@@ -604,14 +789,14 @@ export class NdApiService {
     return this.postMultipart<unknown>('/nd/internal-documents/upload', form);
   }
 
-  private async postMultipart<T>(path: string, form: FormData): Promise<NdApiResult<T>> {
+  private async postMultipart<T>(path: string, form: FormData, timeoutMs = API_TIMEOUT_MS): Promise<NdApiResult<T>> {
     const token = await getNdAccessToken();
     const url = `${this.baseUrl()}${path}`;
     try {
       return await firstValueFrom(
         this.http.post<NdApiResult<T>>(url, form, {
           headers: new HttpHeaders({ Authorization: `Bearer ${token ?? ''}` }),
-        }).pipe(timeout(API_TIMEOUT_MS)),
+        }).pipe(timeout(timeoutMs)),
       );
     } catch (err) {
       if (err instanceof HttpErrorResponse && err.status === 409) {
@@ -717,6 +902,29 @@ export class NdApiService {
     );
   }
 
+  createDemoAnalysisFromCbuaeSeed() {
+    return this.request<{ id: string; pointCount: number; status: string; name?: string }>(
+      'POST',
+      '/nd/analysis-runs/demo-from-cbuae-seed',
+    );
+  }
+
+  saveDemoRegulAnalysisRun(body: {
+    name?: string;
+    regulationDocumentId?: string;
+    internalDocumentId?: string;
+    regulationNameHint?: string;
+    internalNameHint?: string;
+    judgments?: unknown[];
+    useSeedFile?: boolean;
+  }) {
+    return this.request<{ id: string; pointCount: number; status: string; name?: string; workflowEngine?: string }>(
+      'POST',
+      '/nd/analysis-runs/demo-save-regul',
+      body,
+    );
+  }
+
   saveDemoAnalysisRun(body: {
     name?: string;
     selectedPointsSnapshot: unknown[];
@@ -738,12 +946,10 @@ export class NdApiService {
     );
   }
 
-  getAnalysisRun(id: string) {
-    return this.request<unknown>(
-      'GET',
-      `/nd/analysis-runs/${id}`,
-      undefined,
-      true,
+  getAnalysisRun(id: string, opts?: { lite?: boolean }) {
+    const q = opts?.lite ? '?lite=true' : '';
+    return this.requestDedupedGet<unknown>(
+      `/nd/analysis-runs/${id}${q}`,
       ANALYSIS_RUN_DETAIL_TIMEOUT_MS,
     );
   }
@@ -874,7 +1080,10 @@ export class NdApiService {
   }
 
   getResults(runId: string) {
-    return this.request<unknown>('GET', `/nd/results/${runId}`, undefined, true, ANALYSIS_RUN_DETAIL_TIMEOUT_MS);
+    return this.requestDedupedGet<unknown>(
+      `/nd/results/${runId}`,
+      ANALYSIS_RUN_DETAIL_TIMEOUT_MS,
+    );
   }
 
   saveActionItemReview(

@@ -1,193 +1,205 @@
-<div class="page-header">
-  <div>
-    <h1>User Management</h1>
-    <p class="subtitle">Create demo or production users — email verification is not required</p>
-  </div>
-</div>
-
-<div class="nd-page-body">
-@if (!isSuperAdmin) {
-  <p class="nd-error">Access denied</p>
-} @else {
-  <form class="card-surface invite-form" (ngSubmit)="handleInvite()">
-    <h2>Create user</h2>
-    <p class="muted-loading">Demo accounts are created with email pre-confirmed. Optional password lets them sign in immediately.</p>
-    <div class="form-grid">
-      <label class="field">
-        <span>Full name</span>
-        <input [(ngModel)]="inviteName" name="inviteName" required />
-      </label>
-      <label class="field">
-        <span>Email</span>
-        <input type="email" [(ngModel)]="inviteEmail" name="inviteEmail" required />
-      </label>
-      <label class="field">
-        <span>Role</span>
-        <select [(ngModel)]="inviteRole" name="inviteRole">
-          <option value="maker">Maker</option>
-          <option value="checker">Checker</option>
-          <option value="reviewer">Reviewer</option>
-          <option value="super_admin">Super Admin</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Initial password (optional)</span>
-        <input
-          type="password"
-          [(ngModel)]="invitePassword"
-          name="invitePassword"
-          minlength="6"
-          placeholder="Min 6 characters"
-        />
-      </label>
+<div class="nd-catalog-page">
+  <div class="page-header page-header--catalog">
+    <div class="page-header-title-block">
+      <h1>User Management</h1>
+      <p class="subtitle">Create demo or production users — email verification is not required</p>
     </div>
-    <button type="submit" class="btn-primary" [disabled]="inviting">
-      {{ inviting ? 'Creating…' : 'Create user' }}
-    </button>
-  </form>
+  </div>
 
-  @if (resetPasswordUserId) {
-    <form class="card-surface invite-form" (ngSubmit)="handleSetPassword()">
-      <h2>Set password</h2>
-      <p class="muted-loading">
-        Set a new password for
-        <strong>{{ resetPasswordUser?.fullName }}</strong>.
-        Use this when email reset links fail.
-      </p>
-      <label class="field">
-        <span>New password</span>
-        <input
-          type="password"
-          [(ngModel)]="resetPasswordValue"
-          name="resetPasswordValue"
-          minlength="6"
-          required
-        />
-      </label>
-      <div class="form-actions">
-        <button type="button" class="btn-secondary" (click)="cancelResetPassword()">Cancel</button>
-        <button type="submit" class="btn-primary" [disabled]="resettingId === resetPasswordUserId">
-          {{ resettingId === resetPasswordUserId ? 'Saving…' : 'Set password' }}
-        </button>
-      </div>
-    </form>
-  }
-
-  @if (message) {
-    <p class="alert success">{{ message }}</p>
-  }
-  @if (error) {
-    <p class="alert error">{{ error }}</p>
-  }
-
-  @if (loading && users.length === 0) {
-    <p class="muted-loading">Loading users…</p>
+  @if (!isSuperAdmin) {
+    <p class="nd-error">Access denied</p>
   } @else {
-    <div class="filter-pills nd-list-toolbar nd-shrink">
-      <input
-        type="search"
-        class="filter-search"
-        [(ngModel)]="searchQuery"
-        placeholder="Search users…"
-        aria-label="Search users"
-      />
-      <select class="filter-select" [(ngModel)]="roleFilter" aria-label="Filter by role">
-        <option value="">All roles</option>
-        <option value="maker">Maker</option>
-        <option value="checker">Checker</option>
-        <option value="reviewer">Reviewer</option>
-        <option value="super_admin">Super Admin</option>
-      </select>
-      <select class="filter-select" [(ngModel)]="statusFilter" aria-label="Filter by status">
-        <option value="">All statuses</option>
-        <option value="active">Active</option>
-        <option value="deactivated">Deactivated</option>
-        <option value="pending_invitation">Pending invitation</option>
-      </select>
-      <span class="filter-count">{{ visibleUsers.length }} of {{ users.length }}</span>
-      @if (hasActiveFilters) {
-        <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+    <div class="nd-catalog-toolbar">
+      <form class="card-surface invite-form" (ngSubmit)="handleInvite()" autocomplete="off">
+        <h2>Create user</h2>
+        <p class="muted-loading">Demo accounts are created with email pre-confirmed. Optional password lets them sign in immediately.</p>
+        <div class="form-grid">
+          <label class="field">
+            <span>Full name</span>
+            <input [(ngModel)]="inviteName" name="inviteName" autocomplete="off" required />
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input
+              type="email"
+              [(ngModel)]="inviteEmail"
+              name="inviteEmail"
+              autocomplete="off"
+              placeholder="e.g. demo_maker@reguliq.com"
+              required
+            />
+          </label>
+          <label class="field">
+            <span>Role</span>
+            <select [(ngModel)]="inviteRole" name="inviteRole">
+              <option value="maker">Maker</option>
+              <option value="checker">Checker</option>
+              <option value="reviewer">Reviewer</option>
+              <option value="super_admin">Super Admin</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Initial password (optional)</span>
+            <input
+              type="password"
+              [(ngModel)]="invitePassword"
+              name="invitePassword"
+              autocomplete="new-password"
+              minlength="6"
+              placeholder="Min 6 characters"
+            />
+          </label>
+        </div>
+        <button type="submit" class="btn-primary" [disabled]="inviting">
+          {{ inviting ? 'Creating…' : 'Create user' }}
+        </button>
+      </form>
+
+      @if (resetPasswordUserId) {
+        <form class="card-surface invite-form" (ngSubmit)="handleSetPassword()">
+          <h2>Set password</h2>
+          <p class="muted-loading">
+            Set a new password for
+            <strong>{{ resetPasswordUser?.fullName }}</strong>.
+            Use this when email reset links fail.
+          </p>
+          <label class="field">
+            <span>New password</span>
+            <input
+              type="password"
+              [(ngModel)]="resetPasswordValue"
+              name="resetPasswordValue"
+              minlength="6"
+              required
+            />
+          </label>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" (click)="cancelResetPassword()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="resettingId === resetPasswordUserId">
+              {{ resettingId === resetPasswordUserId ? 'Saving…' : 'Set password' }}
+            </button>
+          </div>
+        </form>
+      }
+
+      @if (message) {
+        <app-nd-page-alert kind="success" [text]="message" (dismiss)="message = ''" />
+      }
+      @if (error) {
+        <app-nd-page-alert kind="error" [text]="error" (dismiss)="error = ''" />
       }
     </div>
 
-    @if (!visibleUsers.length) {
-      <div class="card-surface empty-state">
-        <strong>No users match your filters</strong>
-        <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
-      </div>
+    @if (loading && users.length === 0) {
+      <p class="muted-loading">Loading users…</p>
     } @else {
-    <div class="card-surface table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th class="sortable" (click)="toggleSort('name')">Name <span class="sort-indicator">{{ sortMark('name') }}</span></th>
-            <th class="sortable" (click)="toggleSort('email')">Email <span class="sort-indicator">{{ sortMark('email') }}</span></th>
-            <th class="sortable" (click)="toggleSort('role')">Role <span class="sort-indicator">{{ sortMark('role') }}</span></th>
-            <th class="sortable" (click)="toggleSort('status')">Account status <span class="sort-indicator">{{ sortMark('status') }}</span></th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (u of visibleUsers; track u.id) {
-            <tr [class.row-saving]="savingUserId === u.id">
-              <td>
-                <strong>{{ u.fullName }}</strong>
-                @if (u.id === currentUserId) {
-                  <span class="you-tag">You</span>
-                }
-                @if (savingUserId === u.id) {
-                  <span class="row-status">Saving…</span>
-                }
-              </td>
-              <td class="muted">{{ u.email ?? '—' }}</td>
-              <td>
-                <select
-                  class="inline-select"
-                  [ngModel]="u.role"
-                  [disabled]="savingUserId === u.id"
-                  (ngModelChange)="handleRoleChange(u.id, $event)"
-                >
-                  <option value="maker">Maker</option>
-                  <option value="checker">Checker</option>
-                  <option value="reviewer">Reviewer</option>
-                  <option value="super_admin">Super Admin</option>
-                </select>
-              </td>
-              <td>
-                <app-nd-status-badge [status]="u.accountStatus || (u.isActive ? 'active' : 'deactivated')" />
-              </td>
-              <td class="actions">
-                <button
-                  type="button"
-                  class="btn-secondary btn-sm"
-                  [disabled]="savingUserId === u.id"
-                  (click)="openResetPassword(u)"
-                >
-                  Set password
-                </button>
-                <button
-                  type="button"
-                  class="btn-secondary btn-sm"
-                  [disabled]="savingUserId === u.id"
-                  (click)="toggleActive(u)"
-                >
-                  {{ savingUserId === u.id ? '…' : u.isActive ? 'Deactivate' : 'Activate' }}
-                </button>
-                <button
-                  type="button"
-                  class="btn-danger btn-sm"
-                  [disabled]="u.id === currentUserId || deletingId === u.id"
-                  (click)="handleDelete(u)"
-                >
-                  {{ deletingId === u.id ? '…' : 'Delete' }}
-                </button>
-              </td>
-            </tr>
+      <div class="nd-catalog-body">
+        <div class="filter-pills nd-list-toolbar nd-shrink">
+          <input
+            type="search"
+            class="filter-search"
+            [(ngModel)]="searchQuery"
+            placeholder="Search users…"
+            aria-label="Search users"
+          />
+          <select class="filter-select" [(ngModel)]="roleFilter" aria-label="Filter by role">
+            <option value="">All roles</option>
+            <option value="maker">Maker</option>
+            <option value="checker">Checker</option>
+            <option value="reviewer">Reviewer</option>
+            <option value="super_admin">Super Admin</option>
+          </select>
+          <select class="filter-select" [(ngModel)]="statusFilter" aria-label="Filter by status">
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="deactivated">Deactivated</option>
+            <option value="pending_invitation">Pending invitation</option>
+          </select>
+          <span class="filter-count">{{ visibleUsers.length }} of {{ users.length }}</span>
+          @if (hasActiveFilters) {
+            <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
           }
-        </tbody>
-      </table>
-    </div>
+        </div>
+
+        @if (!visibleUsers.length) {
+          <div class="card-surface empty-state">
+            <strong>No users match your filters</strong>
+            <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
+          </div>
+        } @else {
+          <div class="card-surface table-wrap table-scroll-body">
+            <table>
+              <thead>
+                <tr>
+                  <th class="sortable" (click)="toggleSort('name')">Name <span class="sort-indicator">{{ sortMark('name') }}</span></th>
+                  <th class="sortable" (click)="toggleSort('email')">Email <span class="sort-indicator">{{ sortMark('email') }}</span></th>
+                  <th class="sortable" (click)="toggleSort('role')">Role <span class="sort-indicator">{{ sortMark('role') }}</span></th>
+                  <th class="sortable" (click)="toggleSort('status')">Account status <span class="sort-indicator">{{ sortMark('status') }}</span></th>
+                  <th class="col-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (u of visibleUsers; track u.id) {
+                  <tr [class.row-saving]="savingUserId === u.id">
+                    <td>
+                      <strong>{{ u.fullName }}</strong>
+                      @if (u.id === currentUserId) {
+                        <span class="you-tag">You</span>
+                      }
+                      @if (savingUserId === u.id) {
+                        <span class="row-status">Saving…</span>
+                      }
+                    </td>
+                    <td class="muted">{{ u.email ?? '—' }}</td>
+                    <td>
+                      <select
+                        class="inline-select"
+                        [ngModel]="u.role"
+                        [disabled]="savingUserId === u.id"
+                        (ngModelChange)="handleRoleChange(u.id, $event)"
+                      >
+                        <option value="maker">Maker</option>
+                        <option value="checker">Checker</option>
+                        <option value="reviewer">Reviewer</option>
+                        <option value="super_admin">Super Admin</option>
+                      </select>
+                    </td>
+                    <td>
+                      <app-nd-status-badge [status]="u.accountStatus || (u.isActive ? 'active' : 'deactivated')" />
+                    </td>
+                    <td class="col-actions actions">
+                      <button
+                        type="button"
+                        class="btn-secondary btn-sm"
+                        [disabled]="savingUserId === u.id"
+                        (click)="openResetPassword(u)"
+                      >
+                        Set password
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-secondary btn-sm"
+                        [disabled]="savingUserId === u.id"
+                        (click)="toggleActive(u)"
+                      >
+                        {{ savingUserId === u.id ? '…' : u.isActive ? 'Deactivate' : 'Activate' }}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-danger btn-sm"
+                        [disabled]="u.id === currentUserId || deletingId === u.id"
+                        (click)="handleDelete(u)"
+                      >
+                        {{ deletingId === u.id ? '…' : 'Delete' }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
     }
   }
-}
 </div>

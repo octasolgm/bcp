@@ -6,8 +6,8 @@ import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.c
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import type { RegulationDocument, RegulationPoint } from '../../../../lib/nd/types';
+import { prepareRegulationPointsResponse } from '../../../../lib/regulation-catalog-utils';
 import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.component';
-
 @Component({
   selector: 'app-nd-regulation-document-detail',
   standalone: true,
@@ -30,6 +30,7 @@ export class NdRegulationDocumentDetailComponent implements OnInit {
   doc: RegulationDocument | null = null;
   points: RegulationPoint[] = [];
   loading = true;
+  parsing = false;
   extracting = false;
   repairing = false;
   refreshingPages = false;
@@ -48,30 +49,75 @@ export class NdRegulationDocumentDetailComponent implements OnInit {
     return role === 'maker' || role === 'super_admin';
   }
 
+  get isDemoViewer(): boolean {
+    return this.auth.isDemoViewer();
+  }
+
+  /** Production makers/admins, or Demo Admin only — not regular demo makers. */
+  get showRepair(): boolean {
+    if (!this.canExtract || !this.hasPoints) return false;
+    if (this.isDemoViewer && !this.auth.isDemoAdmin()) return false;
+    return true;
+  }
+
   async load(): Promise<void> {
     this.loading = true;
     this.error = '';
     const [docRes, ptsRes] = await Promise.all([
       this.api.getRegulationDocument(this.docId),
-      this.api.getDocumentPoints(this.docId),
+      this.api.getDocumentPoints(this.docId, { lite: true }),
     ]);
     if (docRes.success && docRes.data) this.doc = docRes.data as RegulationDocument;
     else this.error = docRes.message ?? 'Failed to load document';
 
     if (ptsRes.success && ptsRes.data) {
-      this.points = ptsRes.data as RegulationPoint[];
-      this.pointsSource = (ptsRes as { source?: string }).source ?? '';
-      const apiCount = (ptsRes as { pointCount?: number }).pointCount;
-      const count = apiCount ?? this.points.length;
-      if (this.doc) this.doc = { ...this.doc, pointCount: count };
-    }
-    this.loading = false;
+      const prepared = prepareRegulationPointsResponse(ptsRes.data as unknown[], {
+        docName: this.doc?.name,
+        apiPointCount: ptsRes.pointCount ?? this.doc?.pointCount,
+      });
+      this.points = prepared.points;
+      this.pointsSource = ptsRes.source ?? '';
+    }    this.loading = false;
   }
 
   get hasPoints(): boolean {
     if (!this.doc) return false;
     const st = (this.doc.extractionStatus ?? '').toLowerCase();
     return st === 'extracted' || st === 'completed' || (this.doc.pointCount ?? 0) > 0 || this.points.length > 0;
+  }
+
+  isParsedDoc(): boolean {
+    return (this.doc?.extractionStatus ?? '').toLowerCase() === 'parsed';
+  }
+
+  needsParse(): boolean {
+    if (!this.doc) return false;
+    const st = (this.doc.extractionStatus ?? '').toLowerCase();
+    return !this.isParsedDoc() && !this.hasPoints && (st === 'pending' || st === 'failed');
+  }
+
+  canShowExtract(): boolean {
+    if (!this.doc) return false;
+    if (this.isDemoViewer) {
+      const st = (this.doc.extractionStatus ?? '').toLowerCase();
+      return this.isParsedDoc() || this.hasPoints || st === 'pending' || st === 'failed';
+    }
+    return this.isParsedDoc() || this.hasPoints;
+  }
+
+  async handleParse(): Promise<void> {
+    if (!this.docId) return;
+    this.parsing = true;
+    this.error = '';
+    this.message = '';
+    const res = await this.api.parseRegulationDocument(this.docId);
+    if (res.success) {
+      this.message = 'Parse complete.';
+      await this.load();
+    } else {
+      this.error = res.message ?? 'Parse failed';
+    }
+    this.parsing = false;
   }
 
   async handleRepair(): Promise<void> {
@@ -82,8 +128,13 @@ export class NdRegulationDocumentDetailComponent implements OnInit {
     const res = await this.api.repairRegulationPoints(this.docId);
     if (res.success && res.data) {
       const r = res.data.repair;
+      if (this.doc && res.data.pointCount != null) {
+        this.doc = { ...this.doc, pointCount: res.data.pointCount };
+      }
       this.message =
-        `Repaired: ${r.beforeCount} → ${r.afterCount} active (${r.softDeleted} soft-deleted).`;
+        (r as { recovered?: number }).recovered
+          ? `Repaired: ${r.beforeCount} → ${r.afterCount} active (${r.softDeleted} removed, ${(r as { recovered?: number }).recovered} recovered).`
+          : `Repaired: ${r.beforeCount} → ${r.afterCount} active (${r.softDeleted} soft-deleted).`;
       await this.load();
     } else {
       this.error = res.message ?? 'Could not repair points';

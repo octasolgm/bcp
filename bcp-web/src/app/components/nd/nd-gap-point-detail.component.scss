@@ -327,6 +327,21 @@
   color: var(--text-muted);
 }
 
+.gap-analysis-block {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--medium, #a16207) 28%, white);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--medium, #a16207) 6%, white);
+}
+
+.gap-analysis-body {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-primary, #0f172a);
+  white-space: pre-wrap;
+}
+
 .fulfilled-list {
   list-style: none;
   margin: 0;
@@ -594,6 +609,13 @@
   text-transform: uppercase;
   color: var(--cap-ink-muted, #b45309);
   margin: 0 0 0.25rem;
+}
+
+.cap-gap-body p {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  margin: 0 0 0.5rem;
 }
 
 .gap-field {

@@ -30,7 +30,7 @@ import {
   normalizeGapPriority,
   type GapPriority,
 } from '../../../lib/nd/gap-priority';
-import { meaningfulCapGaps, isMeaningfulCapGap, isWeakCorrectivePlan, buildFallbackCapGaps, resolveAiCorrectiveActionForPoint, isVerificationMetaCapText } from '../../../lib/nd/cap-gap-count';
+import { meaningfulCapGaps, isMeaningfulCapGap, isWeakCorrectivePlan, buildFallbackCapGaps, resolveAiCorrectiveActionForPoint, isVerificationMetaCapText, parseRegulElementCapGaps, looksLikeRegulElementAssessment } from '../../../lib/nd/cap-gap-count';
 import { agreementBadgeClass, type AgreementStatus, type DualVerifyAgreement } from '../../../lib/landing-ai/dual-verify-merge';
 import { ReferenceComplianceCardComponent } from '../reference-compliance-card/reference-compliance-card.component';
 import type { ActionPlanHistoryEntry, AnalysisPoint, Department, PointGapAttachment, PointSnapshot } from '../../../lib/nd/types';
@@ -40,6 +40,7 @@ import {
   complianceSeverityLabel,
   resolveAnalysisPointSeverity,
   resolveDisplayConfidence,
+  parseConfidencePercent,
   type ComplianceSeverity,
 } from '../../../lib/nd/point-compliance-status';
 import {
@@ -183,6 +184,7 @@ export class NdGapPointDetailComponent implements OnChanges {
   primaryBlock!: ReferenceComplianceBlock;
   showFulfilled = false;
   fulfilledLines: string[] = [];
+  gapAnalysisText = '';
   responsibility = '';
   capGaps: CapGap[] = [];
   originalPlan = '';
@@ -273,10 +275,15 @@ export class NdGapPointDetailComponent implements OnChanges {
     this.pass1ErrorFull = pass1Err.full;
     this.agreement = this.extractAgreement(this.point.googleAiResult);
 
-    const primaryMsg = (this.llmMessage || this.landingMessage).trim();
+    const primaryMsg = this.isRegulWorkflow
+      ? (this.landingMessage || this.llmMessage).trim()
+      : (this.llmMessage || this.landingMessage).trim();
     this.primaryBlock = parseReferenceComplianceBlock(primaryMsg);
     this.showFulfilled = hasDisplayableFulfilledClauses(this.primaryBlock.fulfilledClauses);
     this.fulfilledLines = parseBulletLines(this.primaryBlock.fulfilledClauses ?? '');
+    const gapRaw = (this.primaryBlock.gapAnalysis ?? '').trim();
+    this.gapAnalysisText =
+      gapRaw && !/^n\/a$/i.test(gapRaw) && gapRaw !== '—' ? gapRaw : '';
     this.responsibility =
       this.primaryBlock.responsibility && this.primaryBlock.responsibility !== 'N/A'
         ? this.primaryBlock.responsibility
@@ -377,7 +384,8 @@ export class NdGapPointDetailComponent implements OnChanges {
     this.originalPlan = this.point.originalAiActionPlan?.trim() ?? '';
     this.currentPlan = this.point.finalActionPlan?.trim() ?? this.originalPlan;
     const aiCap = resolveAiCorrectiveActionForPoint(this.point);
-    const capSource = this.currentPlan || this.originalPlan || aiCap;
+    let capSource = this.currentPlan || this.originalPlan || aiCap;
+    if (looksLikeRegulElementAssessment(capSource)) capSource = '';
     const effectiveCap =
       capSource && !isVerificationMetaCapText(capSource) && !isWeakCorrectivePlan(capSource)
         ? capSource
@@ -406,7 +414,43 @@ export class NdGapPointDetailComponent implements OnChanges {
 
     const userEditedPlan =
       Boolean(this.point.finalActionPlan?.trim()) &&
-      this.point.finalActionPlan!.trim() !== (this.point.originalAiActionPlan?.trim() ?? '');
+      this.point.finalActionPlan!.trim() !== (this.point.originalAiActionPlan?.trim() ?? '') &&
+      !looksLikeRegulElementAssessment(this.point.finalActionPlan!);
+
+    if (
+      this.isRegulWorkflow &&
+      gapRaw &&
+      this.resolvedSeverity &&
+      this.resolvedSeverity !== 'compliant' &&
+      !userEditedPlan
+    ) {
+      const fixFromCap = this.primaryBlock.correctiveAction?.trim() ?? '';
+      const fix =
+        fixFromCap &&
+        !isWeakCorrectivePlan(fixFromCap) &&
+        fixFromCap !== '—' &&
+        fixFromCap !== 'N/A'
+          ? fixFromCap
+          : '';
+      const elementGaps = parseRegulElementCapGaps(gapRaw);
+      if (elementGaps.length > 0) {
+        this.capGaps = elementGaps.map((g, i) => ({
+          ...g,
+          index: i + 1,
+          fix: g.fix || fix,
+        }));
+      } else {
+        this.capGaps = [
+          {
+            index: 1,
+            missing: this.gapAnalysisText,
+            fix,
+            priority: 'Medium',
+          },
+        ];
+      }
+    }
+
     this.capSourceLabel = userEditedPlan ? 'Edited' : 'Compliance AI draft';
 
     this.showCapSection =
@@ -462,7 +506,15 @@ export class NdGapPointDetailComponent implements OnChanges {
   }
 
   get displayConfidence(): string {
-    return resolveDisplayConfidence(this.point);
+    const fromBlock = this.primaryBlock?.confidence?.trim();
+    if (fromBlock) {
+      const pct = parseConfidencePercent(fromBlock);
+      if (pct != null) return `${pct}%`;
+    }
+    const resolved = resolveDisplayConfidence(this.point);
+    const pct = parseConfidencePercent(resolved);
+    if (pct != null) return `${pct}%`;
+    return resolved;
   }
 
   get compliancePillClass(): string {

@@ -1,0 +1,652 @@
+{
+  "summary": {
+    "demo_point_count": 55,
+    "excel_rows_skipped": 125,
+    "excel_rows_in_demo_scope": 50,
+    "found_in_excel": 50,
+    "not_found_in_excel": 5,
+    "would_update": 0,
+    "found_already_aligned": 50
+  },
+  "matching_rules": [
+    "Base set is exactly the 55 demo clause_no values.",
+    "Excel INT rows and sub-clauses (e.g. 3.4-a) are ignored.",
+    "Only judgment fields update: status, confidence, policy_extract, interpretation, document_reference.",
+    "clause_no and clause_title (reg point identity) are never changed.",
+    "gap_description / suggested_action kept unless Excel has action columns filled."
+  ],
+  "not_found_in_excel": [
+    {
+      "clause_no": "3.4",
+      "clause_title": "Statutory Prohibitions",
+      "overall_status": "partial",
+      "confidence": 0.75
+    },
+    {
+      "clause_no": "6.2.3",
+      "clause_title": "Exceptional Circumstances",
+      "overall_status": "partial",
+      "confidence": 0.67
+    },
+    {
+      "clause_no": "6.3.4",
+      "clause_title": "CDD Measures for life insurance activities",
+      "overall_status": "partial",
+      "confidence": 0.62
+    },
+    {
+      "clause_no": "Confidentiality of FIU's Instructions",
+      "clause_title": "Confidentiality of FIU's Instructions",
+      "overall_status": "partial",
+      "confidence": 0.65
+    },
+    {
+      "clause_no": "High-Risk Classification of Reported Business Relationships",
+      "clause_title": "High-Risk Classification of Reported Business Relationships",
+      "overall_status": "partial",
+      "confidence": 0.63
+    }
+  ],
+  "found_in_excel": [
+    {
+      "clause_no": "10",
+      "clause_title": "International Financial Sanctions",
+      "excel_row": 102,
+      "excel_status": {
+        "design": "compliant",
+        "operating": "compliant",
+        "overall": "compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "3.1",
+      "clause_title": "Summary of Minimum Statutory Obligations of Supervised Institutions",
+      "excel_row": 18,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "3.11",
+      "clause_title": "Sanctions against Persons Violating Reporting Obligations",
+      "excel_row": 32,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "3.2",
+      "clause_title": "Confidentiality and Data Protection",
+      "excel_row": 19,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "4",
+      "clause_title": "Identification and Assessment of ML/FT Risks",
+      "excel_row": 33,
+      "excel_status": {
+        "design": "compliant",
+        "operating": "compliant",
+        "overall": "compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "4.1.8",
+      "clause_title": "Assessing New Product and New Technologies Risks",
+      "excel_row": 42,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "4.2.1",
+      "clause_title": "Risk Assessment Methodology",
+      "excel_row": 44,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "4.2.2",
+      "clause_title": "Documentation and Updating",
+      "excel_row": 45,
+      "excel_status": {
+        "design": "compliant",
+        "operating": "compliant",
+        "overall": "compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.1.2",
+      "clause_title": "Establishing a Customer Risk Profile",
+      "excel_row": 50,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.2",
+      "clause_title": "Circumstances and Timing for Undertaking CDD Measures",
+      "excel_row": 51,
+      "excel_status": {
+        "design": "compliant",
+        "operating": "compliant",
+        "overall": "compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.2.1",
+      "clause_title": "Establishment of a Business Relationship",
+      "excel_row": 52,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.2.2",
+      "clause_title": "Occasional Transactions",
+      "excel_row": 53,
+      "excel_status": {
+        "design": "non-compliant",
+        "operating": "non-compliant",
+        "overall": "non-compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.3",
+      "clause_title": "Customer Due Diligence (CDD) Measures",
+      "excel_row": 58,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.3.1",
+      "clause_title": "Customer and Beneficial Owner Identification and Verification of the Identity",
+      "excel_row": 59,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.3.2",
+      "clause_title": "CDD Measures Concerning Wire Transfers",
+      "excel_row": 60,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.3.3",
+      "clause_title": "CDD Measures Concerning Legal Persons and Arrangements",
+      "excel_row": 61,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.3.5",
+      "clause_title": "Ongoing Monitoring of the Business Relationship",
+      "excel_row": 64,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.3.6",
+      "clause_title": "Reviewing and Updating the Customer Due Diligence Information",
+      "excel_row": 65,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.4",
+      "clause_title": "Enhanced Due Diligence (EDD) Measures",
+      "excel_row": 66,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.4.1",
+      "clause_title": "Requirements for Politically Exposed Persons (PEPs)",
+      "excel_row": 67,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.4.2",
+      "clause_title": "EDD Measures for High-Risk Customers or Transactions",
+      "excel_row": 68,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.4.3",
+      "clause_title": "Requirements for High-Risk Countries",
+      "excel_row": 69,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.4.4",
+      "clause_title": "Requirements for Correspondent Relationships",
+      "excel_row": 70,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.4.5",
+      "clause_title": "Requirements for Money or Value Transfer Services",
+      "excel_row": 71,
+      "excel_status": {
+        "design": "non-compliant",
+        "operating": "non-compliant",
+        "overall": "non-compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.4.6",
+      "clause_title": "Requirements for Non-Profit Organisations",
+      "excel_row": 72,
+      "excel_status": {
+        "design": "non-compliant",
+        "operating": "non-compliant",
+        "overall": "non-compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.5",
+      "clause_title": "Simplified Due Diligence (SDD) Measures",
+      "excel_row": 73,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "6.6",
+      "clause_title": "Reliance on a Third Party",
+      "excel_row": 74,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "7",
+      "clause_title": "Suspicious Transaction Reporting",
+      "excel_row": 75,
+      "excel_status": {
+        "design": "compliant",
+        "operating": "compliant",
+        "overall": "compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "7.10",
+      "clause_title": "Handling of Transactions and Business Relationships after Filing of STRs",
+      "excel_row": 85,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "7.4",
+      "clause_title": "Identification of Suspicious Transactions",
+      "excel_row": 79,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "7.5",
+      "clause_title": "Requirement to Report",
+      "excel_row": 80,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "7.6",
+      "clause_title": "Procedures for the Reporting of Suspicious Transactions",
+      "excel_row": 81,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "7.7",
+      "clause_title": "Timing of Suspicious Transaction Reports (STRs)",
+      "excel_row": 82,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "7.8",
+      "clause_title": "Confidentiality and Prohibition against Tipping Off",
+      "excel_row": 83,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "8",
+      "clause_title": "Governance",
+      "excel_row": 86,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "8.1.1",
+      "clause_title": "Appointment and Approval",
+      "excel_row": 87,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "8.1.2",
+      "clause_title": "Responsibilities",
+      "excel_row": 88,
+      "excel_status": {
+        "design": "compliant",
+        "operating": "compliant",
+        "overall": "compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "8.2",
+      "clause_title": "Staff Screening and Training",
+      "excel_row": 89,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "8.3",
+      "clause_title": "Group Oversight",
+      "excel_row": 90,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "8.4",
+      "clause_title": "Independent Audit Function",
+      "excel_row": 91,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "8.5",
+      "clause_title": "Responsibilities of Senior Management",
+      "excel_row": 92,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "8.6",
+      "clause_title": "Governance Issues of Small Organisations",
+      "excel_row": 93,
+      "excel_status": {
+        "design": "non-compliant",
+        "operating": "non-compliant",
+        "overall": "non-compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "9.1",
+      "clause_title": "Obligations and Timeframe for the Retention and Availability of Records",
+      "excel_row": 94,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "9.2",
+      "clause_title": "Required Record Types",
+      "excel_row": 95,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "9.2.1",
+      "clause_title": "Transactions",
+      "excel_row": 96,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "9.2.2",
+      "clause_title": "Customer Information",
+      "excel_row": 97,
+      "excel_status": {
+        "design": "compliant",
+        "operating": "compliant",
+        "overall": "compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "9.2.3",
+      "clause_title": "Company Information",
+      "excel_row": 98,
+      "excel_status": {
+        "design": "non-compliant",
+        "operating": "non-compliant",
+        "overall": "non-compliant"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "9.2.4",
+      "clause_title": "Reliance on Third Parties to Undertake CDD",
+      "excel_row": 99,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "9.2.5",
+      "clause_title": "Ongoing Monitoring of Business Relationships",
+      "excel_row": 100,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    },
+    {
+      "clause_no": "9.2.6",
+      "clause_title": "Suspicious Transaction Reports (STRs)",
+      "excel_row": 101,
+      "excel_status": {
+        "design": "partial",
+        "operating": "partial",
+        "overall": "partial"
+      },
+      "will_change": false,
+      "changes": {}
+    }
+  ]
+}

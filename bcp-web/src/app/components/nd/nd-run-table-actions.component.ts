@@ -209,11 +209,11 @@ export class NdRunTableActionsComponent {
   }
 
   runLink(): string[] {
-    return ndAnalysisRunLink(this.run, this.role);
+    return ndAnalysisRunLink(this.run, this.role, { demoViewer: this.auth.isDemoViewer() });
   }
 
   runQuery(): Record<string, string> | undefined {
-    return ndAnalysisRunQuery(this.run, this.role);
+    return ndAnalysisRunQuery(this.run, this.role, { demoViewer: this.auth.isDemoViewer() });
   }
 
   onHistory(event: Event): void {

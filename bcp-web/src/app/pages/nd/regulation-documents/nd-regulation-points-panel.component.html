@@ -10,7 +10,8 @@
           type="search"
           class="panel-search"
           placeholder="Search points…"
-          [(ngModel)]="search"
+          [ngModel]="search"
+          (ngModelChange)="onSearchChange($event)"
           aria-label="Search points"
         />
         @if (canExpandCollapse) {
@@ -29,7 +30,7 @@
   </div>
 
   <div class="panel-body">
-    @if (loading) {
+    @if (loading || building) {
       <p class="empty">Loading…</p>
     } @else if (visibleChapterGroups.length === 0) {
       <p class="empty">
@@ -62,58 +63,70 @@
                   </button>
                 }
                 @if (!showSectionBar(ch.sections, sec.key, ch.chapter) || isSectionExpanded(ch.chapter, sec.key)) {
-                  @for (p of sec.points; track p.point_id) {
-                    <div class="point-line" [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint || !isComparablePoint(p.point_id)" [class.point-highlight]="isHighlighted(p.point_id)">
-                      <span class="point-check" [class.point-check-skip]="!isComparablePoint(p.point_id)" aria-hidden="true">{{ isComparablePoint(p.point_id) ? '✓' : '○' }}</span>
-                      <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
-                      @if (pointPageLabel(p.point_id); as pref) {
-                        @if (canOpenSource) {
-                          <button
-                            type="button"
-                            class="source-ref-link point-page-ref"
-                            [attr.title]="'Open source at ' + pref"
-                            (click)="openPointPage(p.point_id, $event)"
-                          >
-                            {{ pref }}
-                          </button>
-                        } @else {
-                          <span class="point-page-ref muted">{{ pref }}</span>
-                        }
-                      }
-                      @if (pointMeta(p.point_id)?.isIntroductionPoint || skipReason(p.point_id)?.includes('§1') || skipReason(p.point_id)?.includes('introduction')) {
-                        <span class="point-tag">Intro</span>
-                      }
-                      @if (pointMeta(p.point_id)?.isAnnexPoint) {
-                        <span class="point-tag point-tag-annex">Annex</span>
-                      }
-                      @if (!isComparablePoint(p.point_id)) {
-                        <span class="point-tag point-tag-skip" [title]="skipReason(p.point_id) ?? ''">{{ skipReasonShort(p.point_id) }}</span>
-                      }
-                      <div class="point-text-wrap">
-                        @if (hasSeparateTitle(p)) {
-                          <span class="ptitle">{{ pointTitle(p) }}</span>
-                        }
-                        @if (showDetail(p)) {
-                          @if (isPointExpanded(p.point_id) || !isDetailLong(p)) {
-                            <span class="ptxt ptxt-full">{{ pointDetail(p) }}</span>
-                          } @else {
-                            <span class="ptxt">{{ truncate(pointDetail(p), previewLen) }}</span>
+                  <div class="points-list">
+                    @for (p of sec.points; track p.point_id) {
+                      <article
+                        class="point-card"
+                        [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint || !isComparablePoint(p.point_id)"
+                        [class.point-highlight]="isHighlighted(p.point_id)"
+                      >
+                        <header class="point-meta">
+                          <span class="point-check" [class.point-check-skip]="!isComparablePoint(p.point_id)" aria-hidden="true">{{ isComparablePoint(p.point_id) ? '✓' : '○' }}</span>
+                          <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
+                          @if (pointPageLabel(p.point_id); as pref) {
+                            @if (canOpenSource) {
+                              <button
+                                type="button"
+                                class="source-ref-link point-page-ref"
+                                [attr.title]="'Open source at ' + pref"
+                                (click)="openPointPage(p.point_id, $event)"
+                              >
+                                {{ pref }}
+                              </button>
+                            } @else {
+                              <span class="point-page-ref muted">{{ pref }}</span>
+                            }
                           }
-                          @if (isDetailLong(p)) {
-                            <button
-                              type="button"
-                              class="point-text-toggle"
-                              (click)="togglePointText(p.point_id, $event)"
-                            >
-                              {{ isPointExpanded(p.point_id) ? 'Show less' : 'Show more' }}
-                            </button>
+                          @if (pointMeta(p.point_id)?.isIntroductionPoint || skipReason(p.point_id)?.includes('§1') || skipReason(p.point_id)?.includes('introduction')) {
+                            <span class="point-tag">Intro</span>
                           }
-                        } @else if (pointTitle(p)) {
-                          <span class="ptitle">{{ pointTitle(p) }}</span>
-                        }
-                      </div>
-                    </div>
-                  }
+                          @if (pointMeta(p.point_id)?.isAnnexPoint) {
+                            <span class="point-tag point-tag-annex">Annex</span>
+                          }
+                          @if (!isComparablePoint(p.point_id)) {
+                            <span class="point-tag point-tag-skip" [title]="skipReason(p.point_id) ?? ''">{{ skipReasonShort(p.point_id) }}</span>
+                          }
+                        </header>
+                        <div class="point-text-wrap">
+                          @if (hasSeparateTitle(p)) {
+                            <h4 class="ptitle">{{ pointTitle(p) }}</h4>
+                          }
+                          @if (showDetail(p)) {
+                            @if (isPointExpanded(p.point_id) || !isDetailLong(p)) {
+                              <div class="point-body">
+                                @for (para of pointDetailParagraphs(p); track $index) {
+                                  <p class="point-para">{{ para }}</p>
+                                }
+                              </div>
+                            } @else {
+                              <p class="point-para point-para-preview">{{ truncate(pointDetail(p), previewLen) }}</p>
+                            }
+                            @if (isDetailLong(p)) {
+                              <button
+                                type="button"
+                                class="point-text-toggle"
+                                (click)="togglePointText(p.point_id, $event)"
+                              >
+                                {{ isPointExpanded(p.point_id) ? 'Show less' : 'Show more' }}
+                              </button>
+                            }
+                          } @else if (pointTitle(p)) {
+                            <h4 class="ptitle">{{ pointTitle(p) }}</h4>
+                          }
+                        </div>
+                      </article>
+                    }
+                  </div>
                 }
               }
             </div>

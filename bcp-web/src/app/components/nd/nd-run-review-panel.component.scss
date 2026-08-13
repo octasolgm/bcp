@@ -156,11 +156,35 @@
 
 .run-review-progress {
   margin: 0 0 0.75rem;
+  padding: 0.55rem 0.75rem;
   font-size: 0.8125rem;
-  color: var(--warning-text, #b45309);
+  line-height: 1.45;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--info) 22%, var(--border));
+  background: color-mix(in srgb, var(--info) 6%, var(--bg-card));
 
   &.complete {
-    color: var(--text-secondary);
+    color: var(--low);
+    border-color: color-mix(in srgb, var(--low) 28%, var(--border));
+    background: color-mix(in srgb, var(--low) 8%, var(--bg-card));
+  }
+}
+
+.run-review-progress-count {
+  display: block;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.2rem;
+}
+
+.run-review-progress-hint {
+  display: block;
+  color: var(--text-secondary);
+
+  strong {
+    font-weight: 600;
+    color: var(--text-primary);
   }
 }
 

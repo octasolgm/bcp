@@ -18,17 +18,6 @@
   margin-bottom: 0.75rem;
 }
 
-.nd-page-body--fill {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  max-height: calc(100dvh - 10.5rem);
-  min-height: 0;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-}
-
 .nd-table-wrap--scroll {
   flex: 1 1 auto;
   min-height: 14rem;

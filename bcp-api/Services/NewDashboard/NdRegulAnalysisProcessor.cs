@@ -8,6 +8,7 @@ using Reguliq.Api.Models;
 using Reguliq.Api.Services;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.Llm;
+using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Pdf;
 using Reguliq.Api.Services.Storage;
 
@@ -28,6 +29,7 @@ public class NdRegulAnalysisProcessor(
     NdRegulationPointRepairService regulationPointRepair,
     SupabaseStorageService storage,
     NdAnalysisRunCancellationTracker runCancellation,
+    NdDemoUserDirectory demoDirectory,
     ILogger<NdRegulAnalysisProcessor> logger)
 {
     private const string ReverseMappingJsonInstruction =
@@ -55,6 +57,12 @@ public class NdRegulAnalysisProcessor(
         if (run.RegulClausesConfirmedAt == null)
             throw new InvalidOperationException(
                 "Regul clauses must be confirmed before analysis. Call POST /nd/analysis-runs/{id}/confirm-clauses first.");
+
+        if (await IsDemoOwnedRunAsync(run, ct))
+        {
+            logger.LogWarning("Refusing live Regul AI for demo-owned run {RunId}", runId);
+            return;
+        }
 
         if (runCancellation.IsStopRequested(runId) || run.Status == "cancelled")
         {
@@ -187,6 +195,12 @@ public class NdRegulAnalysisProcessor(
         if (run.RegulClausesConfirmedAt == null)
             throw new InvalidOperationException(
                 "Regul clauses must be confirmed before analysis. Call POST /nd/analysis-runs/{id}/confirm-clauses first.");
+
+        if (await IsDemoOwnedRunAsync(run, ct))
+        {
+            logger.LogWarning("Refusing live Regul AI for demo-owned run {RunId}", runId);
+            return;
+        }
 
         if (runCancellation.IsStopRequested(runId) || run.Status == "cancelled")
         {
@@ -1072,6 +1086,12 @@ public class NdRegulAnalysisProcessor(
         if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException("Not a Regul workflow run.");
 
+        if (await IsDemoOwnedRunAsync(run, ct))
+        {
+            logger.LogWarning("Refusing live Regul AI point rerun for demo-owned run {RunId}", runId);
+            return;
+        }
+
         var point = run.Points.FirstOrDefault(p => p.Id == pointId)
             ?? throw new InvalidOperationException("Analysis point not found.");
 
@@ -1181,6 +1201,12 @@ public class NdRegulAnalysisProcessor(
         if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException("Not a Regul workflow run.");
 
+        if (await IsDemoOwnedRunAsync(run, ct))
+        {
+            logger.LogWarning("Refusing live Regul forward rerun for demo-owned run {RunId}", runId);
+            return;
+        }
+
         if (runCancellation.IsStopRequested(runId))
         {
             await MarkCancelledAsync(run, ct);
@@ -1258,6 +1284,12 @@ public class NdRegulAnalysisProcessor(
         if (!AnalysisWorkflowEngine.IsRegulPipeline(run.WorkflowEngine))
             throw new InvalidOperationException("Not a Regul workflow run.");
 
+        if (await IsDemoOwnedRunAsync(run, ct))
+        {
+            logger.LogWarning("Refusing live Regul reverse rerun for demo-owned run {RunId}", runId);
+            return;
+        }
+
         if (runCancellation.IsStopRequested(runId))
         {
             await MarkCancelledAsync(run, ct);
@@ -1297,5 +1329,12 @@ public class NdRegulAnalysisProcessor(
         {
             return ("", "");
         }
+    }
+
+    private async Task<bool> IsDemoOwnedRunAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        if (!demoDirectory.IsEnabled || !run.CreatedBy.HasValue) return false;
+        var demoIds = await demoDirectory.GetDemoProfileIdsAsync(ct);
+        return demoIds.Contains(run.CreatedBy.Value);
     }
 }

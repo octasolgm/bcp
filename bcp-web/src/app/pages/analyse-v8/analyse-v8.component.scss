@@ -1301,3 +1301,48 @@
   flex-direction: column;
   gap: 0.4rem;
 }
+
+.forward-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.forward-status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  background: var(--surface-muted, #f8fafc);
+  color: var(--text-muted, #64748b);
+}
+
+.forward-status-chip.fwd-running {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.forward-status-chip.fwd-done {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #047857;
+}
+
+.forward-status-chip.fwd-failed,
+.forward-status-chip.fwd-cancelled {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.forward-status-chip.fwd-queued {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
+}

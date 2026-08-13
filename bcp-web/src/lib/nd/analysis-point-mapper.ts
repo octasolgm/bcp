@@ -7,7 +7,13 @@ import { normalizeSessionPointStatus } from '../session-point-status';
 import { reportItemsToGapItems } from '../../app/services/gap-analysis-mapper';
 import type { GapItemData } from '../../app/services/reguliq-store';
 import type { AnalysisPoint } from './types';
-import { normalizeRegulPoint, regulForwardError, regulForwardStatus, isRegulWorkflow } from './regul-fields';
+import {
+  normalizeRegulPoint,
+  regulForwardError,
+  regulForwardStatus,
+  isRegulWorkflow,
+  isRegulFullMarkdownWorkflow,
+} from './regul-fields';
 import { parsePointSnapshot } from './utils';
 
 function comparePointIds(a: string, b: string): number {
@@ -48,8 +54,9 @@ export function analysisPointCoverageStatus(
   const llmMessage = google.message;
   const run = (runStatus ?? '').toLowerCase();
   const isRegul = isRegulWorkflow(regul?.workflowEngine);
+  const isForwardOnlyRegul = isRegulFullMarkdownWorkflow(regul?.workflowEngine);
   const phase = (regul?.regulPipelinePhase ?? '').toLowerCase();
-  const runActive = run === 'running' || run === 'processing';
+  const runActive = run === 'running' || run === 'processing' || run === 'queued';
   const forwardStatus = regulForwardStatus(point);
 
   if (run === 'cancelled') {
@@ -57,6 +64,28 @@ export function analysisPointCoverageStatus(
     if (forwardStatus === 'completed') return 'completed';
     if (forwardStatus === 'failed') return 'failed';
     return 'cancelled';
+  }
+
+  // Regul forward-only (V4): each point can be queued / running / done while the run is in flight.
+  if (isRegul && isForwardOnlyRegul && point.regulationPointId && runActive && phase !== 'done') {
+    if (forwardStatus === 'cancelled' || point.landingAiStatus === 'cancelled') return 'cancelled';
+    if (forwardStatus === 'failed' || point.landingAiStatus === 'failed') return 'failed';
+    if (forwardStatus === 'completed' || point.landingAiStatus === 'completed') return 'completed';
+    if (
+      forwardStatus === 'running' ||
+      point.landingAiStatus === 'running' ||
+      point.dualVerifyStatus === 'running'
+    ) {
+      return 'running';
+    }
+    if (
+      point.landingAiStatus === 'pending' ||
+      forwardStatus === 'pending' ||
+      point.dualVerifyStatus === 'pending'
+    ) {
+      return 'queued';
+    }
+    return 'running';
   }
 
   // Regul V3: forward-complete regulatory rows stay in-flight until pipeline phase is done.
@@ -97,7 +126,16 @@ export function analysisPointCoverageStatus(
       : 'running';
   }
 
-  if (run === 'running' || run === 'processing') return 'running';
+  if (run === 'queued') {
+    if (point.landingAiStatus === 'pending' && !landingMessage) return 'queued';
+    if (point.landingAiStatus === 'running' || point.dualVerifyStatus === 'running') return 'running';
+    if (point.landingAiStatus === 'completed' || p.dualVerifyStatus === 'completed') return 'completed';
+    return 'queued';
+  }
+  if (run === 'running' || run === 'processing') {
+    if (point.landingAiStatus === 'pending' && !landingMessage) return 'queued';
+    return 'running';
+  }
   return 'not-run';
 }
 

@@ -17,7 +17,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { catchError, distinctUntilChanged, map } from 'rxjs/operators';
 import { isRegulWorkflow } from '../../../../lib/nd/regul-fields';
 import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints, exportRegulGapAnalysisExcelFromPoints } from '../../../../lib/nd/export/gap-analysis-export';
 import {
@@ -63,11 +63,13 @@ import { parsePointSnapshot } from '../../../../lib/nd/utils';
 import { countCapGapsForAnalysisPoint, countDisplayGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
 import { compareText, type SortDir } from '../../../../lib/nd/list-utils';
 import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sort';
-import {
-  complianceSeverityLabel,
+import { complianceSeverityLabel,
   resolveAnalysisPointSeverity,
   resolveDisplayConfidence,
 } from '../../../../lib/nd/point-compliance-status';
+import {
+  policySnippetFromAnalysisPoint,
+} from '../../../../lib/nd/analysis-point-rail-meta';
 import { parseReferenceComplianceBlock } from '../../../../lib/ai-lab/parse-reference-response';
 import { internalDocCatalogFromRunDetail } from '../../../../lib/nd/run-internal-docs';
 import type { PolicyDocCatalogEntry } from '../../../../lib/nd/policy-doc-resolve';
@@ -106,6 +108,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   /** Embedded below the analyse-v8 columns: no page header, run supplied via input. */
   @Input() embedMode = false;
   @Input() embedRunId: string | null = null;
+  /** Parent bumps when run results refresh (e.g. analysis just completed). */
+  @Input() embedReloadToken = 0;
   /** When set, shows gap-analysis layout as maker/checker/reviewer workspace (used by review routes). */
   @Input() reviewWorkspaceMode: 'none' | 'maker' | 'checker' | 'reviewer' = 'none';
   @Output() runStatusChange = new EventEmitter<string>();
@@ -133,6 +137,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   ndRunId: string | null = null;
   ndRunStatus = '';
   ndRunWorkflowEngine: string | null = null;
+
+  get isNdRegulWorkflow(): boolean {
+    return isRegulWorkflow(this.ndRunWorkflowEngine);
+  }
+
   ndRunData: ResultsData | null = null;
   ndPolicyDocId: string | null = null;
   ndPolicyDocCatalog: PolicyDocCatalogEntry[] = [];
@@ -171,12 +180,15 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   private tempCommentsByPointId = new Map<string, TempPointReviewComment[]>();
   private lastLoadKey = '';
   private loadGeneration = 0;
+  private pendingLoadRunId: string | null = null;
+  private pendingLoadPromise: Promise<void> | null = null;
   /** Display id of the row whose detail panel is open — at most one. */
   readonly expandedItemId = signal<string | null>(null);
 
   @ViewChild('findingsSection') findingsSection?: ElementRef<HTMLElement>;
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
+    await this.auth.refreshProfile();
     if (this.embedMode || this.reviewWorkspaceMode !== 'none') {
       if (this.embedRunId) {
         this.loadFromQuery(null, null, null, null, this.embedRunId);
@@ -193,8 +205,27 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     );
     if (looksLikeDemo) clearGapItems();
 
-    this.route.queryParamMap.subscribe((params) => {
-      const filter = params.get('filter');
+    this.route.queryParamMap
+      .pipe(
+        map((params) => {
+          const session = params.get('session');
+          const saved = params.get('saved');
+          const runId = params.get('run');
+          const section = params.get('section');
+          const focus = params.get('focus');
+          return {
+            loadKey: [session ?? '', saved ?? '', runId ?? '', section ?? '', focus ?? ''].join('|'),
+            filter: params.get('filter'),
+            session,
+            saved,
+            runId,
+            section,
+            focus,
+          };
+        }),
+        distinctUntilChanged((a, b) => a.loadKey === b.loadKey),
+      )
+      .subscribe(({ filter, session, saved, runId, section, focus, loadKey }) => {
       if (filter) {
         const normalized =
           filter === 'all'
@@ -207,12 +238,6 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         }
       }
 
-      const session = params.get('session');
-      const saved = params.get('saved');
-      const runId = params.get('run');
-      const section = params.get('section');
-      const focus = params.get('focus');
-      const loadKey = [session ?? '', saved ?? '', runId ?? '', section ?? '', focus ?? ''].join('|');
       if (loadKey === this.lastLoadKey) {
         return;
       }
@@ -223,8 +248,12 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!this.embedMode && this.reviewWorkspaceMode === 'none') return;
-    const change = changes['embedRunId'];
-    if (change && !change.firstChange && this.embedRunId) {
+    const runChange = changes['embedRunId'];
+    const tokenChange = changes['embedReloadToken'];
+    if (
+      this.embedRunId &&
+      ((runChange && !runChange.firstChange) || (tokenChange && !tokenChange.firstChange))
+    ) {
       this.loadFromQuery(null, null, null, null, this.embedRunId);
     }
   }
@@ -298,18 +327,34 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   analysisPointForGap(item: GapItemData): AnalysisPoint | null {
     if (!this.ndRunData) return null;
-    const key = item.section.replace(/^§/, '').trim();
-    const fromKey = this.analysisPointByKey.get(key);
-    if (fromKey) return fromKey;
+    const rawKey = item.section.replace(/^§/, '').trim();
+    const candidates = [
+      rawKey,
+      item.section.trim(),
+      rawKey ? `§${rawKey}` : '',
+    ].filter(Boolean);
+    for (const key of candidates) {
+      const fromKey = this.analysisPointByKey.get(key);
+      if (fromKey) return fromKey;
+    }
 
-    const report = this.reportByPointId.get(key);
+    const report = this.reportByPointId.get(rawKey);
     if (report?.pointId) {
       const fromReport = this.analysisPointByKey.get(report.pointId);
       if (fromReport) return fromReport;
     }
 
     const titleNorm = item.title.trim().toLowerCase();
-    if (titleNorm) return this.analysisPointByKey.get(`title:${titleNorm}`) ?? null;
+    if (titleNorm) {
+      const fromTitle = this.analysisPointByKey.get(`title:${titleNorm}`);
+      if (fromTitle) return fromTitle;
+    }
+
+    for (const point of this.ndRunData.points) {
+      const snap = parsePointSnapshot(point.pointSnapshot);
+      const num = (snap.pointNumber ?? '').trim().replace(/^§/, '');
+      if (num && num === rawKey) return point;
+    }
     return null;
   }
 
@@ -333,7 +378,12 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       const snap = parsePointSnapshot(point.pointSnapshot);
       if (point.id) this.snapshotByPointId.set(point.id, snap);
       const pid = (snap.pointNumber || point.regulationPointId || point.id || '').trim();
-      if (pid) this.analysisPointByKey.set(pid, point);
+      if (pid) {
+        this.analysisPointByKey.set(pid, point);
+        const bare = pid.replace(/^§/, '');
+        if (bare) this.analysisPointByKey.set(bare, point);
+        if (bare && bare !== pid) this.analysisPointByKey.set(`§${bare}`, point);
+      }
       if (point.id) this.analysisPointByKey.set(point.id, point);
       const title = (snap.pointTitle ?? '').trim().toLowerCase();
       if (title) this.analysisPointByKey.set(`title:${title}`, point);
@@ -439,6 +489,34 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       );
     }
     return 0;
+  }
+
+  gapPointDisplayNum(item: GapItemData): string {
+    return item.section.replace(/^§/, '').trim();
+  }
+
+  gapPointRailMeta(item: GapItemData): { policySnippet: string; confidence: string } {
+    const ndPoint = this.analysisPointForGap(item);
+    if (ndPoint) {
+      const snap = this.snapshotForPoint(ndPoint);
+      return {
+        policySnippet: policySnippetFromAnalysisPoint(ndPoint, snap.pointContent),
+        confidence: resolveDisplayConfidence(ndPoint),
+      };
+    }
+    const legacy = this.listRowMeta(item);
+    const policySnippet =
+      legacy.policySnippet &&
+      legacy.policySnippet !== '—' &&
+      legacy.policySnippet !== '(See detail panel)'
+        ? legacy.policySnippet
+        : '—';
+    return { policySnippet, confidence: legacy.confidence };
+  }
+
+  openGapPointInfo(event: Event, item: GapItemData): void {
+    event.stopPropagation();
+    this.openPdf('reg', item);
   }
 
   attachmentsForPoint(pointId: string): PointGapAttachment[] {
@@ -1440,17 +1518,33 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     });
   }
 
-  private async loadNdRun(
+  private loadNdRun(
+    runId: string,
+    section: string | null,
+    focus: string | null,
+  ): Promise<void> {
+    if (this.pendingLoadRunId === runId && this.pendingLoadPromise) {
+      return this.pendingLoadPromise;
+    }
+    this.pendingLoadRunId = runId;
+    this.pendingLoadPromise = this.executeLoadNdRun(runId, section, focus).finally(() => {
+      if (this.pendingLoadRunId === runId) {
+        this.pendingLoadRunId = null;
+        this.pendingLoadPromise = null;
+      }
+    });
+    return this.pendingLoadPromise;
+  }
+
+  private async executeLoadNdRun(
     runId: string,
     section: string | null,
     focus: string | null,
   ): Promise<void> {
     const generation = ++this.loadGeneration;
+    const liteRunPromise = this.ndApi.getAnalysisRun(runId, { lite: true });
     try {
-      const [res, runRes] = await Promise.all([
-        this.ndApi.getResults(runId),
-        this.ndApi.getAnalysisRun(runId),
-      ]);
+      const res = await this.ndApi.getResults(runId);
       if (generation !== this.loadGeneration) return;
 
       if (!res.success || !res.data) {
@@ -1461,29 +1555,19 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
       const data = res.data as ResultsData;
       this.ndRunData = data;
-      this.ndRunWorkflowEngine =
-        runRes.success && runRes.data && typeof runRes.data === 'object'
-          ? ((runRes.data as { workflowEngine?: string | null }).workflowEngine ?? null)
-          : null;
+      this.ndRunWorkflowEngine = data.run.workflowEngine ?? null;
       this.rebuildNdRunIndexes(data);
       this.ndRunStatus = data.run.status;
 
       if (!this.embedMode && this.reviewWorkspaceMode === 'none') {
         const status = data.run.status;
-        if (status?.toLowerCase() === 'pulled_back') {
-          this.loading = false;
+        const role = this.auth.getRole();
+        if (status?.toLowerCase() === 'pulled_back' && role === 'maker') {
           void this.router.navigate(['/nd/correction/review', runId]);
           return;
         }
-        const role = this.auth.getRole();
         const reviewRoute = reviewWorkspaceLink(role, runId, status);
         if (reviewRoute && (role === 'checker' || role === 'reviewer')) {
-          this.loading = false;
-          void this.router.navigate(reviewRoute);
-          return;
-        }
-        if (reviewRoute && role === 'super_admin') {
-          this.loading = false;
           void this.router.navigate(reviewRoute);
           return;
         }
@@ -1491,20 +1575,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
       this.runStatusChange.emit(data.run.status);
       this.sourceLabel = data.run.name || 'Analysis run';
-      this.ndPolicyDocId =
-        runRes.success && runRes.data
-          ? this.firstDocIdFromRunDetail(runRes.data, 'selectedInternalDocIds')
-          : null;
-      this.ndRegulationDocId =
-        runRes.success && runRes.data
-          ? this.firstDocIdFromRunDetail(runRes.data, 'selectedRegulationDocIds')
-          : null;
-
-      // Load catalog in background — not required to render the point list.
-      void this.loadPolicyDocCatalog(runRes, generation);
 
       if (generation !== this.loadGeneration) return;
       this.applyNdRunData(data, section, focus);
+
+      void this.loadRunMetadata(runId, generation, liteRunPromise);
     } catch {
       if (generation !== this.loadGeneration) return;
       this.loadError = 'Could not load analysis results. Check your connection and try again.';
@@ -1515,6 +1590,32 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         this.cdr.markForCheck();
       }
     }
+  }
+
+  private async loadRunMetadata(
+    runId: string,
+    generation: number,
+    liteRunPromise?: Promise<{ success: boolean; data?: unknown; message?: string }>,
+  ): Promise<void> {
+    const runRes = liteRunPromise ?? this.ndApi.getAnalysisRun(runId, { lite: true });
+    const resolved = await runRes;
+    if (generation !== this.loadGeneration) return;
+
+    this.ndPolicyDocId =
+      resolved.success && resolved.data
+        ? this.firstDocIdFromRunDetail(resolved.data, 'selectedInternalDocIds')
+        : null;
+    this.ndRegulationDocId =
+      resolved.success && resolved.data
+        ? this.firstDocIdFromRunDetail(resolved.data, 'selectedRegulationDocIds')
+        : null;
+
+    if (!this.ndRunWorkflowEngine && resolved.success && resolved.data && typeof resolved.data === 'object') {
+      this.ndRunWorkflowEngine =
+        (resolved.data as { workflowEngine?: string | null }).workflowEngine ?? null;
+    }
+
+    void this.loadPolicyDocCatalog(resolved, generation);
   }
 
   private async loadPolicyDocCatalog(runRes: { success: boolean; data?: unknown }, generation: number): Promise<void> {
@@ -1560,6 +1661,9 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.items = items;
     this.applyExpandedSelection(items, section, focus, overlays);
     this.refreshFilteredItems();
+    if (this.viewMode === 'list') {
+      this.ensureListSelection();
+    }
     this.loading = false;
     this.loadError = items.length
       ? null

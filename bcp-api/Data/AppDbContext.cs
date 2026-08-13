@@ -38,6 +38,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdRegulReverseMapping> NdRegulReverseMappings => Set<NdRegulReverseMapping>();
     public DbSet<NdRegulQualitativeAssessment> NdRegulQualitativeAssessments => Set<NdRegulQualitativeAssessment>();
     public DbSet<NdTempPointReviewComment> NdTempPointReviewComments => Set<NdTempPointReviewComment>();
+    public DbSet<NdDemoAnalysisTemplate> NdDemoAnalysisTemplates => Set<NdDemoAnalysisTemplate>();
+    public DbSet<NdDemoAnalysisTemplatePoint> NdDemoAnalysisTemplatePoints => Set<NdDemoAnalysisTemplatePoint>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -246,6 +248,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.ValueJson).HasColumnName("value_json").HasColumnType("jsonb");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             e.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+        });
+
+        modelBuilder.Entity<NdDemoAnalysisTemplate>(e =>
+        {
+            e.HasIndex(t => t.Code).IsUnique();
+            e.HasMany(t => t.Points)
+                .WithOne(p => p.Template)
+                .HasForeignKey(p => p.TemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NdDemoAnalysisTemplatePoint>(e =>
+        {
+            e.Property(p => p.PolicyExtractJson)
+                .HasColumnName("policy_extract_json")
+                .HasColumnType("jsonb");
         });
 
         ConfigureUtcDateTimes(modelBuilder);

@@ -29,6 +29,8 @@ public static class AnalysisActivityHelper
     {
         var st = (status ?? "").Trim().ToLowerInvariant();
         if (Terminal.Contains(st)) return false;
+        // Draft = run created but analysis not started — not an active worker.
+        if (st == "draft") return false;
 
         var done = completedPoints + failedPoints;
         if (totalPoints > 0 && done >= totalPoints) return false;

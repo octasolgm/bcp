@@ -151,7 +151,12 @@ export function resolveDisplayConfidence(point: AnalysisPoint): string {
 
   const candidates = [llm?.confidence, landing?.confidence, structured?.confidence].filter(Boolean) as string[];
   let conf = candidates[0]?.trim() ?? '';
-  const pct = parseConfidencePercent(conf);
+  const firstLine = conf.split('\n').map((l) => l.trim()).find(Boolean) ?? conf;
+  const pct = parseConfidencePercent(firstLine);
+  if (pct != null && !firstLine.toLowerCase().includes('gap analysis')) {
+    return `${pct}%`;
+  }
+  conf = firstLine;
 
   if (severity === 'partial_compliant') {
     for (const c of candidates) {

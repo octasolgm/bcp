@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 
@@ -8,6 +9,71 @@ namespace Reguliq.Api.Services.NewDashboard;
 /// </summary>
 public static class NdRegulApiProjection
 {
+    public const int LiteTextMax = 280;
+
+    /** Truncate clause text inside point snapshot JSON for list / attach payloads. */
+    public static string? TruncatePointSnapshotLite(string? snapshotJson)
+    {
+        if (string.IsNullOrWhiteSpace(snapshotJson)) return snapshotJson;
+        try
+        {
+            var node = JsonNode.Parse(snapshotJson);
+            if (node is not JsonObject obj) return snapshotJson;
+            TruncateJsonStringField(obj, "pointContent");
+            TruncateJsonStringField(obj, "text");
+            return node.ToJsonString();
+        }
+        catch
+        {
+            return snapshotJson.Length <= LiteTextMax ? snapshotJson : snapshotJson[..LiteTextMax];
+        }
+    }
+
+    private static void TruncateJsonStringField(JsonObject obj, string field)
+    {
+        if (obj[field]?.GetValueKind() != System.Text.Json.JsonValueKind.String) return;
+        var text = obj[field]!.GetValue<string>();
+        if (text.Length > LiteTextMax) obj[field] = text[..LiteTextMax];
+    }
+
+    public static string? TruncateText(string? text, int max = LiteTextMax) =>
+        string.IsNullOrEmpty(text) ? text : text.Length <= max ? text : text[..max];
+
+    public static object MapPointLite(NdAnalysisPoint p, string? workflowEngine = null) =>
+        MapPoint(
+            p.Id,
+            p.RegulationPointId,
+            TruncatePointSnapshotLite(p.PointSnapshot),
+            p.LandingAiStatus,
+            null,
+            p.LandingAiError,
+            p.GoogleAiStatus,
+            null,
+            p.GoogleAiError,
+            p.DualVerifyStatus,
+            p.FinalStatus,
+            null,
+            null,
+            workflowEngine);
+
+    /** Poll payload for large runs — keeps status + short judgment preview, skips reverse-pass blobs. */
+    public static object MapPointPollLite(NdAnalysisPoint p, string? workflowEngine = null) =>
+        MapPoint(
+            p.Id,
+            p.RegulationPointId,
+            TruncatePointSnapshotLite(p.PointSnapshot),
+            p.LandingAiStatus,
+            TruncateText(p.LandingAiResult, 512),
+            p.LandingAiError,
+            p.GoogleAiStatus,
+            null,
+            p.GoogleAiError,
+            p.DualVerifyStatus,
+            p.FinalStatus,
+            null,
+            null,
+            workflowEngine);
+
     public static object MapRunSummary(NdAnalysisRun run) =>
         AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
             ? new
@@ -47,7 +113,7 @@ public static class NdRegulApiProjection
                 regulPipelinePhase = run.RegulPipelinePhase,
             };
 
-    public static object MapRunDetail(NdAnalysisRun run, string? creatorName) =>
+    public static object MapRunDetail(NdAnalysisRun run, string? creatorName, bool createdByIsDemo = false) =>
         AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
             ? new
             {
@@ -72,6 +138,8 @@ public static class NdRegulApiProjection
                 departmentId = run.DepartmentId,
                 createdBy = run.CreatedBy,
                 createdByName = creatorName,
+                makerName = creatorName,
+                createdByIsDemo,
                 createdAt = run.CreatedAt,
                 // Legacy aliases
                 totalPointsCount = run.TotalPointsCount,
@@ -98,6 +166,8 @@ public static class NdRegulApiProjection
                 departmentId = run.DepartmentId,
                 createdBy = run.CreatedBy,
                 createdByName = creatorName,
+                makerName = creatorName,
+                createdByIsDemo,
                 createdAt = run.CreatedAt,
                 workflowEngine = run.WorkflowEngine,
                 enableQualitative = run.EnableQualitative,
@@ -277,26 +347,29 @@ public static class NdRegulApiProjection
         int? regulReverseSectionTotal,
         int? regulReverseSectionCompleted,
         int? regulReverseSectionFailed,
-        List<object>? regulReverseSections)
+        List<object>? regulReverseSections,
+        bool lite = false)
     {
         var node = System.Text.Json.JsonSerializer.SerializeToNode(
             MapRunPoll(run, regulReverseSectionTotal, regulReverseSectionCompleted, regulReverseSectionFailed)) as System.Text.Json.Nodes.JsonObject
             ?? new System.Text.Json.Nodes.JsonObject();
 
         node["points"] = System.Text.Json.JsonSerializer.SerializeToNode(
-            points.Select(p => MapPoint(
-                p.Id,
-                p.RegulationPointId,
-                p.PointSnapshot,
-                p.LandingAiStatus,
-                p.LandingAiResult,
-                p.LandingAiError,
-                p.GoogleAiStatus,
-                p.GoogleAiResult,
-                p.GoogleAiError,
-                p.DualVerifyStatus,
-                p.FinalStatus,
-                workflowEngine: run.WorkflowEngine)));
+            lite
+                ? points.Select(p => MapPointPollLite(p, run.WorkflowEngine))
+                : points.Select(p => MapPoint(
+                    p.Id,
+                    p.RegulationPointId,
+                    p.PointSnapshot,
+                    p.LandingAiStatus,
+                    p.LandingAiResult,
+                    p.LandingAiError,
+                    p.GoogleAiStatus,
+                    p.GoogleAiResult,
+                    p.GoogleAiError,
+                    p.DualVerifyStatus,
+                    p.FinalStatus,
+                    workflowEngine: run.WorkflowEngine)));
 
         if (regulReverseSections != null)
             node["regulReverseSections"] = System.Text.Json.JsonSerializer.SerializeToNode(regulReverseSections);

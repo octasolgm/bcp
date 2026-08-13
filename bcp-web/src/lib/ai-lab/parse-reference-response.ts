@@ -13,6 +13,7 @@ export type ReferenceComplianceBlock = {
   confidence: string;
   correctiveAction: string;
   responsibility: string;
+  gapAnalysis: string;
   fields: { label: string; value: string }[];
 };
 
@@ -24,7 +25,7 @@ export type ParsedReferenceCitation = {
 
 function parseComplianceBlock(block: string): Omit<
   ReferenceComplianceBlock,
-  'referencePdf' | 'documentReference' | 'outputResponse' | 'fulfilledClauses' | 'status' | 'confidence' | 'correctiveAction' | 'responsibility'
+  'referencePdf' | 'documentReference' | 'outputResponse' | 'fulfilledClauses' | 'status' | 'confidence' | 'correctiveAction' | 'responsibility' | 'gapAnalysis'
 > & {
   fields: { label: string; value: string }[];
 } {
@@ -267,6 +268,7 @@ export function parseReferenceComplianceBlock(
     confidence: confidenceRaw,
     correctiveAction: fieldValue(parsed.fields, 'Corrective Action Plan'),
     responsibility: fieldValue(parsed.fields, 'Responsibility'),
+    gapAnalysis: fieldValue(parsed.fields, 'Gap analysis'),
     fields: parsed.fields,
   };
 }

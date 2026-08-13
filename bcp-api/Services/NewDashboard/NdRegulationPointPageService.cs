@@ -60,6 +60,13 @@ public sealed class NdRegulationPointPageService(
         using (doc)
         {
             var root = doc.RootElement;
+            if (root.TryGetProperty("pdfPage", out var existingPage)
+                && existingPage.ValueKind == JsonValueKind.Number
+                && existingPage.TryGetInt32(out var pageNum)
+                && pageNum > 0)
+            {
+                return raw;
+            }
             Guid? regDocId = null;
             if (root.TryGetProperty("regulationDocumentId", out var rdProp)
                 && Guid.TryParse(rdProp.GetString(), out var fromSnap))

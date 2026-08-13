@@ -1,3 +1,5 @@
+@import '../../../components/nd/nd-analysis-point-rail.scss';
+
 .header-actions {
   display: flex;
   gap: 0.5rem;
@@ -478,66 +480,10 @@
   color: var(--text-muted);
 }
 
-.rail-point {
+.list-rail .nd-analysis-point-rail {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.25rem;
-  width: 100%;
-  margin-bottom: 0.35rem;
-  padding: 0.55rem 0.6rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-
-  &:hover {
-    background: var(--bg-muted);
-  }
-
-  &.active {
-    border-color: var(--accent);
-    background: var(--accent-tint);
-  }
-}
-
-.rail-point-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  width: 100%;
-}
-
-.rail-point-num {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.rail-point-title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.3;
-}
-
-.rail-meta-grid {
-  display: grid;
-  gap: 0.2rem;
-  width: 100%;
-  font-size: 0.6875rem;
-  color: var(--text-muted);
-  line-height: 1.35;
-
-  em {
-    font-style: normal;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-right: 0.25rem;
-  }
+  gap: 0.35rem;
 }
 
 .dv-failed-pill {

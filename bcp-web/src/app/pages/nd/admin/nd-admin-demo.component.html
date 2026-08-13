@@ -1,0 +1,362 @@
+<div class="page-header demo-page-header">
+  <div>
+    <p class="page-eyebrow">Administration</p>
+    <h1>Demo group</h1>
+    <p class="subtitle">
+      Reset the demo portal workspace and preview judgment templates used when demo users run analysis
+      (no live AI). Templates are never deleted by clear actions.
+    </p>
+  </div>
+</div>
+
+<div class="nd-page-body">
+  <div class="nd-page nd-page-fill demo-admin">
+    @if (!isSuperAdmin) {
+      <div class="demo-banner demo-banner-error" role="alert">
+        <strong>Access denied</strong>
+        <span>Real super admin only.</span>
+      </div>
+    } @else if (loading) {
+      <div class="demo-loading" aria-busy="true">
+        <span class="demo-spinner" aria-hidden="true"></span>
+        <p>Loading demo workspace…</p>
+      </div>
+    } @else {
+      @if (error) {
+        <div class="demo-banner demo-banner-error" role="alert">
+          <strong>Could not load</strong>
+          <span>{{ error }}</span>
+          <button type="button" class="btn-secondary btn-sm" (click)="reload()">Retry</button>
+        </div>
+      }
+      @if (message) {
+        <div class="demo-banner demo-banner-success" role="status">{{ message }}</div>
+      }
+
+      <section class="demo-card">
+        <header class="demo-card-header">
+          <div>
+            <h2>Clear demo workspace</h2>
+            <p class="demo-card-desc">
+              Clears records owned by demo accounts only. Also permanently removes demo items from
+              <strong>Deleted</strong> (internal docs, regulation docs, analyses — even when not all
+              categories are selected). Does not remove <code>analys1demo</code> /
+              <code>analys2demo</code> judgment templates.
+            </p>
+          </div>
+        </header>
+
+        <div class="clear-grid">
+          <label class="clear-option clear-option-primary">
+            <input type="checkbox" [(ngModel)]="clearAll" />
+            <span>
+              <strong>Clear all</strong>
+              <small>Docs, libraries, analyses, non-admin demo users</small>
+            </span>
+          </label>
+          <label class="clear-option" [class.dim]="clearAll">
+            <input type="checkbox" [(ngModel)]="clearInternalDocuments" [disabled]="clearAll" />
+            <span>Internal documents</span>
+          </label>
+          <label class="clear-option" [class.dim]="clearAll">
+            <input type="checkbox" [(ngModel)]="clearRegulationDocuments" [disabled]="clearAll" />
+            <span>Regulation documents</span>
+          </label>
+          <label class="clear-option" [class.dim]="clearAll">
+            <input type="checkbox" [(ngModel)]="clearLibraries" [disabled]="clearAll" />
+            <span>Regulation libraries</span>
+          </label>
+          <label class="clear-option" [class.dim]="clearAll">
+            <input type="checkbox" [(ngModel)]="clearAnalysisRuns" [disabled]="clearAll" />
+            <span>Analysis runs (demo-created)</span>
+          </label>
+          <label class="clear-option" [class.dim]="clearAll">
+            <input type="checkbox" [(ngModel)]="clearUsers" [disabled]="clearAll" />
+            <span>Demo users (deactivate non–super-admin)</span>
+          </label>
+        </div>
+
+        <div class="demo-actions">
+          <button type="button" class="btn-primary" [disabled]="clearing" (click)="clearDemo()">
+            {{ clearing ? 'Clearing…' : 'Clear selected' }}
+          </button>
+        </div>
+      </section>
+
+      <section class="demo-card">
+        <header class="demo-card-header">
+          <div>
+            <h2>Demo analysis templates</h2>
+            <p class="demo-card-desc">
+              Click a template to preview judgment points — same detail view demo users see after analysis.
+              Analysis 1 matches
+              <strong>CBUAE_EN_3945_VER2</strong> + <strong>Internal AML Manual 290626</strong>.
+            </p>
+          </div>
+        </header>
+
+        @if (!templates.length && !error) {
+          <div class="demo-empty">
+            <p>No templates found yet.</p>
+            <button type="button" class="btn-secondary btn-sm" (click)="reload()">Refresh</button>
+          </div>
+        } @else {
+          <div class="template-list" role="list">
+            @for (t of templates; track t.id) {
+              <button
+                type="button"
+                class="template-row"
+                role="listitem"
+                [class.active]="selected?.id === t.id"
+                (click)="openTemplate(t.id)"
+              >
+                <span class="template-code">{{ t.code }}</span>
+                <span class="template-body">
+                  <span class="template-name">{{ t.name }}</span>
+                  <span class="template-hints nd-muted">
+                    @if (t.regulationNameHint || t.internalNameHint) {
+                      Reg: {{ t.regulationNameHint || '—' }} · Int: {{ t.internalNameHint || '—' }}
+                    } @else {
+                      Hints not set yet
+                    }
+                  </span>
+                </span>
+                <span class="template-badges">
+                  <span class="pill" [class.pill-on]="t.isActive" [class.pill-off]="!t.isActive">
+                    {{ t.isActive ? 'Active' : 'Inactive' }}
+                  </span>
+                  <span class="pill pill-neutral">{{ t.pointCount }} points</span>
+                </span>
+              </button>
+            }
+          </div>
+        }
+
+        @if (selectedLoading) {
+          <div class="demo-loading demo-loading-inline" aria-busy="true">
+            <span class="demo-spinner" aria-hidden="true"></span>
+            <p>Opening template…</p>
+          </div>
+        } @else if (selected) {
+          <div class="template-detail">
+            <div class="template-detail-top">
+              <h3>{{ selected.code }}</h3>
+              <p class="nd-muted">Edit template hints and judgment points — changes apply to future demo runs.</p>
+            </div>
+
+            <div class="meta-grid">
+              <label class="nd-label">
+                Name
+                <input class="nd-input" [(ngModel)]="selected.name" />
+              </label>
+              <label class="nd-label">
+                Regulation name hint
+                <input class="nd-input" [(ngModel)]="selected.regulationNameHint" placeholder="e.g. CBUAE_EN_3945" />
+              </label>
+              <label class="nd-label">
+                Internal doc name hint
+                <input class="nd-input" [(ngModel)]="selected.internalNameHint" placeholder="e.g. 290626" />
+              </label>
+              <label class="nd-label checkbox-label">
+                <input type="checkbox" [(ngModel)]="selected.isActive" />
+                Active for demo simulation
+              </label>
+              <label class="nd-label full">
+                Description
+                <textarea class="nd-input" rows="2" [(ngModel)]="selected.description"></textarea>
+              </label>
+            </div>
+
+            <div class="demo-actions">
+              <button type="button" class="btn-primary btn-sm" [disabled]="savingMeta" (click)="saveTemplateMeta()">
+                {{ savingMeta ? 'Saving…' : 'Save template' }}
+              </button>
+              @if (selected.code === 'analys1demo') {
+                <button type="button" class="btn-secondary btn-sm" (click)="reloadAnalys1FromSeed()">
+                  Reload points from seed file
+                </button>
+              }
+            </div>
+
+            @if (selected.points.length || pointEditorMode === 'add') {
+              <div class="demo-preview-shell">
+                <aside class="demo-preview-nav" aria-label="Demo judgment points">
+                  <div class="demo-preview-nav-head">
+                    <p class="demo-preview-nav-label">Points ({{ selected.points.length }})</p>
+                    <button type="button" class="btn-secondary btn-sm" (click)="startAddPoint()">
+                      Add item
+                    </button>
+                  </div>
+                  <div class="demo-preview-list nd-analysis-point-rail">
+                    @for (p of selected.points; track p.id) {
+                      <div class="demo-preview-item-wrap" [class.active]="isPreviewPoint(p)">
+                        <button
+                          type="button"
+                          class="rail-point demo-preview-item"
+                          (click)="selectPreviewPoint(p)"
+                        >
+                          <span class="rail-point-head">
+                            <span class="rail-point-num">{{ p.clauseNo }}</span>
+                            @if (templatePointSeverity(p); as sev) {
+                              <span class="severity-badge sm" [class]="sev">{{ previewStatusLabel(p) }}</span>
+                            }
+                          </span>
+                          <span class="rail-point-title">{{ p.clauseTitle || 'Untitled clause' }}</span>
+                          @if (templatePointGapCount(p) > 0) {
+                            <span class="gap-count-badge rail-gap-inline">
+                              {{ templatePointGapCount(p) }} gap
+                            </span>
+                          }
+                          <div class="rail-meta-slim">
+                            @if (templatePointPolicySnippet(p) !== '—') {
+                              <span class="rail-policy-line">
+                                <em>Policy</em> {{ templatePointPolicySnippet(p) }}
+                              </span>
+                            }
+                            <span class="rail-confidence-line">
+                              <em>Conf.</em> {{ formatTemplateConfidence(p) }}
+                            </span>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          class="demo-preview-edit-btn"
+                          title="Edit point"
+                          (click)="startEditPoint(p, $event)"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    }
+                  </div>
+                </aside>
+                <div class="demo-preview-panel">
+                  @if (pointEditorMode) {
+                    <section class="point-editor" aria-label="Edit demo template point">
+                      <div class="point-editor-head">
+                        <h4>{{ pointEditorMode === 'add' ? 'Add judgment point' : 'Edit judgment point' }}</h4>
+                        <button type="button" class="btn-ghost btn-sm" (click)="cancelPointEditor()">Cancel</button>
+                      </div>
+                      <div class="point-editor-grid">
+                        <label class="nd-label">
+                          Clause no
+                          <input class="nd-input" [(ngModel)]="pointForm.clauseNo" placeholder="e.g. 3.1" />
+                        </label>
+                        <label class="nd-label">
+                          Sort order
+                          <input class="nd-input" type="number" step="1" [(ngModel)]="pointForm.sortOrder" />
+                        </label>
+                        <label class="nd-label full">
+                          Clause title
+                          <input class="nd-input" [(ngModel)]="pointForm.clauseTitle" />
+                        </label>
+                        <label class="nd-label">
+                          Design status
+                          <select class="nd-input" [(ngModel)]="pointForm.designStatus">
+                            @for (opt of statusOptions; track opt.value) {
+                              <option [value]="opt.value">{{ opt.label }}</option>
+                            }
+                          </select>
+                        </label>
+                        <label class="nd-label">
+                          Operating status
+                          <select class="nd-input" [(ngModel)]="pointForm.operatingStatus">
+                            @for (opt of statusOptions; track opt.value) {
+                              <option [value]="opt.value">{{ opt.label }}</option>
+                            }
+                          </select>
+                        </label>
+                        <label class="nd-label">
+                          Overall status
+                          <select class="nd-input" [(ngModel)]="pointForm.overallStatus">
+                            @for (opt of statusOptions; track opt.value) {
+                              <option [value]="opt.value">{{ opt.label }}</option>
+                            }
+                          </select>
+                        </label>
+                        <label class="nd-label">
+                          Confidence (0–1)
+                          <input class="nd-input" type="number" min="0" max="1" step="0.01" [(ngModel)]="pointForm.confidence" />
+                        </label>
+                        <label class="nd-label">
+                          Gap direction
+                          <input class="nd-input" [(ngModel)]="pointForm.gapDirection" placeholder="policy_gap" />
+                        </label>
+                        <label class="nd-label full">
+                          Interpretation
+                          <textarea class="nd-input" rows="3" [(ngModel)]="pointForm.interpretation"></textarea>
+                        </label>
+                        <label class="nd-label full">
+                          Policy extract (one line per bullet)
+                          <textarea class="nd-input" rows="4" [(ngModel)]="pointForm.policyExtractText"></textarea>
+                        </label>
+                        <label class="nd-label full">
+                          Document reference
+                          <input class="nd-input" [(ngModel)]="pointForm.documentReference" />
+                        </label>
+                        <label class="nd-label full">
+                          Gap description
+                          <textarea class="nd-input" rows="6" [(ngModel)]="pointForm.gapDescription"></textarea>
+                        </label>
+                        <label class="nd-label full">
+                          Suggested action
+                          <textarea class="nd-input" rows="2" [(ngModel)]="pointForm.suggestedAction"></textarea>
+                        </label>
+                      </div>
+                      <div class="point-editor-actions">
+                        <button
+                          type="button"
+                          class="btn-primary btn-sm"
+                          [disabled]="pointFormSaving"
+                          (click)="savePointEditor()"
+                        >
+                          {{ pointFormSaving ? 'Saving…' : (pointEditorMode === 'add' ? 'Add point' : 'Save changes') }}
+                        </button>
+                        @if (pointEditorMode === 'edit') {
+                          <button
+                            type="button"
+                            class="btn-ghost btn-sm"
+                            [disabled]="pointFormDeleting"
+                            (click)="deleteEditingPoint()"
+                          >
+                            {{ pointFormDeleting ? 'Deleting…' : 'Delete' }}
+                          </button>
+                        }
+                      </div>
+                    </section>
+                  } @else if (previewAnalysisPoint && previewSnapshot) {
+                    <p class="demo-preview-hint nd-muted">
+                      Preview — same detail view demo users see after analysis runs.
+                    </p>
+                    <app-nd-gap-point-detail
+                      [point]="previewAnalysisPoint"
+                      [snapshot]="previewSnapshot"
+                      [displayClause]="previewClause"
+                      [isRegulWorkflow]="true"
+                      [canEdit]="false"
+                      [showReviewPanel]="false"
+                    />
+                  } @else {
+                    <div class="demo-empty demo-empty-compact">
+                      <p>Select a point to preview, or click <strong>Add item</strong> to create one.</p>
+                    </div>
+                  }
+                </div>
+              </div>
+            } @else if (selected.points.length === 0) {
+              <div class="demo-empty demo-empty-compact">
+                <p>No points in this template yet.</p>
+                <button type="button" class="btn-primary btn-sm" (click)="startAddPoint()">Add item</button>
+                @if (selected.code === 'analys1demo') {
+                  <button type="button" class="btn-secondary btn-sm" (click)="reloadAnalys1FromSeed()">
+                    Reload from seed file
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+      </section>
+    }
+  </div>
+</div>

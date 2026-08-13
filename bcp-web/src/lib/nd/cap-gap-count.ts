@@ -6,6 +6,7 @@ import {
 import type { DualVerifyReportItem } from '../dual-verify-report';
 import type { AnalysisPoint } from './types';
 import { resolveAnalysisPointSeverity } from './point-compliance-status';
+import { normalizeRegulGapDisplayText, parseRegulElementCapSegments, parseRegulElementGapSegments } from './regul-fields';
 
 function extractAiMessage(raw?: string | null): string {
   if (!raw?.trim()) return '';
@@ -51,6 +52,9 @@ export function resolveAiCorrectiveActionForPoint(p: AnalysisPoint): string {
 export function resolveCapSourceForAnalysisPoint(p: AnalysisPoint): string {
   const originalPlan = p.originalAiActionPlan?.trim() ?? '';
   const currentPlan = p.finalActionPlan?.trim() ?? originalPlan;
+  if (looksLikeRegulElementAssessment(currentPlan) || looksLikeRegulElementAssessment(originalPlan)) {
+    return '';
+  }
   const aiCap = resolveAiCorrectiveActionForPoint(p);
   const capSource = currentPlan || originalPlan || aiCap;
   if (!capSource || isVerificationMetaCapText(capSource) || isWeakCorrectivePlan(capSource)) return '';
@@ -94,6 +98,18 @@ export function isWeakCorrectivePlan(source: string): boolean {
   return false;
 }
 
+/** CAP stored as element-level assessment prose (demo seed) — not a real corrective action plan. */
+export function looksLikeRegulElementAssessment(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return (
+    /^Element\s+\d+\s*\(/i.test(t) ||
+    /\bElement\s+\d+[\s(].*(?:partially\s+covered|NOT\s+covered|not clearly covered)/i.test(t) ||
+    /^The regulator expects\b/i.test(t) ||
+    /\bno provision found\b/i.test(t)
+  );
+}
+
 /** Build a readable Gap/Fix when Landing left only a placeholder CAP. */
 export function buildFallbackCapGaps(requirementText: string, severity?: string | null): CapGap[] {
   const intent = summarizeRequirementIntent(requirementText);
@@ -123,6 +139,39 @@ export function meaningfulCapGaps(source: string): CapGap[] {
   return parseCapGaps(source).filter(isMeaningfulCapGap);
 }
 
+/** Element-level regul/demo gaps from interpretation or gap analysis prose. */
+export function parseRegulElementCapGaps(gapText: string): CapGap[] {
+  const segments = parseRegulElementCapSegments(gapText);
+  return segments.map((missing, i) => ({
+    index: i + 1,
+    missing,
+    fix: '',
+    priority: capPriorityForRegulCapSegment(missing),
+  }));
+}
+
+function capPriorityForRegulCapSegment(segment: string): string {
+  const s = segment.trim();
+  if (/^The regulator/i.test(s)) return '';
+  if (/\bNOT\s+covered\b/i.test(s) || /\bno provision found\b/i.test(s)) return 'higher';
+  if (/\bpartially\s+covered\b/i.test(s) || /\bnot clearly covered\b/i.test(s)) return 'medium';
+  if (/\bcovered\b/i.test(s)) return 'low';
+  return 'medium';
+}
+
+function regulGapAnalysisTextFromPoint(p: AnalysisPoint): string {
+  const landing = extractAiMessage(p.landingAiResult);
+  if (!landing.trim()) return '';
+  const block = parseReferenceComplianceBlock(landing);
+  return normalizeRegulGapDisplayText(block.gapAnalysis ?? '');
+}
+
+export function countRegulElementGapsForPoint(p: AnalysisPoint): number {
+  const gapText = regulGapAnalysisTextFromPoint(p);
+  if (!gapText) return 0;
+  return parseRegulElementGapSegments(gapText).length;
+}
+
 export function countCapGapsForAnalysisPoint(p: AnalysisPoint): number {
   return countDisplayGapsForAnalysisPoint(p);
 }
@@ -136,6 +185,12 @@ export function countDisplayGapsForAnalysisPoint(
   // Queued / pending — never invent "1 gap" before Landing has scored the point.
   if (!severity) return manualEvidenceCount > 0 ? manualEvidenceCount : 0;
   if (severity === 'compliant') return manualEvidenceCount > 0 ? manualEvidenceCount : 0;
+
+  const elementGapCount = countRegulElementGapsForPoint(p);
+  if (elementGapCount > 0) {
+    return Math.max(elementGapCount, manualEvidenceCount);
+  }
+
   const source = resolveCapSourceForAnalysisPoint(p);
   let count = meaningfulCapGaps(source).length;
   if (count === 0 && (isWeakCorrectivePlan(source) || !source.trim())) {

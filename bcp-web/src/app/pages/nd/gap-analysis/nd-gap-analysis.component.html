@@ -24,23 +24,25 @@
         {{ deletingSession ? 'Deleting…' : 'Delete session' }}
       </button>
     }
-    <button
-      type="button"
-      class="btn-secondary"
-      [disabled]="exporting || !items.length"
-      (click)="exportXlsx()"
-    >
-      {{ exporting ? 'Exporting…' : 'Export XLSX' }}
-    </button>
-    <button
-      type="button"
-      class="btn-secondary"
-      [disabled]="exporting || !items.length"
-      (click)="exportPdf()"
-    >
-      Export PDF
-    </button>
-    @if (ndRunId) {
+    @if (!embedMode) {
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="exporting || !items.length"
+        (click)="exportXlsx()"
+      >
+        {{ exporting ? 'Exporting…' : 'Export XLSX' }}
+      </button>
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="exporting || !items.length"
+        (click)="exportPdf()"
+      >
+        Export PDF
+      </button>
+    }
+    @if (!embedMode && ndRunId) {
       <button type="button" class="btn-secondary" (click)="openRunHistory()">History</button>
     }
     @if (!embedMode) {
@@ -237,6 +239,7 @@
     <app-nd-gap-point-detail
       [point]="ndPoint"
       [snapshot]="snapshotForPoint(ndPoint)"
+      [isRegulWorkflow]="isNdRegulWorkflow"
       [canEdit]="canEditNdCap"
       [editing]="editingPointId === ndPoint.id"
       [saving]="capSavingPointId === ndPoint.id"
@@ -309,41 +312,54 @@
           (sortChange)="onPointSortChange($event)"
         />
       }
-      @for (item of filteredItems; track item.id) {
-        @let meta = listRowMeta(item);
-        <button
-          type="button"
-          class="rail-point"
-          [class.active]="selectedItemId === item.id"
-          (click)="selectGapItem(item)"
-        >
-          <span class="rail-point-head">
-            <span class="rail-point-num">{{ item.section }}</span>
-            @if ((item.gapCount ?? 0) > 0) {
-                <span class="gap-count-badge">{{ item.gapCount }} gap{{ item.gapCount === 1 ? '' : 's' }}</span>
+      <div class="nd-analysis-point-rail">
+        @for (item of filteredItems; track item.id) {
+          @let meta = gapPointRailMeta(item);
+          @let gapCount = gapCountForItem(item);
+          <div
+            class="rail-point"
+            [class.active]="selectedItemId === item.id"
+            role="button"
+            tabindex="0"
+            (click)="selectGapItem(item)"
+            (keydown.enter)="selectGapItem(item)"
+            (keydown.space)="$event.preventDefault(); selectGapItem(item)"
+          >
+            <span class="rail-point-head">
+              <button
+                type="button"
+                class="point-info-btn"
+                title="View full clause"
+                aria-label="View full clause"
+                (click)="openGapPointInfo($event, item)"
+              >
+                ⓘ
+              </button>
+              <span class="rail-point-num">{{ gapPointDisplayNum(item) }}</span>
+              <span class="severity-badge sm" [class]="item.severity">{{ severityLabel(item.severity) }}</span>
+            </span>
+            <span class="rail-point-title" [title]="item.title">{{ item.title }}</span>
+            @if (gapCount > 0) {
+              <span class="gap-count-badge rail-gap-inline">
+                {{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}
+              </span>
             }
-            <span class="severity-badge sm" [class]="item.severity">{{ meta.status }}</span>
-          </span>
-          <span class="rail-point-title">{{ item.title }}</span>
-          <span class="rail-meta-grid">
-            <span><em>Policy</em> {{ meta.policySnippet }}</span>
-            <span><em>Fulfills</em> {{ meta.fulfills }}</span>
-            <span><em>Action</em> {{ meta.actionPlan }}</span>
-            <span><em>Conf.</em> {{ meta.confidence }}</span>
-          </span>
-        </button>
-      }
+            <div class="rail-meta-slim">
+              @if (meta.policySnippet && meta.policySnippet !== '—') {
+                <span class="rail-policy-line"><em>Policy</em> {{ meta.policySnippet }}</span>
+              }
+              <span class="rail-confidence-line"><em>Conf.</em> {{ meta.confidence }}</span>
+            </div>
+          </div>
+        }
+      </div>
     </aside>
     <div class="list-detail card-surface">
       @if (selectedGapItem; as item) {
-        @defer (when selectedGapItem) {
-          <ng-container
-            [ngTemplateOutlet]="pointDetail"
-            [ngTemplateOutletContext]="{ item: item, showHeader: true }"
-          />
-        } @placeholder {
-          <p class="muted-inline">Loading detail…</p>
-        }
+        <ng-container
+          [ngTemplateOutlet]="pointDetail"
+          [ngTemplateOutletContext]="{ item: item, showHeader: true }"
+        />
       } @else {
         <p class="muted-inline">Select a point on the left to view details.</p>
       }

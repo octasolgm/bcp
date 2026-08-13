@@ -4,6 +4,7 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services.LandingAi;
+using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard;
@@ -16,6 +17,7 @@ public class NdInternalParseService(
     LandingAiCacheRepository cache,
     SupabaseStorageService storage,
     IOptions<LandingAiOptions> options,
+    NdDemoUserDirectory demoDirectory,
     ILogger<NdInternalParseService> logger)
 {
     private readonly LandingAiOptions _opts = options.Value;
@@ -114,6 +116,8 @@ public class NdInternalParseService(
         var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == documentId, ct)
             ?? throw new InvalidOperationException("Internal document not found.");
 
+        await ThrowIfLiveAiForbiddenAsync(parsedBy, doc.UploadedBy, ct);
+
         if (!client.IsConfigured)
             throw new InvalidOperationException(
                 "Landing AI is not configured. Set LandingAi:ApiKey in appsettings.");
@@ -169,6 +173,8 @@ public class NdInternalParseService(
             throw new InvalidOperationException(
                 "Parse is already running for this document. Wait for the current run to finish.");
         }
+
+        await ThrowIfLiveAiForbiddenAsync(parsedBy, doc.UploadedBy, ct);
 
         doc.ParseStatus = "processing";
         doc.ParseError = null;
@@ -235,5 +241,18 @@ public class NdInternalParseService(
 
         if (changed)
             await db.SaveChangesAsync(ct);
+    }
+
+    private async Task ThrowIfLiveAiForbiddenAsync(
+        Guid? actingUserId,
+        Guid? resourceOwnerId,
+        CancellationToken ct)
+    {
+        if (!demoDirectory.IsEnabled) return;
+        var demoIds = await demoDirectory.GetDemoProfileIdsAsync(ct);
+        if ((actingUserId is Guid actor && demoIds.Contains(actor))
+            || (resourceOwnerId is Guid owner && demoIds.Contains(owner)))
+            throw new InvalidOperationException(
+                "Demo accounts and demo-owned documents use simulated processing only (no live AI).");
     }
 }

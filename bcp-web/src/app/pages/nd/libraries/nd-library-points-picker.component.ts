@@ -8,6 +8,7 @@ import {
   formatRegulationPointLabel,
   manualRegulationPointToGovPoint,
   normalizeRegulationPoint,
+  prepareRegulationPointsResponse,
   regulationPointToGovPoint,
   sortRegulationDocuments,
 } from '../../../../lib/regulation-catalog-utils';
@@ -454,17 +455,21 @@ export class NdLibraryPointsPickerComponent implements OnInit, OnChanges {
     );
 
     const res = await this.api.getDocumentPoints(docId);
-    const raw = res.success && res.data
-      ? (res.data as Record<string, unknown>[]).map(normalizeRegulationPoint).filter((p) => p.id && p.pointNumber)
-      : [];
     const doc = this.docs.find((d) => d.id === docId);
     const isManual = doc?.isManual === true || doc?.source === 'manual';
-    const { points, chapterGroups } = buildDisplayDocPoints(raw, isManual);
+    const prepared = prepareRegulationPointsResponse(
+      res.success && res.data ? (res.data as unknown[]) : [],
+      { docName: doc?.name, apiPointCount: res.pointCount },
+    );
+    const { points, chapterGroups } = buildDisplayDocPoints(prepared.points, isManual);
     const expandedChapters = new Set(chapterGroups.map((ch) => ch.chapter));
 
     const docIdx = this.docs.findIndex((d) => d.id === docId);
     if (docIdx >= 0) {
-      this.docs[docIdx] = { ...this.docs[docIdx], pointCount: points.length };
+      const listCount = this.docs[docIdx].pointCount ?? 0;
+      const storedCount =
+        listCount > 0 && prepared.storedCount > listCount ? listCount : prepared.storedCount;
+      this.docs[docIdx] = { ...this.docs[docIdx], pointCount: storedCount };
     }
 
     if (!res.success) {

@@ -60,10 +60,10 @@
               <tr>
                 <th class="sortable" (click)="toggleSort('name')">Name <span class="sort-indicator">{{ sortMark('name') }}</span></th>
                 <th class="sortable" (click)="toggleSort('description')">Description <span class="sort-indicator">{{ sortMark('description') }}</span></th>
-                <th class="sortable" (click)="toggleSort('points')">Stored pts <span class="sort-indicator">{{ sortMark('points') }}</span></th>
-                <th class="sortable" (click)="toggleSort('docs')">Docs <span class="sort-indicator">{{ sortMark('docs') }}</span></th>
+                <th class="sortable" (click)="toggleSort('points')">Stored points <span class="sort-indicator">{{ sortMark('points') }}</span></th>
+                <th class="sortable" (click)="toggleSort('docs')">Documents <span class="sort-indicator">{{ sortMark('docs') }}</span></th>
                 <th class="sortable" (click)="toggleSort('created')">Created <span class="sort-indicator">{{ sortMark('created') }}</span></th>
-                <th>Actions</th>
+                <th class="col-actions">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -80,7 +80,7 @@
                   <td>{{ formatStoredAnalyseMeta(lib.pointCount) }}</td>
                   <td>{{ lib.documentCount ?? 0 }}</td>
                   <td class="muted">{{ formatDate(lib.createdAt) }}</td>
-                  <td class="actions-cell" (click)="$event.stopPropagation()">
+                  <td class="col-actions actions-cell" (click)="$event.stopPropagation()">
                     <button type="button" class="btn-use" (click)="viewLibrary(lib, $event)">View points</button>
                     @if (canEdit) {
                       <button type="button" class="btn-secondary btn-sm" (click)="editLibrary(lib, $event)">Edit</button>

@@ -3,23 +3,24 @@ import { ShellComponent } from './layout/shell.component';
 import { authGuard, guestGuard } from './guards/auth.guard';
 import { ndAuthGuard, ndGuestGuard } from './guards/nd-auth.guard';
 import { ndRoleGuard } from './guards/nd-role.guard';
+import { ndDenyDemoViewerGuard } from './guards/nd-deny-demo-viewer.guard';
 
 const ndAnalyseV8Route = {
-  canActivate: [ndRoleGuard],
+  canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
   loadComponent: () =>
     import('./pages/analyse-v8/analyse-v8.component').then((m) => m.AnalyseV8Component),
 };
 
 const ndAnalyseV9Route = {
-  canActivate: [ndRoleGuard],
+  canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
   loadComponent: () =>
     import('./pages/analyse-v9/analyse-v9.component').then((m) => m.AnalyseV9Component),
 };
 
 const ndAnalyseRegulRoute = {
-  canActivate: [ndRoleGuard],
+  canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
   title: 'Regul Workflow · Comply Solutions',
   loadComponent: () =>
@@ -293,7 +294,7 @@ export const routes: Routes = [
           },
           {
             path: 'analysis-versions',
-            canActivate: [ndRoleGuard],
+            canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
             data: { ndRoles: ['maker', 'super_admin'] },
             title: 'Analysis versions · Comply Solutions',
             loadComponent: () =>
@@ -352,7 +353,7 @@ export const routes: Routes = [
           },
           {
             path: 'run-analysis',
-            redirectTo: 'analyse-v8',
+            redirectTo: 'analyse-regul-full',
             pathMatch: 'full',
           },
           {
@@ -457,6 +458,14 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'admin/demo',
+            canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
+            data: { ndRoles: ['super_admin'] },
+            title: 'Demo group · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-demo.component').then((m) => m.NdAdminDemoComponent),
+          },
+          {
             path: 'admin/prompts',
             canActivate: [ndRoleGuard],
             data: { ndRoles: ['super_admin'] },
@@ -469,6 +478,6 @@ export const routes: Routes = [
       },
     ],
   },
-  { path: 'run-analysis', redirectTo: 'nd/analyse-v8', pathMatch: 'full' },
+  { path: 'run-analysis', redirectTo: 'nd/analyse-regul-full', pathMatch: 'full' },
   { path: '**', redirectTo: 'nd/overview' },
 ];

@@ -113,4 +113,27 @@ public static class GovPointClassifier
 
         return false;
     }
+
+    /// <summary>
+    /// Whether a gov point should be included in gap / Arena analysis exports.
+    /// Keep in sync with bcp-web/src/lib/gov-point-filter.ts classifyGovPoint.
+    /// </summary>
+    public static bool IsComparableForAnalysis(
+        string pointId,
+        string? title,
+        string text,
+        string? section,
+        string? pointType)
+    {
+        if (string.Equals(pointType, "mandatory", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (IsAnnexPoint(pointId, title, section))
+            return false;
+        if (IsSectionOnePoint(pointId, section))
+            return false;
+        if (string.Equals(pointType, "informational", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(pointType, "definition", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return !IsIntroductionPoint(pointId, title, text, section, pointType);
+    }
 }

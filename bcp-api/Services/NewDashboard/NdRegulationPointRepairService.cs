@@ -11,6 +11,7 @@ public sealed class NdRegulationPointRepairService(
     AppDbContext db,
     LandingAiCacheRepository cache,
     NdDocumentPageReferenceResolver pageResolver,
+    NdCbuaeSection5LandingAiPatch section5Patch,
     ILogger<NdRegulationPointRepairService> logger)
 {
     public sealed record RepairResult(
@@ -19,7 +20,8 @@ public sealed class NdRegulationPointRepairService(
         int SoftDeleted,
         int DuplicateGroups,
         int JunkRemoved,
-        int PagesRefreshed);
+        int PagesRefreshed,
+        int Recovered);
 
     /// <summary>Scan parse markdown for numbered headings missing from the library and add them.</summary>
     public async Task<int> RecoverMissingPointsAsync(Guid regulationDocumentId, CancellationToken ct = default)
@@ -111,6 +113,64 @@ public sealed class NdRegulationPointRepairService(
         return added;
     }
 
+    /// <summary>Insert Landing AI §5 rows (5, 5.1–5.4) when absent from a CBUAE regulation document.</summary>
+    public async Task<int> EnsureCbuaeSection5LandingAiPatchAsync(
+        Guid regulationDocumentId,
+        CancellationToken ct = default)
+    {
+        var doc = await db.NdRegulationDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == regulationDocumentId, ct)
+            ?? await db.NdRegulationDocuments.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.StoredDocumentId == regulationDocumentId, ct);
+        if (doc == null || doc.IsManual)
+            return 0;
+
+        var fileName = doc.Name;
+        if (doc.StoredDocumentId is Guid storedId)
+        {
+            var stored = await db.StoredDocuments.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == storedId, ct);
+            if (stored != null)
+                fileName = stored.OriginalFileName ?? stored.Title ?? fileName;
+        }
+
+        if (!NdCbuaeSection5LandingAiPatch.IsCbuaeRegulationDocument(doc.Name)
+            && !NdCbuaeSection5LandingAiPatch.IsCbuaeRegulationDocument(fileName))
+            return 0;
+
+        var active = await db.NdRegulationPoints
+            .Where(p => p.RegulationDocumentId == doc.Id && p.Status == NdRegulationPointStatus.Active)
+            .ToListAsync(ct);
+        if (NdCbuaeSection5LandingAiPatch.HasSection5Points(active))
+            return 0;
+
+        var tracked = await db.NdRegulationDocuments.FirstAsync(d => d.Id == doc.Id, ct);
+        var added = section5Patch.ApplyMissing(doc.Id, active, db);
+        if (added == 0)
+            return 0;
+
+        tracked.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var patched = await db.NdRegulationPoints
+            .Where(p => p.RegulationDocumentId == doc.Id
+                && p.Status == NdRegulationPointStatus.Active
+                && (p.PointNumber == "5" || p.PointNumber.StartsWith("5.")))
+            .ToListAsync(ct);
+        if (patched.Count > 0)
+        {
+            await RefreshPageReferencesAsync(tracked, patched, ct);
+            tracked.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+        }
+
+        logger.LogInformation(
+            "Patched {Count} CBUAE section 5 point(s) for regulation doc {DocId}",
+            added,
+            doc.Id);
+        return added;
+    }
+
     /// <summary>Recompute point page references from native PDF text (preferred) or parse cache — no Landing AI credits.</summary>
     public async Task<int> RefreshPagesAsync(Guid regulationDocumentId, CancellationToken ct = default)
     {
@@ -143,7 +203,7 @@ public sealed class NdRegulationPointRepairService(
             .Where(p => p.RegulationDocumentId == regulationDocumentId)
             .ToListAsync(ct);
         if (points.Count == 0)
-            return new RepairResult(0, 0, 0, 0, 0, 0);
+            return new RepairResult(0, 0, 0, 0, 0, 0, 0);
 
         var plan = GovPointExtractNormalizer.PlanRepair(
             points,
@@ -172,15 +232,24 @@ public sealed class NdRegulationPointRepairService(
         doc.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
 
-        var afterCount = points.Count(p => p.Status == NdRegulationPointStatus.Active);
+        var recovered = await RecoverMissingPointsAsync(regulationDocumentId, ct);
+        var section5Patched = await EnsureCbuaeSection5LandingAiPatchAsync(regulationDocumentId, ct);
+
+        var afterPoints = await db.NdRegulationPoints.AsNoTracking()
+            .Where(p => p.RegulationDocumentId == regulationDocumentId
+                && p.Status == NdRegulationPointStatus.Active)
+            .ToListAsync(ct);
+        var afterCount = NdRegulationPointCanonicalFilter.CountCanonical(afterPoints);
         logger.LogInformation(
-            "Repaired regulation points for {DocId}: {Before} → {After} (soft-deleted {Removed}, dup groups {Dup}, junk {Junk})",
+            "Repaired regulation points for {DocId}: {Before} → {After} (soft-deleted {Removed}, dup groups {Dup}, junk {Junk}, recovered {Recovered}, section5 {Section5})",
             regulationDocumentId,
             points.Count,
             afterCount,
             plan.SoftDeleteIds.Count,
             plan.DuplicateGroups,
-            plan.JunkRemoved);
+            plan.JunkRemoved,
+            recovered,
+            section5Patched);
 
         return new RepairResult(
             points.Count,
@@ -188,7 +257,8 @@ public sealed class NdRegulationPointRepairService(
             plan.SoftDeleteIds.Count,
             plan.DuplicateGroups,
             plan.JunkRemoved,
-            pagesRefreshed);
+            pagesRefreshed,
+            recovered);
     }
 
     private async Task<int> RefreshPageReferencesAsync(

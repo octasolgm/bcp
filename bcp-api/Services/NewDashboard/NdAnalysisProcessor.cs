@@ -6,6 +6,7 @@ using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services.LandingAi;
+using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard;
@@ -18,6 +19,7 @@ public class NdAnalysisProcessor(
     SupabaseStorageService storage,
     IConfiguration configuration,
     NdAnalysisRunCancellationTracker runCancellation,
+    NdDemoUserDirectory demoDirectory,
     ILogger<NdAnalysisProcessor> logger)
 {
     private readonly ComparePromptVersion _defaultComparePromptVersion =
@@ -61,6 +63,12 @@ public class NdAnalysisProcessor(
         if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException(
                 "regul_pipeline runs use NdRegulAnalysisProcessor, not NdAnalysisProcessor (dual verify).");
+
+        if (await IsDemoOwnedRunAsync(run, ct))
+        {
+            logger.LogWarning("Refusing live AI for demo-owned run {RunId}", runId);
+            return;
+        }
 
         if (await IsRunStoppedAsync(run, ct))
         {
@@ -214,6 +222,12 @@ public class NdAnalysisProcessor(
             throw new InvalidOperationException(
                 "regul_pipeline runs use NdRegulAnalysisProcessor, not NdAnalysisProcessor (dual verify).");
 
+        if (await IsDemoOwnedRunAsync(run, ct))
+        {
+            logger.LogWarning("Refusing live AI point rerun for demo-owned run {RunId}", runId);
+            return;
+        }
+
         var point = run.Points.FirstOrDefault(p => p.Id == pointId)
             ?? throw new InvalidOperationException("Analysis point not found.");
 
@@ -258,6 +272,12 @@ public class NdAnalysisProcessor(
         if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             throw new InvalidOperationException(
                 "regul_pipeline runs use NdRegulAnalysisProcessor.RerunReversePhaseAsync.");
+
+        if (await IsDemoOwnedRunAsync(run, ct))
+        {
+            logger.LogWarning("Refusing live AI dual-verify rerun for demo-owned run {RunId}", runId);
+            return;
+        }
 
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
 
@@ -670,6 +690,13 @@ public class NdAnalysisProcessor(
             throw new InvalidOperationException("No internal documents could be loaded for this run.");
 
         return result;
+    }
+
+    private async Task<bool> IsDemoOwnedRunAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        if (!demoDirectory.IsEnabled || !run.CreatedBy.HasValue) return false;
+        var demoIds = await demoDirectory.GetDemoProfileIdsAsync(ct);
+        return demoIds.Contains(run.CreatedBy.Value);
     }
 }
 

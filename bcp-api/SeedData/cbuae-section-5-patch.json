@@ -1,0 +1,42 @@
+[
+  {
+    "pointNumber": "5",
+    "pointTitle": "Internal Policies, Controls and Procedures",
+    "pointContent": "Policies:\nClear and simple high-level statements that are uniform across the entire organization (sets the tone from the top).\n\nProcedures:\nTranslates the AML/CFT policies into an acceptable and workable practice, tasking the stakeholders with their respective responsibilities.\n\nControls:\nThe internal technology or tools the financial institution utilizes to ensure the AML/CFT program is functioning as intended and within predefined parameters.\n\n(AML-CFT Law Article 16.1(d); AML-CFT Decision Articles 4.2(a), 20)\n\nThe AML-CFT Law and the AML-CFT Decision require FIs to implement internal policies, controls and procedures that enable them to manage and mitigate the ML/FT risks they have identified in their ML/TF business risk assessment, in keeping with the nature and size of their businesses. Such policies, controls and procedures must be approved by senior management, reviewed for effectiveness and continuously updated, and must apply to all branches, subsidiaries and affiliated entities in which FIs hold a majority interest (see Section 8.3, Group Oversight for more guidance). They must also take into consideration the results of the NRA and Topical Risk Assessments.",
+    "pageReference": "5. Internal Policies, Controls and Procedures · p. 38",
+    "isIntroductionPoint": true,
+    "isAnnexPoint": false
+  },
+  {
+    "pointNumber": "5.1",
+    "pointTitle": "Reasonableness and Proportionality of Policies, Controls and Procedures",
+    "pointContent": "Additionally, FIs should ensure that the policies, controls and procedures they implement to manage and mitigate ML/FT risks are reasonable, proportionate to the risks involved, and consistent with the results of their ML/TF business risk assessments.",
+    "pageReference": "5. Internal Policies, Controls and Procedures · p. 38",
+    "isIntroductionPoint": false,
+    "isAnnexPoint": false
+  },
+  {
+    "pointNumber": "5.2",
+    "pointTitle": "Documentation, Approval, and Communication of Policies, Procedures and Methodologies",
+    "pointContent": "Such policies, procedures and methodologies should be reasonable and proportionate to the risks involved, and, in formulating them, FIs should consider the results of the NRA and any Topical Risk Assessment as well as their own ML/FT business risk assessment. Commensurate with the nature and size of the FIs' businesses, the policies, procedures and methodologies should also be documented, approved by senior management, and communicated at the appropriate levels of the organisation.",
+    "pageReference": "5. Internal Policies, Controls and Procedures · p. 38",
+    "isIntroductionPoint": false,
+    "isAnnexPoint": false
+  },
+  {
+    "pointNumber": "5.3",
+    "pointTitle": "Consideration of IT Infrastructure in AML/CFT Control Systems",
+    "pointContent": "In developing the internal AML/CFT control systems, FIs should also take into account their IT infrastructure and management information systems capabilities. FIs should consider how well their technical infrastructure, including their data management and management information reporting capabilities, are suited to the ML/FT risk mitigation requirements of the types of customers they deal with, particularly in respect of the size and growth dynamics of their customer base.",
+    "pageReference": "5. Internal Policies, Controls and Procedures · p. 38",
+    "isIntroductionPoint": false,
+    "isAnnexPoint": false
+  },
+  {
+    "pointNumber": "5.4",
+    "pointTitle": "Categories of Internal Policies, Controls and Procedures",
+    "pointContent": "The internal policies, controls and procedures that FIs design to prevent, detect and deter ML/FT risks can be categorised broadly as those related to:\n*   The identification and assessment of ML/FT risks (see Section 4.5, Business-wide Risk Assessment).\n*   Customer due diligence (CDD), including enhance due diligence (EDD), and simplified due diligence (SDD) (see Section 6, Customer Due Diligence), including its review and updating, and reliance on third parties in regard to it.\n*   Customer and transaction monitoring, and the reporting of suspicious transactions (see Section 7, Suspicious Transaction Reporting).\n*   AML/CFT governance, including compliance staffing and training, senior management responsibilities, and the independent auditing of risk mitigation measures (see Section 8, Governance).\n*   Record-keeping requirements (see Section 9, Record Keeping).",
+    "pageReference": "5. Internal Policies, Controls and Procedures · p. 38",
+    "isIntroductionPoint": false,
+    "isAnnexPoint": false
+  }
+]

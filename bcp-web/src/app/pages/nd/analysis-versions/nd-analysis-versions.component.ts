@@ -1,5 +1,7 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, OnInit, inject } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { ND_NEW_ANALYSIS_PATH } from '../../../../lib/nd/demo-analysis-routes';
 
 export type AnalysisVersionEntry = {
   id: string;
@@ -16,7 +18,16 @@ export type AnalysisVersionEntry = {
   templateUrl: './nd-analysis-versions.component.html',
   styleUrls: ['./nd-analysis-versions.component.scss', '../nd-shared.scss'],
 })
-export class NdAnalysisVersionsComponent {
+export class NdAnalysisVersionsComponent implements OnInit {
+  private readonly router = inject(Router);
+  private readonly auth = inject(NdAuthService);
+
+  ngOnInit(): void {
+    if (this.auth.isDemoViewer()) {
+      void this.router.navigateByUrl(ND_NEW_ANALYSIS_PATH, { replaceUrl: true });
+    }
+  }
+
   readonly versions: AnalysisVersionEntry[] = [
     {
       id: 'V1',

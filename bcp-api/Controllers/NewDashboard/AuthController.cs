@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Reguliq.Api.Data;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -17,7 +18,8 @@ public class AuthController(
     SupabaseJwtValidator jwt,
     IOptions<SupabaseJwtOptions> jwtOptions,
     IHttpClientFactory httpClientFactory,
-    IWebHostEnvironment env) : NdControllerBase
+    IWebHostEnvironment env,
+    NdDemoUserDirectory demoDirectory) : NdControllerBase
 {
     public record ProfileUpsertRequest(string? FullName, string? Role, Guid? DepartmentId);
     public record ForgotPasswordRequest(string Email, string? RedirectTo);
@@ -44,7 +46,8 @@ public class AuthController(
             if (!profile.IsActive)
                 return StatusCode(403, new { success = false, message = "Account deactivated" });
 
-            return Ok(new { success = true, data = MapProfile(profile) });
+            var demoIds = await demoDirectory.GetDemoProfileIdsAsync(dbCts.Token);
+            return Ok(new { success = true, data = MapProfile(profile, user.Email, demoIds) });
         }
         catch (Exception ex) when (ex is Npgsql.NpgsqlException or TimeoutException or SocketException or OperationCanceledException
             || ex.GetBaseException() is SocketException or TimeoutException or OperationCanceledException)
@@ -87,7 +90,8 @@ public class AuthController(
         if (!profile.IsActive)
             return StatusCode(403, new { success = false, message = "Account deactivated" });
 
-        return Ok(new { success = true, data = MapProfile(profile), email = user.Email });
+        var demoIds = await demoDirectory.GetDemoProfileIdsAsync(ct);
+        return Ok(new { success = true, data = MapProfile(profile, user.Email, demoIds), email = user.Email });
     }
 
     [HttpPost("forgot-password")]

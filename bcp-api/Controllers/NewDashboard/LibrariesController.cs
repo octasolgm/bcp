@@ -5,6 +5,7 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -13,6 +14,7 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class LibrariesController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
+    NdDemoUserDirectory demoDirectory,
     ILogger<LibrariesController> logger) : NdControllerBase
 {
     public record LibraryPointInput(Guid RegulationPointId, Guid RegulationDocumentId, int DisplayOrder, object? PointSnapshot);
@@ -22,11 +24,13 @@ public class LibrariesController(
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] Guid? departmentId, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct,
+        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
-        var q = db.NdLibraries.AsNoTracking().AsQueryable();
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+
+        var q = NdDemoDataFilters.ApplyToLibraries(db.NdLibraries.AsNoTracking().AsQueryable(), demoCtx);
         if (departmentId.HasValue) q = q.Where(l => l.DepartmentId == departmentId);
 
         var libs = await q.OrderByDescending(l => l.CreatedAt).ToListAsync(ct);

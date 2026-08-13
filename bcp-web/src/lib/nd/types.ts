@@ -194,6 +194,7 @@ export type AnalysisRunSummary = {
   dualVerifyFailedCount?: number;
   departmentId?: string | null;
   createdBy?: string | null;
+  createdByIsDemo?: boolean;
   createdAt: string;
   updatedAt?: string;
   submittedToCheckerAt?: string | null;
@@ -260,6 +261,7 @@ export type ResultsData = {
     id: string;
     name: string;
     status: string;
+    workflowEngine?: string | null;
     totalPointsCount: number;
     processedPointsCount: number;
     dualVerifyFailedCount: number;

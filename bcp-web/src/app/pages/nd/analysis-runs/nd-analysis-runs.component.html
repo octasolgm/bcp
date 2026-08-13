@@ -5,7 +5,7 @@
   </div>
   @if (canCreate) {
     <div class="header-actions">
-      <a routerLink="/nd/analyse-v8" class="btn-primary">+ New analysis</a>
+      <a [routerLink]="newAnalysisLink" class="btn-primary">+ New analysis</a>
     </div>
   }
 </div>
@@ -36,7 +36,7 @@
     @if (correctionOnly) {
       <p>Only analyses rolled back directly to the maker appear here (status: pulled back).</p>
     } @else if (canCreate) {
-      <p><a routerLink="/nd/analyse-v8">Create your first analysis run</a></p>
+      <p><a [routerLink]="newAnalysisLink">Create your first analysis run</a></p>
     } @else {
       <p>Nothing to show right now.</p>
     }
@@ -106,7 +106,7 @@
           <th class="sortable col-status" (click)="toggleSort('status')">
             Status <span class="sort-indicator">{{ sortIndicator('status') }}</span>
           </th>
-          <th class="col-actions"></th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>

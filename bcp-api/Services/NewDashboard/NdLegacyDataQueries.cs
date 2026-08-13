@@ -44,10 +44,16 @@ public static class NdLegacyDataQueries
 
     public static string LegacyRegulationExtractionStatus(
         StoredDocument doc,
+        IReadOnlySet<string> cachedHashes) =>
+        LegacyRegulationExtractionStatus(doc.PointCount, doc.FileHash, cachedHashes);
+
+    public static string LegacyRegulationExtractionStatus(
+        int? pointCount,
+        string? fileHash,
         IReadOnlySet<string> cachedHashes)
     {
-        if (doc.PointCount is > 0) return "completed";
-        if (!string.IsNullOrWhiteSpace(doc.FileHash) && cachedHashes.Contains(doc.FileHash))
+        if (pointCount is > 0) return "completed";
+        if (!string.IsNullOrWhiteSpace(fileHash) && cachedHashes.Contains(fileHash))
             return "completed";
         return "pending";
     }
@@ -121,7 +127,8 @@ public static class NdLegacyDataQueries
         int? mediumGaps = null,
         int? lowGaps = null,
         int runningPoints = 0,
-        bool? isActive = null) => new
+        bool? isActive = null,
+        bool createdByIsDemo = false) => new
     {
         id = r.Id,
         source = "nd_analysis",
@@ -139,6 +146,7 @@ public static class NdLegacyDataQueries
         dualVerifyFailedCount = r.DualVerifyFailedCount,
         departmentId = r.DepartmentId,
         createdBy = r.CreatedBy,
+        createdByIsDemo,
         createdAt = r.CreatedAt,
         updatedAt = r.UpdatedAt,
         submittedToCheckerAt = r.SubmittedToCheckerAt,

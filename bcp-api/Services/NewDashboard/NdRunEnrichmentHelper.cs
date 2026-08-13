@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
+using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services;
 
 namespace Reguliq.Api.Services.NewDashboard;
@@ -164,7 +165,8 @@ public static class NdRunEnrichmentHelper
         AppDbContext db,
         IReadOnlyList<NdAnalysisRun> runs,
         CancellationToken ct,
-        bool skipGapStats = false)
+        bool skipGapStats = false,
+        IReadOnlySet<Guid>? demoProfileIds = null)
     {
         if (runs.Count == 0) return [];
 
@@ -201,6 +203,10 @@ public static class NdRunEnrichmentHelper
                 run.UpdatedAt,
                 runningPoints);
 
+            var createdByIsDemo = run.CreatedBy is Guid creatorId
+                && demoProfileIds != null
+                && demoProfileIds.Contains(creatorId);
+
             list.Add(NdLegacyDataQueries.MapNdRunSummary(
                 run,
                 makerName,
@@ -211,7 +217,8 @@ public static class NdRunEnrichmentHelper
                 gapRisk.Medium,
                 gapRisk.Low,
                 runningPoints,
-                isActive));
+                isActive,
+                createdByIsDemo));
         }
 
         return list;
@@ -222,10 +229,13 @@ public static class NdRunEnrichmentHelper
         AppDbContext db,
         bool mineOnly,
         Guid? profileId,
-        CancellationToken ct)
+        CancellationToken ct,
+        NdDemoIsolationContext? demoCtx = null)
     {
         const string deleted = "deleted";
         var runsQ = db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != deleted);
+        if (demoCtx is { Enabled: true })
+            runsQ = NdDemoDataFilters.ApplyToAnalysisRuns(runsQ, demoCtx);
         if (mineOnly && profileId.HasValue)
             runsQ = runsQ.Where(r => r.CreatedBy == profileId.Value);
 
@@ -235,7 +245,14 @@ public static class NdRunEnrichmentHelper
             .FirstOrDefaultAsync(ct);
 
         WorkspaceComplianceTotals totals;
-        if (mineOnly && profileId.HasValue)
+        if (demoCtx is { Enabled: true })
+        {
+            var runIds = await runsQ.Select(r => r.Id).ToListAsync(ct);
+            totals = runIds.Count == 0
+                ? new WorkspaceComplianceTotals(0, 0, 0)
+                : await ComputeComplianceTotalsForRunsAsync(db, runIds, ct);
+        }
+        else if (mineOnly && profileId.HasValue)
         {
             totals = await db.Database.SqlQueryRaw<WorkspaceComplianceTotals>(
                 """
@@ -291,6 +308,38 @@ public static class NdRunEnrichmentHelper
             gapRisk.Low,
             runMeta?.Total ?? 0,
             runMeta?.LastAt);
+    }
+
+    private static async Task<WorkspaceComplianceTotals> ComputeComplianceTotalsForRunsAsync(
+        AppDbContext db,
+        List<Guid> runIds,
+        CancellationToken ct)
+    {
+        var points = await db.NdAnalysisPoints.AsNoTracking()
+            .Where(p => runIds.Contains(p.AnalysisRunId))
+            .Select(p => new { p.FinalStatus, p.LandingAiStatus, p.GoogleAiStatus })
+            .ToListAsync(ct);
+
+        var compliant = 0;
+        var partial = 0;
+        var nonCompliant = 0;
+        foreach (var p in points)
+        {
+            var status = EffectivePointStatus(p.FinalStatus, p.LandingAiStatus, p.GoogleAiStatus);
+            if (status == "compliant") compliant++;
+            else if (status == "partial_compliant") partial++;
+            else if (status == "non_compliant") nonCompliant++;
+        }
+
+        return new WorkspaceComplianceTotals(compliant, partial, nonCompliant);
+    }
+
+    private static string? EffectivePointStatus(string? finalStatus, string landingAiStatus, string googleAiStatus)
+    {
+        if (finalStatus is "compliant" or "partial_compliant" or "non_compliant") return finalStatus;
+        if (landingAiStatus is "compliant" or "partial_compliant" or "non_compliant") return landingAiStatus;
+        if (googleAiStatus is "compliant" or "partial_compliant" or "non_compliant") return googleAiStatus;
+        return null;
     }
 
     private static async Task<Dictionary<Guid, RunPointStatusAggregate>> LoadPointStatusAggregatesAsync(

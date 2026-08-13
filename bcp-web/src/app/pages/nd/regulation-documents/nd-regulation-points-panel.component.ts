@@ -1,4 +1,14 @@
-import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  Input,
+  OnChanges,
+  Output,
+  SimpleChanges,
+  inject,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -11,11 +21,12 @@ import {
   type GovPoint,
   type GovPointChapterGroup,
 } from '../../../../lib/gov-point-filter';
+import { formatPointCountSummary } from '../../../../lib/library-points-utils';
 import {
-  analyzeGovPointSet,
-  formatPointCountSummary,
-} from '../../../../lib/library-points-utils';
-import { regulationPointToGovPoint } from '../../../../lib/regulation-catalog-utils';
+  computeRegulationPointStats,
+  filterRegulationPointsForDisplay,
+  regulationPointToGovPoint,
+} from '../../../../lib/regulation-catalog-utils';
 import type { RegulationPoint } from '../../../../lib/nd/types';
 import { sortByPointRef } from '../../../../lib/nd/list-utils';
 import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd/regulation-pdf-page';
@@ -26,12 +37,17 @@ import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd
   imports: [CommonModule, FormsModule],
   templateUrl: './nd-regulation-points-panel.component.html',
   styleUrl: './nd-regulation-points-panel.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NdRegulationPointsPanelComponent implements OnChanges {
+  private readonly cdr = inject(ChangeDetectorRef);
+
   @Input() docName = '';
   @Input() points: RegulationPoint[] = [];
   @Input() source = '';
   @Input() loading = false;
+  /** Authoritative count from regulation document API (list/detail). Avoids inflating UI when duplicate rows exist. */
+  @Input() reportedPointCount: number | null = null;
   @Input() highlightPointNumber = '';
   @Input() canOpenSource = false;
   @Output() openSourcePage = new EventEmitter<number>();
@@ -42,43 +58,62 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   expandedPoints = new Set<string>();
   chapterGroups: GovPointChapterGroup[] = [];
   private allGovPoints: GovPoint[] = [];
+  private pointsByNumber = new Map<string, RegulationPoint>();
+  private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
   readonly previewLen = 120;
   storedCount = 0;
   analyseCount = 0;
   skippedCount = 0;
   skippedReasons = new Map<string, string>();
   introductionCount = 0;
+  building = false;
 
   readonly formatGovPointDisplayId = formatGovPointDisplayId;
   readonly formatSectionGroupLabel = formatSectionGroupLabel;
   readonly formatChapterLabel = formatChapterLabel;
 
-  ngOnChanges(): void {
+  ngOnChanges(changes: SimpleChanges): void {
     const highlight = this.highlightPointNumber.trim();
-    if (highlight) {
+    if (highlight && changes['highlightPointNumber']) {
       this.search = highlight;
       this.expandedChapters.clear();
     }
-    this.rebuildGroups();
-    if (highlight) {
-      for (const ch of this.chapterGroups) {
-        this.expandedChapters.add(ch.chapter);
-        for (const sec of ch.sections) {
-          if (this.showSectionBar(ch.sections, sec.key, ch.chapter)) {
-            this.expandedSections.add(this.sectionId(ch.chapter, sec.key));
-          }
-          for (const p of sec.points) {
-            if (p.point_id.trim().toLowerCase() === highlight.toLowerCase()) {
-              this.expandedPoints.add(p.point_id);
-            }
-          }
-        }
-      }
+
+    if (changes['loading'] && this.loading) {
+      this.building = false;
+      this.cdr.markForCheck();
     }
+
+    const pointsChanged = !!changes['points'] || !!changes['reportedPointCount'] || !!changes['docName'];
+    if (!pointsChanged && !changes['highlightPointNumber'] && !changes['loading']) {
+      return;
+    }
+
+    if (this.rebuildTimer) {
+      clearTimeout(this.rebuildTimer);
+      this.rebuildTimer = null;
+    }
+
+    // Yield so the network response can clear the spinner before heavy catalog work.
+    if (this.points.length > 80 && pointsChanged) {
+      this.building = true;
+      this.cdr.markForCheck();
+      this.rebuildTimer = setTimeout(() => {
+        this.rebuildTimer = null;
+        this.rebuildGroups(highlight);
+        this.building = false;
+        this.cdr.markForCheck();
+      }, 0);
+      return;
+    }
+
+    this.rebuildGroups(highlight);
+    this.building = false;
+    this.cdr.markForCheck();
   }
 
   get statusLabel(): string {
-    if (this.loading) return 'Loading points…';
+    if (this.loading || this.building) return 'Loading points…';
     if (!this.storedCount) return 'No points extracted yet.';
     const base = formatPointCountSummary({
       storedCount: this.storedCount,
@@ -132,6 +167,7 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
       this.expandedChapters.add(chapter);
       this.defaultExpandSectionsForChapter(chapter);
     }
+    this.cdr.markForCheck();
   }
 
   expandAll(): void {
@@ -143,28 +179,38 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
         }
       }
     }
+    this.cdr.markForCheck();
   }
 
   collapseAll(): void {
     this.search = '';
     this.expandedChapters.clear();
     this.expandedSections.clear();
+    this.cdr.markForCheck();
   }
 
   expandAllDetails(): void {
+    // Only expand details for currently expanded chapters — full catalog expand freezes the UI.
     for (const ch of this.chapterGroups) {
+      if (!this.isChapterExpanded(ch.chapter)) continue;
       for (const sec of ch.sections) {
+        if (
+          this.showSectionBar(ch.sections, sec.key, ch.chapter) &&
+          !this.isSectionExpanded(ch.chapter, sec.key)
+        ) {
+          continue;
+        }
         for (const p of sec.points) {
-          if (this.isDetailLong(p)) {
-            this.expandedPoints.add(p.point_id);
-          }
+          if (this.showDetail(p)) this.expandedPoints.add(p.point_id);
         }
       }
     }
+    this.cdr.markForCheck();
   }
 
   collapseAllDetails(): void {
     this.expandedPoints.clear();
+    this.cdr.markForCheck();
   }
 
   sectionId(chapter: string, sectionKey: string): string {
@@ -181,10 +227,16 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     const id = this.sectionId(chapter, sectionKey);
     if (this.expandedSections.has(id)) this.expandedSections.delete(id);
     else this.expandedSections.add(id);
+    this.cdr.markForCheck();
   }
 
   get canExpandCollapse(): boolean {
-    return !this.loading && this.chapterGroups.length > 0;
+    return !this.loading && !this.building && this.chapterGroups.length > 0;
+  }
+
+  onSearchChange(value: string): void {
+    this.search = value;
+    this.cdr.markForCheck();
   }
 
   showSectionBar(sections: GovPointChapterGroup['sections'], key: string, chapter: string): boolean {
@@ -229,6 +281,16 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     return '';
   }
 
+  pointDetailParagraphs(p: GovPoint): string[] {
+    const text = this.pointDetail(p).trim();
+    if (!text) return [];
+    const byBlank = text.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean);
+    if (byBlank.length > 1) return byBlank;
+    const byLine = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    if (byLine.length > 4) return byLine;
+    return [text];
+  }
+
   showDetail(p: GovPoint): boolean {
     return this.pointDetail(p).length > 0;
   }
@@ -249,6 +311,7 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     } else {
       this.expandedPoints.add(pointId);
     }
+    this.cdr.markForCheck();
   }
 
   isComparablePoint(pointId: string): boolean {
@@ -290,45 +353,58 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     if (page) this.openSourcePage.emit(page);
   }
 
-  private rebuildGroups(): void {
+  private rebuildGroups(highlight = ''): void {
+    const displayPoints = filterRegulationPointsForDisplay(this.points);
+    this.pointsByNumber = new Map(
+      displayPoints.map((p) => [p.pointNumber.trim().toLowerCase(), p]),
+    );
+    const stats = computeRegulationPointStats(displayPoints, this.docName, this.reportedPointCount);
     const rawGovPoints = sortByPointRef(
-      this.points.map((p) => regulationPointToGovPoint(p)),
+      displayPoints.map((p) => regulationPointToGovPoint(p)),
       (p) => p.point_id || p.section || '',
     );
     this.allGovPoints = buildGovPointDisplayCatalog(rawGovPoints);
-    const analyzed = analyzeGovPointSet(rawGovPoints, { docName: this.docName });
-    this.storedCount = analyzed.storedCount;
-    this.analyseCount = analyzed.analyseCount;
-    this.skippedCount = analyzed.skippedCount;
-    this.introductionCount = this.points.filter(
-      (p) =>
-        p.isIntroductionPoint ||
-        analyzed.skipped.some(
-          (s) =>
-            s.point.point_id.trim() === p.pointNumber.trim() &&
-            (s.reason.includes('§1') || s.reason.includes('introduction')),
-        ),
+    this.storedCount = stats.storedCount;
+    this.analyseCount = stats.analyseCount;
+    this.skippedCount = stats.skippedCount;
+    const skippedIntroIds = new Set(
+      stats.skipped
+        .filter((s) => s.reason.includes('§1') || s.reason.includes('introduction'))
+        .map((s) => s.point.point_id.trim().toLowerCase()),
+    );
+    this.introductionCount = displayPoints.filter(
+      (p) => p.isIntroductionPoint || skippedIntroIds.has(p.pointNumber.trim().toLowerCase()),
     ).length;
     this.skippedReasons = new Map(
-      analyzed.skipped.map((s) => [s.point.point_id.trim(), s.reason]),
+      stats.skipped.map((s) => [s.point.point_id.trim(), s.reason]),
     );
     this.chapterGroups = groupGovPointsForPicker(rawGovPoints);
     this.expandedChapters.clear();
     this.expandedSections.clear();
     this.expandedPoints.clear();
-    if (this.chapterGroups.length) {
+
+    if (highlight) {
+      const hl = highlight.toLowerCase();
       for (const ch of this.chapterGroups) {
-        if (ch.chapter === '1' || ch.chapter === 'intro') {
-          this.expandedChapters.add(ch.chapter);
+        for (const sec of ch.sections) {
+          for (const p of sec.points) {
+            if (p.point_id.trim().toLowerCase() !== hl) continue;
+            this.expandedChapters.add(ch.chapter);
+            if (this.showSectionBar(ch.sections, sec.key, ch.chapter)) {
+              this.expandedSections.add(this.sectionId(ch.chapter, sec.key));
+            }
+            this.expandedPoints.add(p.point_id);
+          }
         }
       }
+      return;
+    }
+
+    // Default: first chapter only, collapsed details — expanding all ~400 full texts freezes the tab.
+    if (this.chapterGroups.length) {
       const first = this.chapterGroups[0];
       this.expandedChapters.add(first.chapter);
-      for (const sec of first.sections) {
-        if (this.showSectionBar(first.sections, sec.key, first.chapter)) {
-          this.expandedSections.add(this.sectionId(first.chapter, sec.key));
-        }
-      }
+      this.defaultExpandSectionsForChapter(first.chapter);
     }
   }
 
@@ -343,7 +419,7 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   }
 
   pointMeta(pointId: string): RegulationPoint | undefined {
-    return this.points.find((p) => p.pointNumber.trim() === pointId.trim());
+    return this.pointsByNumber.get(pointId.trim().toLowerCase());
   }
 
   private matchesSearch(p: GovPoint, q: string): boolean {

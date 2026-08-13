@@ -6,26 +6,39 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
+using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services.LandingAi;
+using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Pdf;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard;
+
+public enum DemoRegulationPipelineMode
+{
+    ParseOnly,
+    ExtractOnly,
+    ParseThenExtract,
+}
 
 public class NdRegulationUploadService(
     AppDbContext db,
     SupabaseStorageService storage,
     NdStoredDocumentUploadService uploadPrep,
     LandingAiGovExtractService govExtract,
+    LandingAiDocumentParseService documentParse,
     LandingAiCacheRepository parseCache,
     NdRegulationPointRepairService pointPageRepair,
     NdDocumentPageReferenceResolver pageResolver,
     IOptions<LandingAiOptions> landingAiOptions,
     IServiceScopeFactory scopeFactory,
+    NdDemoUserDirectory demoDirectory,
     ILogger<NdRegulationUploadService> logger)
 {
     private static readonly ConcurrentDictionary<Guid, byte> RunningExtracts = new();
+    private static readonly ConcurrentDictionary<Guid, byte> RunningParses = new();
+    private static readonly ConcurrentDictionary<Guid, byte> RunningDemoRegulationJobs = new();
     private static readonly ConcurrentDictionary<Guid, CancellationTokenSource> ExtractCancellation = new();
     /// <summary>No in-memory job and status still processing — likely API restart or aborted run.</summary>
     private static readonly TimeSpan StaleProcessingAfter = TimeSpan.FromMinutes(3);
@@ -168,6 +181,96 @@ public class NdRegulationUploadService(
         return true;
     }
 
+    /// <summary>Parse regulation PDF to markdown (Landing AI) without extracting points.</summary>
+    public async Task<NdRegulationDocument> ParseByRegulationIdAsync(
+        Guid regulationId,
+        Guid userId,
+        CancellationToken ct)
+    {
+        var regDoc = await ResolveOrCreateRegulationRowAsync(regulationId, userId, ct);
+        await ThrowIfLiveAiForbiddenAsync(userId, regDoc.CreatedBy, ct);
+        if (string.Equals(regDoc.ExtractionStatus, "manual", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Manual regulation entries do not require parse.");
+
+        if (string.Equals(regDoc.ExtractionStatus, "processing", StringComparison.OrdinalIgnoreCase)
+            && RunningExtracts.ContainsKey(regDoc.Id))
+            throw new InvalidOperationException(
+                "Extraction is running for this document. Wait for it to finish or stop it first.");
+
+        if (!RunningParses.TryAdd(regDoc.Id, 0))
+            throw new InvalidOperationException(
+                "Parse is already running for this document. Wait for the current run to finish.");
+
+        try
+        {
+            regDoc.ExtractionStatus = "processing";
+            regDoc.ExtractionProgressLabel = "Parsing document…";
+            regDoc.ExtractionProgressPct = 5;
+            regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+
+            var (bytes, fileName) = await DownloadRegulationBytesAsync(regDoc, ct);
+            var landingOpts = landingAiOptions.Value;
+            var cacheKey = await ResolveExtractionCacheKeyAsync(db, regDoc, ct);
+            var fileHash = LandingAiCacheRepository.HashBuffer(bytes);
+
+            if (regDoc.StoredDocumentId is Guid storedId)
+            {
+                var stored = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct);
+                if (stored != null && string.IsNullOrWhiteSpace(stored.FileHash))
+                {
+                    stored.FileHash = fileHash;
+                    stored.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+            }
+
+            string markdown;
+            var cached = await parseCache.GetParseCacheAsync(cacheKey, ct);
+            if (!string.IsNullOrWhiteSpace(cached?.Markdown))
+            {
+                markdown = cached.Markdown;
+            }
+            else
+            {
+                async Task ReportParseProgress(ExtractionProgressUpdate update)
+                {
+                    regDoc.ExtractionProgressLabel = update.Label;
+                    regDoc.ExtractionProgressPct = update.Percent;
+                    regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+                    await db.SaveChangesAsync(ct);
+                }
+
+                markdown = await documentParse.ParseToMarkdownAsync(
+                    bytes, fileName, ReportParseProgress, null, ct);
+                await parseCache.SaveParseCacheAsync(
+                    cacheKey, fileName, markdown, landingOpts.ParseModel, ct);
+            }
+
+            regDoc.ExtractionMarkdown = markdown;
+            regDoc.ExtractionStatus = "parsed";
+            regDoc.ExtractionProgressLabel = null;
+            regDoc.ExtractionProgressPct = null;
+            regDoc.ExtractionParseChunkCompleted = null;
+            regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+            if (regDoc.StoredDocumentId is Guid storedIdAfterParse)
+            {
+                var storedAfterParse = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedIdAfterParse, ct);
+                if (storedAfterParse != null)
+                {
+                    storedAfterParse.ParseStatus = "parsed";
+                    storedAfterParse.ParseError = null;
+                    storedAfterParse.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+            }
+            await db.SaveChangesAsync(ct);
+            return regDoc;
+        }
+        finally
+        {
+            RunningParses.TryRemove(regDoc.Id, out _);
+        }
+    }
+
     /// <summary>Resolve ND or legacy stored-document id and queue Landing AI extraction (returns immediately).</summary>
     public async Task<NdRegulationDocument> ExtractByRegulationIdAsync(
         Guid regulationId,
@@ -175,6 +278,7 @@ public class NdRegulationUploadService(
         CancellationToken ct)
     {
         var regDoc = await ResolveOrCreateRegulationRowAsync(regulationId, userId, ct);
+        await ThrowIfLiveAiForbiddenAsync(userId, regDoc.CreatedBy, ct);
         await MarkStaleProcessingAsFailedAsync(regDoc, ct);
         var isResume = string.Equals(regDoc.ExtractionStatus, "paused", StringComparison.OrdinalIgnoreCase);
         if (!isResume)
@@ -195,6 +299,27 @@ public class NdRegulationUploadService(
 
         var regDoc = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == docId, ct)
             ?? throw new InvalidOperationException("Regulation document not found.");
+
+        var demoDirectory = scope.ServiceProvider.GetRequiredService<NdDemoUserDirectory>();
+        var demoInterception = scope.ServiceProvider.GetRequiredService<NdDemoInterceptionService>();
+        var demoCtx = await demoDirectory.ResolveContextAsync(new JwtUser(userId, null), ct);
+        if (demoInterception.CanMutateRegulationDocument(regDoc, demoCtx))
+        {
+            try
+            {
+                await demoInterception.SimulateRegulationExtractAsync(innerDb, regDoc, userId, demoCtx, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Demo regulation extraction failed for {DocId}", docId);
+                regDoc.ExtractionStatus = "failed";
+                regDoc.ExtractionProgressLabel = "Extraction failed. Run Extract to try again.";
+                regDoc.ExtractionProgressPct = null;
+                regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+                await innerDb.SaveChangesAsync(ct);
+            }
+            return;
+        }
 
         byte[] bytes;
         string fileName;
@@ -240,6 +365,67 @@ public class NdRegulationUploadService(
             regDoc.UpdatedAt = DateTimeOffset.UtcNow;
             await innerDb.SaveChangesAsync(ct);
         }
+    }
+
+    /// <summary>Background demo parse/extract from DB seed — same status progression as live AI, no Landing AI.</summary>
+    public bool QueueDemoRegulationJob(Guid docId, Guid userId, DemoRegulationPipelineMode mode)
+    {
+        if (!RunningDemoRegulationJobs.TryAdd(docId, 0))
+        {
+            logger.LogInformation("Demo regulation job already running for {DocId} — skipping duplicate queue", docId);
+            return false;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var innerDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var demo = scope.ServiceProvider.GetRequiredService<NdDemoInterceptionService>();
+
+                if (mode is DemoRegulationPipelineMode.ParseOnly or DemoRegulationPipelineMode.ParseThenExtract)
+                {
+                    var parseDoc = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == docId);
+                    if (parseDoc != null)
+                        await demo.SimulateRegulationParseAsync(innerDb, parseDoc, userId, CancellationToken.None);
+                }
+
+                if (mode is DemoRegulationPipelineMode.ExtractOnly or DemoRegulationPipelineMode.ParseThenExtract)
+                {
+                    var extractDoc = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == docId);
+                    if (extractDoc != null)
+                        await demo.SimulateRegulationExtractAsync(innerDb, extractDoc, userId, CancellationToken.None);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Demo regulation pipeline failed for {DocId}", docId);
+                try
+                {
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    var innerDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var regDoc = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == docId);
+                    if (regDoc != null)
+                    {
+                        regDoc.ExtractionStatus = "failed";
+                        regDoc.ExtractionProgressLabel = "Processing failed. Try Parse or Extract again.";
+                        regDoc.ExtractionProgressPct = null;
+                        regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+                        await innerDb.SaveChangesAsync();
+                    }
+                }
+                catch (Exception markEx)
+                {
+                    logger.LogWarning(markEx, "Could not mark demo regulation job failed for {DocId}", docId);
+                }
+            }
+            finally
+            {
+                RunningDemoRegulationJobs.TryRemove(docId, out _);
+            }
+        });
+        return true;
     }
 
     private void QueueExtractJob(Guid docId, Guid userId)
@@ -318,6 +504,12 @@ public class NdRegulationUploadService(
         if (!string.Equals(regDoc.ExtractionStatus, "processing", StringComparison.OrdinalIgnoreCase))
             return;
         if (RunningExtracts.ContainsKey(regDoc.Id))
+            return;
+        if (RunningParses.ContainsKey(regDoc.Id))
+            return;
+        if (RunningDemoRegulationJobs.ContainsKey(regDoc.Id))
+            return;
+        if (NdDemoInterceptionService.IsRegulationDemoJobRunning(regDoc.Id))
             return;
         if (DateTimeOffset.UtcNow - regDoc.UpdatedAt < StaleProcessingAfter)
             return;
@@ -556,6 +748,28 @@ public class NdRegulationUploadService(
         await dbCtx.SaveChangesAsync(ct);
     }
 
+    private async Task<(byte[] Bytes, string FileName)> DownloadRegulationBytesAsync(
+        NdRegulationDocument regDoc,
+        CancellationToken ct)
+    {
+        if (regDoc.StoredDocumentId is Guid storedId)
+        {
+            var stored = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct)
+                ?? throw new InvalidOperationException("Stored document not found.");
+            var bytes = await storage.DownloadAsync(stored.StoragePath, ct);
+            var fileName = stored.OriginalFileName ?? Path.GetFileName(stored.StoragePath);
+            return (bytes, fileName);
+        }
+
+        if (!string.IsNullOrWhiteSpace(regDoc.FilePath))
+        {
+            var bytes = await storage.DownloadAsync(regDoc.FilePath, ct);
+            return (bytes, regDoc.Name + ".pdf");
+        }
+
+        throw new InvalidOperationException("No file available for this regulation.");
+    }
+
     private static async Task<string> ResolveExtractionCacheKeyAsync(
         AppDbContext dbCtx,
         NdRegulationDocument regDoc,
@@ -607,5 +821,15 @@ public class NdRegulationUploadService(
         foreach (var c in Path.GetInvalidFileNameChars())
             baseName = baseName.Replace(c, '_');
         return baseName;
+    }
+
+    private async Task ThrowIfLiveAiForbiddenAsync(
+        Guid actingUserId,
+        Guid? resourceOwnerId,
+        CancellationToken ct)
+    {
+        if (await demoDirectory.ShouldSimulateForProfilesAsync(actingUserId, resourceOwnerId, ct))
+            throw new InvalidOperationException(
+                "Demo accounts and demo-owned documents use simulated processing only (no live AI).");
     }
 }

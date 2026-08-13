@@ -4,8 +4,15 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { isNdRunProcessing } from '../../../lib/nd/nd-run-activity';
 import { NdApiService } from '../../services/nd/nd-api.service';
+import { NdWorkspaceNavService } from '../../services/nd/nd-workspace-nav.service';
+import { bumpsForAnalysisRunSoftDelete } from '../../../lib/nd/nav-badge-bumps';
+import {
+  isPermanentDemoAnalysisDelete,
+  wasAnalysisRunPermanentlyDeleted,
+} from '../../../lib/nd/analysis-run-delete';
 import { shellRoute } from '../../services/app-route-prefix';
 import { isLegacyAnalysisRun, ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../lib/nd/run-links';
+import { ndNewAnalysisRoute } from '../../../lib/nd/demo-analysis-routes';
 import {
   analysisRunWorkflowLabel,
   analysisRunSubmittedByLabel,
@@ -44,6 +51,7 @@ type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'st
 export class InProgressComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly ndApi = inject(NdApiService);
+  private readonly workspaceNav = inject(NdWorkspaceNavService);
   private readonly auth = inject(NdAuthService);
   private readonly toast = inject(ToastService);
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -64,7 +72,11 @@ export class InProgressComponent implements OnInit, OnDestroy {
   historyRunStats: RunGapStatsSummary | null = null;
 
   get newAnalysisPath(): string {
-    return shellRoute(this.router, '/analyse-v8');
+    return shellRoute(this.router, '/analyse-regul-full');
+  }
+
+  private runLinkOpts(): { demoViewer: boolean } {
+    return { demoViewer: this.auth.isDemoViewer() };
   }
 
   get canCreate(): boolean {
@@ -175,11 +187,11 @@ export class InProgressComponent implements OnInit, OnDestroy {
   }
 
   runLink(run: AnalysisRunSummary): string[] {
-    return ndAnalysisRunLink(run, this.auth.getRole());
+    return ndAnalysisRunLink(run, this.auth.getRole(), this.runLinkOpts());
   }
 
   runQuery(run: AnalysisRunSummary): Record<string, string> | undefined {
-    return ndAnalysisRunQuery(run, this.auth.getRole());
+    return ndAnalysisRunQuery(run, this.auth.getRole(), this.runLinkOpts());
   }
 
   workflowStatusLabel = analysisRunWorkflowLabel;
@@ -227,18 +239,46 @@ export class InProgressComponent implements OnInit, OnDestroy {
   async deleteRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
     event?.stopPropagation();
     if (!canDeleteRun(run, this.auth.getRole(), this.auth.profile()?.id)) return;
-    if (!confirm(`Delete "${run.name}"? It will be hidden from the workspace but can be restored by a super admin.`)) {
+    const permanentDemoDelete = isPermanentDemoAnalysisDelete(run, this.auth.isDemoViewer());
+    const confirmMsg = permanentDemoDelete
+      ? `Permanently delete demo analysis "${run.name}"? It will be removed from the database and cannot be restored.`
+      : `Delete "${run.name}"? It will be hidden from the workspace but can be restored by a super admin.`;
+    if (!confirm(confirmMsg)) {
       return;
     }
     this.deletingId = run.id;
+    const bumps = bumpsForAnalysisRunSoftDelete(
+      run,
+      this.auth.getRole() === 'super_admin',
+      !permanentDemoDelete,
+    );
+    this.workspaceNav.bumpNavBadges(bumps);
+    this.allRuns = this.allRuns.filter((r) => r.id !== run.id);
+    this.deletingId = null;
     const res = await this.ndApi.softDeleteAnalysisRun(run.id);
     if (res.success) {
-      this.allRuns = this.allRuns.filter((r) => r.id !== run.id);
-      this.toast.show(`"${run.name}" removed.`, 'success');
+      const permanentlyDeleted =
+        permanentDemoDelete || wasAnalysisRunPermanentlyDeleted(res);
+      this.toast.show(
+        permanentlyDeleted ? `"${run.name}" permanently removed.` : `"${run.name}" removed.`,
+        'success',
+      );
+      if (permanentlyDeleted) {
+        this.workspaceNav.notifyAnalysisRunPermanentlyDeleted(run);
+      } else {
+        this.workspaceNav.notifyAnalysisRunSoftDeleted(run);
+      }
+      window.setTimeout(() => this.workspaceNav.requestNavBadgeRefresh(), 2500);
     } else {
       this.toast.show(res.message ?? 'Delete failed', 'error');
+      this.allRuns = [...this.allRuns, run].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      this.workspaceNav.bumpNavBadges({
+        analysisRunsAll: bumps.analysisRunsAll ? -bumps.analysisRunsAll : undefined,
+        analysisRunsInProgress: bumps.analysisRunsInProgress ? -bumps.analysisRunsInProgress : undefined,
+        analysisRunsCorrection: bumps.analysisRunsCorrection ? -bumps.analysisRunsCorrection : undefined,
+        adminDeletedRuns: bumps.adminDeletedRuns ? -bumps.adminDeletedRuns : undefined,
+      });
     }
-    this.deletingId = null;
   }
 
   async stopRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
@@ -257,6 +297,10 @@ export class InProgressComponent implements OnInit, OnDestroy {
     this.stoppingId = null;
     if (res.success) {
       this.toast.show('Analysis stopped', 'warning');
+      this.workspaceNav.bumpNavBadges({
+        analysisRunsInProgress: isNdRunProcessing(run) ? -1 : undefined,
+      });
+      this.workspaceNav.requestNavBadgeRefresh();
       await this.load();
     } else {
       this.toast.show(res.message ?? 'Stop signalled — refresh in a moment', 'warning');

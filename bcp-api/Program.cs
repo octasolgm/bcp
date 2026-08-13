@@ -186,6 +186,7 @@ builder.Services.AddHttpClient(nameof(Reguliq.Api.Infrastructure.NewDashboard.Su
     c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 });
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationUploadService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdCbuaeSection5LandingAiPatch>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationPointRepairService>();
 builder.Services.AddScoped<Reguliq.Api.Services.Pdf.PdfNativePageDocumentLoader>();
 builder.Services.AddScoped<Reguliq.Api.Services.Pdf.NdDocumentPageReferenceResolver>();
@@ -196,6 +197,11 @@ builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdInternalDocumentS
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisProcessor>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulAnalysisProcessor>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.DemoAnalysisSeedService>();
+builder.Services.Configure<Reguliq.Api.Services.NewDashboard.Demo.NdDemoIsolationOptions>(
+    builder.Configuration.GetSection("Bcp"));
+builder.Services.AddSingleton<Reguliq.Api.Services.NewDashboard.Demo.NdDemoUserDirectory>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.Demo.NdDemoWorkspaceService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.Demo.NdDemoInterceptionService>();
 builder.Services.AddHttpClient();
 
 var ndJwtSecret = BcpConfiguration.GetString(builder.Configuration, "Supabase:JwtSecret", "SUPABASE_JWT_SECRET");
@@ -289,6 +295,16 @@ file static class StartupBootstrap
             if (schemaPresent)
             {
                 await NdIncrementalSchemaBootstrap.EnsureAsync(db, CancellationToken.None);
+                try
+                {
+                    var demoWorkspace = scope.ServiceProvider
+                        .GetRequiredService<Reguliq.Api.Services.NewDashboard.Demo.NdDemoWorkspaceService>();
+                    await demoWorkspace.EnsureTemplatesSeededAsync(CancellationToken.None);
+                }
+                catch (Exception seedEx)
+                {
+                    logger.LogWarning(seedEx, "Demo analysis template seed skipped.");
+                }
                 state.SetStatus("ready");
                 logger.LogInformation("Live schema detected — API ready for login.");
 
