@@ -96,6 +96,8 @@ export type RegulationDocument = {
   extractionProgressPct?: number | null;
   extractionParseChunkCompleted?: number | null;
   pointCount: number;
+  /** Distinct source PDF pages referenced by extracted points. */
+  pageCount?: number | null;
   extractedAt?: string | null;
   createdAt: string;
   updatedAt?: string | null;
@@ -273,6 +275,7 @@ export type ResultsData = {
   reviews: { id: string; reviewerRole: string; action: string; overallComment?: string; createdAt: string }[];
   comments: { id: string; analysisPointId: string; comment: string; createdAt: string }[];
   actionItemReviews?: ActionItemReviewEntry[];
+  actionPlans?: import('./action-plan').ActionPlanEntry[];
   tempReviewComments?: TempPointReviewComment[];
 };
 

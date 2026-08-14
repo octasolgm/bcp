@@ -471,12 +471,13 @@ export function serializeCapGaps(gaps: CapGap[]): string {
 
 export function referenceBlockBadgeLabel(block: ReferenceComplianceBlock): string {
   const tier = referenceBlockToTier(block);
-  if (block.status === 'Non-Compliant') return 'NON-COMPLIANT';
-  if (block.status === 'Partial Compliant') return 'PARTIAL COMPLIANT';
-  if (block.status === 'Compliant') {
+  const status = block.status.trim().toLowerCase();
+  if (/\bnon[- ]?compliant\b/.test(status)) return 'NON COMPLIANT';
+  if (status.includes('partial')) return 'PARTIAL COMPLIANT';
+  if (status === 'compliant') {
     const confMatch = block.confidence.match(/(\d+)/);
     const conf = confMatch ? Number(confMatch[1]) : null;
-    return conf === 100 ? 'FULLY COMPLIANT' : `COMPLIANT · ${conf ?? '?'}%`;
+    return conf === 100 ? 'COMPLIANT' : `COMPLIANT · ${conf ?? '?'}%`;
   }
   return TIER_UI[tier].badgeLabel;
 }

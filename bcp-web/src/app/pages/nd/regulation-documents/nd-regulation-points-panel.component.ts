@@ -31,6 +31,9 @@ import type { RegulationPoint } from '../../../../lib/nd/types';
 import { sortByPointRef } from '../../../../lib/nd/list-utils';
 import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd/regulation-pdf-page';
 
+/** Above this many points, auto-expanding every full text makes the panel unresponsive. */
+const MaxAutoExpandPoints = 250;
+
 @Component({
   selector: 'app-nd-regulation-points-panel',
   standalone: true,
@@ -400,12 +403,19 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
       return;
     }
 
-    // Default: first chapter only, collapsed details — expanding all ~400 full texts freezes the tab.
-    if (this.chapterGroups.length) {
-      const first = this.chapterGroups[0];
-      this.expandedChapters.add(first.chapter);
-      this.defaultExpandSectionsForChapter(first.chapter);
+    if (!this.chapterGroups.length) return;
+
+    // Everything open by default. Very large catalogs render thousands of full texts at
+    // once and freeze the tab, so those fall back to the first chapter with details closed.
+    if (rawGovPoints.length <= MaxAutoExpandPoints) {
+      this.expandAll();
+      this.expandAllDetails();
+      return;
     }
+
+    const first = this.chapterGroups[0];
+    this.expandedChapters.add(first.chapter);
+    this.defaultExpandSectionsForChapter(first.chapter);
   }
 
   private defaultExpandSectionsForChapter(chapter: string): void {

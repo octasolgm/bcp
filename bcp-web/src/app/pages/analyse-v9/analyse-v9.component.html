@@ -1150,22 +1150,22 @@
 
     <div class="summary-row">
       <div class="summary-card compliant">
-        <span class="label">Compliance</span>
+        <span class="label">Compliant</span>
         <strong>{{ inlineGapSummary.compliant }}</strong>
       </div>
       <div class="summary-card partial_compliant">
-        <span class="label">Partial compliance</span>
+        <span class="label">Partial Compliant</span>
         <strong>{{ inlineGapSummary.partialCompliant }}</strong>
       </div>
       <div class="summary-card non_compliant">
-        <span class="label">Non-compliance</span>
+        <span class="label">Non Compliant</span>
         <strong>{{ inlineGapSummary.nonCompliant }}</strong>
       </div>
     </div>
 
     @if (activeNdRunId && nonComplianceGapPoints.length) {
       <div class="gap-verify-panel card-surface">
-        <h3>Non-compliance &amp; partial points — gap verification</h3>
+        <h3>Non compliant &amp; partial compliant points — gap verification</h3>
         <p class="gap-verify-hint">These points are not fully compliant. Expand each row to review AI gaps, upload manual gap analysis, and rerun for that point only.</p>
         <ul class="gap-verify-list">
           @for (row of nonComplianceGapPoints; track row.pointId) {
@@ -1184,13 +1184,13 @@
         All ({{ inlineGapItems.length }})
       </button>
       <button type="button" [class.active]="inlineGapFilter === 'compliant'" (click)="setInlineGapFilter('compliant')">
-        Compliance
+        Compliant
       </button>
       <button type="button" [class.active]="inlineGapFilter === 'partial_compliant'" (click)="setInlineGapFilter('partial_compliant')">
-        Partial compliance
+        Partial Compliant
       </button>
       <button type="button" [class.active]="inlineGapFilter === 'non_compliant'" (click)="setInlineGapFilter('non_compliant')">
-        Non-compliance
+        Non Compliant
       </button>
     </div>
 

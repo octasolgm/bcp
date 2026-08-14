@@ -32,6 +32,18 @@ const REGULATION_UPLOAD_TIMEOUT_MS = 180_000;
 const REGULATION_PAGE_REPAIR_TIMEOUT_MS = 300_000;
 /** Landing AI PDF/Word parse — large manuals can take several minutes. */
 const INTERNAL_PARSE_TIMEOUT_MS = 900_000;
+/** Demo workspace clear cascades across runs, points and documents in one request. */
+const DEMO_CLEAR_TIMEOUT_MS = 300_000;
+
+/** Base the API-unreachable hint on the environment actually configured, not a hardcoded port. */
+function apiUnreachableMessage(): string {
+  const base = (environment.ndApiUrl || environment.apiUrl || '').replace(/\/+$/, '');
+  const isLocal = /localhost|127\.0\.0\.1/i.test(base);
+  const where = base ? ` at ${base}` : '';
+  return isLocal
+    ? `Cannot reach the API${where}. Start it in PowerShell: cd bcp-api; .\\scripts\\restart-api.ps1 — then refresh this page.`
+    : `Cannot reach the API${where}. Check your connection and refresh this page; if it persists the service may be restarting.`;
+}
 
 function friendlyNdApiError(raw: string, status?: number): string {
   if (
@@ -39,10 +51,7 @@ function friendlyNdApiError(raw: string, status?: number): string {
     raw.includes('Unknown Error') ||
     raw.includes('Http failure response')
   ) {
-    return (
-      'Cannot reach the API at http://localhost:5100. ' +
-      'Start it in PowerShell: cd bcp-api; .\\scripts\\restart-api.ps1 — then refresh this page.'
-    );
+    return apiUnreachableMessage();
   }
   if (
     raw.includes('EMAXCONNSESSION') ||
@@ -134,6 +143,39 @@ export type NdWorkspaceNavCounts = {
   checkerQueue: number;
   reviewerQueue: number;
   deletedAnalysisRuns: number;
+  inboxPending: number;
+};
+
+export type NdInboxFilter = 'all' | 'pending' | 'resolved' | 'overdue';
+
+export type NdInboxItem = {
+  id: string;
+  analysisRunId: string;
+  analysisPointId: string;
+  gapIndex: number;
+  runName: string;
+  runStatus?: string | null;
+  workflowEngine?: string | null;
+  clauseNo?: string | null;
+  clauseTitle?: string | null;
+  actionPlan: string;
+  status: string;
+  priority: string;
+  priorityScore: number;
+  targetDate?: string | null;
+  overdue: boolean;
+  resolvedAt?: string | null;
+  updatedAt?: string | null;
+  assignedDirectly: boolean;
+  assignedVia: string;
+  owners: { type: string; label: string }[];
+};
+
+export type NdActionPlanInbox = {
+  counts: { total: number; pending: number; resolved: number; overdue: number };
+  departmentId?: string | null;
+  departmentName?: string | null;
+  items: NdInboxItem[];
 };
 
 export type NdDashboardStats = {
@@ -303,7 +345,7 @@ export class NdApiService {
       libraries: number;
       analysisRuns: number;
       usersDeactivated: number;
-    }>('POST', '/nd/admin/demo/clear', body);
+    }>('POST', '/nd/admin/demo/clear', body, true, DEMO_CLEAR_TIMEOUT_MS);
   }
 
   getDemoAnalysisTemplate(id: string) {
@@ -475,7 +517,13 @@ export class NdApiService {
     return this.request<unknown>('DELETE', `/nd/users/${id}`);
   }
 
-  inviteUser(body: { fullName: string; email: string; role: string; password?: string }) {
+  inviteUser(body: {
+    fullName: string;
+    email: string;
+    role: string;
+    password?: string;
+    departmentId?: string | null;
+  }) {
     return this.request<unknown>('POST', '/nd/users/invite', body);
   }
 
@@ -1053,6 +1101,17 @@ export class NdApiService {
     );
   }
 
+  /** Re-run every open gap against evidence uploaded on the run. */
+  rerunRunWithEvidence(runId: string) {
+    return this.request<{ updated?: number; queued?: number; demo?: boolean }>(
+      'POST',
+      `/nd/analysis-runs/${runId}/rerun-with-evidence`,
+      undefined,
+      true,
+      RERUN_API_TIMEOUT_MS,
+    );
+  }
+
   rerunForwardOnly(runId: string) {
     return this.request<unknown>(
       'POST',
@@ -1125,6 +1184,157 @@ export class NdApiService {
     return this.request<unknown>('DELETE', `/nd/results/${runId}/action-item-reviews/${reviewId}`);
   }
 
+  // ---------------------------------------------------------- action plans
+
+  getActionPlans(runId: string) {
+    return this.request<import('../../../lib/nd/action-plan').ActionPlanEntry[]>(
+      'GET',
+      `/nd/results/${runId}/action-plans`,
+    );
+  }
+
+  createActionPlan(
+    runId: string,
+    body: {
+      analysisPointId: string;
+      gapIndex?: number;
+      actionPlan: string;
+      status?: string;
+      priority?: string;
+      priorityScore?: number;
+      targetDate?: string | null;
+      responsibilityType?: string;
+      responsibilityDepartmentId?: string | null;
+      responsibilityUserId?: string | null;
+      assignees?: import('../../../lib/nd/action-plan').ActionPlanAssignee[];
+      comment?: string | null;
+    },
+  ) {
+    return this.request<import('../../../lib/nd/action-plan').ActionPlanEntry>(
+      'POST',
+      `/nd/results/${runId}/action-plans`,
+      body,
+    );
+  }
+
+  updateActionPlanEntry(
+    runId: string,
+    planId: string,
+    body: {
+      gapIndex?: number;
+      actionPlan?: string;
+      status?: string;
+      priority?: string;
+      priorityScore?: number;
+      targetDate?: string | null;
+      targetDateChangeReason?: string | null;
+      responsibilityType?: string;
+      responsibilityDepartmentId?: string | null;
+      responsibilityUserId?: string | null;
+      assignees?: import('../../../lib/nd/action-plan').ActionPlanAssignee[];
+      comment?: string | null;
+    },
+  ) {
+    return this.request<import('../../../lib/nd/action-plan').ActionPlanEntry>(
+      'PUT',
+      `/nd/results/${runId}/action-plans/${planId}`,
+      body,
+    );
+  }
+
+  deleteActionPlan(runId: string, planId: string) {
+    return this.request<unknown>('DELETE', `/nd/results/${runId}/action-plans/${planId}`);
+  }
+
+  reorderActionPlan(runId: string, planId: string, direction: 'up' | 'down') {
+    return this.request<unknown>('POST', `/nd/results/${runId}/action-plans/${planId}/reorder`, {
+      direction,
+    });
+  }
+
+  getActionPlanDateHistory(runId: string, planId: string) {
+    return this.request<import('../../../lib/nd/action-plan').ActionPlanTargetDateChange[]>(
+      'GET',
+      `/nd/results/${runId}/action-plans/${planId}/date-history`,
+    );
+  }
+
+  addActionPlanReview(runId: string, planId: string, comment: string) {
+    return this.request<import('../../../lib/nd/action-plan').ActionPlanReviewEntry>(
+      'POST',
+      `/nd/results/${runId}/action-plans/${planId}/reviews`,
+      { comment },
+    );
+  }
+
+  updateActionPlanReview(runId: string, planId: string, reviewId: string, comment: string) {
+    return this.request<import('../../../lib/nd/action-plan').ActionPlanReviewEntry>(
+      'PUT',
+      `/nd/results/${runId}/action-plans/${planId}/reviews/${reviewId}`,
+      { comment },
+    );
+  }
+
+  deleteActionPlanReview(runId: string, planId: string, reviewId: string) {
+    return this.request<unknown>(
+      'DELETE',
+      `/nd/results/${runId}/action-plans/${planId}/reviews/${reviewId}`,
+    );
+  }
+
+  getActionPlanResponsibilityOptions() {
+    return this.request<import('../../../lib/nd/action-plan').ActionPlanResponsibilityOptions>(
+      'GET',
+      '/nd/action-plans/responsibility-options',
+    );
+  }
+
+  /** Actions assigned to the signed-in user, directly or through their department. */
+  getActionPlanInbox(status?: NdInboxFilter) {
+    const query = status && status !== 'all' ? `?status=${status}` : '';
+    return this.request<NdActionPlanInbox>('GET', `/nd/action-plans/inbox${query}`);
+  }
+
+  getActionPlanSummary() {
+    return this.request<{
+      total: number;
+      pending: number;
+      resolved: number;
+      overdue: number;
+      byPriority: {
+        priority: string;
+        total: number;
+        pending: number;
+        resolved: number;
+        overdue: number;
+        runCount: number;
+      }[];
+    }>('GET', '/nd/action-plans/summary');
+  }
+
+  getActionPlansByPriority(priority: string, status?: string) {
+    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+    return this.request<{
+      priority: string;
+      total: number;
+      runs: {
+        runId: string;
+        runName: string;
+        runStatus: string;
+        workflowEngine: string;
+        createdAt: string;
+        createdByName?: string | null;
+        actionPlanCount: number;
+        pendingCount: number;
+        resolvedCount: number;
+        overdueCount: number;
+        gapCount: number;
+        nextTargetDate?: string | null;
+        pointIds: string[];
+      }[];
+    }>('GET', `/nd/action-plans/by-priority/${encodeURIComponent(priority)}${query}`);
+  }
+
   addTempPointReviewComment(runId: string, pointId: string, comment: string) {
     return this.request<import('../../../lib/nd/temp-point-review-comment').TempPointReviewComment>(
       'POST',
@@ -1163,6 +1373,14 @@ export class NdApiService {
 
   uploadPointGapAttachments(runId: string, pointId: string, files: File[], actionIndex?: number) {
     return this.uploadMultipart(`/nd/results/${runId}/points/${pointId}/attachments`, files, actionIndex);
+  }
+
+  /** Attach one evidence document to every open gap in the run. */
+  uploadRunGapEvidence(runId: string, files: File[]) {
+    return this.uploadMultipart<{ storedDocumentId: string; fileName: string }[]>(
+      `/nd/results/${runId}/gap-evidence`,
+      files,
+    );
   }
 
   deletePointGapAttachment(runId: string, pointId: string, attachmentId: string) {

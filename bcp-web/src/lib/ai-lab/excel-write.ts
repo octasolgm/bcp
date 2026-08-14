@@ -26,6 +26,13 @@ function applyWrapText(row: import('exceljs').Row): void {
   });
 }
 
+export type ExcelSheetSpec = {
+  sheetName: string;
+  headers: string[];
+  rows: string[][];
+  colWidths: number[];
+};
+
 export async function downloadExcelRows(
   filename: string,
   sheetName: string,
@@ -33,17 +40,27 @@ export async function downloadExcelRows(
   rows: string[][],
   colWidths: number[],
 ): Promise<void> {
+  return downloadExcelSheets(filename, [{ sheetName, headers, rows, colWidths }]);
+}
+
+export async function downloadExcelSheets(
+  filename: string,
+  sheets: ExcelSheetSpec[],
+): Promise<void> {
   const ExcelJS = (await import('exceljs')).default;
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet(sheetName);
-  sheet.columns = colWidths.map((width) => ({ width }));
 
-  const headerRow = sheet.addRow(headers);
-  applyWrapText(headerRow);
+  for (const spec of sheets) {
+    const sheet = workbook.addWorksheet(spec.sheetName);
+    sheet.columns = spec.colWidths.map((width) => ({ width }));
 
-  for (const values of rows) {
-    const row = sheet.addRow(values);
-    applyWrapText(row);
+    const headerRow = sheet.addRow(spec.headers);
+    applyWrapText(headerRow);
+
+    for (const values of spec.rows) {
+      const row = sheet.addRow(values);
+      applyWrapText(row);
+    }
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

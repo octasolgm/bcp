@@ -71,9 +71,20 @@ public static class NdDemoDataFilters
         return query.Where(d => d.UploadedBy == null || !ctx.DemoProfileIds.Contains(d.UploadedBy.Value));
     }
 
+    /// <summary>
+    /// Markers stamped on every simulated run. Demo seeding may keep a caller-supplied run name
+    /// (so the "[Demo]" prefix is not guaranteed), but the description always records that no AI
+    /// credits were used — matching on both is what lets Admin → Demo clear find every demo run.
+    /// </summary>
+    public const string DemoRunNamePrefix = "[Demo]";
+
+    private const string DemoRunSeedMarker = "Arena judgments seeded";
+    private const string DemoRunCreditMarker = "no AI credits";
+
     public static bool IsDemoMarkedAnalysisRun(NdAnalysisRun run) =>
-        run.Name.StartsWith("[Demo]", StringComparison.OrdinalIgnoreCase)
-        || (run.Description?.Contains("Arena judgments seeded", StringComparison.OrdinalIgnoreCase) == true);
+        run.Name.StartsWith(DemoRunNamePrefix, StringComparison.OrdinalIgnoreCase)
+        || (run.Description?.Contains(DemoRunSeedMarker, StringComparison.OrdinalIgnoreCase) == true)
+        || (run.Description?.Contains(DemoRunCreditMarker, StringComparison.OrdinalIgnoreCase) == true);
 
     public static IQueryable<NdAnalysisRun> ApplyToAnalysisRuns(
         IQueryable<NdAnalysisRun> query,
@@ -89,8 +100,10 @@ public static class NdDemoDataFilters
         }
         return query.Where(r =>
             (r.CreatedBy == null || !ctx.DemoProfileIds.Contains(r.CreatedBy.Value))
-            && !r.Name.StartsWith("[Demo]")
-            && (r.Description == null || !r.Description.Contains("Arena judgments seeded")));
+            && !r.Name.StartsWith(DemoRunNamePrefix)
+            && (r.Description == null
+                || (!r.Description.Contains(DemoRunSeedMarker)
+                    && !r.Description.Contains(DemoRunCreditMarker))));
     }
 
     public static IQueryable<NdLibrary> ApplyToLibraries(

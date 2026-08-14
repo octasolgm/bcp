@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
@@ -18,10 +19,11 @@ public class UsersController(
     SupabaseJwtValidator jwt,
     IOptions<SupabaseJwtOptions> jwtOptions,
     IHttpClientFactory httpClientFactory,
+    IMemoryCache memoryCache,
     NdDemoUserDirectory demoDirectory) : NdControllerBase
 {
-    public record UpdateUserRequest(string? FullName, string? Role, bool? IsActive);
-    public record InviteUserRequest(string FullName, string Email, string Role, string? Password);
+    public record UpdateUserRequest(string? FullName, string? Role, bool? IsActive, Guid? DepartmentId);
+    public record InviteUserRequest(string FullName, string Email, string Role, string? Password, Guid? DepartmentId);
     public record SetPasswordRequest(string Password);
 
     private const int MinPasswordLength = 6;
@@ -80,6 +82,9 @@ public class UsersController(
             demoCtx,
             authById.ToDictionary(kv => kv.Key, kv => kv.Value.Email));
 
+        var departmentNames = await db.NdDepartments.AsNoTracking()
+            .ToDictionaryAsync(d => d.Id, d => d.Name, ct);
+
         return Ok(new
         {
             success = true,
@@ -92,6 +97,8 @@ public class UsersController(
                     fullName = u.FullName,
                     email = auth?.Email,
                     role = u.Role,
+                    departmentId = u.DepartmentId,
+                    departmentName = u.DepartmentId is Guid did && departmentNames.TryGetValue(did, out var dn) ? dn : null,
                     isActive = u.IsActive,
                     accountStatus = ResolveAccountStatus(u, auth),
                     invitedAt = auth?.InvitedAt,
@@ -184,8 +191,12 @@ public class UsersController(
         if (!string.IsNullOrWhiteSpace(body.FullName)) user.FullName = body.FullName.Trim();
         if (!string.IsNullOrWhiteSpace(body.Role)) user.Role = body.Role;
         if (body.IsActive.HasValue) user.IsActive = body.IsActive.Value;
+        // Guid.Empty is how the picker clears a department, since a null field means "unchanged".
+        if (body.DepartmentId.HasValue)
+            user.DepartmentId = body.DepartmentId.Value == Guid.Empty ? null : body.DepartmentId.Value;
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+        InvalidateAuthProfile(memoryCache, id);
         return Ok(new { success = true, data = user });
     }
 
@@ -206,6 +217,7 @@ public class UsersController(
         user.IsActive = false;
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+        InvalidateAuthProfile(memoryCache, id);
         return Ok(new { success = true });
     }
 
@@ -226,6 +238,7 @@ public class UsersController(
         user.IsActive = true;
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+        InvalidateAuthProfile(memoryCache, id);
         return Ok(new { success = true });
     }
 
@@ -261,6 +274,7 @@ public class UsersController(
         {
             db.NdProfiles.Remove(profile);
             await db.SaveChangesAsync(ct);
+            InvalidateAuthProfile(memoryCache, id);
         }
 
         return Ok(new { success = true, deleted = true });
@@ -321,6 +335,7 @@ public class UsersController(
                     Id = userId,
                     FullName = fullName,
                     Role = body.Role,
+                    DepartmentId = body.DepartmentId == Guid.Empty ? null : body.DepartmentId,
                     CreatedBy = admin!.Id,
                     IsActive = true,
                 });
@@ -329,8 +344,11 @@ public class UsersController(
             {
                 existing.FullName = fullName;
                 existing.Role = body.Role;
+                if (body.DepartmentId.HasValue)
+                    existing.DepartmentId = body.DepartmentId.Value == Guid.Empty ? null : body.DepartmentId.Value;
             }
             await db.SaveChangesAsync(ct);
+            InvalidateAuthProfile(memoryCache, userId);
             demoDirectory.InvalidateProfileCache();
         }
 

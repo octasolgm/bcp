@@ -17,6 +17,7 @@ public class DemoAdminController(
     NdDemoWorkspaceService workspace,
     NdDemoUserDirectory demoDirectory,
     DemoAnalysisSeedService demoSeed,
+    NdDemoInterceptionService demoInterception,
     Microsoft.Extensions.Options.IOptions<NdDemoIsolationOptions> demoOptions) : NdControllerBase
 {
     public record TemplateUpdateRequest(
@@ -261,6 +262,8 @@ public class DemoAdminController(
         template.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
 
+        await PropagateTemplateChangeAsync(template, ct);
+
         return Ok(new { success = true, data = MapPoint(point) });
     }
 
@@ -285,8 +288,7 @@ public class DemoAdminController(
         template.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
 
-        if (template.Code == NdDemoWorkspaceService.Analys1Code)
-            await demoSeed.SyncAllCbuaeDemoRunsFromTemplateAsync(ct);
+        await PropagateTemplateChangeAsync(template, ct);
 
         return Ok(new { success = true, data = MapPoint(point) });
     }
@@ -306,6 +308,8 @@ public class DemoAdminController(
         var template = await db.NdDemoAnalysisTemplates.FirstAsync(t => t.Id == templateId, ct);
         template.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        await PropagateTemplateChangeAsync(template, ct);
 
         return Ok(new { success = true });
     }
@@ -330,6 +334,7 @@ public class DemoAdminController(
         // Re-seed points from file via Ensure (points empty → load).
         await workspace.EnsureTemplatesSeededAsync(ct);
         var syncedRuns = await demoSeed.SyncAllCbuaeDemoRunsFromTemplateAsync(ct);
+        var syncedDocs = await demoInterception.ResyncDemoCbuaeRegulationDocumentsAsync(ct);
         var refreshed = await db.NdDemoAnalysisTemplates.AsNoTracking()
             .Include(t => t.Points)
             .FirstAsync(t => t.Id == id, ct);
@@ -338,8 +343,20 @@ public class DemoAdminController(
         {
             success = true,
             data = MapTemplate(refreshed),
-            message = $"Reloaded {refreshed.Points.Count} points from seed file. Updated {syncedRuns} demo analysis run point(s).",
+            message = $"Reloaded {refreshed.Points.Count} points from seed file. "
+                + $"Updated {syncedRuns} demo analysis run point(s) and re-cloned {syncedDocs} demo regulation document(s).",
         });
+    }
+
+    /// <summary>
+    /// Keep every demo surface on the same clause list: analysis runs get re-judged and demo
+    /// regulation documents get re-cloned so their point counts match the template.
+    /// </summary>
+    private async Task PropagateTemplateChangeAsync(NdDemoAnalysisTemplate template, CancellationToken ct)
+    {
+        if (template.Code != NdDemoWorkspaceService.Analys1Code) return;
+        await demoSeed.SyncAllCbuaeDemoRunsFromTemplateAsync(ct);
+        await demoInterception.ResyncDemoCbuaeRegulationDocumentsAsync(ct);
     }
 
     private static NdDemoAnalysisTemplatePoint ApplyPoint(NdDemoAnalysisTemplatePoint point, PointUpsertRequest body)

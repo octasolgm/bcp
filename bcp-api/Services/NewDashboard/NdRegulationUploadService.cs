@@ -259,6 +259,8 @@ public class NdRegulationUploadService(
                 {
                     storedAfterParse.ParseStatus = "parsed";
                     storedAfterParse.ParseError = null;
+                    var parsedPages = TryCountPdfPages(bytes, fileName);
+                    if (parsedPages > 0) storedAfterParse.Pages = parsedPages;
                     storedAfterParse.UpdatedAt = DateTimeOffset.UtcNow;
                 }
             }
@@ -629,16 +631,8 @@ public class NdRegulationUploadService(
         var result = await gov.ExtractFromUploadAsync(
             bytes, fileName, null, ReportProgress, checkpoint, cacheKey, ct);
 
-        int? pdfPageCount = null;
-        try
-        {
-            if (LandingAiDocumentFormats.IsPdf(fileName, bytes))
-                pdfPageCount = LandingAiDocumentParseService.GetPdfPageCount(bytes);
-        }
-        catch
-        {
-            // optional
-        }
+        var countedPages = TryCountPdfPages(bytes, fileName);
+        int? pdfPageCount = countedPages > 0 ? countedPages : null;
 
         var parseMarkdown = (await cache.GetParseCacheAsync(cacheKey, ct))?.Markdown;
         if (!string.IsNullOrWhiteSpace(parseMarkdown))
@@ -746,6 +740,21 @@ public class NdRegulationUploadService(
         }
 
         await dbCtx.SaveChangesAsync(ct);
+    }
+
+    /// <summary>PdfPig page count, or 0 when the upload is not a readable PDF.</summary>
+    private static int TryCountPdfPages(byte[] bytes, string fileName)
+    {
+        try
+        {
+            return LandingAiDocumentFormats.IsPdf(fileName, bytes)
+                ? LandingAiDocumentParseService.GetPdfPageCount(bytes)
+                : 0;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private async Task<(byte[] Bytes, string FileName)> DownloadRegulationBytesAsync(

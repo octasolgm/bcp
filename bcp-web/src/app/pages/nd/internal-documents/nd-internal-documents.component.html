@@ -32,11 +32,15 @@
 </div>
 
 <div class="nd-catalog-toolbar nd-fill-panel internal-docs-fill">
-@if (message) {
-  <app-nd-page-alert kind="success" class="nd-shrink" [text]="message" (dismiss)="message = ''" />
-}
-@if (error) {
-  <app-nd-page-alert kind="error" class="nd-shrink" [text]="error" (dismiss)="error = ''" />
+@if (message || error) {
+  <div class="nd-alert-dock" aria-live="polite">
+    @if (message) {
+      <app-nd-page-alert kind="success" [text]="message" (dismiss)="message = ''" />
+    }
+    @if (error) {
+      <app-nd-page-alert kind="error" [text]="error" (dismiss)="error = ''" />
+    }
+  </div>
 }
 
 @if (loading && docs.length === 0) {

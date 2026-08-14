@@ -42,7 +42,26 @@ public sealed class NdDemoWorkspaceService(
     public const string Analys1Code = "analys1demo";
     public const string Analys2Code = "analys2demo";
 
+    private const string TemplatesSeededCacheKey = "nd:demo-templates-seeded";
+
+    /// <summary>
+    /// Idempotent seed. It is called from startup and from several read paths, but the work is
+    /// heavy (DDL statements plus loading every template point) and the database is remote, so
+    /// repeat calls are short-circuited instead of re-running on every request.
+    /// </summary>
     public async Task EnsureTemplatesSeededAsync(CancellationToken ct = default)
+    {
+        if (cache.TryGetValue(TemplatesSeededCacheKey, out bool done) && done)
+            return;
+
+        await EnsureTemplatesSeededCoreAsync(ct);
+        cache.Set(TemplatesSeededCacheKey, true, TimeSpan.FromMinutes(30));
+    }
+
+    /// <summary>Forces the next <see cref="EnsureTemplatesSeededAsync"/> call to re-run.</summary>
+    public void InvalidateTemplateSeedCache() => cache.Remove(TemplatesSeededCacheKey);
+
+    private async Task EnsureTemplatesSeededCoreAsync(CancellationToken ct = default)
     {
         await EnsureTemplateSchemaAsync(ct);
 
@@ -79,22 +98,11 @@ public sealed class NdDemoWorkspaceService(
         }
         else
         {
+            // Deliberately no rebuild when the point count differs from the seed file: adding or
+            // removing clauses in Admin → Demo is a supported edit, and rebuilding would discard it.
             var seedRows = LoadSeedJudgmentsFromFile();
-            if (seedRows.Count > 0 && analys1.Points.Count != seedRows.Count)
-            {
-                db.NdDemoAnalysisTemplatePoints.RemoveRange(analys1.Points);
-                await db.SaveChangesAsync(ct);
-                for (var i = 0; i < seedRows.Count; i++)
-                {
-                    db.NdDemoAnalysisTemplatePoints.Add(MapRowToPoint(analys1.Id, seedRows[i], i));
-                }
-                analys1.UpdatedAt = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync(ct);
-            }
-            else if (seedRows.Count > 0)
-            {
+            if (seedRows.Count > 0)
                 await SyncAnalys1PointFieldsFromSeedAsync(analys1, seedRows, ct);
-            }
         }
 
         var analys2 = await db.NdDemoAnalysisTemplates
@@ -168,9 +176,9 @@ public sealed class NdDemoWorkspaceService(
 
     public async Task<DemoClearResult> ClearDemoWorkspaceAsync(DemoClearRequest req, CancellationToken ct = default)
     {
+        // An empty directory (auth admin API unavailable) must not abort the clear: demo runs are
+        // also identifiable by their "[Demo]" name / simulated-run description markers.
         var demoIds = await demoDirectory.GetDemoProfileIdsAsync(ct);
-        if (demoIds.Count == 0)
-            return new DemoClearResult(0, 0, 0, 0, 0, 0, 0, 0);
 
         var clearInternal = req.ClearAll || req.ClearInternalDocuments;
         var clearRegs = req.ClearAll || req.ClearRegulationDocuments;
@@ -252,6 +260,10 @@ public sealed class NdDemoWorkspaceService(
                 }
             }
             regCount = regs.Count;
+
+            // Purge what we just hid as well, otherwise the deleted bin still shows the cleared docs.
+            await db.SaveChangesAsync(ct);
+            await PermanentlyDeleteDemoSoftDeletedRegulationDocsAsync(demoIds, ct);
         }
         else if (anyClear)
         {
@@ -276,6 +288,10 @@ public sealed class NdDemoWorkspaceService(
                 doc.UpdatedAt = DateTimeOffset.UtcNow;
             }
             internalCount = docs.Count;
+
+            // Purge what we just hid as well, otherwise the deleted bin still shows the cleared docs.
+            await db.SaveChangesAsync(ct);
+            await PermanentlyDeleteDemoSoftDeletedInternalDocsAsync(demoIds, ct);
         }
         else if (anyClear)
         {
@@ -422,16 +438,43 @@ public sealed class NdDemoWorkspaceService(
             await PermanentlyDeleteStoredDocumentAsync(storedDocumentId, ct);
     }
 
+    private sealed record DemoOwnedRun(Guid Id, string Status);
+
     private static bool IsDemoOwnedAnalysisRun(NdAnalysisRun run, HashSet<Guid> demoIds) =>
         run.CreatedBy is Guid creatorId && demoIds.Contains(creatorId)
         || NdDemoDataFilters.IsDemoMarkedAnalysisRun(run);
 
-    private async Task<List<NdAnalysisRun>> ListDemoOwnedAnalysisRunsAsync(
+    /// <summary>
+    /// Ownership only needs id, status, creator and the name/description markers, so the large
+    /// JSONB snapshot columns are left in the database rather than pulled across the wire.
+    /// </summary>
+    private async Task<List<DemoOwnedRun>> ListDemoOwnedAnalysisRunsAsync(
         HashSet<Guid> demoIds,
         CancellationToken ct)
     {
-        var runs = await db.NdAnalysisRuns.ToListAsync(ct);
-        return runs.Where(r => IsDemoOwnedAnalysisRun(r, demoIds)).ToList();
+        var runs = await db.NdAnalysisRuns
+            .AsNoTracking()
+            .Select(r => new
+            {
+                r.Id,
+                r.Status,
+                r.Name,
+                r.Description,
+                r.CreatedBy,
+            })
+            .ToListAsync(ct);
+
+        return runs
+            .Where(r => IsDemoOwnedAnalysisRun(
+                new NdAnalysisRun
+                {
+                    Name = r.Name,
+                    Description = r.Description,
+                    CreatedBy = r.CreatedBy,
+                },
+                demoIds))
+            .Select(r => new DemoOwnedRun(r.Id, r.Status))
+            .ToList();
     }
 
     /// <summary>Permanently removes a demo analysis run and dependent rows (including soft-deleted).</summary>
@@ -513,6 +556,28 @@ public sealed class NdDemoWorkspaceService(
             .AsNoTracking()
             .Include(t => t.Points)
             .FirstOrDefaultAsync(t => t.Code == Analys1Code && t.IsActive, ct);
+        if (analys1 is { Points.Count: > 0 })
+            return analys1.Points.OrderBy(p => p.SortOrder).Select(MapPointToRow).ToList();
+
+        return LoadSeedJudgmentsFromFile();
+    }
+
+    /// <summary>
+    /// Clauses the CBUAE demo template currently defines. This is the single source of truth
+    /// for how many regulation points a demo CBUAE document exposes — library, analysis and
+    /// exports all derive their count from here, so editing points in Admin → Demo changes
+    /// the number everywhere.
+    /// </summary>
+    public async Task<List<DemoAnalysisSeedService.DemoRegulJudgmentRow>> LoadCbuaeTemplateClausesAsync(
+        CancellationToken ct = default)
+    {
+        await EnsureTemplatesSeededAsync(ct);
+
+        var analys1 = await db.NdDemoAnalysisTemplates
+            .AsNoTracking()
+            .Include(t => t.Points)
+            .FirstOrDefaultAsync(t => t.Code == Analys1Code, ct);
+
         if (analys1 is { Points.Count: > 0 })
             return analys1.Points.OrderBy(p => p.SortOrder).Select(MapPointToRow).ToList();
 
@@ -627,6 +692,8 @@ public sealed class NdDemoWorkspaceService(
             .Include(t => t.Points)
             .FirstAsync(t => t.Id == template.Id, ct);
 
+        // Backfill only. Assigning unconditionally rewrote all points on every call (slow against
+        // a remote database) and silently reverted edits made in Admin → Demo.
         var changed = false;
         foreach (var point in tracked.Points)
         {
@@ -638,13 +705,14 @@ public sealed class NdDemoWorkspaceService(
                 row.Interpretation,
                 row.OverallStatus,
                 row.DesignStatus);
-            if (!string.IsNullOrWhiteSpace(gap))
+            if (!string.IsNullOrWhiteSpace(gap)
+                && string.IsNullOrWhiteSpace(point.GapDescription))
             {
                 point.GapDescription = gap;
                 changed = true;
             }
 
-            if (row.Confidence > 0 && point.Confidence != row.Confidence)
+            if (row.Confidence > 0 && point.Confidence <= 0)
             {
                 point.Confidence = row.Confidence;
                 changed = true;

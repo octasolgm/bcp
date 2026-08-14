@@ -65,6 +65,8 @@ import {
   type PolicyRefProof,
 } from '../../../lib/nd/policy-doc-resolve';
 import { NdItemReviewSectionComponent, type ItemReviewSaveEvent } from './nd-item-review-section.component';
+import { NdActionPlansSectionComponent } from './nd-action-plans-section.component';
+import { actionPlansForGap, type ActionPlanEntry } from '../../../lib/nd/action-plan';
 import {
   NdTempPointReviewCommentsComponent,
 } from './nd-temp-point-review-comments.component';
@@ -73,7 +75,14 @@ import type { TempPointReviewComment, TempReviewCommentsChangeEvent } from '../.
 @Component({
   selector: 'app-nd-gap-point-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReferenceComplianceCardComponent, NdItemReviewSectionComponent, NdTempPointReviewCommentsComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReferenceComplianceCardComponent,
+    NdItemReviewSectionComponent,
+    NdActionPlansSectionComponent,
+    NdTempPointReviewCommentsComponent,
+  ],
   templateUrl: './nd-gap-point-detail.component.html',
   styleUrl: './nd-gap-point-detail.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -130,6 +139,10 @@ export class NdGapPointDetailComponent implements OnChanges {
   /** Temporary manual review notes for this point. */
   @Input() tempReviewComments: TempPointReviewComment[] = [];
   @Input() canEditTempReviewComments = true;
+  /** Corrective action plans for this gap (loaded with the run results). */
+  @Input() actionPlans: ActionPlanEntry[] = [];
+  @Input() canEditActionPlans = false;
+  @Input() canReviewActionPlans = false;
 
   @Output() startEdit = new EventEmitter<void>();
   @Output() cancelEdit = new EventEmitter<void>();
@@ -152,6 +165,8 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Output() rerunWithEvidence = new EventEmitter<'full' | 'dual'>();
   @Output() rerunGapEvidence = new EventEmitter<{ actionIndex: number; mode: 'full' | 'dual' }>();
   @Output() tempReviewCommentsChanged = new EventEmitter<TempReviewCommentsChangeEvent>();
+  @Output() actionPlansChanged = new EventEmitter<void>();
+  @Output() viewActionPlanReviews = new EventEmitter<ActionPlanEntry>();
 
   readonly actionReviewStatusLabel = actionReviewStatusLabel;
   readonly pointReviewActionIndex = POINT_REVIEW_ACTION_INDEX;
@@ -495,6 +510,15 @@ export class NdGapPointDetailComponent implements OnChanges {
 
   reviewCountForGap(index: number): number {
     return this.actionReviewsForGap(index).length;
+  }
+
+  /** Actions the user has attached to one CAP gap. */
+  actionPlansForGapIndex(index: number): ActionPlanEntry[] {
+    return actionPlansForGap(this.actionPlans, index);
+  }
+
+  actionCountForGap(index: number): number {
+    return this.actionPlansForGapIndex(index).length;
   }
 
   onItemReviewSave(event: ItemReviewSaveEvent): void {

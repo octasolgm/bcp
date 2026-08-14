@@ -75,6 +75,17 @@ import { internalDocCatalogFromRunDetail } from '../../../../lib/nd/run-internal
 import type { PolicyDocCatalogEntry } from '../../../../lib/nd/policy-doc-resolve';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus, validateSavedActionReviewsComplete, countSavedReviewProgress } from '../../../../lib/nd/action-item-review';
 import { tempCommentsForPoint, type TempPointReviewComment, type TempReviewCommentsChangeEvent } from '../../../../lib/nd/temp-point-review-comment';
+import { ndNewAnalysisRoute } from '../../../../lib/nd/demo-analysis-routes';
+import {
+  actionPlansForPoint,
+  actionPlanPriorityLabel,
+  formatActionPlanDate,
+  normalizeActionPlanPriority,
+  normalizeActionPlanStatus,
+  type ActionPlanEntry,
+  type ActionPlanPriority,
+  type ActionPlanStatus,
+} from '../../../../lib/nd/action-plan';
 import { canAddActionItemReviews, isReviewRole, reviewDisabledHint, reviewWorkspaceLink, attachmentCountsByPoint } from '../../../../lib/nd/nd-review-run-helpers';
 import { computeRunGapStats, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 import { buildNdGapListItems, ndComplianceSummaryFromPoints } from '../../../../lib/nd/nd-run-display';
@@ -146,6 +157,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   ndPolicyDocId: string | null = null;
   ndPolicyDocCatalog: PolicyDocCatalogEntry[] = [];
   ndRegulationDocId: string | null = null;
+  ndRegulationDocName = '';
+  reportEvidenceBusy = false;
   ndSearchQuery = '';
   workflowLoading = false;
   editingPointId: string | null = null;
@@ -165,8 +178,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     { id: 'all', label: 'All' },
     { id: 'with_gaps', label: 'With gaps' },
     { id: 'compliant', label: 'Compliance' },
-    { id: 'partial_compliant', label: 'Partial compliance' },
-    { id: 'non_compliant', label: 'Non-compliance' },
+    { id: 'partial_compliant', label: 'Partial Compliant' },
+    { id: 'non_compliant', label: 'Non Compliant' },
   ];
 
   items: GapItemData[] = [];
@@ -178,6 +191,15 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   private snapshotByPointId = new Map<string, PointSnapshot>();
   private reviewsByPointId = new Map<string, ActionItemReviewEntry[]>();
   private tempCommentsByPointId = new Map<string, TempPointReviewComment[]>();
+  private actionPlansByPointId = new Map<string, ActionPlanEntry[]>();
+  /** Action plan whose reviews are shown in the side panel. */
+  reviewPanelPlan: ActionPlanEntry | null = null;
+  /** Set when arriving from the overview priority drill-down; highlights the matching gaps. */
+  actionPlanFocusPriority: ActionPlanPriority | null = null;
+  actionPlanFocusStatus: ActionPlanStatus | null = null;
+  private actionPlanFocusApplied = false;
+  /** Analysis point to open on load, set by inbox links. */
+  private focusPointId: string | null = null;
   private lastLoadKey = '';
   private loadGeneration = 0;
   private pendingLoadRunId: string | null = null;
@@ -213,19 +235,27 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
           const runId = params.get('run');
           const section = params.get('section');
           const focus = params.get('focus');
+          const apPriority = params.get('apPriority');
+          const apStatus = params.get('apStatus');
+          const point = params.get('point');
+          this.focusPointId = point;
           return {
-            loadKey: [session ?? '', saved ?? '', runId ?? '', section ?? '', focus ?? ''].join('|'),
+            loadKey: [session ?? '', saved ?? '', runId ?? '', section ?? '', focus ?? '', apPriority ?? '', apStatus ?? '', point ?? ''].join('|'),
             filter: params.get('filter'),
             session,
             saved,
             runId,
             section,
             focus,
+            apPriority,
+            apStatus,
           };
         }),
         distinctUntilChanged((a, b) => a.loadKey === b.loadKey),
       )
-      .subscribe(({ filter, session, saved, runId, section, focus, loadKey }) => {
+      .subscribe(({ filter, session, saved, runId, section, focus, apPriority, apStatus, loadKey }) => {
+      this.actionPlanFocusPriority = apPriority ? normalizeActionPlanPriority(apPriority) : null;
+      this.actionPlanFocusStatus = apStatus === 'pending' || apStatus === 'resolved' ? apStatus : null;
       if (filter) {
         const normalized =
           filter === 'all'
@@ -365,6 +395,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.snapshotByPointId.clear();
     this.reviewsByPointId.clear();
     this.tempCommentsByPointId.clear();
+    this.actionPlansByPointId.clear();
 
     for (const attachment of data.pointAttachments ?? []) {
       const count = this.attachmentCountByPointId.get(attachment.analysisPointId) ?? 0;
@@ -399,7 +430,101 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         point.id,
         tempCommentsForPoint(data.tempReviewComments ?? [], point.id),
       );
+      this.actionPlansByPointId.set(
+        point.id,
+        actionPlansForPoint(data.actionPlans ?? [], point.id),
+      );
     }
+  }
+
+  actionPlansFor(pointId?: string | null): ActionPlanEntry[] {
+    return (pointId && this.actionPlansByPointId.get(pointId)) || [];
+  }
+
+  /** Every role may maintain action plans on a run they can open. */
+  get canEditActionPlans(): boolean {
+    return Boolean(this.ndRunId && this.ndRunData);
+  }
+
+  get canReviewActionPlans(): boolean {
+    const role = this.auth.getRole();
+    return role === 'super_admin' || role === 'checker' || role === 'reviewer';
+  }
+
+  /** Reload just the action plans after an inline edit, without refetching the whole run. */
+  async reloadActionPlans(): Promise<void> {
+    if (!this.ndRunId) return;
+    const res = await this.ndApi.getActionPlans(this.ndRunId);
+    if (!res.success || !res.data) return;
+
+    const plans = res.data;
+    if (this.ndRunData) this.ndRunData = { ...this.ndRunData, actionPlans: plans };
+    this.actionPlansByPointId.clear();
+    for (const point of this.ndRunData?.points ?? []) {
+      if (point.id) this.actionPlansByPointId.set(point.id, actionPlansForPoint(plans, point.id));
+    }
+    if (this.reviewPanelPlan) {
+      this.reviewPanelPlan = plans.find((p) => p.id === this.reviewPanelPlan!.id) ?? null;
+    }
+    this.cdr.markForCheck();
+  }
+
+  formatDate(iso?: string | null): string {
+    return formatActionPlanDate(iso);
+  }
+
+  get newAnalysisLink(): string[] {
+    return ndNewAnalysisRoute();
+  }
+
+  /** True when the gap carries at least one action plan matching the priority drill-down. */
+  itemHasFocusedActionPlan(item: GapItemData): boolean {
+    if (!this.actionPlanFocusPriority) return false;
+    const point = this.analysisPointForGap(item);
+    if (!point?.id) return false;
+    return this.actionPlansFor(point.id).some((plan) => {
+      if (normalizeActionPlanPriority(plan.priority) !== this.actionPlanFocusPriority) return false;
+      if (!this.actionPlanFocusStatus) return true;
+      return normalizeActionPlanStatus(plan.status) === this.actionPlanFocusStatus;
+    });
+  }
+
+  get focusedActionPlanCount(): number {
+    if (!this.actionPlanFocusPriority) return 0;
+    return this.items.filter((item) => this.itemHasFocusedActionPlan(item)).length;
+  }
+
+  get actionPlanFocusLabel(): string {
+    return this.actionPlanFocusPriority ? actionPlanPriorityLabel(this.actionPlanFocusPriority) : '';
+  }
+
+  clearActionPlanFocus(): void {
+    this.actionPlanFocusPriority = null;
+    this.actionPlanFocusStatus = null;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { apPriority: null, apStatus: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  private scrollToFocusedActionPlanGap(itemId: string): void {
+    if (this.actionPlanFocusApplied) return;
+    this.actionPlanFocusApplied = true;
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-gap-item-id="${itemId}"]`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 400);
+  }
+
+  openActionPlanReviews(plan: ActionPlanEntry): void {
+    this.reviewPanelPlan = plan;
+    this.cdr.markForCheck();
+  }
+
+  closeActionPlanReviews(): void {
+    this.reviewPanelPlan = null;
+    this.cdr.markForCheck();
   }
 
   private itemIndex(item: GapItemData): number {
@@ -449,6 +574,27 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     overlays: Record<string, GapDraftOverlay>,
   ): void {
     let id: string | null = null;
+
+    // Inbox deep link: open the exact gap that carries the action the user clicked.
+    if (this.focusPointId) {
+      const target = items.find((item) => this.analysisPointForGap(item)?.id === this.focusPointId);
+      if (target) {
+        this.expandedItemId.set(target.id);
+        this.syncExpandedFlags();
+        this.scrollToFocusedActionPlanGap(target.id);
+        return;
+      }
+    }
+
+    if (this.actionPlanFocusPriority && !section && !focus) {
+      id = items.find((item) => this.itemHasFocusedActionPlan(item))?.id ?? null;
+      if (id) {
+        this.expandedItemId.set(id);
+        this.syncExpandedFlags();
+        this.scrollToFocusedActionPlanGap(id);
+        return;
+      }
+    }
 
     if (section) {
       const key = section.trim();
@@ -699,6 +845,41 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     } else {
       this.ndDetailError = res.message ?? 'Upload failed';
       this.toast.show(this.ndDetailError, 'error');
+    }
+  }
+
+  /** Maker/admin only: re-checking the whole report needs write access to the run. */
+  get canRerunReportWithEvidence(): boolean {
+    if (!this.ndRunId || !this.ndRunData) return false;
+    const role = this.auth.getRole();
+    return role === 'super_admin' || role === 'maker';
+  }
+
+  async onReportEvidenceSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (!files.length || !this.ndRunId) return;
+
+    this.reportEvidenceBusy = true;
+    this.cdr.markForCheck();
+    try {
+      const upload = await this.ndApi.uploadRunGapEvidence(this.ndRunId, files);
+      if (!upload.success) {
+        this.toast.show(upload.message ?? 'Upload failed', 'error');
+        return;
+      }
+
+      const rerun = await this.ndApi.rerunRunWithEvidence(this.ndRunId);
+      if (!rerun.success) {
+        this.toast.show(rerun.message ?? 'Re-check failed', 'error');
+        return;
+      }
+      this.toast.show(rerun.message ?? 'Re-checking gaps against the uploaded document…', 'success');
+      await this.loadNdRun(this.ndRunId, null, null);
+    } finally {
+      this.reportEvidenceBusy = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -1240,10 +1421,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
     this.exporting = true;
     try {
+      const options = this.exportOptions();
       if (this.ndRunWorkflowEngine && isRegulWorkflow(this.ndRunWorkflowEngine)) {
-        await exportRegulGapAnalysisExcelFromPoints(points);
+        await exportRegulGapAnalysisExcelFromPoints(points, undefined, undefined, options);
       } else {
-        await exportGapAnalysisExcelFromPoints(points);
+        await exportGapAnalysisExcelFromPoints(points, undefined, undefined, options);
       }
       this.toast.show('Exported gap analysis Excel file', 'success');
     } catch {
@@ -1264,11 +1446,31 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       exportGapAnalysisPdfFromPoints(points, {
         runName: this.sourceLabel || 'Gap Analysis Report',
         subtitle: this.subtitle,
+        ...this.exportOptions(),
       });
       this.toast.show('Exported gap analysis PDF', 'success');
     } catch {
       this.toast.show('Export failed — try again', 'error');
     }
+  }
+
+  /** Regulation document name, action plans and the clause lookup shared by both exports. */
+  private exportOptions(): {
+    regulationDocumentName: string;
+    actionPlans: ActionPlanEntry[];
+    clauseByPointId: Map<string, string>;
+  } {
+    const clauseByPointId = new Map<string, string>();
+    for (const point of this.ndRunData?.points ?? []) {
+      if (!point.id) continue;
+      const snap = this.snapshotForPoint(point);
+      clauseByPointId.set(point.id, (snap.pointNumber ?? '').replace(/^§/, '').trim());
+    }
+    return {
+      regulationDocumentName: this.ndRegulationDocName,
+      actionPlans: this.ndRunData?.actionPlans ?? [],
+      clauseByPointId,
+    };
   }
 
   private analysisPointsForExport(): AnalysisPoint[] {
@@ -1609,6 +1811,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       resolved.success && resolved.data
         ? this.firstDocIdFromRunDetail(resolved.data, 'selectedRegulationDocIds')
         : null;
+    void this.loadRegulationDocName(this.ndRegulationDocId, generation);
 
     if (!this.ndRunWorkflowEngine && resolved.success && resolved.data && typeof resolved.data === 'object') {
       this.ndRunWorkflowEngine =
@@ -1616,6 +1819,19 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     void this.loadPolicyDocCatalog(resolved, generation);
+  }
+
+  /** Regulation document title — first column of the Excel export. */
+  private async loadRegulationDocName(docId: string | null, generation: number): Promise<void> {
+    if (!docId) {
+      this.ndRegulationDocName = '';
+      return;
+    }
+    const res = await this.ndApi.getRegulationDocument(docId);
+    if (generation !== this.loadGeneration) return;
+    const doc = (res.data ?? null) as { title?: string; fileName?: string; originalFileName?: string } | null;
+    this.ndRegulationDocName = doc?.title?.trim() || doc?.originalFileName?.trim() || doc?.fileName?.trim() || '';
+    this.cdr.markForCheck();
   }
 
   private async loadPolicyDocCatalog(runRes: { success: boolean; data?: unknown }, generation: number): Promise<void> {

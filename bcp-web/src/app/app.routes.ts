@@ -276,6 +276,18 @@ export const routes: Routes = [
               import('./pages/in-progress/in-progress.component').then((m) => m.InProgressComponent),
           },
           {
+            path: 'inbox',
+            title: 'My actions · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/inbox/nd-inbox.component').then((m) => m.NdInboxComponent),
+          },
+          {
+            path: 'profile',
+            title: 'My profile · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/profile/nd-profile.component').then((m) => m.NdProfileComponent),
+          },
+          {
             path: 'analyse-v8',
             ...ndAnalyseV8Route,
           },
@@ -312,6 +324,14 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./pages/nd/gap-analysis/nd-gap-analysis.component').then(
                 (m) => m.NdGapAnalysisComponent,
+              ),
+          },
+          {
+            path: 'action-plans/:priority',
+            title: 'Action plans by priority · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/action-plans/nd-action-plan-priority.component').then(
+                (m) => m.NdActionPlanPriorityComponent,
               ),
           },
           {

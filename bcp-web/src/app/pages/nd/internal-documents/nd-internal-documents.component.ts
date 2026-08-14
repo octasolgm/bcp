@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -45,6 +45,9 @@ type InternalDocAnalysisRun = {
   updatedAt?: string;
 };
 
+/** How long a just-uploaded row survives list refreshes that don't return it yet. */
+const RecentUploadKeepMs = 90_000;
+
 @Component({
   selector: 'app-nd-internal-documents',
   standalone: true,
@@ -75,6 +78,8 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   showDeleted = false;
   error = '';
   message = '';
+  /** Document id → upload timestamp, so fresh rows survive an eventually-consistent list. */
+  private readonly recentUploads = new Map<string, number>();
   historyFor: InternalDocument | null = null;
   sectionsFor: InternalDocument | null = null;
   sectionRows: InternalDocumentSection[] = [];
@@ -603,7 +608,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.error = '';
     const res = await this.api.getInternalDocuments(this.showDeleted);
     if (res.success && res.data) {
-      this.docs = res.data as InternalDocument[];
+      this.docs = this.keepRecentUploads(res.data as InternalDocument[]);
       this.syncSectionExtractPollingFromDocs();
       this.syncParsePollingFromDocs();
     } else if (!silent || this.docs.length === 0) {
@@ -788,6 +793,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
         originalFileName?: string;
         parseStatus?: string;
       };
+      this.addOptimisticUpload(data, file);
       this.message =
         'Uploaded — status is Pending parse. Click Run parse when ready (Landing AI supports PDF and Word).';
       this.error = '';
@@ -797,6 +803,49 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       this.error = res.message ?? 'Upload failed';
     }
     this.uploading = false;
+  }
+
+  /** Show the new row straight away instead of waiting for the next list refresh. */
+  private addOptimisticUpload(
+    data: { id?: string; title?: string; originalFileName?: string; parseStatus?: string },
+    file: File,
+  ): void {
+    if (!data?.id || this.showDeleted) return;
+    this.recentUploads.set(data.id, Date.now());
+    const now = new Date().toISOString();
+    const optimistic: InternalDocument = {
+      id: data.id,
+      source: 'nd',
+      title: data.title ?? file.name,
+      originalFileName: data.originalFileName ?? file.name,
+      uploaded: now,
+      uploadedAt: now,
+      sizeBytes: file.size,
+      parseStatus: data.parseStatus ?? 'pending',
+      isHidden: false,
+    };
+    this.docs = [optimistic, ...this.docs.filter((d) => d.id !== optimistic.id)];
+  }
+
+  /**
+   * The list API is eventually consistent, so a document uploaded seconds ago may be
+   * missing from the next response. Re-add it rather than letting the row flicker away.
+   */
+  private keepRecentUploads(incoming: InternalDocument[]): InternalDocument[] {
+    if (!this.recentUploads.size) return incoming;
+    const cutoff = Date.now() - RecentUploadKeepMs;
+    const known = new Set(incoming.map((d) => d.id));
+    const pending: InternalDocument[] = [];
+    for (const [id, at] of [...this.recentUploads]) {
+      if (at < cutoff) {
+        this.recentUploads.delete(id);
+        continue;
+      }
+      if (known.has(id)) continue;
+      const local = this.docs.find((d) => d.id === id);
+      if (local) pending.push(local);
+    }
+    return pending.length ? [...pending, ...incoming] : incoming;
   }
 
   async openSections(doc: InternalDocument, event?: Event): Promise<void> {
@@ -813,6 +862,13 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.sectionRows = [];
     this.loadingSections = false;
     this.shellFocus.setRegulationPointsPanelOpen(false);
+  }
+
+  /** Escape closes the topmost open panel — history overlays the sections panel. */
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.historyFor) this.closeHistory();
+    else if (this.sectionsFor) this.closeSections();
   }
 
   private async loadSections(docId: string): Promise<void> {

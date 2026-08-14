@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
@@ -85,6 +86,19 @@ public abstract class NdControllerBase : ControllerBase
         return jwt.ValidateToken(authHeader);
     }
 
+    /// <summary>
+    /// Every ND endpoint authenticates, so this lookup was one remote round-trip per request
+    /// and a page that fires a dozen calls paid it a dozen times. The window is short so role
+    /// changes and deactivations still take effect quickly, and writes evict explicitly.
+    /// </summary>
+    private static readonly TimeSpan AuthProfileCacheTtl = TimeSpan.FromSeconds(30);
+
+    private static string AuthProfileCacheKey(Guid profileId) => $"nd:auth-profile:{profileId}";
+
+    /// <summary>Drop a cached profile after its role, department or active flag changes.</summary>
+    public static void InvalidateAuthProfile(IMemoryCache cache, Guid profileId) =>
+        cache.Remove(AuthProfileCacheKey(profileId));
+
     protected async Task<(NdProfile Profile, IActionResult? Error)> RequireAuthAsync(
         AppDbContext db,
         SupabaseJwtValidator jwt,
@@ -95,9 +109,7 @@ public abstract class NdControllerBase : ControllerBase
         if (user == null)
             return (null!, Unauthorized(new { success = false, message = "Unauthorized" }));
 
-        var profile = await db.NdProfiles
-            .Include(p => p.Department)
-            .FirstOrDefaultAsync(p => p.Id == user.UserId, ct);
+        var profile = await LoadAuthProfileAsync(db, user.UserId, ct);
 
         if (profile == null)
             return (null!, Unauthorized(new { success = false, message = "Profile not found" }));
@@ -110,6 +122,39 @@ public abstract class NdControllerBase : ControllerBase
 
         return (profile, null);
     }
+
+    /// <summary>
+    /// Returns a detached copy so callers never share a tracked entity across requests.
+    /// The auth profile is read-only on this path; profile writes go through their own load.
+    /// </summary>
+    private async Task<NdProfile?> LoadAuthProfileAsync(AppDbContext db, Guid userId, CancellationToken ct)
+    {
+        var cache = HttpContext?.RequestServices?.GetService<IMemoryCache>();
+        var key = AuthProfileCacheKey(userId);
+
+        if (cache != null && cache.TryGetValue<NdProfile>(key, out var cached) && cached != null)
+            return CloneAuthProfile(cached);
+
+        var profile = await db.NdProfiles.AsNoTracking()
+            .Include(p => p.Department)
+            .FirstOrDefaultAsync(p => p.Id == userId, ct);
+
+        if (profile != null) cache?.Set(key, CloneAuthProfile(profile), AuthProfileCacheTtl);
+        return profile;
+    }
+
+    private static NdProfile CloneAuthProfile(NdProfile p) => new()
+    {
+        Id = p.Id,
+        FullName = p.FullName,
+        Role = p.Role,
+        DepartmentId = p.DepartmentId,
+        IsActive = p.IsActive,
+        CreatedBy = p.CreatedBy,
+        CreatedAt = p.CreatedAt,
+        UpdatedAt = p.UpdatedAt,
+        Department = p.Department,
+    };
 
     protected async Task<(NdProfile Profile, JwtUser User, IActionResult? Error)> RequireAuthWithUserAsync(
         AppDbContext db,
@@ -180,6 +225,9 @@ public abstract class NdControllerBase : ControllerBase
 
         profile.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        var authCache = HttpContext?.RequestServices?.GetService<IMemoryCache>();
+        if (authCache != null) InvalidateAuthProfile(authCache, user.UserId);
 
         if (profile.DepartmentId.HasValue && profile.Department == null)
         {

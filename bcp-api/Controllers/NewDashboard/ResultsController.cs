@@ -14,7 +14,8 @@ public class ResultsController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
     NdRegulationPointPageService pointPages,
-    DemoAnalysisSeedService demoSeed) : NdControllerBase
+    IServiceScopeFactory scopeFactory,
+    ILogger<ResultsController> logger) : NdControllerBase
 {
     public record UpdateActionPlanRequest(string Content, int? RevertToVersion);
 
@@ -35,14 +36,7 @@ public class ResultsController(
             return StatusCode(403);
 
         if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
-        {
-            // Never block gap-analysis on template refresh — sync in background if needed.
-            _ = demoSeed.SyncRegulDemoRunFromTemplateAsync(
-                runId,
-                profile.Id,
-                preserveWorkflowStatus: true,
-                CancellationToken.None);
-        }
+            StartBackgroundTemplateSync(runId, profile.Id);
 
         var creator = run.CreatedBy.HasValue
             ? await db.NdProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == run.CreatedBy, ct)
@@ -63,6 +57,37 @@ public class ResultsController(
             .OrderByDescending(r => r.SortOrder)
             .ThenByDescending(r => r.CreatedAt)
             .ToListAsync(ct);
+
+        var actionPlans = await db.NdAnalysisActionPlans.AsNoTracking()
+            .Where(p => p.AnalysisRunId == runId)
+            .OrderBy(p => p.GapIndex).ThenBy(p => p.SortOrder).ThenBy(p => p.CreatedAt)
+            .ToListAsync(ct);
+        var actionPlanIds = actionPlans.Select(p => p.Id).ToList();
+        var actionPlanReviews = actionPlanIds.Count == 0
+            ? []
+            : await db.NdAnalysisActionPlanReviews.AsNoTracking()
+                .Where(r => actionPlanIds.Contains(r.ActionPlanId))
+                .OrderBy(r => r.CreatedAt)
+                .ToListAsync(ct);
+        var actionPlanAssignees = actionPlanIds.Count == 0
+            ? []
+            : await db.NdAnalysisActionPlanAssignees.AsNoTracking()
+                .Where(a => actionPlanIds.Contains(a.ActionPlanId))
+                .OrderBy(a => a.SortOrder)
+                .ToListAsync(ct);
+        var actionPlanPeople = await LoadProfileNamesAsync(
+            db,
+            actionPlans.SelectMany(p => new[] { p.CreatedBy, p.UpdatedBy, p.ResponsibilityUserId })
+                .Concat(actionPlanReviews.Select(r => r.ReviewerId)),
+            ct);
+        var actionPlanDeptIds = actionPlans
+            .Where(p => p.ResponsibilityDepartmentId.HasValue)
+            .Select(p => p.ResponsibilityDepartmentId!.Value).Distinct().ToList();
+        var actionPlanDepartments = actionPlanDeptIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.NdDepartments.AsNoTracking()
+                .Where(d => actionPlanDeptIds.Contains(d.Id))
+                .ToDictionaryAsync(d => d.Id, d => d.Name, ct);
 
         var tempReviewComments = await db.NdTempPointReviewComments.AsNoTracking()
             .Where(c => pointIds.Contains(c.AnalysisPointId))
@@ -181,6 +206,52 @@ public class ResultsController(
                     sortOrder = r.SortOrder,
                     r.CreatedAt,
                 }),
+                actionPlans = actionPlans.Select(p => new
+                {
+                    id = p.Id,
+                    analysisRunId = p.AnalysisRunId,
+                    analysisPointId = p.AnalysisPointId,
+                    gapIndex = p.GapIndex,
+                    actionPlan = p.ActionPlan,
+                    status = p.Status,
+                    priority = p.Priority,
+                    priorityScore = ActionPlanPriorities.TierFromScore(p.PriorityScore) == ActionPlanPriorities.Normalize(p.Priority)
+                        ? ActionPlanPriorities.ClampScore(p.PriorityScore)
+                        : ActionPlanPriorities.ScoreFromTier(p.Priority),
+                    targetDate = FormatDueDateResponse(p.TargetDate),
+                    responsibilityType = p.ResponsibilityType,
+                    responsibilityDepartmentId = p.ResponsibilityDepartmentId,
+                    responsibilityUserId = p.ResponsibilityUserId,
+                    responsibilityName = p.ResponsibilityType == ActionPlanResponsibilityTypes.User
+                        ? ProfileName(actionPlanPeople, p.ResponsibilityUserId) ?? p.ResponsibilityLabel
+                        : p.ResponsibilityDepartmentId is Guid did && actionPlanDepartments.TryGetValue(did, out var deptName)
+                            ? deptName
+                            : p.ResponsibilityLabel,
+                    assignees = actionPlanAssignees
+                        .Where(a => a.ActionPlanId == p.Id)
+                        .Select(ActionPlansController.MapAssignee),
+                    comment = p.Comment,
+                    sortOrder = p.SortOrder,
+                    resolvedAt = FormatDueDateResponse(p.ResolvedAt),
+                    createdBy = p.CreatedBy,
+                    createdByName = ProfileName(actionPlanPeople, p.CreatedBy),
+                    updatedByName = ProfileName(actionPlanPeople, p.UpdatedBy),
+                    createdAt = p.CreatedAt,
+                    updatedAt = p.UpdatedAt,
+                    reviewCount = actionPlanReviews.Count(r => r.ActionPlanId == p.Id),
+                    reviews = actionPlanReviews.Where(r => r.ActionPlanId == p.Id).Select(r => new
+                    {
+                        id = r.Id,
+                        actionPlanId = r.ActionPlanId,
+                        analysisPointId = r.AnalysisPointId,
+                        comment = r.Comment,
+                        reviewerId = r.ReviewerId,
+                        reviewerName = ProfileName(actionPlanPeople, r.ReviewerId),
+                        reviewerRole = r.ReviewerRole,
+                        createdAt = r.CreatedAt,
+                        updatedAt = r.UpdatedAt,
+                    }),
+                }),
                 tempReviewComments = tempReviewComments.Select(c => new
                 {
                     c.Id,
@@ -195,6 +266,29 @@ public class ResultsController(
                 statusHistory = history,
                 regulQualitativeAssessment,
             },
+        });
+    }
+
+    /// <summary>
+    /// Refreshes a Regul demo run from its template without blocking the response. The work must
+    /// run on its own DI scope: sharing the request-scoped <see cref="AppDbContext"/> would race
+    /// with the queries below and then hit a disposed context once the request completes.
+    /// </summary>
+    private void StartBackgroundTemplateSync(Guid runId, Guid? profileId)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var seed = scope.ServiceProvider.GetRequiredService<DemoAnalysisSeedService>();
+                await seed.SyncRegulDemoRunFromTemplateAsync(
+                    runId, profileId, preserveWorkflowStatus: true, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Background demo template sync failed for run {RunId}", runId);
+            }
         });
     }
 

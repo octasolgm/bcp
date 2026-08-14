@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { NdGapPointDetailComponent } from '../../../components/nd/nd-gap-point-detail.component';
 import {
   demoTemplatePointToPreview,
@@ -60,6 +61,7 @@ export type DemoTemplateDetail = DemoTemplateSummary & {
 export class NdAdminDemoComponent implements OnInit {
   private readonly api = inject(NdApiService);
   readonly auth = inject(NdAuthService);
+  private readonly workspaceNav = inject(NdWorkspaceNavService);
 
   loading = true;
   error = '';
@@ -92,12 +94,20 @@ export class NdAdminDemoComponent implements OnInit {
 
   readonly statusOptions = [
     { value: 'compliant', label: 'Compliant' },
-    { value: 'partial', label: 'Partial' },
-    { value: 'non_compliant', label: 'Non-compliant' },
+    { value: 'partial', label: 'Partial Compliant' },
+    { value: 'non_compliant', label: 'Non Compliant' },
   ];
 
   async ngOnInit(): Promise<void> {
-    await this.auth.refreshProfile();
+    try {
+      await this.auth.refreshProfile();
+    } catch {
+      /* fall through to the access check below */
+    }
+    if (!this.isSuperAdmin) {
+      this.loading = false;
+      return;
+    }
     await this.reload();
   }
 
@@ -179,6 +189,7 @@ export class NdAdminDemoComponent implements OnInit {
       this.clearLibraries = false;
       this.clearAnalysisRuns = false;
       this.clearUsers = false;
+      this.workspaceNav.requestNavBadgeRefresh();
     } finally {
       this.clearing = false;
     }

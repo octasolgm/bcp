@@ -31,7 +31,10 @@ public sealed class NdDemoInterceptionService(
     private static readonly ConcurrentDictionary<Guid, byte> RunningRegulationParseJobs = new();
     private static readonly ConcurrentDictionary<Guid, byte> RunningRegulationExtractJobs = new();
 
-    /// <summary>Demo regulation extract clones real extracts (~397). Judgment seed is ~94 and is for analysis only.</summary>
+    /// <summary>
+    /// Thresholds for picking a *production* clone source (~397 canonical points). The demo copy
+    /// itself is narrowed to the demo admin template clause list, so it holds far fewer points.
+    /// </summary>
     private const int MinDemoRegulationClonePoints = 200;
     private const int ExpectedCbuaeRegulationPointCount = 397;
     private const int CbuaeRegulationPointCountTolerance = 25;
@@ -330,6 +333,8 @@ public sealed class NdDemoInterceptionService(
         destStored.ParseStatus = "parsed";
         destStored.ParseError = null;
         destStored.FileHash = source.FileHash ?? destStored.FileHash;
+        // Demo parse clones the source document, so its PDF page count applies to the copy too.
+        if (source.Pages > 0) destStored.Pages = source.Pages;
         destStored.UpdatedAt = DateTimeOffset.UtcNow;
         await dbCtx.SaveChangesAsync(ct);
 
@@ -518,7 +523,7 @@ public sealed class NdDemoInterceptionService(
 
             // Demo extract is a fast clone from the configured production template (no Landing AI).
             regDoc.ExtractionStatus = "processing";
-            regDoc.ExtractionProgressLabel = "Copying regulation points…";
+            regDoc.ExtractionProgressLabel = "Extracting regulation points…";
             regDoc.ExtractionProgressPct = 40;
             regDoc.UpdatedAt = DateTimeOffset.UtcNow;
             await dbCtx.SaveChangesAsync(ct);
@@ -659,7 +664,7 @@ public sealed class NdDemoInterceptionService(
                 return (0, null);
             }
 
-            var cloned = await CloneRegulationPointsFromSourceAsync(dbCtx, regDoc.Id, source, ct);
+            var cloned = await CloneCbuaeTemplateScopedPointsAsync(dbCtx, regDoc.Id, source, ct);
             if (cloned == 0)
             {
                 logger.LogWarning(
@@ -771,6 +776,149 @@ public sealed class NdDemoInterceptionService(
         }
 
         return fileName;
+    }
+
+    /// <summary>
+    /// CBUAE demo clone. The demo admin template (Admin → Demo) decides which clauses exist,
+    /// so the library, analysis and exports all report the same number. Clause text comes from
+    /// the production extract where a matching clause exists, and falls back to the template's
+    /// own interpretation text otherwise.
+    /// </summary>
+    private async Task<int> CloneCbuaeTemplateScopedPointsAsync(
+        AppDbContext dbCtx,
+        Guid destRegulationId,
+        NdRegulationDocument source,
+        CancellationToken ct)
+    {
+        var clauses = await demoWorkspace.LoadCbuaeTemplateClausesAsync(ct);
+        if (clauses.Count == 0)
+            return await CloneRegulationPointsFromSourceAsync(dbCtx, destRegulationId, source, ct);
+
+        var sourcePoints = NdRegulationPointCanonicalFilter.FilterCanonical(
+            await dbCtx.NdRegulationPoints.AsNoTracking()
+                .Where(p => p.RegulationDocumentId == source.Id && p.Status == NdRegulationPointStatus.Active)
+                .ToListAsync(ct));
+
+        var byKey = new Dictionary<string, NdRegulationPoint>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in sourcePoints)
+        {
+            if (!string.IsNullOrWhiteSpace(p.PointNumber))
+            {
+                var numKey = DemoAnalysisSeedService.NormalizeClauseKey(p.PointNumber);
+                if (numKey.Length > 0) byKey.TryAdd(numKey, p);
+            }
+            if (!string.IsNullOrWhiteSpace(p.PointTitle))
+            {
+                var titleKey = DemoAnalysisSeedService.NormalizeClauseKey(p.PointTitle);
+                if (titleKey.Length > 0) byKey.TryAdd(titleKey, p);
+            }
+        }
+
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var added = 0;
+
+        foreach (var clause in clauses)
+        {
+            if (string.IsNullOrWhiteSpace(clause.ClauseNo)) continue;
+            var key = DemoAnalysisSeedService.NormalizeClauseKey(clause.ClauseNo);
+            if (key.Length == 0 || !used.Add(key)) continue;
+
+            var match = byKey.GetValueOrDefault(key);
+            if (match == null && !string.IsNullOrWhiteSpace(clause.ClauseTitle))
+                match = byKey.GetValueOrDefault(DemoAnalysisSeedService.NormalizeClauseKey(clause.ClauseTitle));
+            if (match == null && TryGetParentClauseKey(key, out var parentKey))
+                match = byKey.GetValueOrDefault(parentKey);
+
+            var content = match?.PointContent;
+            if (string.IsNullOrWhiteSpace(content))
+                content = clause.Interpretation ?? clause.ClauseTitle ?? clause.ClauseNo ?? "";
+
+            dbCtx.NdRegulationPoints.Add(new NdRegulationPoint
+            {
+                RegulationDocumentId = destRegulationId,
+                PointNumber = clause.ClauseNo!.Trim(),
+                PointTitle = string.IsNullOrWhiteSpace(clause.ClauseTitle) ? match?.PointTitle : clause.ClauseTitle,
+                PointContent = content,
+                PageReference = match?.PageReference,
+                IsIntroductionPoint = match?.IsIntroductionPoint ?? false,
+                IsAnnexPoint = match?.IsAnnexPoint ?? false,
+                Status = NdRegulationPointStatus.Active,
+            });
+            added++;
+        }
+
+        logger.LogInformation(
+            "Demo CBUAE template-scoped clone: {Added} of {Clauses} template clauses written for {DestId} (source {SourceId})",
+            added,
+            clauses.Count,
+            destRegulationId,
+            source.Id);
+
+        return added;
+    }
+
+    /// <summary>
+    /// Re-clone every demo-owned CBUAE regulation document after the demo admin edits the
+    /// template, so the point count stays identical across library, analysis and exports.
+    /// Returns the number of documents refreshed.
+    /// </summary>
+    public async Task<int> ResyncDemoCbuaeRegulationDocumentsAsync(CancellationToken ct = default)
+    {
+        if (!IsActive) return 0;
+
+        var demoIds = await directory.GetDemoProfileIdsAsync(ct);
+        if (demoIds.Count == 0) return 0;
+
+        var docs = await db.NdRegulationDocuments
+            .Where(d => !d.IsManual
+                && d.CreatedBy != null
+                && demoIds.Contains(d.CreatedBy.Value)
+                && d.ExtractionStatus == "completed")
+            .ToListAsync(ct);
+
+        var refreshed = 0;
+        foreach (var doc in docs)
+        {
+            var fileName = await ResolveRegulationFileNameAsync(db, doc, ct);
+            if (!IsCbuaeDemoRegulation(doc.Name, fileName)) continue;
+
+            var sem = RegulationSimulateLocks.GetOrAdd(doc.Id, _ => new SemaphoreSlim(1, 1));
+            if (!await sem.WaitAsync(0, ct)) continue;
+            try
+            {
+                await MarkExistingRegulationPointsRemovedAsync(db, doc.Id, ct);
+                var (populated, _) = await PopulateDemoRegulationPointsWithSourceAsync(db, doc, ct);
+                if (populated == 0)
+                {
+                    logger.LogWarning("Demo CBUAE resync produced 0 points for {DocId}; leaving as-is", doc.Id);
+                    continue;
+                }
+
+                doc.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+                refreshed++;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Demo CBUAE resync failed for {DocId}", doc.Id);
+            }
+            finally
+            {
+                sem.Release();
+            }
+        }
+
+        return refreshed;
+    }
+
+    /// <summary>"3.2-a" → "3.2", so sub-clauses can inherit the parent clause text.</summary>
+    private static bool TryGetParentClauseKey(string clauseKey, out string parentKey)
+    {
+        parentKey = "";
+        var dash = clauseKey.LastIndexOf('-');
+        if (dash <= 0 || dash >= clauseKey.Length - 1) return false;
+        parentKey = clauseKey[..dash];
+        return parentKey.Length > 0;
     }
 
     private static async Task<int> CloneRegulationPointsFromSourceAsync(
@@ -989,6 +1137,94 @@ public sealed class NdDemoInterceptionService(
             sourceRun.Id,
             run.Id,
             targetPoints.Count);
+    }
+
+    /// <summary>
+    /// Demo re-run of a gap against a freshly uploaded evidence document. No AI: the clause is
+    /// re-judged one compliance step better and its policy extract / reference are rewritten to
+    /// cite the uploaded file, so the demonstration mirrors what the real pipeline produces.
+    /// </summary>
+    /// <param name="pointId">Null to re-run every gap in the run (whole report demonstration).</param>
+    /// <returns>Number of points updated.</returns>
+    public async Task<int> SimulateEvidenceRerunAsync(
+        Guid runId,
+        Guid? pointId,
+        string evidenceLabel,
+        CancellationToken ct)
+    {
+        var run = await db.NdAnalysisRuns
+            .Include(r => r.Points)
+            .FirstOrDefaultAsync(r => r.Id == runId, ct)
+            ?? throw new InvalidOperationException("Analysis run not found.");
+
+        var targets = run.Points
+            .Where(p => pointId == null || p.Id == pointId.Value)
+            .Where(p => pointId != null || p.FinalStatus is "non_compliant" or "partial_compliant")
+            .OrderBy(p => p.CreatedAt)
+            .ToList();
+        if (targets.Count == 0)
+            return 0;
+
+        var regPointIds = targets.Where(p => p.RegulationPointId.HasValue)
+            .Select(p => p.RegulationPointId!.Value).Distinct().ToList();
+        var regPointsById = regPointIds.Count == 0
+            ? new Dictionary<Guid, NdRegulationPoint>()
+            : await db.NdRegulationPoints.AsNoTracking()
+                .Where(p => regPointIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, ct);
+
+        var label = string.IsNullOrWhiteSpace(evidenceLabel) ? "uploaded evidence document" : evidenceLabel.Trim();
+
+        foreach (var point in targets)
+        {
+            ct.ThrowIfCancellationRequested();
+            var (clauseNo, clauseText) = DemoAnalysisSeedService.ResolveClauseFromAnalysisPoint(point, regPointsById);
+            var judgment = BuildEvidenceRerunJudgment(point, clauseNo, label);
+            var message = NdRegulJudgmentFormatter.FormatLandingMessage(clauseNo, clauseText, judgment);
+            NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, message);
+            point.LandingAiRerunCount += 1;
+            point.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            await Task.Delay(DemoDelayMs(180, 340), ct);
+        }
+
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        dashboardCache.Invalidate();
+        return targets.Count;
+    }
+
+    /// <summary>One compliance step better, evidenced by the newly uploaded document.</summary>
+    private static RegulJudgmentResult BuildEvidenceRerunJudgment(
+        NdAnalysisPoint point,
+        string clauseNo,
+        string evidenceLabel)
+    {
+        var upgraded = point.FinalStatus switch
+        {
+            "non_compliant" => "partial",
+            "partial_compliant" => "compliant",
+            _ => "compliant",
+        };
+        var reference = $"{evidenceLabel} — clause {clauseNo}";
+        var extract = upgraded == "compliant"
+            ? $"The uploaded document \"{evidenceLabel}\" sets out the full procedure required by clause {clauseNo}, including ownership, frequency and escalation."
+            : $"The uploaded document \"{evidenceLabel}\" partially addresses clause {clauseNo}: the control is described, but ownership and review frequency are still missing.";
+
+        return new RegulJudgmentResult
+        {
+            OverallStatus = upgraded,
+            DesignStatus = upgraded,
+            Confidence = upgraded == "compliant" ? 0.94 : 0.62,
+            DocumentReference = reference,
+            PolicyExtract = [extract],
+            GapDescription = upgraded == "compliant"
+                ? ""
+                : $"Clause {clauseNo} is now partially covered by the uploaded evidence; assign an owner and a review cycle to close it fully.",
+            SuggestedAction = upgraded == "compliant"
+                ? "N/A"
+                : "Assign a named owner and a documented review frequency for this control, then re-upload the updated procedure.",
+        };
     }
 
     public async Task SimulateDemoAnalysisRunAsync(

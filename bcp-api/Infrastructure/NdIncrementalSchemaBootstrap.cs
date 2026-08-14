@@ -72,6 +72,101 @@ public static class NdIncrementalSchemaBootstrap
         CREATE INDEX IF NOT EXISTS idx_demo_analysis_template_points_template
           ON demo_analysis_template_points (template_id, sort_order);
         """,
+        """
+        CREATE TABLE IF NOT EXISTS analysis_action_plans (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          analysis_run_id UUID NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
+          analysis_point_id UUID NOT NULL REFERENCES analysis_points(id) ON DELETE CASCADE,
+          action_plan TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'pending',
+          priority TEXT NOT NULL DEFAULT 'medium',
+          target_date TIMESTAMPTZ NULL,
+          responsibility_type TEXT NOT NULL DEFAULT 'department',
+          responsibility_department_id UUID NULL,
+          responsibility_user_id UUID NULL,
+          responsibility_label TEXT NULL,
+          comment TEXT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          resolved_at TIMESTAMPTZ NULL,
+          resolved_by UUID NULL,
+          created_by UUID NULL,
+          updated_by UUID NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        ALTER TABLE analysis_action_plans
+          ADD COLUMN IF NOT EXISTS gap_index INT NOT NULL DEFAULT 0;
+        """,
+        """
+        ALTER TABLE analysis_action_plans
+          ADD COLUMN IF NOT EXISTS priority_score INT NOT NULL DEFAULT 50;
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_analysis_action_plans_point
+          ON analysis_action_plans (analysis_point_id, gap_index, sort_order);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_analysis_action_plans_run
+          ON analysis_action_plans (analysis_run_id, priority, status);
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS analysis_action_plan_assignees (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          action_plan_id UUID NOT NULL REFERENCES analysis_action_plans(id) ON DELETE CASCADE,
+          assignee_type TEXT NOT NULL DEFAULT 'department',
+          department_id UUID NULL,
+          user_id UUID NULL,
+          label TEXT NOT NULL DEFAULT '',
+          sort_order INT NOT NULL DEFAULT 0,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_analysis_action_plan_assignees_plan
+          ON analysis_action_plan_assignees (action_plan_id, sort_order);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_analysis_action_plan_assignees_user
+          ON analysis_action_plan_assignees (user_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_analysis_action_plan_assignees_department
+          ON analysis_action_plan_assignees (department_id);
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS analysis_action_plan_reviews (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          action_plan_id UUID NOT NULL REFERENCES analysis_action_plans(id) ON DELETE CASCADE,
+          analysis_point_id UUID NOT NULL,
+          analysis_run_id UUID NOT NULL,
+          comment TEXT NOT NULL DEFAULT '',
+          reviewer_id UUID NULL,
+          reviewer_role TEXT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_analysis_action_plan_reviews_plan
+          ON analysis_action_plan_reviews (action_plan_id, created_at);
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS analysis_action_plan_date_history (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          action_plan_id UUID NOT NULL REFERENCES analysis_action_plans(id) ON DELETE CASCADE,
+          previous_target_date TIMESTAMPTZ NULL,
+          new_target_date TIMESTAMPTZ NULL,
+          reason TEXT NULL,
+          changed_by UUID NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_analysis_action_plan_date_history_plan
+          ON analysis_action_plan_date_history (action_plan_id, created_at DESC);
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

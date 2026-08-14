@@ -703,6 +703,23 @@
   color: #047857;
 }
 
+.gap-action-count-pill {
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+/* Actions live inside their gap card, so they sit on a lighter inset surface. */
+.gap-actions-block {
+  display: block;
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed var(--border);
+}
+
 .action-review-block-head {
   display: flex;
   align-items: center;

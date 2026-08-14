@@ -65,17 +65,17 @@ function normalizeStructuredStatus(status: string): string {
   const s = status.trim().toLowerCase();
   if (!s) return '';
   if (/\bnon[- ]?compliant\b/.test(s) || (/\bnon\b/.test(s) && /compliant/.test(s))) {
-    return 'Non-compliant';
+    return 'Non Compliant';
   }
-  if (/\bpartial\b/.test(s)) return 'Partial compliant';
+  if (/\bpartial\b/.test(s)) return 'Partial Compliant';
   if (/\bcompliant\b/.test(s)) return 'Compliant';
   return status.trim();
 }
 
 export function exportStatusLabel(severity: ComplianceSeverity | null): string {
   if (severity === 'compliant') return 'Compliant';
-  if (severity === 'partial_compliant') return 'Partial compliant';
-  if (severity === 'non_compliant') return 'Non-compliant';
+  if (severity === 'partial_compliant') return 'Partial Compliant';
+  if (severity === 'non_compliant') return 'Non Compliant';
   return '';
 }
 

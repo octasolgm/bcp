@@ -153,7 +153,9 @@ export class NdAuthService {
       await this.signOut();
       return 'Account deactivated';
     }
-    this.profileSignal.set(normalizeNdProfile(profileRes.data));
+    const profile = normalizeNdProfile(profileRes.data);
+    this.profileSignal.set(profile);
+    this.writeCachedProfile(profile);
     return null;
   }
 

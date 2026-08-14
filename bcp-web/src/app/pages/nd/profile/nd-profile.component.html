@@ -1,0 +1,72 @@
+<section class="nd-page profile-page">
+  <header class="profile-head">
+    <h1>My profile</h1>
+    <p class="profile-sub">Your account details and the actions currently assigned to you.</p>
+  </header>
+
+  @if (message || error) {
+    <div class="nd-alert-dock">
+      @if (message) {
+        <app-nd-page-alert kind="success" [text]="message" />
+      }
+      @if (error) {
+        <app-nd-page-alert kind="error" [text]="error" />
+      }
+    </div>
+  }
+
+  <div class="profile-grid">
+    <div class="profile-card">
+      <h2>Account</h2>
+
+      <label class="profile-field">
+        <span class="field-label">Full name</span>
+        <input type="text" class="nd-input" [(ngModel)]="fullName" />
+      </label>
+
+      <div class="profile-field">
+        <span class="field-label">Email</span>
+        <p class="field-value">{{ profile?.email ?? '—' }}</p>
+      </div>
+
+      <div class="profile-field">
+        <span class="field-label">Role</span>
+        <p class="field-value">{{ roleLabel }}</p>
+      </div>
+
+      <div class="profile-field">
+        <span class="field-label">Department</span>
+        <p class="field-value">
+          {{ profile?.departmentName ?? 'Not assigned' }}
+        </p>
+        <p class="field-hint">
+          Role and department are set by an administrator in User management. Your department
+          decides which team-assigned actions reach your inbox.
+        </p>
+      </div>
+
+      <button type="button" class="nd-btn primary" (click)="save()" [disabled]="saving">
+        {{ saving ? 'Saving…' : 'Save changes' }}
+      </button>
+    </div>
+
+    <div class="profile-card">
+      <h2>My actions</h2>
+      <div class="profile-stats">
+        <div class="stat">
+          <span class="stat-value">{{ inbox.pending }}</span>
+          <span class="stat-label">Pending</span>
+        </div>
+        <div class="stat overdue">
+          <span class="stat-value">{{ inbox.overdue }}</span>
+          <span class="stat-label">Overdue</span>
+        </div>
+        <div class="stat resolved">
+          <span class="stat-value">{{ inbox.resolved }}</span>
+          <span class="stat-label">Resolved</span>
+        </div>
+      </div>
+      <a class="nd-btn ghost" routerLink="/nd/inbox">Open my actions</a>
+    </div>
+  </div>
+</section>

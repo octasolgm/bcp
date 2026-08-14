@@ -2399,7 +2399,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.exportingGapReport = true;
     this.cdr.markForCheck();
     try {
-      await exportRegulGapAnalysisExcelFromPoints(points);
+      await exportRegulGapAnalysisExcelFromPoints(points, undefined, undefined, {
+        regulationDocumentName: this.regulationDocumentExportName,
+      });
       const label = scope === 'all' ? 'regulatory + INT clauses' : 'regulatory clauses';
       this.toast.show(`Exported ${rows.length} ${label} to Excel`, 'success');
     } catch {
@@ -3059,6 +3061,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       exportGapAnalysisPdfFromPoints(points, {
         runName: 'Gap Analysis Report',
         subtitle: `Regul workflow V3 · ${rows.length} point(s)`,
+        regulationDocumentName: this.regulationDocumentExportName,
       });
     } finally {
       this.exportingGapReport = false;

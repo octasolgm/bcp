@@ -19,10 +19,14 @@ type AdminUser = {
   fullName: string;
   email?: string | null;
   role: string;
+  departmentId?: string | null;
+  departmentName?: string | null;
   isActive: boolean;
   accountStatus: 'active' | 'deactivated' | 'pending_invitation' | string;
   createdAt: string;
 };
+
+type AdminDepartment = { id: string; name: string };
 
 type UserSortColumn = 'name' | 'email' | 'role' | 'status';
 
@@ -38,9 +42,11 @@ export class NdAdminUsersComponent implements OnInit {
   readonly auth = inject(NdAuthService);
 
   users: AdminUser[] = [];
+  departments: AdminDepartment[] = [];
   inviteName = '';
   inviteEmail = '';
   inviteRole = 'maker';
+  inviteDepartmentId = '';
   invitePassword = '';
   loading = true;
   inviting = false;
@@ -78,13 +84,48 @@ export class NdAdminUsersComponent implements OnInit {
   async load(silent = false): Promise<void> {
     if (!silent) this.loading = true;
     this.error = '';
-    const usersRes = await this.api.getUsers();
+    const [usersRes, deptRes] = await Promise.all([this.api.getUsers(), this.api.getDepartments()]);
     if (usersRes.success && usersRes.data) {
       this.users = usersRes.data as AdminUser[];
     } else if (!silent || this.users.length === 0) {
       this.error = usersRes.message ?? 'Failed to load users';
     }
+    if (deptRes.success && deptRes.data) {
+      this.departments = (deptRes.data as AdminDepartment[]).map((d) => ({ id: d.id, name: d.name }));
+    }
     this.loading = false;
+  }
+
+  /**
+   * Department drives which team-assigned actions reach a user's inbox, so changes save
+   * immediately. An empty pick clears the department; the API reads Guid.Empty as "none".
+   */
+  async handleDepartmentChange(userId: string, departmentId: string): Promise<void> {
+    const idx = this.users.findIndex((u) => u.id === userId);
+    if (idx < 0) return;
+    const previous = this.users[idx].departmentId ?? '';
+    if (previous === departmentId) return;
+
+    this.savingUserId = userId;
+    this.error = '';
+    this.users[idx] = {
+      ...this.users[idx],
+      departmentId: departmentId || null,
+      departmentName: this.departments.find((d) => d.id === departmentId)?.name ?? null,
+    };
+
+    const res = await this.api.updateUser(userId, {
+      departmentId: departmentId || '00000000-0000-0000-0000-000000000000',
+    });
+    if (!res.success) {
+      this.users[idx] = {
+        ...this.users[idx],
+        departmentId: previous || null,
+        departmentName: this.departments.find((d) => d.id === previous)?.name ?? null,
+      };
+      this.error = res.message ?? 'Failed to update department';
+    }
+    this.savingUserId = null;
   }
 
   get visibleUsers(): AdminUser[] {
@@ -149,12 +190,14 @@ export class NdAdminUsersComponent implements OnInit {
       email: this.inviteEmail.trim(),
       role: this.inviteRole,
       password: password || undefined,
+      departmentId: this.inviteDepartmentId || undefined,
     });
     if (res.success) {
       this.message = res.message ?? 'User created';
       this.inviteName = '';
       this.inviteEmail = '';
       this.invitePassword = '';
+      this.inviteDepartmentId = '';
       await this.load(true);
     } else {
       this.error = this.formatApiError(res.message ?? 'Create user failed');

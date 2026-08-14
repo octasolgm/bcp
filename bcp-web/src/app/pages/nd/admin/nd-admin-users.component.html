@@ -39,6 +39,15 @@
             </select>
           </label>
           <label class="field">
+            <span>Department (optional)</span>
+            <select [(ngModel)]="inviteDepartmentId" name="inviteDepartmentId">
+              <option value="">No department</option>
+              @for (dept of departments; track dept.id) {
+                <option [value]="dept.id">{{ dept.name }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
             <span>Initial password (optional)</span>
             <input
               type="password"
@@ -134,6 +143,7 @@
                   <th class="sortable" (click)="toggleSort('name')">Name <span class="sort-indicator">{{ sortMark('name') }}</span></th>
                   <th class="sortable" (click)="toggleSort('email')">Email <span class="sort-indicator">{{ sortMark('email') }}</span></th>
                   <th class="sortable" (click)="toggleSort('role')">Role <span class="sort-indicator">{{ sortMark('role') }}</span></th>
+                  <th>Department</th>
                   <th class="sortable" (click)="toggleSort('status')">Account status <span class="sort-indicator">{{ sortMark('status') }}</span></th>
                   <th class="col-actions">Actions</th>
                 </tr>
@@ -162,6 +172,19 @@
                         <option value="checker">Checker</option>
                         <option value="reviewer">Reviewer</option>
                         <option value="super_admin">Super Admin</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        class="inline-select"
+                        [ngModel]="u.departmentId ?? ''"
+                        [disabled]="savingUserId === u.id"
+                        (ngModelChange)="handleDepartmentChange(u.id, $event)"
+                      >
+                        <option value="">No department</option>
+                        @for (dept of departments; track dept.id) {
+                          <option [value]="dept.id">{{ dept.name }}</option>
+                        }
                       </select>
                     </td>
                     <td>

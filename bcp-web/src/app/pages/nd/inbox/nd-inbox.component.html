@@ -1,0 +1,116 @@
+<section class="nd-page inbox-page">
+  <header class="inbox-head">
+    <div>
+      <h1>My actions</h1>
+      <p class="inbox-sub">
+        Corrective actions assigned to {{ profileName }}
+        @if (data?.departmentName) {
+          or to <strong>{{ data?.departmentName }}</strong>
+        }
+        .
+      </p>
+    </div>
+    <button type="button" class="nd-btn ghost" (click)="load()" [disabled]="loading">
+      {{ loading ? 'Refreshing…' : 'Refresh' }}
+    </button>
+  </header>
+
+  @if (error) {
+    <div class="nd-alert-dock">
+      <app-nd-page-alert kind="error" [text]="error" />
+    </div>
+  }
+
+  <div class="inbox-stats">
+    <div class="stat">
+      <span class="stat-value">{{ countFor('pending') }}</span>
+      <span class="stat-label">Pending</span>
+    </div>
+    <div class="stat overdue">
+      <span class="stat-value">{{ countFor('overdue') }}</span>
+      <span class="stat-label">Overdue</span>
+    </div>
+    <div class="stat resolved">
+      <span class="stat-value">{{ countFor('resolved') }}</span>
+      <span class="stat-label">Resolved</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">{{ countFor('all') }}</span>
+      <span class="stat-label">Total assigned</span>
+    </div>
+  </div>
+
+  <div class="inbox-tabs" role="tablist">
+    @for (tab of tabs; track tab.id) {
+      <button
+        type="button"
+        role="tab"
+        class="inbox-tab"
+        [class.active]="activeTab === tab.id"
+        [attr.aria-selected]="activeTab === tab.id"
+        (click)="setTab(tab.id)"
+      >
+        {{ tab.label }}
+        <span class="tab-count">{{ countFor(tab.id) }}</span>
+      </button>
+    }
+  </div>
+
+  @if (loading) {
+    <p class="inbox-empty">Loading your actions…</p>
+  } @else if (!items.length) {
+    <p class="inbox-empty">{{ emptyMessage() }}</p>
+  } @else {
+    <ul class="inbox-list">
+      @for (item of items; track item.id) {
+        <li class="inbox-card" [class.overdue]="item.overdue" [class.resolved]="item.status === 'resolved'">
+          <div class="inbox-card-main">
+            <div class="inbox-card-top">
+              <span class="pill status" [class.resolved]="item.status === 'resolved'">
+                {{ statusLabel(item.status) }}
+              </span>
+              <span class="pill" [ngClass]="priorityClass(item.priority)">
+                {{ scoreLabel(item.priorityScore) }}
+              </span>
+              @if (item.overdue) {
+                <span class="pill danger">Overdue</span>
+              }
+              <span class="pill soft">{{ item.assignedDirectly ? 'Assigned to you' : 'Via ' + item.assignedVia }}</span>
+            </div>
+
+            <p class="inbox-action">{{ item.actionPlan }}</p>
+
+            <p class="inbox-context">
+              <span class="context-clause">{{ clauseLabel(item) }}</span>
+              @if (item.gapIndex) {
+                <span class="context-sep">·</span>
+                <span>Gap {{ item.gapIndex }}</span>
+              }
+              <span class="context-sep">·</span>
+              <span class="context-run">{{ item.runName }}</span>
+            </p>
+
+            @if (item.owners.length > 1) {
+              <p class="inbox-owners">
+                Shared with:
+                @for (owner of item.owners; track owner.label) {
+                  <span class="owner-chip">{{ owner.label }}</span>
+                }
+              </p>
+            }
+          </div>
+
+          <div class="inbox-card-side">
+            <div class="inbox-date">
+              <span class="date-label">Target</span>
+              <span class="date-value" [class.overdue]="item.overdue">{{ formatDate(item.targetDate) }}</span>
+            </div>
+            <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="gapLinkParams(item)">
+              Open gap
+            </a>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</section>

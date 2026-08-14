@@ -52,6 +52,9 @@ export type RegulationPointSearchGroup = {
   points: RegulationPointSearchHit[];
 };
 
+/** How long a just-uploaded row survives list refreshes that don't return it yet. */
+const RecentUploadKeepMs = 90_000;
+
 @Component({
   selector: 'app-nd-regulation-documents',
   standalone: true,
@@ -91,6 +94,8 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   savingDeptId: string | null = null;
   error = '';
   message = '';
+  /** Document id → upload timestamp, so fresh rows survive an eventually-consistent list. */
+  private readonly recentUploads = new Map<string, number>();
 
   selectedDoc: RegulationDocument | null = null;
   selectedPoints: RegulationPoint[] = [];
@@ -407,9 +412,60 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     return this.canExtract && !this.isManualDoc(doc);
   }
 
-  showRowViewButton(doc: RegulationDocument): boolean {
-    if (this.isManualDoc(doc)) return true;
-    return this.hasExtractedPoints(doc);
+  /**
+   * View is always visible so the workflow reads Upload → Parse → Extract → View.
+   * It is disabled with an explanatory reason until points exist.
+   */
+  showRowViewButton(): boolean {
+    return true;
+  }
+
+  /** Null when the action is allowed, otherwise the reason shown in the tooltip. */
+  viewDisabledReason(doc: RegulationDocument): string | null {
+    if (this.isManualDoc(doc)) return null;
+    if (this.hasExtractedPoints(doc)) return null;
+    if (this.isExtractingDoc(doc)) return 'Extraction in progress — points will appear when it finishes.';
+    if (this.isParsingDoc(doc)) return 'Parsing in progress. Extract points before viewing.';
+    if (this.isParsedDoc(doc) || this.isPausedDoc(doc)) return 'Extract points first to view them.';
+    return 'Parse the document first, then extract points to view them.';
+  }
+
+  extractDisabledReason(doc: RegulationDocument): string | null {
+    if (this.isManualDoc(doc)) return 'Manual documents do not use extraction.';
+    if (this.isExtractingDoc(doc)) return 'Extraction already running.';
+    if (this.isParsingDoc(doc)) return 'Wait for parsing to finish.';
+    if (this.canShowExtract(doc)) return null;
+    return 'Parse the document first.';
+  }
+
+  parseDisabledReason(doc: RegulationDocument): string | null {
+    if (this.isManualDoc(doc)) return 'Manual documents do not use parsing.';
+    if (this.parsingId === doc.id || this.isParsingDoc(doc)) return 'Parsing already running.';
+    if (this.isExtractingDoc(doc)) return 'Wait for extraction to finish before re-parsing.';
+    return null;
+  }
+
+  parseButtonTitle(doc: RegulationDocument): string {
+    return (
+      this.parseDisabledReason(doc)
+      ?? (this.isParsedDoc(doc) || this.hasExtractedPoints(doc)
+        ? 'Re-parse PDF to markdown'
+        : 'Parse PDF to markdown (required before extraction)')
+    );
+  }
+
+  extractButtonTitle(doc: RegulationDocument): string {
+    return (
+      this.extractDisabledReason(doc)
+      ?? (this.hasExtractedPoints(doc) ? 'Re-extract regulation points' : 'Extract regulation points')
+    );
+  }
+
+  viewButtonTitle(doc: RegulationDocument): string {
+    return (
+      this.viewDisabledReason(doc)
+      ?? (this.isManualDoc(doc) ? 'Manage points' : 'View extracted points')
+    );
   }
 
   showRowJsonButton(doc: RegulationDocument): boolean {
@@ -423,6 +479,15 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     if (!this.hasExtractedPoints(doc)) return false;
     if (this.auth.isDemoViewer() && !this.auth.isDemoAdmin()) return false;
     return true;
+  }
+
+  /**
+   * Demo runs extraction from the document row only — the points panel stays a read-only
+   * viewer so the demo walkthrough is Upload → Parse → Extract → View.
+   */
+  showPanelExtractButton(doc: RegulationDocument): boolean {
+    if (this.auth.isDemoViewer()) return false;
+    return this.canShowExtract(doc);
   }
 
   canClickRowExtract(doc: RegulationDocument): boolean {
@@ -537,6 +602,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     file: File,
   ): void {
     if (!data?.id) return;
+    this.recentUploads.set(data.id, Date.now());
     const deptId = data.departmentId ?? (this.uploadDept || null);
     const deptName = deptId ? (this.departments.find((d) => d.id === deptId)?.name ?? null) : null;
     const now = new Date().toISOString();
@@ -1091,6 +1157,12 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.exportingPointsId = null;
   }
 
+  docPageMeta(doc: RegulationDocument): string {
+    if (this.isManualDoc(doc)) return '—';
+    const pages = doc.pageCount ?? 0;
+    return pages > 0 ? `${pages}` : '—';
+  }
+
   docPointMeta(doc: RegulationDocument): string {
     if (this.isManualDoc(doc)) {
       return `${this.docListPointCount(doc)} pts`;
@@ -1187,6 +1259,19 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     return 'Pending parse';
   }
 
+  /**
+   * A just-uploaded row is not returned by the list API right away, and it has no points
+   * and no extraction running — without this it would be merged away and only reappear on
+   * a later refresh, which reads as the upload silently failing.
+   */
+  private isRecentUpload(docId: string): boolean {
+    const at = this.recentUploads.get(docId);
+    if (at == null) return false;
+    if (Date.now() - at <= RecentUploadKeepMs) return true;
+    this.recentUploads.delete(docId);
+    return false;
+  }
+
   private mergeRegulationList(
     prev: RegulationDocument[],
     incoming: RegulationDocument[],
@@ -1219,7 +1304,12 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       const shadowed = merged.some(
         (m) => m.id === d.id || (!!d.storedDocumentId && m.storedDocumentId === d.storedDocumentId),
       );
-      if (!shadowed && (this.isDocExtractionInFlight(d.id) || (d.pointCount ?? 0) > 0)) {
+      if (
+        !shadowed
+        && (this.isDocExtractionInFlight(d.id)
+          || (d.pointCount ?? 0) > 0
+          || this.isRecentUpload(d.id))
+      ) {
         merged.push(d);
       }
     }

@@ -77,8 +77,8 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
   readonly filters: { id: 'all' | GapSeverity; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'compliant', label: 'Compliance' },
-    { id: 'partial_compliant', label: 'Partial compliance' },
-    { id: 'non_compliant', label: 'Non-compliance' },
+    { id: 'partial_compliant', label: 'Partial Compliant' },
+    { id: 'non_compliant', label: 'Non Compliant' },
   ];
 
   items: GapItemData[] = [];

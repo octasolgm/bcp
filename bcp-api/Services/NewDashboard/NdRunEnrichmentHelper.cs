@@ -310,36 +310,37 @@ public static class NdRunEnrichmentHelper
             runMeta?.LastAt);
     }
 
+    /// <summary>
+    /// Same tally as the production SQL above, restricted to a run-id list. Aggregating in
+    /// SQL matters here: demo workspaces would otherwise stream every analysis point over
+    /// the wire on each dashboard load.
+    /// </summary>
     private static async Task<WorkspaceComplianceTotals> ComputeComplianceTotalsForRunsAsync(
         AppDbContext db,
         List<Guid> runIds,
         CancellationToken ct)
     {
-        var points = await db.NdAnalysisPoints.AsNoTracking()
-            .Where(p => runIds.Contains(p.AnalysisRunId))
-            .Select(p => new { p.FinalStatus, p.LandingAiStatus, p.GoogleAiStatus })
-            .ToListAsync(ct);
+        if (runIds.Count == 0) return new WorkspaceComplianceTotals(0, 0, 0);
 
-        var compliant = 0;
-        var partial = 0;
-        var nonCompliant = 0;
-        foreach (var p in points)
-        {
-            var status = EffectivePointStatus(p.FinalStatus, p.LandingAiStatus, p.GoogleAiStatus);
-            if (status == "compliant") compliant++;
-            else if (status == "partial_compliant") partial++;
-            else if (status == "non_compliant") nonCompliant++;
-        }
-
-        return new WorkspaceComplianceTotals(compliant, partial, nonCompliant);
-    }
-
-    private static string? EffectivePointStatus(string? finalStatus, string landingAiStatus, string googleAiStatus)
-    {
-        if (finalStatus is "compliant" or "partial_compliant" or "non_compliant") return finalStatus;
-        if (landingAiStatus is "compliant" or "partial_compliant" or "non_compliant") return landingAiStatus;
-        if (googleAiStatus is "compliant" or "partial_compliant" or "non_compliant") return googleAiStatus;
-        return null;
+        return await db.Database.SqlQueryRaw<WorkspaceComplianceTotals>(
+            """
+            SELECT
+              COUNT(*) FILTER (WHERE effective_status = 'compliant')::int AS "Compliant",
+              COUNT(*) FILTER (WHERE effective_status = 'partial_compliant')::int AS "Partial",
+              COUNT(*) FILTER (WHERE effective_status = 'non_compliant')::int AS "NonCompliant"
+            FROM (
+              SELECT
+                CASE
+                  WHEN p.final_status IN ('compliant','partial_compliant','non_compliant') THEN p.final_status
+                  WHEN p.landing_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.landing_ai_status
+                  WHEN p.google_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.google_ai_status
+                  ELSE NULL
+                END AS effective_status
+              FROM analysis_points p
+              WHERE p.analysis_run_id = ANY({0})
+            ) t
+            """,
+            runIds.ToArray()).FirstOrDefaultAsync(ct) ?? new WorkspaceComplianceTotals(0, 0, 0);
     }
 
     private static async Task<Dictionary<Guid, RunPointStatusAggregate>> LoadPointStatusAggregatesAsync(

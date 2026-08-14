@@ -56,9 +56,9 @@ public static class NdRegulJudgmentFormatter
         if (string.IsNullOrEmpty(s) && !string.IsNullOrWhiteSpace(designStatus))
             s = designStatus.Trim().ToLowerInvariant();
         if (s == "compliant") return "Compliant";
-        if (s.Contains("partial")) return "Partial compliant";
-        if (s.Contains("non")) return "Non-Compliant";
-        return string.IsNullOrEmpty(s) ? "Non-Compliant" : overallStatus!.Trim();
+        if (s.Contains("partial")) return "Partial Compliant";
+        if (s.Contains("non")) return "Non Compliant";
+        return string.IsNullOrEmpty(s) ? "Non Compliant" : overallStatus!.Trim();
     }
 
     private static string BuildGapAnalysisText(RegulJudgmentResult judgment, string status)

@@ -11,15 +11,15 @@
 
 <div class="nd-page-body">
   <div class="nd-page nd-page-fill demo-admin">
-    @if (!isSuperAdmin) {
-      <div class="demo-banner demo-banner-error" role="alert">
-        <strong>Access denied</strong>
-        <span>Real super admin only.</span>
-      </div>
-    } @else if (loading) {
+    @if (loading) {
       <div class="demo-loading" aria-busy="true">
         <span class="demo-spinner" aria-hidden="true"></span>
         <p>Loading demo workspace…</p>
+      </div>
+    } @else if (!isSuperAdmin) {
+      <div class="demo-banner demo-banner-error" role="alert">
+        <strong>Access denied</strong>
+        <span>Real super admin only.</span>
       </div>
     } @else {
       @if (error) {

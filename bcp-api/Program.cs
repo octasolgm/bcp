@@ -317,6 +317,19 @@ file static class StartupBootstrap
                         var bgTracker = bgScope.ServiceProvider
                             .GetRequiredService<Reguliq.Api.Infrastructure.NewDashboard.NdAnalysisRunCancellationTracker>();
                         var bgLog = bgScope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+
+                        // Sign-in blocks on this lookup, so pay for it here instead of on the first login.
+                        try
+                        {
+                            var bgDemoDirectory = bgScope.ServiceProvider
+                                .GetRequiredService<Reguliq.Api.Services.NewDashboard.Demo.NdDemoUserDirectory>();
+                            await bgDemoDirectory.GetDemoProfileIdsAsync(CancellationToken.None);
+                        }
+                        catch (Exception demoEx)
+                        {
+                            bgLog.LogWarning(demoEx, "Background demo directory warm-up failed.");
+                        }
+
                         var n = await Reguliq.Api.Services.NewDashboard.NdStaleRunRecovery
                             .CancelAllRunningWithoutWorkerAsync(bgDb, bgTracker, bgLog, CancellationToken.None);
                         if (n > 0)

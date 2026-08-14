@@ -28,6 +28,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdAnalysisReview> NdAnalysisReviews => Set<NdAnalysisReview>();
     public DbSet<NdAnalysisPointComment> NdAnalysisPointComments => Set<NdAnalysisPointComment>();
     public DbSet<NdActionPlanItemReview> NdActionPlanItemReviews => Set<NdActionPlanItemReview>();
+    public DbSet<NdAnalysisActionPlan> NdAnalysisActionPlans => Set<NdAnalysisActionPlan>();
+    public DbSet<NdAnalysisActionPlanAssignee> NdAnalysisActionPlanAssignees => Set<NdAnalysisActionPlanAssignee>();
+    public DbSet<NdAnalysisActionPlanReview> NdAnalysisActionPlanReviews => Set<NdAnalysisActionPlanReview>();
+    public DbSet<NdAnalysisActionPlanDateHistory> NdAnalysisActionPlanDateHistories => Set<NdAnalysisActionPlanDateHistory>();
     public DbSet<NdAnalysisStatusHistory> NdAnalysisStatusHistories => Set<NdAnalysisStatusHistory>();
     public DbSet<NdHiddenLegacyRun> NdHiddenLegacyRuns => Set<NdHiddenLegacyRun>();
     public DbSet<NdSystemSetting> NdSystemSettings => Set<NdSystemSetting>();

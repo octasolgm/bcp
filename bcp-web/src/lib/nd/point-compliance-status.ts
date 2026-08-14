@@ -181,9 +181,9 @@ export function resolveDisplayConfidence(point: AnalysisPoint): string {
 }
 
 export function complianceSeverityLabel(severity: ComplianceSeverity): string {
-  if (severity === 'compliant') return 'Fully Compliant';
+  if (severity === 'compliant') return 'Compliant';
   if (severity === 'partial_compliant') return 'Partial Compliant';
-  return 'Non-Compliant';
+  return 'Non Compliant';
 }
 
 export function pointHasCapContent(point: AnalysisPoint): boolean {

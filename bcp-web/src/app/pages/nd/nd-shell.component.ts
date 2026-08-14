@@ -26,6 +26,7 @@ type NavIcon =
   | 'list'
   | 'trash'
   | 'settings'
+  | 'inbox'
   | 'chevron';
 
 type NavItem = {
@@ -60,6 +61,7 @@ type NavEntry =
 })
 export class NdShellComponent implements OnInit, OnDestroy {
   private static readonly SIDEBAR_WIDTH_KEY = 'nd-sidebar-width';
+  private static readonly BADGE_CACHE_KEY = 'nd-sidebar-badges';
 
   readonly auth = inject(NdAuthService);
   readonly toast = inject(ToastService);
@@ -87,6 +89,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private badgeRefreshQueued = false;
   private badgeApplyGeneration = 0;
   private lastBadgeBumpMs = 0;
+  private badgesLoadedOnce = false;
 
   /** Demo accounts: hide legacy version picker only (sidebar New analysis stays). */
   private static readonly DEMO_HIDDEN_NAV_IDS = new Set(['analysis-versions', 'analyse-v8']);
@@ -141,7 +144,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     this.sidebarWidth = this.loadSidebarWidth();
     this.expandedGroups = new Set();
     this.syncExpandedGroupsToRoute();
-    // Sidebar badges are non-critical — defer on overview so analysis-runs gets the DB pool first.
+    this.hydrateBadgesFromCache(role);
     this.scheduleNavBadgeRefresh();
     if (!this.isOverviewRoute() && !this.auth.isDemoViewer()) {
       setTimeout(() => void this.refreshPass2LlmSummary(), 2500);
@@ -303,15 +306,52 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private scheduleNavBadgeRefresh(): void {
     if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
     const path = this.router.url.split('?')[0];
-    const delayMs = this.isOverviewRoute()
-      ? 15_000
-      : path.includes('/nd/analysis-runs') || path.includes('/nd/in-progress')
-        ? 0
-        : 8_000;
+    // The first pass is near-immediate, otherwise the sidebar sits blank for seconds. The short
+    // delay just lets the page issue its own requests first (the database is remote, so parallel
+    // queries contend); cached badges are already on screen by then.
+    const delayMs = !this.badgesLoadedOnce
+      ? 500
+      : this.isOverviewRoute()
+        ? 15_000
+        : path.includes('/nd/analysis-runs') || path.includes('/nd/in-progress')
+          ? 0
+          : 8_000;
     this.badgeRefreshTimer = setTimeout(() => {
       this.badgeRefreshTimer = null;
       void this.refreshNavBadges();
     }, delayMs);
+  }
+
+  private badgeCacheKey(role: string): string {
+    return `${NdShellComponent.BADGE_CACHE_KEY}:${role}:${this.auth.isDemoViewer() ? 'demo' : 'real'}`;
+  }
+
+  /** Paint the previous session's numbers instantly while the fresh counts are in flight. */
+  private hydrateBadgesFromCache(role: string): void {
+    try {
+      const raw = sessionStorage.getItem(this.badgeCacheKey(role));
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        badges?: Partial<Record<string, number>>;
+        inProgress?: number;
+      };
+      if (parsed.badges) this.navBadges = parsed.badges;
+      if (typeof parsed.inProgress === 'number') this.ndActiveRunCount = parsed.inProgress;
+      this.cdr.markForCheck();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private cacheBadges(role: string): void {
+    try {
+      sessionStorage.setItem(
+        this.badgeCacheKey(role),
+        JSON.stringify({ badges: this.navBadges, inProgress: this.ndActiveRunCount }),
+      );
+    } catch {
+      /* ignore */
+    }
   }
 
   private isOverviewRoute(): boolean {
@@ -376,11 +416,14 @@ export class NdShellComponent implements OnInit, OnDestroy {
         'admin-users': c.adminUsers,
         'admin-departments': c.adminDepartments,
         'admin-deleted-runs': c.deletedAnalysisRuns,
+        inbox: c.inboxPending,
         'checker-queue': c.checkerQueue,
         'reviewer-queue': c.reviewerQueue,
       };
       this.ndActiveRunCount = c.analysisRunsInProgress;
       this.navBadges = next;
+      this.badgesLoadedOnce = true;
+      this.cacheBadges(role);
       this.cdr.markForCheck();
     } finally {
       this.badgeRefreshInFlight = false;
@@ -571,12 +614,21 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   private navForRole(role: string): NavEntry[] {
     const overview = this.link({ id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' });
+    // Every role owns actions, so the inbox sits directly under Overview for all of them.
+    const inbox = this.link({
+      id: 'inbox',
+      path: '/nd/inbox',
+      label: 'My actions',
+      icon: 'inbox',
+      badgeAlways: true,
+    });
 
     switch (role) {
       case 'super_admin': {
         const pending = this.pendingReviewsGroup(role);
         return [
           overview,
+          inbox,
           this.group(this.documentsGroup(role)),
           this.group(this.analysisGroup(role)),
           ...(pending ? [this.group(pending)] : []),
@@ -587,6 +639,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         const pending = this.pendingReviewsGroup(role);
         return [
           overview,
+          inbox,
           this.group(this.documentsGroup(role)),
           this.group(this.analysisGroup(role)),
           ...(pending ? [this.group(pending)] : []),
@@ -596,6 +649,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         const pending = this.pendingReviewsGroup(role);
         return [
           overview,
+          inbox,
           this.group({
             id: 'analysis',
             label: 'Analysis',
@@ -617,6 +671,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         const pending = this.pendingReviewsGroup(role);
         return [
           overview,
+          inbox,
           this.group({
             id: 'analysis',
             label: 'Analysis',
@@ -635,7 +690,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         ];
       }
       default:
-        return [overview];
+        return [overview, inbox];
     }
   }
 }

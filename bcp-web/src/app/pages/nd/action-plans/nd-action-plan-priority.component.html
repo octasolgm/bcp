@@ -1,0 +1,87 @@
+<div class="page-header">
+  <div>
+    <a class="back-link" routerLink="/nd/overview">← Overview</a>
+    <h1>{{ priorityLabel }} priority action plans</h1>
+    <p class="subtitle">
+      {{ rows.length }} analysis · {{ totalPlans }} action plan(s) at {{ priorityLabel.toLowerCase() }} priority
+    </p>
+  </div>
+  <div class="priority-switch">
+    <a class="switch-link" routerLink="/nd/action-plans/high" [class.active]="priority === 'high'">High</a>
+    <a class="switch-link" routerLink="/nd/action-plans/medium" [class.active]="priority === 'medium'">Medium</a>
+    <a class="switch-link" routerLink="/nd/action-plans/low" [class.active]="priority === 'low'">Low</a>
+  </div>
+</div>
+
+<div class="nd-page-body">
+  <div class="status-filters">
+    <button type="button" [class.active]="statusFilter === 'all'" (click)="setStatusFilter('all')">All</button>
+    <button type="button" [class.active]="statusFilter === 'pending'" (click)="setStatusFilter('pending')">Pending</button>
+    <button type="button" [class.active]="statusFilter === 'resolved'" (click)="setStatusFilter('resolved')">Resolved</button>
+  </div>
+
+  @if (loading) {
+    <p class="muted-loading">Loading…</p>
+  } @else if (error) {
+    <div class="card-surface empty-state">
+      <strong>Could not load action plans</strong>
+      <p>{{ error }}</p>
+      <button type="button" class="btn-primary" (click)="load()">Retry</button>
+    </div>
+  } @else if (!rows.length) {
+    <div class="card-surface empty-state">
+      <strong>No {{ priorityLabel.toLowerCase() }} priority action plans</strong>
+      <p>Action plans created on gap reports appear here grouped by priority.</p>
+    </div>
+  } @else {
+    <section class="card-surface">
+      <div class="nd-table-wrap">
+        <table class="nd-table">
+          <thead>
+            <tr>
+              <th>Analysis</th>
+              <th>Created</th>
+              <th class="num">Action plans</th>
+              <th class="num">Gaps</th>
+              <th class="num">Pending</th>
+              <th class="num">Resolved</th>
+              <th class="num">Overdue</th>
+              <th>Next target</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows; track row.runId) {
+              <tr class="clickable" (click)="openRun(row)">
+                <td>
+                  <span class="run-name">{{ row.runName }}</span>
+                  @if (row.createdByName) {
+                    <span class="run-sub">{{ row.createdByName }}</span>
+                  }
+                </td>
+                <td>{{ formatDate(row.createdAt) }}</td>
+                <td class="num"><strong>{{ row.actionPlanCount }}</strong></td>
+                <td class="num">{{ row.gapCount }}</td>
+                <td class="num">{{ row.pendingCount }}</td>
+                <td class="num">{{ row.resolvedCount }}</td>
+                <td class="num">
+                  @if (row.overdueCount > 0) {
+                    <span class="overdue">{{ row.overdueCount }}</span>
+                  } @else {
+                    0
+                  }
+                </td>
+                <td>{{ formatTargetDate(row.nextTargetDate) }}</td>
+                <td class="num">
+                  <button type="button" class="btn-link" (click)="openRun(row); $event.stopPropagation()">
+                    Open gaps →
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>

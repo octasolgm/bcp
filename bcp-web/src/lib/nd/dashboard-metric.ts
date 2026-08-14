@@ -53,15 +53,15 @@ export const DASHBOARD_METRICS: Record<DashboardMetricId, DashboardMetricDef> = 
   },
   partial: {
     id: 'partial',
-    label: 'Partial items',
+    label: 'Partial compliant items',
     hint: 'Partially addressed',
-    countLabel: 'Partial',
+    countLabel: 'Partial Compliant',
   },
   non_compliant: {
     id: 'non_compliant',
-    label: 'Non-compliant items',
+    label: 'Non compliant items',
     hint: 'Not addressed',
-    countLabel: 'Non-compliant',
+    countLabel: 'Non Compliant',
   },
 };
 

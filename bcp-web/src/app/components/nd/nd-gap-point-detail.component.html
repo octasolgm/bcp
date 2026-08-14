@@ -144,24 +144,6 @@
     />
   }
 
-  @if (showReviewPanel && !dockPointReview) {
-    <app-nd-item-review-section
-      [actionIndex]="pointReviewActionIndex"
-      title="Compliance point review"
-      subtitle="Point-level review applies to this requirement — not individual actions."
-      [reviews]="pointLevelReviews"
-      [reviewMode]="reviewMode"
-      [showPanel]="true"
-      [disabledHint]="reviewDisabledHint"
-      [departments]="departments"
-      [savingActionIndex]="savingActionReviewIndex"
-      [savingReviewId]="savingReviewId"
-      (saveReview)="onItemReviewSave($event)"
-      (deleteReview)="deleteActionItemReview.emit($event)"
-      (reorderReview)="reorderActionItemReview.emit($event)"
-    />
-  }
-
   @if (showCapSection) {
     <section class="cap-section">
       <div class="cap-toolbar">
@@ -173,7 +155,7 @@
           @if (showHistoryPanel) {
             <button type="button" class="toolbar-btn" (click)="onCloseHistory()">Close history</button>
           } @else if (canEdit && !editing) {
-            <button type="button" class="toolbar-btn primary" (click)="startAddAction()">+ Add action</button>
+            <button type="button" class="toolbar-btn primary" (click)="startAddAction()">+ Add gap</button>
             @if (history.length || currentPlan || capGaps.length) {
               <button type="button" class="toolbar-btn" (click)="onOpenHistory()">Full history</button>
             }
@@ -187,7 +169,7 @@
         <div class="history-backdrop" (click)="onCloseHistory()"></div>
         <aside class="history-panel" role="dialog" aria-label="Action plan history">
           <header class="history-panel-head">
-            <h4>Action plan history@if (historyGapIndex != null) { — Action {{ historyGapIndex }} }</h4>
+            <h4>Action plan history@if (historyGapIndex != null) { — Gap {{ historyGapIndex }} }</h4>
             <button type="button" class="history-close" (click)="onCloseHistory()" aria-label="Close history">✕</button>
           </header>
           <p class="history-sub">Every edit is versioned — who changed it and when. Set any version as current to restore it.</p>
@@ -210,7 +192,7 @@
                     @if (historyGapAt(h, historyGapIndex); as gap) {
                       <ul class="history-action-list">
                         <li class="history-action-item">
-                          <strong>Action {{ gap.index }}</strong>
+                          <strong>Gap {{ gap.index }}</strong>
                           <p>{{ gap.fix || gap.missing }}</p>
                         </li>
                       </ul>
@@ -219,7 +201,7 @@
                     <ul class="history-action-list">
                       @for (gap of historyGaps(h.actionPlanContent); track gap.index) {
                         <li class="history-action-item">
-                          <strong>Action {{ gap.index }}</strong>
+                          <strong>Gap {{ gap.index }}</strong>
                           <p>{{ gap.fix || gap.missing }}</p>
                         </li>
                       }
@@ -243,7 +225,7 @@
           @for (gap of capGaps; track gap.index) {
             @if (isEditingGap(gap.index)) {
               <div class="cap-gap cap-gap-edit">
-                <p class="gap-label">Action {{ gap.index }}</p>
+                <p class="gap-label">Gap {{ gap.index }}</p>
                 <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
                 <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
                 <p class="fix-label">Action (what to do)</p>
@@ -273,9 +255,12 @@
               <div class="cap-gap cap-gap-read" [class.is-collapsed]="isActionCollapsed(gap.index)">
                 <button type="button" class="cap-gap-toggle" (click)="toggleActionCollapsed(gap.index)">
                   <span class="cap-gap-toggle-main">
-                    <span class="gap-label">Action {{ gap.index }}</span>
+                    <span class="gap-label">Gap {{ gap.index }}</span>
                     @if (gapPriorityFor(gap); as priority) {
                       <span class="gap-priority-pill" [ngClass]="gapPriorityClass(priority)">{{ gapPriorityLabel(priority) }}</span>
+                    }
+                    @if (actionCountForGap(gap.index); as actionCount) {
+                      <span class="gap-action-count-pill">{{ actionCount }} action{{ actionCount === 1 ? '' : 's' }}</span>
                     }
                     @if (reviewCountForGap(gap.index); as reviewCount) {
                       @if (reviewCount > 0) {
@@ -293,7 +278,7 @@
                   <div class="cap-gap-head">
                     <div class="cap-gap-head-meta">
                       @if (canEdit && !editing) {
-                        <div class="gap-priority-inline" role="group" [attr.aria-label]="'Priority for action ' + gap.index">
+                        <div class="gap-priority-inline" role="group" [attr.aria-label]="'Priority for gap ' + gap.index">
                           @for (opt of gapPriorityOptions; track opt.id) {
                             <button
                               type="button"
@@ -326,6 +311,23 @@
                     <p class="fix-label">Action (what to do)</p>
                     <p>{{ gap.fix }}</p>
                   }
+
+                  @if (runId) {
+                    <app-nd-action-plans-section
+                      class="gap-actions-block"
+                      [runId]="runId"
+                      [analysisPointId]="point.id"
+                      [gapIndex]="gap.index"
+                      [plans]="actionPlansForGapIndex(gap.index)"
+                      [canEdit]="canEditActionPlans"
+                      [canReview]="canReviewActionPlans"
+                      [lightSurface]="true"
+                      [disabledHint]="reviewDisabledHint"
+                      (plansChanged)="actionPlansChanged.emit()"
+                      (viewReviews)="viewActionPlanReviews.emit($event)"
+                    />
+                  }
+
                   @if (showGapEvidenceForGap(gap)) {
                     <div class="gap-evidence-inline">
                       @if (attachmentsForGap(gap.index).length) {
@@ -366,20 +368,6 @@
                     </div>
                   }
 
-                  <app-nd-item-review-section
-                    [lightSurface]="true"
-                    [actionIndex]="gap.index"
-                    [reviews]="actionReviewsForGap(gap.index)"
-                    [reviewMode]="reviewMode"
-                    [showPanel]="showReviewPanel"
-                    [disabledHint]="reviewDisabledHint"
-                    [departments]="departments"
-                    [savingActionIndex]="savingActionReviewIndex"
-                    [savingReviewId]="savingReviewId"
-                    (saveReview)="onItemReviewSave($event)"
-                    (deleteReview)="deleteActionItemReview.emit($event)"
-                    (reorderReview)="reorderActionItemReview.emit($event)"
-                  />
                 </div>
                 }
               </div>
@@ -388,12 +376,12 @@
         } @else if (currentPlan && !addingNewAction) {
           <p class="cap-plain">{{ currentPlan }}</p>
         } @else if (!addingNewAction) {
-          <p class="cap-plain muted">No corrective actions yet.@if (canEdit) { Use <strong>Add action</strong> to create one. }</p>
+          <p class="cap-plain muted">No gaps recorded yet.@if (canEdit) { Use <strong>Add gap</strong> to create one. }</p>
         }
 
         @if (addingNewAction) {
           <div class="cap-gap cap-gap-edit cap-gap-new">
-            <p class="gap-label">New action</p>
+            <p class="gap-label">New gap</p>
             <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
             <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
             <p class="fix-label">Action (what to do)</p>

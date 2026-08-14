@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
@@ -24,9 +25,18 @@ public class AnalysisRunsController(
     NdDashboardCacheService dashboardCache,
     NdDemoUserDirectory demoDirectory,
     NdDemoWorkspaceService demoWorkspace,
+    NdDemoInterceptionService demoIntercept,
+    IMemoryCache memoryCache,
     ILogger<AnalysisRunsController> logger) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
+
+    /// <summary>
+    /// The demo workspace is auto-seeded on first visit. Without a cooldown, a demo user
+    /// whose workspace is intentionally empty (just cleared) re-runs the whole seed on
+    /// every list request, which is what made demo navigation crawl.
+    /// </summary>
+    private static readonly TimeSpan DemoAutoSeedCooldown = TimeSpan.FromMinutes(2);
 
     public record CreateRunRequest(
         string Name,
@@ -68,12 +78,14 @@ public class AnalysisRunsController(
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
-        if (demoCtx.Enabled && demoCtx.ViewerIsDemo)
+        var autoSeedKey = $"nd:demo-autoseed:{profile!.Id}";
+        if (demoCtx.Enabled && demoCtx.ViewerIsDemo && !deletedOnly && !memoryCache.TryGetValue(autoSeedKey, out _))
         {
+            memoryCache.Set(autoSeedKey, true, DemoAutoSeedCooldown);
             var previewQ = NdDemoDataFilters.ApplyToAnalysisRuns(
                 db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != DeletedStatus),
                 demoCtx);
-            if (profile!.Role == "maker")
+            if (profile.Role == "maker")
                 previewQ = previewQ.Where(r => r.CreatedBy == profile.Id);
             if (!await previewQ.AnyAsync(ct))
             {
@@ -969,22 +981,97 @@ public class AnalysisRunsController(
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
-        var demoAiBlock = NdDemoIsolationHelper.ForbidDemoAiOperations(demoCtx);
-        if (demoAiBlock != null) return demoAiBlock;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound();
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
 
-        var demoOwnedBlock = await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(
-            demoDirectory, run.CreatedBy, ct);
-        if (demoOwnedBlock != null) return demoOwnedBlock;
-
         var pointExists = await db.NdAnalysisPoints.AnyAsync(p => p.Id == pointId && p.AnalysisRunId == id, ct);
         if (!pointExists) return NotFound(new { success = false, message = "Analysis point not found" });
 
+        var demoOwned = run.CreatedBy != null
+            && await demoDirectory.IsDemoProfileAsync(run.CreatedBy.Value, ct);
+        if (demoCtx.ViewerIsDemo || demoOwned)
+        {
+            if (!evidenceOnly)
+            {
+                var block = NdDemoIsolationHelper.ForbidDemoAiOperations(demoCtx)
+                    ?? await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(demoDirectory, run.CreatedBy, ct);
+                return block ?? (IActionResult)StatusCode(403);
+            }
+            return await SimulateDemoEvidenceRerunAsync(id, pointId, ct);
+        }
+
         return QueuePointProcessing(run, id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex);
+    }
+
+    /// <summary>Re-run every open gap in the run against a freshly uploaded evidence document.</summary>
+    [HttpPost("{id:guid}/rerun-with-evidence")]
+    public async Task<IActionResult> RerunRunWithEvidence(Guid id, CancellationToken ct)
+    {
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound();
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+            return StatusCode(403);
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var demoOwned = run.CreatedBy != null
+            && await demoDirectory.IsDemoProfileAsync(run.CreatedBy.Value, ct);
+        if (demoCtx.ViewerIsDemo || demoOwned)
+            return await SimulateDemoEvidenceRerunAsync(id, null, ct);
+
+        var openPointIds = await db.NdAnalysisPoints
+            .Where(p => p.AnalysisRunId == id
+                && (p.FinalStatus == "non_compliant" || p.FinalStatus == "partial_compliant"))
+            .Select(p => p.Id)
+            .ToListAsync(ct);
+        if (openPointIds.Count == 0)
+            return Ok(new { success = true, message = "No open gaps to re-run", queued = 0 });
+
+        foreach (var openPointId in openPointIds)
+            QueuePointProcessing(run, id, openPointId, dualVerifyOnly: false, evidenceOnly: true, actionIndex: null);
+
+        return Ok(new
+        {
+            success = true,
+            message = $"Re-running {openPointIds.Count} gap(s) against the uploaded evidence",
+            queued = openPointIds.Count,
+        });
+    }
+
+    private async Task<IActionResult> SimulateDemoEvidenceRerunAsync(Guid runId, Guid? pointId, CancellationToken ct)
+    {
+        var label = await ResolveLatestEvidenceLabelAsync(runId, pointId, ct);
+        var updated = await demoIntercept.SimulateEvidenceRerunAsync(runId, pointId, label, ct);
+        return Ok(new
+        {
+            success = true,
+            demo = true,
+            updated,
+            message = updated == 0
+                ? "No open gaps to re-run"
+                : $"Re-ran {updated} gap(s) against \"{label}\"",
+        });
+    }
+
+    private async Task<string> ResolveLatestEvidenceLabelAsync(Guid runId, Guid? pointId, CancellationToken ct)
+    {
+        var pointIds = await db.NdAnalysisPoints
+            .Where(p => p.AnalysisRunId == runId && (pointId == null || p.Id == pointId.Value))
+            .Select(p => p.Id)
+            .ToListAsync(ct);
+        if (pointIds.Count == 0) return "uploaded evidence document";
+
+        var name = await db.NdAnalysisPointAttachments
+            .Where(a => pointIds.Contains(a.AnalysisPointId))
+            .OrderByDescending(a => a.CreatedAt)
+            .Select(a => a.FileName)
+            .FirstOrDefaultAsync(ct);
+        return string.IsNullOrWhiteSpace(name) ? "uploaded evidence document" : name;
     }
 
     [HttpPost("{id:guid}/rerun-forward")]
@@ -1089,20 +1176,27 @@ public class AnalysisRunsController(
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
-        var demoAiBlock = NdDemoIsolationHelper.ForbidDemoAiOperations(demoCtx);
-        if (demoAiBlock != null) return demoAiBlock;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound();
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
             return StatusCode(403);
 
-        var demoOwnedBlock = await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(
-            demoDirectory, run.CreatedBy, ct);
-        if (demoOwnedBlock != null) return demoOwnedBlock;
-
         var pointExists = await db.NdAnalysisPoints.AnyAsync(p => p.Id == pointId && p.AnalysisRunId == id, ct);
         if (!pointExists) return NotFound(new { success = false, message = "Analysis point not found" });
+
+        var demoOwned = run.CreatedBy != null
+            && await demoDirectory.IsDemoProfileAsync(run.CreatedBy.Value, ct);
+        if (demoCtx.ViewerIsDemo || demoOwned)
+        {
+            if (!evidenceOnly)
+            {
+                var block = NdDemoIsolationHelper.ForbidDemoAiOperations(demoCtx)
+                    ?? await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(demoDirectory, run.CreatedBy, ct);
+                return block ?? (IActionResult)StatusCode(403);
+            }
+            return await SimulateDemoEvidenceRerunAsync(id, pointId, ct);
+        }
 
         return QueuePointProcessing(run, id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex);
     }

@@ -1294,7 +1294,7 @@ public class DemoAnalysisSeedService(
         return matched;
     }
 
-    private static string NormalizeClauseKey(string value)
+    public static string NormalizeClauseKey(string value)
     {
         var trimmed = value.Trim();
         while (trimmed.EndsWith('.'))

@@ -1,0 +1,406 @@
+<section class="action-plans-section" [class.light-surface]="lightSurface">
+  <header class="ap-head">
+    <div class="ap-head-text">
+      <h4>
+        Actions
+        @if (sortedPlans.length) {
+          <span class="ap-count">{{ sortedPlans.length }}</span>
+        }
+      </h4>
+      <p class="ap-sub">
+        This gap can carry several actions. Each one has its own owner, target date and priority.
+      </p>
+    </div>
+    @if (canEdit && !adding && !editingId) {
+      <button type="button" class="btn-secondary btn-sm" (click)="startAdd()">+ Add action</button>
+    }
+  </header>
+
+  @if (error) {
+    <p class="ap-error" role="alert">{{ error }}</p>
+  }
+
+  @if (!sortedPlans.length && !adding) {
+    <p class="ap-empty">
+      No actions yet.
+      @if (!canEdit && disabledHint) {
+        {{ disabledHint }}
+      }
+    </p>
+  }
+
+  <ol class="ap-list">
+    @for (plan of sortedPlans; track plan.id; let i = $index) {
+      <li class="ap-card" [class.is-resolved]="plan.status === 'resolved'" [class.is-overdue]="isOverdue(plan)">
+        <button
+          type="button"
+          class="ap-card-toggle"
+          [attr.aria-expanded]="isExpanded(plan.id)"
+          (click)="toggleExpanded(plan.id)"
+        >
+          <span class="ap-index">Action {{ i + 1 }}</span>
+          <span class="ap-status-pill" [class.resolved]="plan.status === 'resolved'">{{ statusLabel(plan.status) }}</span>
+          <span class="ap-priority-pill" [ngClass]="planScoreClass(plan)">{{ scoreLabel(planScore(plan)) }}</span>
+          <span class="ap-summary truncate" [title]="plan.actionPlan">{{ plan.actionPlan }}</span>
+          <span class="ap-meta truncate">{{ responsibilityLabel(plan) }}</span>
+          <span class="ap-meta ap-target" [class.overdue]="isOverdue(plan)">
+            {{ targetDateLabel(plan) }}
+            @if (isOverdue(plan)) {
+              <span class="ap-overdue-tag">overdue</span>
+            }
+          </span>
+          <span class="ap-review-pill" [class.has-reviews]="plan.reviewCount > 0">{{ reviewCountLabel(plan) }}</span>
+          <svg class="ap-chevron" [class.open]="isExpanded(plan.id)" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="1.8" d="M5 8l5 5 5-5" />
+          </svg>
+        </button>
+
+        <div class="ap-card-actions">
+          <button
+            type="button"
+            class="ap-icon-btn"
+            [title]="'Target date history' + (plan.targetDate ? ' — ' + targetDateLabel(plan) : '')"
+            aria-label="Target date history"
+            (click)="toggleHistory(plan)"
+          >
+            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+              <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6" />
+              <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M10 6v4.2l2.8 1.7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="ap-icon-btn"
+            [class.has-reviews]="plan.reviewCount > 0"
+            [title]="plan.reviewCount + ' review(s) — open in side panel'"
+            aria-label="Open reviews"
+            (click)="onViewReviews(plan, $event)"
+          >
+            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="1.6" d="M4 5h12v8H8.5L5 15.5V13H4z" />
+            </svg>
+            @if (plan.reviewCount > 0) {
+              <span class="ap-review-badge">{{ plan.reviewCount }}</span>
+            }
+          </button>
+          @if (canEdit) {
+            <button type="button" class="ap-icon-btn" title="Move up" aria-label="Move up" [disabled]="i === 0 || saving" (click)="move(plan, 'up')">
+              <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="1.8" d="M5 12l5-5 5 5" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="ap-icon-btn"
+              title="Move down"
+              aria-label="Move down"
+              [disabled]="i === sortedPlans.length - 1 || saving"
+              (click)="move(plan, 'down')"
+            >
+              <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="1.8" d="M5 8l5 5 5-5" />
+              </svg>
+            </button>
+          }
+        </div>
+
+        @if (historyPlanId === plan.id) {
+          <div class="ap-history">
+            <h5>Target date history</h5>
+            @if (historyLoading) {
+              <p class="ap-muted">Loading…</p>
+            } @else if (!historyRows.length) {
+              <p class="ap-muted">No target date changes recorded.</p>
+            } @else {
+              <ul>
+                @for (row of historyRows; track row.id) {
+                  <li>
+                    <strong>{{ historyEntryLabel(row) }}</strong>
+                    <span class="ap-muted">
+                      {{ row.changedByName ?? 'Unknown user' }} · {{ formatDate(row.createdAt) }}
+                    </span>
+                    @if (row.reason) {
+                      <span class="ap-history-reason">{{ row.reason }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+
+        @if (isExpanded(plan.id)) {
+          <div class="ap-card-detail">
+            @if (editingId === plan.id) {
+              <ng-container [ngTemplateOutlet]="editor" />
+            } @else {
+              <p class="ap-plan-text">{{ plan.actionPlan }}</p>
+              <dl class="ap-detail-grid">
+                <div>
+                  <dt>Status</dt>
+                  <dd>{{ statusLabel(plan.status) }}</dd>
+                </div>
+                <div>
+                  <dt>Priority</dt>
+                  <dd [ngClass]="planScoreClass(plan)">{{ scoreLabel(planScore(plan)) }}</dd>
+                </div>
+                <div>
+                  <dt>Target date</dt>
+                  <dd>{{ targetDateLabel(plan) }}</dd>
+                </div>
+                <div>
+                  <dt>Responsibility</dt>
+                  <dd>
+                    @if (ownersOf(plan).length) {
+                      <span class="ap-owner-chips">
+                        @for (owner of ownersOf(plan); track owner.label + owner.type) {
+                          <span [ngClass]="ownerChipClass(owner)">{{ owner.label }}</span>
+                        }
+                      </span>
+                    } @else {
+                      Unassigned
+                    }
+                  </dd>
+                </div>
+                @if (plan.comment) {
+                  <div class="wide">
+                    <dt>Comment</dt>
+                    <dd>{{ plan.comment }}</dd>
+                  </div>
+                }
+                <div class="wide">
+                  <dt>Audit</dt>
+                  <dd>
+                    Created by {{ plan.createdByName ?? 'Unknown' }} on {{ formatDate(plan.createdAt) }}
+                    @if (plan.updatedByName && plan.updatedAt) {
+                      · last edited by {{ plan.updatedByName }} on {{ formatDate(plan.updatedAt) }}
+                    }
+                  </dd>
+                </div>
+              </dl>
+
+              @if (canEdit) {
+                <div class="ap-detail-actions">
+                  <button type="button" class="btn-secondary btn-sm" [disabled]="saving" (click)="startEdit(plan)">Edit</button>
+                  <button type="button" class="btn-secondary btn-sm" [disabled]="saving" (click)="toggleStatus(plan)">
+                    {{ plan.status === 'resolved' ? 'Reopen' : 'Mark resolved' }}
+                  </button>
+                  <button type="button" class="btn-secondary btn-sm danger" [disabled]="saving" (click)="remove(plan)">Delete</button>
+                </div>
+              }
+            }
+
+            <div class="ap-reviews">
+              <div class="ap-reviews-head">
+                <h5>Reviews <span class="ap-count">{{ plan.reviews.length }}</span></h5>
+                @if (canReview && reviewDraftPlanId !== plan.id) {
+                  <button type="button" class="btn-secondary btn-sm" (click)="startReview(plan)">+ Add review</button>
+                }
+              </div>
+
+              @if (!plan.reviews.length) {
+                <p class="ap-muted">No reviews on this action plan yet.</p>
+              } @else {
+                <ul class="ap-review-list">
+                  @for (review of plan.reviews; track review.id) {
+                    <li>
+                      <p class="ap-review-comment">{{ review.comment }}</p>
+                      <p class="ap-review-meta">
+                        {{ review.reviewerName ?? 'Reviewer' }}
+                        @if (review.reviewerRole) {
+                          · {{ review.reviewerRole }}
+                        }
+                        · {{ formatDate(review.createdAt) }}
+                      </p>
+                      @if (canReview) {
+                        <div class="ap-review-actions">
+                          <button type="button" class="link-btn" (click)="startEditReview(plan, review.id, review.comment)">Edit</button>
+                          <button type="button" class="link-btn danger" (click)="removeReview(plan, review.id)">Delete</button>
+                        </div>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+
+              @if (canReview && reviewDraftPlanId === plan.id) {
+                <div class="ap-review-form">
+                  <textarea
+                    class="ap-input ap-textarea"
+                    rows="3"
+                    placeholder="Review comment"
+                    [(ngModel)]="reviewDraftText"
+                  ></textarea>
+                  <div class="ap-form-actions">
+                    <button type="button" class="btn-primary btn-sm" [disabled]="savingReview || !reviewDraftText.trim()" (click)="submitReview(plan)">
+                      {{ savingReview ? 'Saving…' : editingReviewId ? 'Update review' : 'Save review' }}
+                    </button>
+                    <button type="button" class="btn-secondary btn-sm" [disabled]="savingReview" (click)="cancelReview()">Cancel</button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </li>
+    }
+  </ol>
+
+  @if (adding) {
+    <div class="ap-card ap-card-new">
+      <ng-container [ngTemplateOutlet]="editor" />
+    </div>
+  }
+</section>
+
+<ng-template #editor>
+  <div class="ap-form">
+    <div class="ap-field wide">
+      <label class="ap-label" for="ap-text">Action plan</label>
+      <textarea
+        id="ap-text"
+        class="ap-input ap-textarea"
+        rows="3"
+        placeholder="What will be done to close this gap?"
+        [(ngModel)]="draft.actionPlan"
+      ></textarea>
+    </div>
+
+    <div class="ap-field-row">
+      <div class="ap-field">
+        <label class="ap-label" for="ap-status">Status</label>
+        <select id="ap-status" class="ap-input" [ngModel]="draft.status" (ngModelChange)="setDraftStatus($event)">
+          @for (opt of statusOptions; track opt.value) {
+            <option [value]="opt.value">{{ opt.label }}</option>
+          }
+        </select>
+      </div>
+      <div class="ap-field">
+        <label class="ap-label" for="ap-target">Target date</label>
+        <input id="ap-target" type="date" class="ap-input" [(ngModel)]="draft.targetDate" />
+      </div>
+    </div>
+
+    <div class="ap-field wide ap-owner-field">
+      <label class="ap-label" for="ap-owner-input">Responsibility</label>
+      <div class="ap-owner-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          class="ap-owner-tab"
+          [class.active]="draft.responsibilityType === 'department'"
+          [attr.aria-selected]="draft.responsibilityType === 'department'"
+          (click)="setResponsibilityType('department')"
+        >
+          Departments
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="ap-owner-tab"
+          [class.active]="draft.responsibilityType === 'user'"
+          [attr.aria-selected]="draft.responsibilityType === 'user'"
+          (click)="setResponsibilityType('user')"
+        >
+          Individuals
+        </button>
+      </div>
+
+      @if (draftAssignees.length) {
+        <div class="ap-owner-chips">
+          @for (owner of draftAssignees; track owner.label + owner.type) {
+            <span [ngClass]="ownerChipClass(owner)">
+              {{ owner.label }}
+              <button type="button" class="ap-owner-chip-x" (click)="removeOwner(owner)" aria-label="Remove owner">
+                ×
+              </button>
+            </span>
+          }
+        </div>
+      }
+
+      <div class="ap-owner-input-wrap">
+        <input
+          id="ap-owner-input"
+          type="text"
+          class="ap-input"
+          autocomplete="off"
+          [placeholder]="
+            draft.responsibilityType === 'department'
+              ? 'Start typing a department name…'
+              : 'Start typing a name or email…'
+          "
+          [ngModel]="ownerQuery"
+          (ngModelChange)="onOwnerQueryChange($event)"
+          (focus)="ownerSuggestionsOpen = true"
+          (keydown.enter)="$event.preventDefault(); commitTypedOwner()"
+        />
+        @if (ownerSuggestionsOpen && ownerSuggestions.length) {
+          <ul class="ap-owner-suggestions">
+            @for (suggestion of ownerSuggestions; track suggestion.label) {
+              <li>
+                <button type="button" (click)="addOwner(suggestion)">{{ suggestion.label }}</button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+      <p class="ap-owner-hint">
+        Add as many owners as you need. Press Enter to keep a name that is not in the list.
+      </p>
+    </div>
+
+    <div class="ap-field wide ap-priority-field">
+      <div class="ap-priority-head">
+        <label class="ap-label" for="ap-priority">Priority</label>
+        <span class="ap-priority-value" [ngClass]="draftPriorityClass">{{ draftPriorityLabel }}</span>
+      </div>
+      <div class="ap-priority-slider-wrap">
+        <div class="ap-priority-track" aria-hidden="true"></div>
+        <input
+          id="ap-priority"
+          type="range"
+          class="ap-priority-slider"
+          min="0"
+          max="100"
+          step="1"
+          [ngModel]="draft.priorityScore"
+          (ngModelChange)="setDraftPriority($event)"
+          [attr.aria-valuenow]="draft.priorityScore"
+          [attr.aria-valuetext]="draftPriorityLabel"
+        />
+      </div>
+      <div class="ap-priority-scale" aria-hidden="true">
+        <span>0 Low</span>
+        <span>50 Medium</span>
+        <span>100 High</span>
+      </div>
+      <p class="ap-priority-standard">{{ priorityScale }}</p>
+    </div>
+
+    @if (showRetargetReason) {
+      <div class="ap-field wide">
+        <label class="ap-label" for="ap-reason">Reason for changing the target date</label>
+        <input
+          id="ap-reason"
+          type="text"
+          class="ap-input"
+          placeholder="Recorded in the target date history"
+          [(ngModel)]="draft.targetDateChangeReason"
+        />
+      </div>
+    }
+
+    <div class="ap-field wide">
+      <label class="ap-label" for="ap-comment">Comment</label>
+      <textarea id="ap-comment" class="ap-input ap-textarea" rows="2" [(ngModel)]="draft.comment"></textarea>
+    </div>
+
+    <div class="ap-form-actions">
+      <button type="button" class="btn-primary btn-sm" [disabled]="saving || !draft.actionPlan.trim()" (click)="submit()">
+        {{ saving ? 'Saving…' : editingId ? 'Update action' : 'Save action' }}
+      </button>
+      <button type="button" class="btn-secondary btn-sm" [disabled]="saving" (click)="cancelEdit()">Cancel</button>
+    </div>
+  </div>
+</ng-template>

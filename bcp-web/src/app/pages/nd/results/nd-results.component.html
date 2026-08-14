@@ -77,15 +77,15 @@
     @if (embedMode) {
       <div class="summary-row embedded-summary">
         <div class="summary-card compliant">
-          <span class="label">Compliance</span>
+          <span class="label">Compliant</span>
           <strong>{{ compliantCount }}</strong>
         </div>
         <div class="summary-card partial_compliant">
-          <span class="label">Partial compliance</span>
+          <span class="label">Partial Compliant</span>
           <strong>{{ partialCount }}</strong>
         </div>
         <div class="summary-card non_compliant">
-          <span class="label">Non-compliance</span>
+          <span class="label">Non Compliant</span>
           <strong>{{ nonCompliantCount }}</strong>
         </div>
       </div>
@@ -99,9 +99,9 @@
       <input type="search" class="nd-input" [(ngModel)]="search" placeholder="Search points…" />
       <select class="nd-input" [(ngModel)]="statusFilter">
         <option value="all">All statuses</option>
-        <option value="compliant">Compliance</option>
-        <option value="partial_compliant">Partial compliance</option>
-        <option value="non_compliant">Non-compliance</option>
+        <option value="compliant">Compliant</option>
+        <option value="partial_compliant">Partial Compliant</option>
+        <option value="non_compliant">Non Compliant</option>
         <option value="dual_verify_failed">Dual verify failed</option>
       </select>
       @if (embedMode && viewMode === 'cards') {

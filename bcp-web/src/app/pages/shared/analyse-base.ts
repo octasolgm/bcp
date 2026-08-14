@@ -801,7 +801,9 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     this.exportingGapReport = true;
     this.cdr.markForCheck();
     try {
-      await exportGapAnalysisExcelFromPoints(points);
+      await exportGapAnalysisExcelFromPoints(points, undefined, undefined, {
+        regulationDocumentName: this.regulationDocumentExportName,
+      });
       this.toast.show(`Exported ${rows.length} point(s) to Excel`, 'success');
     } catch {
       this.toast.show('Export failed — try again', 'error');
@@ -825,6 +827,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       exportGapAnalysisPdfFromPoints(points, {
         runName: 'Gap Analysis Report',
         subtitle: `${rows.length} done point(s) · Analyse v8`,
+        regulationDocumentName: this.regulationDocumentExportName,
       });
       this.toast.show(`Exported ${rows.length} point(s) to PDF`, 'success');
     } catch {
@@ -1238,11 +1241,11 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     if (!item?.landingMessage && !item?.llmMessage) return '—';
     const block = parseReferenceComplianceBlock((item.llmMessage || item.landingMessage || '').trim());
     const raw = `${block.status ?? ''} ${item.agreement?.landingStatus ?? ''} ${item.agreement?.llmStatus ?? ''}`.toLowerCase();
-    if (/\bnon[- ]?compliant\b/.test(raw) || /\bnon\b/.test(raw) && /compliant/.test(raw)) return 'Non-compliance';
-    if (/\bpartial\b/.test(raw)) return 'Partial compliance';
-    if (/\bcompliant\b/.test(raw)) return 'Compliance';
-    if (item.agreement?.status === 'aligned') return 'Compliance';
-    return 'Partial compliance';
+    if (/\bnon[- ]?compliant\b/.test(raw) || /\bnon\b/.test(raw) && /compliant/.test(raw)) return 'Non Compliant';
+    if (/\bpartial\b/.test(raw)) return 'Partial Compliant';
+    if (/\bcompliant\b/.test(raw)) return 'Compliant';
+    if (item.agreement?.status === 'aligned') return 'Compliant';
+    return 'Partial Compliant';
   }
 
   get policyPdfDocId(): string | null {
@@ -1254,6 +1257,14 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
 
   get regulationPdfDocId(): string | null {
     return this.selectedRegDocs[0]?.id ?? this.libraryPrimaryRegDocId ?? null;
+  }
+
+  /** Title of the regulation document driving the run — used as the leading export column. */
+  get regulationDocumentExportName(): string {
+    const selected = this.selectedRegDocs[0];
+    if (selected) return selected.title?.trim() || selected.originalFileName?.trim() || '';
+    const primary = this.regulationDocs.find((d) => d.id === this.libraryPrimaryRegDocId);
+    return primary?.title?.trim() || primary?.originalFileName?.trim() || '';
   }
 
   openPdfDocument(docId: string | null, page?: string | null): void {

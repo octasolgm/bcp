@@ -20,6 +20,11 @@ import {
   `,
   styles: [
     `
+      :host {
+        display: block;
+        pointer-events: auto;
+      }
+
       .nd-page-alert {
         display: flex;
         align-items: flex-start;
@@ -27,9 +32,28 @@ import {
         gap: 0.75rem;
         padding: 0.75rem 1rem;
         border-radius: var(--radius-md);
-        margin-bottom: 1rem;
         font-size: 0.8125rem;
         line-height: 1.45;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+        animation: nd-page-alert-in 180ms ease-out;
+      }
+
+      /* Docked alerts slide in from the right edge instead of pushing page content. */
+      @keyframes nd-page-alert-in {
+        from {
+          opacity: 0;
+          transform: translateX(1.5rem);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .nd-page-alert {
+          animation: none;
+        }
       }
 
       .nd-page-alert.success {

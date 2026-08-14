@@ -121,6 +121,8 @@ public class RegulationDocumentsController(
             catch { /* table may not exist */ }
         }
 
+        var pageCountMap = await BuildExtractedPageCountMapAsync(ndDocIds, ct);
+
         var ndByStoredId = ndDocs
             .Where(d => d.Status != StatusHidden && d.StoredDocumentId.HasValue && !IsDepartmentOverlay(d))
             .GroupBy(d => d.StoredDocumentId!.Value)
@@ -253,7 +255,7 @@ public class RegulationDocumentsController(
             {
                 allRegStored.TryGetValue(d.StoredDocumentId ?? Guid.Empty, out var stored);
                 items.Add(BuildRegulationListItem(
-                    d, stored, deptNames, pointCountMap, profileNames, isHidden: true));
+                    d, stored, deptNames, pointCountMap, profileNames, isHidden: true, pageCountMap));
             }
 
             foreach (var leg in hiddenLegacyRows)
@@ -358,7 +360,7 @@ public class RegulationDocumentsController(
                 allRegStored.TryGetValue(sid, out storedDoc);
 
             items.Add(BuildRegulationListItem(
-                d, storedDoc, deptNames, pointCountMap, profileNames, isHidden: false));
+                d, storedDoc, deptNames, pointCountMap, profileNames, isHidden: false, pageCountMap));
         }
 
         if (!ndDocs.Any(d => d.IsManual))
@@ -1973,13 +1975,59 @@ public class RegulationDocumentsController(
         return doc;
     }
 
+    /// <summary>Distinct source PDF pages that extracted points reference, per regulation document.</summary>
+    private async Task<Dictionary<Guid, int>> BuildExtractedPageCountMapAsync(
+        List<Guid> regulationDocumentIds,
+        CancellationToken ct)
+    {
+        var map = new Dictionary<Guid, int>();
+        if (regulationDocumentIds.Count == 0) return map;
+
+        try
+        {
+            var rows = await db.NdRegulationPoints.AsNoTracking()
+                .Where(p => regulationDocumentIds.Contains(p.RegulationDocumentId)
+                    && p.Status == NdRegulationPointStatus.Active
+                    && p.PageReference != null)
+                .Select(p => new { p.RegulationDocumentId, p.PageReference })
+                .ToListAsync(ct);
+
+            foreach (var group in rows.GroupBy(r => r.RegulationDocumentId))
+            {
+                var pages = group
+                    .Select(r => ParsePageNumber(r.PageReference))
+                    .Where(page => page > 0)
+                    .Distinct()
+                    .Count();
+                if (pages > 0) map[group.Key] = pages;
+            }
+        }
+        catch { /* column/table may not exist on older schemas */ }
+
+        return map;
+    }
+
+    /// <summary>Page references are stored as free text ("p. 12", "Page 12, Section 3").</summary>
+    private static int ParsePageNumber(string? pageReference)
+    {
+        if (string.IsNullOrWhiteSpace(pageReference)) return 0;
+        var match = System.Text.RegularExpressions.Regex.Match(
+            pageReference,
+            @"(?:p\.?|page)\s*(\d{1,5})",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!match.Success)
+            match = System.Text.RegularExpressions.Regex.Match(pageReference, @"\b(\d{1,5})\b");
+        return match.Success && int.TryParse(match.Groups[1].Value, out var page) ? page : 0;
+    }
+
     private static object BuildRegulationListItem(
         NdRegulationDocument d,
         StoredDocument? stored,
         IReadOnlyDictionary<Guid, string> deptNames,
         IReadOnlyDictionary<Guid, int> pointCountMap,
         IReadOnlyDictionary<Guid, string> profileNames,
-        bool isHidden)
+        bool isHidden,
+        IReadOnlyDictionary<Guid, int>? pageCountMap = null)
     {
         var resolvedCount = pointCountMap.GetValueOrDefault(d.Id);
         var rawStatus = ResolveRegulationRawStatus(d.ExtractionStatus, "pending", stored);
@@ -2003,6 +2051,8 @@ public class RegulationDocumentsController(
                 ? d.ExtractionParseChunkCompleted
                 : null,
             pointCount = resolvedCount,
+            // Total PDF pages recorded at parse (PdfPig); fall back to pages referenced by extracted points.
+            pageCount = stored?.Pages is > 0 ? stored.Pages : pageCountMap?.GetValueOrDefault(d.Id) ?? 0,
             extractedAt = d.ExtractedAt,
             createdAt = d.CreatedAt,
             updatedAt = d.UpdatedAt,

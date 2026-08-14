@@ -1,0 +1,93 @@
+.back-link {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--accent);
+  }
+}
+
+.priority-switch {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.switch-link {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+
+  &.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+}
+
+.status-filters {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+
+  button {
+    padding: 0.28rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+
+    &.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+  }
+}
+
+.nd-table {
+  th.num,
+  td.num {
+    text-align: right;
+  }
+
+  tr.clickable {
+    cursor: pointer;
+
+    &:hover {
+      background: var(--bg-hover, rgba(127, 127, 127, 0.06));
+    }
+  }
+}
+
+.run-name {
+  display: block;
+  font-weight: 550;
+}
+
+.run-sub {
+  display: block;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.overdue {
+  color: var(--danger, #dc2626);
+  font-weight: 600;
+}
+
+.btn-link {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0;
+}

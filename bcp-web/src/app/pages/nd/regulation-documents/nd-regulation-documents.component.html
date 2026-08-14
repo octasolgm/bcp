@@ -165,11 +165,15 @@
 }
 }
 
-@if (message) {
-  <app-nd-page-alert kind="success" class="nd-shrink" [text]="message" (dismiss)="message = ''" />
-}
-@if (error) {
-  <app-nd-page-alert kind="error" class="nd-shrink" [text]="error" (dismiss)="error = ''" />
+@if (message || error) {
+  <div class="nd-alert-dock" aria-live="polite">
+    @if (message) {
+      <app-nd-page-alert kind="success" [text]="message" (dismiss)="message = ''" />
+    }
+    @if (error) {
+      <app-nd-page-alert kind="error" [text]="error" (dismiss)="error = ''" />
+    }
+  </div>
 }
 
 <div
@@ -202,6 +206,7 @@
             <col class="col-reg" />
             <col class="col-dept" />
             <col class="col-pts" />
+            <col class="col-pts" />
             <col class="col-date" />
             @if (showDeleted) {
               <col class="col-date" />
@@ -216,6 +221,7 @@
               <th class="sortable col-reg" (click)="toggleSort('name')">Regulation <span class="sort-indicator">{{ sortMark('name') }}</span></th>
               <th class="sortable col-dept" (click)="toggleSort('department')">Department <span class="sort-indicator">{{ sortMark('department') }}</span></th>
               <th class="sortable col-pts" (click)="toggleSort('points')">Points <span class="sort-indicator">{{ sortMark('points') }}</span></th>
+              <th class="col-pts" title="Distinct source PDF pages referenced by extracted points">Pages</th>
               <th class="sortable col-date" (click)="toggleSort('created')">Uploaded <span class="sort-indicator">{{ sortMark('created') }}</span></th>
               @if (showDeleted) {
                 <th class="col-date">Deleted</th>
@@ -266,6 +272,7 @@
                   }
                 </td>
                 <td class="col-pts">{{ docPointMeta(d) }}</td>
+                <td class="col-pts muted">{{ docPageMeta(d) }}</td>
                 <td class="muted col-date">{{ isManualDoc(d) ? '—' : formatTableDate(d.createdAt) }}</td>
                 @if (showDeleted) {
                   <td class="muted col-date">{{ d.hiddenAt ? formatTableDate(d.hiddenAt) : '—' }}</td>
@@ -305,16 +312,16 @@
                 </td>
                 <td class="col-actions nd-catalog-actions-cell" (click)="$event.stopPropagation()">
                   <div class="nd-catalog-row-actions">
-                    @if (showRowViewButton(d)) {
-                      <button
-                        type="button"
-                        class="row-action-btn compact"
-                        [title]="isManualDoc(d) ? 'Manage points' : 'View extracted points'"
-                        (click)="viewPoints(d, $event)"
-                      >
-                        View
-                      </button>
-                    }
+                    <button
+                      type="button"
+                      class="row-action-btn compact"
+                      [title]="viewButtonTitle(d)"
+                      [attr.aria-disabled]="!!viewDisabledReason(d)"
+                      [disabled]="!!viewDisabledReason(d)"
+                      (click)="viewPoints(d, $event)"
+                    >
+                      View
+                    </button>
                     @if (showExtractProgressActions(d)) {
                       <button
                         type="button"
@@ -340,8 +347,8 @@
                         type="button"
                         class="row-action-btn compact"
                         [class.primary]="needsParse(d)"
-                        [title]="isParsedDoc(d) || hasExtractedPoints(d) ? 'Re-parse PDF to markdown' : 'Parse PDF to markdown (required before extraction)'"
-                        [disabled]="parsingId === d.id || isParsingDoc(d) || isExtractingDoc(d)"
+                        [title]="parseButtonTitle(d)"
+                        [disabled]="!!parseDisabledReason(d)"
                         (click)="handleParse(d, $event)"
                       >
                         {{ parseButtonLabel(d) }}
@@ -352,8 +359,8 @@
                         type="button"
                         class="row-action-btn compact"
                         [class.primary]="canShowExtract(d) && !hasExtractedPoints(d)"
-                        [title]="hasExtractedPoints(d) ? 'Re-extract regulation points' : 'Extract regulation points'"
-                        [disabled]="!canClickRowExtract(d)"
+                        [title]="extractButtonTitle(d)"
+                        [disabled]="!!extractDisabledReason(d)"
                         (click)="handleExtract(d, $event)"
                       >
                         {{ extractButtonLabel(d) }}
@@ -535,7 +542,7 @@
               {{ refreshingPagesId === selectedDoc.id ? 'Refreshing…' : 'Refresh PDF pages' }}
             </button>
           }
-          @if (canShowExtract(selectedDoc)) {
+          @if (showPanelExtractButton(selectedDoc)) {
             <button
               type="button"
               class="btn-primary btn-sm"

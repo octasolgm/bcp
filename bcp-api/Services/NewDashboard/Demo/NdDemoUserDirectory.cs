@@ -18,6 +18,7 @@ public sealed class NdDemoUserDirectory(
     IServiceScopeFactory scopeFactory)
 {
     private const string CacheKey = "nd:demo-profile-ids";
+    private static readonly TimeSpan AuthDirectoryTimeout = TimeSpan.FromSeconds(6);
 
     public void InvalidateProfileCache() => cache.Remove(CacheKey);
 
@@ -65,14 +66,25 @@ public sealed class NdDemoUserDirectory(
         return new NdDemoIsolationContext(true, viewerIsDemo, demoIds, user);
     }
 
+    /// <summary>
+    /// Resolved on every authenticated request, so it is cached: the database is remote and an
+    /// extra round trip here is paid by every single ND endpoint.
+    /// </summary>
     private async Task<string?> LoadProfileFullNameAsync(Guid profileId, CancellationToken ct)
     {
+        var key = $"nd:demo-profile-name:{profileId}";
+        if (cache.TryGetValue(key, out string? cached))
+            return cached;
+
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await db.NdProfiles.AsNoTracking()
+        var fullName = await db.NdProfiles.AsNoTracking()
             .Where(p => p.Id == profileId)
             .Select(p => p.FullName)
             .FirstOrDefaultAsync(ct);
+
+        cache.Set(key, fullName, TimeSpan.FromMinutes(5));
+        return fullName;
     }
 
     private async Task<HashSet<Guid>> FetchDemoProfileIdsAsync(CancellationToken ct)
@@ -83,27 +95,41 @@ public sealed class NdDemoUserDirectory(
         return demoIds;
     }
 
-    /// <summary>Profiles invited/created by a demo admin (CreatedBy chain) — use simulation, not live AI.</summary>
+    /// <summary>
+    /// Profiles invited/created by a demo admin (CreatedBy chain) — use simulation, not live AI.
+    /// The parent/child links are fetched once and walked in memory: the database is remote, so
+    /// looping a query until the set stops growing used to cost a round trip per level.
+    /// </summary>
     private async Task MergeDescendantDemoProfilesAsync(HashSet<Guid> demoIds, CancellationToken ct)
     {
+        if (demoIds.Count == 0) return;
+
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var added = true;
-        while (added)
+        var links = await db.NdProfiles.AsNoTracking()
+            .Where(p => p.CreatedBy != null)
+            .Select(p => new { p.Id, ParentId = p.CreatedBy!.Value })
+            .ToListAsync(ct);
+
+        var childrenByParent = links
+            .GroupBy(l => l.ParentId)
+            .ToDictionary(g => g.Key, g => g.Select(l => l.Id).ToList());
+
+        var pending = new Queue<Guid>(demoIds);
+        while (pending.Count > 0)
         {
-            added = false;
-            var childIds = await db.NdProfiles.AsNoTracking()
-                .Where(p => p.CreatedBy != null && demoIds.Contains(p.CreatedBy.Value))
-                .Select(p => p.Id)
-                .ToListAsync(ct);
-            foreach (var id in childIds)
+            if (!childrenByParent.TryGetValue(pending.Dequeue(), out var children)) continue;
+            foreach (var child in children)
             {
-                if (demoIds.Add(id))
-                    added = true;
+                if (demoIds.Add(child)) pending.Enqueue(child);
             }
         }
     }
 
+    /// <summary>
+    /// Best-effort: sign-in blocks on this, so a slow or failing auth admin API must degrade to the
+    /// profile-name fallback rather than stall the request.
+    /// </summary>
     private async Task<HashSet<Guid>> FetchDemoIdsFromAuthAsync(CancellationToken ct)
     {
         var demoIds = new HashSet<Guid>();
@@ -111,27 +137,40 @@ public sealed class NdDemoUserDirectory(
         if (string.IsNullOrWhiteSpace(opts.Url) || string.IsNullOrWhiteSpace(opts.ServiceRoleKey))
             return demoIds;
 
-        var client = httpClientFactory.CreateClient();
-        client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", opts.ServiceRoleKey);
-        client.DefaultRequestHeaders.TryAddWithoutValidation("apikey", opts.ServiceRoleKey);
-
-        var res = await client.GetAsync($"{opts.Url.TrimEnd('/')}/auth/v1/admin/users?per_page=1000", ct);
-        if (!res.IsSuccessStatusCode)
-            return demoIds;
-
-        var json = await res.Content.ReadAsStringAsync(ct);
-        using var doc = JsonDocument.Parse(json);
-        if (!doc.RootElement.TryGetProperty("users", out var usersEl) || usersEl.ValueKind != JsonValueKind.Array)
-            return demoIds;
-
-        foreach (var u in usersEl.EnumerateArray())
+        try
         {
-            if (!u.TryGetProperty("id", out var idEl) || !Guid.TryParse(idEl.GetString(), out var id))
-                continue;
-            var email = u.TryGetProperty("email", out var emailEl) ? emailEl.GetString() : null;
-            if (NdDemoIsolationHelper.IsDemoEmail(email))
-                demoIds.Add(id);
+            var client = httpClientFactory.CreateClient();
+            client.Timeout = AuthDirectoryTimeout;
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", opts.ServiceRoleKey);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("apikey", opts.ServiceRoleKey);
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(AuthDirectoryTimeout);
+
+            var res = await client.GetAsync(
+                $"{opts.Url.TrimEnd('/')}/auth/v1/admin/users?per_page=1000",
+                timeoutCts.Token);
+            if (!res.IsSuccessStatusCode)
+                return demoIds;
+
+            var json = await res.Content.ReadAsStringAsync(timeoutCts.Token);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("users", out var usersEl) || usersEl.ValueKind != JsonValueKind.Array)
+                return demoIds;
+
+            foreach (var u in usersEl.EnumerateArray())
+            {
+                if (!u.TryGetProperty("id", out var idEl) || !Guid.TryParse(idEl.GetString(), out var id))
+                    continue;
+                var email = u.TryGetProperty("email", out var emailEl) ? emailEl.GetString() : null;
+                if (NdDemoIsolationHelper.IsDemoEmail(email))
+                    demoIds.Add(id);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException)
+        {
+            return demoIds;
         }
 
         return demoIds;

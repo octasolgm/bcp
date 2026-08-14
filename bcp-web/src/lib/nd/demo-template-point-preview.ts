@@ -33,9 +33,9 @@ export function mapDemoDisplayStatus(overallStatus?: string, designStatus?: stri
   let s = (overallStatus ?? '').trim().toLowerCase();
   if (!s && designStatus?.trim()) s = designStatus.trim().toLowerCase();
   if (s === 'compliant') return 'Compliant';
-  if (s.includes('partial')) return 'Partial compliant';
-  if (s.includes('non')) return 'Non-Compliant';
-  return s ? overallStatus!.trim() : 'Non-Compliant';
+  if (s.includes('partial')) return 'Partial Compliant';
+  if (s.includes('non')) return 'Non Compliant';
+  return s ? overallStatus!.trim() : 'Non Compliant';
 }
 
 export function mapDemoFinalStatus(overallStatus?: string, designStatus?: string): string {
