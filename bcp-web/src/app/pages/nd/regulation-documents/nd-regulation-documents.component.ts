@@ -29,6 +29,7 @@ import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.c
 import { NdManualRegulationPointsPanelComponent } from './nd-manual-regulation-points-panel.component';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
+import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { ToastService } from '../../../services/toast.service';
 import { startPanelResize } from '../../shared/panel-resize';
 import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd/regulation-pdf-page';
@@ -70,6 +71,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly workspaceNav = inject(NdWorkspaceNavService);
   readonly auth = inject(NdAuthService);
   readonly formatPointPageRef = formatPointPageRef;
 
@@ -115,6 +117,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   private readonly pollingExtractIds = new Set<string>();
   private readonly pollingParseIds = new Set<string>();
   private readonly completionNotified = new Set<string>();
+  private readonly pollStuckSince = new Map<string, { key: string; since: number }>();
   private pollInFlight = false;
   private departmentsLoaded = false;
 
@@ -236,6 +239,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   private trackParsingDoc(docId: string): void {
     this.pollingExtractIds.delete(docId);
     this.pollingParseIds.add(docId);
+    this.pollStuckSince.delete(docId);
     this.parsingId = docId;
     this.ensureExtractPolling();
     void this.pollProcessingDocs();
@@ -285,6 +289,19 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
         if (st === 'processing') {
           if (isParsePoll) {
             this.message = doc.extractionProgressLabel?.trim() || 'Parsing document…';
+            const progressKey = `${doc.extractionProgressLabel ?? ''}|${doc.extractionProgressPct ?? ''}`;
+            const stuck = this.pollStuckSince.get(id);
+            if (!stuck || stuck.key !== progressKey) {
+              this.pollStuckSince.set(id, { key: progressKey, since: Date.now() });
+            } else if (Date.now() - stuck.since > 60_000) {
+              this.pollingParseIds.delete(id);
+              this.pollStuckSince.delete(id);
+              if (this.parsingId === id) this.parsingId = null;
+              const stallMsg = `Parse stalled for "${doc.name}". Click Parse to try again.`;
+              this.error = stallMsg;
+              this.toast.show(stallMsg, 'error', 6000);
+              continue;
+            }
           } else {
             this.message = doc.extractionProgressLabel?.trim() || `Extracting "${doc.name}"…`;
           }
@@ -292,6 +309,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
 
         if (isParsePoll && st === 'parsed') {
           this.pollingParseIds.delete(id);
+          this.pollStuckSince.delete(id);
           if (this.parsingId === id) this.parsingId = null;
           const notifyKey = `parse:${id}`;
           if (!this.completionNotified.has(notifyKey)) {
@@ -309,6 +327,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
 
         if (isParsePoll && (st === 'failed' || st === 'paused')) {
           this.pollingParseIds.delete(id);
+          this.pollStuckSince.delete(id);
           if (this.parsingId === id) this.parsingId = null;
           if (st === 'failed') this.error = `Parse failed for "${doc.name}"`;
           continue;
@@ -515,7 +534,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     if (res.success && res.data) this.departments = res.data as Department[];
   }
 
-  async loadDocs(silent = false): Promise<void> {
+  async loadDocs(silent = false, replace = false): Promise<void> {
     if (!silent) this.loading = true;
     const res = await this.api.getRegulationDocuments({
       departmentId: this.deptFilter || undefined,
@@ -524,9 +543,10 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     });
     if (res.success && res.data) {
       const incoming = res.data as RegulationDocument[];
-      this.docs = sortRegulationDocuments(
-        dedupeRegulationDocuments(this.mergeRegulationList(this.docs, incoming)),
-      );
+      const merged = replace
+        ? incoming
+        : this.mergeRegulationList(this.docs, incoming);
+      this.docs = sortRegulationDocuments(dedupeRegulationDocuments(merged));
       this.syncExtractPollingFromDocs();
     } else if (!silent || this.docs.length === 0) {
       this.error = res.message ?? 'Failed to load regulation documents';
@@ -666,6 +686,9 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
         this.message = 'Document uploaded';
       }
       this.toast.show(this.message, 'success', 4000);
+      if (!this.showDeleted) {
+        this.workspaceNav.bumpNavBadges({ regulationDocuments: 1 });
+      }
       void this.loadDocs(true);
     } else {
       this.error = res.message ?? 'Upload failed';
@@ -1092,7 +1115,11 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     if (res.success) {
       this.message = res.message ?? 'Regulation removed from library';
       if (this.selectedDoc?.id === doc.id) this.closePointsPanel();
-      await this.loadDocs(true);
+      this.removeRegulationDocFromList(doc);
+      if (!this.showDeleted) {
+        this.workspaceNav.bumpNavBadges({ regulationDocuments: -1 });
+      }
+      await this.loadDocs(true, true);
     } else {
       this.error = res.message ?? 'Failed to delete regulation';
     }
@@ -1108,6 +1135,12 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     if (res.success) {
       this.message = res.message ?? 'Regulation restored';
       if (this.selectedDoc?.id === doc.id) this.closePointsPanel();
+      if (this.showDeleted) {
+        this.workspaceNav.bumpNavBadges({
+          regulationDocuments: 1,
+          regulationDocumentsDeleted: -1,
+        });
+      }
       await this.loadDocs(true);
     } else {
       this.error = res.message ?? 'Failed to restore regulation';
@@ -1158,9 +1191,25 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   }
 
   docPageMeta(doc: RegulationDocument): string {
-    if (this.isManualDoc(doc)) return '—';
+    if (!this.shouldShowDocPages(doc)) return '—';
     const pages = doc.pageCount ?? 0;
     return pages > 0 ? `${pages}` : '—';
+  }
+
+  /** PDF page total — only after parse completes (not during upload/parsing). */
+  private shouldShowDocPages(doc: RegulationDocument): boolean {
+    if (this.isManualDoc(doc)) return true;
+    if (this.isParsingDoc(doc)) return false;
+    const st = (doc.extractionStatus ?? '').toLowerCase();
+    if (st === 'pending' || st === 'processing') return false;
+    return (
+      st === 'parsed' ||
+      st === 'extracted' ||
+      st === 'paused' ||
+      st === 'completed' ||
+      this.isParsedDoc(doc) ||
+      this.hasExtractedPoints(doc)
+    );
   }
 
   docPointMeta(doc: RegulationDocument): string {
@@ -1306,15 +1355,27 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       );
       if (
         !shadowed
-        && (this.isDocExtractionInFlight(d.id)
-          || (d.pointCount ?? 0) > 0
-          || this.isRecentUpload(d.id))
+        && (this.isDocExtractionInFlight(d.id) || this.isRecentUpload(d.id))
       ) {
         merged.push(d);
       }
     }
 
     return merged;
+  }
+
+  private removeRegulationDocFromList(doc: RegulationDocument): void {
+    const ids = new Set(
+      [doc.id, doc.storedDocumentId].filter(Boolean) as string[],
+    );
+    this.docs = this.docs.filter(
+      (row) => !ids.has(row.id) && (!row.storedDocumentId || !ids.has(row.storedDocumentId)),
+    );
+    this.pollingExtractIds.delete(doc.id);
+    this.pollingParseIds.delete(doc.id);
+    this.pollStuckSince.delete(doc.id);
+    if (this.parsingId === doc.id) this.parsingId = null;
+    if (this.extractingId === doc.id) this.extractingId = null;
   }
 
   private mergeRegulationRow(
@@ -1579,6 +1640,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
         storedDocumentId: data.storedDocumentId ?? doc.storedDocumentId,
         extractionStatus: data.extractionStatus ?? 'parsed',
         pointCount: data.pointCount ?? doc.pointCount,
+        pageCount: (data as { pageCount?: number }).pageCount ?? doc.pageCount,
         extractionProgressLabel: null,
         extractionProgressPct: null,
       });
@@ -1588,6 +1650,12 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       this.parsingId = null;
       this.pollingParseIds.delete(doc.id);
       this.error = res.message ?? 'Parse failed';
+      this.toast.show(this.error, 'error', 6000);
+      this.patchRegulationDoc(doc, {
+        extractionStatus: 'failed',
+        extractionProgressLabel: this.error,
+        extractionProgressPct: null,
+      });
       await this.loadDocs(true);
     }
   }

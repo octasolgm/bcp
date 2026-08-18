@@ -65,6 +65,11 @@ $hasSdk = Test-DotnetSdk
 
 if (-not $NoBuild) {
     if ($hasSdk) {
+        Write-Host "Writing deploy version stamp..."
+        $writeVersion = Join-Path $PSScriptRoot "write-deploy-version.ps1"
+        if (Test-Path $writeVersion) {
+            & $writeVersion
+        }
         Write-Host "Building $project ..."
         & $dotnet build $project -v q
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

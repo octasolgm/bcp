@@ -4,6 +4,8 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve --port 3002 --host localhost",
+    "prestart": "powershell -NoProfile -ExecutionPolicy Bypass -File ../bcp-api/scripts/write-deploy-version.ps1 -PreserveLabel",
+    "prebuild:prod": "powershell -NoProfile -ExecutionPolicy Bypass -File ../bcp-api/scripts/write-deploy-version.ps1 -PreserveLabel",
     "build": "ng build",
     "build:prod": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",

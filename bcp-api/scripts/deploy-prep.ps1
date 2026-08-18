@@ -1,14 +1,26 @@
 # One-click prep before Visual Studio publish to bcp-api-dev.
 # Run: .\scripts\deploy-prep.ps1
+# Run: .\scripts\deploy-prep.ps1 -Label "2026.08.18.3" -Notes "..."
+
+param(
+    [string]$Label = "",
+    [string]$Notes = ""
+)
 
 $ErrorActionPreference = "Stop"
 $apiRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $apiRoot
 
-Write-Host "`n[1/4] Syncing appsettings.Secrets.json from Development.json..." -ForegroundColor Cyan
+Write-Host "`n[1/5] Writing deploy version stamp..." -ForegroundColor Cyan
+$versionArgs = @{}
+if ($Label.Trim()) { $versionArgs.Label = $Label.Trim() }
+if ($Notes.Trim()) { $versionArgs.Notes = $Notes.Trim() }
+& (Join-Path $PSScriptRoot "write-deploy-version.ps1") @versionArgs
+
+Write-Host "`n[2/5] Syncing appsettings.Secrets.json from Development.json..." -ForegroundColor Cyan
 & (Join-Path $PSScriptRoot "sync-secrets.ps1")
 
-Write-Host "`n[2/4] Building Release publish package..." -ForegroundColor Cyan
+Write-Host "`n[3/5] Building Release publish package..." -ForegroundColor Cyan
 if (Test-Path "./publish") {
     Remove-Item "./publish" -Recurse -Force
 }
@@ -17,7 +29,7 @@ dotnet publish Bcp.Api.csproj -c Release -o ./publish
 $secretsInPublish = Test-Path "./publish/appsettings.Secrets.json"
 $devInPublish = Test-Path "./publish/appsettings.Development.json"
 
-Write-Host "`n[3/4] Publish folder check:" -ForegroundColor Cyan
+Write-Host "`n[4/5] Publish folder check:" -ForegroundColor Cyan
 Write-Host "  appsettings.Secrets.json included: $secretsInPublish"
 Write-Host "  appsettings.Development.json excluded: $(-not $devInPublish)"
 
@@ -26,7 +38,7 @@ if (-not $secretsInPublish) {
 }
 
 $zipPath = Join-Path $apiRoot "bcp-api.zip"
-Write-Host "`n[4/4] Creating bcp-api.zip..." -ForegroundColor Cyan
+Write-Host "`n[5/5] Creating bcp-api.zip..." -ForegroundColor Cyan
 & (Join-Path $PSScriptRoot "write-deploy-zip.ps1") -SourceDir (Join-Path $apiRoot "publish") -ZipPath $zipPath
 
 Write-Host @"

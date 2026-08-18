@@ -47,14 +47,14 @@ public class WorkspaceController(
 
         var data = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>
         {
-            var mineOnly = role == "maker";
+            var mineOnly = role == "maker" && !demoCtx.ViewerIsDemo;
 
             // The database is remote (~200ms per round trip), so the independent counters are
             // batched and overlapped rather than issued one badge at a time.
             IQueryable<Data.NewDashboard.Entities.NdAnalysisRun> RunsFor(AppDbContext ctx)
             {
                 var q = NdDemoDataFilters.ApplyToAnalysisRuns(ctx.NdAnalysisRuns.AsNoTracking(), demoCtx);
-                return mineOnly ? q.Where(r => r.CreatedBy == profile.Id) : q;
+                return NdDemoDataFilters.ApplyMakerRunScope(q, profile.Id, role, mineOnly, demoCtx);
             }
 
             var runCountsTask = RunsFor(db)
@@ -117,15 +117,8 @@ public class WorkspaceController(
 
                 var docsAndLibrariesTask = InParallelScopeAsync(async (sdb, sct) =>
                 {
-                    var regs = await NdDemoDataFilters.ApplyToRegulationDocuments(
-                            sdb.NdRegulationDocuments.AsNoTracking()
-                                .Where(d =>
-                                    d.Status != -1
-                                    && (d.IsManual
-                                        || !d.StoredDocumentId.HasValue
-                                        || !string.IsNullOrWhiteSpace(d.FilePath))),
-                            demoCtx)
-                        .CountAsync(sct);
+                    var regs = await NdWorkspaceNavCountHelper.CountVisibleRegulationDocumentsAsync(
+                        sdb, demoCtx, sct);
                     var libs = await NdDemoDataFilters.ApplyToLibraries(
                             sdb.NdLibraries.AsNoTracking(), demoCtx)
                         .CountAsync(sct);
@@ -252,7 +245,7 @@ public class WorkspaceController(
 
         var role = profile!.Role;
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
-        var effectiveMineOnly = mineOnly || role == "maker";
+        var effectiveMineOnly = (mineOnly || role == "maker") && !demoCtx.ViewerIsDemo;
         var cacheScope = $"dashboard-stats:{profile.Id}:{role}:{effectiveMineOnly}:demo={demoCtx.ViewerIsDemo}";
 
         var stats = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>

@@ -26,7 +26,8 @@ public class InternalDocumentsController(
     LandingAiCacheRepository landingCache,
     NdDemoUserDirectory demoDirectory,
     NdDemoInterceptionService demoInterception,
-    SupabaseJwtValidator jwt) : NdControllerBase
+    SupabaseJwtValidator jwt,
+    NdDashboardCacheService dashboardCache) : NdControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] bool hiddenOnly = false, CancellationToken ct = default)
@@ -298,6 +299,7 @@ public class InternalDocumentsController(
             row.ExtractionCacheKey = NdRegulationCacheKeys.ForStoredDocument(row.Id);
             appDb.StoredDocuments.Add(row);
             await appDb.SaveChangesAsync(ct);
+            dashboardCache.Invalidate();
 
             return Ok(new
             {
@@ -454,6 +456,7 @@ public class InternalDocumentsController(
         doc.HiddenBy = profile!.Id;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
         await appDb.SaveChangesAsync(ct);
+        dashboardCache.Invalidate();
 
         return Ok(new { success = true, message = "Document removed from library (data kept in database)." });
     }
@@ -476,6 +479,7 @@ public class InternalDocumentsController(
         doc.HiddenBy = null;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
         await appDb.SaveChangesAsync(ct);
+        dashboardCache.Invalidate();
 
         return Ok(new { success = true, message = "Document restored." });
     }

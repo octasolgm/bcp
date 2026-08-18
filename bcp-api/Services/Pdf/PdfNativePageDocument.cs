@@ -51,6 +51,21 @@ public sealed class PdfNativePageDocument
         }
     }
 
+    /// <summary>Fast PdfPig page count without building per-page markdown.</summary>
+    public static int TryGetPageCount(byte[] pdfBytes)
+    {
+        if (pdfBytes.Length < 16) return 0;
+        try
+        {
+            using var pdf = PdfDocument.Open(pdfBytes);
+            return pdf.NumberOfPages;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
     internal static PdfNativePageDocument FromMarkdown(string markdown, int totalPages)
     {
         var ctx = PolicyPageResolver.CreateResolveContext(markdown, totalPages);

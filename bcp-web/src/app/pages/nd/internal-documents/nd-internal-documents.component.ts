@@ -6,6 +6,7 @@ import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
+import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.service';
 import { ToastService } from '../../../services/toast.service';
 import { startPanelResize } from '../../shared/panel-resize';
@@ -62,6 +63,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   readonly auth = inject(NdAuthService);
   private readonly shellFocus = inject(NdShellFocusService);
+  private readonly workspaceNav = inject(NdWorkspaceNavService);
 
   private static readonly PANEL_SPLIT_KEY = 'nd-internal-docs-sections-panel-split';
 
@@ -672,6 +674,10 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     const res = await this.api.hideInternalDocument(doc.id);
     if (res.success) {
       this.message = res.message ?? 'Document removed from library';
+      this.removeInternalDocFromList(doc);
+      if (!this.showDeleted) {
+        this.workspaceNav.bumpNavBadges({ internalDocuments: -1 });
+      }
       await this.load(true);
     } else {
       this.error = res.message ?? 'Failed to delete document';
@@ -686,6 +692,12 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     const res = await this.api.restoreInternalDocument(doc.id);
     if (res.success) {
       this.message = res.message ?? 'Document restored';
+      if (this.showDeleted) {
+        this.workspaceNav.bumpNavBadges({
+          internalDocuments: 1,
+          internalDocumentsDeleted: -1,
+        });
+      }
       await this.load(true);
     } else {
       this.error = res.message ?? 'Failed to restore document';
@@ -798,6 +810,9 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
         'Uploaded — status is Pending parse. Click Run parse when ready (Landing AI supports PDF and Word).';
       this.error = '';
       this.toast.show(this.message, 'success', 4000);
+      if (!this.showDeleted) {
+        this.workspaceNav.bumpNavBadges({ internalDocuments: 1 });
+      }
       void this.load(true);
     } else {
       this.error = res.message ?? 'Upload failed';
@@ -827,10 +842,6 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.docs = [optimistic, ...this.docs.filter((d) => d.id !== optimistic.id)];
   }
 
-  /**
-   * The list API is eventually consistent, so a document uploaded seconds ago may be
-   * missing from the next response. Re-add it rather than letting the row flicker away.
-   */
   private keepRecentUploads(incoming: InternalDocument[]): InternalDocument[] {
     if (!this.recentUploads.size) return incoming;
     const cutoff = Date.now() - RecentUploadKeepMs;
@@ -846,6 +857,19 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       if (local) pending.push(local);
     }
     return pending.length ? [...pending, ...incoming] : incoming;
+  }
+
+  private removeInternalDocFromList(doc: InternalDocument): void {
+    this.docs = this.docs.filter((row) => row.id !== doc.id);
+    this.recentUploads.delete(doc.id);
+    this.pollingParseIds.delete(doc.id);
+    this.pollingSectionExtractIds.delete(doc.id);
+    this.pollingSectionPageRepairIds.delete(doc.id);
+    this.sectionExtractPollStartedAt.delete(doc.id);
+    this.sectionPageRepairPollStartedAt.delete(doc.id);
+    this.sectionPageRepairProgress.delete(doc.id);
+    if (this.parsingId === doc.id) this.parsingId = null;
+    if (this.sectionsFor?.id === doc.id) this.closeSections();
   }
 
   async openSections(doc: InternalDocument, event?: Event): Promise<void> {

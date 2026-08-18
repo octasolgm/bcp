@@ -6,6 +6,10 @@ export type NdNavBadgeBumps = {
   analysisRunsInProgress?: number;
   analysisRunsCorrection?: number;
   adminDeletedRuns?: number;
+  internalDocuments?: number;
+  regulationDocuments?: number;
+  internalDocumentsDeleted?: number;
+  regulationDocumentsDeleted?: number;
 };
 
 /** Optimistic sidebar deltas when a run is soft-deleted from the workspace. */

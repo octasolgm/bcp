@@ -221,7 +221,7 @@
               <th class="sortable col-reg" (click)="toggleSort('name')">Regulation <span class="sort-indicator">{{ sortMark('name') }}</span></th>
               <th class="sortable col-dept" (click)="toggleSort('department')">Department <span class="sort-indicator">{{ sortMark('department') }}</span></th>
               <th class="sortable col-pts" (click)="toggleSort('points')">Points <span class="sort-indicator">{{ sortMark('points') }}</span></th>
-              <th class="col-pts" title="Distinct source PDF pages referenced by extracted points">Pages</th>
+              <th class="col-pts" title="Total PDF pages in the uploaded document">Pages</th>
               <th class="sortable col-date" (click)="toggleSort('created')">Uploaded <span class="sort-indicator">{{ sortMark('created') }}</span></th>
               @if (showDeleted) {
                 <th class="col-date">Deleted</th>

@@ -34,7 +34,7 @@ $tempZip = Join-Path $env:TEMP "bcp-web-dist.zip"
 
 if ($ZipOnly -or -not (Test-AzCli)) {
     if (-not (Test-AzCli)) {
-        Write-Host "`nAzure CLI not found — upload zip manually:" -ForegroundColor Yellow
+        Write-Host "`nAzure CLI not found - upload zip manually:" -ForegroundColor Yellow
         Write-Host "  $zipPath"
         Write-Host "  or $tempZip"
     }

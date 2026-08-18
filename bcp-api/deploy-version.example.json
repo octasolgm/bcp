@@ -1,0 +1,9 @@
+{
+  "label": "2026.08.18+dev",
+  "api": "2026.08.18+dev",
+  "web": "2026.08.18+dev",
+  "commit": "local",
+  "branch": "main",
+  "builtAt": "2026-08-18T00:00:00Z",
+  "notes": "Regenerate with bcp-api/scripts/write-deploy-version.ps1 before deploy"
+}

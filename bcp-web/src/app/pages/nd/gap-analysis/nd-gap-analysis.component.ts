@@ -64,6 +64,7 @@ import { countCapGapsForAnalysisPoint, countDisplayGapsForAnalysisPoint } from '
 import { compareText, type SortDir } from '../../../../lib/nd/list-utils';
 import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sort';
 import { complianceSeverityLabel,
+  COMPLIANCE_SEVERITY_LABELS,
   resolveAnalysisPointSeverity,
   resolveDisplayConfidence,
 } from '../../../../lib/nd/point-compliance-status';
@@ -174,12 +175,14 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   savingActionReviewIndex: number | null = null;
   savingReviewId: string | null = null;
 
+  readonly complianceLabels = COMPLIANCE_SEVERITY_LABELS;
+
   readonly filters: { id: 'all' | GapSeverity | 'with_gaps'; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'with_gaps', label: 'With gaps' },
-    { id: 'compliant', label: 'Compliance' },
-    { id: 'partial_compliant', label: 'Partial Compliant' },
-    { id: 'non_compliant', label: 'Non Compliant' },
+    { id: 'compliant', label: COMPLIANCE_SEVERITY_LABELS.compliant },
+    { id: 'partial_compliant', label: COMPLIANCE_SEVERITY_LABELS.partial_compliant },
+    { id: 'non_compliant', label: COMPLIANCE_SEVERITY_LABELS.non_compliant },
   ];
 
   items: GapItemData[] = [];

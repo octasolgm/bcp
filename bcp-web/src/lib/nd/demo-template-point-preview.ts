@@ -29,13 +29,15 @@ export function findRegulationPointForClause(
   return points.find((p) => normalizeClauseKey(p.pointNumber) === key);
 }
 
+import { complianceSeverityLabel } from './point-compliance-status';
+
 export function mapDemoDisplayStatus(overallStatus?: string, designStatus?: string): string {
   let s = (overallStatus ?? '').trim().toLowerCase();
   if (!s && designStatus?.trim()) s = designStatus.trim().toLowerCase();
-  if (s === 'compliant') return 'Compliant';
-  if (s.includes('partial')) return 'Partial Compliant';
-  if (s.includes('non')) return 'Non Compliant';
-  return s ? overallStatus!.trim() : 'Non Compliant';
+  if (s === 'compliant') return complianceSeverityLabel('compliant');
+  if (s.includes('partial')) return complianceSeverityLabel('partial_compliant');
+  if (s.includes('non')) return complianceSeverityLabel('non_compliant');
+  return s ? overallStatus!.trim() : complianceSeverityLabel('non_compliant');
 }
 
 export function mapDemoFinalStatus(overallStatus?: string, designStatus?: string): string {

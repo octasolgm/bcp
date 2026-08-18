@@ -426,6 +426,8 @@ public class DemoAnalysisSeedService(
             var existing = await FindExistingCbuaeDemoRunAsync(userId, ct);
             if (existing != null)
             {
+                existing = await EnsureDemoRunOwnedByUserAsync(existing, userId, ct);
+
                 if (existing.TotalPointsCount != seedCount)
                 {
                     await SyncRegulDemoRunFromTemplateAsync(
@@ -464,8 +466,9 @@ public class DemoAnalysisSeedService(
             .Where(r => r.CreatedBy == userId
                 && r.WorkflowEngine == AnalysisWorkflowEngine.RegulPipelineFull
                 && r.Status != "deleted"
-                && (NdDemoDataFilters.IsDemoMarkedAnalysisRun(r)
-                    || (r.Description != null && r.Description.Contains("Arena judgments seeded"))))
+                && (r.Name.StartsWith(NdDemoDataFilters.DemoRunNamePrefix)
+                    || (r.Description != null && r.Description.Contains(NdDemoDataFilters.DemoRunSeedMarker))
+                    || (r.Description != null && r.Description.Contains(NdDemoDataFilters.DemoRunCreditMarker))))
             .OrderByDescending(r => r.CreatedAt)
             .FirstOrDefaultAsync(ct);
         if (own != null && await IsCbuaeAmlDemoRunAsync(own, ct))
@@ -475,7 +478,7 @@ public class DemoAnalysisSeedService(
             .Where(r => r.WorkflowEngine == AnalysisWorkflowEngine.RegulPipelineFull
                 && r.Status != "deleted"
                 && (r.Name.StartsWith(NdDemoDataFilters.DemoRunNamePrefix)
-                    || (r.Description != null && r.Description.Contains("Arena judgments seeded"))))
+                    || (r.Description != null && r.Description.Contains(NdDemoDataFilters.DemoRunSeedMarker))))
             .OrderByDescending(r => r.TotalPointsCount)
             .ThenBy(r => r.CreatedAt)
             .ToListAsync(ct);
@@ -487,6 +490,24 @@ public class DemoAnalysisSeedService(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Migrated demo runs may be reused across demo accounts — assign to the active demo user so
+    /// maker lists and permissions match the account running analysis.
+    /// </summary>
+    private async Task<NdAnalysisRun> EnsureDemoRunOwnedByUserAsync(
+        NdAnalysisRun run,
+        Guid userId,
+        CancellationToken ct)
+    {
+        if (run.CreatedBy == userId) return run;
+
+        var tracked = await db.NdAnalysisRuns.FirstAsync(r => r.Id == run.Id, ct);
+        tracked.CreatedBy = userId;
+        tracked.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return tracked;
     }
 
     /// <summary>Applies CBUAE seed judgments to an existing draft/run (demo simulation).</summary>

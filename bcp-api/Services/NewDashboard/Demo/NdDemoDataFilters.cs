@@ -16,6 +16,28 @@ public static class NdDemoDataFilters
         return ctx.ViewerIsDemo ? demoOwned : !demoOwned;
     }
 
+    /// <summary>Production makers are limited to their own runs; demo makers can use demo-scoped runs.</summary>
+    public static bool MakerCanAccessRun(Guid profileId, string role, Guid? runCreatedBy, NdDemoIsolationContext ctx)
+    {
+        if (role != "maker") return true;
+        if (runCreatedBy == profileId) return true;
+        return ctx.ViewerIsDemo && CanAccessCreatedBy(runCreatedBy, ctx);
+    }
+
+    public static IQueryable<NdAnalysisRun> ApplyMakerRunScope(
+        IQueryable<NdAnalysisRun> query,
+        Guid profileId,
+        string role,
+        bool mineOnly,
+        NdDemoIsolationContext ctx)
+    {
+        if (role == "maker" && !ctx.ViewerIsDemo)
+            return query.Where(r => r.CreatedBy == profileId);
+        if (mineOnly)
+            return query.Where(r => r.CreatedBy == profileId);
+        return query;
+    }
+
     /// <summary>Demo simulation may write to this regulation row (never production-owned or template docs).</summary>
     public static bool CanDemoMutateRegulationDocument(
         NdRegulationDocument regDoc,
@@ -78,8 +100,8 @@ public static class NdDemoDataFilters
     /// </summary>
     public const string DemoRunNamePrefix = "[Demo]";
 
-    private const string DemoRunSeedMarker = "Arena judgments seeded";
-    private const string DemoRunCreditMarker = "no AI credits";
+    public const string DemoRunSeedMarker = "Arena judgments seeded";
+    public const string DemoRunCreditMarker = "no AI credits";
 
     public static bool IsDemoMarkedAnalysisRun(NdAnalysisRun run) =>
         run.Name.StartsWith(DemoRunNamePrefix, StringComparison.OrdinalIgnoreCase)

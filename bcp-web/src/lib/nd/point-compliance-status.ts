@@ -4,6 +4,13 @@ import type { AnalysisPoint } from './types';
 
 export type ComplianceSeverity = 'compliant' | 'partial_compliant' | 'non_compliant';
 
+/** Canonical display labels — use everywhere (filters, badges, exports, cards). */
+export const COMPLIANCE_SEVERITY_LABELS: Record<ComplianceSeverity, string> = {
+  compliant: 'compliant',
+  partial_compliant: 'partial compliant',
+  non_compliant: 'non compliant',
+};
+
 function looksStructured(block: ReferenceComplianceBlock | null): boolean {
   if (!block) return false;
   return Boolean(
@@ -181,9 +188,7 @@ export function resolveDisplayConfidence(point: AnalysisPoint): string {
 }
 
 export function complianceSeverityLabel(severity: ComplianceSeverity): string {
-  if (severity === 'compliant') return 'Compliant';
-  if (severity === 'partial_compliant') return 'Partial Compliant';
-  return 'Non Compliant';
+  return COMPLIANCE_SEVERITY_LABELS[severity];
 }
 
 export function pointHasCapContent(point: AnalysisPoint): boolean {

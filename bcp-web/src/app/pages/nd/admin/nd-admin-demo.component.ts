@@ -12,6 +12,7 @@ import {
 } from '../../../../lib/nd/demo-template-point-preview';
 import {
   complianceSeverityLabel,
+  COMPLIANCE_SEVERITY_LABELS,
   type ComplianceSeverity,
 } from '../../../../lib/nd/point-compliance-status';
 import type { AnalysisPoint, PointSnapshot, RegulationPoint } from '../../../../lib/nd/types';
@@ -93,9 +94,9 @@ export class NdAdminDemoComponent implements OnInit {
   pointForm = this.emptyPointForm();
 
   readonly statusOptions = [
-    { value: 'compliant', label: 'Compliant' },
-    { value: 'partial', label: 'Partial Compliant' },
-    { value: 'non_compliant', label: 'Non Compliant' },
+    { value: 'compliant', label: COMPLIANCE_SEVERITY_LABELS.compliant },
+    { value: 'partial', label: COMPLIANCE_SEVERITY_LABELS.partial_compliant },
+    { value: 'non_compliant', label: COMPLIANCE_SEVERITY_LABELS.non_compliant },
   ];
 
   async ngOnInit(): Promise<void> {

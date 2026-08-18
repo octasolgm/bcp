@@ -1,3 +1,4 @@
+import { resolveApiUrl } from './api-url';
 import { environment } from './environment';
 
 export interface RuntimeAppConfig {
@@ -16,7 +17,13 @@ export function applyRuntimeConfig(cfg: RuntimeAppConfig | null | undefined): vo
   const app = cfg.appUrl?.trim();
   if (url) environment.supabaseUrl = url;
   if (key) environment.supabaseAnonKey = key;
-  if (ndApi) environment.ndApiUrl = ndApi;
+  // app-config.json targets Azure; ng serve on localhost must keep using the local API.
+  if (ndApi) {
+    const isLocalHost =
+      typeof window !== 'undefined'
+      && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    environment.ndApiUrl = isLocalHost ? resolveApiUrl() : ndApi;
+  }
   if (app) environment.appUrl = app;
 }
 

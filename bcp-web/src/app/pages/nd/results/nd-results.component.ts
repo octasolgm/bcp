@@ -11,6 +11,7 @@ import { ToastService } from '../../../services/toast.service';
 import { formatDate, parsePointSnapshot } from '../../../../lib/nd/utils';
 import { countDisplayGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
 import {
+  COMPLIANCE_SEVERITY_LABELS,
   resolveAnalysisPointSeverity,
   resolvePointComplianceLabel,
 } from '../../../../lib/nd/point-compliance-status';
@@ -32,6 +33,8 @@ import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sor
   styleUrls: ['./nd-results.component.scss', '../nd-shared.scss'],
 })
 export class NdResultsComponent implements OnInit, OnChanges {
+  readonly complianceLabels = COMPLIANCE_SEVERITY_LABELS;
+
   private readonly api = inject(NdApiService);
   readonly auth = inject(NdAuthService);
   private readonly toast = inject(ToastService);

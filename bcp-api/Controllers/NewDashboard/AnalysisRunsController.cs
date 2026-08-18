@@ -101,7 +101,7 @@ public class AnalysisRunsController(
             demoCtx);
 
         if (profile!.Role == "maker" || mineOnly)
-            q = q.Where(r => r.CreatedBy == profile.Id);
+            q = NdDemoDataFilters.ApplyMakerRunScope(q, profile.Id, profile.Role, mineOnly, demoCtx);
 
         if (!string.IsNullOrWhiteSpace(status))
             q = q.Where(r => r.Status == status);
@@ -751,7 +751,7 @@ public class AnalysisRunsController(
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
-        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+        if (profile!.Role == "maker" && !NdDemoDataFilters.MakerCanAccessRun(profile.Id, profile.Role, run.CreatedBy, demoCtx))
             return StatusCode(403, new { success = false, message = "Forbidden" });
         if (!NdDemoDataFilters.CanAccessCreatedBy(run.CreatedBy, demoCtx))
             return NotFound(new { success = false, message = "Not found" });

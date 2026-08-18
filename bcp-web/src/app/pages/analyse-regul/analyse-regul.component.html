@@ -1493,15 +1493,15 @@
 
     <div class="summary-row">
       <div class="summary-card compliant">
-        <span class="label">Compliant</span>
+        <span class="label">{{ complianceSeverityLabels.compliant }}</span>
         <strong>{{ inlineGapSummary.compliant }}</strong>
       </div>
       <div class="summary-card partial_compliant">
-        <span class="label">Partial Compliant</span>
+        <span class="label">{{ complianceSeverityLabels.partial_compliant }}</span>
         <strong>{{ inlineGapSummary.partialCompliant }}</strong>
       </div>
       <div class="summary-card non_compliant">
-        <span class="label">Non Compliant</span>
+        <span class="label">{{ complianceSeverityLabels.non_compliant }}</span>
         <strong>{{ inlineGapSummary.nonCompliant }}</strong>
       </div>
     </div>
@@ -1527,13 +1527,13 @@
         All ({{ inlineGapItems.length }})
       </button>
       <button type="button" [class.active]="inlineGapFilter === 'compliant'" (click)="setInlineGapFilter('compliant')">
-        Compliant
+        {{ complianceSeverityLabels.compliant }}
       </button>
       <button type="button" [class.active]="inlineGapFilter === 'partial_compliant'" (click)="setInlineGapFilter('partial_compliant')">
-        Partial Compliant
+        {{ complianceSeverityLabels.partial_compliant }}
       </button>
       <button type="button" [class.active]="inlineGapFilter === 'non_compliant'" (click)="setInlineGapFilter('non_compliant')">
-        Non Compliant
+        {{ complianceSeverityLabels.non_compliant }}
       </button>
     </div>
 

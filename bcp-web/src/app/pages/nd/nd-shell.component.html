@@ -102,6 +102,11 @@
 
       @if (profile(); as p) {
         <div class="sidebar-footer">
+          @if (deployVersion.web) {
+            <p class="deploy-version-hint" title="Open Settings for full deploy details">
+              Build {{ deployVersion.webLabel() }}
+            </p>
+          }
           <a class="profile-btn" routerLink="/nd/profile" aria-label="Open my profile">
             <span class="profile-avatar" aria-hidden="true">{{ profileInitial }}</span>
             <span class="profile-meta">
@@ -174,6 +179,42 @@
           </p>
         </section>
       }
+
+      <section class="settings-section">
+        <h3>Build version</h3>
+        <p class="settings-desc">Use these labels to confirm which build is live after a deploy.</p>
+        <dl class="deploy-version-dl">
+          <div>
+            <dt>Web</dt>
+            <dd>{{ deployVersion.webLabel() }}</dd>
+          </div>
+          <div>
+            <dt>API</dt>
+            <dd>{{ deployVersion.apiLabel() }}</dd>
+          </div>
+          @if (deployVersion.web?.commit || deployVersion.api?.commit) {
+            <div>
+              <dt>Git commit</dt>
+              <dd>{{ deployVersion.api?.commit || deployVersion.web?.commit }}</dd>
+            </div>
+          }
+          @if (deployVersion.api?.builtAt || deployVersion.web?.builtAt) {
+            <div>
+              <dt>Built</dt>
+              <dd>{{ deployVersion.formatBuiltAt(deployVersion.api?.builtAt || deployVersion.web?.builtAt) }}</dd>
+            </div>
+          }
+          @if (deployVersion.web?.notes || deployVersion.api?.notes) {
+            <div>
+              <dt>Notes</dt>
+              <dd>{{ deployVersion.api?.notes || deployVersion.web?.notes }}</dd>
+            </div>
+          }
+        </dl>
+        @if (!deployVersion.versionsMatch()) {
+          <p class="deploy-version-warn">Web and API versions differ — redeploy both or hard refresh after deploy completes.</p>
+        }
+      </section>
     </aside>
   }
 

@@ -245,9 +245,9 @@ export function ResultsView({
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="all">All statuses</option>
-            <option value="compliant">Compliant</option>
-            <option value="partial_compliant">Partial</option>
-            <option value="non_compliant">Non-compliant</option>
+            <option value="compliant">compliant</option>
+            <option value="partial_compliant">partial compliant</option>
+            <option value="non_compliant">non compliant</option>
             <option value="dual_verify_failed">Dual verify failed</option>
           </select>
         </div>

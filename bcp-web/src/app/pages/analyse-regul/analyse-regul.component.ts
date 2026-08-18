@@ -784,6 +784,13 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return parts.join(' · ');
   }
 
+  protected override onNdRunDetached(): void {
+    this.ndRunPointsList = [];
+    this.regulClausesConfirmed = false;
+    this.showRegulClauseReview = false;
+    this.pendingNdRunForwardOnly = false;
+  }
+
   protected override onNdRunSaved(runId: string): void {
     void this.loadNdRunPoints(runId).then(() => {
       this.mergeDemoGovSelectionSession(true);
@@ -1801,7 +1808,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     }
 
     this.ndRunId = createRes.data.id;
-    this.notifyNewAnalysisRunCreated();
+    this.notifyNewAnalysisRunCreated({ all: true });
     this.regulClausesConfirmed = false;
     if (this.ndAuth.isDemoViewer() && this.pendingNdRunForwardOnly) {
       await this.loadNdRunLight(this.ndRunId);
@@ -4072,7 +4079,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
     const runId = createRes.data.id;
     this.ndRunId = runId;
-    this.notifyNewAnalysisRunCreated();
+    this.notifyNewAnalysisRunCreated({ all: true });
     await this.router.navigate([this.regulAnalysisRoute], {
       queryParams: { run: runId },
       replaceUrl: true,
@@ -4148,7 +4155,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
     const runId = createRes.data.id;
     this.ndRunId = runId;
-    this.notifyNewAnalysisRunCreated();
+    this.notifyNewAnalysisRunCreated({ all: true });
     await this.router.navigate([this.regulAnalysisRoute], {
       queryParams: { run: runId },
       replaceUrl: true,
@@ -4194,17 +4201,24 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         }
       }
 
-      const seedRes = await this.ndApi.createDemoAnalysisFromCbuaeSeed();
-      if (!seedRes.success || !seedRes.data?.id) {
-        this.error = seedRes.message ?? 'Could not prepare demo analysis run';
+      const selectedIds = this.demoSelectedRegulationIds();
+      if (!selectedIds.length) {
+        this.error = 'Select regulation points before starting analysis';
+        this.toast.show(this.error, 'error', 4000);
+        return false;
+      }
+
+      const createRes = await this.ndApi.createAnalysisRun(this.buildNdCreateRunPayload(selectedIds));
+      if (!createRes.success || !createRes.data?.id) {
+        this.error = createRes.message ?? 'Could not prepare demo analysis run';
         this.toast.show(this.error, 'error', 5000);
         return false;
       }
 
-      const runId = seedRes.data.id;
+      const runId = createRes.data.id;
       this.ndRunId = runId;
-      this.notifyNewAnalysisRunCreated();
-      this.ndRunStatus = seedRes.data.status ?? 'draft';
+      this.ndRunStatus = 'draft';
+      this.notifyNewAnalysisRunCreated({ all: true });
       this.ndWorkflowEngine = this.regulWorkflowEngineId;
       await this.router.navigate([this.regulAnalysisRoute], {
         queryParams: { run: runId },

@@ -36,7 +36,12 @@
     <None Update="Schemas\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Content Update="deploy-version.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <Target Name="WriteDeployVersion" BeforeTargets="PrepareForPublish">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)scripts\write-deploy-version.ps1&quot; -PreserveLabel" />
+  </Target>
 
   <Target Name="SyncAppSettingsSecrets" BeforeTargets="PrepareForPublish">
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)scripts\sync-secrets.ps1&quot;" Condition="Exists('$(ProjectDir)appsettings.Development.json')" />

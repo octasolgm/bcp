@@ -48,6 +48,56 @@ public sealed class NdDemoInterceptionService(
         RunningRegulationExtractJobs.ContainsKey(regDocId)
         || RunningRegulationParseJobs.ContainsKey(regDocId);
 
+    private static readonly TimeSpan StaleDemoParseRequeueAfter = TimeSpan.FromSeconds(45);
+
+    /// <summary>
+    /// GET/poll heal: if a demo doc is stuck at the initial parse stamp with no in-memory job, re-queue once.
+    /// </summary>
+    public bool TryRecoverStaleRegulationParse(
+        NdRegulationDocument regDoc,
+        Guid userId,
+        NdDemoIsolationContext demoCtx)
+    {
+        if (!CanMutateRegulationDocument(regDoc, demoCtx))
+            return false;
+        if (!string.Equals(regDoc.ExtractionStatus, "processing", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (IsRegulationDemoJobRunning(regDoc.Id))
+            return false;
+        if (DateTimeOffset.UtcNow - regDoc.UpdatedAt < StaleDemoParseRequeueAfter)
+            return false;
+
+        var label = regDoc.ExtractionProgressLabel ?? "";
+        var looksLikeParse = label.Contains("Parsing", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("markdown", StringComparison.OrdinalIgnoreCase)
+            || (regDoc.ExtractionProgressPct is null or <= 15);
+        if (!looksLikeParse)
+            return false;
+
+        logger.LogWarning(
+            "Re-queueing stale demo regulation parse for {DocId} (last update {UpdatedAt}, label {Label})",
+            regDoc.Id,
+            regDoc.UpdatedAt,
+            label);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var innerDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var demo = scope.ServiceProvider.GetRequiredService<NdDemoInterceptionService>();
+                var row = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regDoc.Id);
+                if (row != null)
+                    await demo.CompleteDemoRegulationParseAsync(innerDb, row, userId, demoCtx, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Stale demo regulation parse heal failed for {DocId}", regDoc.Id);
+            }
+        });
+        return true;
+    }
+
     private static int DemoDelayMs(int minMs, int maxMs) => Rng.Next(minMs, maxMs);
 
     /// <summary>Visible demo steps — brief but noticeable (~6–10s total).</summary>
@@ -147,10 +197,16 @@ public sealed class NdDemoInterceptionService(
         return true;
     }
 
-    public bool TryQueueRegulationParse(Guid regDocId, Guid userId)
+    public bool TryQueueRegulationParse(Guid regDocId, Guid userId, bool forceIfStale = false)
     {
         if (!RunningRegulationParseJobs.TryAdd(regDocId, 0))
-            return false;
+        {
+            if (!forceIfStale || IsRegulationDemoJobRunning(regDocId))
+                return false;
+            RunningRegulationParseJobs.TryRemove(regDocId, out _);
+            if (!RunningRegulationParseJobs.TryAdd(regDocId, 0))
+                return false;
+        }
 
         _ = Task.Run(async () =>
         {
@@ -160,8 +216,13 @@ public sealed class NdDemoInterceptionService(
                 var innerDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 var demo = scope.ServiceProvider.GetRequiredService<NdDemoInterceptionService>();
                 var regDoc = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regDocId);
-                if (regDoc != null)
-                    await demo.SimulateRegulationParseAsync(innerDb, regDoc, userId, CancellationToken.None);
+                if (regDoc == null)
+                {
+                    await MarkRegulationJobFailedAsync(regDocId, "Regulation document not found.");
+                    return;
+                }
+                await demo.SimulateRegulationParseAsync(innerDb, regDoc, userId, CancellationToken.None);
+                dashboardCache.Invalidate();
             }
             catch (Exception ex)
             {
@@ -191,10 +252,62 @@ public sealed class NdDemoInterceptionService(
                 var regDoc = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regDocId);
                 if (regDoc != null)
                     await demo.SimulateRegulationExtractAsync(innerDb, regDoc, userId, CancellationToken.None);
+                dashboardCache.Invalidate();
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Demo regulation extract failed for {DocId}", regDocId);
+                await MarkRegulationJobFailedAsync(regDocId, ex.Message);
+            }
+            finally
+            {
+                RunningRegulationExtractJobs.TryRemove(regDocId, out _);
+            }
+        });
+        return true;
+    }
+
+    /// <summary>Background parse then extract — demo Extract must not block the HTTP request.</summary>
+    public bool TryQueueRegulationParseAndExtract(Guid regDocId, Guid userId)
+    {
+        if (!RunningRegulationExtractJobs.TryAdd(regDocId, 0))
+            return false;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var innerDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var demo = scope.ServiceProvider.GetRequiredService<NdDemoInterceptionService>();
+                var regDoc = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regDocId);
+                if (regDoc == null) return;
+
+                var demoCtx = await demo.ResolveDemoContextForProfileAsync(userId, CancellationToken.None);
+                var status = (regDoc.ExtractionStatus ?? "").Trim().ToLowerInvariant();
+                if (status is not "parsed" and not "completed")
+                {
+                    RunningRegulationParseJobs.TryAdd(regDocId, 0);
+                    try
+                    {
+                        await demo.SimulateRegulationParseAsync(
+                            innerDb, regDoc, userId, demoCtx, CancellationToken.None);
+                    }
+                    finally
+                    {
+                        RunningRegulationParseJobs.TryRemove(regDocId, out _);
+                    }
+
+                    regDoc = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regDocId);
+                    if (regDoc == null) return;
+                }
+
+                await demo.SimulateRegulationExtractAsync(innerDb, regDoc, userId, demoCtx, CancellationToken.None);
+                dashboardCache.Invalidate();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Demo regulation parse+extract failed for {DocId}", regDocId);
                 await MarkRegulationJobFailedAsync(regDocId, ex.Message);
             }
             finally
@@ -259,7 +372,18 @@ public sealed class NdDemoInterceptionService(
         await SimulateRegulationParseAsync(dbCtx, regDoc, userId, demoCtx, ct);
     }
 
-    public async Task SimulateRegulationParseAsync(
+    public Task SimulateRegulationParseAsync(
+        AppDbContext dbCtx,
+        NdRegulationDocument regDoc,
+        Guid userId,
+        NdDemoIsolationContext demoCtx,
+        CancellationToken ct) =>
+        CompleteDemoRegulationParseAsync(dbCtx, regDoc, userId, demoCtx, ct);
+
+    /// <summary>
+    /// Demo parse: count real PDF pages from the uploaded file and mark parsed — no Landing AI, no cache clone, no fake progress.
+    /// </summary>
+    public async Task CompleteDemoRegulationParseAsync(
         AppDbContext dbCtx,
         NdRegulationDocument regDoc,
         Guid userId,
@@ -267,82 +391,44 @@ public sealed class NdDemoInterceptionService(
         CancellationToken ct)
     {
         if (!CanMutateRegulationDocument(regDoc, demoCtx))
-            return;
+            throw new InvalidOperationException("Parse could not run for this document.");
 
         var sem = RegulationSimulateLocks.GetOrAdd(regDoc.Id, _ => new SemaphoreSlim(1, 1));
         await sem.WaitAsync(ct);
         RunningRegulationParseJobs.TryAdd(regDoc.Id, 0);
         try
         {
-            if (string.Equals(regDoc.ExtractionStatus, "parsed", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(regDoc.ExtractionStatus, "completed", StringComparison.OrdinalIgnoreCase))
+            await dbCtx.Entry(regDoc).ReloadAsync(ct);
+            var status = (regDoc.ExtractionStatus ?? "").Trim().ToLowerInvariant();
+            if (status is "parsed" or "completed")
                 return;
 
-            regDoc.ExtractionStatus = "processing";
-            regDoc.ExtractionProgressLabel = "Parsing document…";
-            regDoc.ExtractionProgressPct = 8;
-            regDoc.UpdatedAt = DateTimeOffset.UtcNow;
-            await dbCtx.SaveChangesAsync(ct);
-
-            foreach (var (label, pct) in DemoParseProgressSteps)
+            var pages = 0;
+            if (regDoc.StoredDocumentId is Guid storedId)
             {
-                regDoc.ExtractionProgressLabel = label;
-                regDoc.ExtractionProgressPct = pct;
-                regDoc.UpdatedAt = DateTimeOffset.UtcNow;
-                await dbCtx.SaveChangesAsync(ct);
-                await Task.Delay(DemoStepDelayMs(), ct);
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var upload = scope.ServiceProvider.GetRequiredService<NdRegulationUploadService>();
+                pages = await upload.SyncStoredPdfPageCountAsync(regDoc.Id, ct);
+
+                var stored = await dbCtx.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct);
+                if (stored != null)
+                {
+                    stored.ParseStatus = "parsed";
+                    stored.ParseError = null;
+                    stored.UpdatedAt = DateTimeOffset.UtcNow;
+                }
             }
 
-        if (regDoc.StoredDocumentId is not Guid storedId)
-            throw new InvalidOperationException("Regulation has no stored file.");
-
-        var destStored = await dbCtx.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct)
-            ?? throw new InvalidOperationException("Stored document not found.");
-
-        var demoIds = await directory.GetDemoProfileIdsAsync(ct);
-        var fileName = NormalizeFileName(destStored.OriginalFileName, destStored.Title, destStored.StoragePath);
-        var source = await ResolveRegulationParseStoredSourceAsync(dbCtx, demoIds, fileName, regDoc, destStored, ct)
-            ?? await FindLatestParsedStoredDocumentAsync(dbCtx, demoIds, ct);
-
-        if (source == null)
-        {
             regDoc.ExtractionStatus = "parsed";
             regDoc.ExtractionProgressLabel = null;
             regDoc.ExtractionProgressPct = null;
             regDoc.UpdatedAt = DateTimeOffset.UtcNow;
-            destStored.ParseStatus = "parsed";
-            destStored.ParseError = null;
-            destStored.UpdatedAt = DateTimeOffset.UtcNow;
             await dbCtx.SaveChangesAsync(ct);
+
             logger.LogInformation(
-                "Demo regulation parse skipped (no production source) for {DocId} ({File})",
+                "Demo regulation parse complete for {DocId} ({Pages} pages)",
                 regDoc.Id,
-                fileName);
-            return;
-        }
-
-        await CopyParseCacheAsync(source, destStored, ct);
-        var destKey = destStored.ExtractionCacheKey ?? NdRegulationCacheKeys.ForStoredDocument(destStored.Id);
-        var cached = await cache.GetParseCacheAsync(destKey, ct);
-
-        regDoc.ExtractionMarkdown = cached?.Markdown;
-        regDoc.ExtractionStatus = "parsed";
-        regDoc.ExtractionProgressLabel = null;
-        regDoc.ExtractionProgressPct = null;
-        regDoc.UpdatedAt = DateTimeOffset.UtcNow;
-        destStored.ParseStatus = "parsed";
-        destStored.ParseError = null;
-        destStored.FileHash = source.FileHash ?? destStored.FileHash;
-        // Demo parse clones the source document, so its PDF page count applies to the copy too.
-        if (source.Pages > 0) destStored.Pages = source.Pages;
-        destStored.UpdatedAt = DateTimeOffset.UtcNow;
-        await dbCtx.SaveChangesAsync(ct);
-
-        logger.LogInformation(
-            "Demo regulation parse cloned from {SourceId} to {DestId} ({File})",
-            source.Id,
-            regDoc.Id,
-            fileName);
+                pages);
         }
         finally
         {
@@ -498,7 +584,18 @@ public sealed class NdDemoInterceptionService(
         await SimulateRegulationExtractAsync(dbCtx, regDoc, userId, demoCtx, ct);
     }
 
-    public async Task SimulateRegulationExtractAsync(
+    public Task SimulateRegulationExtractAsync(
+        AppDbContext dbCtx,
+        NdRegulationDocument regDoc,
+        Guid userId,
+        NdDemoIsolationContext demoCtx,
+        CancellationToken ct) =>
+        CompleteDemoRegulationExtractAsync(dbCtx, regDoc, userId, demoCtx, ct);
+
+    /// <summary>
+    /// Demo extract: clone canonical points from the configured admin demo template — no Landing AI, no progress theatre.
+    /// </summary>
+    public async Task CompleteDemoRegulationExtractAsync(
         AppDbContext dbCtx,
         NdRegulationDocument regDoc,
         Guid userId,
@@ -506,7 +603,7 @@ public sealed class NdDemoInterceptionService(
         CancellationToken ct)
     {
         if (!CanMutateRegulationDocument(regDoc, demoCtx))
-            return;
+            throw new InvalidOperationException("Extract could not run for this document.");
 
         var sem = RegulationSimulateLocks.GetOrAdd(regDoc.Id, _ => new SemaphoreSlim(1, 1));
         await sem.WaitAsync(ct);
@@ -517,37 +614,24 @@ public sealed class NdDemoInterceptionService(
 
             var existingCount = await CountCanonicalActivePointsAsync(dbCtx, regDoc.Id, ct);
             var alreadyCompleted = string.Equals(regDoc.ExtractionStatus, "completed", StringComparison.OrdinalIgnoreCase);
-            // Keep a finished demo extract as-is. Re-extract (user click) still runs when status is not completed.
             if (existingCount > 0 && alreadyCompleted)
                 return;
 
-            // Demo extract is a fast clone from the configured production template (no Landing AI).
-            regDoc.ExtractionStatus = "processing";
-            regDoc.ExtractionProgressLabel = "Extracting regulation points…";
-            regDoc.ExtractionProgressPct = 40;
-            regDoc.UpdatedAt = DateTimeOffset.UtcNow;
-            await dbCtx.SaveChangesAsync(ct);
-
             regDoc.ExtractionParseChunkCompleted = null;
             await MarkExistingRegulationPointsRemovedAsync(dbCtx, regDoc.Id, ct);
+            await dbCtx.SaveChangesAsync(ct);
 
             var (populated, source) = await PopulateDemoRegulationPointsWithSourceAsync(dbCtx, regDoc, ct);
             if (populated == 0)
             {
                 var templateId = demoOptions.Value.DemoRegulationTemplateDocumentId;
                 throw new InvalidOperationException(
-                    "No regulation points available to clone for demo. " +
-                    $"Looked up template {templateId} (by regulation id or stored-document id) and production CBUAE extracts; " +
-                    "none had cloneable canonical points. Open the production CBUAE doc as super admin, run View points / Repair, then retry Extract.");
+                    "No demo regulation points to clone. " +
+                    $"Check admin demo template {templateId} has points, then retry Extract.");
             }
 
-            if (source != null)
-            {
-                regDoc.ExtractionResult = source.ExtractionResult;
-                if (!string.IsNullOrWhiteSpace(source.ExtractionMarkdown))
-                    regDoc.ExtractionMarkdown = source.ExtractionMarkdown;
-            }
-
+            regDoc.ExtractionResult = null;
+            regDoc.ExtractionMarkdown = null;
             regDoc.ExtractionStatus = "completed";
             regDoc.ExtractionProgressLabel = null;
             regDoc.ExtractionProgressPct = null;
@@ -565,27 +649,6 @@ public sealed class NdDemoInterceptionService(
                 savedCount,
                 regDoc.Id,
                 source?.Id);
-
-            if (source?.StoredDocumentId is Guid srcStoredId && regDoc.StoredDocumentId is Guid destStoredId
-                && string.IsNullOrWhiteSpace(regDoc.ExtractionMarkdown))
-            {
-                try
-                {
-                    var destStored = await dbCtx.StoredDocuments.FirstOrDefaultAsync(d => d.Id == destStoredId, ct);
-                    var srcStored = await dbCtx.StoredDocuments.AsNoTracking()
-                        .FirstOrDefaultAsync(d => d.Id == srcStoredId, ct);
-                    if (destStored != null && srcStored != null)
-                    {
-                        await CopyParseCacheAsync(srcStored, destStored, ct);
-                        destStored.UpdatedAt = DateTimeOffset.UtcNow;
-                        await dbCtx.SaveChangesAsync(ct);
-                    }
-                }
-                catch (Exception cacheEx)
-                {
-                    logger.LogWarning(cacheEx, "Demo regulation parse cache copy skipped for {DocId}", regDoc.Id);
-                }
-            }
         }
         finally
         {
@@ -1700,6 +1763,31 @@ public sealed class NdDemoInterceptionService(
         }
     }
 
+    private async Task UpdateRegulationProgressAsync(
+        AppDbContext dbCtx,
+        Guid regDocId,
+        string label,
+        int? pct,
+        CancellationToken ct)
+    {
+        try
+        {
+            dbCtx.ChangeTracker.Clear();
+            var row = await dbCtx.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regDocId, ct);
+            if (row == null) return;
+            row.ExtractionStatus = "processing";
+            row.ExtractionProgressLabel = label;
+            row.ExtractionProgressPct = pct;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+            await dbCtx.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Demo regulation progress update skipped for {DocId}", regDocId);
+            dbCtx.ChangeTracker.Clear();
+        }
+    }
+
     private async Task MarkRegulationJobFailedAsync(Guid regDocId, string message)
     {
         try
@@ -1709,9 +1797,13 @@ public sealed class NdDemoInterceptionService(
             var regDoc = await innerDb.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regDocId);
             if (regDoc == null) return;
             regDoc.ExtractionStatus = "failed";
-            regDoc.ExtractionProgressLabel = string.IsNullOrWhiteSpace(message)
+            var friendly = string.IsNullOrWhiteSpace(message)
                 ? "Processing failed. Try Parse or Extract again."
-                : message;
+                : message.Contains("entity changes", StringComparison.OrdinalIgnoreCase)
+                    || message.Contains("violates check constraint", StringComparison.OrdinalIgnoreCase)
+                    ? "Parse could not save results. Click Parse to try again."
+                    : message.Length > 180 ? message[..180] + "…" : message;
+            regDoc.ExtractionProgressLabel = friendly;
             regDoc.ExtractionProgressPct = null;
             regDoc.UpdatedAt = DateTimeOffset.UtcNow;
             await innerDb.SaveChangesAsync();

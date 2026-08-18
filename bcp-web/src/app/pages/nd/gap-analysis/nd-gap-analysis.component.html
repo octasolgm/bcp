@@ -147,7 +147,7 @@
     [attr.aria-pressed]="isSummaryCardActive('compliant')"
     (click)="filterFromSummaryCard('compliant')"
   >
-    <span class="label">Compliant</span>
+    <span class="label">{{ complianceLabels.compliant }}</span>
     <strong>{{ summary.compliant }}</strong>
     <span class="hint">Fully addressed</span>
   </button>
@@ -158,7 +158,7 @@
     [attr.aria-pressed]="isSummaryCardActive('partial_compliant')"
     (click)="filterFromSummaryCard('partial_compliant')"
   >
-    <span class="label">Partial Compliant</span>
+    <span class="label">{{ complianceLabels.partial_compliant }}</span>
     <strong>{{ summary.partialCompliant }}</strong>
     <span class="hint">Needs improvement</span>
   </button>
@@ -169,7 +169,7 @@
     [attr.aria-pressed]="isSummaryCardActive('non_compliant')"
     (click)="filterFromSummaryCard('non_compliant')"
   >
-    <span class="label">Non Compliant</span>
+    <span class="label">{{ complianceLabels.non_compliant }}</span>
     <strong>{{ summary.nonCompliant }}</strong>
     <span class="hint">Corrective action required</span>
   </button>

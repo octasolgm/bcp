@@ -42,6 +42,7 @@ public class NdRegulationUploadService(
     private static readonly ConcurrentDictionary<Guid, CancellationTokenSource> ExtractCancellation = new();
     /// <summary>No in-memory job and status still processing — likely API restart or aborted run.</summary>
     private static readonly TimeSpan StaleProcessingAfter = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan StaleParseProcessingAfter = TimeSpan.FromSeconds(45);
     public async Task<NdRegulationDocument> UploadAndExtractAsync(
         byte[] bytes,
         string fileName,
@@ -63,6 +64,8 @@ public class NdRegulationUploadService(
 
         var title = await AllocateRegulationDisplayNameAsync(baseTitle, prepared.FileHash, ct);
 
+        var pdfPageCount = TryCountPdfPages(bytes, fileName);
+
         var stored = new Data.Entities.StoredDocument
         {
             Title = title,
@@ -76,7 +79,9 @@ public class NdRegulationUploadService(
             StoragePath = prepared.StoragePath,
             FileHash = prepared.FileHash,
             SizeBytes = prepared.SizeBytes,
-            Pages = Math.Max(1, (int)Math.Round(prepared.SizeBytes / 45000.0)),
+            Pages = pdfPageCount > 0
+                ? pdfPageCount
+                : Math.Max(1, (int)Math.Round(prepared.SizeBytes / 45000.0)),
             UploadedBy = userId,
         };
         stored.ExtractionCacheKey = NdRegulationCacheKeys.ForStoredDocument(stored.Id);
@@ -100,9 +105,44 @@ public class NdRegulationUploadService(
 
     /// <summary>
     /// Recompute stored PDF page references from native PDF text (preferred) or parse cache — no Landing AI calls.
+    /// Also re-counts <c>stored_documents.pages</c> from the uploaded PDF (PdfPig).
     /// </summary>
-    public Task<int> RefreshPointPageReferencesAsync(Guid regulationId, CancellationToken ct)
-        => pointPageRepair.RefreshPagesAsync(regulationId, ct);
+    public async Task<(int PdfPages, int PointsUpdated)> RefreshPointPageReferencesAsync(
+        Guid regulationId,
+        CancellationToken ct)
+    {
+        var pdfPages = await SyncStoredPdfPageCountAsync(regulationId, ct);
+        var pointsUpdated = await pointPageRepair.RefreshPagesAsync(regulationId, ct);
+        return (pdfPages, pointsUpdated);
+    }
+
+    /// <summary>Download the regulation PDF and persist accurate page count on stored_documents.</summary>
+    public async Task<int> SyncStoredPdfPageCountAsync(Guid regulationId, CancellationToken ct)
+    {
+        var regDoc = await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == regulationId, ct)
+            ?? await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.StoredDocumentId == regulationId, ct);
+        if (regDoc?.StoredDocumentId is not Guid storedId) return 0;
+
+        var stored = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct);
+        if (stored is null) return 0;
+
+        var (bytes, fileName) = await DownloadRegulationBytesAsync(regDoc, ct);
+        var count = TryCountPdfPages(bytes, fileName);
+        if (count <= 0) return stored.Pages;
+
+        var previous = stored.Pages;
+        if (previous != count)
+        {
+            stored.Pages = count;
+            stored.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation(
+                "Updated stored_documents.pages for {StoredId} ({File}): {Old} -> {New}",
+                storedId, fileName, previous, count);
+        }
+
+        return count;
+    }
 
     private async Task<string> AllocateRegulationDisplayNameAsync(
         string baseTitle,
@@ -513,11 +553,20 @@ public class NdRegulationUploadService(
             return;
         if (NdDemoInterceptionService.IsRegulationDemoJobRunning(regDoc.Id))
             return;
-        if (DateTimeOffset.UtcNow - regDoc.UpdatedAt < StaleProcessingAfter)
+
+        var label = regDoc.ExtractionProgressLabel ?? "";
+        var looksLikeParse = label.Contains("Parsing", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("markdown", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("parse results", StringComparison.OrdinalIgnoreCase)
+            || (regDoc.ExtractionProgressPct is null or <= 15);
+        var staleAfter = looksLikeParse ? StaleParseProcessingAfter : StaleProcessingAfter;
+        if (DateTimeOffset.UtcNow - regDoc.UpdatedAt < staleAfter)
             return;
 
         regDoc.ExtractionStatus = "failed";
-        regDoc.ExtractionProgressLabel = "Previous extraction did not finish. Run Extract again.";
+        regDoc.ExtractionProgressLabel = looksLikeParse
+            ? "Parse did not finish. Click Parse to try again."
+            : "Previous extraction did not finish. Run Extract again.";
         regDoc.ExtractionProgressPct = null;
         regDoc.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -742,14 +791,15 @@ public class NdRegulationUploadService(
         await dbCtx.SaveChangesAsync(ct);
     }
 
-    /// <summary>PdfPig page count, or 0 when the upload is not a readable PDF.</summary>
+    /// <summary>PdfPig page count (preferred), PdfSharp fallback, or 0 when not a readable PDF.</summary>
     private static int TryCountPdfPages(byte[] bytes, string fileName)
     {
         try
         {
-            return LandingAiDocumentFormats.IsPdf(fileName, bytes)
-                ? LandingAiDocumentParseService.GetPdfPageCount(bytes)
-                : 0;
+            if (!LandingAiDocumentFormats.IsPdf(fileName, bytes)) return 0;
+            var pigCount = PdfNativePageDocument.TryGetPageCount(bytes);
+            if (pigCount > 0) return pigCount;
+            return LandingAiDocumentParseService.GetPdfPageCount(bytes);
         }
         catch
         {

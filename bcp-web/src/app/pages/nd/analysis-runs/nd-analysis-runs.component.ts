@@ -86,7 +86,10 @@ export class NdAnalysisRunsComponent implements OnInit {
 
     this.route.queryParamMap.subscribe((params) => {
       const role = this.auth.getRole();
-      this.mineOnly = role === 'maker' ? params.get('mine') !== '0' : params.get('mine') === '1';
+      this.mineOnly =
+        role === 'maker' && !this.auth.isDemoViewer()
+          ? params.get('mine') !== '0'
+          : params.get('mine') === '1';
       this.correctionOnly = params.get('correction') === '1';
       this.pageTitle = this.correctionOnly
         ? 'Pending correction'

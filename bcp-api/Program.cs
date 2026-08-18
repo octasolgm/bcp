@@ -222,6 +222,8 @@ else
 
 var app = builder.Build();
 
+var deployVersion = DeployVersionInfo.Load(app.Environment);
+
 var bootstrapState = new StartupBootstrapState();
 app.Lifetime.ApplicationStarted.Register(() =>
 {
@@ -244,10 +246,16 @@ app.MapControllers();
 app.MapGet("/", () => Results.Ok(new
 {
     name = "BCP API",
-    version = "1.0.0",
+    version = deployVersion.Api,
+    deploy = deployVersion.Label,
+    commit = deployVersion.Commit,
     persistence = dbConfig.UsePostgres ? "supabase" : "sqlite",
     bootstrap = bootstrapState.Status,
 }));
+
+app.MapGet("/health/version", () => Results.Ok(deployVersion.ToPayload(
+    dbConfig.UsePostgres ? "supabase" : "sqlite",
+    bootstrapState.Status)));
 
 app.MapGet("/health/startup", () =>
 {

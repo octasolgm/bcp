@@ -11,6 +11,8 @@ import {
 import { ToastService } from '../../services/toast.service';
 import { NdShellFocusService } from '../../services/nd/nd-shell-focus.service';
 import { NdWorkspaceNavService } from '../../services/nd/nd-workspace-nav.service';
+import type { NdNavBadgeBumps } from '../../../lib/nd/nav-badge-bumps';
+import { DeployVersionService } from '../../services/deploy-version.service';
 import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.component';
 import { startPanelResize } from '../shared/panel-resize';
 
@@ -71,6 +73,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   readonly activeSessions = inject(ActiveAnalysisSessionsService);
   readonly shellFocus = inject(NdShellFocusService);
   private readonly workspaceNav = inject(NdWorkspaceNavService);
+  readonly deployVersion = inject(DeployVersionService);
   private readonly cdr = inject(ChangeDetectorRef);
 
   readonly profile = this.auth.profile;
@@ -146,6 +149,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     this.syncExpandedGroupsToRoute();
     this.hydrateBadgesFromCache(role);
     this.scheduleNavBadgeRefresh();
+    void this.deployVersion.ensureLoaded().then(() => this.cdr.markForCheck());
     if (!this.isOverviewRoute() && !this.auth.isDemoViewer()) {
       setTimeout(() => void this.refreshPass2LlmSummary(), 2500);
     }
@@ -251,6 +255,11 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   groupBadge(group: NavGroup): number | undefined {
+    // Analysis group: total runs only — in-progress is a subset, not additive.
+    if (group.id === 'analysis') {
+      const n = this.navBadges['analysis-runs-all'] ?? 0;
+      return group.children.some((c) => c.badgeAlways) ? n : n > 0 ? n : undefined;
+    }
     let total = 0;
     let anyAlways = false;
     for (const child of group.children) {
@@ -315,7 +324,11 @@ export class NdShellComponent implements OnInit, OnDestroy {
         ? 15_000
         : path.includes('/nd/analysis-runs') || path.includes('/nd/in-progress')
           ? 0
-          : 8_000;
+          : path.includes('/nd/regulation-documents') || path.includes('/nd/internal-documents')
+            ? 500
+          : path.includes('/nd/analyse-regul') || path.includes('/nd/analyse-v')
+            ? 2_000
+            : 8_000;
     this.badgeRefreshTimer = setTimeout(() => {
       this.badgeRefreshTimer = null;
       void this.refreshNavBadges();
@@ -360,7 +373,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   badgeFor(item: NavItem): number | undefined {
     if (item.id === 'in-progress') {
-      const n = this.ndActiveRunCount + this.activeSessions.sessions().length;
+      const n = this.ndActiveRunCount;
       if (item.badgeAlways) return n;
       return n > 0 ? n : undefined;
     }
@@ -397,7 +410,6 @@ export class NdShellComponent implements OnInit, OnDestroy {
       const res = await this.api.getWorkspaceNavCounts();
       if (genAtStart !== this.badgeApplyGeneration) return;
       if (this.badgeRefreshQueued) return;
-      if (Date.now() - this.lastBadgeBumpMs < 1500) return;
       if (!res.success || !res.data) {
         this.ndActiveRunCount = 0;
         this.cdr.markForCheck();
@@ -434,12 +446,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     }
   }
 
-  private applyNavBadgeBumps(bumps: {
-    analysisRunsAll?: number;
-    analysisRunsInProgress?: number;
-    analysisRunsCorrection?: number;
-    adminDeletedRuns?: number;
-  }): void {
+  private applyNavBadgeBumps(bumps: NdNavBadgeBumps): void {
     this.badgeApplyGeneration++;
     this.lastBadgeBumpMs = Date.now();
     const next = { ...this.navBadges };
@@ -455,6 +462,24 @@ export class NdShellComponent implements OnInit, OnDestroy {
     if (bumps.adminDeletedRuns) {
       next['admin-deleted-runs'] = Math.max(0, (next['admin-deleted-runs'] ?? 0) + bumps.adminDeletedRuns);
     }
+    if (bumps.internalDocuments) {
+      next['internal-documents'] = Math.max(0, (next['internal-documents'] ?? 0) + bumps.internalDocuments);
+    }
+    if (bumps.regulationDocuments) {
+      next['regulation-documents'] = Math.max(0, (next['regulation-documents'] ?? 0) + bumps.regulationDocuments);
+    }
+    if (bumps.internalDocumentsDeleted) {
+      next['internal-documents-deleted'] = Math.max(
+        0,
+        (next['internal-documents-deleted'] ?? 0) + bumps.internalDocumentsDeleted,
+      );
+    }
+    if (bumps.regulationDocumentsDeleted) {
+      next['regulation-documents-deleted'] = Math.max(
+        0,
+        (next['regulation-documents-deleted'] ?? 0) + bumps.regulationDocumentsDeleted,
+      );
+    }
     this.navBadges = next;
     if (bumps.analysisRunsInProgress) {
       this.ndActiveRunCount = Math.max(0, this.ndActiveRunCount + bumps.analysisRunsInProgress);
@@ -464,6 +489,9 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   toggleSettings(): void {
     this.settingsOpen = !this.settingsOpen;
+    if (this.settingsOpen) {
+      void this.deployVersion.ensureLoaded().then(() => this.cdr.markForCheck());
+    }
   }
 
   closeSettings(): void {
@@ -525,7 +553,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         label: 'All analysis',
         icon: 'list',
         badgeAlways: true,
-        ...(role === 'maker' ? { queryParams: { mine: '1' } } : {}),
+        ...(role === 'maker' && !this.auth.isDemoViewer() ? { queryParams: { mine: '1' } } : {}),
       },
     ];
     if (role === 'maker' || role === 'super_admin') {
@@ -559,7 +587,9 @@ export class NdShellComponent implements OnInit, OnDestroy {
         icon: 'clock',
         badgeAlways: true,
         queryParams:
-          role === 'maker' ? { mine: '1', correction: '1' } : { correction: '1' },
+          role === 'maker' && !this.auth.isDemoViewer()
+            ? { mine: '1', correction: '1' }
+            : { correction: '1' },
       });
     }
     if (role === 'super_admin' || role === 'checker' || role === 'reviewer') {

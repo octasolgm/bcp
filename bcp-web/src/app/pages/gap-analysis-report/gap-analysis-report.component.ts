@@ -29,7 +29,7 @@ import {
 import { analysisPointToReportItem } from '../../../lib/nd/analysis-point-mapper';
 import type { AnalysisPoint } from '../../../lib/nd/types';
 import { countDisplayGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
-import { resolveAnalysisPointSeverity } from '../../../lib/nd/point-compliance-status';
+import { resolveAnalysisPointSeverity, COMPLIANCE_SEVERITY_LABELS } from '../../../lib/nd/point-compliance-status';
 import { parsePointSnapshot } from '../../../lib/nd/utils';
 import { NdApiService } from '../../services/nd/nd-api.service';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
@@ -74,11 +74,13 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
   ndRunData: ResultsData | null = null;
   workflowLoading = false;
 
+  readonly complianceLabels = COMPLIANCE_SEVERITY_LABELS;
+
   readonly filters: { id: 'all' | GapSeverity; label: string }[] = [
     { id: 'all', label: 'All' },
-    { id: 'compliant', label: 'Compliance' },
-    { id: 'partial_compliant', label: 'Partial Compliant' },
-    { id: 'non_compliant', label: 'Non Compliant' },
+    { id: 'compliant', label: COMPLIANCE_SEVERITY_LABELS.compliant },
+    { id: 'partial_compliant', label: COMPLIANCE_SEVERITY_LABELS.partial_compliant },
+    { id: 'non_compliant', label: COMPLIANCE_SEVERITY_LABELS.non_compliant },
   ];
 
   items: GapItemData[] = [];

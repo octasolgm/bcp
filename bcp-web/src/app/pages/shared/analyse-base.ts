@@ -98,6 +98,7 @@ import {
 } from '../../../lib/session-point-status';
 import { reportItemsToGapItems } from '../../services/gap-analysis-mapper';
 import {
+  COMPLIANCE_SEVERITY_LABELS,
   gapSeverityLabel,
   gapSeverityShortLabel,
   type GapItemData,
@@ -169,6 +170,8 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     'c84713f9aacd18415680356aeae47bcacff9c17458b5595b575400b12fe8f2ff';
   readonly IMPTFS_HASH =
     '6a0a0bd13c7a32ea10c43c9a8391347a7e0caceaa0b17dd6443e9ee622111717';
+
+  readonly complianceSeverityLabels = COMPLIANCE_SEVERITY_LABELS;
 
   readonly regCards: RegCard[] = [
     {
@@ -414,11 +417,28 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
         this.stopPolling();
         this.sessionId = null;
         void this.attachToNdAnalysisRun(runId);
-      } else if (!sid && !runId && this.sessionId) {
-        this.sessionSelectedPointIds = null;
+      } else if (!sid && !runId) {
+        if (this.ndRunId) {
+          this.stopNdRunPolling();
+          this.ndRunId = null;
+          this.ndRunStatus = '';
+          this.ndRunWorkflowStatus = '';
+          this.ndRunDetailPoints = [];
+          this.analysisState = 'idle';
+          this.isDemoRun = false;
+          this.demoNdRunId = null;
+          this.analysisCompleteUiDone = false;
+          this.onNdRunDetached();
+        }
+        if (this.sessionId) {
+          this.sessionSelectedPointIds = null;
+        }
       }
     });
   }
+
+  /** Subclass hook when ?run= is cleared (e.g. New analysis navigation). */
+  protected onNdRunDetached(): void {}
 
   ngOnDestroy(): void {
     this.sessionParamSub?.unsubscribe();
@@ -1042,6 +1062,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   protected onAnalysisComplete(): void {
     if (this.analysisCompleteUiDone) return;
     this.analysisCompleteUiDone = true;
+    this.workspaceNav.requestNavBadgeRefresh();
     // ND Analyse v8 runs use embedded app-nd-gap-analysis (GET /nd/results) — not session inline rows.
     if (!this.activeNdRunId) {
       this.buildInlineGapItems();
@@ -1241,11 +1262,13 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     if (!item?.landingMessage && !item?.llmMessage) return '—';
     const block = parseReferenceComplianceBlock((item.llmMessage || item.landingMessage || '').trim());
     const raw = `${block.status ?? ''} ${item.agreement?.landingStatus ?? ''} ${item.agreement?.llmStatus ?? ''}`.toLowerCase();
-    if (/\bnon[- ]?compliant\b/.test(raw) || /\bnon\b/.test(raw) && /compliant/.test(raw)) return 'Non Compliant';
-    if (/\bpartial\b/.test(raw)) return 'Partial Compliant';
-    if (/\bcompliant\b/.test(raw)) return 'Compliant';
-    if (item.agreement?.status === 'aligned') return 'Compliant';
-    return 'Partial Compliant';
+    if (/\bnon[- ]?compliant\b/.test(raw) || (/\bnon\b/.test(raw) && /compliant/.test(raw))) {
+      return gapSeverityLabel('non_compliant');
+    }
+    if (/\bpartial\b/.test(raw)) return gapSeverityLabel('partial_compliant');
+    if (/\bcompliant\b/.test(raw)) return gapSeverityLabel('compliant');
+    if (item.agreement?.status === 'aligned') return gapSeverityLabel('compliant');
+    return gapSeverityLabel('partial_compliant');
   }
 
   get policyPdfDocId(): string | null {
@@ -2181,10 +2204,15 @@ ${this.findingsPreview
     return this.useNdRegulationCatalog || this.ndAuth.isDemoViewer();
   }
 
-  /** Sidebar + All analysis list should pick up a newly created run. */
-  protected notifyNewAnalysisRunCreated(): void {
+  /** Sidebar + All analysis list — bump only what actually changed (avoid double-count on re-run). */
+  protected notifyNewAnalysisRunCreated(opts?: { all?: boolean; inProgress?: boolean }): void {
     this.workspaceNav.requestNavBadgeRefresh();
-    this.workspaceNav.bumpNavBadges({ analysisRunsAll: 1 });
+    const bumps: { analysisRunsAll?: number; analysisRunsInProgress?: number } = {};
+    if (opts?.all) bumps.analysisRunsAll = 1;
+    if (opts?.inProgress) bumps.analysisRunsInProgress = 1;
+    if (bumps.analysisRunsAll || bumps.analysisRunsInProgress) {
+      this.workspaceNav.bumpNavBadges(bumps);
+    }
   }
 
   private autoSelectTfs(): void {
@@ -4096,7 +4124,7 @@ ${this.findingsPreview
       'success',
       2000,
     );
-    this.notifyNewAnalysisRunCreated();
+    this.notifyNewAnalysisRunCreated({ inProgress: true });
     this.markStep(0, false);
     this.markStep(1, true);
     this.progress = 25;
@@ -4159,7 +4187,7 @@ ${this.findingsPreview
     }
 
     this.toast.show('Analysis started', 'success', 2000);
-    this.notifyNewAnalysisRunCreated();
+    this.notifyNewAnalysisRunCreated({ inProgress: true });
     this.markStep(0, false);
     this.markStep(1, true);
     this.progress = 25;
