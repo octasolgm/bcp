@@ -1,11 +1,5 @@
 -- BCP: Enterprise compliance platform (new dashboard) — new tables only
 
--- ── Helper: current user role from profiles ──
-CREATE OR REPLACE FUNCTION get_my_role()
-RETURNS TEXT AS $$
-  SELECT role FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
-
 -- ── Departments ──
 CREATE TABLE IF NOT EXISTS departments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -44,6 +38,12 @@ DROP TRIGGER IF EXISTS trg_profiles_updated ON profiles;
 CREATE TRIGGER trg_profiles_updated
   BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ── Helper: current user role from profiles (after profiles table exists) ──
+CREATE OR REPLACE FUNCTION get_my_role()
+RETURNS TEXT AS $$
+  SELECT role FROM profiles WHERE id = auth.uid();
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- ── Regulation documents (dashboard tracking) ──
 CREATE TABLE IF NOT EXISTS regulation_documents (

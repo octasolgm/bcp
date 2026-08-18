@@ -50,7 +50,14 @@ public class SupabaseJwtValidator(
             return await ValidateViaSupabaseAuthApiAsync(bearerToken, ct);
         }
 
-        return ValidateLocally(bearerToken);
+        var local = ValidateLocally(bearerToken);
+        if (local != null)
+            return local;
+
+        // New Supabase projects may sign user access tokens with JWT Signing Keys (not legacy HS256).
+        logger.LogInformation(
+            "[ND JWT] Local legacy-secret validation failed — trying Supabase Auth API");
+        return await ValidateViaSupabaseAuthApiAsync(bearerToken, ct);
     }
 
     private JwtUser? ValidateLocally(string bearerToken) =>

@@ -41,8 +41,8 @@ try {
     Write-Host "GET / OK persistence=$($root.persistence)"
 } catch { Fail "GET / - $($_.Exception.Message)" }
 
-$sb = "https://hxfbzhjlmkiqhbbeftfq.supabase.co"
-$anon = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZmJ6aGpsbWtpcWhiYmVmdGZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDMxODUsImV4cCI6MjA5Nzc3OTE4NX0.YFoIaS3i7NqUuRyaks92CYn1XLYOl5H1azlS0oyAXsk"
+$sb = "https://prxmkrmwqxlltwjnazay.supabase.co"
+$anon = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByeG1rcm13cXhsbHR3am5hemF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5NzAwMTIsImV4cCI6MjEwMjU0NjAxMn0.nHcayH4ul9rcluW8yqzvWTEXgh-jHC6hU4WL2YauVAw"
 $token = $null
 try {
     $authBody = @{ email = $Email; password = $Password } | ConvertTo-Json

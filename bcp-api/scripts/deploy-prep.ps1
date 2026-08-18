@@ -33,17 +33,17 @@ Write-Host @"
 
 Ready to deploy.
 
-YOUR STEPS:
+  Recommended (settings + zip in one step):
+    .\scripts\deploy-api.ps1
 
-  A) Visual Studio: Publish -> profile bcp-api-dev - Web Deploy -> Publish
+  Manual ZIP only:
+    Upload $zipPath in Azure Portal -> Deployment Center
 
-  B) Azure Portal ZIP: Deployment Center -> ZIP Deploy -> upload bcp-api.zip
-     (from this folder: $zipPath)
-Optional later (when bcp-web is on Azure):
-  Add your web URL to Bcp:CorsOrigins in appsettings.Production.json, then republish.
-  Example: "http://localhost:3002,https://bcp-web-dev.azurewebsites.net"
+  Settings are synced from appsettings.Development.json -> appsettings.Secrets.json in the zip.
+  deploy-api.ps1 also pushes the same values to Azure App Settings (requires az login).
 
 Verify:
+  https://bcp-api-dev.azurewebsites.net/health/startup
   https://bcp-api-dev.azurewebsites.net/dual-verify-kafka/health
 
 "@ -ForegroundColor Yellow

@@ -322,25 +322,41 @@ public static class NdRunEnrichmentHelper
     {
         if (runIds.Count == 0) return new WorkspaceComplianceTotals(0, 0, 0);
 
-        return await db.Database.SqlQueryRaw<WorkspaceComplianceTotals>(
-            """
-            SELECT
-              COUNT(*) FILTER (WHERE effective_status = 'compliant')::int AS "Compliant",
-              COUNT(*) FILTER (WHERE effective_status = 'partial_compliant')::int AS "Partial",
-              COUNT(*) FILTER (WHERE effective_status = 'non_compliant')::int AS "NonCompliant"
-            FROM (
-              SELECT
-                CASE
-                  WHEN p.final_status IN ('compliant','partial_compliant','non_compliant') THEN p.final_status
-                  WHEN p.landing_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.landing_ai_status
-                  WHEN p.google_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.google_ai_status
-                  ELSE NULL
-                END AS effective_status
-              FROM analysis_points p
-              WHERE p.analysis_run_id = ANY({0})
-            ) t
-            """,
-            runIds.ToArray()).FirstOrDefaultAsync(ct) ?? new WorkspaceComplianceTotals(0, 0, 0);
+        // Chunk IN lists — EF/Npgsql does not reliably bind Guid[] for ANY({0}) in SqlQueryRaw.
+        var compliant = 0;
+        var partial = 0;
+        var nonCompliant = 0;
+        foreach (var chunk in runIds.Chunk(50))
+        {
+            var batch = chunk.ToArray();
+            var placeholders = string.Join(", ", batch.Select((_, i) => $"{{{i}}}"));
+            var sql = $"""
+                SELECT
+                  COUNT(*) FILTER (WHERE effective_status = 'compliant')::int AS "Compliant",
+                  COUNT(*) FILTER (WHERE effective_status = 'partial_compliant')::int AS "Partial",
+                  COUNT(*) FILTER (WHERE effective_status = 'non_compliant')::int AS "NonCompliant"
+                FROM (
+                  SELECT
+                    CASE
+                      WHEN p.final_status IN ('compliant','partial_compliant','non_compliant') THEN p.final_status
+                      WHEN p.landing_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.landing_ai_status
+                      WHEN p.google_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.google_ai_status
+                      ELSE NULL
+                    END AS effective_status
+                  FROM analysis_points p
+                  WHERE p.analysis_run_id IN ({placeholders})
+                ) t
+                """;
+
+            var row = await db.Database
+                .SqlQueryRaw<WorkspaceComplianceTotals>(sql, batch.Cast<object>().ToArray())
+                .FirstOrDefaultAsync(ct) ?? new WorkspaceComplianceTotals(0, 0, 0);
+            compliant += row.Compliant;
+            partial += row.Partial;
+            nonCompliant += row.NonCompliant;
+        }
+
+        return new WorkspaceComplianceTotals(compliant, partial, nonCompliant);
     }
 
     private static async Task<Dictionary<Guid, RunPointStatusAggregate>> LoadPointStatusAggregatesAsync(

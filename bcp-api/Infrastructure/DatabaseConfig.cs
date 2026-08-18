@@ -15,8 +15,8 @@ public sealed class DatabaseConfig
     {
         var pgRaw = BcpConfiguration.GetString(
             config,
-            "ConnectionStrings:DirectUrl",
             "ConnectionStrings:PostgreSQL",
+            "ConnectionStrings:DirectUrl",
             "DATABASE_URL",
             "DIRECT_URL",
             "REGULIQ_DATABASE_URL",

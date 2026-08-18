@@ -94,9 +94,16 @@ public static class NdDemoDataFilters
         if (ctx.ViewerIsDemo)
         {
             var viewerId = ctx.User.UserId;
+            // Migrated demo runs may still reference old profile UUIDs from the source Supabase
+            // project — include demo-marked rows so migrated data stays visible to demo users.
+            // Inline marker checks — EF cannot translate IsDemoMarkedAnalysisRun(r) to SQL.
             return query.Where(r =>
                 r.CreatedBy != null
-                && (r.CreatedBy == viewerId || ctx.DemoProfileIds.Contains(r.CreatedBy.Value)));
+                && (r.CreatedBy == viewerId
+                    || ctx.DemoProfileIds.Contains(r.CreatedBy.Value)
+                    || r.Name.StartsWith(DemoRunNamePrefix)
+                    || (r.Description != null && r.Description.Contains(DemoRunSeedMarker))
+                    || (r.Description != null && r.Description.Contains(DemoRunCreditMarker))));
         }
         return query.Where(r =>
             (r.CreatedBy == null || !ctx.DemoProfileIds.Contains(r.CreatedBy.Value))

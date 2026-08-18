@@ -24,6 +24,7 @@ public class DemoAnalysisSeedService(
     IMemoryCache cache)
 {
     private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> DemoRunSyncLocks = new();
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> CbuaeDemoCreateLocks = new();
     private static readonly TimeSpan DemoRunSyncThrottle = TimeSpan.FromSeconds(45);
 
     private static readonly JsonSerializerOptions JudgmentJsonOptions = new()
@@ -417,27 +418,75 @@ public class DemoAnalysisSeedService(
 
     public async Task<NdAnalysisRun> GetOrCreateDemoCbuaeRunAsync(Guid userId, CancellationToken ct = default)
     {
-        var seedCount = GetCachedCbuaeSeedJudgments().Count;
-        var existing = await db.NdAnalysisRuns
-            .Include(r => r.Points)
+        var createLock = CbuaeDemoCreateLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
+        await createLock.WaitAsync(ct);
+        try
+        {
+            var seedCount = GetCachedCbuaeSeedJudgments().Count;
+            var existing = await FindExistingCbuaeDemoRunAsync(userId, ct);
+            if (existing != null)
+            {
+                if (existing.TotalPointsCount != seedCount)
+                {
+                    await SyncRegulDemoRunFromTemplateAsync(
+                        existing.Id,
+                        userId,
+                        preserveWorkflowStatus: true,
+                        ct);
+                    existing = await db.NdAnalysisRuns.AsNoTracking()
+                        .FirstAsync(r => r.Id == existing.Id, ct);
+                }
+
+                return existing;
+            }
+
+            return await CreateDemoRegulRunFromJudgmentsAsync(
+                userId,
+                new DemoRegulSaveRequest(
+                    RegulationNameHint: "CBUAE_EN_3945",
+                    InternalNameHint: "290626",
+                    UseSeedFile: true),
+                ct);
+        }
+        finally
+        {
+            createLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Reuse a migrated or previously seeded CBUAE demo run instead of inserting another copy.
+    /// Matches the current user first, then any demo-marked Regul V4 CBUAE × AML manual run.
+    /// </summary>
+    private async Task<NdAnalysisRun?> FindExistingCbuaeDemoRunAsync(Guid userId, CancellationToken ct)
+    {
+        var own = await db.NdAnalysisRuns.AsNoTracking()
             .Where(r => r.CreatedBy == userId
                 && r.WorkflowEngine == AnalysisWorkflowEngine.RegulPipelineFull
                 && r.Status != "deleted"
-                && r.Description != null
-                && r.Description.Contains("Arena judgments seeded"))
+                && (NdDemoDataFilters.IsDemoMarkedAnalysisRun(r)
+                    || (r.Description != null && r.Description.Contains("Arena judgments seeded"))))
             .OrderByDescending(r => r.CreatedAt)
             .FirstOrDefaultAsync(ct);
+        if (own != null && await IsCbuaeAmlDemoRunAsync(own, ct))
+            return own;
 
-        if (existing is { TotalPointsCount: > 0 } && existing.TotalPointsCount == seedCount)
-            return existing;
+        var candidates = await db.NdAnalysisRuns.AsNoTracking()
+            .Where(r => r.WorkflowEngine == AnalysisWorkflowEngine.RegulPipelineFull
+                && r.Status != "deleted"
+                && (r.Name.StartsWith(NdDemoDataFilters.DemoRunNamePrefix)
+                    || (r.Description != null && r.Description.Contains("Arena judgments seeded"))))
+            .OrderByDescending(r => r.TotalPointsCount)
+            .ThenBy(r => r.CreatedAt)
+            .ToListAsync(ct);
 
-        return await CreateDemoRegulRunFromJudgmentsAsync(
-            userId,
-            new DemoRegulSaveRequest(
-                RegulationNameHint: "CBUAE_EN_3945",
-                InternalNameHint: "290626",
-                UseSeedFile: true),
-            ct);
+        foreach (var candidate in candidates)
+        {
+            if (await IsCbuaeAmlDemoRunAsync(candidate, ct))
+                return candidate;
+        }
+
+        return null;
     }
 
     /// <summary>Applies CBUAE seed judgments to an existing draft/run (demo simulation).</summary>

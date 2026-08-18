@@ -137,31 +137,10 @@ export class NdAnalysisRunsComponent implements OnInit {
           : { ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize },
     );
     if (res.success && res.data) {
-      let finalRes = res;
-      const rows = Array.isArray(res.data) ? res.data : [];
-      if (rows.length === 0 && this.auth.isDemoViewer()) {
-        const seed = await this.api.createDemoAnalysisFromCbuaeSeed();
-        if (seed.success) {
-          const retry = await this.api.getAnalysisRuns(
-            this.correctionOnly
-              ? {
-                  ndOnly: true,
-                  summaryOnly: true,
-                  status: 'pulled_back',
-                  page: this.page,
-                  pageSize: this.pageSize,
-                  ...(this.mineOnly ? { mineOnly: true } : {}),
-                }
-              : this.mineOnly
-                ? { mineOnly: true, ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize }
-                : { ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize },
-          );
-          if (retry.success && retry.data) finalRes = retry;
-        }
-      }
-      this.allRuns = finalRes.data as AnalysisRunSummary[];
-      this.totalCount = finalRes.pagination?.total ?? this.allRuns.length;
-      this.totalPages = finalRes.pagination?.totalPages ?? 1;
+      // Demo CBUAE seeding is handled server-side on list (with cooldown + dedupe).
+      this.allRuns = res.data as AnalysisRunSummary[];
+      this.totalCount = res.pagination?.total ?? this.allRuns.length;
+      this.totalPages = res.pagination?.totalPages ?? 1;
       if (this.page > this.totalPages && this.totalPages > 0) {
         this.page = this.totalPages;
         this.loading = false;

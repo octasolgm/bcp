@@ -1,5 +1,15 @@
 -- Temporary manual review notes per analysis point (remove table when workflow is finalized).
 
+CREATE OR REPLACE FUNCTION is_nd_super_admin()
+RETURNS BOOLEAN AS $$
+  SELECT get_my_role() = 'super_admin';
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION is_nd_authenticated()
+RETURNS BOOLEAN AS $$
+  SELECT auth.uid() IS NOT NULL;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
 CREATE TABLE IF NOT EXISTS temp_point_review_comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   analysis_point_id UUID NOT NULL REFERENCES analysis_points(id) ON DELETE CASCADE,

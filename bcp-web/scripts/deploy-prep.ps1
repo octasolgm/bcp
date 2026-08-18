@@ -40,15 +40,12 @@ Write-Host @"
 
 Deploy options:
 
-  A) VS Code Azure: Deploy to Web App on the ZIP file (not the browser folder)
-     $tempZip
+  Recommended:
+    .\scripts\deploy-web.ps1
 
-  B) Azure Portal ZIP deploy - upload bcp-web-dist.zip
+  Manual ZIP:
+    Upload bcp-web-dist.zip (or $tempZip)
 
-  C) Do NOT deploy dist\browser folder when repo path has a space (bcp new).
-
-After deploy, add CORS on API (appsettings.Production.json):
-  https://bcp-web-dev.azurewebsites.net
-  then republish bcp-api.
+After deploy, run deploy-api.ps1 so API CORS + Supabase settings match.
 
 "@ -ForegroundColor Yellow

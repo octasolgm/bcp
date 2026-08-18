@@ -1,13 +1,13 @@
 using Npgsql;
 
-const string host = "aws-1-ap-northeast-2.pooler.supabase.com";
-const string user = "postgres.hxfbzhjlmkiqhbbeftfq";
-const string pass = "23Gmrehman@123";
+const string host = "aws-0-ap-northeast-1.pooler.supabase.com";
+const string user = "postgres.prxmkrmwqxlltwjnazay";
+const string pass = "YOUR_DB_PASSWORD";
 
 var cs = new NpgsqlConnectionStringBuilder
 {
     Host = host,
-    Port = 5432,
+    Port = 6543,
     Username = user,
     Password = pass,
     Database = "postgres",
@@ -20,7 +20,7 @@ try
 {
     await using var conn = new NpgsqlConnection(cs);
     await conn.OpenAsync();
-  await using var cmd = new NpgsqlCommand("SELECT current_user", conn);
+    await using var cmd = new NpgsqlCommand("SELECT current_user", conn);
     var u = await cmd.ExecuteScalarAsync();
     Console.WriteLine($"SUCCESS connected as {u}");
 }

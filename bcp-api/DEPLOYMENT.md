@@ -26,7 +26,7 @@ Configuration → Application settings → **New application setting**:
 
 **Or** use separate Supabase keys (easier if password contains `@`):
 
-| `Supabase__DbHost` | `aws-1-ap-northeast-2.pooler.supabase.com` |
+| `Supabase__DbHost` | `aws-0-ap-northeast-1.pooler.supabase.com` |
 | `Supabase__DbPort` | `6543` |
 | `Supabase__DbUser` | `postgres.YOUR_PROJECT_REF` |
 | `Supabase__DbPassword` | your DB password |
@@ -56,7 +56,7 @@ cd bcp-api/scripts
 
 Example **transaction** pooler URI (replace password; prefer **6543** for App Service):
 
-`postgresql://postgres.YOUR_PROJECT_REF:YOUR_PASSWORD@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres`
+`postgresql://postgres.prxmkrmwqxlltwjnazay:YOUR_PASSWORD@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres`
 
 Do **not** use session pooler port **5432** for production API unless you have very low concurrency — Supabase caps session mode at ~15 clients **shared** by Azure API, local dev, workers, and SQL tools.
 
@@ -83,7 +83,27 @@ Azure maps `Section__Key` to nested appsettings. Flat names like `DATABASE_URL` 
 
 Use Key Vault for secrets in production.
 
-## 3. Build & publish locally
+## 3. Build + deploy (one command)
+
+```powershell
+cd bcp-api/scripts
+az login
+.\deploy-api.ps1
+```
+
+This will:
+1. Sync `appsettings.Secrets.json` from `appsettings.Development.json`
+2. Build `bcp-api.zip`
+3. Push **all** Supabase/DB/API keys to Azure App Settings (from Development.json)
+4. ZIP-deploy to `bcp-api-dev`
+
+Manual build only:
+
+```powershell
+.\deploy-prep.ps1
+```
+
+## 4. Deploy (ZIP) — manual portal
 
 ```bash
 cd bcp-api

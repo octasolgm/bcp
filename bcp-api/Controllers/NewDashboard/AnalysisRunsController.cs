@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
@@ -26,17 +25,9 @@ public class AnalysisRunsController(
     NdDemoUserDirectory demoDirectory,
     NdDemoWorkspaceService demoWorkspace,
     NdDemoInterceptionService demoIntercept,
-    IMemoryCache memoryCache,
     ILogger<AnalysisRunsController> logger) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
-
-    /// <summary>
-    /// The demo workspace is auto-seeded on first visit. Without a cooldown, a demo user
-    /// whose workspace is intentionally empty (just cleared) re-runs the whole seed on
-    /// every list request, which is what made demo navigation crawl.
-    /// </summary>
-    private static readonly TimeSpan DemoAutoSeedCooldown = TimeSpan.FromMinutes(2);
 
     public record CreateRunRequest(
         string Name,
@@ -77,29 +68,6 @@ public class AnalysisRunsController(
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
-
-        var autoSeedKey = $"nd:demo-autoseed:{profile!.Id}";
-        if (demoCtx.Enabled && demoCtx.ViewerIsDemo && !deletedOnly && !memoryCache.TryGetValue(autoSeedKey, out _))
-        {
-            memoryCache.Set(autoSeedKey, true, DemoAutoSeedCooldown);
-            var previewQ = NdDemoDataFilters.ApplyToAnalysisRuns(
-                db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != DeletedStatus),
-                demoCtx);
-            if (profile.Role == "maker")
-                previewQ = previewQ.Where(r => r.CreatedBy == profile.Id);
-            if (!await previewQ.AnyAsync(ct))
-            {
-                try
-                {
-                    await demoSeed.GetOrCreateDemoCbuaeRunAsync(profile.Id, ct);
-                    dashboardCache.Invalidate();
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Auto-seed CBUAE demo analysis failed for profile {ProfileId}", profile.Id);
-                }
-            }
-        }
 
         if (deletedOnly)
         {

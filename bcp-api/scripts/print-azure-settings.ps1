@@ -19,8 +19,8 @@ $settings = @(
     @{ Name = "Bcp__MigrateLocalDataToSupabase"; Value = "false" },
     @{ Name = "KAFKA_ENABLED"; Value = "true" },
     @{ Name = "Bcp__PostgresMaxPoolSize"; Value = "5" },
-    @{ Name = "Supabase__DbPort"; Value = "6543" },
-    @{ Name = "ConnectionStrings__PostgreSQL"; Value = ($dev.ConnectionStrings.PostgreSQL -replace ':5432/', ':6543/') },
+    @{ Name = "Supabase__DbPort"; Value = "5432" },
+    @{ Name = "ConnectionStrings__PostgreSQL"; Value = ($dev.ConnectionStrings.PostgreSQL -replace ':6543/', ':5432/') },
     @{ Name = "Gemini__ApiKey"; Value = $dev.Gemini.ApiKey },
     @{ Name = "LandingAi__ApiKey"; Value = $dev.LandingAi.ApiKey },
     @{ Name = "Bcp__CorsOrigins"; Value = "https://YOUR-bcp-web.azurewebsites.net,http://localhost:3002" }

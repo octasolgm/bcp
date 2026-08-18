@@ -347,7 +347,7 @@ public static class SupabaseSchemaBootstrap
                 """
                 SELECT EXISTS (
                   SELECT 1 FROM information_schema.tables
-                  WHERE table_schema = 'public' AND table_name IN ('profiles', 'nd_system_settings')
+                  WHERE table_schema = 'public' AND table_name = 'analysis_runs'
                 ) AS "Value"
                 """)
             .FirstAsync(ct);

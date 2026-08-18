@@ -7,8 +7,8 @@ export const environment = {
   /** Override when testing local web against Azure API only */
   localApiUrl: LOCAL_API_URL,
   nestjsApiUrl: '',
-  supabaseUrl: 'https://hxfbzhjlmkiqhbbeftfq.supabase.co',
-  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZmJ6aGpsbWtpcWhiYmVmdGZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMDMxODUsImV4cCI6MjA5Nzc3OTE4NX0.YFoIaS3i7NqUuRyaks92CYn1XLYOl5H1azlS0oyAXsk',
+  supabaseUrl: 'https://prxmkrmwqxlltwjnazay.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByeG1rcm13cXhsbHR3am5hemF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5NzAwMTIsImV4cCI6MjEwMjU0NjAxMn0.nHcayH4ul9rcluW8yqzvWTEXgh-jHC6hU4WL2YauVAw',
   ndApiUrl: resolveApiUrl(),
   appUrl: 'http://localhost:3002',
 };
