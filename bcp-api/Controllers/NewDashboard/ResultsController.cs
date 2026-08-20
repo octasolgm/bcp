@@ -190,7 +190,18 @@ public class ResultsController(
                     fileName = a.FileName,
                     createdAt = a.CreatedAt,
                 }),
-                reviews,
+                reviews = reviews.Select(r => new
+                {
+                    r.Id,
+                    reviewerRole = r.ReviewerRole,
+                    action = r.Action,
+                    overallComment = r.OverallComment,
+                    reviewStatus = r.ReviewStatus,
+                    priority = r.Priority,
+                    responsibility = r.Responsibility,
+                    dueDate = FormatDueDateResponse(r.DueDate),
+                    createdAt = r.CreatedAt,
+                }),
                 comments,
                 actionItemReviews = actionItemReviews.Select(r => new
                 {

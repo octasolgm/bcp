@@ -71,8 +71,7 @@ public abstract class NdControllerBase : ControllerBase
         review.ReviewStatus = string.IsNullOrWhiteSpace(body.ReviewStatus) ? null : body.ReviewStatus.Trim();
         review.Priority = body.Priority is >= 0 and <= 100 ? body.Priority : null;
         review.Responsibility = string.IsNullOrWhiteSpace(body.Responsibility) ? null : body.Responsibility.Trim();
-        if (!string.IsNullOrWhiteSpace(body.DueDate) && DateTimeOffset.TryParse(body.DueDate.Trim(), out var parsedDue))
-            review.DueDate = parsedDue;
+        review.DueDate = ParseOptionalDueDate(body.DueDate);
     }
 
     private static readonly HashSet<string> ValidActionItemReviewStatuses = new(StringComparer.OrdinalIgnoreCase)

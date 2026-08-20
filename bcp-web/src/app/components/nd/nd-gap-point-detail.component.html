@@ -227,23 +227,7 @@
               <div class="cap-gap cap-gap-edit">
                 <p class="gap-label">Gap {{ gap.index }}</p>
                 <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
-                <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
-                <p class="fix-label">Action (what to do)</p>
-                <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.fix" placeholder="Corrective action…"></textarea>
-                <p class="gap-priority-label">Priority</p>
-                <div class="gap-priority-options" role="group" aria-label="Gap priority">
-                  @for (opt of gapPriorityOptions; track opt.id) {
-                    <button
-                      type="button"
-                      class="gap-priority-btn"
-                      [class.active]="gapPriorityFor(draftGap) === opt.id"
-                      [ngClass]="gapPriorityClass(opt.id)"
-                      (click)="setDraftPriority(opt.id)"
-                    >
-                      {{ opt.label }}
-                    </button>
-                  }
-                </div>
+                <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
                 <div class="cap-edit-actions">
                   <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="saving" (click)="onSave()">
                     {{ saving ? 'Saving…' : 'Save' }}
@@ -253,64 +237,45 @@
               </div>
             } @else {
               <div class="cap-gap cap-gap-read" [class.is-collapsed]="isActionCollapsed(gap.index)">
-                <button type="button" class="cap-gap-toggle" (click)="toggleActionCollapsed(gap.index)">
-                  <span class="cap-gap-toggle-main">
-                    <span class="gap-label">Gap {{ gap.index }}</span>
-                    @if (gapPriorityFor(gap); as priority) {
-                      <span class="gap-priority-pill" [ngClass]="gapPriorityClass(priority)">{{ gapPriorityLabel(priority) }}</span>
-                    }
-                    @if (actionCountForGap(gap.index); as actionCount) {
-                      <span class="gap-action-count-pill">{{ actionCount }} action{{ actionCount === 1 ? '' : 's' }}</span>
-                    }
-                    @if (reviewCountForGap(gap.index); as reviewCount) {
-                      @if (reviewCount > 0) {
-                        <span class="review-count-pill">{{ reviewCount }} review{{ reviewCount === 1 ? '' : 's' }}</span>
+                <div class="cap-gap-header-bar">
+                  <button type="button" class="cap-gap-toggle" (click)="toggleActionCollapsed(gap.index)">
+                    <span class="cap-gap-toggle-main">
+                      <span class="gap-label">Gap {{ gap.index }}</span>
+                      @if (actionCountForGap(gap.index); as actionCount) {
+                        <span class="gap-action-count-pill">{{ actionCount }} action{{ actionCount === 1 ? '' : 's' }}</span>
                       }
+                      @if (reviewCountForGap(gap.index); as reviewCount) {
+                        @if (reviewCount > 0) {
+                          <span class="review-count-pill">{{ reviewCount }} review{{ reviewCount === 1 ? '' : 's' }}</span>
+                        }
+                      }
+                    </span>
+                  </button>
+                  <div class="cap-gap-header-end">
+                    @if (canEdit && !editing) {
+                      <button type="button" class="cap-gap-edit-link" (click)="startEditSingleGap(gap.index)">Edit</button>
                     }
-                  </span>
-                  <svg class="cap-gap-chevron" [class.open]="!isActionCollapsed(gap.index)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M6 9l6 6 6-6"/>
-                  </svg>
-                </button>
+                    @if (history.length) {
+                      <button type="button" class="cap-gap-edit-link" (click)="onOpenHistory(gap.index)">History</button>
+                    }
+                    <button
+                      type="button"
+                      class="cap-gap-chevron-btn"
+                      (click)="toggleActionCollapsed(gap.index)"
+                      [attr.aria-expanded]="!isActionCollapsed(gap.index)"
+                      [attr.aria-label]="isActionCollapsed(gap.index) ? 'Expand gap ' + gap.index : 'Collapse gap ' + gap.index"
+                    >
+                      <svg class="cap-gap-chevron" [class.open]="!isActionCollapsed(gap.index)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M6 9l6 6 6-6"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
 
                 @if (!isActionCollapsed(gap.index)) {
                 <div class="cap-gap-body">
-                  <div class="cap-gap-head">
-                    <div class="cap-gap-head-meta">
-                      @if (canEdit && !editing) {
-                        <div class="gap-priority-inline" role="group" [attr.aria-label]="'Priority for gap ' + gap.index">
-                          @for (opt of gapPriorityOptions; track opt.id) {
-                            <button
-                              type="button"
-                              class="gap-priority-btn compact"
-                              [class.active]="gapPriorityFor(gap) === opt.id"
-                              [ngClass]="gapPriorityClass(opt.id)"
-                              [disabled]="saving"
-                              (click)="onPriorityChange(gap.index, opt.id)"
-                            >
-                              {{ opt.label }}
-                            </button>
-                          }
-                        </div>
-                      }
-                    </div>
-                    @if (canEdit && !editing) {
-                      <div class="cap-item-actions">
-                        <button type="button" class="toolbar-btn subtle" (click)="startEditSingleGap(gap.index)">Edit</button>
-                        @if (history.length) {
-                          <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
-                        }
-                      </div>
-                    } @else if (history.length) {
-                      <button type="button" class="toolbar-btn subtle" (click)="onOpenHistory(gap.index)">History</button>
-                    }
-                  </div>
                   <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
                   <p>{{ gap.missing }}</p>
-                  @if (gap.fix) {
-                    <p class="fix-label">Action (what to do)</p>
-                    <p>{{ gap.fix }}</p>
-                  }
 
                   @if (runId) {
                     <app-nd-action-plans-section
@@ -319,51 +284,97 @@
                       [analysisPointId]="point.id"
                       [gapIndex]="gap.index"
                       [plans]="actionPlansForGapIndex(gap.index)"
-                      [canEdit]="canEditActionPlans"
-                      [canReview]="canReviewActionPlans"
+                      [canEdit]="effectiveCanEditActionPlans"
+                      [canReview]="effectiveCanReviewActionPlans"
                       [lightSurface]="true"
                       [disabledHint]="reviewDisabledHint"
-                      (plansChanged)="actionPlansChanged.emit()"
+                      (plansChanged)="onActionPlansChanged()"
                       (viewReviews)="viewActionPlanReviews.emit($event)"
                     />
                   }
 
                   @if (showGapEvidenceForGap(gap)) {
-                    <div class="gap-evidence-inline">
+                    <div class="gap-docs-panel gap-docs-panel-inline">
+                      <div class="gap-docs-head">
+                        <div class="gap-docs-title-wrap">
+                          <p class="gap-docs-title">Gap analysis documents</p>
+                          @if (attachmentsForGap(gap.index).length) {
+                            <span class="gap-docs-count">{{ attachmentsForGap(gap.index).length }}</span>
+                          }
+                        </div>
+                        @if (canUploadEvidence) {
+                          <div class="gap-docs-head-actions">
+                            <button
+                              type="button"
+                              class="gap-docs-rerun"
+                              [disabled]="isRerunningGap(gap.index) || isUploadingGap(gap.index) || isRemovingAny()"
+                              title="Rerun analysis for this gap"
+                              (click)="rerunGapEvidence.emit({ actionIndex: gap.index, mode: 'full' })"
+                            >
+                              {{ isRerunningGap(gap.index) ? 'Rerunning…' : 'Rerun this gap' }}
+                            </button>
+                            <input
+                              #gapEvidenceInput
+                              type="file"
+                              class="hidden-input"
+                              multiple
+                              accept=".pdf,.doc,.docx,.doc"
+                              (change)="onGapFilesSelected(gap.index, $event)"
+                            />
+                            <button
+                              type="button"
+                              class="gap-docs-upload"
+                              [disabled]="isUploadingGap(gap.index) || isRerunningGap(gap.index) || isRemovingAny()"
+                              (click)="gapEvidenceInput.click()"
+                            >
+                              @if (isUploadingGap(gap.index)) {
+                                Uploading…
+                              } @else {
+                                <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+                                  <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M10 4v12M4 10h12" />
+                                </svg>
+                                Upload
+                              }
+                            </button>
+                          </div>
+                        }
+                      </div>
                       @if (attachmentsForGap(gap.index).length) {
-                        <ul class="gap-evidence-list compact">
+                        <ul class="gap-docs-list">
                           @for (att of attachmentsForGap(gap.index); track att.id) {
-                            <li class="gap-evidence-item">
-                              <button type="button" class="source-ref-link subtle" (click)="onViewGapEvidence(att.storedDocumentId)">
-                                {{ att.fileName }}
-                              </button>
-                              @if (canUploadEvidence) {
-                                <button type="button" class="toolbar-btn subtle" (click)="deleteGapEvidence.emit({ actionIndex: gap.index, attachmentId: att.id })">Remove</button>
+                            <li class="gap-docs-row" [class.is-confirming]="isPendingRemove(att.id)" [class.is-busy]="isRemoving(att.id)">
+                              <span class="gap-docs-icon" aria-hidden="true">{{ fileKind(att.fileName) }}</span>
+                              <div class="gap-docs-meta">
+                                <button type="button" class="gap-docs-name" (click)="onViewGapEvidence(att.storedDocumentId)">
+                                  {{ att.fileName }}
+                                </button>
+                                <p class="gap-docs-sub">{{ fileMeta(att) }}</p>
+                              </div>
+                              @if (isRemoving(att.id)) {
+                                <span class="gap-docs-busy">Removing…</span>
+                              } @else if (isPendingRemove(att.id)) {
+                                <div class="gap-docs-confirm">
+                                  <span>Remove this file?</span>
+                                  <button type="button" class="gap-docs-btn ghost" (click)="cancelRemove()">Cancel</button>
+                                  <button type="button" class="gap-docs-btn danger" (click)="confirmRemoveGap(gap.index, att.id)">Remove</button>
+                                </div>
+                              } @else {
+                                <div class="gap-docs-actions">
+                                  <button type="button" class="gap-docs-btn ghost" (click)="onViewGapEvidence(att.storedDocumentId)">Open</button>
+                                  @if (canUploadEvidence) {
+                                    <button type="button" class="gap-docs-btn danger-text" [disabled]="isRemovingAny()" (click)="askRemove(att.id)">
+                                      Remove
+                                    </button>
+                                  }
+                                </div>
                               }
                             </li>
                           }
                         </ul>
-                      }
-                      @if (canUploadEvidence) {
-                        <div class="gap-evidence-actions inline">
-                          <input
-                            #gapEvidenceInput
-                            type="file"
-                            class="hidden-input"
-                            multiple
-                            accept=".pdf,.doc,.docx,.doc"
-                            (change)="onGapFilesSelected(gap.index, $event)"
-                          />
-                          <button type="button" class="toolbar-btn primary" [disabled]="isUploadingGap(gap.index)" (click)="gapEvidenceInput.click()">
-                            {{ isUploadingGap(gap.index) ? 'Uploading…' : 'Upload gap analysis' }}
-                          </button>
-                          @if (attachmentsForGap(gap.index).length) {
-                            <button type="button" class="toolbar-btn" [disabled]="isRerunningGap(gap.index)" (click)="rerunGapEvidence.emit({ actionIndex: gap.index, mode: 'full' })">
-                              {{ isRerunningGap(gap.index) ? 'Rerunning…' : 'Rerun analysis (this gap)' }}
-                            </button>
-                          }
+                      } @else {
+                        <div class="gap-docs-empty">
+                          <p>No documents uploaded yet. Upload files, then rerun this gap.</p>
                         </div>
-                        <p class="gap-evidence-hint inline">Uploaded docs are saved to this gap and used instead of internal policy docs when rerunning.</p>
                       }
                     </div>
                   }
@@ -383,23 +394,7 @@
           <div class="cap-gap cap-gap-edit cap-gap-new">
             <p class="gap-label">New gap</p>
             <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
-            <textarea class="nd-input gap-field" rows="2" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
-            <p class="fix-label">Action (what to do)</p>
-            <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.fix" placeholder="Corrective action…"></textarea>
-            <p class="gap-priority-label">Priority</p>
-            <div class="gap-priority-options" role="group" aria-label="Gap priority">
-              @for (opt of gapPriorityOptions; track opt.id) {
-                <button
-                  type="button"
-                  class="gap-priority-btn"
-                  [class.active]="gapPriorityFor(draftGap) === opt.id"
-                  [ngClass]="gapPriorityClass(opt.id)"
-                  (click)="setDraftPriority(opt.id)"
-                >
-                  {{ opt.label }}
-                </button>
-              }
-            </div>
+            <textarea class="nd-input gap-field" rows="3" [(ngModel)]="draftGap.missing" placeholder="Describe the gap…"></textarea>
             <div class="cap-edit-actions">
               <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="saving" (click)="onSave()">
                 {{ saving ? 'Saving…' : 'Add' }}

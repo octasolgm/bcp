@@ -272,7 +272,17 @@ export type ResultsData = {
   };
   points: AnalysisPoint[];
   pointAttachments?: PointGapAttachment[];
-  reviews: { id: string; reviewerRole: string; action: string; overallComment?: string; createdAt: string }[];
+  reviews: {
+    id: string;
+    reviewerRole: string;
+    action: string;
+    overallComment?: string | null;
+    reviewStatus?: string | null;
+    priority?: number | null;
+    responsibility?: string | null;
+    dueDate?: string | null;
+    createdAt: string;
+  }[];
   comments: { id: string; analysisPointId: string; comment: string; createdAt: string }[];
   actionItemReviews?: ActionItemReviewEntry[];
   actionPlans?: import('./action-plan').ActionPlanEntry[];

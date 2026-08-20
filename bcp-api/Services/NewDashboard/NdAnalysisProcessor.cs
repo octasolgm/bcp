@@ -643,7 +643,7 @@ public class NdAnalysisProcessor(
             .Where(a => a.AnalysisPointId == point.Id);
 
         if (actionIndex.HasValue)
-            query = query.Where(a => a.ActionIndex == actionIndex.Value);
+            query = query.Where(a => a.ActionIndex == null || a.ActionIndex == actionIndex.Value);
 
         var attachmentIds = await query
             .Select(a => a.StoredDocumentId.ToString())

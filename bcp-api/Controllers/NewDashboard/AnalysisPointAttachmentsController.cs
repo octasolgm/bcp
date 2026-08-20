@@ -5,7 +5,6 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
-using Reguliq.Api.Services.NewDashboard;
 using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Storage;
 
@@ -16,7 +15,6 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class AnalysisPointAttachmentsController(
     AppDbContext db,
     SupabaseStorageService storage,
-    NdInternalParseService parseService,
     NdDemoUserDirectory demoDirectory,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
@@ -108,29 +106,12 @@ public class AnalysisPointAttachmentsController(
                 FileHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
                 SizeBytes = bytes.Length,
                 ContentType = file.ContentType ?? "application/pdf",
-                ParseStatus = "pending",
+                ParseStatus = skipLiveParse ? "skipped" : "pending",
+                ParseError = skipLiveParse ? "Demo mode — evidence upload stored without live AI parse." : null,
+                UploadedBy = profile!.Id,
             };
             db.StoredDocuments.Add(row);
             await db.SaveChangesAsync(ct);
-
-            if (skipLiveParse)
-            {
-                row.ParseStatus = "skipped";
-                row.ParseError = "Demo mode — evidence upload stored without live AI parse.";
-                row.UpdatedAt = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync(ct);
-            }
-            else
-            {
-                try
-                {
-                    await parseService.EnsureParsedAsync(row, bytes, ct, profile!.Id);
-                }
-                catch
-                {
-                    /* parse can be retried at rerun */
-                }
-            }
 
             var link = new NdAnalysisPointAttachment
             {
@@ -146,6 +127,7 @@ public class AnalysisPointAttachmentsController(
             uploaded.Add(new
             {
                 id = link.Id,
+                analysisPointId = pointId,
                 storedDocumentId = row.Id,
                 fileName = link.FileName,
                 actionIndex = link.ActionIndex,
@@ -175,8 +157,32 @@ public class AnalysisPointAttachmentsController(
             .FirstOrDefaultAsync(a => a.Id == attachmentId && a.AnalysisPointId == pointId, ct);
         if (link == null) return NotFound(new { success = false, message = "Attachment not found." });
 
+        var storedId = link.StoredDocumentId;
         db.NdAnalysisPointAttachments.Remove(link);
         await db.SaveChangesAsync(ct);
+
+        var stillLinked = await db.NdAnalysisPointAttachments.AnyAsync(a => a.StoredDocumentId == storedId, ct);
+        if (!stillLinked)
+        {
+            var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId && d.DocKind == "gap_evidence", ct);
+            if (doc != null)
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(doc.StoragePath) && storage.IsConfigured)
+                        await storage.DeleteAsync(doc.StoragePath, ct);
+                    if (!string.IsNullOrWhiteSpace(doc.SourceStoragePath) && storage.IsConfigured)
+                        await storage.DeleteAsync(doc.SourceStoragePath, ct);
+                }
+                catch
+                {
+                    /* DB row still goes so the list stays accurate */
+                }
+                db.StoredDocuments.Remove(doc);
+                await db.SaveChangesAsync(ct);
+            }
+        }
+
         return Ok(new { success = true });
     }
 

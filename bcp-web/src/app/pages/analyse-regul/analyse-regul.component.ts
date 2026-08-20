@@ -183,6 +183,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   evidenceRerunningPointId: string | null = null;
   evidenceUploadingActionIndex: number | null = null;
   evidenceRerunningActionIndex: number | null = null;
+  evidenceDeletingAttachmentId: string | null = null;
   private sessionPointCache = new Map<string, AnalysisPoint>();
   private snapshotByPointId = new Map<string, PointSnapshot>();
   private runPointMetaByAnalysisId = new Map<string, RunPointDisplayMeta>();
@@ -3337,7 +3338,18 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.evidenceUploadingActionIndex = null;
     if (res.success) {
       this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
-      await this.loadNdRunPoints(runId);
+      for (const att of res.data ?? []) {
+        const mapped: PointGapAttachment = {
+          ...att,
+          analysisPointId: att.analysisPointId || ndPoint.id,
+          actionIndex: att.actionIndex ?? actionIndex ?? null,
+          createdAt: att.createdAt || new Date().toISOString(),
+        };
+        this.ndPointAttachments = [...this.ndPointAttachments, mapped];
+        const list = this.attachmentsByPointId.get(ndPoint.id) ?? [];
+        this.attachmentsByPointId.set(ndPoint.id, [...list, mapped]);
+      }
+      this.cdr.markForCheck();
     } else {
       this.resultDetailError = res.message ?? 'Upload failed';
       this.toast.show(this.resultDetailError, 'error');
@@ -3348,12 +3360,18 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     const runId = this.activeNdRunId;
     const ndPoint = this.analysisPointForPointId(pointId);
     if (!runId || !ndPoint) return;
+    this.evidenceDeletingAttachmentId = attachmentId;
+    this.cdr.markForCheck();
     const res = await this.ndApi.deletePointGapAttachment(runId, ndPoint.id, attachmentId);
+    this.evidenceDeletingAttachmentId = null;
     if (res.success) {
-      await this.loadNdRunPoints(runId);
+      this.ndPointAttachments = this.ndPointAttachments.filter((a) => a.id !== attachmentId);
+      const list = this.attachmentsByPointId.get(ndPoint.id) ?? [];
+      this.attachmentsByPointId.set(ndPoint.id, list.filter((a) => a.id !== attachmentId));
     } else {
       this.toast.show(res.message ?? 'Could not remove file', 'error');
     }
+    this.cdr.markForCheck();
   }
 
   async onRerunWithEvidence(pointId: string, mode: 'full' | 'dual'): Promise<void> {
@@ -3385,7 +3403,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.evidenceRerunningPointId = ndPoint.id;
     this.evidenceRerunningActionIndex = payload.actionIndex;
     this.resultDetailError = '';
-    const opts = { evidenceOnly: true, actionIndex: payload.actionIndex };
+    const hasEvidence = this.attachmentsForPoint(ndPoint.id).some(
+      (a) => a.actionIndex == null || a.actionIndex === payload.actionIndex,
+    );
+    const opts = { evidenceOnly: hasEvidence, actionIndex: payload.actionIndex };
     const res = await this.ndApi.rerunPoint(runId, ndPoint.id, opts);
     this.evidenceRerunningPointId = null;
     this.evidenceRerunningActionIndex = null;

@@ -2,9 +2,11 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
+using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard.Demo;
 
@@ -35,7 +37,9 @@ public sealed class NdDemoWorkspaceService(
     NdDemoUserDirectory demoDirectory,
     IMemoryCache cache,
     IHostEnvironment env,
-    NdDashboardCacheService dashboardCache)
+    NdDashboardCacheService dashboardCache,
+    SupabaseStorageService storage,
+    ILogger<NdDemoWorkspaceService> logger)
 {
     private const string DeletedStatus = "deleted";
     private const int RegulationStatusHidden = -1;
@@ -494,7 +498,11 @@ public sealed class NdDemoWorkspaceService(
             var attachments = await db.NdAnalysisPointAttachments
                 .Where(a => pointIds.Contains(a.AnalysisPointId))
                 .ToListAsync(ct);
+
+            var storedIds = attachments.Select(a => a.StoredDocumentId).Distinct().ToList();
             if (attachments.Count > 0) db.NdAnalysisPointAttachments.RemoveRange(attachments);
+
+            await PurgeDemoGapEvidenceDocsAsync(runId, storedIds, pointIds, ct);
 
             var histories = await db.NdActionPlanHistories
                 .Where(h => pointIds.Contains(h.AnalysisPointId))
@@ -540,6 +548,63 @@ public sealed class NdDemoWorkspaceService(
         db.NdAnalysisRuns.Remove(run);
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    /// <summary>
+    /// Deletes gap-analysis files uploaded by demo users for this run. Real-user documents
+    /// (including files a production admin attached while reviewing a demo run) are left in storage.
+    /// </summary>
+    private async Task PurgeDemoGapEvidenceDocsAsync(
+        Guid runId,
+        List<Guid> storedIds,
+        List<Guid> runPointIds,
+        CancellationToken ct)
+    {
+        if (storedIds.Count == 0) return;
+
+        var demoIds = await demoDirectory.GetDemoProfileIdsAsync(ct);
+        var runPrefix = $"documents/nd/gap-evidence/{runId:N}/";
+
+        var otherRefs = await db.NdAnalysisPointAttachments.AsNoTracking()
+            .Where(a => storedIds.Contains(a.StoredDocumentId) && !runPointIds.Contains(a.AnalysisPointId))
+            .Select(a => a.StoredDocumentId)
+            .Distinct()
+            .ToListAsync(ct);
+        var keptElsewhere = otherRefs.ToHashSet();
+
+        var docs = await db.StoredDocuments
+            .Where(d => storedIds.Contains(d.Id) && d.DocKind == "gap_evidence")
+            .ToListAsync(ct);
+
+        foreach (var doc in docs)
+        {
+            if (keptElsewhere.Contains(doc.Id)) continue;
+
+            var uploadedByRealUser = doc.UploadedBy is Guid uploader && !demoIds.Contains(uploader);
+            if (uploadedByRealUser) continue;
+
+            var uploadedByDemo = doc.UploadedBy is Guid demoUploader && demoIds.Contains(demoUploader);
+            var pathIsThisRun = !string.IsNullOrWhiteSpace(doc.StoragePath)
+                && doc.StoragePath.StartsWith(runPrefix, StringComparison.OrdinalIgnoreCase);
+            if (!uploadedByDemo && !(doc.UploadedBy == null && pathIsThisRun)) continue;
+
+            try
+            {
+                if (storage.IsConfigured)
+                {
+                    if (!string.IsNullOrWhiteSpace(doc.StoragePath))
+                        await storage.DeleteAsync(doc.StoragePath, ct);
+                    if (!string.IsNullOrWhiteSpace(doc.SourceStoragePath))
+                        await storage.DeleteAsync(doc.SourceStoragePath, ct);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not delete demo gap-evidence file {Path} for run {RunId}", doc.StoragePath, runId);
+            }
+
+            db.StoredDocuments.Remove(doc);
+        }
     }
 
     public async Task<List<DemoAnalysisSeedService.DemoRegulJudgmentRow>> LoadJudgmentsForRunAsync(

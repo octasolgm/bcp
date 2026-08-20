@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
@@ -1000,13 +1001,18 @@ public class AnalysisRunsController(
         if (openPointIds.Count == 0)
             return Ok(new { success = true, message = "No open gaps to re-run", queued = 0 });
 
+        var hasEvidence = await db.NdAnalysisPointAttachments
+            .AnyAsync(a => openPointIds.Contains(a.AnalysisPointId), ct);
+
         foreach (var openPointId in openPointIds)
-            QueuePointProcessing(run, id, openPointId, dualVerifyOnly: false, evidenceOnly: true, actionIndex: null);
+            QueuePointProcessing(run, id, openPointId, dualVerifyOnly: false, evidenceOnly: hasEvidence, actionIndex: null);
 
         return Ok(new
         {
             success = true,
-            message = $"Re-running {openPointIds.Count} gap(s) against the uploaded evidence",
+            message = hasEvidence
+                ? $"Re-running {openPointIds.Count} gap(s) against the uploaded evidence"
+                : $"Re-running {openPointIds.Count} gap(s)",
             queued = openPointIds.Count,
         });
     }
@@ -1225,7 +1231,10 @@ public class AnalysisRunsController(
     }
 
     [HttpPost("{id:guid}/submit-for-review")]
-    public async Task<IActionResult> SubmitForReview(Guid id, CancellationToken ct)
+    public async Task<IActionResult> SubmitForReview(
+        Guid id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ReviewRequest? body,
+        CancellationToken ct)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
@@ -1243,13 +1252,15 @@ public class AnalysisRunsController(
         run.SubmittedToCheckerAt = DateTimeOffset.UtcNow;
         run.UpdatedAt = DateTimeOffset.UtcNow;
 
-        db.NdAnalysisReviews.Add(new NdAnalysisReview
+        var review = new NdAnalysisReview
         {
             AnalysisRunId = id,
             ReviewerId = profile.Id,
             ReviewerRole = "maker",
             Action = "submitted",
-        });
+        };
+        if (body != null) ApplyReviewMetadata(review, body);
+        db.NdAnalysisReviews.Add(review);
 
         await db.SaveChangesAsync(ct);
         await RecordStatusChangeAsync(db, id, from, run.Status, profile.Id, null, ct);
@@ -1258,7 +1269,10 @@ public class AnalysisRunsController(
     }
 
     [HttpPost("{id:guid}/resubmit-for-review")]
-    public async Task<IActionResult> ResubmitForReview(Guid id, CancellationToken ct)
+    public async Task<IActionResult> ResubmitForReview(
+        Guid id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ReviewRequest? body,
+        CancellationToken ct)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
@@ -1273,13 +1287,15 @@ public class AnalysisRunsController(
         run.SubmittedToCheckerAt = DateTimeOffset.UtcNow;
         run.UpdatedAt = DateTimeOffset.UtcNow;
 
-        db.NdAnalysisReviews.Add(new NdAnalysisReview
+        var review = new NdAnalysisReview
         {
             AnalysisRunId = id,
             ReviewerId = profile!.Id,
             ReviewerRole = "maker",
             Action = "submitted",
-        });
+        };
+        if (body != null) ApplyReviewMetadata(review, body);
+        db.NdAnalysisReviews.Add(review);
 
         await db.SaveChangesAsync(ct);
         await RecordStatusChangeAsync(db, id, from, run.Status, profile.Id, "Resubmitted", ct);

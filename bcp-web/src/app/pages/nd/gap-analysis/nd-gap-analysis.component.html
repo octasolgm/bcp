@@ -78,24 +78,6 @@
           {{ workflowLoading ? 'Rerunning…' : 'Rerun all failed dual verify' }}
         </button>
       }
-      @if (canRerunReportWithEvidence) {
-        <input
-          #reportEvidenceInput
-          type="file"
-          multiple
-          hidden
-          (change)="onReportEvidenceSelected($event)"
-        />
-        <button
-          type="button"
-          class="workflow-link-btn"
-          [disabled]="reportEvidenceBusy"
-          [title]="'Upload a new policy document and re-check every open gap against it'"
-          (click)="reportEvidenceInput.click()"
-        >
-          {{ reportEvidenceBusy ? 'Re-checking gaps…' : 'Upload document & re-check gaps' }}
-        </button>
-      }
       <a routerLink="/nd/analysis-runs" class="workflow-link">All analysis runs</a>
       @if (ndRunData.run.status === 'submitted_for_review') {
         <button type="button" class="workflow-link-btn" (click)="openCheckerQueue()">Checker queue →</button>
@@ -188,7 +170,17 @@
     [error]="runReviewError"
     [reviewProgress]="reviewProgress"
     [resubmitLabel]="ndRunData?.run?.status === 'pulled_back'"
+    [initialDraft]="runReviewInitialDraft"
+    [reportAttachments]="reportGapAttachments"
+    [canUploadEvidence]="canUploadGapEvidence"
+    [evidenceUploading]="reportEvidenceBusy"
+    [evidenceRerunning]="reportEvidenceRerunning"
+    [evidenceDeletingId]="reportEvidenceDeletingId"
     (submitReview)="onRunReviewSubmit($event)"
+    (uploadEvidence)="onReportEvidenceSelected($event)"
+    (deleteEvidence)="onDeleteReportEvidence($event)"
+    (viewEvidence)="openPdfFromNd({ docId: $event })"
+    (rerunAllGaps)="onRerunAllGaps()"
   />
 }
 
@@ -305,6 +297,7 @@
       [evidenceRerunning]="evidenceRerunningPointId === ndPoint.id"
       [evidenceUploadingActionIndex]="evidenceUploadingPointId === ndPoint.id ? evidenceUploadingActionIndex : null"
       [evidenceRerunningActionIndex]="evidenceRerunningPointId === ndPoint.id ? evidenceRerunningActionIndex : null"
+      [evidenceDeletingAttachmentId]="evidenceDeletingAttachmentId"
       (startEdit)="startEditCap(ndPoint)"
       (cancelEdit)="cancelEditCap()"
       (save)="saveCap(ndPoint.id, $event)"

@@ -3,6 +3,15 @@ import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http
 import { firstValueFrom, timeout, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
+import type { PointGapAttachment } from '../../../lib/nd/types';
+
+export type RunGapEvidenceUpload = {
+  storedDocumentId: string;
+  fileName: string;
+  parseStatus?: string | null;
+  sizeBytes?: number | null;
+  attachments: PointGapAttachment[];
+};
 
 /** Default ND API calls — Supabase pooler can exceed 25s under load (regul runs, cold start). */
 const API_TIMEOUT_MS = 60_000;
@@ -1122,12 +1131,12 @@ export class NdApiService {
     );
   }
 
-  submitForReview(runId: string) {
-    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/submit-for-review`);
+  submitForReview(runId: string, body?: NdRunReviewBody) {
+    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/submit-for-review`, body);
   }
 
-  resubmitForReview(runId: string) {
-    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/resubmit-for-review`);
+  resubmitForReview(runId: string, body?: NdRunReviewBody) {
+    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/resubmit-for-review`, body);
   }
 
   softDeleteAnalysisRun(runId: string) {
@@ -1372,12 +1381,16 @@ export class NdApiService {
   }
 
   uploadPointGapAttachments(runId: string, pointId: string, files: File[], actionIndex?: number) {
-    return this.uploadMultipart(`/nd/results/${runId}/points/${pointId}/attachments`, files, actionIndex);
+    return this.uploadMultipart<PointGapAttachment[]>(
+      `/nd/results/${runId}/points/${pointId}/attachments`,
+      files,
+      actionIndex,
+    );
   }
 
-  /** Attach one evidence document to every open gap in the run. */
+  /** Attach one evidence document to every point in the run. */
   uploadRunGapEvidence(runId: string, files: File[]) {
-    return this.uploadMultipart<{ storedDocumentId: string; fileName: string }[]>(
+    return this.uploadMultipart<RunGapEvidenceUpload[]>(
       `/nd/results/${runId}/gap-evidence`,
       files,
     );
@@ -1388,6 +1401,10 @@ export class NdApiService {
       'DELETE',
       `/nd/results/${runId}/points/${pointId}/attachments/${attachmentId}`,
     );
+  }
+
+  deleteRunGapEvidence(runId: string, storedDocumentId: string) {
+    return this.request<unknown>('DELETE', `/nd/results/${runId}/gap-evidence/${storedDocumentId}`);
   }
 
   private async uploadMultipart<T>(path: string, files: File[], actionIndex?: number): Promise<NdApiResult<T>> {

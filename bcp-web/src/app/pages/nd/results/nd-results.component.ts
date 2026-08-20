@@ -68,6 +68,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
   evidenceRerunningPointId: string | null = null;
   evidenceUploadingActionIndex: number | null = null;
   evidenceRerunningActionIndex: number | null = null;
+  evidenceDeletingAttachmentId: string | null = null;
   savingActionReviewIndex: number | null = null;
   savingReviewId: string | null = null;
 
@@ -365,7 +366,18 @@ export class NdResultsComponent implements OnInit, OnChanges {
     this.evidenceUploadingActionIndex = null;
     if (res.success) {
       this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
-      await this.load();
+      const mapped = (res.data ?? []).map((att) => ({
+        ...att,
+        analysisPointId: att.analysisPointId || pointId,
+        actionIndex: att.actionIndex ?? actionIndex ?? null,
+        createdAt: att.createdAt || new Date().toISOString(),
+      }));
+      if (this.data) {
+        this.data = {
+          ...this.data,
+          pointAttachments: [...(this.data.pointAttachments ?? []), ...mapped],
+        };
+      }
     } else {
       this.error = res.message ?? 'Upload failed';
       this.toast.show(this.error, 'error');
@@ -373,9 +385,16 @@ export class NdResultsComponent implements OnInit, OnChanges {
   }
 
   async onDeleteGapEvidence(pointId: string, attachmentId: string): Promise<void> {
+    this.evidenceDeletingAttachmentId = attachmentId;
     const res = await this.api.deletePointGapAttachment(this.runId, pointId, attachmentId);
+    this.evidenceDeletingAttachmentId = null;
     if (res.success) {
-      await this.load();
+      if (this.data?.pointAttachments) {
+        this.data = {
+          ...this.data,
+          pointAttachments: this.data.pointAttachments.filter((a) => a.id !== attachmentId),
+        };
+      }
     } else {
       this.toast.show(res.message ?? 'Could not remove file', 'error');
     }
@@ -407,7 +426,10 @@ export class NdResultsComponent implements OnInit, OnChanges {
     this.evidenceRerunningPointId = pointId;
     this.evidenceRerunningActionIndex = payload.actionIndex;
     this.error = '';
-    const opts = { evidenceOnly: true, actionIndex: payload.actionIndex };
+    const hasEvidence = this.attachmentsForPoint(pointId).some(
+      (a) => a.actionIndex == null || a.actionIndex === payload.actionIndex,
+    );
+    const opts = { evidenceOnly: hasEvidence, actionIndex: payload.actionIndex };
     const res =
       payload.mode === 'dual'
         ? await this.api.rerunDualVerify(this.runId, pointId, opts)

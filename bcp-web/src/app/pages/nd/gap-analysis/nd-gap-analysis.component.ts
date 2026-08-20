@@ -83,6 +83,7 @@ import {
   formatActionPlanDate,
   normalizeActionPlanPriority,
   normalizeActionPlanStatus,
+  toDateInputValue,
   type ActionPlanEntry,
   type ActionPlanPriority,
   type ActionPlanStatus,
@@ -160,6 +161,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   ndRegulationDocId: string | null = null;
   ndRegulationDocName = '';
   reportEvidenceBusy = false;
+  reportEvidenceRerunning = false;
   ndSearchQuery = '';
   workflowLoading = false;
   editingPointId: string | null = null;
@@ -172,6 +174,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   evidenceRerunningPointId: string | null = null;
   evidenceUploadingActionIndex: number | null = null;
   evidenceRerunningActionIndex: number | null = null;
+  evidenceDeletingAttachmentId: string | null = null;
+  reportEvidenceDeletingId: string | null = null;
   savingActionReviewIndex: number | null = null;
   savingReviewId: string | null = null;
 
@@ -672,6 +676,39 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return this.attachmentsByPointId.get(pointId) ?? EMPTY_GAP_ATTACHMENTS;
   }
 
+  private pointHasGapEvidence(pointId: string, actionIndex?: number): boolean {
+    return this.attachmentsForPoint(pointId).some((att) =>
+      att.actionIndex == null || (actionIndex != null && att.actionIndex === actionIndex),
+    );
+  }
+
+  get reportGapAttachments(): PointGapAttachment[] {
+    const seen = new Set<string>();
+    const out: PointGapAttachment[] = [];
+    for (const list of this.attachmentsByPointId.values()) {
+      for (const att of list) {
+        if (att.actionIndex != null) continue;
+        if (seen.has(att.storedDocumentId)) continue;
+        seen.add(att.storedDocumentId);
+        out.push(att);
+      }
+    }
+    return out;
+  }
+
+  get runReviewInitialDraft(): Partial<RunReviewDraft> | null {
+    const reviews = this.ndRunData?.reviews ?? [];
+    if (!reviews.length) return null;
+    const last = reviews[reviews.length - 1];
+    return {
+      status: (last.reviewStatus as RunReviewDraft['status']) || 'pending',
+      priority: typeof last.priority === 'number' ? last.priority : 50,
+      responsibility: last.responsibility ?? '',
+      dueDate: toDateInputValue(last.dueDate),
+      comment: last.overallComment ?? '',
+    };
+  }
+
   savedReviewsForPoint(pointId: string): ActionItemReviewEntry[] {
     return this.reviewsByPointId.get(pointId) ?? EMPTY_ACTION_REVIEWS;
   }
@@ -843,25 +880,44 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.evidenceUploadingPointId = null;
     this.evidenceUploadingActionIndex = null;
     if (res.success) {
+      this.mergePointAttachments(pointId, res.data ?? [], actionIndex);
       this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
-      await this.loadNdRun(this.ndRunId, null, null);
     } else {
       this.ndDetailError = res.message ?? 'Upload failed';
       this.toast.show(this.ndDetailError, 'error');
     }
   }
 
-  /** Maker/admin only: re-checking the whole report needs write access to the run. */
   get canRerunReportWithEvidence(): boolean {
     if (!this.ndRunId || !this.ndRunData) return false;
     const role = this.auth.getRole();
     return role === 'super_admin' || role === 'maker';
   }
 
-  async onReportEvidenceSelected(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const files = Array.from(input.files ?? []);
-    input.value = '';
+  async onRerunAllGaps(): Promise<void> {
+    if (!this.ndRunId || this.reportEvidenceRerunning) return;
+    this.reportEvidenceRerunning = true;
+    this.ndDetailError = '';
+    this.cdr.markForCheck();
+    try {
+      const res = await this.ndApi.rerunRunWithEvidence(this.ndRunId);
+      if (res.success) {
+        this.toast.show(res.message ?? 'Rerunning analysis for all gaps…', 'success');
+        await this.loadNdRun(this.ndRunId, null, null);
+      } else {
+        this.ndDetailError = res.message ?? 'Rerun failed';
+        this.toast.show(this.ndDetailError, 'error');
+      }
+    } finally {
+      this.reportEvidenceRerunning = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  async onReportEvidenceSelected(filesOrEvent: FileList | Event): Promise<void> {
+    const files = filesOrEvent instanceof FileList
+      ? Array.from(filesOrEvent)
+      : Array.from((filesOrEvent.target as HTMLInputElement).files ?? []);
     if (!files.length || !this.ndRunId) return;
 
     this.reportEvidenceBusy = true;
@@ -872,14 +928,12 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         this.toast.show(upload.message ?? 'Upload failed', 'error');
         return;
       }
-
-      const rerun = await this.ndApi.rerunRunWithEvidence(this.ndRunId);
-      if (!rerun.success) {
-        this.toast.show(rerun.message ?? 'Re-check failed', 'error');
-        return;
+      for (const item of upload.data ?? []) {
+        for (const att of item.attachments ?? []) {
+          this.mergePointAttachments(att.analysisPointId, [att]);
+        }
       }
-      this.toast.show(rerun.message ?? 'Re-checking gaps against the uploaded document…', 'success');
-      await this.loadNdRun(this.ndRunId, null, null);
+      this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
     } finally {
       this.reportEvidenceBusy = false;
       this.cdr.markForCheck();
@@ -888,12 +942,94 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   async onDeleteGapEvidence(pointId: string, attachmentId: string): Promise<void> {
     if (!this.ndRunId) return;
-    const res = await this.ndApi.deletePointGapAttachment(this.ndRunId, pointId, attachmentId);
-    if (res.success) {
-      await this.loadNdRun(this.ndRunId, null, null);
-    } else {
-      this.toast.show(res.message ?? 'Could not remove file', 'error');
+    this.evidenceDeletingAttachmentId = attachmentId;
+    this.cdr.markForCheck();
+    try {
+      const res = await this.ndApi.deletePointGapAttachment(this.ndRunId, pointId, attachmentId);
+      if (res.success) {
+        this.removePointAttachment(pointId, attachmentId);
+      } else {
+        this.toast.show(res.message ?? 'Could not remove file', 'error');
+      }
+    } finally {
+      this.evidenceDeletingAttachmentId = null;
+      this.cdr.markForCheck();
     }
+  }
+
+  async onDeleteReportEvidence(storedDocumentId: string): Promise<void> {
+    if (!this.ndRunId) return;
+    this.reportEvidenceDeletingId = storedDocumentId;
+    this.cdr.markForCheck();
+    try {
+      const res = await this.ndApi.deleteRunGapEvidence(this.ndRunId, storedDocumentId);
+      if (res.success) {
+        this.removeReportAttachment(storedDocumentId);
+      } else {
+        this.toast.show(res.message ?? 'Could not remove file', 'error');
+      }
+    } finally {
+      this.reportEvidenceDeletingId = null;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private mergePointAttachments(
+    pointId: string,
+    uploaded: PointGapAttachment[],
+    fallbackActionIndex?: number,
+  ): void {
+    if (!uploaded.length) return;
+    const mapped = uploaded.map((att) => ({
+      ...att,
+      analysisPointId: att.analysisPointId || pointId,
+      actionIndex: att.actionIndex ?? fallbackActionIndex ?? null,
+      createdAt: att.createdAt || new Date().toISOString(),
+    }));
+    const prev = this.attachmentsByPointId.get(pointId) ?? [];
+    const ids = new Set(prev.map((a) => a.id));
+    const next = [...prev, ...mapped.filter((a) => a.id && !ids.has(a.id))];
+    this.attachmentsByPointId.set(pointId, next);
+    if (this.ndRunData) {
+      const existing = this.ndRunData.pointAttachments ?? [];
+      const existingIds = new Set(existing.map((a) => a.id));
+      this.ndRunData = {
+        ...this.ndRunData,
+        pointAttachments: [...existing, ...mapped.filter((a) => a.id && !existingIds.has(a.id))],
+      };
+    }
+    this.cdr.markForCheck();
+  }
+
+  private removePointAttachment(pointId: string, attachmentId: string): void {
+    const prev = this.attachmentsByPointId.get(pointId) ?? [];
+    this.attachmentsByPointId.set(
+      pointId,
+      prev.filter((a) => a.id !== attachmentId),
+    );
+    if (this.ndRunData?.pointAttachments) {
+      this.ndRunData = {
+        ...this.ndRunData,
+        pointAttachments: this.ndRunData.pointAttachments.filter((a) => a.id !== attachmentId),
+      };
+    }
+    this.cdr.markForCheck();
+  }
+
+  private removeReportAttachment(storedDocumentId: string): void {
+    for (const [pointId, list] of this.attachmentsByPointId) {
+      this.attachmentsByPointId.set(
+        pointId,
+        list.filter((a) => a.storedDocumentId !== storedDocumentId),
+      );
+    }
+    if (this.ndRunData?.pointAttachments) {
+      this.ndRunData = {
+        ...this.ndRunData,
+        pointAttachments: this.ndRunData.pointAttachments.filter((a) => a.storedDocumentId !== storedDocumentId),
+      };
+    }
+    this.cdr.markForCheck();
   }
 
   async onRerunWithEvidence(pointId: string, mode: 'full' | 'dual'): Promise<void> {
@@ -916,19 +1052,25 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.evidenceRerunningPointId = pointId;
     this.evidenceRerunningActionIndex = actionIndex ?? null;
     this.ndDetailError = '';
-    const opts = { evidenceOnly: true, actionIndex };
-    const res =
-      mode === 'dual'
-        ? await this.ndApi.rerunDualVerify(this.ndRunId, pointId, opts)
-        : await this.ndApi.rerunPoint(this.ndRunId, pointId, opts);
-    this.evidenceRerunningPointId = null;
-    this.evidenceRerunningActionIndex = null;
-    if (res.success) {
-      this.toast.show('Rerunning analysis for this gap…', 'success');
-      await this.loadNdRun(this.ndRunId, null, null);
-    } else {
-      this.ndDetailError = res.message ?? 'Rerun failed';
-      this.toast.show(this.ndDetailError, 'error');
+    this.cdr.markForCheck();
+    const hasEvidence = this.pointHasGapEvidence(pointId, actionIndex);
+    const opts = { evidenceOnly: hasEvidence, actionIndex };
+    try {
+      const res =
+        mode === 'dual'
+          ? await this.ndApi.rerunDualVerify(this.ndRunId, pointId, opts)
+          : await this.ndApi.rerunPoint(this.ndRunId, pointId, opts);
+      if (res.success) {
+        this.toast.show('Rerunning analysis for this gap…', 'success');
+        await this.loadNdRun(this.ndRunId, null, null);
+      } else {
+        this.ndDetailError = res.message ?? 'Rerun failed';
+        this.toast.show(this.ndDetailError, 'error');
+      }
+    } finally {
+      this.evidenceRerunningPointId = null;
+      this.evidenceRerunningActionIndex = null;
+      this.cdr.markForCheck();
     }
   }
 
@@ -1151,14 +1293,15 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return '';
   }
 
-  async submitNdReview(): Promise<void> {
+  async submitNdReview(draft?: RunReviewDraft): Promise<void> {
     if (!this.ndRunId || !this.ndRunData) return;
     this.workflowLoading = true;
     this.runReviewError = '';
+    const body = draft ? this.buildRunReviewBody(draft) : undefined;
     const res =
       this.ndRunData.run.status === 'pulled_back'
-        ? await this.ndApi.resubmitForReview(this.ndRunId)
-        : await this.ndApi.submitForReview(this.ndRunId);
+        ? await this.ndApi.resubmitForReview(this.ndRunId, body)
+        : await this.ndApi.submitForReview(this.ndRunId, body);
     this.workflowLoading = false;
     if (res.success) {
       this.toast.show('Sent to checker for review', 'success');
@@ -1175,8 +1318,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
-  async submitNdReviewFromPanel(_draft?: RunReviewDraft): Promise<void> {
-    await this.submitNdReview();
+  async submitNdReviewFromPanel(draft?: RunReviewDraft): Promise<void> {
+    await this.submitNdReview(draft);
   }
 
   async onRunReviewSubmit(event: RunReviewSubmitEvent): Promise<void> {

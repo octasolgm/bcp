@@ -23,13 +23,6 @@ import {
   type CapGap,
   type ReferenceComplianceBlock,
 } from '../../../lib/ai-lab/parse-reference-response';
-import {
-  GAP_PRIORITY_OPTIONS,
-  gapPriorityClass,
-  gapPriorityLabel,
-  normalizeGapPriority,
-  type GapPriority,
-} from '../../../lib/nd/gap-priority';
 import { meaningfulCapGaps, isMeaningfulCapGap, isWeakCorrectivePlan, buildFallbackCapGaps, resolveAiCorrectiveActionForPoint, isVerificationMetaCapText, parseRegulElementCapGaps, looksLikeRegulElementAssessment } from '../../../lib/nd/cap-gap-count';
 import { agreementBadgeClass, type AgreementStatus, type DualVerifyAgreement } from '../../../lib/landing-ai/dual-verify-merge';
 import { ReferenceComplianceCardComponent } from '../reference-compliance-card/reference-compliance-card.component';
@@ -66,7 +59,8 @@ import {
 } from '../../../lib/nd/policy-doc-resolve';
 import { NdItemReviewSectionComponent, type ItemReviewSaveEvent } from './nd-item-review-section.component';
 import { NdActionPlansSectionComponent } from './nd-action-plans-section.component';
-import { actionPlansForGap, type ActionPlanEntry } from '../../../lib/nd/action-plan';
+import { actionPlansForGap, actionPlansForPoint, type ActionPlanEntry } from '../../../lib/nd/action-plan';
+import { NdAuthService } from '../../services/nd/nd-auth.service';
 import {
   NdTempPointReviewCommentsComponent,
 } from './nd-temp-point-review-comments.component';
@@ -89,7 +83,9 @@ import type { TempPointReviewComment, TempReviewCommentsChangeEvent } from '../.
 })
 export class NdGapPointDetailComponent implements OnChanges {
   private readonly ndApi = inject(NdApiService);
+  private readonly auth = inject(NdAuthService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private loadedActionPlans: ActionPlanEntry[] = [];
   private lastPointId: string | null = null;
   private contentKey = '';
   private collapsedActionsInit = false;
@@ -132,6 +128,7 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Input() evidenceRerunning = false;
   @Input() evidenceUploadingActionIndex: number | null = null;
   @Input() evidenceRerunningActionIndex: number | null = null;
+  @Input() evidenceDeletingAttachmentId: string | null = null;
   /** Pin point-level review to bottom with scrollable detail above (list / review workspace). */
   @Input() dockPointReview = false;
   /** Regul workflow V3 — forward/reverse labels, no V8 dual-verify pass 2 block. */
@@ -170,10 +167,6 @@ export class NdGapPointDetailComponent implements OnChanges {
 
   readonly actionReviewStatusLabel = actionReviewStatusLabel;
   readonly pointReviewActionIndex = POINT_REVIEW_ACTION_INDEX;
-  readonly gapPriorityOptions = GAP_PRIORITY_OPTIONS;
-  readonly gapPriorityLabel = gapPriorityLabel;
-  readonly gapPriorityClass = gapPriorityClass;
-
   pointHeading = '';
   regulatoryText = '';
   policyExtract = '';
@@ -213,6 +206,7 @@ export class NdGapPointDetailComponent implements OnChanges {
   draftGap: CapGap = { index: 1, missing: '', fix: '', priority: '' };
   /** Filter history panel to a single action item. */
   historyGapIndex: number | null = null;
+  pendingRemoveId: string | null = null;
   resolvedSeverity: ComplianceSeverity | null = null;
   capSourceLabel = 'Compliance AI draft';
 
@@ -244,6 +238,48 @@ export class NdGapPointDetailComponent implements OnChanges {
     if (this.showReviewPanel && !this.departmentsLoaded && (changes['showReviewPanel'] || changes['point'])) {
       void this.loadDepartments();
     }
+
+    if ((changes['runId'] || changes['point'] || changes['actionPlans']) && this.runId && this.point?.id) {
+      if (this.actionPlans.length > 0) {
+        this.loadedActionPlans = this.actionPlans;
+      } else {
+        void this.loadActionPlans();
+      }
+    }
+
+    if (this.pendingRemoveId && !this.gapAttachments.some((a) => a.id === this.pendingRemoveId)) {
+      this.pendingRemoveId = null;
+    }
+  }
+
+  /** Every role may add or edit action plans when viewing a saved run. */
+  get effectiveCanEditActionPlans(): boolean {
+    return Boolean(this.runId);
+  }
+
+  get effectiveCanReviewActionPlans(): boolean {
+    const role = this.auth.getRole();
+    return role === 'super_admin' || role === 'checker' || role === 'reviewer';
+  }
+
+  private get resolvedActionPlans(): ActionPlanEntry[] {
+    return this.actionPlans.length > 0 ? this.actionPlans : this.loadedActionPlans;
+  }
+
+  private async loadActionPlans(): Promise<void> {
+    if (!this.runId || !this.point?.id) return;
+    const res = await this.ndApi.getActionPlans(this.runId);
+    if (res.success && res.data) {
+      this.loadedActionPlans = actionPlansForPoint(res.data, this.point.id);
+      this.cdr.markForCheck();
+    }
+  }
+
+  async onActionPlansChanged(): Promise<void> {
+    if (this.actionPlans.length === 0) {
+      await this.loadActionPlans();
+    }
+    this.actionPlansChanged.emit();
   }
 
   private rebuildContent(): void {
@@ -514,7 +550,7 @@ export class NdGapPointDetailComponent implements OnChanges {
 
   /** Actions the user has attached to one CAP gap. */
   actionPlansForGapIndex(index: number): ActionPlanEntry[] {
-    return actionPlansForGap(this.actionPlans, index);
+    return actionPlansForGap(this.resolvedActionPlans, index);
   }
 
   actionCountForGap(index: number): number {
@@ -602,7 +638,9 @@ export class NdGapPointDetailComponent implements OnChanges {
     this.addingNewAction = false;
     this.editingGapIndex = index;
     const gap = this.capGaps.find((g) => g.index === index);
-    this.draftGap = gap ? { ...gap, priority: normalizeGapPriority(gap.priority) } : { index, missing: '', fix: '', priority: '' };
+    this.draftGap = gap
+      ? { ...gap, missing: gap.missing }
+      : { index, missing: '', fix: '', priority: '' };
     this.startEdit.emit();
   }
 
@@ -628,21 +666,26 @@ export class NdGapPointDetailComponent implements OnChanges {
   }
 
   onSave(): void {
-    if (!this.draftGap.missing.trim() && !this.draftGap.fix.trim()) return;
+    if (!this.draftGap.missing.trim()) return;
 
     let gaps: CapGap[];
     if (this.addingNewAction) {
-      gaps = [...this.capGaps, { ...this.draftGap }];
+      gaps = [
+        ...this.capGaps,
+        { ...this.draftGap, missing: this.draftGap.missing.trim(), fix: '', priority: '' },
+      ];
     } else if (this.editingGapIndex != null) {
       gaps = this.capGaps.map((g) =>
-        g.index === this.editingGapIndex ? { ...this.draftGap, index: g.index } : g,
+        g.index === this.editingGapIndex
+          ? { ...g, missing: this.draftGap.missing.trim() }
+          : g,
       );
     } else {
       return;
     }
 
     gaps = gaps
-      .filter((g) => g.missing.trim() || g.fix.trim())
+      .filter((g) => g.missing.trim())
       .map((g, i) => ({ ...g, index: i + 1 }));
 
     const content = serializeCapGaps(gaps);
@@ -656,23 +699,6 @@ export class NdGapPointDetailComponent implements OnChanges {
     this.editingGapIndex = null;
     this.addingNewAction = false;
     this.draftGap = { index: 1, missing: '', fix: '', priority: '' };
-  }
-
-  gapPriorityFor(gap: CapGap): GapPriority | '' {
-    return normalizeGapPriority(gap.priority);
-  }
-
-  onPriorityChange(gapIndex: number, priority: GapPriority): void {
-    if (!this.canEdit || this.saving) return;
-    const gaps = this.capGaps.map((g) =>
-      g.index === gapIndex ? { ...g, priority } : g,
-    );
-    const content = serializeCapGaps(gaps);
-    if (content.trim()) this.save.emit(content);
-  }
-
-  setDraftPriority(priority: GapPriority | ''): void {
-    this.draftGap = { ...this.draftGap, priority: priority || '' };
   }
 
   onViewRegPdf(): void {
@@ -718,6 +744,46 @@ export class NdGapPointDetailComponent implements OnChanges {
 
   attachmentsForGap(actionIndex: number): PointGapAttachment[] {
     return this.gapAttachments.filter((a) => (a.actionIndex ?? null) === actionIndex);
+  }
+
+  fileKind(fileName: string): string {
+    const ext = fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
+    if (ext === 'DOCX') return 'DOC';
+    return ext.slice(0, 4) || 'FILE';
+  }
+
+  fileMeta(att: PointGapAttachment): string {
+    const kind = this.fileKind(att.fileName);
+    const size = formatAttachmentSize(att.sizeBytes);
+    return size ? `${kind} · ${size}` : kind;
+  }
+
+  isPendingRemove(id: string): boolean {
+    return this.pendingRemoveId === id;
+  }
+
+  isRemoving(id: string): boolean {
+    return this.evidenceDeletingAttachmentId === id;
+  }
+
+  isRemovingAny(): boolean {
+    return Boolean(this.evidenceDeletingAttachmentId);
+  }
+
+  askRemove(id: string): void {
+    this.pendingRemoveId = id;
+    this.cdr.markForCheck();
+  }
+
+  cancelRemove(): void {
+    this.pendingRemoveId = null;
+    this.cdr.markForCheck();
+  }
+
+  confirmRemoveGap(actionIndex: number, attachmentId: string): void {
+    this.pendingRemoveId = null;
+    this.deleteGapEvidence.emit({ actionIndex, attachmentId });
+    this.cdr.markForCheck();
   }
 
   showGapEvidenceForGap(gap: CapGap): boolean {
@@ -828,4 +894,11 @@ export class NdGapPointDetailComponent implements OnChanges {
   }
 
   formatDate = formatDate;
+}
+
+function formatAttachmentSize(bytes?: number | null): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return '';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

@@ -1,10 +1,9 @@
-export type RunReviewStatus = 'in_review' | 'approved' | 'needs_modification' | 'finalized';
+import { ACTION_PLAN_STATUS_OPTIONS, type ActionPlanStatus } from './action-plan';
+
+export type RunReviewStatus = ActionPlanStatus | 'in_review' | 'approved' | 'needs_modification' | 'finalized';
 
 export const RUN_REVIEW_STATUS_OPTIONS: { id: RunReviewStatus; label: string }[] = [
-  { id: 'in_review', label: 'In review' },
-  { id: 'approved', label: 'Approved' },
-  { id: 'needs_modification', label: 'Needs modification' },
-  { id: 'finalized', label: 'Finalized' },
+  ...ACTION_PLAN_STATUS_OPTIONS.map((opt) => ({ id: opt.value as RunReviewStatus, label: opt.label })),
 ];
 
 export type RunReviewDraft = {
@@ -17,7 +16,7 @@ export type RunReviewDraft = {
 
 export function emptyRunReviewDraft(): RunReviewDraft {
   return {
-    status: 'in_review',
+    status: 'pending',
     priority: 50,
     responsibility: '',
     dueDate: '',
@@ -26,5 +25,7 @@ export function emptyRunReviewDraft(): RunReviewDraft {
 }
 
 export function runReviewStatusLabel(status: RunReviewStatus | string | null | undefined): string {
-  return RUN_REVIEW_STATUS_OPTIONS.find((o) => o.id === status)?.label ?? String(status ?? '');
+  return RUN_REVIEW_STATUS_OPTIONS.find((o) => o.id === status)?.label
+    ?? ACTION_PLAN_STATUS_OPTIONS.find((o) => o.value === status)?.label
+    ?? String(status ?? '').replace(/_/g, ' ');
 }

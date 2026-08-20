@@ -5,22 +5,20 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
-using Reguliq.Api.Services.NewDashboard;
 using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
 /// <summary>
-/// Report-level gap evidence: one upload is linked to every open gap in the run so the whole
-/// report can be re-checked against a newly issued policy document.
+/// Report-level gap evidence: one upload is linked to every point in the run so the whole
+/// report can re-check against a newly issued policy document.
 /// </summary>
 [ApiController]
 [Route("nd/results/{runId:guid}/gap-evidence")]
 public class RunGapEvidenceController(
     AppDbContext db,
     SupabaseStorageService storage,
-    NdInternalParseService parseService,
     NdDemoUserDirectory demoDirectory,
     SupabaseJwtValidator jwt) : NdControllerBase
 {
@@ -43,12 +41,11 @@ public class RunGapEvidenceController(
         if (files == null || files.Count == 0)
             return BadRequest(new { success = false, message = "No files provided." });
 
-        var openPointIds = await db.NdAnalysisPoints
-            .Where(p => p.AnalysisRunId == runId
-                && (p.FinalStatus == "non_compliant" || p.FinalStatus == "partial_compliant"))
+        var pointIds = await db.NdAnalysisPoints
+            .Where(p => p.AnalysisRunId == runId)
             .Select(p => p.Id)
             .ToListAsync(ct);
-        if (openPointIds.Count == 0)
+        if (pointIds.Count == 0)
             return Ok(new { success = true, data = Array.Empty<object>(), linkedPoints = 0 });
 
         var skipLiveParse = await NdDemoIsolationHelper.ShouldSimulateAiAsync(
@@ -79,39 +76,25 @@ public class RunGapEvidenceController(
                 FileHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
                 SizeBytes = bytes.Length,
                 ContentType = file.ContentType ?? "application/pdf",
-                ParseStatus = "pending",
+                ParseStatus = skipLiveParse ? "skipped" : "pending",
+                ParseError = skipLiveParse ? "Demo mode — evidence upload stored without live AI parse." : null,
+                UploadedBy = profile.Id,
             };
             db.StoredDocuments.Add(doc);
             await db.SaveChangesAsync(ct);
 
-            if (skipLiveParse)
+            var links = new List<NdAnalysisPointAttachment>(pointIds.Count);
+            foreach (var pointId in pointIds)
             {
-                doc.ParseStatus = "skipped";
-                doc.ParseError = "Demo mode — evidence upload stored without live AI parse.";
-                doc.UpdatedAt = DateTimeOffset.UtcNow;
-                await db.SaveChangesAsync(ct);
-            }
-            else
-            {
-                try
-                {
-                    await parseService.EnsureParsedAsync(doc, bytes, ct, profile.Id);
-                }
-                catch
-                {
-                    /* parse can be retried at rerun */
-                }
-            }
-
-            foreach (var pointId in openPointIds)
-            {
-                db.NdAnalysisPointAttachments.Add(new NdAnalysisPointAttachment
+                var link = new NdAnalysisPointAttachment
                 {
                     AnalysisPointId = pointId,
                     StoredDocumentId = doc.Id,
                     FileName = file.FileName,
                     UploadedBy = profile.Id,
-                });
+                };
+                db.NdAnalysisPointAttachments.Add(link);
+                links.Add(link);
             }
             await db.SaveChangesAsync(ct);
 
@@ -121,9 +104,67 @@ public class RunGapEvidenceController(
                 fileName = file.FileName,
                 parseStatus = doc.ParseStatus,
                 sizeBytes = doc.SizeBytes,
+                attachments = links.Select(l => new
+                {
+                    id = l.Id,
+                    analysisPointId = l.AnalysisPointId,
+                    storedDocumentId = l.StoredDocumentId,
+                    fileName = l.FileName,
+                    actionIndex = l.ActionIndex,
+                    createdAt = l.CreatedAt,
+                }),
             });
         }
 
-        return Ok(new { success = true, data = uploaded, linkedPoints = openPointIds.Count });
+        return Ok(new { success = true, data = uploaded, linkedPoints = pointIds.Count });
+    }
+
+    [HttpDelete("{storedDocumentId:guid}")]
+    public async Task<IActionResult> Delete(Guid runId, Guid storedDocumentId, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct);
+        if (run == null) return NotFound(new { success = false, message = "Analysis run not found." });
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id) return StatusCode(403);
+
+        var pointIds = await db.NdAnalysisPoints
+            .Where(p => p.AnalysisRunId == runId)
+            .Select(p => p.Id)
+            .ToListAsync(ct);
+
+        var links = await db.NdAnalysisPointAttachments
+            .Where(a => a.StoredDocumentId == storedDocumentId && pointIds.Contains(a.AnalysisPointId))
+            .ToListAsync(ct);
+        if (links.Count == 0)
+            return NotFound(new { success = false, message = "Attachment not found." });
+
+        db.NdAnalysisPointAttachments.RemoveRange(links);
+        await db.SaveChangesAsync(ct);
+
+        var stillLinked = await db.NdAnalysisPointAttachments.AnyAsync(a => a.StoredDocumentId == storedDocumentId, ct);
+        if (!stillLinked)
+        {
+            var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedDocumentId && d.DocKind == "gap_evidence", ct);
+            if (doc != null)
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(doc.StoragePath) && storage.IsConfigured)
+                        await storage.DeleteAsync(doc.StoragePath, ct);
+                    if (!string.IsNullOrWhiteSpace(doc.SourceStoragePath) && storage.IsConfigured)
+                        await storage.DeleteAsync(doc.SourceStoragePath, ct);
+                }
+                catch
+                {
+                    /* keep going so the list stays accurate */
+                }
+                db.StoredDocuments.Remove(doc);
+                await db.SaveChangesAsync(ct);
+            }
+        }
+
+        return Ok(new { success = true });
     }
 }

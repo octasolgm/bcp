@@ -4,40 +4,182 @@
     <p class="run-review-sub">Report-level review applies to the whole analysis — not individual points.</p>
   </header>
 
+  <div class="gap-docs-panel">
+    <div class="gap-docs-head">
+      <div class="gap-docs-title-wrap">
+        <p class="gap-docs-title">Gap analysis documents</p>
+        @if (uniqueReportAttachments.length) {
+          <span class="gap-docs-count">{{ uniqueReportAttachments.length }}</span>
+        }
+      </div>
+      @if (canUploadEvidence) {
+        <div class="gap-docs-head-actions">
+          <button
+            type="button"
+            class="gap-docs-rerun"
+            [disabled]="evidenceRerunning || evidenceUploading || !!evidenceDeletingId"
+            title="Rerun analysis for all gaps in this report"
+            (click)="rerunAllGaps.emit()"
+          >
+            {{ evidenceRerunning ? 'Rerunning…' : 'Rerun all gaps' }}
+          </button>
+          <input
+            #reportEvidenceInput
+            type="file"
+            class="hidden-input"
+            multiple
+            accept=".pdf,.doc,.docx,.doc"
+            (change)="onReportFilesSelected($event)"
+          />
+          <button
+            type="button"
+            class="gap-docs-upload"
+            [disabled]="evidenceUploading || evidenceRerunning || !!evidenceDeletingId"
+            title="Upload gap analysis for the whole analysis"
+            (click)="reportEvidenceInput.click()"
+          >
+            @if (evidenceUploading) {
+              Uploading…
+            } @else {
+              <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+                <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M10 4v12M4 10h12" />
+              </svg>
+              Upload
+            }
+          </button>
+        </div>
+      }
+    </div>
+    <p class="gap-docs-hint">Attach supporting files for the whole analysis, then rerun all open gaps against those documents.</p>
+    @if (uniqueReportAttachments.length) {
+      <ul class="gap-docs-list">
+        @for (att of uniqueReportAttachments; track att.storedDocumentId) {
+          <li class="gap-docs-row" [class.is-confirming]="isPendingRemove(att.storedDocumentId)" [class.is-busy]="isRemoving(att.storedDocumentId)">
+            <span class="gap-docs-icon" aria-hidden="true">{{ fileKind(att.fileName) }}</span>
+            <div class="gap-docs-meta">
+              <button type="button" class="gap-docs-name" (click)="viewEvidence.emit(att.storedDocumentId)">
+                {{ att.fileName }}
+              </button>
+              <p class="gap-docs-sub">{{ fileMeta(att) }}</p>
+            </div>
+            @if (isRemoving(att.storedDocumentId)) {
+              <span class="gap-docs-busy">Removing…</span>
+            } @else if (isPendingRemove(att.storedDocumentId)) {
+              <div class="gap-docs-confirm">
+                <span>Remove this file?</span>
+                <button type="button" class="gap-docs-btn ghost" (click)="cancelRemove()">Cancel</button>
+                <button type="button" class="gap-docs-btn danger" (click)="confirmRemove(att.storedDocumentId)">Remove</button>
+              </div>
+            } @else {
+              <div class="gap-docs-actions">
+                <button type="button" class="gap-docs-btn ghost" (click)="viewEvidence.emit(att.storedDocumentId)">Open</button>
+                @if (canUploadEvidence) {
+                  <button type="button" class="gap-docs-btn danger-text" [disabled]="!!evidenceDeletingId" (click)="askRemove(att.storedDocumentId)">
+                    Remove
+                  </button>
+                }
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    } @else {
+      <div class="gap-docs-empty">
+        <p>No documents uploaded for this analysis yet.</p>
+      </div>
+    }
+  </div>
+
   <div class="run-review-row run-review-row-fields">
     <label class="run-review-field">
-      <span class="field-label">Status</span>
+      <span class="field-label">Action status</span>
       <select class="run-review-input" [(ngModel)]="draft.status">
         @for (opt of statusOptions; track opt.id) {
           <option [ngValue]="opt.id">{{ opt.label }}</option>
+        }
+        @if (showLegacyStatusOption) {
+          <option [ngValue]="draft.status">{{ fallbackStatusLabel }}</option>
         }
       </select>
     </label>
 
     <label class="run-review-field">
-      <span class="field-label">Due date</span>
-      <input type="datetime-local" class="run-review-input" [(ngModel)]="draft.dueDate" />
+      <span class="field-label">Target date</span>
+      <input type="date" class="run-review-input" [(ngModel)]="draft.dueDate" />
     </label>
+  </div>
 
-    <label class="run-review-field">
+  <div class="run-review-row">
+    <div class="run-review-field run-review-field-wide ap-owner-field">
       <span class="field-label">Responsibility</span>
-      @if (departments.length) {
-        <select class="run-review-input" [(ngModel)]="draft.responsibility">
-          <option value="">Select department…</option>
-          @for (dept of departments; track dept.id) {
-            <option [value]="dept.name">{{ dept.name }}</option>
+      <div class="ap-owner-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          class="ap-owner-tab"
+          [class.active]="responsibilityType === 'department'"
+          [attr.aria-selected]="responsibilityType === 'department'"
+          (click)="setResponsibilityType('department')"
+        >
+          Departments
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="ap-owner-tab"
+          [class.active]="responsibilityType === 'user'"
+          [attr.aria-selected]="responsibilityType === 'user'"
+          (click)="setResponsibilityType('user')"
+        >
+          Individuals
+        </button>
+      </div>
+
+      @if (assignees.length) {
+        <div class="ap-owner-chips">
+          @for (owner of assignees; track owner.label + owner.type) {
+            <span [ngClass]="ownerChipClass(owner)">
+              {{ owner.label }}
+              <button type="button" class="ap-owner-chip-x" (click)="removeOwner(owner)" aria-label="Remove owner">
+                ×
+              </button>
+            </span>
           }
-        </select>
-      } @else {
-        <input type="text" class="run-review-input" [(ngModel)]="draft.responsibility" placeholder="Owner or department" />
+        </div>
       }
-    </label>
+
+      <div class="ap-owner-input-wrap">
+        <input
+          type="text"
+          class="run-review-input"
+          autocomplete="off"
+          [placeholder]="
+            responsibilityType === 'department'
+              ? 'Start typing a department name…'
+              : 'Start typing a name or email…'
+          "
+          [ngModel]="ownerQuery"
+          (ngModelChange)="onOwnerQueryChange($event)"
+          (focus)="ownerSuggestionsOpen = true"
+          (keydown.enter)="$event.preventDefault(); commitTypedOwner()"
+        />
+        @if (ownerSuggestionsOpen && ownerSuggestions.length) {
+          <ul class="ap-owner-suggestions">
+            @for (suggestion of ownerSuggestions; track suggestion.label) {
+              <li>
+                <button type="button" (click)="addOwner(suggestion)">{{ suggestion.label }}</button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
   </div>
 
   <div class="run-review-row run-review-row-priority">
     <div class="run-review-field run-review-field-wide">
       <div class="priority-head">
-        <span class="field-label">Priority score</span>
+        <span class="field-label">Priority</span>
         <span class="priority-value" [ngClass]="priorityTierClass">{{ priorityScoreLabel }}</span>
       </div>
       <div class="priority-slider-wrap">
@@ -59,9 +201,9 @@
       <div class="priority-scale" aria-hidden="true">
         <span>0 Low</span>
         <span>50 Medium</span>
-        <span>100 Critical</span>
+        <span>100 High</span>
       </div>
-      <p class="priority-standard">{{ riskStandardLabel }}</p>
+      <p class="priority-standard">{{ priorityScale }}</p>
     </div>
   </div>
 

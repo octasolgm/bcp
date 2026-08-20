@@ -97,6 +97,19 @@ public class SupabaseStorageService(
         return $"{TrimUrl(_opts.Url)}/storage/v1{signed}";
     }
 
+    public async Task DeleteAsync(string objectPath, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(objectPath) || !IsConfigured) return;
+        var url = $"{TrimUrl(_opts.Url)}/storage/v1/object/{Bucket}/{TrimPath(objectPath)}";
+        using var req = new HttpRequestMessage(HttpMethod.Delete, url);
+        ApplyAuth(req);
+        using var res = await http.SendAsync(req, ct);
+        if (res.IsSuccessStatusCode || (int)res.StatusCode == 404) return;
+
+        var body = await res.Content.ReadAsStringAsync(ct);
+        logger.LogWarning("Supabase Storage delete failed ({Status}): {Body}", (int)res.StatusCode, body);
+    }
+
     private void EnsureConfigured()
     {
         if (!_opts.IsConfigured)
