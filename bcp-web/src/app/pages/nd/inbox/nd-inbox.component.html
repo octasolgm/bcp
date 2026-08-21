@@ -90,6 +90,10 @@
               <span class="context-run">{{ item.runName }}</span>
             </p>
 
+            @if (statusChangeLabel(item); as change) {
+              <p class="inbox-change">{{ change }}</p>
+            }
+
             @if (item.owners.length > 1) {
               <p class="inbox-owners">
                 Shared with:

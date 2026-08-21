@@ -5,11 +5,25 @@
       <h3>Review summary</h3>
     </button>
     <div class="rs-boxes">
+      @if (rollup) {
+        <span class="rs-box">
+          <strong>{{ rollup.gaps }}</strong>
+          <em>gaps</em>
+        </span>
+        <span class="rs-box" [class.warn]="rollup.pendingGaps > 0">
+          <strong>{{ rollup.pendingGaps }}</strong>
+          <em>pending gaps</em>
+        </span>
+        <span class="rs-box ok">
+          <strong>{{ rollup.resolvedGaps }}</strong>
+          <em>resolved gaps</em>
+        </span>
+      }
       <span class="rs-box">
         <strong>{{ pendingPointCount }}</strong>
         <em>pending action points</em>
       </span>
-      <span class="rs-box">
+      <span class="rs-box ok">
         <strong>{{ resolvedCount }}</strong>
         <em>resolved action plans</em>
       </span>

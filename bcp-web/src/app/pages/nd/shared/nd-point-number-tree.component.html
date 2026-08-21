@@ -6,25 +6,50 @@
       [class.tree-group-nested]="node.depth > 1"
       [style.marginLeft.rem]="baseDepth * 0.35"
     >
-      <button type="button" class="tree-group-head" (click)="toggleExpand(node.key)">
-        <span class="chevron" [class.open]="isExpanded(node.key)">›</span>
-        <span class="tree-group-label">{{ groupLabel(node) }}</span>
-        @if (mode === 'analysis') {
-          <span class="acc-meta">{{ groupSelectedCount(node) }}/{{ node.analyseCount }}</span>
-          @if (node.analyseCount > 0) {
+      <div class="tree-group-head-row">
+        @if (mode === 'analysis' && node.analyseCount > 0) {
+          <input
+            type="checkbox"
+            class="tree-group-check"
+            [checked]="groupAllSelected(node)"
+            [indeterminate]="groupPartlySelected(node)"
+            [attr.aria-label]="'Select every point under ' + groupLabel(node)"
+            (change)="setGroupSelection(node, $any($event.target).checked)"
+            (click)="$event.stopPropagation()"
+          />
+        }
+        <button type="button" class="tree-group-head" (click)="toggleExpand(node.key)">
+          <span class="chevron" [class.open]="isExpanded(node.key)">›</span>
+          <span class="tree-group-label">{{ groupLabel(node) }}</span>
+          @if (mode === 'analysis') {
+            <span class="acc-meta">{{ groupSelectedCount(node) }}/{{ node.analyseCount }}</span>
+          } @else {
+            <span class="acc-meta">{{ node.analyseCount }}/{{ node.storedCount }}</span>
+          }
+        </button>
+        @if (mode === 'analysis' && node.analyseCount > 0) {
+          <span class="tree-group-actions">
             <button
               type="button"
               class="acc-action"
-              [attr.aria-label]="groupAllSelected(node) ? 'Deselect group' : 'Select group'"
-              (click)="toggleGroupSelection(node, $event)"
+              title="Select all points in this section"
+              [disabled]="groupAllSelected(node)"
+              (click)="setGroupSelection(node, true, $event)"
             >
-              {{ groupAllSelected(node) ? '−' : '+' }}
+              All
             </button>
-          }
-        } @else {
-          <span class="acc-meta">{{ node.analyseCount }}/{{ node.storedCount }}</span>
+            <button
+              type="button"
+              class="acc-action"
+              title="Clear all points in this section"
+              [disabled]="groupSelectedCount(node) === 0"
+              (click)="setGroupSelection(node, false, $event)"
+            >
+              Clear
+            </button>
+          </span>
         }
-      </button>
+      </div>
 
       @if (isExpanded(node.key)) {
         <div class="tree-group-body">
@@ -76,6 +101,8 @@
             [resolvePointId]="resolvePointId"
             (togglePoint)="togglePoint.emit($event)"
             (toggleGroup)="toggleGroup.emit($event)"
+            (selectGroup)="selectGroup.emit($event)"
+            (clearGroup)="clearGroup.emit($event)"
             (selectDetail)="selectDetail.emit($event)"
           />
         </div>

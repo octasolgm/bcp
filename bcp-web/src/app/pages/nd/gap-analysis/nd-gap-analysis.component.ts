@@ -28,9 +28,14 @@ import {
 } from '../../../../lib/nd/export/gap-analysis-export';
 import { NdExportOptionsDialogComponent } from '../../../components/nd/nd-export-options-dialog.component';
 import { NdReviewSummaryPanelComponent } from '../../../components/nd/nd-review-summary-panel.component';
-import { buildSeededActionPlan } from '../../../../lib/nd/action-plan-seed';
+import {
+  buildSeededActionPlansForGap,
+  type SeededActionPlan,
+} from '../../../../lib/nd/action-plan-seed';
 import { meaningfulCapGaps, resolveCapSourceForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
 import { isAnalysisRunResultsReady } from '../../../../lib/nd/analysis-run-status';
+import { normalizeGapRisk } from '../../../../lib/nd/doc-analysis-ready';
+import { gapStateKey, indexGapStates, rollupClause, type ClauseRollup, type GapState } from '../../../../lib/nd/gap-state';
 import {
   progressPointToReportItem,
   savedResultToReportItem,
@@ -279,8 +284,15 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
           this.focusPointId = point;
           this.focusPlanId = plan;
           this.focusGapIndex = gap && Number.isFinite(Number(gap)) ? Number(gap) : null;
+          const riskTier = params.get('riskTier');
+          this.riskTierFilter =
+            riskTier === 'critical' || riskTier === 'high'
+              ? 'high'
+              : riskTier === 'medium' || riskTier === 'low'
+                ? (riskTier as ActionPlanPriority)
+                : null;
           return {
-            loadKey: [session ?? '', saved ?? '', runId ?? '', section ?? '', focus ?? '', apPriority ?? '', apStatus ?? '', point ?? '', plan ?? '', gap ?? ''].join('|'),
+            loadKey: [session ?? '', saved ?? '', runId ?? '', section ?? '', focus ?? '', apPriority ?? '', apStatus ?? '', point ?? '', plan ?? '', gap ?? '', riskTier ?? ''].join('|'),
             filter: params.get('filter'),
             session,
             saved,
@@ -342,6 +354,36 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return this.filteredItemsList;
   }
 
+  /**
+   * Risk drill-down from the overview cards. The overview counts high/medium/low gaps,
+   * so opening one of those cards should land on exactly those gaps.
+   */
+  riskTierFilter: ActionPlanPriority | null = null;
+
+  private itemHasGapRisk(item: GapItemData, tier: ActionPlanPriority): boolean {
+    const point = this.analysisPointForGap(item);
+    if (!point?.id) return false;
+    return meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point)).some((gap) => {
+      const state = this.gapStates.get(gapStateKey(point.id!, gap.index));
+      return (state?.risk ?? normalizeGapRisk(gap.priority)) === tier;
+    });
+  }
+
+  get riskTierFilterLabel(): string {
+    if (!this.riskTierFilter) return '';
+    return actionPlanPriorityLabel(this.riskTierFilter);
+  }
+
+  clearRiskTierFilter(): void {
+    this.riskTierFilter = null;
+    this.refreshFilteredItems();
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { riskTier: null },
+      queryParamsHandling: 'merge',
+    });
+  }
+
   private refreshFilteredItems(): void {
     let list = this.items;
     if (this.activeFilter === 'with_gaps') {
@@ -353,6 +395,10 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       );
     } else if (this.activeFilter !== 'all') {
       list = list.filter((i) => i.severity === this.activeFilter);
+    }
+    // Drill-down from an overview risk card: keep only clauses carrying that risk.
+    if (this.riskTierFilter) {
+      list = list.filter((i) => this.itemHasGapRisk(i, this.riskTierFilter!));
     }
     const q = this.ndSearchQuery.trim().toLowerCase();
     if (q) {
@@ -476,6 +522,100 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     void this.seedDefaultActionPlans(data);
+    void this.syncGapRoster(data);
+  }
+
+  // ------------------------------------------------------------- gap state
+
+  /** Risk and resolve state per gap, keyed by `${pointId}:${gapIndex}`. */
+  gapStates = new Map<string, GapState>();
+  private gapRosterSynced = false;
+
+  /**
+   * Gaps are parsed out of each clause's CAP text, so the API only learns which gaps
+   * exist when a client tells it. Registering them is what lets a gap carry its own
+   * risk and resolve state instead of the clause carrying it for all of them.
+   */
+  private async syncGapRoster(data: ResultsData): Promise<void> {
+    if (!this.ndRunId || this.gapRosterSynced) return;
+    if (!isAnalysisRunResultsReady(data.run.status)) return;
+    this.gapRosterSynced = true;
+
+    const items: { analysisPointId: string; gapIndex: number; risk: string }[] = [];
+    for (const point of data.points) {
+      if (!point.id) continue;
+      for (const gap of meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point))) {
+        items.push({
+          analysisPointId: point.id,
+          gapIndex: gap.index,
+          risk: normalizeGapRisk(gap.priority),
+        });
+      }
+    }
+    if (items.length) await this.ndApi.syncRunGaps(this.ndRunId, items);
+    await this.reloadGapStates();
+  }
+
+  async reloadGapStates(): Promise<void> {
+    if (!this.ndRunId) return;
+    const res = await this.ndApi.getRunGaps(this.ndRunId);
+    if (!res.success || !res.data) return;
+    this.gapStates = indexGapStates(res.data);
+    this.cdr.markForCheck();
+  }
+
+  async onGapStateChanged(): Promise<void> {
+    await this.reloadGapStates();
+    await this.reloadActionPlans();
+  }
+
+  // ------------------------------------------------------------- rollups
+
+  /** Gap indexes a clause is showing, read from the same CAP text the cards render. */
+  private gapIndexesForPoint(point: AnalysisPoint | null): number[] {
+    if (!point?.id) return [];
+    return meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point)).map((g) => g.index);
+  }
+
+  /** Gap/action/review tallies for one clause, shown beside it in the clause list. */
+  clauseRollupFor(item: GapItemData): ClauseRollup | null {
+    const point = this.analysisPointForGap(item);
+    if (!point?.id) return null;
+    return rollupClause(
+      point.id,
+      this.gapIndexesForPoint(point),
+      this.actionPlansFor(point.id),
+      this.gapStates,
+    );
+  }
+
+  /** Whole-report tallies, shown in the report header and on the review page. */
+  get runRollup(): ClauseRollup {
+    const plans = this.ndRunData?.actionPlans ?? [];
+    const total = {
+      gaps: 0,
+      resolvedGaps: 0,
+      pendingGaps: 0,
+      actions: plans.length,
+      resolvedActions: plans.filter((p) => normalizeActionPlanStatus(p.status) === 'resolved').length,
+      pendingActions: 0,
+      reviews: plans.reduce((sum, p) => sum + (p.reviewCount ?? p.reviews?.length ?? 0), 0),
+    };
+    total.pendingActions = total.actions - total.resolvedActions;
+
+    for (const point of this.ndRunData?.points ?? []) {
+      if (!point.id) continue;
+      const rollup = rollupClause(
+        point.id,
+        this.gapIndexesForPoint(point),
+        this.actionPlansFor(point.id),
+        this.gapStates,
+      );
+      total.gaps += rollup.gaps;
+      total.resolvedGaps += rollup.resolvedGaps;
+      total.pendingGaps += rollup.pendingGaps;
+    }
+    return total;
   }
 
   /**
@@ -489,12 +629,12 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
     this.actionPlanSeedAttempted = true;
 
-    const items: ReturnType<typeof buildSeededActionPlan>[] = [];
+    const items: SeededActionPlan[] = [];
     for (const point of data.points) {
       if (!point.id) continue;
       if (resolveAnalysisPointSeverity(point) === 'compliant') continue;
       for (const gap of meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point))) {
-        items.push(buildSeededActionPlan(point.id, gap));
+        items.push(...buildSeededActionPlansForGap(point.id, gap));
       }
     }
     if (!items.length) return;
@@ -872,22 +1012,42 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return canAddActionItemReviews(this.auth.getRole(), this.ndRunData?.run.status);
   }
 
+  /**
+   * Which phase the report sits in: with the maker, with the checker, or with the
+   * reviewer. This follows the run's own status, not who is looking at it, so the
+   * report reads the same for everybody. Role-based restrictions come later.
+   */
   get effectiveReviewMode(): RunReviewPanelMode {
     if (this.reviewWorkspaceMode === 'maker') return 'maker';
     if (this.reviewWorkspaceMode === 'checker') return 'checker';
     if (this.reviewWorkspaceMode === 'reviewer') return 'reviewer';
-    const role = this.auth.getRole();
+
     const status = this.ndRunData?.run.status ?? '';
-    if (status === 'pulled_back' && (role === 'maker' || role === 'super_admin')) return 'maker';
-    if (status === 'submitted_for_review' && (role === 'checker' || role === 'super_admin')) return 'checker';
-    if (status === 'checker_approved' && (role === 'reviewer' || role === 'super_admin')) return 'reviewer';
+    if (status === 'submitted_for_review') return 'checker';
+    if (status === 'checker_approved') return 'reviewer';
     if (
-      (role === 'maker' || role === 'super_admin') &&
-      ['completed', 'dual_verify_failed', 'landing_ai_complete'].includes(status)
+      status === 'pulled_back' ||
+      ['completed', 'dual_verify_failed', 'landing_ai_complete', 'reviewer_approved'].includes(status)
     ) {
       return 'maker';
     }
     return 'none';
+  }
+
+  /** Label for the phase badge on the report header. */
+  get reportPhaseLabel(): string {
+    switch (this.effectiveReviewMode) {
+      case 'checker':
+        return 'In review — with checker';
+      case 'reviewer':
+        return 'Final review — with reviewer';
+      case 'maker':
+        return this.ndRunData?.run.status === 'reviewer_approved'
+          ? 'Finalised'
+          : 'Draft — with maker';
+      default:
+        return '';
+    }
   }
 
   get showReviewWorkspaceTabs(): boolean {

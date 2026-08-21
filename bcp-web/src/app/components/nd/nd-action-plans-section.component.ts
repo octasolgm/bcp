@@ -381,14 +381,102 @@ export class NdActionPlansSectionComponent implements OnChanges {
     this.plansChanged.emit();
   }
 
+  /** Action whose status is being written right now, so only its own button spins. */
+  togglingPlanId: string | null = null;
+  /** Short-lived confirmation shown on the card after a resolve or reopen lands. */
+  statusNoticePlanId: string | null = null;
+  statusNoticeText = '';
+  private statusNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  isToggling(planId: string): boolean {
+    return this.togglingPlanId === planId;
+  }
+
   /** One-click resolve/reopen without opening the full editor. */
   async toggleStatus(plan: ActionPlanEntry): Promise<void> {
+    if (this.togglingPlanId) return;
+
     const next: ActionPlanStatus = plan.status === 'resolved' ? 'pending' : 'resolved';
-    this.saving = true;
-    await this.api.updateActionPlanEntry(this.runId, plan.id, { status: next });
-    this.saving = false;
+    this.togglingPlanId = plan.id;
+    this.error = '';
+    this.clearStatusNotice();
+    this.cdr.markForCheck();
+
+    const res = await this.api.updateActionPlanEntry(this.runId, plan.id, { status: next });
+    this.togglingPlanId = null;
+
+    if (!res.success) {
+      this.error = res.message ?? 'Could not update the action.';
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.showStatusNotice(
+      plan.id,
+      next === 'resolved' ? 'Action resolved.' : 'Action reopened.',
+    );
     this.plansChanged.emit();
     this.cdr.markForCheck();
+  }
+
+  private showStatusNotice(planId: string, text: string): void {
+    this.statusNoticePlanId = planId;
+    this.statusNoticeText = text;
+    this.statusNoticeTimer = setTimeout(() => {
+      this.clearStatusNotice();
+      this.cdr.markForCheck();
+    }, 4000);
+  }
+
+  private clearStatusNotice(): void {
+    if (this.statusNoticeTimer) clearTimeout(this.statusNoticeTimer);
+    this.statusNoticeTimer = null;
+    this.statusNoticePlanId = null;
+    this.statusNoticeText = '';
+  }
+
+  // ------------------------------------------------------ status history
+
+  statusHistoryPlanId: string | null = null;
+  statusHistoryRows: {
+    id: string;
+    previousStatus: string | null;
+    newStatus: string;
+    changedByName: string | null;
+    createdAt: string;
+  }[] = [];
+  statusHistoryLoading = false;
+
+  /** Who moved this action between pending and resolved. */
+  async toggleStatusHistory(plan: ActionPlanEntry): Promise<void> {
+    if (this.statusHistoryPlanId === plan.id) {
+      this.statusHistoryPlanId = null;
+      this.statusHistoryRows = [];
+      return;
+    }
+    this.statusHistoryPlanId = plan.id;
+    this.statusHistoryRows = [];
+    this.statusHistoryLoading = true;
+    this.cdr.markForCheck();
+
+    const res = await this.api.getActionPlanStatusHistory(this.runId, plan.id);
+    this.statusHistoryLoading = false;
+    if (res.success && res.data) this.statusHistoryRows = res.data;
+    this.cdr.markForCheck();
+  }
+
+  statusHistoryLabel(row: { previousStatus: string | null; newStatus: string }): string {
+    const from = actionPlanStatusLabel(row.previousStatus ?? 'pending');
+    return `${from} → ${actionPlanStatusLabel(row.newStatus)}`;
+  }
+
+  /** Falls back to the action's own resolve stamp when no history row exists yet. */
+  resolvedByLabel(plan: ActionPlanEntry): string {
+    if (plan.status !== 'resolved') return '';
+    const who = plan.resolvedByName ?? plan.updatedByName;
+    const when = plan.resolvedAt ? this.formatDate(plan.resolvedAt) : '';
+    if (!who && !when) return '';
+    return who ? `Resolved by ${who}${when ? ` · ${when}` : ''}` : `Resolved ${when}`;
   }
 
   // ------------------------------------------------------ target history
@@ -423,6 +511,8 @@ export class NdActionPlansSectionComponent implements OnChanges {
     this.editingReviewId = null;
     this.reviewDraftText = '';
     this.reviewAssigneeKey = '';
+    this.reviewAssigneeType = 'department';
+    this.reviewAssigneeQuery = '';
   }
 
   startEditReview(plan: ActionPlanEntry, review: ActionPlanReviewEntry): void {
@@ -432,6 +522,8 @@ export class NdActionPlansSectionComponent implements OnChanges {
     this.reviewAssigneeKey = review.assigneeType
       ? `${review.assigneeType}:${review.assigneeDepartmentId ?? review.assigneeUserId ?? ''}`
       : '';
+    this.reviewAssigneeType = review.assigneeType === 'user' ? 'user' : 'department';
+    this.reviewAssigneeQuery = '';
   }
 
   cancelReview(): void {
@@ -439,9 +531,18 @@ export class NdActionPlansSectionComponent implements OnChanges {
     this.editingReviewId = null;
     this.reviewDraftText = '';
     this.reviewAssigneeKey = '';
+    this.reviewAssigneeQuery = '';
+    this.reviewAssigneeOpen = false;
   }
 
-  /** Flat list for the "send to" select: departments first, then people. */
+  /**
+   * Review routing uses the same department/individual picker as an action's
+   * responsibility, so both read the same way.
+   */
+  reviewAssigneeType: ActionPlanResponsibilityType = 'department';
+  reviewAssigneeQuery = '';
+  reviewAssigneeOpen = false;
+
   get reviewAssigneeChoices(): { key: string; label: string; group: string }[] {
     return [
       ...this.options.departments.map((d) => ({
@@ -455,6 +556,45 @@ export class NdActionPlansSectionComponent implements OnChanges {
         group: 'People',
       })),
     ];
+  }
+
+  get reviewAssigneeLabelSelected(): string {
+    return this.reviewAssigneeChoices.find((c) => c.key === this.reviewAssigneeKey)?.label ?? '';
+  }
+
+  get reviewAssigneeChipClass(): string {
+    return `ap-owner-chip ap-owner-chip-${this.reviewAssigneeType}`;
+  }
+
+  get reviewAssigneeSuggestions(): { key: string; label: string; group: string }[] {
+    const wanted = this.reviewAssigneeType === 'user' ? 'People' : 'Departments';
+    const q = this.reviewAssigneeQuery.trim().toLowerCase();
+    return this.reviewAssigneeChoices
+      .filter((c) => c.group === wanted)
+      .filter((c) => !q || c.label.toLowerCase().includes(q))
+      .slice(0, 8);
+  }
+
+  setReviewAssigneeType(type: ActionPlanResponsibilityType): void {
+    this.reviewAssigneeType = type;
+    this.reviewAssigneeQuery = '';
+    this.reviewAssigneeOpen = true;
+  }
+
+  onReviewAssigneeQueryChange(value: string): void {
+    this.reviewAssigneeQuery = value;
+    this.reviewAssigneeOpen = true;
+  }
+
+  pickReviewAssignee(choice: { key: string; label: string }): void {
+    this.reviewAssigneeKey = choice.key;
+    this.reviewAssigneeQuery = '';
+    this.reviewAssigneeOpen = false;
+  }
+
+  clearReviewAssignee(): void {
+    this.reviewAssigneeKey = '';
+    this.reviewAssigneeQuery = '';
   }
 
   private reviewAssigneePayload(): NdReviewAssignee | undefined {

@@ -60,6 +60,19 @@
   <div class="workflow-bar card-surface">
     <div class="workflow-bar-main">
       <app-nd-status-badge [status]="ndRunData.run.status" />
+      @if (reportPhaseLabel) {
+        <span class="report-phase-chip">{{ reportPhaseLabel }}</span>
+      }
+      @if (runRollup; as rollup) {
+        <span class="report-rollup">
+          <span class="rollup-chip">{{ rollup.gaps }} gap{{ rollup.gaps === 1 ? '' : 's' }}</span>
+          <span class="rollup-chip is-resolved">{{ rollup.resolvedGaps }} resolved</span>
+          <span class="rollup-chip is-pending">{{ rollup.pendingGaps }} pending</span>
+          <span class="rollup-chip">{{ rollup.actions }} action{{ rollup.actions === 1 ? '' : 's' }}</span>
+          <span class="rollup-chip is-resolved">{{ rollup.resolvedActions }} resolved</span>
+          <span class="rollup-chip is-pending">{{ rollup.pendingActions }} pending</span>
+        </span>
+      }
       @if (showDualVerifyFailedBanner) {
         <span class="dv-failed-pill">Dual verify failed</span>
       }
@@ -110,6 +123,16 @@
       — {{ focusedActionPlanCount }} gap(s) highlighted.
     </span>
     <button type="button" class="workflow-link-btn" (click)="clearActionPlanFocus()">Clear highlight</button>
+  </div>
+}
+
+@if (riskTierFilter) {
+  <div class="action-plan-focus-banner">
+    <span>
+      Showing clauses with <strong>{{ riskTierFilterLabel.toLowerCase() }} risk</strong> gaps
+      — {{ filteredItems.length }} clause(s).
+    </span>
+    <button type="button" class="workflow-link-btn" (click)="clearRiskTierFilter()">Clear risk filter</button>
   </div>
 }
 
@@ -168,7 +191,7 @@
 }
 
 @if (showReviewSummary) {
-  <app-nd-review-summary-panel [plans]="allActionPlans" [clauseByPointId]="clauseByPointId" />
+  <app-nd-review-summary-panel [plans]="allActionPlans" [clauseByPointId]="clauseByPointId" [rollup]="runRollup" />
 }
 
 @if (showRunReviewPanel) {
@@ -293,7 +316,9 @@
       [focusPlanId]="focusPlanIdFor(ndPoint.id)"
       [canEditActionPlans]="canEditActionPlans"
       [canReviewActionPlans]="canReviewActionPlans"
-      (actionPlansChanged)="reloadActionPlans()"
+      [gapStates]="gapStates"
+      (gapStateChanged)="onGapStateChanged()"
+      (actionPlansChanged)="onGapStateChanged()"
       (viewActionPlanReviews)="openActionPlanReviews($event)"
       (tempReviewCommentsChanged)="onTempReviewCommentsChanged($event)"
       [showReviewPanel]="canShowReviewPanel"
@@ -387,6 +412,27 @@
               <span class="gap-count-badge rail-gap-inline">
                 {{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}
               </span>
+            }
+            @if (clauseRollupFor(item); as rollup) {
+              @if (rollup.gaps || rollup.actions) {
+                <span class="rail-rollup">
+                  @if (rollup.resolvedGaps) {
+                    <span class="rollup-chip is-resolved">{{ rollup.resolvedGaps }} gap resolved</span>
+                  }
+                  @if (rollup.pendingGaps) {
+                    <span class="rollup-chip is-pending">{{ rollup.pendingGaps }} gap pending</span>
+                  }
+                  @if (rollup.actions) {
+                    <span class="rollup-chip">{{ rollup.actions }} action{{ rollup.actions === 1 ? '' : 's' }}</span>
+                  }
+                  @if (rollup.pendingActions) {
+                    <span class="rollup-chip is-pending">{{ rollup.pendingActions }} open</span>
+                  }
+                  @if (rollup.reviews) {
+                    <span class="rollup-chip">{{ rollup.reviews }} review{{ rollup.reviews === 1 ? '' : 's' }}</span>
+                  }
+                </span>
+              }
             }
             <div class="rail-meta-slim">
               @if (meta.policySnippet && meta.policySnippet !== '—') {

@@ -9,9 +9,15 @@ import {
 } from '../../services/nd/nd-api.service';
 import { formatActionPlanDate } from '../../../lib/nd/action-plan';
 
+/** Which cut of the same action data the panel is showing. */
+export type MisView = 'plans' | 'owners';
+
+/** An action plan plus the owners it is assigned to, for the by-action-plan view. */
+type MisPlanRow = NdMisItem & { owners: string[] };
+
 /**
- * Workload view over corrective actions: one row per department or person that owns
- * actions, expanding into the actions behind the count. Replaces the old seeded
+ * Two views over the same corrective actions: one listing the actions themselves, and
+ * one grouping them by the department or person who owns them. Replaces the old seeded
  * Remediation Tracker, which was not connected to real action plans.
  */
 @Component({
@@ -33,6 +39,10 @@ export class NdMisPanelComponent implements OnInit {
   data: NdActionPlanMis | null = null;
   openKey: string | null = null;
 
+  view: MisView = 'plans';
+  /** Filter applied by clicking one of the three total boxes. */
+  statusFilter: 'all' | 'pending' | 'resolved' = 'all';
+
   ngOnInit(): void {
     void this.load();
   }
@@ -52,13 +62,97 @@ export class NdMisPanelComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
+  setView(view: MisView): void {
+    this.view = view;
+    this.openKey = null;
+    this.cdr.markForCheck();
+  }
+
+  setStatusFilter(filter: 'all' | 'pending' | 'resolved'): void {
+    this.statusFilter = this.statusFilter === filter ? 'all' : filter;
+    this.cdr.markForCheck();
+  }
+
+  // ------------------------------------------------------------- totals
+
+  get totalCount(): number {
+    return this.data?.totals.total ?? 0;
+  }
+
+  get pendingCount(): number {
+    return this.data?.totals.pending ?? 0;
+  }
+
+  get resolvedCount(): number {
+    return this.data?.totals.resolved ?? 0;
+  }
+
+  get overdueCount(): number {
+    return this.data?.totals.overdue ?? 0;
+  }
+
+  // ------------------------------------------------ by action plan view
+
+  /**
+   * Every action once, with the owners it is shared by. The API groups by owner, so an
+   * action assigned to two departments arrives twice and is merged back here.
+   */
+  get planRows(): MisPlanRow[] {
+    const byId = new Map<string, MisPlanRow>();
+    for (const owner of this.owners) {
+      const ownerName = owner.type === 'unassigned' ? 'Unassigned' : owner.name;
+      for (const item of owner.items) {
+        const existing = byId.get(item.id);
+        if (existing) {
+          if (!existing.owners.includes(ownerName)) existing.owners.push(ownerName);
+        } else {
+          byId.set(item.id, { ...item, owners: [ownerName] });
+        }
+      }
+    }
+    return [...byId.values()]
+      .filter((row) => this.matchesStatusFilter(row.status))
+      .sort((a, b) => {
+        // Open work first, then the soonest target date.
+        if ((a.status === 'resolved') !== (b.status === 'resolved')) {
+          return a.status === 'resolved' ? 1 : -1;
+        }
+        return (a.targetDate ?? '9999').localeCompare(b.targetDate ?? '9999');
+      });
+  }
+
+  private matchesStatusFilter(status: string): boolean {
+    if (this.statusFilter === 'all') return true;
+    if (this.statusFilter === 'resolved') return status === 'resolved';
+    return status !== 'resolved';
+  }
+
+  ownersLabel(row: MisPlanRow): string {
+    if (!row.owners.length) return 'Unassigned';
+    if (row.owners.length === 1) return row.owners[0];
+    return `${row.owners[0]} +${row.owners.length - 1}`;
+  }
+
+  /** Short enough to scan in a list; the full text is on the report. */
+  shortPlan(text: string): string {
+    const t = (text ?? '').trim();
+    return t.length > 120 ? `${t.slice(0, 120)}…` : t;
+  }
+
+  // ----------------------------------------------------- by owner view
+
   get owners(): NdMisOwner[] {
     return this.data?.owners ?? [];
   }
 
-  /** Owners with nothing open are noise in a workload view. */
-  get activeOwners(): NdMisOwner[] {
-    return this.owners.filter((o) => o.pending > 0);
+  /**
+   * Owners to list. Under the pending filter only those with open work appear, which is
+   * the workload question; otherwise everyone holding an action is listed.
+   */
+  get visibleOwners(): NdMisOwner[] {
+    if (this.statusFilter === 'pending') return this.owners.filter((o) => o.pending > 0);
+    if (this.statusFilter === 'resolved') return this.owners.filter((o) => o.resolved > 0);
+    return this.owners.filter((o) => o.total > 0);
   }
 
   toggle(key: string): void {
@@ -66,17 +160,20 @@ export class NdMisPanelComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-  pendingItems(owner: NdMisOwner): NdMisItem[] {
-    return owner.items.filter((i) => i.status !== 'resolved');
+  itemsFor(owner: NdMisOwner): NdMisItem[] {
+    return owner.items.filter((i) => this.matchesStatusFilter(i.status));
   }
 
   ownerLabel(owner: NdMisOwner): string {
-    if (owner.type === 'unassigned') return 'Unassigned';
-    return `${owner.name} — ${owner.pending} pending action${owner.pending === 1 ? '' : 's'}`;
+    return owner.type === 'unassigned' ? 'Unassigned' : owner.name;
   }
 
   ownerKind(owner: NdMisOwner): string {
     return owner.type === 'user' ? 'Person' : owner.type === 'department' ? 'Department' : '—';
+  }
+
+  isResolved(status: string): boolean {
+    return status === 'resolved';
   }
 
   gapLinkParams(item: NdMisItem): Record<string, string> {

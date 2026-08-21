@@ -176,6 +176,20 @@ public class ActionPlanInsightsController(
             ? await db.NdDepartments.AsNoTracking().Where(d => d.Id == myDept).Select(d => d.Name).FirstOrDefaultAsync(ct)
             : null;
 
+        // Last status move per action, so the list can say who resolved or reopened it.
+        var history = planIds.Count == 0
+            ? []
+            : await db.NdAnalysisActionPlanStatusHistories.AsNoTracking()
+                .Where(h => planIds.Contains(h.ActionPlanId))
+                .OrderByDescending(h => h.CreatedAt)
+                .ToListAsync(ct);
+
+        var lastChange = history
+            .GroupBy(h => h.ActionPlanId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var changeNames = await LoadProfileNamesAsync(db, lastChange.Values.Select(h => h.ChangedBy), ct);
+
         var items = filtered
             .OrderBy(p => p.Status == ActionPlanStatuses.Resolved)
             .ThenBy(p => p.TargetDate ?? DateTimeOffset.MaxValue)
@@ -186,8 +200,16 @@ public class ActionPlanInsightsController(
                 var run = runs.GetValueOrDefault(p.AnalysisRunId);
                 var clause = ClauseLabel(snapshots.GetValueOrDefault(p.AnalysisPointId));
                 var direct = p.ResponsibilityUserId == profile.Id || mine.Any(a => a.UserId == profile.Id);
+                var change = lastChange.GetValueOrDefault(p.Id);
                 return new
                 {
+                    lastStatusChange = change == null ? null : new
+                    {
+                        previousStatus = change.PreviousStatus,
+                        newStatus = change.NewStatus,
+                        changedByName = ProfileName(changeNames, change.ChangedBy),
+                        createdAt = change.CreatedAt,
+                    },
                     id = p.Id,
                     analysisRunId = p.AnalysisRunId,
                     analysisPointId = p.AnalysisPointId,

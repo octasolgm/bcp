@@ -59,8 +59,32 @@ import {
 } from '../../../lib/nd/policy-doc-resolve';
 import { NdItemReviewSectionComponent, type ItemReviewSaveEvent } from './nd-item-review-section.component';
 import { NdActionPlansSectionComponent } from './nd-action-plans-section.component';
-import { actionPlansForGap, actionPlansForPoint, ACTION_PLAN_PRIORITY_OPTIONS, type ActionPlanEntry, type ActionPlanPriority } from '../../../lib/nd/action-plan';
+import {
+  actionPlansForGap,
+  actionPlansForPoint,
+  actionPlanPriorityFromScore,
+  actionPlanPriorityLabel,
+  actionPlanScoreLabel,
+  clampActionPlanScore,
+  normalizeActionPlanStatus,
+  ACTION_PLAN_PRIORITY_OPTIONS,
+  ACTION_PLAN_PRIORITY_SCALE,
+  ACTION_PLAN_STATUS_OPTIONS,
+  DEFAULT_ACTION_PLAN_PRIORITY_SCORE,
+  type ActionPlanEntry,
+  type ActionPlanPriority,
+} from '../../../lib/nd/action-plan';
 import { normalizeGapRisk } from '../../../lib/nd/doc-analysis-ready';
+import {
+  canResolveGapByHand,
+  deriveGapStatus,
+  gapRiskScore,
+  gapRiskTargetHint,
+  gapStateKey,
+  gapStatusLabel,
+  type GapState,
+  type GapStatus,
+} from '../../../lib/nd/gap-state';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import {
   NdTempPointReviewCommentsComponent,
@@ -570,14 +594,145 @@ export class NdGapPointDetailComponent implements OnChanges {
     return this.actionPlansForGapIndex(index).length;
   }
 
-  readonly gapRiskOptions = ACTION_PLAN_PRIORITY_OPTIONS;
+  // ------------------------------------------------------------- gap state
 
-  gapRisk(gap: CapGap): ActionPlanPriority {
-    return normalizeGapRisk(gap.priority);
+  readonly gapRiskOptions = ACTION_PLAN_PRIORITY_OPTIONS;
+  readonly gapStatusOptions = ACTION_PLAN_STATUS_OPTIONS;
+  readonly gapPriorityScale = ACTION_PLAN_PRIORITY_SCALE;
+  readonly gapStatusLabel = gapStatusLabel;
+
+  /** Gap index currently open in the header edit panel. */
+  editingGapStateIndex: number | null = null;
+  gapEditDraft = { missing: '', riskScore: DEFAULT_ACTION_PLAN_PRIORITY_SCORE, status: 'pending' as GapStatus };
+  savingGapState = false;
+  /** Set when a resolve was refused because the gap still has open actions. */
+  gapResolveBlockedIndex: number | null = null;
+
+  /** Saved gap rows for this run, keyed `${pointId}:${gapIndex}`. */
+  @Input() gapStates = new Map<string, GapState>();
+  @Output() gapStateChanged = new EventEmitter<void>();
+
+  gapStateFor(index: number): GapState | null {
+    if (!this.point?.id) return null;
+    return this.gapStates.get(gapStateKey(this.point.id, index)) ?? null;
   }
 
-  setGapRisk(gap: CapGap, value: string): void {
-    gap.priority = normalizeGapRisk(value);
+  /** Risk shown on the card: the saved value when there is one, else the AI's. */
+  gapRisk(gap: CapGap): ActionPlanPriority {
+    return this.gapStateFor(gap.index)?.risk ?? normalizeGapRisk(gap.priority);
+  }
+
+  gapRiskScore(gap: CapGap): number {
+    return gapRiskScore(this.gapStateFor(gap.index), gap.priority);
+  }
+
+  gapRiskLabel(gap: CapGap): string {
+    return actionPlanPriorityLabel(this.gapRisk(gap));
+  }
+
+  gapRiskClass(gap: CapGap): string {
+    return `gap-risk-${this.gapRisk(gap)}`;
+  }
+
+  /** Resolved once every action on the gap is resolved. */
+  gapStatus(gap: CapGap): GapStatus {
+    return deriveGapStatus(this.actionPlansForGapIndex(gap.index), this.gapStateFor(gap.index));
+  }
+
+  gapTargetHint(gap: CapGap): string {
+    return gapRiskTargetHint(this.gapRisk(gap));
+  }
+
+  private openActionCount(index: number): number {
+    return this.actionPlansForGapIndex(index).filter(
+      (p) => normalizeActionPlanStatus(p.status) !== 'resolved',
+    ).length;
+  }
+
+  isEditingGapState(index: number): boolean {
+    return this.editingGapStateIndex === index;
+  }
+
+  startEditGapState(gap: CapGap): void {
+    this.editingGapStateIndex = gap.index;
+    this.gapEditDraft = {
+      missing: gap.missing ?? '',
+      riskScore: this.gapRiskScore(gap),
+      status: this.gapStatus(gap),
+    };
+    this.gapResolveBlockedIndex = null;
+    this.cdr.markForCheck();
+  }
+
+  cancelEditGapState(): void {
+    this.editingGapStateIndex = null;
+    this.gapResolveBlockedIndex = null;
+    this.cdr.markForCheck();
+  }
+
+  gapEditRiskLabel(): string {
+    return actionPlanScoreLabel(this.gapEditDraft.riskScore);
+  }
+
+  gapEditTargetHint(): string {
+    return gapRiskTargetHint(actionPlanPriorityFromScore(this.gapEditDraft.riskScore));
+  }
+
+  onGapEditScore(value: string | number): void {
+    this.gapEditDraft.riskScore = clampActionPlanScore(Number(value));
+  }
+
+  /** Dismisses the "resolve the actions first" notice. */
+  dismissGapResolveBlocked(): void {
+    this.gapResolveBlockedIndex = null;
+    this.cdr.markForCheck();
+  }
+
+  gapResolveBlockedMessage(index: number): string {
+    const open = this.openActionCount(index);
+    return open === 1
+      ? 'This gap still has 1 action open. Resolve it before closing the gap.'
+      : `This gap still has ${open} actions open. Resolve them before closing the gap.`;
+  }
+
+  /**
+   * Saves the gap header edit: the gap text goes back into the clause's CAP blob, while
+   * risk and resolve are stored per gap so the clause's other gaps are left alone.
+   */
+  async saveGapState(gap: CapGap): Promise<void> {
+    if (!this.runId || !this.point?.id || this.savingGapState) return;
+
+    const wantsResolved = this.gapEditDraft.status === 'resolved';
+    if (wantsResolved && !canResolveGapByHand(this.actionPlansForGapIndex(gap.index))) {
+      this.gapResolveBlockedIndex = gap.index;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.savingGapState = true;
+    this.gapResolveBlockedIndex = null;
+    this.cdr.markForCheck();
+
+    const missing = this.gapEditDraft.missing.trim();
+    const textChanged = missing.length > 0 && missing !== (gap.missing ?? '').trim();
+    if (textChanged) {
+      gap.missing = missing;
+      this.save.emit(serializeCapGaps(this.capGaps));
+    }
+
+    const res = await this.ndApi.updateRunGap(this.runId, this.point.id, gap.index, {
+      riskScore: this.gapEditDraft.riskScore,
+      status: this.gapEditDraft.status,
+    });
+
+    this.savingGapState = false;
+    if (res.success) {
+      this.editingGapStateIndex = null;
+      this.gapStateChanged.emit();
+    } else if ((res as { code?: string }).code === 'actions_pending') {
+      this.gapResolveBlockedIndex = gap.index;
+    }
+    this.cdr.markForCheck();
   }
 
   // --------------------------------------------------- clause status override

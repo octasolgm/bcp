@@ -211,6 +211,21 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   selectedRegIds = new Set<string>();
   selectedRegDocs: StoredDocumentDto[] = [];
 
+  /** Points contributed by every selected document, before duplicates are merged. */
+  regPointTotalAcrossDocs = 0;
+  /** Points left after clauses shared between documents are merged. */
+  regPointUniqueCount = 0;
+
+  /**
+   * "188 points · 94 unique" when the selected documents overlap. Stays quiet when a
+   * single document is picked, or when nothing is duplicated.
+   */
+  regPointOverlapNote(): string {
+    if (this.selectedRegIds.size < 2) return '';
+    if (this.regPointTotalAcrossDocs <= this.regPointUniqueCount) return '';
+    return `${this.regPointTotalAcrossDocs} points across ${this.selectedRegIds.size} documents · ${this.regPointUniqueCount} unique`;
+  }
+
   storageConfigured = false;
   loadingRegs = false;
   loadingPoints = false;
@@ -320,7 +335,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     if (s === 'cancelled') return 'Cancelled';
     if (s === 'completed') return 'Done';
     if (s === 'not-run') return 'Not run';
-    return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Not run';
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Not started';
   }
 
   forwardPointStatusClass(pointId: string): string {
@@ -1836,10 +1851,23 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   togglePointIds(ids: string[]): void {
     if (!ids.length) return;
     const all = ids.every((id) => this.selected.has(id));
-    for (const id of ids) {
-      if (all) this.selected.delete(id);
-      else this.selected.add(id);
-    }
+    if (all) this.clearPointIds(ids);
+    else this.selectPointIds(ids);
+  }
+
+  /** Pick every point under a section. A new Set so change detection sees the update. */
+  selectPointIds(ids: string[]): void {
+    if (!ids.length) return;
+    const next = new Set(this.selected);
+    for (const id of ids) next.add(id);
+    this.selected = next;
+  }
+
+  clearPointIds(ids: string[]): void {
+    if (!ids.length) return;
+    const next = new Set(this.selected);
+    for (const id of ids) next.delete(id);
+    this.selected = next;
   }
 
   displaySectionAllSelected(sec: LibraryPointDisplayChapter['sections'][number]): boolean {
@@ -2653,6 +2681,7 @@ ${this.findingsPreview
         const labels: string[] = [];
         const regulationDisplayDocs: LibraryPointDisplayDoc[] = [];
         let useNdDocGroups = false;
+        let regPointTotalAcrossDocs = 0;
 
         for (const r of results) {
           if (r.document) {
@@ -2682,6 +2711,9 @@ ${this.findingsPreview
           for (const p of docPoints) {
             byId.set(p.point_id, p);
           }
+          // Kept alongside the deduped pool so two documents that share clauses can be
+          // reported as "188 points · 94 unique" rather than silently collapsing.
+          regPointTotalAcrossDocs += docPoints.length;
           if (r.message) labels.push(r.message);
 
           if (
@@ -2721,6 +2753,8 @@ ${this.findingsPreview
         }
         this.syncSelectedDocs();
         const merged = [...byId.values()];
+        this.regPointTotalAcrossDocs = regPointTotalAcrossDocs;
+        this.regPointUniqueCount = merged.length;
         if (loadGen === this.pointsLoadGen) this.loadingPoints = false;
         const fileNames = this.selectedRegDocs.map((d) => d.title || d.originalFileName).join(', ');
         const finishLoad = () => {
@@ -2749,51 +2783,111 @@ ${this.findingsPreview
   private async uploadNdRegulationFile(file: File): Promise<void> {
     this.uploadingReg = true;
     this.error = '';
+    this.beginRegUpload(file.name);
+
+    // Whatever the user had picked before uploading stays picked afterwards; the new
+    // document is added to that selection rather than replacing it.
+    const keptRegIds = new Set(this.selectedRegIds);
+    const keptPointIds = new Set(this.selected);
+
     try {
       const res = await this.ndApi.uploadRegulationDocument(file);
       if (!res.success) {
         this.error = res.message ?? 'Regulation upload failed.';
-        this.toast.show(this.error, 'error', 4000);
+        this.failRegUpload(this.error);
         return;
       }
       const data = (res.data ?? {}) as { id?: string; extractionStatus?: string };
       const id = data.id;
       if (!id) {
+        this.endRegUpload();
         this.toast.show('Document uploaded', 'success', 3000);
         this.refreshRegulations();
         return;
       }
 
       if (this.ndAuth.isDemoViewer()) {
-        this.toast.show('Uploaded — parsing via demo (no live AI)…', 'info', 3000);
+        this.setRegUploadStage('parsing');
         const parsed = await this.ndApi.parseRegulationDocument(id);
         if (!parsed.success) {
-          this.toast.show(parsed.message ?? 'Demo parse failed', 'error', 4000);
+          this.failRegUpload(parsed.message ?? 'Demo parse failed');
         } else {
+          this.setRegUploadStage('extracting');
           const extracted = await this.ndApi.extractRegulationDocument(id);
-          if (!extracted.success) {
-            this.toast.show(extracted.message ?? 'Demo extract failed', 'error', 4000);
-          } else {
-            this.toast.show('Parsed and extracted (demo)', 'success', 3500);
-          }
+          if (!extracted.success) this.failRegUpload(extracted.message ?? 'Demo extract failed');
+          else this.endRegUpload('Parsed and extracted (demo)');
         }
       } else {
+        this.setRegUploadStage('needs_extract');
         this.toast.show('Uploaded — parse and extract it from Regulation Docs before selecting.', 'success', 4000);
       }
 
       this.refreshRegulations(() => {
+        for (const kept of keptRegIds) this.selectedRegIds.add(kept);
         const doc = this.regulationDocs.find((d) => d.id === id);
-        if (doc && this.canSelectRegDoc(doc)) {
-          this.selectedRegIds.add(doc.id);
-          this.syncSelectedDocs();
-          this.loadPointsForSelectedFiles();
-        }
+        if (doc && this.canSelectRegDoc(doc)) this.selectedRegIds.add(doc.id);
+        this.syncSelectedDocs();
+        this.loadPointsForSelectedFiles(undefined, {
+          selectedIds: keptPointIds.size ? keptPointIds : undefined,
+        });
       });
     } catch {
       this.error = 'Regulation upload failed.';
-      this.toast.show(this.error, 'error', 4000);
+      this.failRegUpload(this.error);
     } finally {
       this.uploadingReg = false;
+    }
+  }
+
+  // --------------------------------------------------------- upload progress
+
+  /**
+   * The document being uploaded, shown as a live row at the top of the regulation
+   * list so the upload is visible while it runs instead of only a spinning button.
+   */
+  regUploadProgress: {
+    name: string;
+    stage: 'uploading' | 'parsing' | 'extracting' | 'needs_extract' | 'failed';
+    message?: string;
+  } | null = null;
+  private regUploadClearTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private beginRegUpload(name: string): void {
+    if (this.regUploadClearTimer) clearTimeout(this.regUploadClearTimer);
+    this.regUploadProgress = { name, stage: 'uploading' };
+  }
+
+  private setRegUploadStage(stage: 'parsing' | 'extracting' | 'needs_extract'): void {
+    if (this.regUploadProgress) this.regUploadProgress = { ...this.regUploadProgress, stage };
+  }
+
+  private endRegUpload(message?: string): void {
+    if (message) this.toast.show(message, 'success', 3500);
+    this.regUploadProgress = null;
+  }
+
+  private failRegUpload(message: string): void {
+    this.toast.show(message, 'error', 4000);
+    if (this.regUploadProgress) {
+      this.regUploadProgress = { ...this.regUploadProgress, stage: 'failed', message };
+      this.regUploadClearTimer = setTimeout(() => (this.regUploadProgress = null), 6000);
+    }
+  }
+
+  regUploadStageLabel(): string {
+    switch (this.regUploadProgress?.stage) {
+      case 'uploading':
+        return 'Uploading…';
+      case 'parsing':
+        return 'Parsing…';
+      case 'extracting':
+        return 'Extracting points…';
+      case 'needs_extract':
+        return 'Uploaded — needs parse and extract';
+      case 'failed':
+        return this.regUploadProgress.message ?? 'Upload failed';
+      default:
+        return '';
     }
   }
 

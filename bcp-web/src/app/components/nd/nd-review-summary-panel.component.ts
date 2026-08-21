@@ -8,6 +8,7 @@ import {
   type ActionPlanEntry,
   type ActionPlanReviewEntry,
 } from '../../../lib/nd/action-plan';
+import type { ClauseRollup } from '../../../lib/nd/gap-state';
 
 type ReviewRow = ActionPlanReviewEntry & { clause: string; planText: string };
 
@@ -27,6 +28,8 @@ export class NdReviewSummaryPanelComponent {
   @Input() plans: ActionPlanEntry[] = [];
   /** Point id → clause number, so rows can name the clause they belong to. */
   @Input() clauseByPointId = new Map<string, string>();
+  /** Whole-report gap tallies, so the reviewer sees gaps and actions side by side. */
+  @Input() rollup: ClauseRollup | null = null;
 
   readonly formatDate = formatActionPlanDate;
   readonly isOverdue = isActionPlanOverdue;

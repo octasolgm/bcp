@@ -198,6 +198,44 @@ public static class NdIncrementalSchemaBootstrap
           WHERE assignee_department_id IS NOT NULL;
         """,
         """
+        CREATE TABLE IF NOT EXISTS analysis_action_plan_status_history (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          action_plan_id UUID NOT NULL REFERENCES analysis_action_plans(id) ON DELETE CASCADE,
+          previous_status TEXT NULL,
+          new_status TEXT NOT NULL,
+          changed_by UUID NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_analysis_action_plan_status_history_plan
+          ON analysis_action_plan_status_history (action_plan_id, created_at DESC);
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS analysis_gaps (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          analysis_run_id UUID NOT NULL,
+          analysis_point_id UUID NOT NULL,
+          gap_index INT NOT NULL,
+          risk TEXT NOT NULL DEFAULT 'medium',
+          risk_score INT NOT NULL DEFAULT 50,
+          status TEXT NOT NULL DEFAULT 'pending',
+          resolved_at TIMESTAMPTZ NULL,
+          resolved_by UUID NULL,
+          updated_by UUID NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_gaps_point_index
+          ON analysis_gaps (analysis_point_id, gap_index);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_analysis_gaps_run
+          ON analysis_gaps (analysis_run_id, status);
+        """,
+        """
         ALTER TABLE analysis_points
           ADD COLUMN IF NOT EXISTS final_status_source TEXT NULL,
           ADD COLUMN IF NOT EXISTS ai_final_status TEXT NULL;

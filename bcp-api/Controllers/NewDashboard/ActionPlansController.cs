@@ -95,7 +95,7 @@ public class ActionPlansController(
 
         var names = await LoadProfileNamesAsync(
             db,
-            plans.SelectMany(p => new[] { p.CreatedBy, p.UpdatedBy, p.ResponsibilityUserId })
+            plans.SelectMany(p => new[] { p.CreatedBy, p.UpdatedBy, p.ResolvedBy, p.ResponsibilityUserId })
                 .Concat(reviews.Select(r => r.ReviewerId)),
             ct);
 
@@ -338,9 +338,16 @@ public class ActionPlansController(
         var statusChanged = newStatus != row.Status;
         if (statusChanged)
         {
+            db.NdAnalysisActionPlanStatusHistories.Add(new NdAnalysisActionPlanStatusHistory
+            {
+                ActionPlanId = row.Id,
+                PreviousStatus = row.Status,
+                NewStatus = newStatus,
+                ChangedBy = profile!.Id,
+            });
             row.Status = newStatus;
             row.ResolvedAt = newStatus == ActionPlanStatuses.Resolved ? DateTimeOffset.UtcNow : null;
-            row.ResolvedBy = newStatus == ActionPlanStatuses.Resolved ? profile!.Id : null;
+            row.ResolvedBy = newStatus == ActionPlanStatuses.Resolved ? profile.Id : null;
         }
 
         if (body.GapIndex is int gi) row.GapIndex = Math.Max(0, gi);
@@ -465,6 +472,41 @@ public class ActionPlansController(
                 changedByName = ProfileName(names, h.ChangedBy),
                 createdAt = h.CreatedAt,
             }),
+        });
+    }
+
+    /// <summary>Who moved this action between pending and resolved, newest first.</summary>
+    [HttpGet("{planId:guid}/status-history")]
+    public async Task<IActionResult> StatusHistory(Guid runId, Guid planId, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct, AllRoles);
+        if (error != null) return error;
+
+        var plan = await db.NdAnalysisActionPlans.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == planId && p.AnalysisRunId == runId, ct);
+        if (plan == null) return NotFound(new { success = false, message = "Action plan not found." });
+
+        var rows = await db.NdAnalysisActionPlanStatusHistories.AsNoTracking()
+            .Where(h => h.ActionPlanId == planId)
+            .OrderByDescending(h => h.CreatedAt)
+            .ToListAsync(ct);
+
+        var names = await LoadProfileNamesAsync(db, rows.Select(r => r.ChangedBy).Append(plan.CreatedBy), ct);
+
+        return Ok(new
+        {
+            success = true,
+            data = rows.Select(h => new
+            {
+                id = h.Id,
+                previousStatus = h.PreviousStatus,
+                newStatus = h.NewStatus,
+                changedBy = h.ChangedBy,
+                changedByName = ProfileName(names, h.ChangedBy),
+                createdAt = h.CreatedAt,
+            }),
+            createdByName = ProfileName(names, plan.CreatedBy),
+            createdAt = plan.CreatedAt,
         });
     }
 
@@ -687,7 +729,7 @@ public class ActionPlansController(
 
     private async Task<object> MapSinglePlanAsync(NdAnalysisActionPlan row, CancellationToken ct)
     {
-        var names = await LoadProfileNamesAsync(db, [row.CreatedBy, row.UpdatedBy, row.ResponsibilityUserId], ct);
+        var names = await LoadProfileNamesAsync(db, [row.CreatedBy, row.UpdatedBy, row.ResolvedBy, row.ResponsibilityUserId], ct);
         var departmentNames = await LoadDepartmentNamesAsync([row], ct);
         var reviews = await db.NdAnalysisActionPlanReviews.AsNoTracking()
             .Where(r => r.ActionPlanId == row.Id)
@@ -736,6 +778,8 @@ public class ActionPlansController(
         comment = p.Comment,
         sortOrder = p.SortOrder,
         resolvedAt = FormatDueDateResponse(p.ResolvedAt),
+        resolvedBy = p.ResolvedBy,
+        resolvedByName = ProfileName(names, p.ResolvedBy),
         createdBy = p.CreatedBy,
         createdByName = ProfileName(names, p.CreatedBy),
         updatedByName = ProfileName(names, p.UpdatedBy),

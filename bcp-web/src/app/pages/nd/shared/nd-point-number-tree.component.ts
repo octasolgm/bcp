@@ -35,6 +35,8 @@ export class NdPointNumberTreeComponent implements OnChanges {
 
   @Output() togglePoint = new EventEmitter<string>();
   @Output() toggleGroup = new EventEmitter<string[]>();
+  @Output() selectGroup = new EventEmitter<string[]>();
+  @Output() clearGroup = new EventEmitter<string[]>();
   @Output() selectDetail = new EventEmitter<string>();
 
   expandedKeys = new Set<string>();
@@ -140,9 +142,22 @@ export class NdPointNumberTreeComponent implements OnChanges {
     return ids.length > 0 && ids.every((id) => this.selected.has(id));
   }
 
-  toggleGroupSelection(node: PointDisplayTreeNode, event: Event): void {
-    event.stopPropagation();
-    this.toggleGroup.emit(this.selectableIds(node));
+  /** Some but not all children picked — drives the parent checkbox's dash state. */
+  groupPartlySelected(node: PointDisplayTreeNode): boolean {
+    const count = this.groupSelectedCount(node);
+    return count > 0 && count < this.selectableIds(node).length;
+  }
+
+  /**
+   * Select or clear every point under a section. Explicit rather than a toggle so the
+   * parent checkbox and the All/Clear buttons all land on a predictable result.
+   */
+  setGroupSelection(node: PointDisplayTreeNode, select: boolean, event?: Event): void {
+    event?.stopPropagation();
+    const ids = this.selectableIds(node);
+    if (!ids.length) return;
+    if (select) this.selectGroup.emit(ids);
+    else this.clearGroup.emit(ids);
   }
 
   onToggle(pointId: string): void {

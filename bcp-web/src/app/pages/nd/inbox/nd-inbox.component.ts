@@ -59,6 +59,17 @@ export class NdInboxComponent implements OnInit {
     return this.auth.profile()?.fullName ?? 'You';
   }
 
+  /** Who last moved this action, so a resolve on the list is attributable. */
+  statusChangeLabel(item: NdInboxItem): string {
+    const change = item.lastStatusChange;
+    if (!change) return '';
+
+    const verb = change.newStatus === 'resolved' ? 'Resolved' : 'Reopened';
+    const who = change.changedByName?.trim() || 'a colleague';
+    const when = formatActionPlanDate(change.createdAt);
+    return when ? `${verb} by ${who} on ${when}` : `${verb} by ${who}`;
+  }
+
   ngOnInit(): void {
     void this.load();
   }

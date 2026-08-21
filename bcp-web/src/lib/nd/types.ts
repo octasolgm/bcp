@@ -215,6 +215,13 @@ export type AnalysisRunSummary = {
   criticalGaps?: number;
   mediumGaps?: number;
   lowGaps?: number;
+  /** Gap and action tallies for the run, shown beside it on the analysis lists. */
+  gapCount?: number;
+  resolvedGapCount?: number;
+  pendingGapCount?: number;
+  actionPlanCount?: number;
+  resolvedActionPlanCount?: number;
+  pendingActionPlanCount?: number;
   submittedAt?: string;
   workflowHolder?: string;
   totalGaps?: number;

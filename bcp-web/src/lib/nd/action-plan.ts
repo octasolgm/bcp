@@ -56,6 +56,8 @@ export type ActionPlanEntry = {
   comment?: string | null;
   sortOrder?: number | null;
   resolvedAt?: string | null;
+  resolvedBy?: string | null;
+  resolvedByName?: string | null;
   createdBy?: string | null;
   createdByName?: string | null;
   updatedByName?: string | null;

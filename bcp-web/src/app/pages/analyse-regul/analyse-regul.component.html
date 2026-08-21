@@ -94,6 +94,21 @@
                 <p class="empty-msg">Loading regulations…</p>
               } @else {
                 <ul class="file-list">
+                  @if (regUploadProgress) {
+                    <li>
+                      <div class="file-row file-row-stack upload-row" [class.is-failed]="regUploadProgress.stage === 'failed'">
+                        <span class="upload-row-spinner" aria-hidden="true"></span>
+                        <span class="file-row-body">
+                          <span class="fname-line">
+                            <span class="fname">{{ regUploadProgress.name }}</span>
+                          </span>
+                          <span class="fsub">
+                            <span class="fmeta ready-label">{{ regUploadStageLabel() }}</span>
+                          </span>
+                        </span>
+                      </div>
+                    </li>
+                  }
                   @for (doc of filteredRegulationDocs; track doc.id) {
                     <li>
                       <button
@@ -223,7 +238,7 @@
             <div class="panel-header panel-header-v8">
               <div class="panel-header-top">
                 <h2>Reg. points</h2>
-                @if (!showNdPointSources || pointsSource === 'regulation') {
+                @if (!showNdPointSources || pointsSource === 'regulation' || govPoints.length) {
                   <div class="header-actions">
                     <label class="header-select-all" title="Select all points">
                       <input
@@ -233,17 +248,15 @@
                       />
                       <span>All</span>
                     </label>
-                  </div>
-                } @else if (govPoints.length) {
-                  <div class="header-actions">
-                    <label class="header-select-all" title="Select all points">
-                      <input
-                        type="checkbox"
-                        [checked]="allPointsSelected"
-                        (change)="toggleAllPoints($any($event.target).checked)"
-                      />
-                      <span>All</span>
-                    </label>
+                    <button
+                      type="button"
+                      class="toolbar-btn secondary"
+                      title="Clear every selected point"
+                      [disabled]="!selectedCount"
+                      (click)="clearSelection()"
+                    >
+                      Clear all
+                    </button>
                   </div>
                 }
               </div>
@@ -322,6 +335,8 @@
                                               [resolvePointId]="selectableLibraryPointId.bind(this)"
                                               (togglePoint)="toggle($event)"
                                               (toggleGroup)="togglePointIds($event)"
+                                              (selectGroup)="selectPointIds($event)"
+                                              (clearGroup)="clearPointIds($event)"
                                               (selectDetail)="selectPointForDetail($event)"
                                             />
                                           </div>
@@ -337,6 +352,8 @@
                                       [resolvePointId]="selectableLibraryPointId.bind(this)"
                                       (togglePoint)="toggle($event)"
                                       (toggleGroup)="togglePointIds($event)"
+                                      (selectGroup)="selectPointIds($event)"
+                                      (clearGroup)="clearPointIds($event)"
                                       (selectDetail)="selectPointForDetail($event)"
                                     />
                                     @if (!doc.pointTree.length) {
@@ -440,6 +457,8 @@
                                       [resolvePointId]="selectableRegPointId.bind(this)"
                                       (togglePoint)="toggle($event)"
                                       (toggleGroup)="togglePointIds($event)"
+                                      (selectGroup)="selectPointIds($event)"
+                                      (clearGroup)="clearPointIds($event)"
                                       (selectDetail)="selectPointForDetail($event)"
                                     />
                                   </div>
@@ -455,6 +474,8 @@
                               [resolvePointId]="selectableRegPointId.bind(this)"
                               (togglePoint)="toggle($event)"
                               (toggleGroup)="togglePointIds($event)"
+                              (selectGroup)="selectPointIds($event)"
+                              (clearGroup)="clearPointIds($event)"
                               (selectDetail)="selectPointForDetail($event)"
                             />
                             @if (!doc.pointTree.length) {
@@ -504,6 +525,8 @@
                                       [resolvePointId]="selectableRegPointId.bind(this)"
                                       (togglePoint)="toggle($event)"
                             (toggleGroup)="togglePointIds($event)"
+                            (selectGroup)="selectPointIds($event)"
+                            (clearGroup)="clearPointIds($event)"
                             (selectDetail)="selectPointForDetail($event)"
                           />
                         </div>
@@ -545,6 +568,9 @@
                     · {{ note }}
                   }
                 }
+                @if (regPointOverlapNote(); as overlap) {
+                  · {{ overlap }}
+                }
               </p>
             }
           </div>
@@ -566,7 +592,6 @@
             <div class="panel-header-top">
               <h2>Internal Documents</h2>
               <div class="header-actions">
-                <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredCompliance()">All</button>
                 <button type="button" class="toolbar-btn secondary" (click)="clearComplianceSelection()">Clear</button>
                 <label class="btn-upload" [class.busy]="uploadingCompliance">
                   <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" [disabled]="uploadingCompliance" />

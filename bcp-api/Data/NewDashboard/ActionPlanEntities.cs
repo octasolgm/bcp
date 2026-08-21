@@ -88,6 +88,65 @@ public class NdAnalysisActionPlan
 }
 
 /// <summary>
+/// A gap raised against a clause. The gap text itself still lives in the clause's CAP
+/// blob — this row carries the state a person can change (risk and resolve) so that
+/// resolving one gap does not disturb its siblings on the same clause.
+/// </summary>
+[Table("analysis_gaps")]
+public class NdAnalysisGap
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("analysis_run_id")]
+    public Guid AnalysisRunId { get; set; }
+
+    [Column("analysis_point_id")]
+    public Guid AnalysisPointId { get; set; }
+
+    /// <summary>1-based index of the gap within the clause's CAP text.</summary>
+    [Column("gap_index")]
+    public int GapIndex { get; set; }
+
+    /// <summary>low | medium | high. Actions on this gap inherit it.</summary>
+    [Column("risk")]
+    public string Risk { get; set; } = ActionPlanPriorities.Medium;
+
+    /// <summary>0–100 score behind <see cref="Risk"/>, written by the risk slider.</summary>
+    [Column("risk_score")]
+    public int RiskScore { get; set; } = ActionPlanPriorities.DefaultScore;
+
+    /// <summary>pending | resolved</summary>
+    [Column("status")]
+    public string Status { get; set; } = GapStatuses.Pending;
+
+    [Column("resolved_at")]
+    public DateTimeOffset? ResolvedAt { get; set; }
+
+    [Column("resolved_by")]
+    public Guid? ResolvedBy { get; set; }
+
+    [Column("updated_by")]
+    public Guid? UpdatedBy { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    [Column("updated_at")]
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public static class GapStatuses
+{
+    public const string Pending = "pending";
+    public const string Resolved = "resolved";
+
+    public static string Normalize(string? value) =>
+        string.Equals(value?.Trim(), Resolved, StringComparison.OrdinalIgnoreCase) ? Resolved : Pending;
+}
+
+/// <summary>
 /// One owner of an action plan. An action can be shared by several departments and/or
 /// people, which is what drives each user's inbox. The single
 /// <c>responsibility_*</c> columns on the plan stay in sync with the first row here so
@@ -197,6 +256,33 @@ public class NdAnalysisActionPlanDateHistory
 
     [Column("reason")]
     public string? Reason { get; set; }
+
+    [Column("changed_by")]
+    public Guid? ChangedBy { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
+/// Who moved an action between pending and resolved, and when. Surfaced on the action
+/// card and in My actions so a resolve is never anonymous.
+/// </summary>
+[Table("analysis_action_plan_status_history")]
+public class NdAnalysisActionPlanStatusHistory
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("action_plan_id")]
+    public Guid ActionPlanId { get; set; }
+
+    [Column("previous_status")]
+    public string? PreviousStatus { get; set; }
+
+    [Column("new_status")]
+    public string NewStatus { get; set; } = ActionPlanStatuses.Pending;
 
     [Column("changed_by")]
     public Guid? ChangedBy { get; set; }

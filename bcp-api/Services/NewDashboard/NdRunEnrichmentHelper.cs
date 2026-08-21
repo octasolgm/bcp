@@ -182,6 +182,10 @@ public static class NdRunEnrichmentHelper
             ? new Dictionary<Guid, RunPointStatusAggregate>()
             : await LoadPointStatusAggregatesAsync(db, runIds, ct);
 
+        var workByRun = runIds.Count == 0
+            ? []
+            : await LoadWorkCountsAsync(db, runIds, ct);
+
         var list = new List<object>(runs.Count);
         foreach (var run in runs)
         {
@@ -218,10 +222,69 @@ public static class NdRunEnrichmentHelper
                 gapRisk.Low,
                 runningPoints,
                 isActive,
-                createdByIsDemo));
+                createdByIsDemo,
+                workByRun.GetValueOrDefault(run.Id)));
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// Gap and action tallies per run for the analysis lists. Gap rows only exist once a
+    /// report has been opened, so a run nobody has looked at reports zero rather than a
+    /// guess — the report itself registers its gaps on first view.
+    /// </summary>
+    public static async Task<Dictionary<Guid, NdRunWorkCounts>> LoadWorkCountsAsync(
+        AppDbContext db,
+        IReadOnlyList<Guid> runIds,
+        CancellationToken ct)
+    {
+        var result = new Dictionary<Guid, NdRunWorkCounts>();
+
+        try
+        {
+            var gaps = await db.NdAnalysisGaps.AsNoTracking()
+                .Where(g => runIds.Contains(g.AnalysisRunId))
+                .GroupBy(g => g.AnalysisRunId)
+                .Select(g => new
+                {
+                    RunId = g.Key,
+                    Total = g.Count(),
+                    Resolved = g.Count(x => x.Status == GapStatuses.Resolved),
+                })
+                .ToListAsync(ct);
+
+            var actions = await db.NdAnalysisActionPlans.AsNoTracking()
+                .Where(p => runIds.Contains(p.AnalysisRunId))
+                .GroupBy(p => p.AnalysisRunId)
+                .Select(g => new
+                {
+                    RunId = g.Key,
+                    Total = g.Count(),
+                    Resolved = g.Count(x => x.Status == ActionPlanStatuses.Resolved),
+                })
+                .ToListAsync(ct);
+
+            var actionsByRun = actions.ToDictionary(a => a.RunId);
+            foreach (var runId in runIds)
+            {
+                var gap = gaps.FirstOrDefault(g => g.RunId == runId);
+                var action = actionsByRun.GetValueOrDefault(runId);
+                if (gap == null && action == null) continue;
+
+                result[runId] = new NdRunWorkCounts(
+                    gap?.Total ?? 0,
+                    gap?.Resolved ?? 0,
+                    action?.Total ?? 0,
+                    action?.Resolved ?? 0);
+            }
+        }
+        catch
+        {
+            /* tables may not exist yet */
+        }
+
+        return result;
     }
 
     /// <summary>One SQL scan for workspace dashboard cards (cached on WorkspaceController).</summary>

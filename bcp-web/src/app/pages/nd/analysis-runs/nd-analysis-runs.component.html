@@ -102,7 +102,7 @@
           <th class="sortable col-workflow" (click)="toggleSort('workflow')">
             Workflow <span class="sort-indicator">{{ sortIndicator('workflow') }}</span>
           </th>
-          <th class="col-gaps">Gaps</th>
+          <th class="col-gaps" title="Gaps and action plans, with how many are resolved">Gaps / actions</th>
           <th class="sortable col-status" (click)="toggleSort('status')">
             Status <span class="sort-indicator">{{ sortIndicator('status') }}</span>
           </th>
@@ -146,12 +146,21 @@
                 <span class="muted">—</span>
               }
             </td>
-            <td class="muted col-gaps" data-label="Gaps">
-              @if (run.totalGaps !== undefined && run.totalGaps > 0) {
-                {{ run.totalGaps }}
-                @if (run.totalReviews !== undefined && run.totalReviews > 0) {
-                  / {{ run.totalReviews }}
-                }
+            <td class="muted col-gaps" data-label="Gaps / actions">
+              @if (workCounts(run); as work) {
+                <span class="work-tally">
+                  <span class="work-chip" [class.is-clear]="!work.pendingGaps">
+                    {{ work.resolvedGaps }}/{{ work.gaps }} gaps
+                  </span>
+                  @if (work.actions) {
+                    <span class="work-chip" [class.is-clear]="!work.pendingActions">
+                      {{ work.resolvedActions }}/{{ work.actions }} actions
+                    </span>
+                  }
+                  @if (run.totalReviews) {
+                    <span class="work-chip neutral">{{ run.totalReviews }} reviews</span>
+                  }
+                </span>
               } @else {
                 —
               }

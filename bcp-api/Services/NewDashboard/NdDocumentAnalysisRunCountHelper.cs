@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Services.NewDashboard;
 
@@ -44,7 +45,17 @@ public static class NdDocumentAnalysisRunCountHelper
 {
     public static readonly NdDocumentAnalysisRunCounts Empty = new([], [], []);
 
-    public static async Task<NdDocumentAnalysisRunCounts> LoadAsync(AppDbContext db, CancellationToken ct)
+    /// <summary>
+    /// Builds the run-count map for the document lists.
+    ///
+    /// <paramref name="demoCtx"/> scopes the runs the same way the document lists are
+    /// scoped: a demo viewer counts only demo runs, and a real user never counts them.
+    /// Without it a demo document reads as used in every real user's analysis too.
+    /// </summary>
+    public static async Task<NdDocumentAnalysisRunCounts> LoadAsync(
+        AppDbContext db,
+        CancellationToken ct,
+        NdDemoIsolationContext? demoCtx = null)
     {
         var byDoc = new Dictionary<Guid, HashSet<Guid>>();
         var byInternalHash = new Dictionary<string, HashSet<Guid>>(StringComparer.OrdinalIgnoreCase);
@@ -52,8 +63,10 @@ public static class NdDocumentAnalysisRunCountHelper
 
         try
         {
-            var ndRuns = await db.NdAnalysisRuns.AsNoTracking()
-                .Where(r => r.Status != "deleted")
+            var query = db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != "deleted");
+            if (demoCtx != null) query = NdDemoDataFilters.ApplyToAnalysisRuns(query, demoCtx);
+
+            var ndRuns = await query
                 .Select(r => new { r.Id, r.SelectedInternalDocIds, r.SelectedRegulationDocIds })
                 .ToListAsync(ct);
 
@@ -72,6 +85,10 @@ public static class NdDocumentAnalysisRunCountHelper
 
         try
         {
+            // Legacy runs predate demo isolation, so a demo viewer never counts them.
+            if (demoCtx is { Enabled: true, ViewerIsDemo: true })
+                return new NdDocumentAnalysisRunCounts(byDoc, byInternalHash, byGovHash);
+
             var legacy = await db.DocumentAnalysisRuns.AsNoTracking()
                 .Select(r => new
                 {

@@ -1,58 +1,141 @@
 <section class="mis-card">
   <header class="mis-head">
     <div>
-      <h2>MIS — action workload</h2>
-      <p class="mis-sub">Open corrective actions by department and person.</p>
+      <h2>MIS — corrective actions</h2>
+      <p class="mis-sub">Action plans across every report, by action or by owner.</p>
     </div>
-    @if (data) {
-      <div class="mis-totals">
-        <span class="mis-total"><strong>{{ data.totals.pending }}</strong> pending</span>
-        <span class="mis-total warn"><strong>{{ data.totals.overdue }}</strong> overdue</span>
-        <span class="mis-total"><strong>{{ data.totals.resolved }}</strong> resolved</span>
-      </div>
-    }
+    <div class="mis-view-tabs" role="tablist">
+      <button
+        type="button"
+        role="tab"
+        class="mis-view-tab"
+        [class.active]="view === 'plans'"
+        [attr.aria-selected]="view === 'plans'"
+        (click)="setView('plans')"
+      >
+        By action plan
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="mis-view-tab"
+        [class.active]="view === 'owners'"
+        [attr.aria-selected]="view === 'owners'"
+        (click)="setView('owners')"
+      >
+        By user / department
+      </button>
+    </div>
   </header>
 
+  @if (data) {
+    <div class="mis-boxes">
+      <button
+        type="button"
+        class="mis-box"
+        [class.active]="statusFilter === 'all'"
+        (click)="setStatusFilter('all')"
+      >
+        <span class="mis-box-value">{{ totalCount }}</span>
+        <span class="mis-box-label">Total action plans</span>
+      </button>
+      <button
+        type="button"
+        class="mis-box is-pending"
+        [class.active]="statusFilter === 'pending'"
+        (click)="setStatusFilter('pending')"
+      >
+        <span class="mis-box-value">{{ pendingCount }}</span>
+        <span class="mis-box-label">Pending</span>
+        @if (overdueCount) {
+          <span class="mis-box-note">{{ overdueCount }} overdue</span>
+        }
+      </button>
+      <button
+        type="button"
+        class="mis-box is-resolved"
+        [class.active]="statusFilter === 'resolved'"
+        (click)="setStatusFilter('resolved')"
+      >
+        <span class="mis-box-value">{{ resolvedCount }}</span>
+        <span class="mis-box-label">Resolved</span>
+      </button>
+    </div>
+  }
+
   @if (loading) {
-    <p class="mis-empty">Loading workload…</p>
+    <p class="mis-empty">Loading actions…</p>
   } @else if (error) {
     <p class="mis-empty mis-error" role="alert">{{ error }}</p>
-  } @else if (!activeOwners.length) {
-    <p class="mis-empty">No open actions are assigned to anyone yet.</p>
+  } @else if (view === 'plans') {
+    @if (!planRows.length) {
+      <p class="mis-empty">No action plans match this filter.</p>
+    } @else {
+      <ul class="mis-plan-list">
+        @for (row of planRows; track row.id) {
+          <li class="mis-plan" [class.is-resolved]="isResolved(row.status)">
+            <span class="mis-status-dot" [class.is-resolved]="isResolved(row.status)" aria-hidden="true"></span>
+            <div class="mis-plan-body">
+              <div class="mis-plan-top">
+                <span class="mis-item-clause">{{ row.clauseNo || 'Gap' }}</span>
+                <span class="mis-plan-text">{{ shortPlan(row.actionPlan) }}</span>
+              </div>
+              <div class="mis-item-meta">
+                <span class="mis-owner-tag">{{ ownersLabel(row) }}</span>
+                <span [class.overdue]="row.overdue">{{ formatDate(row.targetDate) || 'No target date' }}</span>
+                <span class="mis-item-run">{{ row.runName }}</span>
+                <span class="mis-status-tag" [class.is-resolved]="isResolved(row.status)">
+                  {{ isResolved(row.status) ? 'Resolved' : 'Pending' }}
+                </span>
+              </div>
+            </div>
+            <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="gapLinkParams(row)">Open</a>
+          </li>
+        }
+      </ul>
+    }
   } @else {
-    <ul class="mis-list">
-      @for (owner of activeOwners; track owner.key) {
-        <li class="mis-owner" [class.is-open]="openKey === owner.key">
-          <button type="button" class="mis-owner-row" (click)="toggle(owner.key)">
-            <span class="mis-kind">{{ ownerKind(owner) }}</span>
-            <span class="mis-name">{{ ownerLabel(owner) }}</span>
-            @if (owner.overdue > 0) {
-              <span class="mis-chip overdue">{{ owner.overdue }} overdue</span>
-            }
-            <span class="mis-chip">{{ owner.resolved }} resolved</span>
-          </button>
-
-          @if (openKey === owner.key) {
-            <ul class="mis-items">
-              @for (item of pendingItems(owner); track item.id) {
-                <li class="mis-item">
-                  <div class="mis-item-main">
-                    <span class="mis-item-clause">{{ item.clauseNo || 'Gap' }}</span>
-                    <span class="mis-item-text">{{ item.actionPlan }}</span>
-                  </div>
-                  <div class="mis-item-meta">
-                    <span [class.overdue]="item.overdue">{{ formatDate(item.targetDate) || 'No target date' }}</span>
-                    <span class="mis-item-run">{{ item.runName }}</span>
-                    <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="gapLinkParams(item)">
-                      Open
-                    </a>
-                  </div>
-                </li>
+    @if (!visibleOwners.length) {
+      <p class="mis-empty">No owners match this filter.</p>
+    } @else {
+      <ul class="mis-list">
+        @for (owner of visibleOwners; track owner.key) {
+          <li class="mis-owner" [class.is-open]="openKey === owner.key">
+            <button type="button" class="mis-owner-row" (click)="toggle(owner.key)">
+              <span class="mis-kind">{{ ownerKind(owner) }}</span>
+              <span class="mis-name">{{ ownerLabel(owner) }}</span>
+              @if (owner.pending > 0) {
+                <span class="mis-chip pending">{{ owner.pending }} pending</span>
               }
-            </ul>
-          }
-        </li>
-      }
-    </ul>
+              @if (owner.overdue > 0) {
+                <span class="mis-chip overdue">{{ owner.overdue }} overdue</span>
+              }
+              <span class="mis-chip resolved">{{ owner.resolved }} resolved</span>
+            </button>
+
+            @if (openKey === owner.key) {
+              <ul class="mis-items">
+                @for (item of itemsFor(owner); track item.id) {
+                  <li class="mis-item" [class.is-resolved]="isResolved(item.status)">
+                    <span class="mis-status-dot" [class.is-resolved]="isResolved(item.status)" aria-hidden="true"></span>
+                    <div class="mis-item-main">
+                      <span class="mis-item-clause">{{ item.clauseNo || 'Gap' }}</span>
+                      <span class="mis-item-text">{{ shortPlan(item.actionPlan) }}</span>
+                    </div>
+                    <div class="mis-item-meta">
+                      <span [class.overdue]="item.overdue">{{ formatDate(item.targetDate) || 'No target date' }}</span>
+                      <span class="mis-item-run">{{ item.runName }}</span>
+                      <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="gapLinkParams(item)">
+                        Open
+                      </a>
+                    </div>
+                  </li>
+                }
+              </ul>
+            }
+          </li>
+        }
+      </ul>
+    }
   }
 </section>

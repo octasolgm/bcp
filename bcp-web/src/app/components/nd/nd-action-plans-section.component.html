@@ -180,17 +180,57 @@
                     @if (plan.updatedByName && plan.updatedAt) {
                       · last edited by {{ plan.updatedByName }} on {{ formatDate(plan.updatedAt) }}
                     }
+                    @if (resolvedByLabel(plan); as resolvedNote) {
+                      · {{ resolvedNote }}
+                    }
                   </dd>
                 </div>
               </dl>
 
+              @if (statusNoticePlanId === plan.id) {
+                <p class="ap-status-notice" role="status">{{ statusNoticeText }}</p>
+              }
+
               @if (canEdit) {
                 <div class="ap-detail-actions">
-                  <button type="button" class="btn-secondary btn-sm" [disabled]="saving" (click)="startEdit(plan)">Edit</button>
-                  <button type="button" class="btn-secondary btn-sm" [disabled]="saving" (click)="toggleStatus(plan)">
-                    {{ plan.status === 'resolved' ? 'Reopen' : 'Mark resolved' }}
+                  <button type="button" class="btn-secondary btn-sm" [disabled]="saving || isToggling(plan.id)" (click)="startEdit(plan)">Edit</button>
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [class.is-busy]="isToggling(plan.id)"
+                    [disabled]="saving || isToggling(plan.id)"
+                    (click)="toggleStatus(plan)"
+                  >
+                    @if (isToggling(plan.id)) {
+                      <span class="ap-spinner" aria-hidden="true"></span>
+                      {{ plan.status === 'resolved' ? 'Reopening…' : 'Resolving…' }}
+                    } @else {
+                      {{ plan.status === 'resolved' ? 'Reopen' : 'Mark resolved' }}
+                    }
                   </button>
-                  <button type="button" class="btn-secondary btn-sm danger" [disabled]="saving" (click)="remove(plan)">Delete</button>
+                  <button type="button" class="btn-secondary btn-sm" [disabled]="isToggling(plan.id)" (click)="toggleStatusHistory(plan)">
+                    {{ statusHistoryPlanId === plan.id ? 'Hide history' : 'Status history' }}
+                  </button>
+                  <button type="button" class="btn-secondary btn-sm danger" [disabled]="saving || isToggling(plan.id)" (click)="remove(plan)">Delete</button>
+                </div>
+              }
+
+              @if (statusHistoryPlanId === plan.id) {
+                <div class="ap-status-history">
+                  @if (statusHistoryLoading) {
+                    <p class="ap-muted">Loading history…</p>
+                  } @else if (!statusHistoryRows.length) {
+                    <p class="ap-muted">No status changes recorded yet.</p>
+                  } @else {
+                    <ul>
+                      @for (row of statusHistoryRows; track row.id) {
+                        <li>
+                          <span class="ap-history-change">{{ statusHistoryLabel(row) }}</span>
+                          <span class="ap-history-who">{{ row.changedByName ?? 'Unknown' }} · {{ formatDate(row.createdAt) }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
                 </div>
               }
             }
@@ -239,17 +279,70 @@
                     placeholder="Review comment"
                     [(ngModel)]="reviewDraftText"
                   ></textarea>
-                  <label class="ap-review-route">
-                    <span>Send to</span>
-                    <select class="ap-input" [(ngModel)]="reviewAssigneeKey">
-                      <option value="">No one — keep as a note</option>
-                      @for (choice of reviewAssigneeChoices; track choice.key) {
-                        <option [value]="choice.key">{{ choice.group }} · {{ choice.label }}</option>
+                  <div class="ap-owner-field">
+                    <span class="ap-label">Send review to</span>
+                    <div class="ap-owner-tabs" role="tablist">
+                      <button
+                        type="button"
+                        role="tab"
+                        class="ap-owner-tab"
+                        [class.active]="reviewAssigneeType === 'department'"
+                        [attr.aria-selected]="reviewAssigneeType === 'department'"
+                        (click)="setReviewAssigneeType('department')"
+                      >
+                        Departments
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        class="ap-owner-tab"
+                        [class.active]="reviewAssigneeType === 'user'"
+                        [attr.aria-selected]="reviewAssigneeType === 'user'"
+                        (click)="setReviewAssigneeType('user')"
+                      >
+                        Individuals
+                      </button>
+                    </div>
+
+                    @if (reviewAssigneeLabelSelected) {
+                      <div class="ap-owner-chips">
+                        <span [ngClass]="reviewAssigneeChipClass">
+                          {{ reviewAssigneeLabelSelected }}
+                          <button type="button" class="ap-owner-chip-x" (click)="clearReviewAssignee()" aria-label="Remove recipient">
+                            ×
+                          </button>
+                        </span>
+                      </div>
+                    }
+
+                    <div class="ap-owner-input-wrap">
+                      <input
+                        type="text"
+                        class="ap-input"
+                        autocomplete="off"
+                        [placeholder]="
+                          reviewAssigneeType === 'department'
+                            ? 'Start typing a department name…'
+                            : 'Start typing a name or email…'
+                        "
+                        [ngModel]="reviewAssigneeQuery"
+                        (ngModelChange)="onReviewAssigneeQueryChange($event)"
+                        (focus)="reviewAssigneeOpen = true"
+                      />
+                      @if (reviewAssigneeOpen && reviewAssigneeSuggestions.length) {
+                        <ul class="ap-owner-suggestions">
+                          @for (suggestion of reviewAssigneeSuggestions; track suggestion.key) {
+                            <li>
+                              <button type="button" (click)="pickReviewAssignee(suggestion)">{{ suggestion.label }}</button>
+                            </li>
+                          }
+                        </ul>
                       }
-                    </select>
-                  </label>
+                    </div>
+                  </div>
                   <p class="ap-muted ap-review-route-hint">
                     A routed review lands in the recipient's inbox, and a copy stays in yours.
+                    Leave it empty to keep the review as a note.
                   </p>
                   <div class="ap-form-actions">
                     <button type="button" class="btn-primary btn-sm" [disabled]="savingReview || !reviewDraftText.trim()" (click)="submitReview(plan)">

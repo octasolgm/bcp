@@ -248,7 +248,7 @@ public class RegulationDocumentsController(
         var cachedHashes = await NdLegacyDataQueries.GetExtractCachedHashesAsync(
             db, legacyRows.Select(d => d.FileHash), ct);
 
-        var analysisCounts = await NdDocumentAnalysisRunCountHelper.LoadAsync(db, ct);
+        var analysisCounts = await NdDocumentAnalysisRunCountHelper.LoadAsync(db, ct, demoCtx);
 
         var items = new List<object>();
 

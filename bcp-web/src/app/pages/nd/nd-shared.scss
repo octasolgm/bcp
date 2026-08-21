@@ -509,7 +509,7 @@
     .col-date { min-width: 7rem; white-space: nowrap; }
     .col-source { min-width: 4.5rem; white-space: nowrap; }
     .col-workflow { min-width: 9rem; }
-    .col-gaps { min-width: 3.5rem; white-space: nowrap; }
+    .col-gaps { min-width: 8rem; }
     .col-status { min-width: 5.5rem; white-space: nowrap; }
     .col-actions { min-width: 8rem; white-space: nowrap; }
 
@@ -519,6 +519,33 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       vertical-align: bottom;
+    }
+
+    /* Gap and action tallies: red while work is open, green once it is all closed. */
+    .work-tally {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.2rem;
+    }
+
+    .work-chip {
+      padding: 0.05rem 0.35rem;
+      border-radius: 999px;
+      background: color-mix(in srgb, #dc2626 12%, transparent);
+      color: #b91c1c;
+      font-size: 0.68rem;
+      font-weight: 700;
+      white-space: nowrap;
+
+      &.is-clear {
+        background: color-mix(in srgb, #16a34a 12%, transparent);
+        color: #15803d;
+      }
+
+      &.neutral {
+        background: var(--bg-muted);
+        color: var(--text-secondary);
+      }
     }
 
     .row-actions {

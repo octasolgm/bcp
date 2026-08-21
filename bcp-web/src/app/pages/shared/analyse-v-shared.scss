@@ -381,25 +381,99 @@
     box-shadow: inset 2px 0 0 var(--accent);
   }
 
+  /*
+   * Readiness colour standard, shared with the document libraries:
+   * red = not parsed/extracted, blue = ready to analyse, green = already analysed.
+   * The status word carries the colour so it reads without relying on the tint alone.
+   */
   &.doc-ready-red {
-    background: color-mix(in srgb, #dc2626 12%, transparent);
+    background: color-mix(in srgb, #dc2626 10%, transparent);
+    box-shadow: inset 3px 0 0 #dc2626;
     cursor: not-allowed;
 
     &:hover {
-      background: color-mix(in srgb, #dc2626 16%, transparent);
+      background: color-mix(in srgb, #dc2626 15%, transparent);
+    }
+
+    .ready-label {
+      background: #fee2e2;
+      color: #b91c1c;
     }
   }
 
   &.doc-ready-blue {
-    box-shadow: inset 2px 0 0 #2563eb;
+    box-shadow: inset 3px 0 0 #2563eb;
+
+    .ready-label {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
   }
 
   &.doc-ready-green {
-    box-shadow: inset 2px 0 0 #16a34a;
+    box-shadow: inset 3px 0 0 #16a34a;
+
+    .ready-label {
+      background: #dcfce7;
+      color: #15803d;
+    }
+  }
+
+  &.selected.doc-ready-blue,
+  &.selected.doc-ready-green {
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg-input));
+  }
+
+  .ready-label {
+    font-weight: 700;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+  }
+
+/* A document mid-upload gets a row of its own so the progress is visible in the list. */
+  &.upload-row {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    align-items: center;
+    gap: 0.5rem;
+    cursor: default;
+    box-shadow: inset 3px 0 0 #6366f1;
+    background: color-mix(in srgb, #6366f1 8%, transparent);
+
+    &.is-failed {
+      box-shadow: inset 3px 0 0 #dc2626;
+      background: color-mix(in srgb, #dc2626 10%, transparent);
+
+      .upload-row-spinner {
+        animation: none;
+        border-top-color: #dc2626;
+        border-color: #dc2626;
+      }
+    }
+
+    .ready-label {
+      background: #e0e7ff;
+      color: #4338ca;
+    }
   }
 
   &:disabled {
     opacity: 0.95;
+  }
+}
+
+.upload-row-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, #6366f1 35%, transparent);
+  border-top-color: #6366f1;
+  animation: upload-row-spin 0.7s linear infinite;
+}
+
+@keyframes upload-row-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

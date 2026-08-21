@@ -178,6 +178,13 @@ export type NdInboxItem = {
   assignedDirectly: boolean;
   assignedVia: string;
   owners: { type: string; label: string }[];
+  /** Most recent move between pending and resolved, so a change is never anonymous. */
+  lastStatusChange?: {
+    previousStatus?: string | null;
+    newStatus: string;
+    changedByName?: string | null;
+    createdAt: string;
+  } | null;
 };
 
 /** Where a review on an action is addressed. Omit to leave it as a plain note. */
@@ -1334,6 +1341,52 @@ export class NdApiService {
     return this.request<import('../../../lib/nd/action-plan').ActionPlanTargetDateChange[]>(
       'GET',
       `/nd/results/${runId}/action-plans/${planId}/date-history`,
+    );
+  }
+
+  /** Who moved this action between pending and resolved, newest first. */
+  getActionPlanStatusHistory(runId: string, planId: string) {
+    return this.request<
+      {
+        id: string;
+        previousStatus: string | null;
+        newStatus: string;
+        changedBy: string | null;
+        changedByName: string | null;
+        createdAt: string;
+      }[]
+    >('GET', `/nd/results/${runId}/action-plans/${planId}/status-history`);
+  }
+
+  // ------------------------------------------------------------------ gaps
+
+  /** Risk and resolve state for every gap in a run. */
+  getRunGaps(runId: string) {
+    return this.request<import('../../../lib/nd/gap-state').GapState[]>(
+      'GET',
+      `/nd/results/${runId}/gaps`,
+    );
+  }
+
+  /**
+   * Registers the gaps a report is showing. Gaps are parsed out of the clause CAP text,
+   * so the API only learns about them when a client reports them. Existing rows keep
+   * the risk and status they already carry.
+   */
+  syncRunGaps(runId: string, items: { analysisPointId: string; gapIndex: number; risk: string }[]) {
+    return this.request<{ added: number }>('POST', `/nd/results/${runId}/gaps/sync`, { items });
+  }
+
+  updateRunGap(
+    runId: string,
+    pointId: string,
+    gapIndex: number,
+    body: { risk?: string; riskScore?: number; status?: string },
+  ) {
+    return this.request<import('../../../lib/nd/gap-state').GapState>(
+      'PUT',
+      `/nd/results/${runId}/gaps/${pointId}/${gapIndex}`,
+      body,
     );
   }
 

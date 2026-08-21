@@ -35,7 +35,11 @@ import {
 } from '../../../../lib/nd/analysis-run-status';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
 import { isNdRunProcessing } from '../../../../lib/nd/nd-run-activity';
-import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
+import {
+  runGapStatsFromSummary,
+  runWorkCounts,
+  type RunGapStatsSummary,
+} from '../../../../lib/nd/run-gap-stats';
 
 type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'status' | 'maker';
 
@@ -305,6 +309,7 @@ export class NdAnalysisRunsComponent implements OnInit {
   submittedByLabel = analysisRunSubmittedByLabel;
   submittedByCaption = analysisRunSubmittedByCaption;
   submittedDate = analysisRunSubmittedDate;
+  workCounts = runWorkCounts;
 
   openHistory(run: AnalysisRunSummary, event?: Event): void {
     event?.stopPropagation();

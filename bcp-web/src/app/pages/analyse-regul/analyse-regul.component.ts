@@ -481,13 +481,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   override togglePointIds(ids: string[]): void {
     if (!ids.length) return;
-    const next = new Set(this.selected);
-    const all = ids.every((id) => next.has(id));
-    for (const id of ids) {
-      if (all) next.delete(id);
-      else next.add(id);
-    }
-    this.selected = next;
+    const all = ids.every((id) => this.selected.has(id));
+    if (all) this.clearPointIds(ids);
+    else this.selectPointIds(ids);
   }
 
   private resetLibraryPointMeta(): void {
@@ -691,9 +687,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override regPointsFootnote(): string {
+    // Demo runs used to advertise their clause count here; the pool count beside it
+    // already says the same thing, so the note only repeated it.
     if (!this.isDemoViewer) return super.regPointsFootnote();
-    if (!this.govPoints.length || this.useLibraryPoints) return '';
-    return `${this.regulationPointPoolCount} demo clause${this.regulationPointPoolCount === 1 ? '' : 's'} for gap analysis`;
+    return '';
   }
 
   displayDocAnalyseCount(doc: LibraryPointDisplayDoc): number {
@@ -1101,6 +1098,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     if (s === 'failed') return 'Failed';
     if (s === 'cancelled') return 'Cancelled';
     if (s === 'not-run') return 'Not run';
+    if (!s || s === 'idle' || s === 'not_started') return 'Not started';
     return this.formatCoverageStatus(status);
   }
 
@@ -1166,31 +1164,27 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return this.analysisPointForPointId(pointId) ?? undefined;
   }
 
+  /**
+   * A point's verdict is only meaningful once that point has been scored. Until then the
+   * rail shows how far the point has got — not started, queued, running — so the run reads
+   * as work in progress rather than a finished report.
+   */
+  private analysingPointIsScored(pointId: string): boolean {
+    const uiStatus = this.analysingPointCoverageStatus(pointId).toLowerCase();
+    return uiStatus === 'completed' || uiStatus === 'failed';
+  }
+
   analysingPointRailSeverity(pointId: string): GapSeverity | null {
     const ap = this.analysisPointRailSource(pointId);
     if (!ap) return null;
-    const uiStatus = this.analysingPointCoverageStatus(pointId).toLowerCase();
-    if (
-      this.isDemoRunInFlight() ||
-      uiStatus === 'completed' ||
-      uiStatus === 'failed'
-    ) {
-      return resolveAnalysisPointSeverity(ap) ?? null;
-    }
-    return null;
+    if (!this.analysingPointIsScored(pointId)) return null;
+    return resolveAnalysisPointSeverity(ap) ?? null;
   }
 
   analysingPointRailGapCount(pointId: string): number {
     const ap = this.analysisPointRailSource(pointId);
     if (!ap) return 0;
-    const uiStatus = this.analysingPointCoverageStatus(pointId).toLowerCase();
-    if (
-      !this.isDemoRunInFlight() &&
-      uiStatus !== 'completed' &&
-      uiStatus !== 'failed'
-    ) {
-      return 0;
-    }
+    if (!this.analysingPointIsScored(pointId)) return 0;
     const sev = resolveAnalysisPointSeverity(ap);
     if (!sev || sev === 'compliant') return 0;
     return countDisplayGapsForAnalysisPoint(ap, this.attachmentsForPoint(pointId).length);

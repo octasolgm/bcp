@@ -945,25 +945,205 @@
   min-width: 0;
 }
 
-.gap-risk-picker {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.7rem;
-  font-weight: 650;
-  color: var(--text-muted);
+/* Risk on a gap card is a read-only chip; the Edit panel is what changes it. */
+.gap-risk-chip {
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
   text-transform: none;
   letter-spacing: 0;
 
-  select {
-    font: inherit;
-    font-weight: 650;
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg-input);
-    padding: 0.1rem 0.35rem;
+  &.gap-risk-high {
+    background: #fee2e2;
+    color: #b91c1c;
   }
+
+  &.gap-risk-medium {
+    background: #fef3c7;
+    color: #b45309;
+  }
+
+  &.gap-risk-low {
+    background: #dcfce7;
+    color: #15803d;
+  }
+}
+
+.gap-status-chip {
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  text-transform: none;
+  letter-spacing: 0;
+
+  &.is-resolved {
+    background: #dcfce7;
+    color: #15803d;
+  }
+}
+
+/* Slider read-out under the gap text, mirroring the action plan priority bar. */
+.gap-risk-meter {
+  margin: 0.55rem 0 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle, #f8fafc);
+
+  --gap-risk-accent: #f59e0b;
+
+  &.gap-risk-high {
+    --gap-risk-accent: #dc2626;
+  }
+
+  &.gap-risk-low {
+    --gap-risk-accent: #16a34a;
+  }
+}
+
+.gap-risk-meter-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.gap-risk-meter-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.gap-risk-meter-score {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--gap-risk-accent);
+}
+
+.gap-risk-meter-tier {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.gap-risk-meter-track {
+  position: relative;
+  height: 6px;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.gap-risk-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--gap-risk-accent);
+  transition: width 0.2s ease;
+}
+
+.gap-risk-meter-hint {
+  margin: 0.3rem 0 0;
+  font-size: 0.625rem;
+  color: var(--text-muted);
+}
+
+.gap-edit-panel {
+  margin: 0.5rem 0;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle, #f8fafc);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.gap-edit-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(200px, 2fr);
+  gap: 0.75rem;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gap-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.gap-edit-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+
+  strong {
+    color: var(--text-primary);
+  }
+}
+
+.gap-edit-slider input[type='range'] {
+  width: 100%;
+  accent-color: #4338ca;
+}
+
+.gap-edit-hint {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+}
+
+.gap-resolve-blocked {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0.5rem 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+}
+
+.gap-resolve-blocked-icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+.gap-resolve-blocked-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.gap-resolve-blocked-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #b91c1c;
+}
+
+.gap-resolve-blocked-text {
+  margin: 0.15rem 0 0;
+  font-size: 0.6875rem;
+  color: #7f1d1d;
 }
 
 .clause-status-picker {

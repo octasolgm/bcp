@@ -69,14 +69,36 @@
   flex-shrink: 0;
 }
 
+/* The section row carries its own checkbox plus explicit All/Clear, so a half-picked
+   section reads as half-picked instead of hiding behind a single toggle. */
+.tree-group-head-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+}
+
+.tree-group-check {
+  flex-shrink: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.tree-group-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+
 .acc-action {
   background: color-mix(in srgb, var(--low, #10b981) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--low, #10b981) 35%, var(--border, #e2e8f0));
   color: var(--low, #10b981);
-  width: 18px;
   height: 18px;
+  padding: 0 0.35rem;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
@@ -84,6 +106,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
 }
 
 .point-line input[type='checkbox'] {

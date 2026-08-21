@@ -56,7 +56,7 @@ public class InternalDocumentsController(
             docs.SelectMany(d => new Guid?[] { d.UploadedBy, d.ParsedBy, d.HiddenBy, d.SectionExtractedBy }),
             ct);
 
-        var analysisCounts = await NdDocumentAnalysisRunCountHelper.LoadAsync(appDb, ct);
+        var analysisCounts = await NdDocumentAnalysisRunCountHelper.LoadAsync(appDb, ct, demoCtx);
 
         var items = new List<object>();
         foreach (var d in docs)

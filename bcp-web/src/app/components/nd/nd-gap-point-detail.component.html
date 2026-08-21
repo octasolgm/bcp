@@ -148,7 +148,8 @@
     </dl>
   </div>
 
-  @if (runId && showTempReviewComments) {
+  <!-- When the review area is docked it renders its own copy, so skip this one. -->
+  @if (runId && showTempReviewComments && !(showReviewPanel && dockPointReview)) {
     <app-nd-temp-point-review-comments
       [runId]="runId"
       [analysisPointId]="point.id"
@@ -255,18 +256,10 @@
                   <button type="button" class="cap-gap-toggle" (click)="toggleActionCollapsed(gap.index)">
                     <span class="cap-gap-toggle-main">
                       <span class="gap-label">Gap {{ gap.index }}</span>
-                      <label class="gap-risk-picker" (click)="$event.stopPropagation()">
-                        <span>Risk</span>
-                        <select
-                          [ngModel]="gapRisk(gap)"
-                          (ngModelChange)="setGapRisk(gap, $event)"
-                          [disabled]="!canEdit"
-                        >
-                          @for (opt of gapRiskOptions; track opt.value) {
-                            <option [value]="opt.value">{{ opt.label }}</option>
-                          }
-                        </select>
-                      </label>
+                      <span class="gap-risk-chip" [class]="gapRiskClass(gap)">Risk {{ gapRiskLabel(gap) }}</span>
+                      <span class="gap-status-chip" [class.is-resolved]="gapStatus(gap) === 'resolved'">
+                        {{ gapStatusLabel(gapStatus(gap)) }}
+                      </span>
                       @if (actionCountForGap(gap.index); as actionCount) {
                         <span class="gap-action-count-pill">{{ actionCount }} action{{ actionCount === 1 ? '' : 's' }}</span>
                       }
@@ -279,7 +272,7 @@
                   </button>
                   <div class="cap-gap-header-end">
                     @if (canEdit && !editing) {
-                      <button type="button" class="cap-gap-edit-link" (click)="startEditSingleGap(gap.index)">Edit</button>
+                      <button type="button" class="cap-gap-edit-link" (click)="startEditGapState(gap)">Edit</button>
                     }
                     @if (history.length) {
                       <button type="button" class="cap-gap-edit-link" (click)="onOpenHistory(gap.index)">History</button>
@@ -298,10 +291,70 @@
                   </div>
                 </div>
 
+                @if (gapResolveBlockedIndex === gap.index) {
+                  <div class="gap-resolve-blocked" role="alert">
+                    <span class="gap-resolve-blocked-icon" aria-hidden="true">!</span>
+                    <div class="gap-resolve-blocked-body">
+                      <p class="gap-resolve-blocked-title">Resolve the actions first</p>
+                      <p class="gap-resolve-blocked-text">{{ gapResolveBlockedMessage(gap.index) }}</p>
+                    </div>
+                    <button type="button" class="toolbar-btn" (click)="dismissGapResolveBlocked()">Got it</button>
+                  </div>
+                }
+
+                @if (isEditingGapState(gap.index)) {
+                  <div class="gap-edit-panel">
+                    <label class="gap-edit-field">
+                      <span class="gap-edit-label">Gap (what&rsquo;s missing)</span>
+                      <textarea class="nd-input" rows="3" [(ngModel)]="gapEditDraft.missing"></textarea>
+                    </label>
+                    <div class="gap-edit-row">
+                      <label class="gap-edit-field">
+                        <span class="gap-edit-label">Status</span>
+                        <select class="nd-input" [(ngModel)]="gapEditDraft.status">
+                          @for (opt of gapStatusOptions; track opt.value) {
+                            <option [value]="opt.value">{{ opt.label }}</option>
+                          }
+                        </select>
+                      </label>
+                      <div class="gap-edit-field gap-edit-slider">
+                        <span class="gap-edit-label">Priority <strong>{{ gapEditRiskLabel() }}</strong></span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          [ngModel]="gapEditDraft.riskScore"
+                          (ngModelChange)="onGapEditScore($event)"
+                        />
+                        <span class="gap-edit-hint">{{ gapPriorityScale }}</span>
+                        <span class="gap-edit-hint">{{ gapEditTargetHint() }}</span>
+                      </div>
+                    </div>
+                    <div class="cap-edit-actions">
+                      <button type="button" class="nd-btn-primary nd-btn-sm" [disabled]="savingGapState" (click)="saveGapState(gap)">
+                        {{ savingGapState ? 'Saving…' : 'Save gap' }}
+                      </button>
+                      <button type="button" class="toolbar-btn" [disabled]="savingGapState" (click)="cancelEditGapState()">Cancel</button>
+                    </div>
+                  </div>
+                }
+
                 @if (!isActionCollapsed(gap.index)) {
                 <div class="cap-gap-body">
                   <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
                   <p>{{ gap.missing }}</p>
+
+                  <div class="gap-risk-meter" [class]="gapRiskClass(gap)">
+                    <div class="gap-risk-meter-head">
+                      <span class="gap-risk-meter-label">Priority</span>
+                      <span class="gap-risk-meter-score">{{ gapRiskScore(gap) }}</span>
+                      <span class="gap-risk-meter-tier">{{ gapRiskLabel(gap) }}</span>
+                    </div>
+                    <div class="gap-risk-meter-track">
+                      <span class="gap-risk-meter-fill" [style.width.%]="gapRiskScore(gap)"></span>
+                    </div>
+                    <p class="gap-risk-meter-hint">{{ gapTargetHint(gap) }}</p>
+                  </div>
 
                   @if (runId) {
                     <app-nd-action-plans-section

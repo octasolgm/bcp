@@ -229,6 +229,14 @@
   opacity: 0.5;
 }
 
+/* Attribution for the last status move on this action. */
+.inbox-change {
+  margin: 0 0 0.2rem;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  color: var(--text-secondary);
+}
+
 .inbox-owners {
   margin: 0;
   font-size: 0.6875rem;

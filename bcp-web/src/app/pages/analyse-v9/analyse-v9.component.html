@@ -305,6 +305,8 @@
                                               [resolvePointId]="selectableLibraryPointId.bind(this)"
                                               (togglePoint)="toggle($event)"
                                               (toggleGroup)="togglePointIds($event)"
+                                              (selectGroup)="selectPointIds($event)"
+                                              (clearGroup)="clearPointIds($event)"
                                               (selectDetail)="selectPointForDetail($event)"
                                             />
                                           </div>
@@ -319,6 +321,8 @@
                                       [resolvePointId]="selectableLibraryPointId.bind(this)"
                                       (togglePoint)="toggle($event)"
                                       (toggleGroup)="togglePointIds($event)"
+                                      (selectGroup)="selectPointIds($event)"
+                                      (clearGroup)="clearPointIds($event)"
                                       (selectDetail)="selectPointForDetail($event)"
                                     />
                                     @if (!doc.pointTree.length) {
@@ -420,6 +424,8 @@
                                       [selectedDetailPointId]="selectedDetailPointId"
                                       (togglePoint)="toggle($event)"
                                       (toggleGroup)="togglePointIds($event)"
+                                      (selectGroup)="selectPointIds($event)"
+                                      (clearGroup)="clearPointIds($event)"
                                       (selectDetail)="selectPointForDetail($event)"
                                     />
                                   </div>
@@ -433,6 +439,8 @@
                               [selectedDetailPointId]="selectedDetailPointId"
                               (togglePoint)="toggle($event)"
                               (toggleGroup)="togglePointIds($event)"
+                              (selectGroup)="selectPointIds($event)"
+                              (clearGroup)="clearPointIds($event)"
                               (selectDetail)="selectPointForDetail($event)"
                             />
                             @if (!doc.pointTree.length) {
@@ -477,6 +485,8 @@
                             [selectedDetailPointId]="selectedDetailPointId"
                             (togglePoint)="toggle($event)"
                             (toggleGroup)="togglePointIds($event)"
+                            (selectGroup)="selectPointIds($event)"
+                            (clearGroup)="clearPointIds($event)"
                             (selectDetail)="selectPointForDetail($event)"
                           />
                         </div>

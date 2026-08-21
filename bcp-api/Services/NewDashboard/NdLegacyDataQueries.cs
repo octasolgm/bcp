@@ -128,7 +128,8 @@ public static class NdLegacyDataQueries
         int? lowGaps = null,
         int runningPoints = 0,
         bool? isActive = null,
-        bool createdByIsDemo = false) => new
+        bool createdByIsDemo = false,
+        NdRunWorkCounts? work = null) => new
     {
         id = r.Id,
         source = "nd_analysis",
@@ -161,5 +162,22 @@ public static class NdLegacyDataQueries
         lowGaps = lowGaps ?? 0,
         runningPoints,
         isActive,
+        gapCount = work?.Gaps ?? 0,
+        resolvedGapCount = work?.ResolvedGaps ?? 0,
+        pendingGapCount = work?.PendingGaps ?? 0,
+        actionPlanCount = work?.Actions ?? 0,
+        resolvedActionPlanCount = work?.ResolvedActions ?? 0,
+        pendingActionPlanCount = work?.PendingActions ?? 0,
     };
+}
+
+/// <summary>Gap and action tallies for one run, shown on the analysis lists.</summary>
+public sealed record NdRunWorkCounts(
+    int Gaps,
+    int ResolvedGaps,
+    int Actions,
+    int ResolvedActions)
+{
+    public int PendingGaps => Math.Max(0, Gaps - ResolvedGaps);
+    public int PendingActions => Math.Max(0, Actions - ResolvedActions);
 }
