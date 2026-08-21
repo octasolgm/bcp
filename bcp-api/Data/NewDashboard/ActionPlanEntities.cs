@@ -156,6 +156,19 @@ public class NdAnalysisActionPlanReview
     [Column("reviewer_role")]
     public string? ReviewerRole { get; set; }
 
+    /// <summary>department | user — who the review is addressed to. Null is a plain note.</summary>
+    [Column("assignee_type")]
+    public string? AssigneeType { get; set; }
+
+    [Column("assignee_department_id")]
+    public Guid? AssigneeDepartmentId { get; set; }
+
+    [Column("assignee_user_id")]
+    public Guid? AssigneeUserId { get; set; }
+
+    [Column("assignee_label")]
+    public string? AssigneeLabel { get; set; }
+
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 

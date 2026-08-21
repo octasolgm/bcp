@@ -146,6 +146,7 @@
   color: inherit;
   text-align: left;
   min-width: 0;
+  flex-shrink: 0;
 
   &:hover .section-ref {
     text-decoration: underline;
@@ -165,9 +166,12 @@
 }
 
 .section-ref {
+  flex-shrink: 0;
   font-weight: 700;
   font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
   color: var(--accent);
+  min-width: 2.25rem;
   overflow-wrap: anywhere;
   word-break: break-word;
 }

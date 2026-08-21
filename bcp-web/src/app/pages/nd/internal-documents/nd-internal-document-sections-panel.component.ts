@@ -1,8 +1,9 @@
-import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { InternalDocumentSection } from '../../../../lib/nd/types';
 import { sortInternalSectionsByPointRef, normalizeInternalSectionRef } from '../../../../lib/nd/internal-section-group';
+import { sanitizePolicySectionText } from '../../../../lib/nd/policy-section-text';
 
 @Component({
   selector: 'app-nd-internal-document-sections-panel',
@@ -31,12 +32,11 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
 
   readonly formatSectionRef = normalizeInternalSectionRef;
 
-  ngOnChanges(): void {
-    this.sortedSections = sortInternalSectionsByPointRef(this.sections);
+  ngOnChanges(changes: SimpleChanges): void {
+    if (!changes['sections']) return;
+    this.sortedSections = sortInternalSectionsByPointRef(this.sections ?? []);
     this.expandedRows.clear();
-    if (this.sortedSections.length > 0) {
-      this.expandAll();
-    }
+    this.expandAll();
   }
 
   get isBusy(): boolean {
@@ -89,10 +89,14 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
     else this.expandedRows.add(id);
   }
 
+  rowKey(section: InternalDocumentSection, index: number): string {
+    return section.id || `${section.sectionRef}-${index}`;
+  }
+
   expandAll(): void {
-    for (const section of this.sortedSections) {
-      this.expandedRows.add(section.id);
-    }
+    this.sortedSections.forEach((section, index) => {
+      this.expandedRows.add(this.rowKey(section, index));
+    });
   }
 
   collapseAll(): void {
@@ -113,12 +117,13 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
   }
 
   preview(text: string): string {
-    if (text.length <= this.previewLen) return text;
-    return text.slice(0, this.previewLen).trimEnd() + '…';
+    const clean = sanitizePolicySectionText(text);
+    if (clean.length <= this.previewLen) return clean;
+    return clean.slice(0, this.previewLen).trimEnd() + '…';
   }
 
   sectionParagraphs(text: string): string[] {
-    const t = text.trim();
+    const t = sanitizePolicySectionText(text);
     if (!t) return [];
     const byBlank = t.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean);
     if (byBlank.length > 1) return byBlank;
@@ -127,9 +132,14 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
     return [t];
   }
 
+  sectionPage(section: InternalDocumentSection): number | null {
+    const page = section.sourcePage;
+    return page != null && page > 0 ? page : null;
+  }
+
   openPage(page: number | null | undefined, event: Event): void {
     event.stopPropagation();
-    if (!this.canOpenSource || !page || page < 1) return;
+    if (!this.canOpenSource || page == null || page < 1) return;
     this.openSourcePage.emit(page);
   }
 

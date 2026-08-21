@@ -391,6 +391,11 @@ export interface StoredDocumentDto {
   isNdManual?: boolean;
   /** Legacy stored document id when this row comes from the ND catalog. */
   ndStoredDocumentId?: string | null;
+  extractionStatus?: string | null;
+  parseStatus?: string | null;
+  sectionExtractStatus?: string | null;
+  sectionCount?: number | null;
+  analysisRunCount?: number | null;
 }
 
 export interface DocumentAnalysisRunDto {

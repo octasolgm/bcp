@@ -168,6 +168,54 @@ public static class NdIncrementalSchemaBootstrap
           ON analysis_action_plan_date_history (action_plan_id, created_at DESC);
         """,
         """
+        ALTER TABLE analysis_action_plan_reviews
+          ADD COLUMN IF NOT EXISTS assignee_type TEXT NULL,
+          ADD COLUMN IF NOT EXISTS assignee_department_id UUID NULL,
+          ADD COLUMN IF NOT EXISTS assignee_user_id UUID NULL,
+          ADD COLUMN IF NOT EXISTS assignee_label TEXT NULL;
+        """,
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'analysis_action_plan_reviews_assignee_type_check'
+          ) THEN
+            ALTER TABLE analysis_action_plan_reviews
+              ADD CONSTRAINT analysis_action_plan_reviews_assignee_type_check
+              CHECK (assignee_type IS NULL OR assignee_type IN ('department', 'user'));
+          END IF;
+        END $$;
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_action_plan_reviews_assignee_user
+          ON analysis_action_plan_reviews (assignee_user_id)
+          WHERE assignee_user_id IS NOT NULL;
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_action_plan_reviews_assignee_department
+          ON analysis_action_plan_reviews (assignee_department_id)
+          WHERE assignee_department_id IS NOT NULL;
+        """,
+        """
+        ALTER TABLE analysis_points
+          ADD COLUMN IF NOT EXISTS final_status_source TEXT NULL,
+          ADD COLUMN IF NOT EXISTS ai_final_status TEXT NULL;
+        """,
+        """
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'analysis_points_final_status_source_check'
+          ) THEN
+            ALTER TABLE analysis_points
+              ADD CONSTRAINT analysis_points_final_status_source_check
+              CHECK (final_status_source IS NULL OR final_status_source IN ('manual', 'auto'));
+          END IF;
+        END $$;
+        """,
+        """
         DO $$
         DECLARE r record;
         BEGIN

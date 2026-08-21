@@ -59,7 +59,8 @@ import {
 } from '../../../lib/nd/policy-doc-resolve';
 import { NdItemReviewSectionComponent, type ItemReviewSaveEvent } from './nd-item-review-section.component';
 import { NdActionPlansSectionComponent } from './nd-action-plans-section.component';
-import { actionPlansForGap, actionPlansForPoint, type ActionPlanEntry } from '../../../lib/nd/action-plan';
+import { actionPlansForGap, actionPlansForPoint, ACTION_PLAN_PRIORITY_OPTIONS, type ActionPlanEntry, type ActionPlanPriority } from '../../../lib/nd/action-plan';
+import { normalizeGapRisk } from '../../../lib/nd/doc-analysis-ready';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import {
   NdTempPointReviewCommentsComponent,
@@ -137,6 +138,9 @@ export class NdGapPointDetailComponent implements OnChanges {
   @Input() tempReviewComments: TempPointReviewComment[] = [];
   @Input() canEditTempReviewComments = true;
   /** Corrective action plans for this gap (loaded with the run results). */
+  /** Deep link from My actions: CAP gap index to keep open, and the action to reveal. */
+  @Input() focusGapIndex: number | null = null;
+  @Input() focusPlanId: string | null = null;
   @Input() actionPlans: ActionPlanEntry[] = [];
   @Input() canEditActionPlans = false;
   @Input() canReviewActionPlans = false;
@@ -544,6 +548,15 @@ export class NdGapPointDetailComponent implements OnChanges {
     this.collapsedActionIndexes = next;
   }
 
+  /** Only hand the deep-link action id to the gap that actually owns it. */
+  focusPlanIdForGap(index: number): string | null {
+    if (!this.focusPlanId) return null;
+    if (this.focusGapIndex != null && this.focusGapIndex !== index) return null;
+    return this.actionPlansForGapIndex(index).some((p) => p.id === this.focusPlanId)
+      ? this.focusPlanId
+      : null;
+  }
+
   reviewCountForGap(index: number): number {
     return this.actionReviewsForGap(index).length;
   }
@@ -555,6 +568,64 @@ export class NdGapPointDetailComponent implements OnChanges {
 
   actionCountForGap(index: number): number {
     return this.actionPlansForGapIndex(index).length;
+  }
+
+  readonly gapRiskOptions = ACTION_PLAN_PRIORITY_OPTIONS;
+
+  gapRisk(gap: CapGap): ActionPlanPriority {
+    return normalizeGapRisk(gap.priority);
+  }
+
+  setGapRisk(gap: CapGap, value: string): void {
+    gap.priority = normalizeGapRisk(value);
+  }
+
+  // --------------------------------------------------- clause status override
+
+  readonly clauseStatusOptions = [
+    { value: 'compliant', label: 'Compliant' },
+    { value: 'partial_compliant', label: 'Partial' },
+    { value: 'non_compliant', label: 'Non-compliant' },
+  ];
+
+  savingClauseStatus = false;
+
+  get canOverrideClauseStatus(): boolean {
+    return !!this.runId && !!this.point?.id;
+  }
+
+  /** Blank means the clause is still following the analysis and the auto rule. */
+  get clauseStatusValue(): string {
+    return this.point?.finalStatusSource === 'manual' ? (this.point.finalStatus ?? '') : '';
+  }
+
+  get clauseStatusSourceNote(): string {
+    if (this.point?.finalStatusSource === 'manual') return 'Set manually';
+    if (this.point?.finalStatusSource === 'auto') return 'Auto — all actions resolved';
+    return '';
+  }
+
+  get clauseStatusHint(): string {
+    return 'Compliance verdict for this clause. Leave on Auto to follow the analysis and flip to compliant once every action is resolved.';
+  }
+
+  async setClauseStatus(value: string): Promise<void> {
+    if (!this.runId || !this.point?.id || this.savingClauseStatus) return;
+
+    this.savingClauseStatus = true;
+    this.cdr.markForCheck();
+
+    const res = await this.ndApi.updateClauseStatus(this.runId, this.point.id, value || null);
+    this.savingClauseStatus = false;
+
+    if (res.success && res.data) {
+      this.point.finalStatus = res.data.finalStatus;
+      this.point.finalStatusSource = res.data.finalStatusSource;
+      this.point.aiFinalStatus = res.data.aiFinalStatus;
+      this.rebuildContent();
+      this.actionPlansChanged.emit();
+    }
+    this.cdr.markForCheck();
   }
 
   onItemReviewSave(event: ItemReviewSaveEvent): void {
@@ -620,7 +691,7 @@ export class NdGapPointDetailComponent implements OnChanges {
     this.addingNewAction = true;
     this.editingGapIndex = null;
     const next = this.capGaps.length ? Math.max(...this.capGaps.map((g) => g.index)) + 1 : 1;
-    this.draftGap = { index: next, missing: '', fix: '', priority: '' };
+    this.draftGap = { index: next, missing: '', fix: '', priority: 'medium' };
     this.startEdit.emit();
   }
 

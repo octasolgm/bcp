@@ -285,7 +285,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     const qual = this.enableQualitativeAssessment
       ? 'Forward + reverse + qualitative assessment.'
       : 'Forward + reverse coverage (qualitative skipped).';
-    return `Regul workflow using ${model}. ${qual} Type start to confirm.`;
+    return `Regul workflow using ${model}. ${qual}`;
   }
 
   get needsComplianceDocumentSelection(): boolean {
@@ -1813,7 +1813,6 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.regulClausesConfirmed = false;
     if (this.ndAuth.isDemoViewer() && this.pendingNdRunForwardOnly) {
       await this.loadNdRunLight(this.ndRunId);
-      this.revealRegulClauseReview(false);
     } else {
       this.showRegulClauseReview = false;
       await this.loadNdRunPoints(this.ndRunId);
@@ -2407,9 +2406,12 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.exportingGapReport = true;
     this.cdr.markForCheck();
     try {
-      await exportRegulGapAnalysisExcelFromPoints(points, undefined, undefined, {
-        regulationDocumentName: this.regulationDocumentExportName,
-      });
+      await exportRegulGapAnalysisExcelFromPoints(
+        points,
+        undefined,
+        undefined,
+        await this.gapAnalysisExportOptions(),
+      );
       const label = scope === 'all' ? 'regulatory + INT clauses' : 'regulatory clauses';
       this.toast.show(`Exported ${rows.length} ${label} to Excel`, 'success');
     } catch {
@@ -2750,7 +2752,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       this.ndRunPointsList.length > 0 &&
       !this.ndAuth.isDemoViewer()
     ) {
-      this.revealRegulClauseReview();
+      this.regulClausesConfirmed = true;
     }
     this.cdr.markForCheck();
   }
@@ -2944,11 +2946,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     );
   }
 
-  private revealRegulClauseReview(scroll = true): void {
-    this.showRegulClauseReview = true;
-    this.buildRegulClauseRows();
-    if (scroll) this.scrollToRegulClauseReview();
-    this.cdr.markForCheck();
+  private revealRegulClauseReview(_scroll = true): void {
+    this.showRegulClauseReview = false;
+    this.regulClausesConfirmed = true;
+    void this.confirmRegulClauses();
   }
 
   closeRegulClauseReview(): void {
@@ -3055,7 +3056,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return combined;
   }
 
-  override exportDoneGapAnalysisPdf(): void {
+  override async exportDoneGapAnalysisPdf(): Promise<void> {
     if (this.exportingGapReport || !this.ndRunId) return;
     const points = this.collectDoneAnalysisPointsForExport();
     const rows = buildGapAnalysisExportRows(points);
@@ -3066,10 +3067,11 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.exportingGapReport = true;
     this.cdr.markForCheck();
     try {
+      const options = await this.gapAnalysisExportOptions();
       exportGapAnalysisPdfFromPoints(points, {
         runName: 'Gap Analysis Report',
-        subtitle: `Regul workflow V3 · ${rows.length} point(s)`,
-        regulationDocumentName: this.regulationDocumentExportName,
+        subtitle: `Regul workflow · ${rows.length} point(s)`,
+        ...options,
       });
     } finally {
       this.exportingGapReport = false;
@@ -3875,19 +3877,14 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   requestNdRunConfirm(
-    title: string,
-    hint: string,
+    _title: string,
+    _hint: string,
     action: () => void | Promise<void>,
   ): void {
-    if (!this.isNdShell) {
-      void action();
-      return;
-    }
-    this.ndRunConfirmTitle = title;
-    this.ndRunConfirmHint = hint;
+    this.showNdRunConfirm = false;
+    this.pendingNdRunAction = null;
     this.ndRunConfirmInput = '';
-    this.pendingNdRunAction = action;
-    this.showNdRunConfirm = true;
+    void action();
   }
 
   confirmNdRun(): void {
@@ -3938,14 +3935,12 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     if (this.ndAuth.isDemoViewer()) {
       this.pendingNdRunForwardOnly = true;
       this.buildRegulClauseRows();
-      this.revealRegulClauseReview();
       void this.ensureDemoRunPreparedForClauseReview().then((ok) => {
         if (!ok) {
           this.pendingNdRunForwardOnly = false;
           return;
         }
-        this.buildRegulClauseRows();
-        this.cdr.markForCheck();
+        void this.confirmRegulClauses();
       });
       return;
     }
@@ -4074,16 +4069,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         const incomplete =
           data.totalPointsCount > 0 && data.processedPointsCount < data.totalPointsCount;
         if (st === 'draft' || incomplete || st === 'failed') {
-          this.buildRegulClauseRows();
-          if (!this.regulClausesConfirmed) {
-            this.revealRegulClauseReview();
-            this.toast.show('Review and confirm clauses, then Run again', 'info', 5000);
-            void this.loadNdRunPoints(this.ndRunId).then(() => {
-              this.buildRegulClauseRows();
-              this.cdr.markForCheck();
-            });
-            return;
-          }
+          this.regulClausesConfirmed = true;
           await this.loadNdRunPoints(this.ndRunId);
           await this.launchNdAnalysisRun(this.ndRunId, selectedIds);
           return;
@@ -4105,13 +4091,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       queryParams: { run: runId },
       replaceUrl: true,
     });
-    this.buildRegulClauseRows();
-    this.revealRegulClauseReview();
-    this.toast.show('Review clauses and confirm before running analysis', 'info', 5000);
-    void this.loadNdRunPoints(runId).then(() => {
-      this.buildRegulClauseRows();
-      this.cdr.markForCheck();
-    });
+    this.regulClausesConfirmed = true;
+    await this.loadNdRunPoints(runId);
+    await this.launchNdAnalysisRun(runId, selectedIds);
+    this.scrollToWorkspace();
   }
 
   /** ND shell: forward judgment only — no reverse or qualitative phases. */
@@ -4147,17 +4130,8 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         const incomplete =
           data.totalPointsCount > 0 && data.processedPointsCount < data.totalPointsCount;
         if (st === 'draft' || incomplete || st === 'failed') {
-          this.buildRegulClauseRows();
-          if (!this.regulClausesConfirmed) {
-            this.pendingNdRunForwardOnly = true;
-            this.revealRegulClauseReview();
-            this.toast.show('Review and confirm clauses, then Run forward only again', 'info', 5000);
-            void this.loadNdRunPoints(this.ndRunId).then(() => {
-              this.buildRegulClauseRows();
-              this.cdr.markForCheck();
-            });
-            return;
-          }
+          this.pendingNdRunForwardOnly = true;
+          this.regulClausesConfirmed = true;
           await this.loadNdRunPoints(this.ndRunId);
           await this.launchNdAnalysisRunForwardOnly(this.ndRunId, selectedIds);
           return;
@@ -4181,13 +4155,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       queryParams: { run: runId },
       replaceUrl: true,
     });
-    this.buildRegulClauseRows();
-    this.revealRegulClauseReview();
-    this.toast.show('Review clauses and confirm before running forward-only analysis', 'info', 5000);
-    void this.loadNdRunPoints(runId).then(() => {
-      this.buildRegulClauseRows();
-      this.cdr.markForCheck();
-    });
+    this.regulClausesConfirmed = true;
+    await this.loadNdRunPoints(runId);
+    await this.launchNdAnalysisRunForwardOnly(runId, selectedIds);
+    this.scrollToWorkspace();
   }
 
   /** Demo: attach to seeded CBUAE run (fast), then show clause overview (confirm starts simulation). */
@@ -4450,9 +4421,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         id: d.id,
         title: d.title,
         originalFileName: d.originalFileName,
-        category: d.department ?? 'Compliance',
+        category: d.department ?? 'Internal',
         version: d.version != null ? String(d.version) : '',
-        pages: 0,
+        pages: d.pageCount ?? 0,
         uploaded: d.uploadedAt ?? d.uploaded,
         status: 'active',
         filter: 'document',
@@ -4462,6 +4433,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         history: [],
         sizeBytes: d.sizeBytes ?? 0,
         fileHash: null,
+        parseStatus: d.parseStatus ?? 'pending',
+        sectionExtractStatus: d.sectionExtractStatus ?? 'pending',
+        sectionCount: d.sectionCount ?? 0,
+        analysisRunCount: d.analysisRunCount ?? 0,
       }));
       for (const id of [...this.selectedComplianceIds]) {
         if (!this.complianceDocs.some((doc) => doc.id === id)) {

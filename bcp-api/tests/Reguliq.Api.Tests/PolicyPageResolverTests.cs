@@ -131,6 +131,55 @@ public class PolicyPageResolverTests
     }
 
     [Fact]
+    public void ResolveGovPointPage_IgnoresRunningHeaderOnNextPage()
+    {
+        var body =
+            "The department has complete independence in relation to the investigation of Anti-Money Laundering and Terrorist Financing cases";
+        var md = $"""
+            {PolicyPageResolver.PageMarkerPrefix}12 -->
+            Table of contents 6.2 Independence of the Compliance / AML Department .... 14
+            {PolicyPageResolver.PageMarkerPrefix}14 -->
+            6.2 Independence of the Compliance / AML Department:
+            {body}
+            {PolicyPageResolver.PageMarkerPrefix}15 -->
+            6.2 Independence of the Compliance / AML Department
+            Continuation of the same section on the following viewer page.
+            """;
+
+        var page = PolicyPageResolver.ResolveGovPointPage(
+            md,
+            "6.2",
+            section: "6.2",
+            title: "Independence of the Compliance / AML Department",
+            text: body,
+            aiPageHint: 15,
+            maxPageOverride: 63);
+
+        Assert.Equal(14, page);
+    }
+
+    [Fact]
+    public void InjectPageMarkersFromParseJson_ConvertsZeroBasedPageArrays()
+    {
+        var json = """
+            {
+              "splits": [
+                {
+                  "pages": [0, 1, 2],
+                  "markdown": "AAAAABBBBBCCCCC"
+                }
+              ]
+            }
+            """;
+
+        var md = PolicyPageResolver.InjectPageMarkersFromParseJson(json, "fallback");
+        Assert.Contains("<!-- BCP_PDF_PAGE:1 -->", md);
+        Assert.Contains("<!-- BCP_PDF_PAGE:2 -->", md);
+        Assert.Contains("<!-- BCP_PDF_PAGE:3 -->", md);
+        Assert.DoesNotContain("<!-- BCP_PDF_PAGE:0 -->", md);
+    }
+
+    [Fact]
     public void InjectPageMarkersFromParseJson_SplitsMultiPageArraysProportionally()
     {
         var json = """

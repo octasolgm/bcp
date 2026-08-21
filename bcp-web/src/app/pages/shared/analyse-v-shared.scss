@@ -354,7 +354,7 @@
 
 .file-row {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto auto auto;
   gap: 0.45rem;
   align-items: center;
   width: 100%;
@@ -380,6 +380,27 @@
     background: color-mix(in srgb, var(--accent) 10%, var(--bg-input));
     box-shadow: inset 2px 0 0 var(--accent);
   }
+
+  &.doc-ready-red {
+    background: color-mix(in srgb, #dc2626 12%, transparent);
+    cursor: not-allowed;
+
+    &:hover {
+      background: color-mix(in srgb, #dc2626 16%, transparent);
+    }
+  }
+
+  &.doc-ready-blue {
+    box-shadow: inset 2px 0 0 #2563eb;
+  }
+
+  &.doc-ready-green {
+    box-shadow: inset 2px 0 0 #16a34a;
+  }
+
+  &:disabled {
+    opacity: 0.95;
+  }
 }
 
 .fname {
@@ -391,12 +412,65 @@
   white-space: nowrap;
 }
 
+.file-row.file-row-stack {
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: start;
+  padding: 0.42rem 0.5rem;
+  min-height: 0;
+  gap: 0.5rem;
+
+  .file-row-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.14rem;
+    min-width: 0;
+  }
+
+  .fname-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  .fname {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .fpts {
+    flex-shrink: 0;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .fsub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.15rem 0.55rem;
+  }
+
+  .fmeta.muted,
+  .fmeta.ready-label {
+    max-width: none;
+    overflow: visible;
+    text-overflow: unset;
+  }
+}
+
 .file-row.manual-reg-row .fname {
   white-space: normal;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
   overflow: visible;
+}
+
+.file-row.file-row-stack.manual-reg-row .fname-line {
+  align-items: flex-start;
 }
 
 .manual-reg-hint {
@@ -414,6 +488,16 @@
   &.muted {
     color: var(--text-muted);
     max-width: 5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &.ready-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    max-width: 9rem;
     overflow: hidden;
     text-overflow: ellipsis;
   }

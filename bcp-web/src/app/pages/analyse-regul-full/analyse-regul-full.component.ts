@@ -58,7 +58,7 @@ export class AnalyseRegulFullComponent extends AnalyseRegulComponent {
     return (
       `Regul full-markdown analysis using ${model}. ` +
       'Sends complete parsed markdown for every attached internal file (any page count, multiple files supported; no section ranking). ' +
-      'Forward judgment only — reverse coverage is skipped. Type start to confirm.'
+      'Forward judgment only — reverse coverage is skipped.'
     );
   }
 

@@ -163,6 +163,14 @@
   <p>Data was extracted from source documents using AI. All findings require human review before sign-off. Edit gaps, management responses, and effectiveness ratings below — changes are saved automatically.</p>
 </div>
 
+@if (finalizeProgressMessage) {
+  <p class="finalize-progress card-surface">{{ finalizeProgressMessage }}</p>
+}
+
+@if (showReviewSummary) {
+  <app-nd-review-summary-panel [plans]="allActionPlans" [clauseByPointId]="clauseByPointId" />
+}
+
 @if (showRunReviewPanel) {
   <app-nd-run-review-panel
     [mode]="effectiveReviewMode"
@@ -281,6 +289,8 @@
       [tempReviewComments]="savedTempCommentsForPoint(ndPoint.id)"
       [canEditTempReviewComments]="canEditTempReviewComments"
       [actionPlans]="actionPlansFor(ndPoint.id)"
+      [focusGapIndex]="focusGapIndexFor(ndPoint.id)"
+      [focusPlanId]="focusPlanIdFor(ndPoint.id)"
       [canEditActionPlans]="canEditActionPlans"
       [canReviewActionPlans]="canReviewActionPlans"
       (actionPlansChanged)="reloadActionPlans()"
@@ -350,7 +360,9 @@
           @let gapCount = gapCountForItem(item);
           <div
             class="rail-point"
+            [attr.data-gap-item-id]="item.id"
             [class.active]="selectedItemId === item.id"
+            [class.action-plan-focus]="itemHasFocusedActionPlan(item)"
             role="button"
             tabindex="0"
             (click)="selectGapItem(item)"
@@ -502,10 +514,52 @@
                 }
                 · {{ formatDate(review.createdAt) }}
               </p>
+              @if (canMutateActionPlanReview(review)) {
+                <div class="apr-actions">
+                  <button type="button" class="link-btn" (click)="startPanelReviewEdit(review.id, review.comment)">Edit</button>
+                  <button type="button" class="link-btn danger" [disabled]="savingPanelReview" (click)="removePanelReview(plan, review.id)">Delete</button>
+                </div>
+              }
             </li>
           }
         </ul>
       }
+
+      @if (canReviewActionPlans) {
+        @if (panelReviewDraftOpen) {
+          <div class="apr-form">
+            <textarea
+              class="apr-textarea"
+              rows="4"
+              placeholder="Review comment"
+              [(ngModel)]="panelReviewDraftText"
+            ></textarea>
+            <div class="apr-form-actions">
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                [disabled]="savingPanelReview || !panelReviewDraftText.trim()"
+                (click)="submitPanelReview(plan)"
+              >
+                {{ savingPanelReview ? 'Saving…' : panelEditingReviewId ? 'Update review' : 'Save review' }}
+              </button>
+              <button type="button" class="btn-secondary btn-sm" [disabled]="savingPanelReview" (click)="cancelPanelReview()">Cancel</button>
+            </div>
+          </div>
+        } @else {
+          <button type="button" class="btn-secondary btn-sm apr-add" (click)="startPanelReview()">+ Add review</button>
+        }
+      }
     </div>
   </aside>
+}
+
+@if (showExportDialog) {
+  <app-nd-export-options-dialog
+    [gapColumns]="exportDialogColumns"
+    [hasActionPlans]="exportDialogHasActionPlans"
+    [hasReviews]="exportDialogHasReviews"
+    (cancelled)="closeExportDialog()"
+    (confirmed)="runXlsxExport($event)"
+  />
 }

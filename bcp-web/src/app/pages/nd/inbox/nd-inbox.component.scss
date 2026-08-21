@@ -275,3 +275,14 @@
     color: #dc2626;
   }
 }
+
+.inbox-reviews {
+  margin-top: 1.5rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border);
+
+  h2 {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+}

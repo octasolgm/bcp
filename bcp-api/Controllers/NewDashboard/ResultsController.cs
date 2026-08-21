@@ -129,6 +129,8 @@ public class ResultsController(
             googleAiError = p.GoogleAiError,
             dualVerifyStatus = p.DualVerifyStatus,
             finalStatus = p.FinalStatus,
+            finalStatusSource = p.FinalStatusSource,
+            aiFinalStatus = p.AiFinalStatus,
             finalActionPlan = p.FinalActionPlan,
             originalAiActionPlan = p.OriginalAiActionPlan,
         }).ToList();
@@ -300,6 +302,54 @@ public class ResultsController(
             {
                 logger.LogWarning(ex, "Background demo template sync failed for run {RunId}", runId);
             }
+        });
+    }
+
+    public record UpdateClauseStatusRequest(string? FinalStatus);
+
+    /// <summary>
+    /// Sets a clause's compliance verdict by hand. Passing null hands the clause back to
+    /// the AI verdict and to the rule that flips it once every action is resolved.
+    /// </summary>
+    [HttpPut("{runId:guid}/points/{pointId:guid}/status")]
+    public async Task<IActionResult> UpdateClauseStatus(
+        Guid runId,
+        Guid pointId,
+        [FromBody] UpdateClauseStatusRequest body,
+        CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var point = await db.NdAnalysisPoints
+            .FirstOrDefaultAsync(p => p.Id == pointId && p.AnalysisRunId == runId, ct);
+        if (point == null) return NotFound(new { success = false, message = "Clause not found for this run." });
+
+        if (string.IsNullOrWhiteSpace(body.FinalStatus))
+        {
+            NdClauseStatusResolver.ClearManual(point);
+            await db.SaveChangesAsync(ct);
+            await NdClauseStatusResolver.RecomputeAsync(db, [pointId], ct);
+        }
+        else
+        {
+            var status = ClauseStatuses.Normalize(body.FinalStatus);
+            if (status == null)
+                return BadRequest(new { success = false, message = "Unknown compliance status." });
+
+            NdClauseStatusResolver.ApplyManual(point, status);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                finalStatus = point.FinalStatus,
+                finalStatusSource = point.FinalStatusSource,
+                aiFinalStatus = point.AiFinalStatus,
+            },
         });
     }
 

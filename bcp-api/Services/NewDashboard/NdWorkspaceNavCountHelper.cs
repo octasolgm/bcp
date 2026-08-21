@@ -82,6 +82,11 @@ public static class NdWorkspaceNavCountHelper
             .Select(d => d.StoredDocumentId!.Value)
             .ToHashSet();
 
+        var manualsWithPoints = await ManualIdsWithActivePointsAsync(
+            db,
+            ndDocs.Where(d => d.IsManual).Select(d => d.Id),
+            ct);
+
         var count = 0;
 
         foreach (var storedId in legacyStoredIds)
@@ -97,7 +102,7 @@ public static class NdWorkspaceNavCountHelper
             if (NdDemoDataFilters.IsRegulationDepartmentOverlay(d)) continue;
             if (d.IsManual)
             {
-                count++;
+                if (manualsWithPoints.Contains(d.Id)) count++;
                 continue;
             }
 
@@ -114,9 +119,31 @@ public static class NdWorkspaceNavCountHelper
             var manualDoc = await db.NdRegulationDocuments.AsNoTracking()
                 .FirstOrDefaultAsync(d => d.IsManual && d.Status != StatusHidden, ct);
             if (manualDoc != null)
-                count++;
+            {
+                var hasPoints = await db.NdRegulationPoints.AsNoTracking()
+                    .AnyAsync(p => p.RegulationDocumentId == manualDoc.Id, ct);
+                if (hasPoints)
+                    count++;
+            }
         }
 
         return count;
+    }
+
+    /// <summary>A manual regulation counts as a library document only after it has at least one active point.</summary>
+    public static async Task<HashSet<Guid>> ManualIdsWithActivePointsAsync(
+        AppDbContext db,
+        IEnumerable<Guid> manualDocumentIds,
+        CancellationToken ct)
+    {
+        var ids = manualDocumentIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+
+        var withPoints = await db.NdRegulationPoints.AsNoTracking()
+            .Where(p => ids.Contains(p.RegulationDocumentId))
+            .Select(p => p.RegulationDocumentId)
+            .Distinct()
+            .ToListAsync(ct);
+        return withPoints.ToHashSet();
     }
 }

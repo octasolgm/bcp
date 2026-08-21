@@ -1319,3 +1319,48 @@
 @keyframes nd-panel-spin {
   to { transform: rotate(360deg); }
 }
+
+.hist-loading,
+.hist-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.25rem 1.25rem;
+  text-align: center;
+}
+
+.hist-loading p,
+.hist-empty p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.hist-empty strong {
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.severity-badge.doc-ready-red,
+.file-row.doc-ready-red {
+  background: color-mix(in srgb, #dc2626 14%, transparent);
+  color: #b91c1c;
+}
+
+.severity-badge.doc-ready-blue {
+  background: color-mix(in srgb, #2563eb 16%, transparent);
+  color: #1d4ed8;
+}
+
+.severity-badge.doc-ready-green {
+  background: color-mix(in srgb, #16a34a 16%, transparent);
+  color: #15803d;
+}
+
+tr.doc-ready-red td {
+  background: color-mix(in srgb, #dc2626 8%, transparent);
+}

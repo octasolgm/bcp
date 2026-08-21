@@ -15,6 +15,11 @@ export type ActionPlanReviewEntry = {
   reviewerId?: string | null;
   reviewerName?: string | null;
   reviewerRole?: string | null;
+  /** Department or person the review was addressed to; absent for a plain note. */
+  assigneeType?: ActionPlanResponsibilityType | null;
+  assigneeDepartmentId?: string | null;
+  assigneeUserId?: string | null;
+  assigneeLabel?: string | null;
   createdAt: string;
   updatedAt?: string | null;
 };

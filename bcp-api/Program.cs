@@ -192,6 +192,7 @@ builder.Services.AddScoped<Reguliq.Api.Services.Pdf.PdfNativePageDocumentLoader>
 builder.Services.AddScoped<Reguliq.Api.Services.Pdf.NdDocumentPageReferenceResolver>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulationPointPageService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdInternalParseService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdCorrectedDocumentService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdInternalDocumentSectionService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdInternalDocumentSectionPageService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisProcessor>();

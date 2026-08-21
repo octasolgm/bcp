@@ -1,7 +1,14 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { NdApiService, type NdActionPlanInbox, type NdInboxFilter, type NdInboxItem } from '../../../services/nd/nd-api.service';
+import {
+  NdApiService,
+  type NdActionPlanInbox,
+  type NdInboxFilter,
+  type NdInboxItem,
+  type NdReviewInbox,
+  type NdReviewInboxItem,
+} from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import {
@@ -46,6 +53,7 @@ export class NdInboxComponent implements OnInit {
   loading = true;
   error = '';
   data: NdActionPlanInbox | null = null;
+  reviews: NdReviewInbox | null = null;
 
   get profileName(): string {
     return this.auth.profile()?.fullName ?? 'You';
@@ -66,8 +74,14 @@ export class NdInboxComponent implements OnInit {
     this.error = '';
     this.cdr.markForCheck();
 
-    const res = await this.api.getActionPlanInbox(this.activeTab);
+    const [res, reviewRes] = await Promise.all([
+      this.api.getActionPlanInbox(this.activeTab),
+      this.api.getActionPlanReviewInbox(),
+    ]);
     this.loading = false;
+
+    if (reviewRes.success && reviewRes.data) this.reviews = reviewRes.data;
+
     if (!res.success || !res.data) {
       this.error = res.message ?? 'Could not load your actions.';
       this.cdr.markForCheck();
@@ -75,6 +89,26 @@ export class NdInboxComponent implements OnInit {
     }
     this.data = res.data;
     this.cdr.markForCheck();
+  }
+
+  get reviewItems(): NdReviewInboxItem[] {
+    return this.reviews?.items ?? [];
+  }
+
+  reviewDirectionLabel(review: NdReviewInboxItem): string {
+    if (review.direction === 'sent') return 'You sent this';
+    if (review.direction === 'self') return 'Sent to you by you';
+    return 'For you to review';
+  }
+
+  reviewLinkParams(review: NdReviewInboxItem): Record<string, string> {
+    const params: Record<string, string> = {
+      run: review.analysisRunId,
+      point: review.analysisPointId,
+      plan: review.actionPlanId,
+    };
+    if (review.gapIndex > 0) params['gap'] = String(review.gapIndex);
+    return params;
   }
 
   get items(): NdInboxItem[] {
@@ -87,9 +121,15 @@ export class NdInboxComponent implements OnInit {
     return tab === 'all' ? c.total : tab === 'pending' ? c.pending : tab === 'resolved' ? c.resolved : c.overdue;
   }
 
-  /** Deep link that opens the report and expands the gap this action belongs to. */
+  /** Deep link that opens the report and expands the gap and action card this row is for. */
   gapLinkParams(item: NdInboxItem): Record<string, string> {
-    return { run: item.analysisRunId, point: item.analysisPointId };
+    const params: Record<string, string> = {
+      run: item.analysisRunId,
+      point: item.analysisPointId,
+      plan: item.id,
+    };
+    if (item.gapIndex > 0) params['gap'] = String(item.gapIndex);
+    return params;
   }
 
   clauseLabel(item: NdInboxItem): string {

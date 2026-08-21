@@ -11,9 +11,18 @@ import {
   isRegulationExtractTerminal,
   prepareRegulationPointsResponse,
   regulationDocLookupIds,
+  regulationDocumentCountsTowardTotal,
   sortRegulationDocuments,
 } from '../../../../lib/regulation-catalog-utils';
 import { formatDate, formatTableDate } from '../../../../lib/nd/utils';
+import { catalogPdfPageLabel } from '../../../../lib/nd/doc-page-count';
+import {
+  docAnalysisReadyClass,
+  docAnalysisReadyLabel,
+  regulationAnalysisReadyState,
+  usedInAnalysesLabel,
+  type DocAnalysisReadyState,
+} from '../../../../lib/nd/doc-analysis-ready';
 import {
   compareDateIso,
   compareNumber,
@@ -24,15 +33,17 @@ import {
   sortIndicator,
   type SortDir,
 } from '../../../../lib/nd/list-utils';
-import type { Department, RegulationDocument, RegulationPoint } from '../../../../lib/nd/types';
+import type { AnalysisRunSummary, Department, RegulationDocument, RegulationPoint } from '../../../../lib/nd/types';
 import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.component';
 import { NdManualRegulationPointsPanelComponent } from './nd-manual-regulation-points-panel.component';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
 import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { ToastService } from '../../../services/toast.service';
+import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.service';
 import { startPanelResize } from '../../shared/panel-resize';
 import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd/regulation-pdf-page';
+import { ndAnalysisRunTarget } from '../../../../lib/nd/run-links';
 
 export type RegulationPointSearchHit = {
   id: string;
@@ -56,6 +67,25 @@ export type RegulationPointSearchGroup = {
 /** How long a just-uploaded row survives list refreshes that don't return it yet. */
 const RecentUploadKeepMs = 90_000;
 
+type RegulationDocAnalysisRun = {
+  id: string;
+  source: 'nd_analysis' | 'legacy_analysis' | string;
+  name: string;
+  regulationFileName?: string | null;
+  internalFileName?: string | null;
+  status: string;
+  pointCount: number;
+  completedPoints?: number;
+  failedPoints?: number;
+  runningPoints?: number;
+  isActive?: boolean;
+  sessionAvailable?: boolean;
+  dualVerifySessionId?: string | null;
+  complianceSessionId?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+};
+
 @Component({
   selector: 'app-nd-regulation-documents',
   standalone: true,
@@ -73,14 +103,20 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly workspaceNav = inject(NdWorkspaceNavService);
   readonly auth = inject(NdAuthService);
-  readonly formatPointPageRef = formatPointPageRef;
+
+  searchHitPageLabel(group: RegulationPointSearchGroup, hit: RegulationPointSearchHit): string | null {
+    return formatPointPageRef(hit.pageReference, null, {
+      docName: group.documentName,
+      pointNumber: hit.pointNumber,
+    });
+  }
 
   docs: RegulationDocument[] = [];
   departments: Department[] = [];
   deptFilter = '';
   statusFilter = '';
   searchQuery = '';
-  sortColumn: 'name' | 'department' | 'points' | 'created' | 'status' = 'created';
+  sortColumn: 'name' | 'department' | 'points' | 'pages' | 'analyses' | 'created' | 'status' = 'created';
   sortDir: SortDir = 'desc';
   uploadDept = '';
   file: File | null = null;
@@ -91,6 +127,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   refreshingPagesId: string | null = null;
   repairingPointsId: string | null = null;
   exportingPointsId: string | null = null;
+  exportingFileId: string | null = null;
   hidingId: string | null = null;
   showDeleted = false;
   savingDeptId: string | null = null;
@@ -106,6 +143,10 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   showPointsPanel = false;
   /** Left (table) share when points panel is open — kept small by default. */
   leftPanelPct = 20;
+  analysisFor: RegulationDocument | null = null;
+  analysisRuns: RegulationDocAnalysisRun[] = [];
+  loadingAnalysisRuns = false;
+  analysisLoadError: string | null = null;
   highlightPointNumber = '';
   globalPointSearch = '';
   pointSearchLoading = false;
@@ -558,6 +599,14 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     void this.loadDocs();
   }
 
+  get countableDocs(): RegulationDocument[] {
+    return this.docs.filter((d) => regulationDocumentCountsTowardTotal(d));
+  }
+
+  get countableVisibleDocs(): RegulationDocument[] {
+    return this.visibleDocs.filter((d) => regulationDocumentCountsTowardTotal(d));
+  }
+
   get visibleDocs(): RegulationDocument[] {
     let list = this.docs.filter((doc) => {
       if (!matchesSearch(this.searchQuery, [doc.name, doc.departmentName])) return false;
@@ -572,6 +621,10 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
           return compareText(a.departmentName ?? '', b.departmentName ?? '', this.sortDir);
         case 'points':
           return compareNumber(a.pointCount ?? 0, b.pointCount ?? 0, this.sortDir);
+        case 'pages':
+          return compareNumber(a.pageCount ?? 0, b.pageCount ?? 0, this.sortDir);
+        case 'analyses':
+          return compareNumber(a.analysisRunCount ?? 0, b.analysisRunCount ?? 0, this.sortDir);
         case 'status':
           return compareText(a.extractionStatus, b.extractionStatus, this.sortDir);
         case 'created':
@@ -944,9 +997,22 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
 
   async onManualPointsChanged(): Promise<void> {
     if (!this.selectedDoc) return;
+    const countedBefore = regulationDocumentCountsTowardTotal(this.selectedDoc);
     await this.loadPointsForDoc(this.selectedDoc.id);
+    this.syncManualPointCountFromPanel(this.selectedDoc.id);
+    const countedAfter = regulationDocumentCountsTowardTotal(
+      this.docs.find((d) => d.id === this.selectedDoc?.id) ?? this.selectedDoc,
+    );
+    // Bump immediately so the sidebar does not wait on list reload / cached nav-counts.
+    if (countedAfter !== countedBefore) {
+      this.workspaceNav.bumpNavBadges({ regulationDocuments: countedAfter ? 1 : -1 });
+    } else {
+      this.workspaceNav.requestNavBadgeRefresh();
+    }
     await this.loadDocs(true);
+    this.syncManualPointCountFromPanel(this.selectedDoc.id);
     this.selectedDoc = this.docs.find((d) => d.id === this.selectedDoc?.id) ?? this.selectedDoc;
+    void this.loadDepartments();
   }
 
   closePointsPanel(): void {
@@ -957,7 +1023,8 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
-    if (this.showPointsPanel) this.closePointsPanel();
+    if (this.analysisFor) this.closeAnalysisPicker();
+    else if (this.showPointsPanel) this.closePointsPanel();
   }
 
   onGlobalPointSearch(value: string): void {
@@ -1008,7 +1075,10 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     event?.stopPropagation();
     const doc = this.docFromSearchGroup(group);
     if (this.isManualDoc(doc)) return;
-    const page = resolveRegulationPdfPage(hit.pageReference, hit.pdfPage);
+    const page = resolveRegulationPdfPage(hit.pageReference, null, {
+      docName: group.documentName,
+      pointNumber: hit.pointNumber,
+    });
     const fileDocId = hit.storedDocumentId ?? group.storedDocumentId ?? doc.id;
     await this.openDocumentById(fileDocId, event, page);
   }
@@ -1035,7 +1105,10 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   }
 
   openSourceTooltip(group: RegulationPointSearchGroup, hit: RegulationPointSearchHit): string {
-    const page = formatPointPageRef(hit.pageReference, hit.pdfPage);
+    const page = formatPointPageRef(hit.pageReference, null, {
+      docName: group.documentName,
+      pointNumber: hit.pointNumber,
+    });
     return [
       group.documentName,
       hit.pointNumber,
@@ -1070,26 +1143,37 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       });
       this.selectedPoints = prepared.points;
       this.pointsSource = res.source ?? '';
-      // Always use API canonical pointCount so list header matches the points endpoint.
-      const stored = res.pointCount != null && res.pointCount > 0
-        ? res.pointCount
-        : prepared.storedCount;
-      if (stored > 0) {
-        this.patchRegulationDoc(
-          this.selectedDoc ?? ({ id: docId } as RegulationDocument),
-          {
-            pointCount: stored,
-            extractionStatus: 'extracted',
-            extractionProgressLabel: null,
-            extractionProgressPct: null,
-          },
-        );
+      const row = this.selectedDoc ?? this.docs.find((d) => d.id === docId);
+      const isManual = !!row && this.isManualDoc(row);
+      // Prefer the points just loaded so a newly added manual point counts immediately.
+      const stored = Math.max(
+        res.pointCount ?? 0,
+        prepared.storedCount,
+        prepared.points.length,
+      );
+      if (isManual || stored > 0) {
+        this.patchRegulationDoc(row ?? ({ id: docId } as RegulationDocument), {
+          pointCount: stored,
+          extractionStatus: isManual ? 'manual' : 'extracted',
+          extractionProgressLabel: null,
+          extractionProgressPct: null,
+        });
       }
     } else {
       this.selectedPoints = [];
       this.pointsSource = '';
     }
     this.pointsLoading = false;
+  }
+
+  /** After add/delete, keep the list row's pointCount in lockstep with the panel. */
+  private syncManualPointCountFromPanel(docId: string): void {
+    const row = this.docs.find((d) => d.id === docId) ?? this.selectedDoc;
+    if (!row || !this.isManualDoc(row)) return;
+    this.patchRegulationDoc(row, {
+      pointCount: this.selectedPoints.length,
+      extractionStatus: 'manual',
+    });
   }
 
   /** List-row canonical count — never inflated by viewing points in the side panel. */
@@ -1190,26 +1274,100 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.exportingPointsId = null;
   }
 
-  docPageMeta(doc: RegulationDocument): string {
-    if (!this.shouldShowDocPages(doc)) return '—';
-    const pages = doc.pageCount ?? 0;
-    return pages > 0 ? `${pages}` : '—';
+  async downloadRegulationFile(doc: RegulationDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (this.isManualDoc(doc) || this.exportingFileId) return;
+    this.exportingFileId = doc.id;
+    this.error = '';
+    this.toast.show('Preparing PDF download…', 'info', 4000);
+    const res = await this.api.downloadRegulationFileExport(doc.id);
+    if (!res.success) {
+      this.error = res.message ?? 'Failed to download file';
+      this.toast.show(res.message ?? 'Download failed', 'error', 5000);
+    }
+    this.exportingFileId = null;
   }
 
-  /** PDF page total — only after parse completes (not during upload/parsing). */
-  private shouldShowDocPages(doc: RegulationDocument): boolean {
-    if (this.isManualDoc(doc)) return true;
-    if (this.isParsingDoc(doc)) return false;
-    const st = (doc.extractionStatus ?? '').toLowerCase();
-    if (st === 'pending' || st === 'processing') return false;
-    return (
-      st === 'parsed' ||
-      st === 'extracted' ||
-      st === 'paused' ||
-      st === 'completed' ||
-      this.isParsedDoc(doc) ||
-      this.hasExtractedPoints(doc)
-    );
+  async viewAnalysis(doc: RegulationDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    this.loadingAnalysisRuns = true;
+    this.analysisLoadError = null;
+    this.analysisFor = doc;
+    this.analysisRuns = [];
+
+    const res = await this.api.getRegulationDocumentAnalysisRuns(doc.id);
+    this.loadingAnalysisRuns = false;
+
+    if (!res.success || !res.data) {
+      this.analysisLoadError = res.message ?? 'Could not load analysis history.';
+      return;
+    }
+
+    const runs = (res.data as RegulationDocAnalysisRun[]).slice().sort((a, b) => {
+      const aActive = isActiveDocumentRun(a);
+      const bActive = isActiveDocumentRun(b);
+      if (aActive !== bActive) return aActive ? -1 : 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    this.analysisRuns = runs;
+  }
+
+  closeAnalysisPicker(): void {
+    this.analysisFor = null;
+    this.analysisRuns = [];
+    this.analysisLoadError = null;
+    this.loadingAnalysisRuns = false;
+  }
+
+  isRunInProgress(run: RegulationDocAnalysisRun): boolean {
+    return isActiveDocumentRun(run);
+  }
+
+  openAnalysisRun(run: RegulationDocAnalysisRun): void {
+    this.closeAnalysisPicker();
+
+    if (run.sessionAvailable === false && run.source !== 'nd_analysis') {
+      this.toast.show('This analysis session is no longer available', 'warning', 5000);
+      return;
+    }
+
+    const summary: AnalysisRunSummary = {
+      id: run.id,
+      source:
+        run.source === 'nd_analysis'
+          ? 'nd_analysis'
+          : run.dualVerifySessionId
+            ? 'legacy_dual_verify'
+            : 'legacy_analysis',
+      name: run.name,
+      status: run.status,
+      totalPointsCount: run.pointCount,
+      processedPointsCount: run.completedPoints ?? 0,
+      createdAt: run.createdAt,
+      legacySessionId: run.dualVerifySessionId ?? undefined,
+      legacyHref: run.complianceSessionId
+        ? `/nd/gap-analysis?saved=compliance:${run.complianceSessionId}`
+        : undefined,
+    };
+
+    const target = ndAnalysisRunTarget(summary, this.auth.getRole());
+    void this.router.navigate(target.routerLink, { queryParams: target.queryParams });
+  }
+
+  runStatusLabel(run: RegulationDocAnalysisRun): string {
+    if (this.isRunInProgress(run)) return 'In progress';
+    if (run.status === 'completed') return 'Completed';
+    if (run.status === 'failed') return 'Failed';
+    return run.status;
+  }
+
+  formatRunWhen(iso: string): string {
+    return formatDate(iso);
+  }
+
+  docPageMeta(doc: RegulationDocument): string {
+    return catalogPdfPageLabel(doc.pageCount, this.isParsingDoc(doc) && !this.isManualDoc(doc));
   }
 
   docPointMeta(doc: RegulationDocument): string {
@@ -1271,14 +1429,27 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   }
 
   extractionClassForDoc(doc: RegulationDocument): string {
-    if (this.isManualDoc(doc)) return 'completed';
-    if (this.hasExtractedPoints(doc)) return 'completed';
-    if (this.isParsingDoc(doc) || this.isExtractingDoc(doc)) return 'running';
-    if (this.isPausedDoc(doc)) return 'pending';
-    const st = (doc.extractionStatus ?? '').toLowerCase();
-    if (st === 'failed') return 'failed';
-    return 'pending';
+    return this.analysisReadyClass(doc);
   }
+
+  analysisReadyState(doc: RegulationDocument): DocAnalysisReadyState {
+    return regulationAnalysisReadyState({
+      isManual: this.isManualDoc(doc),
+      extractionStatus: doc.extractionStatus,
+      pointCount: doc.pointCount,
+      analysisRunCount: doc.analysisRunCount,
+    });
+  }
+
+  analysisReadyLabel(doc: RegulationDocument): string {
+    return docAnalysisReadyLabel(this.analysisReadyState(doc));
+  }
+
+  analysisReadyClass(doc: RegulationDocument): string {
+    return docAnalysisReadyClass(this.analysisReadyState(doc));
+  }
+
+  usedInAnalysesLabel = usedInAnalysesLabel;
 
   extractionLabel(status: string): string {
     if (status === 'manual') return 'Manual';
@@ -1683,7 +1854,10 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   }
 
   isSelected(doc: RegulationDocument): boolean {
-    return this.showPointsPanel && this.selectedDoc?.id === doc.id;
+    return (
+      (this.showPointsPanel && this.selectedDoc?.id === doc.id) ||
+      this.analysisFor?.id === doc.id
+    );
   }
 
   isManualDoc(doc: RegulationDocument): boolean {

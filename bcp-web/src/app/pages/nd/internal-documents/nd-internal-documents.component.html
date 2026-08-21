@@ -79,6 +79,8 @@
       <option value="uploaded">Sort: Uploaded</option>
       <option value="title">Sort: Title</option>
       <option value="size">Sort: Size</option>
+      <option value="pages">Sort: Pages</option>
+      <option value="analyses">Sort: Analyses</option>
       <option value="source">Sort: Source</option>
     </select>
     <select class="filter-select" [(ngModel)]="sortDir" aria-label="Sort direction">
@@ -114,6 +116,8 @@
         <col class="col-actor" />
         <col class="col-actor" />
         <col class="col-size" />
+        <col class="col-pts" />
+        <col class="col-pts" />
         <col class="col-status" />
         <col class="col-status" />
         <col class="col-actions" />
@@ -128,7 +132,9 @@
           <th class="col-actor">Uploaded by</th>
           <th class="col-actor">Parsed by</th>
           <th class="col-size">Size</th>
-          <th class="col-status">Parse status</th>
+          <th class="sortable col-pts" (click)="toggleSort('pages')" title="Total PDF pages in the uploaded document">Pages <span class="sort-indicator">{{ sortMark('pages') }}</span></th>
+          <th class="sortable col-pts" (click)="toggleSort('analyses')" title="Analysis runs that use this document">Used in analyses <span class="sort-indicator">{{ sortMark('analyses') }}</span></th>
+          <th class="col-status">Status</th>
           <th class="col-status">Sections status</th>
           <th class="col-actions internal-doc-actions-cell">Actions</th>
         </tr>
@@ -138,6 +144,7 @@
           <tr
             class="clickable-row"
             [class.selected-row]="isSelected(d)"
+            [class.doc-ready-red]="analysisReadyState(d) === 'not_ready'"
             (click)="openSections(d)"
           >
             <td class="doc-cell col-doc">
@@ -158,14 +165,10 @@
             <td class="muted col-actor" [title]="actorLabel(d.uploadedByName)">{{ actorLabel(d.uploadedByName) }}</td>
             <td class="muted col-actor" [title]="actorLabel(d.parsedByName)">{{ actorLabel(d.parsedByName) }}</td>
             <td class="muted col-size">{{ formatBytes(d.sizeBytes) }}</td>
+            <td class="col-pts muted">{{ docPageMeta(d) }}</td>
+            <td class="col-pts muted" [title]="usedInAnalysesLabel(d.analysisRunCount)">{{ d.analysisRunCount ?? 0 }}</td>
             <td class="col-status">
-              <span class="severity-badge" [ngClass]="parseClass(d.parseStatus)">
-                @if (isParsingDoc(d)) {
-                  Parsing…
-                } @else {
-                  {{ parseLabel(d.parseStatus) }}
-                }
-              </span>
+              <span class="severity-badge" [ngClass]="analysisReadyClass(d)">{{ analysisReadyLabel(d) }}</span>
             </td>
             <td class="col-status">
               <span class="severity-badge extract-status-cell" [ngClass]="sectionExtractClass(d.sectionExtractStatus)">
@@ -241,14 +244,6 @@
                       {{ isRepairingSectionPages(d) ? 'Repairing…' : 'Repair' }}
                     </button>
                   }
-                  <button
-                    type="button"
-                    class="row-action-btn compact"
-                    title="View analysis runs"
-                    (click)="viewAnalysis(d)"
-                  >
-                    Analysis
-                  </button>
                   <div class="row-export-actions">
                     @if (showRowMarkdownButton(d)) {
                       <button
@@ -290,18 +285,24 @@
                   <button
                     type="button"
                     class="row-action-btn icon-only ghost"
-                    title="History"
-                    aria-label="History"
-                    (click)="openHistory(d)"
+                    [class.is-loading]="loadingAnalysisRuns && analysisFor?.id === d.id"
+                    title="Analysis runs history"
+                    aria-label="Analysis runs history"
+                    [disabled]="loadingAnalysisRuns && analysisFor?.id === d.id"
+                    (click)="viewAnalysis(d)"
                   >
-                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-                      <path
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.6"
-                        d="M10 4.5v5.25l3 1.75M10 18a8 8 0 100-16 8 8 0 000 16z"
-                      />
-                    </svg>
+                    @if (loadingAnalysisRuns && analysisFor?.id === d.id) {
+                      <span class="row-action-spinner" aria-hidden="true"></span>
+                    } @else {
+                      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                        <path
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.6"
+                          d="M10 4.5v5.25l3 1.75M10 18a8 8 0 100-16 8 8 0 000 16z"
+                        />
+                      </svg>
+                    }
                   </button>
                   <button
                     type="button"
@@ -474,23 +475,6 @@
 </div>
 </div>
 
-@if (historyFor) {
-  <div class="hist-backdrop" (click)="closeHistory()"></div>
-  <aside class="hist-panel" role="dialog" aria-label="Document history">
-    <header>
-      <div>
-        <h3>{{ historyFor.title }}</h3>
-        <p>Version history</p>
-      </div>
-      <button type="button" class="btn-close" (click)="closeHistory()" aria-label="Close">✕</button>
-    </header>
-    <ul>
-      <li>v{{ historyFor.version ?? 1 }} — uploaded {{ formatDate(historyFor.uploaded) }}</li>
-      <li>{{ historyFor.originalFileName }}</li>
-    </ul>
-  </aside>
-}
-
 @if (analysisFor) {
   <div class="hist-backdrop" (click)="closeAnalysisPicker()"></div>
   <aside class="hist-panel analysis-panel" role="dialog" aria-label="Analysis runs">
@@ -499,7 +483,11 @@
         <h3>{{ analysisFor.title }}</h3>
         <p>
           @if (loadingAnalysisRuns) {
-            Loading analyses…
+            Loading analysis history…
+          } @else if (analysisLoadError) {
+            Could not load history
+          } @else if (!analysisRuns.length) {
+            No history found
           } @else {
             {{ analysisRuns.length }} analysis run{{ analysisRuns.length === 1 ? '' : 's' }} — pick one to open
           }
@@ -508,7 +496,20 @@
       <button type="button" class="btn-close" (click)="closeAnalysisPicker()" aria-label="Close">✕</button>
     </header>
     @if (loadingAnalysisRuns) {
-      <p class="muted-loading">Fetching…</p>
+      <div class="hist-loading" role="status" aria-live="polite">
+        <span class="panel-busy-spinner" aria-hidden="true"></span>
+        <p>Loading analysis history…</p>
+      </div>
+    } @else if (analysisLoadError) {
+      <div class="hist-empty">
+        <strong>Could not load history</strong>
+        <p>{{ analysisLoadError }}</p>
+      </div>
+    } @else if (!analysisRuns.length) {
+      <div class="hist-empty">
+        <strong>No history found</strong>
+        <p>This document has not been used in an analysis yet.</p>
+      </div>
     } @else {
       <ul class="analysis-run-list">
         @for (run of analysisRuns; track run.id) {

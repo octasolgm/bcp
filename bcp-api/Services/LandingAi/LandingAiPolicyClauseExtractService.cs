@@ -116,7 +116,7 @@ public class LandingAiPolicyClauseExtractService(
                 "Loaded {Count} cached policy clauses for {File}",
                 cachedClauses.Count,
                 fileName);
-            return PolicyClauseMarkdownRecovery.MergeMissing(cachedClauses.ToList(), markdown);
+            return PolicyClauseOfficialRefAligner.AlignThenMerge(cachedClauses, markdown);
         }
 
         logger.LogInformation(
@@ -128,7 +128,7 @@ public class LandingAiPolicyClauseExtractService(
         if (clauses.Count == 0)
             throw new InvalidOperationException("No policy sections found in internal document.");
 
-        clauses = PolicyClauseMarkdownRecovery.MergeMissing(clauses, markdown);
+        clauses = PolicyClauseOfficialRefAligner.AlignThenMerge(clauses, markdown);
 
         var json = SerializeClausesJson(clauses);
 

@@ -18,7 +18,10 @@ public static class PolicyClauseMarkdownRecovery
             var key = MarkdownSectionScanner.NormalizeRef(scanned.SectionRef);
             if (existing.Contains(key)) continue;
 
-            result.Add(new PolicyClause(scanned.SectionRef, scanned.SectionText, 0));
+            result.Add(new PolicyClause(
+                scanned.SectionRef,
+                PolicyExtractTextSanitizer.Clean(scanned.SectionText),
+                0));
             existing.Add(key);
         }
 

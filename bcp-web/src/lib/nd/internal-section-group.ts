@@ -1,5 +1,4 @@
 import type { InternalDocumentSection } from './types';
-import { comparePointNumber } from './list-utils';
 
 export type InternalSectionChapterGroup = {
   chapter: string;
@@ -9,27 +8,57 @@ export type InternalSectionChapterGroup = {
 
 /** Display cleanup for legacy dedupe ids like `1.-1` → `1.1`. */
 export function normalizeInternalSectionRef(ref: string): string {
-  const trimmed = ref.trim();
+  const trimmed = (ref ?? '').trim();
   if (!trimmed) return trimmed;
   return trimmed
     .replace(/^(\d+)\.+-(\d+)$/, '$1.$2')
     .replace(/\.+-/g, '.');
 }
 
-function sortKey(ref: string): string {
-  return normalizeInternalSectionRef(ref);
+/** Outline order: 1, 6, 6.1, 7, 7.1, 7.7, 7.7-a, 7.7-b, 8 (parent before children). */
+export function compareInternalSectionRef(a: string, b: string): number {
+  const partsA = parseInternalSectionTokens(a);
+  const partsB = parseInternalSectionTokens(b);
+  const len = Math.max(partsA.length, partsB.length);
+  for (let i = 0; i < len; i++) {
+    if (i >= partsA.length) return -1;
+    if (i >= partsB.length) return 1;
+    const ta = partsA[i];
+    const tb = partsB[i];
+    if (ta.num !== tb.num) return ta.num - tb.num;
+    const suffixCmp = ta.suffix.localeCompare(tb.suffix);
+    if (suffixCmp !== 0) return suffixCmp;
+  }
+  return 0;
 }
 
-/** Sort internal sections point-wise: 1.1, 1.2, 1.10, 9.4.1, 14.4 (not string order). */
+function parseInternalSectionTokens(raw: string): { num: number; suffix: string }[] {
+  const head = (normalizeInternalSectionRef(raw).split(/\s+/)[0] ?? '').replace(/\.$/, '');
+  if (!head) return [];
+  return head
+    .split(/[.-]/)
+    .filter(Boolean)
+    .map((segment) => {
+      const m = segment.match(/^(\d+)([a-z]*)$/i);
+      if (m) {
+        return { num: Number.parseInt(m[1], 10), suffix: (m[2] ?? '').toLowerCase() };
+      }
+      if (/^[a-z]+$/i.test(segment)) {
+        return { num: -1, suffix: segment.toLowerCase() };
+      }
+      const digits = segment.replace(/\D/g, '');
+      return digits
+        ? { num: Number.parseInt(digits, 10), suffix: '' }
+        : { num: -1, suffix: segment.toLowerCase() };
+    });
+}
+
+/** Sort internal sections ascending by number: 1, 1.2, 1.10, 7, 7.7-a, 8. */
 export function sortInternalSectionsByPointRef(
   sections: InternalDocumentSection[],
 ): InternalDocumentSection[] {
   return [...sections].sort((a, b) => {
-    const refCmp = comparePointNumber(
-      sortKey(a.sectionRef),
-      sortKey(b.sectionRef),
-      'asc',
-    );
+    const refCmp = compareInternalSectionRef(a.sectionRef, b.sectionRef);
     if (refCmp !== 0) return refCmp;
 
     const orderA = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
@@ -72,7 +101,7 @@ export function groupInternalSectionsForDisplay(
     .sort(([a], [b]) => {
       if (a === 'other') return 1;
       if (b === 'other') return -1;
-      return comparePointNumber(a, b, 'asc');
+      return compareInternalSectionRef(a, b);
     })
     .map(([chapter, chapterSections]) => ({
       chapter,

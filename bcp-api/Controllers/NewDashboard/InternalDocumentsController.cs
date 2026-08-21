@@ -56,12 +56,16 @@ public class InternalDocumentsController(
             docs.SelectMany(d => new Guid?[] { d.UploadedBy, d.ParsedBy, d.HiddenBy, d.SectionExtractedBy }),
             ct);
 
+        var analysisCounts = await NdDocumentAnalysisRunCountHelper.LoadAsync(appDb, ct);
+
         var items = new List<object>();
         foreach (var d in docs)
         {
             var recovered = await parseService.RecoverStaleParseIfNeededAsync(d.Id, ct);
             var live = recovered ?? d;
             var parseStatus = await parseService.ResolveDisplayParseStatusAsync(live, ct);
+            var exposePages = !string.Equals(parseStatus, "pending", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(parseStatus, "processing", StringComparison.OrdinalIgnoreCase);
             items.Add(new
             {
                 id = d.Id,
@@ -77,6 +81,8 @@ public class InternalDocumentsController(
                 parseStatus,
                 parsedAt = live.ParsedAt,
                 parseError = live.ParseError,
+                pageCount = exposePages && live.Pages > 0 ? live.Pages : (int?)null,
+                analysisRunCount = analysisCounts.CountForInternal(d.Id, d.FileHash),
                 uploadedBy = d.UploadedBy,
                 uploadedByName = ProfileName(profileNames, d.UploadedBy),
                 parsedBy = d.ParsedBy,
@@ -524,6 +530,7 @@ public class InternalDocumentsController(
                             id,
                             parseStatus = "parsed",
                             parsedAt = doc.ParsedAt,
+                            pageCount = doc.Pages > 0 ? doc.Pages : (int?)null,
                             parsedByName = doc.ParsedBy != null
                                 ? ProfileName(
                                     await LoadProfileNamesAsync(appDb, [doc.ParsedBy], ct),
@@ -555,6 +562,7 @@ public class InternalDocumentsController(
                     id,
                     parseStatus = refreshed?.ParseStatus ?? "parsed",
                     parsedAt = refreshed?.ParsedAt,
+                    pageCount = refreshed?.Pages > 0 ? refreshed.Pages : (int?)null,
                     parsedByName = refreshed?.ParsedBy != null
                         ? ProfileName(
                             await LoadProfileNamesAsync(appDb, [refreshed.ParsedBy], ct),

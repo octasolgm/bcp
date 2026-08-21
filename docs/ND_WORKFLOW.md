@@ -3,7 +3,8 @@
 **Document type:** Product & process workflow (no code changes)  
 **Audience:** Product owner, PM, developers, QA  
 **Scope:** New Dashboard (`/nd/*`) — legacy dashboard remains at `/old/*`  
-**Last updated:** 2026-07-20
+**Last updated:** 2026-08-21  
+**Diagrams:** [SYSTEM-WORKFLOW-DIAGRAMS.md](./workflow/SYSTEM-WORKFLOW-DIAGRAMS.md)
 
 ---
 
@@ -174,7 +175,7 @@ Must match the richness of legacy dual-verify PDF (reference: old dual-verify sc
 | Policy extract | No | Citation, page, quote from internal doc |
 | Phase 1 — Landing AI full detail | No | Collapsible full message |
 | Phase 2 — Google AI full detail | No | Collapsible full message |
-| Agreement / confidence / status | No | Compliant \| Partial \| Non-compliant |
+| Agreement / confidence / status | No | compliant \| partial compliant \| non compliant |
 | **What this reference fulfills** | No | Bullet list from AI |
 | **Corrective Action Plan** | **Yes — item-wise** | Each CAP line item editable separately |
 
@@ -198,7 +199,7 @@ Must match the richness of legacy dual-verify PDF (reference: old dual-verify sc
 
 **Route:** `/nd/gap-analysis?run={id}`
 
-**Filters:** Severity (compliant / partial / non-compliant), status, confidence, search text.
+**Filters:** Severity (compliant / partial compliant / non compliant), status, confidence, search text.
 
 **Two view modes:**
 
@@ -209,7 +210,7 @@ Must match the richness of legacy dual-verify PDF (reference: old dual-verify sc
 
 **List view columns (summary row):** Point | AI extract | Fulfills | Action plan | Confidence | Status
 
-**Export:** Excel + PDF (reuse existing export libs) — includes current (final) action plans.
+**Export:** Excel + PDF (reuse existing export libs) — includes current (final) action plans, a leading **Name of Regulatory Document** column, clause heading **Clause from the regulatory document**, and an Action Plans sheet with reviews.
 
 ### 5.5 Analyse-v8 embedded results (Task 3)
 
@@ -217,6 +218,17 @@ Below the 3-column analysis layout on `/nd/analyse-v8`, when run has results:
 
 - Toggle: **All cards** | **List view** (same components as gap analysis)
 - **Submit for review** button when run is complete enough
+
+### 5.6 Gap evidence upload and re-check
+
+After analysis, a user can attach a new policy / gap document and re-judge:
+
+| Scope | Where | What happens |
+|-------|--------|----------------|
+| One gap | Point detail — upload + **Rerun this gap** | Re-judges that clause against the uploaded file. Demo upgrades `non_compliant` → `partial_compliant` → `compliant` and cites the file; real users call AI. |
+| Whole report | Overall analysis report panel — upload + **Rerun all gaps** | Same, for every open gap on the run. |
+
+Updated fields after a successful rerun: policy extract, document reference, compliance status.
 
 ---
 

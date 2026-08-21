@@ -44,6 +44,7 @@ public class DepartmentsController(
         {
             var docCounts = await NdDemoDataFilters.ApplyToRegulationDocuments(
                     db.NdRegulationDocuments.AsNoTracking(), demoCtx)
+                .Where(d => !d.IsManual || d.Points.Any())
                 .GroupBy(d => d.DepartmentId)
                 .Select(g => new { g.Key, Count = g.Count() })
                 .ToListAsync(ct);

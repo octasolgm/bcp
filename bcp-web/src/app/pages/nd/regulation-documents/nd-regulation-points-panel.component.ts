@@ -345,14 +345,20 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   pointPageLabel(pointId: string): string | null {
     const p = this.pointMeta(pointId);
     if (!p) return null;
-    return formatPointPageRef(p.pageReference, resolveRegulationPdfPage(p.pageReference, p.pdfPage ?? null));
+    return formatPointPageRef(p.pageReference, p.pdfPage ?? null, {
+      docName: this.docName,
+      pointNumber: pointId,
+    });
   }
 
   openPointPage(pointId: string, event: Event): void {
     event.stopPropagation();
     const p = this.pointMeta(pointId);
     if (!p) return;
-    const page = resolveRegulationPdfPage(p.pageReference, p.pdfPage ?? null);
+    const page = resolveRegulationPdfPage(p.pageReference, p.pdfPage ?? null, {
+      docName: this.docName,
+      pointNumber: pointId,
+    });
     if (page) this.openSourcePage.emit(page);
   }
 

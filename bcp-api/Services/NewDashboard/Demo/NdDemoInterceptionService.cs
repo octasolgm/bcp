@@ -341,6 +341,11 @@ public sealed class NdDemoInterceptionService(
 
         await CopyParseCacheAsync(source, doc, ct);
 
+        if (source.Pages is > 0)
+            doc.Pages = source.Pages;
+        else if (IsAmlManualSeedDocument(fileName, doc.Title))
+            doc.Pages = NdDemoInternalAmlManualSeed.TotalPages;
+
         doc.ParseStatus = "parsed";
         doc.FileHash = source.FileHash ?? doc.FileHash;
         doc.ParseError = null;
@@ -530,36 +535,48 @@ public sealed class NdDemoInterceptionService(
         var demoIds = await directory.GetDemoProfileIdsAsync(ct);
         var fileName = NormalizeFileName(doc.OriginalFileName, doc.Title, doc.StoragePath);
 
-        var source = await ResolveInternalTemplateSourceAsync(dbCtx, demoIds, fileName, doc.Title, ct)
-            ?? throw new InvalidOperationException(
-                "No template section extract available. Upload Internal AML Manual 290626 or I M P T F S.pdf.");
-
-        var sourceSections = await dbCtx.NdInternalDocumentSections.AsNoTracking()
-            .Where(s => s.StoredDocumentId == source.Id)
-            .OrderBy(s => s.DisplayOrder)
-            .ToListAsync(ct);
-        if (sourceSections.Count == 0)
-            throw new InvalidOperationException("Template document has no extracted sections.");
-
         var existing = await dbCtx.NdInternalDocumentSections
             .Where(s => s.StoredDocumentId == doc.Id)
             .ToListAsync(ct);
         dbCtx.NdInternalDocumentSections.RemoveRange(existing);
 
-        foreach (var section in sourceSections)
+        int sectionCount;
+        if (IsAmlManualSeedDocument(fileName, doc.Title))
         {
-            dbCtx.NdInternalDocumentSections.Add(new NdInternalDocumentSection
+            sectionCount = ApplyAmlManualSeedSections(dbCtx, doc.Id);
+            if (doc.Pages <= 0)
+                doc.Pages = NdDemoInternalAmlManualSeed.TotalPages;
+        }
+        else
+        {
+            var source = await ResolveInternalTemplateSourceAsync(dbCtx, demoIds, fileName, doc.Title, ct)
+                ?? throw new InvalidOperationException(
+                    "No template section extract available. Upload Internal AML Manual 290626 or I M P T F S.pdf.");
+
+            var sourceSections = await dbCtx.NdInternalDocumentSections.AsNoTracking()
+                .Where(s => s.StoredDocumentId == source.Id)
+                .OrderBy(s => s.DisplayOrder)
+                .ToListAsync(ct);
+            if (sourceSections.Count == 0)
+                throw new InvalidOperationException("Template document has no extracted sections.");
+
+            foreach (var section in sourceSections)
             {
-                StoredDocumentId = doc.Id,
-                SectionRef = section.SectionRef,
-                SectionText = section.SectionText,
-                SourcePage = section.SourcePage,
-                DisplayOrder = section.DisplayOrder,
-            });
+                dbCtx.NdInternalDocumentSections.Add(new NdInternalDocumentSection
+                {
+                    StoredDocumentId = doc.Id,
+                    SectionRef = section.SectionRef,
+                    SectionText = section.SectionText,
+                    SourcePage = section.SourcePage,
+                    DisplayOrder = section.DisplayOrder,
+                });
+            }
+
+            sectionCount = sourceSections.Count;
         }
 
         doc.SectionExtractStatus = "extracted";
-        doc.SectionCount = sourceSections.Count;
+        doc.SectionCount = sectionCount;
         doc.SectionExtractError = null;
         doc.SectionExtractProgressLabel = null;
         doc.SectionExtractProgressPct = null;
@@ -1525,6 +1542,44 @@ public sealed class NdDemoInterceptionService(
             .Where(d => d.FileHash == hash)
             .OrderByDescending(d => d.SectionExtractedAt ?? d.ParsedAt ?? d.UpdatedAt)
             .FirstOrDefaultAsync(ct);
+    }
+
+    private static int ApplyAmlManualSeedSections(AppDbContext dbCtx, Guid storedDocumentId)
+    {
+        var clauses = NdDemoInternalAmlManualSeed.Sections;
+        var order = 0;
+        foreach (var clause in clauses)
+        {
+            dbCtx.NdInternalDocumentSections.Add(new NdInternalDocumentSection
+            {
+                StoredDocumentId = storedDocumentId,
+                SectionRef = clause.ClauseNo,
+                SectionText = clause.ClauseText,
+                SourcePage = clause.SourcePage > 0 ? clause.SourcePage : null,
+                DisplayOrder = order++,
+            });
+        }
+
+        return clauses.Count;
+    }
+
+    private static bool IsAmlManualSeedDocument(string? fileName, string? title)
+    {
+        foreach (var raw in new[] { fileName, title })
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                continue;
+
+            var normalized = DemoAnalysisSeedService.NormalizeDocNameForMatch(raw);
+            if (normalized.Contains("290626", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (normalized.Contains("aml", StringComparison.OrdinalIgnoreCase)
+                && normalized.Contains("manual", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool IsAmlManualDemoTemplateName(string? fileName, string? title)

@@ -113,4 +113,49 @@
       }
     </ul>
   }
+
+  @if (reviewItems.length) {
+    <section class="inbox-reviews">
+      <h2>Review requests</h2>
+      <p class="inbox-sub">
+        Reviews addressed to you or your department, and the ones you sent.
+      </p>
+      <ul class="inbox-list">
+        @for (review of reviewItems; track review.id) {
+          <li class="inbox-card">
+            <div class="inbox-card-main">
+              <div class="inbox-card-top">
+                <span class="pill soft">{{ reviewDirectionLabel(review) }}</span>
+                @if (review.assigneeLabel) {
+                  <span class="pill soft">{{ review.assigneeLabel }}</span>
+                }
+              </div>
+
+              <p class="inbox-action">{{ review.comment }}</p>
+              <p class="inbox-context">
+                <span class="context-clause">{{ review.clauseNo || 'Gap' }}</span>
+                <span class="context-sep">·</span>
+                <span>{{ review.actionPlan }}</span>
+              </p>
+              <p class="inbox-context">
+                <span>{{ review.reviewerName || 'Reviewer' }}</span>
+                <span class="context-sep">·</span>
+                <span class="context-run">{{ review.runName }}</span>
+              </p>
+            </div>
+
+            <div class="inbox-card-side">
+              <div class="inbox-date">
+                <span class="date-label">Sent</span>
+                <span class="date-value">{{ formatDate(review.createdAt) }}</span>
+              </div>
+              <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="reviewLinkParams(review)">
+                Open action
+              </a>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  }
 </section>

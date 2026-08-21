@@ -1,0 +1,95 @@
+<section class="rs-card">
+  <header class="rs-head">
+    <button type="button" class="rs-toggle" (click)="collapsed = !collapsed">
+      <span class="rs-caret" [class.is-open]="!collapsed">▸</span>
+      <h3>Review summary</h3>
+    </button>
+    <div class="rs-boxes">
+      <span class="rs-box">
+        <strong>{{ pendingPointCount }}</strong>
+        <em>pending action points</em>
+      </span>
+      <span class="rs-box">
+        <strong>{{ resolvedCount }}</strong>
+        <em>resolved action plans</em>
+      </span>
+      <span class="rs-box" [class.warn]="overdueCount > 0">
+        <strong>{{ overdueCount }}</strong>
+        <em>overdue</em>
+      </span>
+    </div>
+  </header>
+
+  @if (!collapsed) {
+    <div class="rs-body">
+      <div class="rs-block">
+        <h4>Open actions</h4>
+        @if (!pendingPlans.length) {
+          <p class="rs-empty">Nothing outstanding — every action is resolved.</p>
+        } @else {
+          <table class="rs-table">
+            <thead>
+              <tr>
+                <th>Clause</th>
+                <th>Action</th>
+                <th>Target date</th>
+                <th>Responsible</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (plan of pendingPlans; track plan.id) {
+                <tr>
+                  <td class="rs-clause">{{ clauseFor(plan) || '—' }}</td>
+                  <td class="rs-text">{{ plan.actionPlan }}</td>
+                  <td [class.overdue]="isOverdue(plan)">{{ formatDate(plan.targetDate) || '—' }}</td>
+                  <td>{{ responsibleFor(plan) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+
+      <div class="rs-block">
+        <div class="rs-block-head">
+          <h4>Review records</h4>
+          <div class="rs-range">
+            <label>
+              From
+              <input type="date" [(ngModel)]="fromDate" />
+            </label>
+            <label>
+              To
+              <input type="date" [(ngModel)]="toDate" />
+            </label>
+            @if (isFiltered) {
+              <button type="button" class="rs-clear" (click)="clearRange()">Clear</button>
+            }
+          </div>
+        </div>
+
+        @if (!totalReviewCount) {
+          <p class="rs-empty">No reviews have been left on these actions yet.</p>
+        } @else if (!reviews.length) {
+          <p class="rs-empty">No reviews in that date range.</p>
+        } @else {
+          <ul class="rs-reviews">
+            @for (review of reviews; track review.id) {
+              <li class="rs-review">
+                <div class="rs-review-head">
+                  <span class="rs-clause">{{ review.clause || '—' }}</span>
+                  <span class="rs-reviewer">{{ review.reviewerName || 'Reviewer' }}</span>
+                  @if (review.reviewerRole) {
+                    <span class="rs-role">{{ review.reviewerRole }}</span>
+                  }
+                  <span class="rs-date">{{ formatDate(review.createdAt) }}</span>
+                </div>
+                <p class="rs-review-text">{{ review.comment }}</p>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+  }
+</section>

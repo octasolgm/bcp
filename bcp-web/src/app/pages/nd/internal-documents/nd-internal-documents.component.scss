@@ -206,6 +206,7 @@
     col.col-date { min-width: 7.5rem; }
     col.col-actor { min-width: 6.5rem; }
     col.col-size { min-width: 4.5rem; }
+    col.col-pts { min-width: 5.5rem; }
     col.col-status { min-width: 9rem; }
     col.col-actions { min-width: 20rem; }
 
@@ -232,6 +233,7 @@
 
     .col-actor,
     .col-size,
+    .col-pts,
     .col-date {
       white-space: nowrap;
       overflow: visible;

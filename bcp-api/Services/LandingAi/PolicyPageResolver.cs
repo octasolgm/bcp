@@ -403,15 +403,15 @@ public static partial class PolicyPageResolver
             foreach (var p in pagesProp.EnumerateArray())
             {
                 if (p.ValueKind == System.Text.Json.JsonValueKind.Number && p.TryGetInt32(out var n))
-                    pages.Add(ZeroToOneIndexed(n));
+                    pages.Add(n);
             }
         }
 
-        if (pages.Count == 0)
-        {
-            var single = ReadSplitPageFromIdentifier(split);
-            if (single > 0) pages.Add(single);
-        }
+        if (pages.Count > 0)
+            return ToOneIndexedPages(pages);
+
+        var single = ReadSplitPageFromIdentifier(split);
+        if (single > 0) pages.Add(single);
 
         return pages;
     }
@@ -467,11 +467,21 @@ public static partial class PolicyPageResolver
     {
         if (!chunk.TryGetProperty("grounding", out var grounding)) return 0;
         if (grounding.TryGetProperty("page", out var pageProp) && pageProp.TryGetInt32(out var page))
-            return ZeroToOneIndexed(page);
+            return page <= 0 ? page + 1 : page;
         return 0;
     }
 
-    private static int ZeroToOneIndexed(int page) => page <= 0 ? page + 1 : page;
+    /// <summary>
+    /// ADE parse v1 <c>pages</c> are 0-based when 0 is present. A mixed/1-based list is left as viewer pages.
+    /// </summary>
+    private static List<int> ToOneIndexedPages(List<int> pages)
+    {
+        if (pages.Count == 0) return pages;
+        if (pages.Min() > 0)
+            return pages;
+
+        return pages.Select(p => p + 1).Where(p => p > 0).ToList();
+    }
 
     private static List<(int Page, string Text)> SplitByPageMarkers(string markdown)
     {
@@ -548,7 +558,7 @@ public static partial class PolicyPageResolver
                 {
                     var segEnd = SegmentEndPage(segments, segIndex, maxPage.Value);
                     var indexInSegment = rawIndex - segmentStart;
-                    return PageFromIndexInSegment(page, segEnd, indexInSegment, text.Length, clauseHeading: false);
+                    return PageFromIndexInSegment(page, segEnd, indexInSegment, text.Length);
                 }
 
                 return page;
@@ -604,7 +614,7 @@ public static partial class PolicyPageResolver
             if (maxPage is > 10)
             {
                 var segEnd = SegmentEndPage(segments, segIndex, maxPage.Value);
-                return PageFromIndexInSegment(page, segEnd, idx, text.Length, clauseHeading: false);
+                return PageFromIndexInSegment(page, segEnd, idx, text.Length);
             }
 
             return page;
@@ -669,6 +679,7 @@ public static partial class PolicyPageResolver
 
     /// <summary>
     /// Resolve numbered clause page inside chunked parse markdown (marker = chunk start, not every PDF page).
+    /// Body text wins over later running headers (those look like headings and used to shift refs +1).
     /// </summary>
     private static int? ResolveNumberedClausePageRefined(
         IReadOnlyList<(int Page, string Text)> segments,
@@ -683,42 +694,55 @@ public static partial class PolicyPageResolver
         var escaped = Regex.Escape(id).Replace("\\.", "[.]");
         var idRegex = new Regex($@"\b{escaped}\b", RegexOptions.IgnoreCase);
         var (anchorSegment, anchorIndex) = FindSectionTextAnchor(segments, sectionText);
+        if (anchorSegment >= 0)
+        {
+            var (page, text) = segments[anchorSegment];
+            var segEnd = SegmentEndPage(segments, anchorSegment, maxPage);
+            Match? headingBeforeBody = null;
+            foreach (Match m in idRegex.Matches(text))
+            {
+                if (IsTocLine(text, m) || !IsLikelyClauseHeading(text, m, title))
+                    continue;
+                if (anchorIndex >= 0 && m.Index > anchorIndex + 120)
+                    continue;
+                headingBeforeBody = m;
+            }
 
-        int? bestPage = null;
+            var idx = headingBeforeBody?.Index ?? Math.Max(anchorIndex, 0);
+            return PageFromIndexInSegment(page, segEnd, idx, text.Length);
+        }
+        int? firstHeadingPage = null;
+        int? lastMentionPage = null;
+
         for (var i = 0; i < segments.Count; i++)
         {
             var (page, text) = segments[i];
             var matches = idRegex.Matches(text);
             if (matches.Count == 0) continue;
 
-            Match? chosen = null;
+            Match? chosenHeading = null;
             foreach (Match m in matches)
             {
-                if (!IsLikelyClauseHeading(text, m, title)) continue;
-                if (anchorIndex is int anchor && anchorSegment == i)
-                {
-                    if (m.Index > anchor + 120) continue;
-                    if (m.Index < anchor - 1200) continue;
-                }
-
-                if (chosen is null
-                    || (anchorIndex is int a && anchorSegment == i
-                        && Math.Abs(m.Index - a) < Math.Abs(chosen.Index - a)))
-                {
-                    chosen = m;
-                }
+                if (IsTocLine(text, m) || !IsLikelyClauseHeading(text, m, title))
+                    continue;
+                chosenHeading = m;
+                break;
             }
 
-            chosen ??= matches[^1];
-
             var segEnd = SegmentEndPage(segments, i, maxPage);
-            var isHeading = IsLikelyClauseHeading(text, chosen, title);
-            var refined = PageFromIndexInSegment(page, segEnd, chosen.Index, text.Length, isHeading);
-            if (bestPage is null || refined > bestPage)
-                bestPage = refined;
+            if (chosenHeading is not null)
+            {
+                var refined = PageFromIndexInSegment(page, segEnd, chosenHeading.Index, text.Length);
+                if (firstHeadingPage is null)
+                    firstHeadingPage = refined;
+                continue;
+            }
+
+            lastMentionPage = PageFromIndexInSegment(page, segEnd, matches[^1].Index, text.Length);
         }
 
-        if (bestPage is > 0) return bestPage;
+        if (firstHeadingPage is > 0) return firstHeadingPage;
+        if (lastMentionPage is > 0) return lastMentionPage;
 
         return FindNumberedClauseHeadingPageLast(segments, pointId, title);
     }
@@ -758,18 +782,26 @@ public static partial class PolicyPageResolver
         int segStart,
         int segEnd,
         int matchIndex,
-        int segmentTextLength,
-        bool clauseHeading = false)
+        int segmentTextLength)
     {
         var span = Math.Max(1, segEnd - segStart + 1);
         if (segmentTextLength < 6000 || span <= 1)
             return segStart;
 
         var ratio = matchIndex / (double)Math.Max(segmentTextLength, 1);
-        var offset = clauseHeading
-            ? (int)Math.Ceiling(ratio * (span - 1))
-            : (int)Math.Round(ratio * (span - 1));
+        // Round (not Ceiling): Ceiling systematically landed one viewer page late.
+        var offset = (int)Math.Round(ratio * (span - 1), MidpointRounding.AwayFromZero);
         return Math.Clamp(segStart + offset, segStart, segEnd);
+    }
+
+    /// <summary>TOC lines like "6.2 Title .......... 52" must not beat the real heading.</summary>
+    private static bool IsTocLine(string text, Match clauseIdMatch)
+    {
+        var lineStart = text.LastIndexOf('\n', Math.Max(0, clauseIdMatch.Index - 1));
+        lineStart = lineStart < 0 ? 0 : lineStart + 1;
+        var lineEnd = text.IndexOf('\n', clauseIdMatch.Index);
+        var line = (lineEnd < 0 ? text[lineStart..] : text[lineStart..lineEnd]).Trim();
+        return TocLeaderRegex().IsMatch(line);
     }
 
     private static bool IsLikelyClauseHeading(string text, Match clauseIdMatch, string? title)
@@ -813,13 +845,20 @@ public static partial class PolicyPageResolver
                 RegexOptions.IgnoreCase | RegexOptions.Multiline);
         }
 
-        int? last = null;
+        int? first = null;
         foreach (var (page, text) in segments)
         {
-            if (headingRegex.IsMatch(text)) last = page;
+            foreach (Match m in headingRegex.Matches(text))
+            {
+                if (IsTocLine(text, m)) continue;
+                first ??= page;
+                break;
+            }
+
+            if (first is > 0) break;
         }
 
-        return last;
+        return first;
     }
 
     private static bool LooksLikeNumberedClause(string value) =>
@@ -910,6 +949,9 @@ public static partial class PolicyPageResolver
 
     [GeneratedRegex(@"page_(\d+)", RegexOptions.IgnoreCase)]
     private static partial Regex SplitPageIdRegex();
+
+    [GeneratedRegex(@"\.{3,}|…|\s{2,}\d{1,4}\s*$")]
+    private static partial Regex TocLeaderRegex();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();

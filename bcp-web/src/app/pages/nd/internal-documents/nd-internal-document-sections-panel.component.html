@@ -72,43 +72,42 @@
       </p>
     } @else {
       <ul class="section-list">
-        @for (section of visibleSections; track section.id) {
+        @for (section of visibleSections; track rowKey(section, $index); let i = $index) {
           <li>
-            <article class="section-card" [class.section-card-expanded]="isRowExpanded(section.id)">
+            <article class="section-card" [class.section-card-expanded]="isRowExpanded(rowKey(section, i))">
               <header class="section-meta">
                 <button
                   type="button"
                   class="section-toggle"
-                  (click)="toggleRow(section.id)"
-                  [attr.aria-expanded]="isRowExpanded(section.id)"
+                  (click)="toggleRow(rowKey(section, i))"
+                  [attr.aria-expanded]="isRowExpanded(rowKey(section, i))"
                 >
-                  <span class="chevron" [class.open]="isRowExpanded(section.id)">›</span>
+                  <span class="chevron" [class.open]="isRowExpanded(rowKey(section, i))">›</span>
                   <span class="section-ref">{{ formatSectionRef(section.sectionRef) }}</span>
                 </button>
-                @if (section.sourcePage) {
+                @if (sectionPage(section); as page) {
                   @if (canOpenSource) {
                     <button
                       type="button"
                       class="source-ref-link section-page"
-                      [attr.title]="'Open ' + docTitle + ' at page ' + section.sourcePage"
+                      [attr.title]="'Open ' + docTitle + ' at page ' + page"
                       (click)="openPage(section.sourcePage, $event)"
                     >
-                      p. {{ section.sourcePage }}
+                      p. {{ page }}
                     </button>
                   } @else {
-                    <span class="section-page">p. {{ section.sourcePage }}</span>
+                    <span class="section-page">p. {{ page }}</span>
                   }
                 }
               </header>
-              @if (!isRowExpanded(section.id) && isLong(section.sectionText)) {
-                <p class="section-preview">{{ preview(section.sectionText) }}</p>
-              }
-              @if (isRowExpanded(section.id)) {
+              @if (isRowExpanded(rowKey(section, i))) {
                 <div class="section-body">
                   @for (para of sectionParagraphs(section.sectionText); track $index) {
                     <p class="section-para">{{ para }}</p>
                   }
                 </div>
+              } @else {
+                <p class="section-preview">{{ preview(section.sectionText) }}</p>
               }
             </article>
           </li>

@@ -29,6 +29,16 @@ stateDiagram-v2
 
 Available at every state, independent of processing: **Open**, **Download source**, **Delete**.
 
+Internal policy documents use the same gated sequence.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Uploaded: Upload PDF / Word
+    Uploaded --> Parsed: Parse (Landing AI, or simulated for demo)
+    Parsed --> Extracted: Extract policy clauses / sections
+    Extracted --> Viewing: View sections
+```
+
 ## 2. Analysis run lifecycle
 
 ```mermaid
@@ -38,7 +48,7 @@ flowchart TD
     C -- No --> D[Landing AI forward pass per clause]
     D --> E[LLM / dual verify pass]
     C -- Yes --> F[Replay seeded judgments - no AI]
-    E --> G[Points scored: Compliant / Partial Compliant / Non Compliant]
+    E --> G[Points scored: compliant / partial compliant / non compliant]
     F --> G
     G --> H[Gap report]
 ```
@@ -114,7 +124,27 @@ flowchart LR
     R --> G["Gap report with ?apPriority= — matching gaps highlighted and scrolled to"]
 ```
 
-## 7. Real vs demo behaviour
+## 7. Retarget an action-plan date
+
+Anyone who can edit an action plan can change its target date. The change is audited; the clock
+icon on the plan opens the history.
+
+```mermaid
+sequenceDiagram
+    participant U as User (any role)
+    participant W as Web app
+    participant A as API
+
+    U->>W: Change target date (+ reason)
+    W->>A: PATCH action plan
+    A->>A: Write NdAnalysisActionPlanDateHistory (who, when, previous, new, reason)
+    A-->>W: Updated plan
+    U->>W: Click clock icon
+    W->>A: GET date-history
+    A-->>W: previous → new, changedByName, timestamp, reason
+```
+
+## 8. Real vs demo behaviour
 
 | Stage | Real user | Demo user |
 | --- | --- | --- |

@@ -72,6 +72,19 @@ export function isAnalysisRunSubmitReviewPending(status: string): boolean {
   return ['completed', 'dual_verify_failed', 'landing_ai_complete'].includes(normalizeRunStatus(status));
 }
 
+/** Analysis has produced its findings — safe to export, seed actions, or review. */
+export function isAnalysisRunResultsReady(status: string): boolean {
+  return [
+    'completed',
+    'dual_verify_failed',
+    'landing_ai_complete',
+    'submitted_for_review',
+    'pulled_back',
+    'checker_approved',
+    'reviewer_approved',
+  ].includes(normalizeRunStatus(status));
+}
+
 /** Human-readable workflow / run status label for badges and lists. */
 export function analysisRunStatusLabel(status: string): string {
   const s = normalizeRunStatus(status);
@@ -147,7 +160,7 @@ export function analysisRunComplianceSummary(run: AnalysisRunSummary): string | 
   const parts: string[] = [];
   if (compliant) parts.push(`${compliant} compliant`);
   if (partial) parts.push(`${partial} partial`);
-  if (nonCompliant) parts.push(`${nonCompliant} non-compliant`);
+  if (nonCompliant) parts.push(`${nonCompliant} non compliant`);
   return parts.length ? parts.join(' · ') : null;
 }
 

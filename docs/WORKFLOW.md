@@ -4,6 +4,8 @@ A short overview of how an analysis run moves from setup → AI → review → s
 
 **Dashboard:** New workflow lives at `/nd/*` (legacy stays at `/old/*`).
 
+**Full diagrams** (upload → parse → extract, analysis, action plans, submit / approve / rollback, retarget, gap evidence): [SYSTEM-WORKFLOW-DIAGRAMS.md](./workflow/SYSTEM-WORKFLOW-DIAGRAMS.md). Role and screen detail: [ND_WORKFLOW.md](./ND_WORKFLOW.md).
+
 ---
 
 ## 1. Big picture (4 phases)

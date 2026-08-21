@@ -1,5 +1,6 @@
 import {
   chapterKeyFromSectionRef,
+  compareInternalSectionRef,
   groupInternalSectionsForDisplay,
   normalizeInternalSectionRef,
   sortInternalSectionsByPointRef,
@@ -39,6 +40,22 @@ describe('sortInternalSectionsByPointRef', () => {
     expect(sorted).toEqual(['1.1', '1.2', '1.10', '6.18-a', '6.18-b', '9.4.1', '14.4']);
   });
 
+  it('puts parent headings before numbered children', () => {
+    const sorted = sortInternalSectionsByPointRef([
+      section('7.1', 'a'),
+      section('7', 'b'),
+      section('7.7-b', 'c'),
+      section('7.7', 'd'),
+      section('7.7-a', 'e'),
+      section('6.15', 'f'),
+      section('6', 'g'),
+      section('8', 'h'),
+      section('10', 'i'),
+    ]).map((s) => s.sectionRef);
+
+    expect(sorted).toEqual(['6', '6.15', '7', '7.1', '7.7', '7.7-a', '7.7-b', '8', '10']);
+  });
+
   it('normalizes legacy 1.-2 before sorting', () => {
     const sorted = sortInternalSectionsByPointRef([
       section('1.-2', 'b'),
@@ -46,6 +63,15 @@ describe('sortInternalSectionsByPointRef', () => {
     ]).map((s) => normalizeInternalSectionRef(s.sectionRef));
 
     expect(sorted).toEqual(['1.1', '1.2']);
+  });
+});
+
+describe('compareInternalSectionRef', () => {
+  it('uses outline ascending order', () => {
+    expect(compareInternalSectionRef('7', '7.1')).toBeLessThan(0);
+    expect(compareInternalSectionRef('7.7', '7.7-a')).toBeLessThan(0);
+    expect(compareInternalSectionRef('9', '10')).toBeLessThan(0);
+    expect(compareInternalSectionRef('1.2', '1.10')).toBeLessThan(0);
   });
 });
 

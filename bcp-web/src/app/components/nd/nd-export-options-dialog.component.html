@@ -1,0 +1,96 @@
+<div class="xo-backdrop" (click)="cancelled.emit()"></div>
+
+<div class="xo-dialog" role="dialog" aria-modal="true" aria-labelledby="xo-title">
+  <header class="xo-head">
+    <h2 id="xo-title">Export to Excel</h2>
+    <p class="xo-sub">Pick the sheets and columns to include.</p>
+  </header>
+
+  <div class="xo-body">
+    <section class="xo-section">
+      <div class="xo-section-head">
+        <h3>Gaps</h3>
+        <div class="xo-bulk">
+          <button type="button" (click)="toggleAll(selectedGap, gapCols, true)">All</button>
+          <button type="button" (click)="toggleAll(selectedGap, gapCols, false)">None</button>
+        </div>
+      </div>
+      <div class="xo-cols">
+        @for (col of gapCols; track col) {
+          <label class="xo-col">
+            <input type="checkbox" [checked]="isOn(selectedGap, col)" (change)="toggle(selectedGap, col)" />
+            <span>{{ col }}</span>
+          </label>
+        }
+      </div>
+      @if (!canConfirm) {
+        <p class="xo-warn">Keep at least one gap column.</p>
+      }
+    </section>
+
+    @if (hasActionPlans) {
+      <section class="xo-section">
+        <div class="xo-section-head">
+          <label class="xo-sheet-toggle">
+            <input type="checkbox" [(ngModel)]="includeActionPlans" />
+            <h3>Action plans</h3>
+          </label>
+          <div class="xo-bulk">
+            <button type="button" (click)="toggleAll(selectedActionPlan, actionPlanCols, true)">All</button>
+            <button type="button" (click)="toggleAll(selectedActionPlan, actionPlanCols, false)">None</button>
+          </div>
+        </div>
+        @if (includeActionPlans) {
+          <div class="xo-cols">
+            @for (col of actionPlanCols; track col) {
+              <label class="xo-col">
+                <input
+                  type="checkbox"
+                  [checked]="isOn(selectedActionPlan, col)"
+                  (change)="toggle(selectedActionPlan, col)"
+                />
+                <span>{{ col }}</span>
+              </label>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    @if (hasReviews) {
+      <section class="xo-section">
+        <div class="xo-section-head">
+          <label class="xo-sheet-toggle">
+            <input type="checkbox" [(ngModel)]="includeReviews" />
+            <h3>Reviews</h3>
+          </label>
+          <div class="xo-bulk">
+            <button type="button" (click)="toggleAll(selectedReview, reviewCols, true)">All</button>
+            <button type="button" (click)="toggleAll(selectedReview, reviewCols, false)">None</button>
+          </div>
+        </div>
+        @if (includeReviews) {
+          <div class="xo-cols">
+            @for (col of reviewCols; track col) {
+              <label class="xo-col">
+                <input
+                  type="checkbox"
+                  [checked]="isOn(selectedReview, col)"
+                  (change)="toggle(selectedReview, col)"
+                />
+                <span>{{ col }}</span>
+              </label>
+            }
+          </div>
+        }
+      </section>
+    }
+  </div>
+
+  <footer class="xo-foot">
+    <button type="button" class="nd-btn small" (click)="cancelled.emit()">Cancel</button>
+    <button type="button" class="nd-btn small primary" [disabled]="!canConfirm" (click)="confirm()">
+      Export
+    </button>
+  </footer>
+</div>

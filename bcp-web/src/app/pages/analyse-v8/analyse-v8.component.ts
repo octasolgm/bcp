@@ -1650,19 +1650,14 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   }
 
   requestNdRunConfirm(
-    title: string,
-    hint: string,
+    _title: string,
+    _hint: string,
     action: () => void | Promise<void>,
   ): void {
-    if (!this.isNdShell) {
-      void action();
-      return;
-    }
-    this.ndRunConfirmTitle = title;
-    this.ndRunConfirmHint = hint;
+    this.showNdRunConfirm = false;
+    this.pendingNdRunAction = null;
     this.ndRunConfirmInput = '';
-    this.pendingNdRunAction = action;
-    this.showNdRunConfirm = true;
+    void action();
   }
 
   confirmNdRun(): void {

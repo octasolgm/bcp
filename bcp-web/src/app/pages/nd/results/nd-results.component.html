@@ -74,6 +74,20 @@
       </div>
     </div>
 
+    <app-nd-run-review-panel
+      mode="none"
+      [evidenceOnly]="true"
+      [reportAttachments]="reportGapAttachments"
+      [canUploadEvidence]="canUploadGapEvidence"
+      [evidenceUploading]="reportEvidenceBusy"
+      [evidenceRerunning]="reportEvidenceRerunning"
+      [evidenceDeletingId]="reportEvidenceDeletingId"
+      (uploadEvidence)="onReportEvidenceSelected($event)"
+      (deleteEvidence)="onDeleteReportEvidence($event)"
+      (viewEvidence)="onOpenPdf({ docId: $event })"
+      (rerunAllGaps)="onRerunAllGaps()"
+    />
+
     @if (embedMode) {
       <div class="summary-row embedded-summary">
         <div class="summary-card compliant">

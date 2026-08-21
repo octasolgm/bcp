@@ -406,6 +406,14 @@ public class NdAnalysisPoint
     [Column("final_status")]
     public string? FinalStatus { get; set; }
 
+    /// <summary>null = set by the AI pipeline, "manual" = a user chose it, "auto" = every action resolved.</summary>
+    [Column("final_status_source")]
+    public string? FinalStatusSource { get; set; }
+
+    /// <summary>The pipeline's own verdict, kept so an automatic flip can be reverted.</summary>
+    [Column("ai_final_status")]
+    public string? AiFinalStatus { get; set; }
+
     [Column("final_action_plan")]
     public string? FinalActionPlan { get; set; }
 

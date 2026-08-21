@@ -3,13 +3,13 @@
   "properties": {
     "clauses": {
       "type": "array",
-      "description": "Discrete individually-assessable policy sections/clauses. Same shape as Regul.ai EXTRACTION_TOOL_SCHEMA (record_clauses). Segment internal policy manuals into sections a compliance officer can map on their own. Preserve official numbering (e.g. 3.2, 4.1.1). Go to the DEEPEST enumeration level: if section 2.3 has sub-points (a)(b)(i), emit 2.3-a, 2.3-b — never one merged 2.3 summary. Full verbatim clause_text — do not summarize obligation body text. Skip preambles, revision history, and admin-only text unless they impose an obligation. EXCEPTION: entire annexes/typology/red-flag illustrative lists are ONE clause per annex group (summarize the group; do not split every example). Every clause_no must be unique; invent -a, -b suffixes when needed.",
+      "description": "Discrete individually-assessable policy sections/clauses. Same shape as Regul.ai EXTRACTION_TOOL_SCHEMA (record_clauses). Segment internal policy manuals into sections a compliance officer can map on their own. Preserve official headings exactly as printed (e.g. 1. Introduction, 7.4, 8. Independent Reviews, 9.4.1). Do not invent sequential ids such as 1-14 or 1.-15. Go to the DEEPEST enumeration level: if section 2.3 has sub-points (a)(b)(i), emit 2.3-a, 2.3-b — never one merged 2.3 summary. Letter suffixes only for official lettered/unnumbered sub-points under a real heading. Full verbatim clause_text — do not summarize obligation body text. Skip preambles, revision history, table of contents, and admin-only text unless they impose an obligation. EXCEPTION: entire annexes/typology/red-flag illustrative lists are ONE clause per annex group (summarize the group; do not split every example). Every clause_no must be unique.",
       "items": {
         "type": "object",
         "properties": {
           "clause_no": {
             "type": "string",
-            "description": "Official section/clause number, e.g. 3.2 or 4.1.1 or 2.3-a"
+            "description": "Official printed heading number, e.g. 7.4 or 1. Introduction or 2.3-a. Never invent 1-14 style counters."
           },
           "clause_text": {
             "type": "string",

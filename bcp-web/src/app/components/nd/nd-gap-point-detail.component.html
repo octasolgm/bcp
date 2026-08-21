@@ -4,6 +4,20 @@
     <header class="report-header">
       <h3>{{ pointHeading || 'Regulation point' }}</h3>
       <span class="compliance-pill" [ngClass]="compliancePillClass">{{ displayComplianceStatus }}</span>
+      @if (canOverrideClauseStatus) {
+        <label class="clause-status-picker" [title]="clauseStatusHint">
+          <span>Clause</span>
+          <select [ngModel]="clauseStatusValue" (ngModelChange)="setClauseStatus($event)" [disabled]="savingClauseStatus">
+            <option value="">Auto (from analysis)</option>
+            @for (opt of clauseStatusOptions; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </label>
+        @if (clauseStatusSourceNote) {
+          <span class="clause-status-note">{{ clauseStatusSourceNote }}</span>
+        }
+      }
       @if (agreement) {
         <span class="agreement" [ngClass]="agreementClass(agreement.status)">{{ agreement.label }}</span>
       }
@@ -241,6 +255,18 @@
                   <button type="button" class="cap-gap-toggle" (click)="toggleActionCollapsed(gap.index)">
                     <span class="cap-gap-toggle-main">
                       <span class="gap-label">Gap {{ gap.index }}</span>
+                      <label class="gap-risk-picker" (click)="$event.stopPropagation()">
+                        <span>Risk</span>
+                        <select
+                          [ngModel]="gapRisk(gap)"
+                          (ngModelChange)="setGapRisk(gap, $event)"
+                          [disabled]="!canEdit"
+                        >
+                          @for (opt of gapRiskOptions; track opt.value) {
+                            <option [value]="opt.value">{{ opt.label }}</option>
+                          }
+                        </select>
+                      </label>
                       @if (actionCountForGap(gap.index); as actionCount) {
                         <span class="gap-action-count-pill">{{ actionCount }} action{{ actionCount === 1 ? '' : 's' }}</span>
                       }
@@ -283,6 +309,8 @@
                       [runId]="runId"
                       [analysisPointId]="point.id"
                       [gapIndex]="gap.index"
+                      [inheritedPriority]="gapRisk(gap)"
+                      [focusPlanId]="focusPlanIdForGap(gap.index)"
                       [plans]="actionPlansForGapIndex(gap.index)"
                       [canEdit]="effectiveCanEditActionPlans"
                       [canReview]="effectiveCanReviewActionPlans"

@@ -63,9 +63,6 @@
                   From regulation points library
                 </button>
               </div>
-              @if (isNdShell) {
-                <p class="v8-run-confirm-note">Run requires typing <strong>start</strong> to confirm (uses AI credits).</p>
-              }
             </div>
           </div>
         }
@@ -77,7 +74,6 @@
                 <div class="panel-header-top">
                   <h2>Regulation</h2>
                   <div class="header-actions">
-                    <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredRegs()">All</button>
                     <button type="button" class="toolbar-btn secondary" (click)="clearRegSelection()">Clear</button>
                     <label class="btn-upload" [class.busy]="uploadingReg">
                       <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" [disabled]="uploadingReg" />
@@ -100,16 +96,33 @@
                 <ul class="file-list">
                   @for (doc of filteredRegulationDocs; track doc.id) {
                     <li>
-                      <button type="button" class="file-row" [class.selected]="isRegFileSelected(doc.id)" [class.manual-reg-row]="doc.isNdManual" (click)="toggleRegFile(doc)">
+                      <button
+                      type="button"
+                      class="file-row file-row-stack"
+                      [class.selected]="isRegFileSelected(doc.id)"
+                      [class.manual-reg-row]="doc.isNdManual"
+                      [class.doc-ready-red]="regDocReadyState(doc) === 'not_ready'"
+                      [class.doc-ready-blue]="regDocReadyState(doc) === 'ready'"
+                      [class.doc-ready-green]="regDocReadyState(doc) === 'analysed'"
+                      [disabled]="!canSelectRegDoc(doc)"
+                      (click)="toggleRegFile(doc)"
+                    >
                         <span class="multi-check" [class.on]="isRegFileSelected(doc.id)">{{ isRegFileSelected(doc.id) ? '✓' : '' }}</span>
-                        <span class="fname">
-                          {{ fileLabel(doc) }}
-                          @if (doc.isNdManual) {
-                            <span class="manual-reg-hint">Custom points you enter manually</span>
-                          }
+                        <span class="file-row-body">
+                          <span class="fname-line">
+                            <span class="fname">
+                              {{ fileLabel(doc) }}
+                              @if (doc.isNdManual) {
+                                <span class="manual-reg-hint">Custom points you enter manually</span>
+                              }
+                            </span>
+                            <span class="fpts">{{ doc.pointCount ?? 0 }} pts</span>
+                          </span>
+                          <span class="fsub">
+                            <span class="fmeta ready-label">{{ regDocReadyLabel(doc) }}</span>
+                            <span class="fmeta muted">{{ usedInAnalysesMeta(doc) }}</span>
+                          </span>
                         </span>
-                        <span class="fmeta">{{ pointMeta(doc) }}</span>
-                        <span class="fmeta muted">{{ doc.version }}</span>
                       </button>
                     </li>
                   } @empty {
@@ -578,19 +591,27 @@
                 <li>
                   <button
                     type="button"
-                    class="file-row"
+                    class="file-row file-row-stack"
                     [class.selected]="isComplianceFileSelected(doc.id)"
-                    [disabled]="attachingCompliance"
+                    [class.doc-ready-red]="complianceDocReadyState(doc) === 'not_ready'"
+                    [class.doc-ready-blue]="complianceDocReadyState(doc) === 'ready'"
+                    [class.doc-ready-green]="complianceDocReadyState(doc) === 'analysed'"
+                    [disabled]="attachingCompliance || !canSelectComplianceDoc(doc)"
                     (click)="toggleComplianceFile(doc)"
                   >
                     <span class="multi-check" [class.on]="isComplianceFileSelected(doc.id)">{{ isComplianceFileSelected(doc.id) ? '✓' : '' }}</span>
-                    <span class="fname">{{ fileLabel(doc) }}</span>
-                    <span class="fmeta">{{ doc.category || 'Compliance' }}</span>
-                    @if (isNdShell) {
-                      <span class="fmeta parse-status" [class.parsed]="complianceParseLabel(doc.id) === 'Parsed'">{{ complianceParseLabel(doc.id) }}</span>
-                    } @else {
-                      <span class="fmeta muted">{{ doc.version }}</span>
-                    }
+                    <span class="file-row-body">
+                      <span class="fname-line">
+                        <span class="fname">{{ fileLabel(doc) }}</span>
+                      </span>
+                      <span class="fsub">
+                        <span class="fmeta ready-label">{{ complianceDocReadyLabel(doc) }}</span>
+                        <span class="fmeta muted">{{ usedInAnalysesMeta(doc) }}</span>
+                        @if (isNdShell) {
+                          <span class="fmeta parse-status" [class.parsed]="complianceParseLabel(doc.id) === 'Parsed'">{{ complianceParseLabel(doc.id) }}</span>
+                        }
+                      </span>
+                    </span>
                   </button>
                 </li>
               } @empty {
@@ -650,7 +671,7 @@
       </div>
       <div class="stat-box">
         <strong>{{ selectedComplianceIds.size }}</strong>
-        <em>Compliance docs</em>
+        <em>Internal docs</em>
       </div>
       <div class="stat-box">
         <strong>{{ coverageCounts.completed }}</strong>
@@ -706,9 +727,6 @@
             {{ isDemoViewer ? 'Run analysis' : 'Run forward only' }}
           }
         </button>
-        @if (isNdShell && !isDemoViewer) {
-          <span class="run-confirm-hint">Confirm with <strong>start</strong></span>
-        }
       }
     </div>
   </section>
@@ -726,62 +744,6 @@
     </div>
   }
 </div>
-
-@if (showRegulClauseReview && (ndRunId || regulClauseRows.length)) {
-  <section #clauseReviewEl class="card-surface regul-clause-review" aria-label="Review regulatory clauses">
-    <h2>{{ isDemoViewer ? 'Clause overview' : 'Review clauses before analysis' }}</h2>
-    <p class="muted-small">
-      @if (isDemoViewer) {
-        Edit clause text if needed, then confirm. {{ regulClauseReviewTotal }} regulatory clause{{ regulClauseReviewTotal === 1 ? '' : 's' }} in this demo run.
-      } @else {
-        Edit clause text if needed, then confirm. Analysis starts only after confirm.
-      }
-    </p>
-    @if (demoRunPreparing) {
-      <p class="muted-small regul-clause-preparing">Preparing run in the background…</p>
-    }
-    @if (regulClauseReviewTotal > 0) {
-      <p class="regul-clause-summary">
-        <strong>{{ regulClauseReviewTotal }}</strong> regulatory clause{{ regulClauseReviewTotal === 1 ? '' : 's' }} in this run
-      </p>
-    }
-    <div class="regul-clause-list">
-      @for (row of regulClauseRows; track row.pointId) {
-        <div class="regul-clause-row">
-          <label class="regul-clause-no">
-            <span>Clause no.</span>
-            <input type="text" [(ngModel)]="row.pointNumber" />
-          </label>
-          <label class="regul-clause-title">
-            <span>Title</span>
-            <input type="text" [(ngModel)]="row.pointTitle" />
-          </label>
-          <label class="regul-clause-text">
-            <span>Clause text</span>
-            <textarea rows="4" [(ngModel)]="row.pointContent"></textarea>
-          </label>
-        </div>
-      }
-      @if (!regulClauseRows.length) {
-        <p class="empty-msg">Loading clauses…</p>
-      }
-    </div>
-    <div class="regul-clause-actions">
-      <button type="button" class="btn-secondary btn-sm" (click)="closeRegulClauseReview()">Close</button>
-      <button
-        type="button"
-        class="btn-primary btn-sm"
-        [disabled]="regulClauseConfirmLoading || regulClausesConfirmed || regulClauseReviewTotal === 0"
-        (click)="confirmRegulClauses()"
-      >
-        {{ regulClauseConfirmButtonLabel }}
-      </button>
-      @if (regulClausesConfirmed) {
-        <span class="muted-small">Clauses confirmed — analysis is starting…</span>
-      }
-    </div>
-  </section>
-}
 
 <!-- 3-column workspace: analysing | progress | result -->
 <div #workspaceEl class="workspace-3col workspace-resizable v8-workspace">

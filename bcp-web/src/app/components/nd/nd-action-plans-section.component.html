@@ -8,7 +8,7 @@
         }
       </h4>
       <p class="ap-sub">
-        This gap can carry several actions. Each one has its own owner, target date and priority.
+        This gap can carry several actions. Each one has its own owner and target date. Priority comes from the gap.
       </p>
     </div>
     @if (canEdit && !adding && !editingId) {
@@ -31,7 +31,12 @@
 
   <ol class="ap-list">
     @for (plan of sortedPlans; track plan.id; let i = $index) {
-      <li class="ap-card" [class.is-resolved]="plan.status === 'resolved'" [class.is-overdue]="isOverdue(plan)">
+      <li
+        class="ap-card"
+        [attr.data-action-plan-id]="plan.id"
+        [class.is-resolved]="plan.status === 'resolved'"
+        [class.is-overdue]="isOverdue(plan)"
+      >
         <button
           type="button"
           class="ap-card-toggle"
@@ -40,7 +45,7 @@
         >
           <span class="ap-index">Action {{ i + 1 }}</span>
           <span class="ap-status-pill" [class.resolved]="plan.status === 'resolved'">{{ statusLabel(plan.status) }}</span>
-          <span class="ap-priority-pill" [ngClass]="planScoreClass(plan)">{{ scoreLabel(planScore(plan)) }}</span>
+          <span class="ap-priority-pill" [ngClass]="priorityClass(inheritedPriority)">{{ inheritedPriorityLabel }}</span>
           <span class="ap-summary truncate" [title]="plan.actionPlan">{{ plan.actionPlan }}</span>
           <span class="ap-meta truncate">{{ responsibilityLabel(plan) }}</span>
           <span class="ap-meta ap-target" [class.overdue]="isOverdue(plan)">
@@ -211,10 +216,13 @@
                           · {{ review.reviewerRole }}
                         }
                         · {{ formatDate(review.createdAt) }}
+                        @if (reviewAssigneeLabel(review); as sentTo) {
+                          · sent to {{ sentTo }}
+                        }
                       </p>
                       @if (canReview) {
                         <div class="ap-review-actions">
-                          <button type="button" class="link-btn" (click)="startEditReview(plan, review.id, review.comment)">Edit</button>
+                          <button type="button" class="link-btn" (click)="startEditReview(plan, review)">Edit</button>
                           <button type="button" class="link-btn danger" (click)="removeReview(plan, review.id)">Delete</button>
                         </div>
                       }
@@ -231,6 +239,18 @@
                     placeholder="Review comment"
                     [(ngModel)]="reviewDraftText"
                   ></textarea>
+                  <label class="ap-review-route">
+                    <span>Send to</span>
+                    <select class="ap-input" [(ngModel)]="reviewAssigneeKey">
+                      <option value="">No one — keep as a note</option>
+                      @for (choice of reviewAssigneeChoices; track choice.key) {
+                        <option [value]="choice.key">{{ choice.group }} · {{ choice.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <p class="ap-muted ap-review-route-hint">
+                    A routed review lands in the recipient's inbox, and a copy stays in yours.
+                  </p>
                   <div class="ap-form-actions">
                     <button type="button" class="btn-primary btn-sm" [disabled]="savingReview || !reviewDraftText.trim()" (click)="submitReview(plan)">
                       {{ savingReview ? 'Saving…' : editingReviewId ? 'Update review' : 'Save review' }}
@@ -350,32 +370,9 @@
       </p>
     </div>
 
-    <div class="ap-field wide ap-priority-field">
-      <div class="ap-priority-head">
-        <label class="ap-label" for="ap-priority">Priority</label>
-        <span class="ap-priority-value" [ngClass]="draftPriorityClass">{{ draftPriorityLabel }}</span>
-      </div>
-      <div class="ap-priority-slider-wrap">
-        <div class="ap-priority-track" aria-hidden="true"></div>
-        <input
-          id="ap-priority"
-          type="range"
-          class="ap-priority-slider"
-          min="0"
-          max="100"
-          step="1"
-          [ngModel]="draft.priorityScore"
-          (ngModelChange)="setDraftPriority($event)"
-          [attr.aria-valuenow]="draft.priorityScore"
-          [attr.aria-valuetext]="draftPriorityLabel"
-        />
-      </div>
-      <div class="ap-priority-scale" aria-hidden="true">
-        <span>0 Low</span>
-        <span>50 Medium</span>
-        <span>100 High</span>
-      </div>
-      <p class="ap-priority-standard">{{ priorityScale }}</p>
+    <div class="ap-field">
+      <span class="ap-label">Priority</span>
+      <p class="ap-inherited">{{ inheritedPriorityLabel }} <span class="ap-muted">(from gap)</span></p>
     </div>
 
     @if (showRetargetReason) {

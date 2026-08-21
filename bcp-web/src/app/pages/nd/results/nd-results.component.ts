@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdGapPointDetailComponent } from '../../../components/nd/nd-gap-point-detail.component';
 import { NdPointSortControlsComponent } from '../../../components/nd/nd-point-sort-controls.component';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
+import { NdRunReviewPanelComponent } from '../../../components/nd/nd-run-review-panel.component';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
@@ -15,8 +16,7 @@ import {
   resolveAnalysisPointSeverity,
   resolvePointComplianceLabel,
 } from '../../../../lib/nd/point-compliance-status';
-import { exportResultsExcel } from '../../../../lib/nd/export/export-excel';
-import { exportResultsPdf } from '../../../../lib/nd/export/export-pdf';
+import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints } from '../../../../lib/nd/export/gap-analysis-export';
 import type { ActionPlanHistoryEntry, AnalysisPoint, PointGapAttachment, ResultsData } from '../../../../lib/nd/types';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus } from '../../../../lib/nd/action-item-review';
 import { tempCommentsForPoint, type TempPointReviewComment, type TempReviewCommentsChangeEvent } from '../../../../lib/nd/temp-point-review-comment';
@@ -28,7 +28,7 @@ import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sor
 @Component({
   selector: 'app-nd-results',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent],
   templateUrl: './nd-results.component.html',
   styleUrls: ['./nd-results.component.scss', '../nd-shared.scss'],
 })
@@ -71,6 +71,9 @@ export class NdResultsComponent implements OnInit, OnChanges {
   evidenceDeletingAttachmentId: string | null = null;
   savingActionReviewIndex: number | null = null;
   savingReviewId: string | null = null;
+  reportEvidenceBusy = false;
+  reportEvidenceRerunning = false;
+  reportEvidenceDeletingId: string | null = null;
 
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
@@ -240,6 +243,18 @@ export class NdResultsComponent implements OnInit, OnChanges {
 
   attachmentsForPoint(pointId: string): PointGapAttachment[] {
     return (this.data?.pointAttachments ?? []).filter((a) => a.analysisPointId === pointId);
+  }
+
+  get reportGapAttachments(): PointGapAttachment[] {
+    const seen = new Set<string>();
+    const out: PointGapAttachment[] = [];
+    for (const att of this.data?.pointAttachments ?? []) {
+      if (att.actionIndex != null) continue;
+      if (seen.has(att.storedDocumentId)) continue;
+      seen.add(att.storedDocumentId);
+      out.push(att);
+    }
+    return out;
   }
 
   savedReviewsForPoint(pointId: string): ActionItemReviewEntry[] {
@@ -445,6 +460,63 @@ export class NdResultsComponent implements OnInit, OnChanges {
     }
   }
 
+  async onRerunAllGaps(): Promise<void> {
+    if (!this.runId || this.reportEvidenceRerunning) return;
+    this.reportEvidenceRerunning = true;
+    this.error = '';
+    try {
+      const res = await this.api.rerunRunWithEvidence(this.runId);
+      if (res.success) {
+        this.toast.show(res.message ?? 'Rerunning analysis for all gaps…', 'success');
+        await this.load();
+      } else {
+        this.error = res.message ?? 'Rerun failed';
+        this.toast.show(this.error, 'error');
+      }
+    } finally {
+      this.reportEvidenceRerunning = false;
+    }
+  }
+
+  async onReportEvidenceSelected(filesOrEvent: FileList | Event): Promise<void> {
+    const files = filesOrEvent instanceof FileList
+      ? Array.from(filesOrEvent)
+      : Array.from((filesOrEvent.target as HTMLInputElement).files ?? []);
+    if (!files.length || !this.runId) return;
+    this.reportEvidenceBusy = true;
+    try {
+      const upload = await this.api.uploadRunGapEvidence(this.runId, files);
+      if (!upload.success) {
+        this.toast.show(upload.message ?? 'Upload failed', 'error');
+        return;
+      }
+      this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
+      await this.load();
+    } finally {
+      this.reportEvidenceBusy = false;
+    }
+  }
+
+  async onDeleteReportEvidence(storedDocumentId: string): Promise<void> {
+    if (!this.runId) return;
+    this.reportEvidenceDeletingId = storedDocumentId;
+    try {
+      const res = await this.api.deleteRunGapEvidence(this.runId, storedDocumentId);
+      if (res.success) {
+        if (this.data?.pointAttachments) {
+          this.data = {
+            ...this.data,
+            pointAttachments: this.data.pointAttachments.filter((a) => a.storedDocumentId !== storedDocumentId),
+          };
+        }
+      } else {
+        this.toast.show(res.message ?? 'Could not remove file', 'error');
+      }
+    } finally {
+      this.reportEvidenceDeletingId = null;
+    }
+  }
+
   regDocIdForPoint(point: AnalysisPoint): string | null {
     const snap = parsePointSnapshot(point.pointSnapshot);
     return snap.regulationDocumentId ?? this.regulationDocId;
@@ -576,11 +648,29 @@ export class NdResultsComponent implements OnInit, OnChanges {
   }
 
   exportPdf(): void {
-    if (this.data) exportResultsPdf(this.data);
+    if (!this.data) return;
+    exportGapAnalysisPdfFromPoints(this.data.points, {
+      runName: this.data.run.name || 'Gap Analysis Report',
+      ...this.exportOptions(),
+    });
   }
 
   async exportExcel(): Promise<void> {
-    if (this.data) await exportResultsExcel(this.data);
+    if (!this.data) return;
+    await exportGapAnalysisExcelFromPoints(this.data.points, undefined, undefined, this.exportOptions());
+  }
+
+  private exportOptions() {
+    const clauseByPointId = new Map<string, string>();
+    for (const point of this.data?.points ?? []) {
+      if (!point.id) continue;
+      const snap = parsePointSnapshot(point.pointSnapshot);
+      clauseByPointId.set(point.id, (snap.pointNumber ?? '').replace(/^§/, '').trim());
+    }
+    return {
+      actionPlans: this.data?.actionPlans ?? [],
+      clauseByPointId,
+    };
   }
 
   formatDate = formatDate;

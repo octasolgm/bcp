@@ -17,7 +17,7 @@
 
 <div class="stats-row gap-risk-row">
   <button type="button" class="stat-card critical" (click)="openMetricBreakdown('critical')">
-    <span class="stat-label">Critical gaps</span>
+    <span class="stat-label">High risk gaps</span>
     <strong class="stat-value">{{ criticalGapCount < 0 ? '…' : criticalGapCount }}</strong>
     <span class="stat-hint">Score 67–100</span>
   </button>
@@ -37,20 +37,20 @@
     <span class="stat-hint">Across {{ analysisCountLabel }} analysis</span>
   </button>
   <button type="button" class="stat-card compliant" (click)="openMetricBreakdown('compliant')">
-    <span class="stat-label">Compliant Items</span>
-    <strong class="stat-value">{{ compliantCount }}</strong>
-    <span class="stat-hint">Fully addressed</span>
-  </button>
-  <button type="button" class="stat-card partial" (click)="openMetricBreakdown('partial')">
-    <span class="stat-label">Partial Items</span>
-    <strong class="stat-value">{{ partialCount }}</strong>
-    <span class="stat-hint">Partially addressed</span>
-  </button>
-  <button type="button" class="stat-card non-compliant" (click)="openMetricBreakdown('non_compliant')">
-    <span class="stat-label">Non-compliant Items</span>
-    <strong class="stat-value">{{ nonCompliantCount }}</strong>
-    <span class="stat-hint">Not addressed</span>
-  </button>
+          <span class="stat-label">{{ complianceLabels.compliant }} items</span>
+          <strong class="stat-value">{{ compliantCount }}</strong>
+          <span class="stat-hint">Fully addressed</span>
+        </button>
+        <button type="button" class="stat-card partial" (click)="openMetricBreakdown('partial')">
+          <span class="stat-label">{{ complianceLabels.partial_compliant }} items</span>
+          <strong class="stat-value">{{ partialCount }}</strong>
+          <span class="stat-hint">{{ complianceLabels.partial_compliant }}</span>
+        </button>
+        <button type="button" class="stat-card non-compliant" (click)="openMetricBreakdown('non_compliant')">
+          <span class="stat-label">{{ complianceLabels.non_compliant }} items</span>
+          <strong class="stat-value">{{ nonCompliantCount }}</strong>
+          <span class="stat-hint">{{ complianceLabels.non_compliant }}</span>
+        </button>
 </div>
 <p class="risk-standard-note">{{ riskStandardLabel }}</p>
 @if (inNdShell && !ndRunsLoading && ndRuns.length && !ndRunsWithMetricsCount) {
@@ -90,29 +90,7 @@
     </div>
   </section>
 
-  <section class="card-surface tracker-card">
-    <h2>Remediation Tracker</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Item</th>
-          <th>Severity</th>
-          <th>Target</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (row of remediationItems; track row.item) {
-          <tr class="clickable-row" (click)="openRemediation(row)" role="link" tabindex="0">
-            <td>{{ row.item }}</td>
-            <td><span class="severity-badge" [class]="severityClass(row.severity)">{{ row.severity }}</span></td>
-            <td>{{ row.target }}</td>
-            <td class="status-open">{{ row.status }}</td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </section>
+  <app-nd-mis-panel class="tracker-card" />
 </div>
 
 <section class="card-surface recent-section">

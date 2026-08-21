@@ -5,6 +5,7 @@ using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.NewDashboard.Demo;
+using Reguliq.Api.Services.Pdf;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard;
@@ -152,7 +153,7 @@ public class NdInternalParseService(
         var cached = await cache.ResolveParseCacheAsync(cacheKey, hash, _opts.ParseModel, ct);
         if (!string.IsNullOrWhiteSpace(cached?.Markdown))
         {
-            await MarkParsedAsync(doc, hash, parsedBy, ct);
+            await MarkParsedAsync(doc, hash, parsedBy, ct, pdfBytes);
             return new InternalDocPayload(
                 cacheKey,
                 doc.OriginalFileName,
@@ -194,7 +195,7 @@ public class NdInternalParseService(
                 ?? "document";
             var markdown = await documentParse.ParseToMarkdownAsync(pdfBytes, fileName, ct);
             await cache.SaveParseCacheAsync(cacheKey, fileName, markdown, _opts.ParseModel, ct);
-            await MarkParsedAsync(doc, hash, parsedBy, ct);
+            await MarkParsedAsync(doc, hash, parsedBy, ct, pdfBytes);
             return new InternalDocPayload(cacheKey, doc.OriginalFileName ?? fileName, markdown, pdfBytes);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -224,7 +225,8 @@ public class NdInternalParseService(
         StoredDocument doc,
         string hash,
         Guid? parsedBy,
-        CancellationToken ct)
+        CancellationToken ct,
+        byte[]? pdfBytes = null)
     {
         var changed = doc.ParseStatus != "parsed"
             || doc.FileHash != hash
@@ -237,6 +239,17 @@ public class NdInternalParseService(
         doc.ParsedAt ??= DateTimeOffset.UtcNow;
         if (parsedBy.HasValue)
             doc.ParsedBy = parsedBy;
+
+        if (pdfBytes is { Length: > 0 })
+        {
+            var pages = PdfNativePageDocument.TryGetPageCount(pdfBytes);
+            if (pages > 0 && doc.Pages != pages)
+            {
+                doc.Pages = pages;
+                changed = true;
+            }
+        }
+
         doc.UpdatedAt = DateTimeOffset.UtcNow;
 
         if (changed)

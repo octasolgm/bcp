@@ -605,6 +605,11 @@
   font-size: 0.8125rem;
 }
 
+.rail-point.action-plan-focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
 .item-card.action-plan-focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
@@ -676,6 +681,55 @@
     margin: 0.3rem 0 0;
     font-size: 0.6875rem;
     color: var(--text-secondary);
+  }
+
+  .apr-actions {
+    display: flex;
+    gap: 0.65rem;
+    margin-top: 0.4rem;
+  }
+
+  .link-btn {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    font-size: 0.75rem;
+    color: var(--accent);
+    cursor: pointer;
+
+    &.danger {
+      color: var(--danger, #dc2626);
+    }
+  }
+
+  .apr-add {
+    margin-top: 0.85rem;
+  }
+
+  .apr-form {
+    margin-top: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .apr-textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 5rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.8125rem;
+  }
+
+  .apr-form-actions {
+    display: flex;
+    gap: 0.5rem;
   }
 }
 
@@ -800,4 +854,11 @@
 
 .field-group {
   min-width: 0;
+}
+
+.finalize-progress {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
 }

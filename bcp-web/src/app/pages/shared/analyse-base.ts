@@ -65,6 +65,7 @@ import {
   normalizeRegulationPoint,
   ndGovPointToRegulationPoint,
   prepareRegulationPointsResponse,
+  regulationDocumentCountsTowardTotal,
   regulationPointToGovPoint,
   regulationPointToNdGovPoint,
   sortRegulationDocuments,
@@ -72,6 +73,7 @@ import {
 } from '../../../lib/regulation-catalog-utils';
 import { parsePointSnapshot, resolveSnapshotDisplayNumber } from '../../../lib/nd/utils';
 import type { AnalysisPoint, AnalysisRunSummary, PointSnapshot, RegulationDocument } from '../../../lib/nd/types';
+import type { ActionPlanEntry } from '../../../lib/nd/action-plan';
 import { analysisPointCoverageStatus } from '../../../lib/nd/analysis-point-mapper';
 import {
   normalizeRegulPoint,
@@ -90,6 +92,7 @@ import {
 import {
   exportGapAnalysisExcelFromPoints,
   exportGapAnalysisPdfFromPoints,
+  type GapAnalysisExcelOptions,
 } from '../../../lib/nd/export/gap-analysis-export';
 import { analysisRunNeedsExecutionView } from '../../../lib/nd/run-links';
 import {
@@ -97,6 +100,14 @@ import {
   normalizeSessionPointStatus,
 } from '../../../lib/session-point-status';
 import { reportItemsToGapItems } from '../../services/gap-analysis-mapper';
+import {
+  docAnalysisReadyClass,
+  docAnalysisReadyLabel,
+  internalAnalysisReadyState,
+  regulationAnalysisReadyState,
+  usedInAnalysesLabel,
+  type DocAnalysisReadyState,
+} from '../../../lib/nd/doc-analysis-ready';
 import {
   COMPLIANCE_SEVERITY_LABELS,
   gapSeverityLabel,
@@ -821,9 +832,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     this.exportingGapReport = true;
     this.cdr.markForCheck();
     try {
-      await exportGapAnalysisExcelFromPoints(points, undefined, undefined, {
-        regulationDocumentName: this.regulationDocumentExportName,
-      });
+      await exportGapAnalysisExcelFromPoints(points, undefined, undefined, await this.gapAnalysisExportOptions());
       this.toast.show(`Exported ${rows.length} point(s) to Excel`, 'success');
     } catch {
       this.toast.show('Export failed — try again', 'error');
@@ -833,7 +842,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     }
   }
 
-  exportDoneGapAnalysisPdf(): void {
+  async exportDoneGapAnalysisPdf(): Promise<void> {
     if (this.exportingGapReport || !this.ndRunId) return;
     const points = this.collectDoneAnalysisPointsForExport();
     const rows = buildGapAnalysisExportRows(points);
@@ -844,10 +853,11 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     this.exportingGapReport = true;
     this.cdr.markForCheck();
     try {
+      const options = await this.gapAnalysisExportOptions();
       exportGapAnalysisPdfFromPoints(points, {
         runName: 'Gap Analysis Report',
-        subtitle: `${rows.length} done point(s) · Analyse v8`,
-        regulationDocumentName: this.regulationDocumentExportName,
+        subtitle: `${rows.length} done point(s)`,
+        ...options,
       });
       this.toast.show(`Exported ${rows.length} point(s) to PDF`, 'success');
     } catch {
@@ -1282,6 +1292,25 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     return this.selectedRegDocs[0]?.id ?? this.libraryPrimaryRegDocId ?? null;
   }
 
+  protected async gapAnalysisExportOptions(): Promise<GapAnalysisExcelOptions> {
+    const clauseByPointId = new Map<string, string>();
+    for (const point of this.ndRunDetailPoints) {
+      if (!point.id) continue;
+      const snap = parsePointSnapshot(point.pointSnapshot);
+      clauseByPointId.set(point.id, (snap.pointNumber ?? '').replace(/^§/, '').trim());
+    }
+    let actionPlans: ActionPlanEntry[] = [];
+    if (this.ndRunId) {
+      const res = await this.ndApi.getActionPlans(this.ndRunId);
+      if (res.success && res.data) actionPlans = res.data;
+    }
+    return {
+      regulationDocumentName: this.regulationDocumentExportName,
+      actionPlans,
+      clauseByPointId,
+    };
+  }
+
   /** Title of the regulation document driving the run — used as the leading export column. */
   get regulationDocumentExportName(): string {
     const selected = this.selectedRegDocs[0];
@@ -1697,9 +1726,10 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   get filteredRegulationDocs(): StoredDocumentDto[] {
+    const countable = this.regulationDocs.filter((d) => regulationDocumentCountsTowardTotal(d));
     const q = this.regSearch.trim().toLowerCase();
-    if (!q) return this.regulationDocs;
-    return this.regulationDocs.filter((d) => {
+    if (!q) return countable;
+    return countable.filter((d) => {
       const label = `${d.title} ${d.originalFileName} ${d.category}${d.isNdManual ? ' custom manual' : ''}`.toLowerCase();
       return label.includes(q);
     });
@@ -2125,10 +2155,10 @@ ${this.findingsPreview
       id: nd.id,
       title: nd.name,
       category: 'Regulation',
-      pages: 0,
+      pages: nd.pageCount ?? 0,
       uploaded: nd.createdAt,
       version: nd.isManual || nd.source === 'manual' ? 'Manual' : 'v1',
-      status: nd.extractionStatus === 'extracted' || nd.extractionStatus === 'manual' ? 'active' : 'pending',
+      status: nd.extractionStatus === 'extracted' || nd.extractionStatus === 'manual' || demoCbuaeCount > 0 ? 'active' : 'pending',
       filter: 'regulation',
       fileType: nd.isManual || nd.source === 'manual' ? 'manual' : 'pdf',
       docKind: 'regulation',
@@ -2139,6 +2169,9 @@ ${this.findingsPreview
       pointCount: demoCbuaeCount,
       isNdManual: nd.isManual === true || nd.source === 'manual',
       ndStoredDocumentId: nd.storedDocumentId ?? null,
+      extractionStatus:
+        demoCbuaeCount > 0 && apiCount === 0 ? 'extracted' : nd.extractionStatus,
+      analysisRunCount: nd.analysisRunCount ?? 0,
     };
   }
 
@@ -2288,6 +2321,7 @@ ${this.findingsPreview
 
   toggleComplianceFile(doc: StoredDocumentDto, event?: Event): void {
     event?.stopPropagation();
+    if (!this.canSelectComplianceDoc(doc)) return;
     if (this.selectedComplianceIds.has(doc.id)) {
       this.selectedComplianceIds.delete(doc.id);
       if (this.selectedComplianceDocId === doc.id) {
@@ -2311,6 +2345,7 @@ ${this.findingsPreview
 
   selectAllFilteredCompliance(): void {
     for (const doc of this.filteredComplianceDocs) {
+      if (!this.canSelectComplianceDoc(doc)) continue;
       this.selectedComplianceIds.add(doc.id);
     }
     const last = this.filteredComplianceDocs[this.filteredComplianceDocs.length - 1];
@@ -2425,13 +2460,48 @@ ${this.findingsPreview
   }
 
   selectAllFilteredRegs(): void {
-    for (const d of this.filteredRegulationDocs) this.selectedRegIds.add(d.id);
+    for (const d of this.filteredRegulationDocs) {
+      if (this.canSelectRegDoc(d)) this.selectedRegIds.add(d.id);
+    }
     this.syncSelectedDocs();
     this.loadPointsForSelectedFiles();
   }
 
+  regDocReadyState(doc: StoredDocumentDto): DocAnalysisReadyState {
+    return regulationAnalysisReadyState(doc);
+  }
+
+  canSelectRegDoc(doc: StoredDocumentDto): boolean {
+    return this.regDocReadyState(doc) !== 'not_ready';
+  }
+
+  regDocReadyLabel(doc: StoredDocumentDto): string {
+    return docAnalysisReadyLabel(this.regDocReadyState(doc));
+  }
+
+  complianceDocReadyState(doc: StoredDocumentDto): DocAnalysisReadyState {
+    return internalAnalysisReadyState(doc);
+  }
+
+  canSelectComplianceDoc(doc: StoredDocumentDto): boolean {
+    return this.complianceDocReadyState(doc) !== 'not_ready';
+  }
+
+  complianceDocReadyLabel(doc: StoredDocumentDto): string {
+    return docAnalysisReadyLabel(this.complianceDocReadyState(doc));
+  }
+
+  usedInAnalysesMeta(doc: StoredDocumentDto): string {
+    return usedInAnalysesLabel(doc.analysisRunCount);
+  }
+
+  docReadyClass(state: DocAnalysisReadyState): string {
+    return docAnalysisReadyClass(state);
+  }
+
   toggleRegFile(doc: StoredDocumentDto, event?: Event): void {
     event?.stopPropagation();
+    if (!this.canSelectRegDoc(doc)) return;
     this.toggleRegFileById(doc.id);
   }
 
@@ -2453,7 +2523,9 @@ ${this.findingsPreview
   }
 
   private syncSelectedDocs(): void {
-    const catalogIds = new Set(this.regulationDocs.map((d) => d.id));
+    const catalogIds = new Set(
+      this.regulationDocs.filter((d) => regulationDocumentCountsTowardTotal(d)).map((d) => d.id),
+    );
     for (const id of [...this.selectedRegIds]) {
       if (!catalogIds.has(id)) this.selectedRegIds.delete(id);
     }
@@ -2674,6 +2746,57 @@ ${this.findingsPreview
       });
   }
 
+  private async uploadNdRegulationFile(file: File): Promise<void> {
+    this.uploadingReg = true;
+    this.error = '';
+    try {
+      const res = await this.ndApi.uploadRegulationDocument(file);
+      if (!res.success) {
+        this.error = res.message ?? 'Regulation upload failed.';
+        this.toast.show(this.error, 'error', 4000);
+        return;
+      }
+      const data = (res.data ?? {}) as { id?: string; extractionStatus?: string };
+      const id = data.id;
+      if (!id) {
+        this.toast.show('Document uploaded', 'success', 3000);
+        this.refreshRegulations();
+        return;
+      }
+
+      if (this.ndAuth.isDemoViewer()) {
+        this.toast.show('Uploaded — parsing via demo (no live AI)…', 'info', 3000);
+        const parsed = await this.ndApi.parseRegulationDocument(id);
+        if (!parsed.success) {
+          this.toast.show(parsed.message ?? 'Demo parse failed', 'error', 4000);
+        } else {
+          const extracted = await this.ndApi.extractRegulationDocument(id);
+          if (!extracted.success) {
+            this.toast.show(extracted.message ?? 'Demo extract failed', 'error', 4000);
+          } else {
+            this.toast.show('Parsed and extracted (demo)', 'success', 3500);
+          }
+        }
+      } else {
+        this.toast.show('Uploaded — parse and extract it from Regulation Docs before selecting.', 'success', 4000);
+      }
+
+      this.refreshRegulations(() => {
+        const doc = this.regulationDocs.find((d) => d.id === id);
+        if (doc && this.canSelectRegDoc(doc)) {
+          this.selectedRegIds.add(doc.id);
+          this.syncSelectedDocs();
+          this.loadPointsForSelectedFiles();
+        }
+      });
+    } catch {
+      this.error = 'Regulation upload failed.';
+      this.toast.show(this.error, 'error', 4000);
+    } finally {
+      this.uploadingReg = false;
+    }
+  }
+
   onRegulationUpload(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -2694,6 +2817,10 @@ ${this.findingsPreview
   }
 
   private uploadRegulationFile(file: File, confirmVersionBump: boolean): void {
+    if (this.useNdRegulationCatalog) {
+      void this.uploadNdRegulationFile(file);
+      return;
+    }
     if (!this.storageConfigured) {
       this.error = 'Configure Supabase Storage before uploading.';
       this.toast.show(this.error, 'error', 4000);

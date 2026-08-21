@@ -13,18 +13,17 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { NdApiService } from '../../services/nd/nd-api.service';
+import { NdApiService, type NdReviewAssignee } from '../../services/nd/nd-api.service';
 import {
-  ACTION_PLAN_PRIORITY_SCALE,
   ACTION_PLAN_STATUS_OPTIONS,
   actionPlanPriorityClass,
   actionPlanPriorityFromScore,
   actionPlanPriorityLabel,
   actionPlanPriorityScore,
+  actionPlanScoreFromPriority,
   actionPlanScoreLabel,
   actionPlanStatusLabel,
   assigneesForPlan,
-  clampActionPlanScore,
   draftFromActionPlan,
   emptyActionPlanDraft,
   isActionPlanOverdue,
@@ -32,11 +31,14 @@ import {
   type ActionPlanAssignee,
   type ActionPlanDraft,
   type ActionPlanEntry,
+  type ActionPlanPriority,
   type ActionPlanResponsibilityOptions,
+  type ActionPlanReviewEntry,
   type ActionPlanResponsibilityType,
   type ActionPlanStatus,
   type ActionPlanTargetDateChange,
 } from '../../../lib/nd/action-plan';
+import { defaultTargetDateForGapRisk } from '../../../lib/nd/doc-analysis-ready';
 import { formatDate } from '../../../lib/nd/utils';
 
 /**
@@ -68,12 +70,15 @@ export class NdActionPlansSectionComponent implements OnChanges {
   @Input() canReview = false;
   @Input() lightSurface = false;
   @Input() disabledHint = '';
+  /** Priority inherited from the parent gap — not independently editable on the action. */
+  @Input() inheritedPriority: ActionPlanPriority = 'medium';
+  /** Action id from an inbox deep link — expanded and scrolled into view once it loads. */
+  @Input() focusPlanId: string | null = null;
 
   @Output() plansChanged = new EventEmitter<void>();
   @Output() viewReviews = new EventEmitter<ActionPlanEntry>();
 
   readonly statusOptions = ACTION_PLAN_STATUS_OPTIONS;
-  readonly priorityScale = ACTION_PLAN_PRIORITY_SCALE;
   readonly priorityLabel = actionPlanPriorityLabel;
   readonly priorityClass = actionPlanPriorityClass;
   readonly scoreLabel = actionPlanScoreLabel;
@@ -98,15 +103,36 @@ export class NdActionPlansSectionComponent implements OnChanges {
 
   reviewDraftPlanId: string | null = null;
   reviewDraftText = '';
+  /** "department:{id}" or "user:{id}"; blank leaves the review as an unrouted note. */
+  reviewAssigneeKey = '';
   editingReviewId: string | null = null;
   savingReview = false;
+
+  private focusPlanApplied: string | null = null;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['analysisPointId'] || changes['gapIndex']) {
       this.resetEditor();
       this.historyPlanId = null;
     }
-    if (!this.optionsLoaded && this.canEdit) void this.loadOptions();
+    if (!this.optionsLoaded && (this.canEdit || this.canReview)) void this.loadOptions();
+    this.applyFocusPlan();
+  }
+
+  /** Expand and scroll to the action a deep link points at, once that action has loaded. */
+  private applyFocusPlan(): void {
+    const target = this.focusPlanId;
+    if (!target || this.focusPlanApplied === target) return;
+    if (!this.plans.some((p) => p.id === target)) return;
+
+    this.focusPlanApplied = target;
+    this.expandedIds = new Set(this.expandedIds).add(target);
+    setTimeout(() => {
+      const root = this.host.nativeElement as HTMLElement;
+      const el = root.querySelector(`[data-action-plan-id="${target}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.classList.add('ap-card-focused');
+    }, 300);
   }
 
   private async loadOptions(): Promise<void> {
@@ -153,10 +179,18 @@ export class NdActionPlansSectionComponent implements OnChanges {
 
   // -------------------------------------------------------------- editor
 
+  get inheritedPriorityLabel(): string {
+    return actionPlanPriorityLabel(this.inheritedPriority);
+  }
+
   startAdd(): void {
     this.adding = true;
     this.editingId = null;
-    this.draft = emptyActionPlanDraft();
+    this.draft = {
+      ...emptyActionPlanDraft(),
+      priorityScore: actionPlanScoreFromPriority(this.inheritedPriority),
+      targetDate: defaultTargetDateForGapRisk(this.inheritedPriority),
+    };
     this.error = '';
   }
 
@@ -181,18 +215,6 @@ export class NdActionPlansSectionComponent implements OnChanges {
 
   setDraftStatus(value: string): void {
     this.draft = { ...this.draft, status: value as ActionPlanStatus };
-  }
-
-  setDraftPriority(value: number | string): void {
-    this.draft = { ...this.draft, priorityScore: clampActionPlanScore(Number(value)) };
-  }
-
-  get draftPriorityLabel(): string {
-    return this.scoreLabel(this.draft.priorityScore);
-  }
-
-  get draftPriorityClass(): string {
-    return `ap-priority-${actionPlanPriorityFromScore(this.draft.priorityScore)}`;
   }
 
   planScoreClass(plan: ActionPlanEntry): string {
@@ -309,8 +331,8 @@ export class NdActionPlansSectionComponent implements OnChanges {
     const body = {
       actionPlan: this.draft.actionPlan.trim(),
       status: this.draft.status,
-      priorityScore: this.draft.priorityScore,
-      priority: actionPlanPriorityFromScore(this.draft.priorityScore),
+      priorityScore: actionPlanScoreFromPriority(this.inheritedPriority),
+      priority: this.inheritedPriority,
       targetDate: this.draft.targetDate || null,
       responsibilityType: this.draft.responsibilityType,
       assignees: this.draft.assignees,
@@ -400,28 +422,68 @@ export class NdActionPlansSectionComponent implements OnChanges {
     this.reviewDraftPlanId = plan.id;
     this.editingReviewId = null;
     this.reviewDraftText = '';
+    this.reviewAssigneeKey = '';
   }
 
-  startEditReview(plan: ActionPlanEntry, reviewId: string, comment: string): void {
+  startEditReview(plan: ActionPlanEntry, review: ActionPlanReviewEntry): void {
     this.reviewDraftPlanId = plan.id;
-    this.editingReviewId = reviewId;
-    this.reviewDraftText = comment;
+    this.editingReviewId = review.id;
+    this.reviewDraftText = review.comment;
+    this.reviewAssigneeKey = review.assigneeType
+      ? `${review.assigneeType}:${review.assigneeDepartmentId ?? review.assigneeUserId ?? ''}`
+      : '';
   }
 
   cancelReview(): void {
     this.reviewDraftPlanId = null;
     this.editingReviewId = null;
     this.reviewDraftText = '';
+    this.reviewAssigneeKey = '';
+  }
+
+  /** Flat list for the "send to" select: departments first, then people. */
+  get reviewAssigneeChoices(): { key: string; label: string; group: string }[] {
+    return [
+      ...this.options.departments.map((d) => ({
+        key: `department:${d.id}`,
+        label: d.name,
+        group: 'Departments',
+      })),
+      ...this.options.users.map((u) => ({
+        key: `user:${u.id}`,
+        label: u.fullName,
+        group: 'People',
+      })),
+    ];
+  }
+
+  private reviewAssigneePayload(): NdReviewAssignee | undefined {
+    if (!this.reviewAssigneeKey) return undefined;
+    const [type, id] = this.reviewAssigneeKey.split(':');
+    const label = this.reviewAssigneeChoices.find((c) => c.key === this.reviewAssigneeKey)?.label;
+    if (!label || (type !== 'department' && type !== 'user')) return undefined;
+    return {
+      assigneeType: type,
+      assigneeDepartmentId: type === 'department' ? id : null,
+      assigneeUserId: type === 'user' ? id : null,
+      assigneeLabel: label,
+    };
+  }
+
+  reviewAssigneeLabel(review: ActionPlanReviewEntry): string {
+    if (!review.assigneeLabel) return '';
+    return `${review.assigneeLabel} (${review.assigneeType === 'user' ? 'person' : 'department'})`;
   }
 
   async submitReview(plan: ActionPlanEntry): Promise<void> {
     const comment = this.reviewDraftText.trim();
     if (!comment) return;
 
+    const assignee = this.reviewAssigneePayload();
     this.savingReview = true;
     const res = this.editingReviewId
-      ? await this.api.updateActionPlanReview(this.runId, plan.id, this.editingReviewId, comment)
-      : await this.api.addActionPlanReview(this.runId, plan.id, comment);
+      ? await this.api.updateActionPlanReview(this.runId, plan.id, this.editingReviewId, comment, assignee)
+      : await this.api.addActionPlanReview(this.runId, plan.id, comment, assignee);
     this.savingReview = false;
 
     if (!res.success) {

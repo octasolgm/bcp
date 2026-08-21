@@ -35,10 +35,12 @@ import {
   type GapRiskCounts,
   type RiskTier,
 } from '../../../lib/nd/risk-priority-score';
+import { COMPLIANCE_SEVERITY_LABELS } from '../../../lib/nd/point-compliance-status';
 import type { DashboardMetricId } from '../../../lib/nd/dashboard-metric';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdRunHistoryPanelComponent } from '../../components/nd/nd-run-history-panel.component';
 import { NdRunTableActionsComponent } from '../../components/nd/nd-run-table-actions.component';
+import { NdMisPanelComponent } from '../../components/nd/nd-mis-panel.component';
 import { NdRunRoleBadgeComponent } from '../../components/nd/nd-run-role-badge.component';
 import {
   buildReportStats,
@@ -108,12 +110,14 @@ type RecentRow = {
     NdRunHistoryPanelComponent,
     NdRunRoleBadgeComponent,
     NdRunTableActionsComponent,
+    NdMisPanelComponent,
   ],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss', '../nd/nd-shared.scss'],
 })
 export class DashboardComponent implements OnInit {
   readonly apiUrl = environment.apiUrl;
+  readonly complianceLabels = COMPLIANCE_SEVERITY_LABELS;
 
   seed: DashboardMetrics | null = null;
   health: DualVerifyHealth | null = null;
@@ -129,7 +133,6 @@ export class DashboardComponent implements OnInit {
   metricsError: string | null = null;
   sessionsError: string | null = null;
 
-  remediationItems: Array<{ item: string; severity: string; target: string; status: string }> = [];
   ndRuns: AnalysisRunSummary[] = [];
   ndRunsTotal = 0;
   ndRunsLoading = false;
@@ -171,7 +174,6 @@ export class DashboardComponent implements OnInit {
     this.loadHealth();
     this.loadMetrics();
     this.loadSessions();
-    this.loadRemediationFromCompliance();
   }
 
   private loadHealth(): void {
@@ -186,7 +188,7 @@ export class DashboardComponent implements OnInit {
         },
         error: () => {
           this.healthError =
-            `Cannot reach API at ${environment.apiUrl}. Start bcp-api or check CORS.`;
+            `Cannot reach the API at ${environment.apiUrl}. Start it with: cd bcp-api; .\\scripts\\restart-api.ps1 — then refresh.`;
         },
       });
   }
@@ -713,48 +715,8 @@ export class DashboardComponent implements OnInit {
       });
   }
 
-  private loadRemediationFromCompliance(): void {
-    this.api.loadComplianceSession(this.seededComplianceId).subscribe({
-      next: (r) => {
-        const rows = (r.results as Record<string, unknown>[]) ?? [];
-        const gaps = rows
-          .map((row) => {
-            const agreement = row['agreementJson'] as DualVerifyAgreement | undefined;
-            const title = String(row['title'] ?? row['point_id'] ?? 'Finding');
-            const status = `${agreement?.llmStatus ?? ''} ${agreement?.landingStatus ?? ''} ${agreement?.status ?? ''}`.toLowerCase();
-            let severity = 'Medium';
-            if (/non/.test(status) || agreement?.status === 'both_non_compliant') severity = 'Critical';
-            else if (/partial/.test(status) || agreement?.status === 'status_mismatch') severity = 'High';
-            else if (agreement?.status === 'aligned' || /compliant/.test(status)) return null;
-            return {
-              item: title,
-              severity,
-              target: 'Review',
-              status: 'Open',
-            };
-          })
-          .filter((x): x is { item: string; severity: string; target: string; status: string } => !!x)
-          .slice(0, 6);
-        if (gaps.length) this.remediationItems = gaps;
-      },
-      error: () => {
-        /* leave empty — no dummy rows */
-      },
-    });
-  }
-
   severityClass(name: string): string {
     return name.toLowerCase();
-  }
-
-  openRemediation(row: { item: string; severity: string }): void {
-    this.router.navigate(shellRouteSegments(this.router, '/gap-analysis'), {
-      queryParams: {
-        ...this.preferredReportQuery(),
-        filter: row.severity.toLowerCase(),
-        focus: row.item,
-      },
-    });
   }
 
   /** Drill into analyses that contribute to this dashboard card total. */

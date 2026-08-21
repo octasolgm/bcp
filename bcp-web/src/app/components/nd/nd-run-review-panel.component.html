@@ -1,7 +1,13 @@
 <section class="run-review-panel card-surface" aria-labelledby="run-review-heading">
   <header class="run-review-head">
-    <h2 id="run-review-heading">Overall analysis report review</h2>
-    <p class="run-review-sub">Report-level review applies to the whole analysis — not individual points.</p>
+    <h2 id="run-review-heading">{{ evidenceOnly ? 'Overall analysis report' : 'Overall analysis report review' }}</h2>
+    <p class="run-review-sub">
+      @if (evidenceOnly) {
+        Upload a supporting document for the whole analysis, then rerun all open gaps against it.
+      } @else {
+        Report-level review applies to the whole analysis — not individual points.
+      }
+    </p>
   </header>
 
   <div class="gap-docs-panel">
@@ -90,6 +96,7 @@
     }
   </div>
 
+  @if (!evidenceOnly) {
   <div class="run-review-row run-review-row-fields">
     <label class="run-review-field">
       <span class="field-label">Action status</span>
@@ -230,8 +237,7 @@
       </span>
       @if (!reviewProgressComplete) {
         <span class="run-review-progress-hint">
-          Open each point below, expand its corrective action, click <strong>+ Add review</strong>, choose
-          <strong>Approve</strong> or <strong>Need modify</strong>, then save.
+          Reviewing every point is optional — you can sign off with reviews outstanding.
         </span>
       }
     </p>
@@ -245,8 +251,8 @@
     }
 
     @if (showCheckerActions) {
-      <button type="button" class="btn-primary" [disabled]="submitting || !reviewProgressComplete" (click)="emit('approve')">
-        Approve
+      <button type="button" class="btn-primary" [disabled]="submitting" (click)="emit('approve')">
+        Submit for final review
       </button>
       <button type="button" class="btn-secondary" [disabled]="submitting" (click)="emit('pullback')">
         Pull back to maker
@@ -254,8 +260,8 @@
     }
 
     @if (showReviewerActions) {
-      <button type="button" class="btn-primary" [disabled]="submitting || !reviewProgressComplete" (click)="emit('finalize')">
-        Final review
+      <button type="button" class="btn-primary" [disabled]="submitting" (click)="emit('finalize')">
+        Finalize
       </button>
       <button type="button" class="btn-secondary" [disabled]="submitting" (click)="emit('pullback_to_checker')">
         Pull back to checker
@@ -265,4 +271,5 @@
       </button>
     }
   </footer>
+  }
 </section>

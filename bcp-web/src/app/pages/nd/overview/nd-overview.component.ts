@@ -14,29 +14,7 @@ import { ndNewAnalysisRoute } from '../../../../lib/nd/demo-analysis-routes';
 import { analysisRunWorkflowLabel, sortAnalysisRunsByRecent } from '../../../../lib/nd/analysis-run-status';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
 import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
-import {
-  ACTION_PLAN_PRIORITY_OPTIONS,
-  normalizeActionPlanPriority,
-  type ActionPlanPriority,
-} from '../../../../lib/nd/action-plan';
-
-type ActionPlanSummary = {
-  total: number;
-  pending: number;
-  resolved: number;
-  overdue: number;
-  byPriority: { priority: string; total: number; pending: number; resolved: number; overdue: number; runCount: number }[];
-};
-
-type PriorityBucket = {
-  priority: ActionPlanPriority;
-  label: string;
-  total: number;
-  pending: number;
-  resolved: number;
-  overdue: number;
-  runCount: number;
-};
+import { emptyGapRiskCounts, type GapRiskCounts } from '../../../../lib/nd/risk-priority-score';
 
 @Component({
   selector: 'app-nd-overview',
@@ -57,8 +35,7 @@ export class NdOverviewComponent implements OnInit {
   historyRunId: string | null = null;
   historyRunName = '';
   historyRunStats: RunGapStatsSummary | null = null;
-  actionPlanSummary: ActionPlanSummary | null = null;
-  priorityBuckets: PriorityBucket[] = [];
+  gapRisk: GapRiskCounts = emptyGapRiskCounts();
 
   async ngOnInit(): Promise<void> {
     this.router.events
@@ -104,33 +81,17 @@ export class NdOverviewComponent implements OnInit {
       this.recentRuns = sortAnalysisRunsByRecent((queue.data as AnalysisRunSummary[]) ?? []);
     }
 
-    await this.loadActionPlanSummary();
-
-    this.loading = false;
-  }
-
-  private async loadActionPlanSummary(): Promise<void> {
-    const res = await this.api.getActionPlanSummary();
-    if (!res.success || !res.data || res.data.total === 0) {
-      this.actionPlanSummary = null;
-      this.priorityBuckets = [];
-      return;
+    const stats = await this.api.getDashboardStats(role === 'maker' ? { mineOnly: true } : undefined);
+    if (stats.success && stats.data) {
+      this.gapRisk = {
+        critical: stats.data.criticalGaps,
+        medium: stats.data.mediumGaps,
+        low: stats.data.lowGaps,
+        total: stats.data.criticalGaps + stats.data.mediumGaps + stats.data.lowGaps,
+      };
     }
 
-    this.actionPlanSummary = res.data;
-    const byPriority = new Map(res.data.byPriority.map((b) => [normalizeActionPlanPriority(b.priority), b]));
-    this.priorityBuckets = ACTION_PLAN_PRIORITY_OPTIONS.map(({ value, label }) => {
-      const bucket = byPriority.get(value);
-      return {
-        priority: value,
-        label,
-        total: bucket?.total ?? 0,
-        pending: bucket?.pending ?? 0,
-        resolved: bucket?.resolved ?? 0,
-        overdue: bucket?.overdue ?? 0,
-        runCount: bucket?.runCount ?? 0,
-      };
-    });
+    this.loading = false;
   }
 
   runLink(run: AnalysisRunSummary): string[] {

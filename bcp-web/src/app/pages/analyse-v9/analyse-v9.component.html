@@ -64,9 +64,6 @@
                   From regulation points library
                 </button>
               </div>
-              @if (isNdShell) {
-                <p class="v8-run-confirm-note">Run requires typing <strong>start</strong> to confirm (uses AI credits).</p>
-              }
             </div>
           </div>
         }
@@ -78,7 +75,6 @@
                 <div class="panel-header-top">
                   <h2>Regulation</h2>
                   <div class="header-actions">
-                    <button type="button" class="toolbar-btn primary" (click)="selectAllFilteredRegs()">All</button>
                     <button type="button" class="toolbar-btn secondary" (click)="clearRegSelection()">Clear</button>
                     <label class="btn-upload" [class.busy]="uploadingReg">
                       <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" [disabled]="uploadingReg" />
@@ -638,7 +634,7 @@
       </div>
       <div class="stat-box">
         <strong>{{ selectedComplianceIds.size }}</strong>
-        <em>Compliance docs</em>
+        <em>Internal docs</em>
       </div>
       <div class="stat-box">
         <strong>{{ coverageCounts.completed }}</strong>
@@ -671,9 +667,6 @@
         <button type="button" class="btn-run v8-run" [disabled]="!canRun" (click)="runAnalysisAndScroll()">
           Run
         </button>
-        @if (isNdShell) {
-          <span class="run-confirm-hint">Confirm with <strong>start</strong></span>
-        }
       }
     </div>
   </section>

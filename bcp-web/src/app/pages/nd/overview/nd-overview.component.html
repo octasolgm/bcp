@@ -11,28 +11,29 @@
 @if (loading) {
   <p class="muted-loading">Loading…</p>
 } @else {
-  @if (actionPlanSummary; as summary) {
-    <section class="card-surface priority-section">
-      <div class="section-head">
-        <h2>Action plan priorities</h2>
-        <span class="priority-total">{{ summary.total }} action plan(s) · {{ summary.pending }} pending · {{ summary.overdue }} overdue</span>
-      </div>
-      <div class="priority-grid">
-        @for (bucket of priorityBuckets; track bucket.priority) {
-          <a class="priority-card" [class]="'priority-' + bucket.priority" [routerLink]="['/nd/action-plans', bucket.priority]">
-            <span class="priority-label">{{ bucket.label }} priority</span>
-            <span class="priority-count">{{ bucket.total }}</span>
-            <span class="priority-meta">
-              {{ bucket.runCount }} analysis · {{ bucket.pending }} pending
-              @if (bucket.overdue > 0) {
-                · <strong class="priority-overdue">{{ bucket.overdue }} overdue</strong>
-              }
-            </span>
-          </a>
-        }
-      </div>
-    </section>
-  }
+  <section class="card-surface priority-section">
+    <div class="section-head">
+      <h2>Gap risk</h2>
+      <span class="priority-total">High / Medium / Low from open gaps</span>
+    </div>
+    <div class="priority-grid">
+      <a class="priority-card priority-high" routerLink="/nd/overview/metric" [queryParams]="{ metric: 'critical' }">
+        <span class="priority-label">High risk</span>
+        <span class="priority-count">{{ gapRisk.critical }}</span>
+        <span class="priority-meta">Score 67–100</span>
+      </a>
+      <a class="priority-card priority-medium" routerLink="/nd/overview/metric" [queryParams]="{ metric: 'medium' }">
+        <span class="priority-label">Medium risk</span>
+        <span class="priority-count">{{ gapRisk.medium }}</span>
+        <span class="priority-meta">Score 34–66</span>
+      </a>
+      <a class="priority-card priority-low" routerLink="/nd/overview/metric" [queryParams]="{ metric: 'low' }">
+        <span class="priority-label">Low risk</span>
+        <span class="priority-count">{{ gapRisk.low }}</span>
+        <span class="priority-meta">Score 0–33</span>
+      </a>
+    </div>
+  </section>
 
   @if (recentRuns.length > 0) {
     <section class="card-surface recent-section">

@@ -104,12 +104,12 @@
     <strong>{{ loadError ? 'Could not load findings' : 'No gap findings yet' }}</strong>
     <p>
       @if (loadError) {
-        {{ loadError }} Open a valid session from Documents → View analysis, or start a new run on Analyse V2.
+        {{ loadError }} Open a completed run from Gap analysis, or start a new analysis from Overview.
       } @else {
-        Run an analysis on Analyse V2 (TFS Guidelines × I M P T F S), then open this page again — findings come from the real dual-verify / compliance session.
+        Run an analysis, then open Gap analysis — findings come from the completed run.
       }
     </p>
-    <a routerLink="/analyse-v2" class="btn-primary">Go to Analyse V2</a>
+    <a routerLink="/nd/overview" class="btn-primary">Go to Overview</a>
   </div>
 }
 

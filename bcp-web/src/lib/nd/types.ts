@@ -98,6 +98,8 @@ export type RegulationDocument = {
   pointCount: number;
   /** Distinct source PDF pages referenced by extracted points. */
   pageCount?: number | null;
+  /** Analysis runs that selected this regulation. */
+  analysisRunCount?: number | null;
   extractedAt?: string | null;
   createdAt: string;
   updatedAt?: string | null;
@@ -156,6 +158,9 @@ export type InternalDocument = {
   sectionExtractProgressLabel?: string | null;
   sectionExtractProgressPct?: number | null;
   sectionExtractedByName?: string | null;
+  pageCount?: number | null;
+  /** Analysis runs that selected this internal document. */
+  analysisRunCount?: number | null;
 };
 
 export type InternalDocumentSection = {
@@ -243,6 +248,9 @@ export type AnalysisPoint = {
   googleAiError?: string | null;
   dualVerifyStatus: string;
   finalStatus?: string | null;
+  /** null = AI verdict, 'manual' = a user chose it, 'auto' = all actions resolved. */
+  finalStatusSource?: string | null;
+  aiFinalStatus?: string | null;
   finalActionPlan?: string | null;
   originalAiActionPlan?: string | null;
 };

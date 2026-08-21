@@ -53,6 +53,7 @@ export class DocumentsComponent implements OnInit {
   analysisFor: DocumentRow | null = null;
   analysisRuns: DocumentAnalysisRunDto[] = [];
   loadingAnalysisRuns = false;
+  analysisLoadError: string | null = null;
   deletingRunId: string | null = null;
   connectingOneDrive = false;
   pendingUpload: PendingUpload | null = null;
@@ -240,6 +241,7 @@ export class DocumentsComponent implements OnInit {
    */
   viewAnalysis(doc: DocumentRow): void {
     this.loadingAnalysisRuns = true;
+    this.analysisLoadError = null;
     this.analysisFor = doc;
     this.analysisRuns = [];
     this.api.listDocumentAnalysisRuns(doc.id).subscribe({
@@ -252,21 +254,10 @@ export class DocumentsComponent implements OnInit {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
         this.analysisRuns = runs;
-        if (runs.length === 0) {
-          this.analysisFor = null;
-          this.toast.show('No analyses for this document yet — run one from Analyse', 'warning', 4000);
-          return;
-        }
-        if (runs.length === 1) {
-          this.openAnalysisRun(runs[0]);
-          this.analysisFor = null;
-          return;
-        }
       },
       error: (err: HttpErrorResponse) => {
         this.loadingAnalysisRuns = false;
-        this.analysisFor = null;
-        this.toast.show(err.error?.message ?? 'Could not load analysis list', 'error');
+        this.analysisLoadError = err.error?.message ?? 'Could not load analysis history.';
       },
     });
   }
@@ -274,6 +265,8 @@ export class DocumentsComponent implements OnInit {
   closeAnalysisPicker(): void {
     this.analysisFor = null;
     this.analysisRuns = [];
+    this.analysisLoadError = null;
+    this.loadingAnalysisRuns = false;
   }
 
   isRunInProgress(run: DocumentAnalysisRunDto): boolean {

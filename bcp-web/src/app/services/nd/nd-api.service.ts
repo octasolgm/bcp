@@ -50,7 +50,7 @@ function apiUnreachableMessage(): string {
   const isLocal = /localhost|127\.0\.0\.1/i.test(base);
   const where = base ? ` at ${base}` : '';
   return isLocal
-    ? `Cannot reach the API${where}. Start it in PowerShell: cd bcp-api; .\\scripts\\restart-api.ps1 — then refresh this page.`
+    ? `Cannot reach the API${where}. Start it in PowerShell: cd bcp-api; .\\scripts\\restart-api.ps1 — then refresh this page. Sign in from Analysis runs (/nd/analysis-runs) or open a completed run from Gap analysis.`
     : `Cannot reach the API${where}. Check your connection and refresh this page; if it persists the service may be restarting.`;
 }
 
@@ -180,6 +180,71 @@ export type NdInboxItem = {
   owners: { type: string; label: string }[];
 };
 
+/** Where a review on an action is addressed. Omit to leave it as a plain note. */
+export type NdReviewAssignee = {
+  assigneeType: 'department' | 'user';
+  assigneeDepartmentId?: string | null;
+  assigneeUserId?: string | null;
+  assigneeLabel: string;
+};
+
+export type NdReviewInboxItem = {
+  id: string;
+  actionPlanId: string;
+  analysisRunId: string;
+  analysisPointId: string;
+  gapIndex: number;
+  runName: string;
+  clauseNo?: string | null;
+  clauseTitle?: string | null;
+  actionPlan: string;
+  comment: string;
+  reviewerName?: string | null;
+  reviewerRole?: string | null;
+  assigneeType?: string | null;
+  assigneeLabel?: string | null;
+  /** 'received' when addressed to you, 'sent' when you sent it, 'self' when both. */
+  direction: 'received' | 'sent' | 'self';
+  createdAt: string;
+};
+
+export type NdReviewInbox = {
+  counts: { total: number; received: number; sent: number };
+  items: NdReviewInboxItem[];
+};
+
+export type NdMisItem = {
+  id: string;
+  analysisRunId: string;
+  analysisPointId: string;
+  gapIndex: number;
+  runName: string;
+  clauseNo?: string | null;
+  clauseTitle?: string | null;
+  actionPlan: string;
+  status: string;
+  priority: string;
+  targetDate?: string | null;
+  overdue: boolean;
+};
+
+export type NdMisOwner = {
+  key: string;
+  type: 'department' | 'user' | 'unassigned';
+  id?: string | null;
+  name: string;
+  pending: number;
+  resolved: number;
+  overdue: number;
+  total: number;
+  items: NdMisItem[];
+};
+
+export type NdActionPlanMis = {
+  totals: { total: number; pending: number; resolved: number; overdue: number };
+  owners: NdMisOwner[];
+};
+
 export type NdActionPlanInbox = {
   counts: { total: number; pending: number; resolved: number; overdue: number };
   departmentId?: string | null;
@@ -256,7 +321,7 @@ export class NdApiService {
               return throwError(
                 () =>
                   new Error(
-                    'Request timed out — is bcp-api running on http://localhost:5100? ' +
+                    'Request timed out — is the API running? Start it with: cd bcp-api; .\\scripts\\restart-api.ps1. ' +
                       'Use one API instance and Supabase DbPort 6543. Wait for API bootstrap to finish, then retry.',
                   ),
               );
@@ -785,6 +850,10 @@ export class NdApiService {
     return this.request<unknown[]>('GET', `/nd/internal-documents/${docId}/analysis-runs`);
   }
 
+  getRegulationDocumentAnalysisRuns(docId: string) {
+    return this.request<unknown[]>('GET', `/nd/regulation-documents/${docId}/analysis-runs`);
+  }
+
   parseInternalDocument(docId: string) {
     return this.request<{ parseStatus?: string; parsedAt?: string }>(
       'POST',
@@ -1268,20 +1337,31 @@ export class NdApiService {
     );
   }
 
-  addActionPlanReview(runId: string, planId: string, comment: string) {
+  addActionPlanReview(runId: string, planId: string, comment: string, assignee?: NdReviewAssignee) {
     return this.request<import('../../../lib/nd/action-plan').ActionPlanReviewEntry>(
       'POST',
       `/nd/results/${runId}/action-plans/${planId}/reviews`,
-      { comment },
+      { comment, ...(assignee ?? {}) },
     );
   }
 
-  updateActionPlanReview(runId: string, planId: string, reviewId: string, comment: string) {
+  updateActionPlanReview(
+    runId: string,
+    planId: string,
+    reviewId: string,
+    comment: string,
+    assignee?: NdReviewAssignee,
+  ) {
     return this.request<import('../../../lib/nd/action-plan').ActionPlanReviewEntry>(
       'PUT',
       `/nd/results/${runId}/action-plans/${planId}/reviews/${reviewId}`,
-      { comment },
+      { comment, ...(assignee ?? {}) },
     );
+  }
+
+  /** Reviews routed to the viewer or their department, plus the ones they sent. */
+  getActionPlanReviewInbox() {
+    return this.request<NdReviewInbox>('GET', '/nd/action-plans/review-inbox');
   }
 
   deleteActionPlanReview(runId: string, planId: string, reviewId: string) {
@@ -1302,6 +1382,42 @@ export class NdApiService {
   getActionPlanInbox(status?: NdInboxFilter) {
     const query = status && status !== 'all' ? `?status=${status}` : '';
     return this.request<NdActionPlanInbox>('GET', `/nd/action-plans/inbox${query}`);
+  }
+
+  /**
+   * Writes first-draft actions for a run. The API ignores the call once the run has
+   * any action of its own, so this is safe to fire whenever a report loads.
+   */
+  seedActionPlans(
+    runId: string,
+    items: {
+      analysisPointId: string;
+      gapIndex: number;
+      actionPlan: string;
+      priority: string;
+      targetDate: string;
+      ownerLabel: string;
+    }[],
+  ) {
+    return this.request<{ seeded: number; skipped: boolean }>(
+      'POST',
+      `/nd/results/${runId}/action-plans/seed`,
+      { items },
+    );
+  }
+
+  /** Override a clause verdict. Pass null to hand it back to the AI + auto rule. */
+  updateClauseStatus(runId: string, pointId: string, finalStatus: string | null) {
+    return this.request<{
+      finalStatus: string | null;
+      finalStatusSource: string | null;
+      aiFinalStatus: string | null;
+    }>('PUT', `/nd/results/${runId}/points/${pointId}/status`, { finalStatus });
+  }
+
+  /** MIS workload rollup: who owns how many open actions, and which ones. */
+  getActionPlanMis() {
+    return this.request<NdActionPlanMis>('GET', '/nd/action-plans/mis');
   }
 
   getActionPlanSummary() {
@@ -1457,7 +1573,9 @@ export class NdApiService {
   }
 
   finalizeAnalysis(runId: string, body: NdRunReviewBody) {
-    return this.request<unknown>('POST', `/nd/reviewer/review/${runId}/finalize`, body);
+    return this.request<{
+      correctedDocuments: { documentId: string; title: string; version: number }[];
+    }>('POST', `/nd/reviewer/review/${runId}/finalize`, body);
   }
 
   pullBackToChecker(runId: string, body: NdRunReviewBody) {

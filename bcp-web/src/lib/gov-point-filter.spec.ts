@@ -9,8 +9,9 @@ import {
   resolveGovPointDisplayNumber,
   sectionHeadingTitleForKey,
   synthesizeMissingParentGovPoints,
+  type GovPointWithNumber,
 } from './gov-point-filter';
-import { assignUniqueLibraryPointIds } from './library-points-utils';
+import { assignUniqueLibraryPointIds, type SourcedGovPoint } from './library-points-utils';
 
 describe('gov-point-filter', () => {
   it('normalizes numeric point ids', () => {
@@ -78,7 +79,7 @@ describe('gov-point-filter', () => {
       }),
     ).toBe('2.6.6');
 
-    const { comparable, skipped } = filterComparableGovLeafPoints([
+    const rows: GovPointWithNumber[] = [
       {
         point_id: 'uuid-1',
         pointNumber: 'Part III',
@@ -86,9 +87,10 @@ describe('gov-point-filter', () => {
         text: 'LFIs must conduct CDD on all customers.',
         section: '2.6.6 Customer Due Diligence',
       },
-    ]);
-    expect(comparable).toHaveLength(1);
-    expect(skipped).toHaveLength(0);
+    ];
+    const { comparable, skipped } = filterComparableGovLeafPoints(rows);
+    expect(comparable.length).toBe(1);
+    expect(skipped.length).toBe(0);
   });
 
   it('keeps expanded leaf clause ids as selection keys (not parent UUID)', () => {
@@ -102,13 +104,15 @@ describe('gov-point-filter', () => {
       },
     ]);
     const withIds = assignUniqueLibraryPointIds(
-      expanded.map((p) => ({
-        ...p,
-        regulationPointId: parentUuid,
-        libraryId: 'lib',
-        docId: 'doc',
-        docName: 'CBUAE',
-      })),
+      expanded.map(
+        (p): SourcedGovPoint => ({
+          ...p,
+          regulationPointId: parentUuid,
+          libraryId: 'lib',
+          docId: 'doc',
+          docName: 'CBUAE',
+        }),
+      ),
     );
     expect(withIds.map((p) => p.point_id)).toEqual(['3.1.1', '3.1.2']);
     expect(withIds[0].pointNumber).toBe('3.1.1');

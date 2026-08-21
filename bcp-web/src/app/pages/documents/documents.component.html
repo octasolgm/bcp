@@ -94,7 +94,11 @@
         <h3>{{ analysisFor.title }}</h3>
         <p>
           @if (loadingAnalysisRuns) {
-            Loading analyses…
+            Loading analysis history…
+          } @else if (analysisLoadError) {
+            Could not load history
+          } @else if (!analysisRuns.length) {
+            No history found
           } @else {
             {{ analysisRuns.length }} analysis run{{ analysisRuns.length === 1 ? '' : 's' }} — pick one to open
           }
@@ -103,7 +107,20 @@
       <button type="button" class="btn-close" (click)="closeAnalysisPicker()" aria-label="Close">✕</button>
     </header>
     @if (loadingAnalysisRuns) {
-      <p class="muted-loading">Fetching…</p>
+      <div class="hist-loading" role="status" aria-live="polite">
+        <span class="panel-busy-spinner" aria-hidden="true"></span>
+        <p>Loading analysis history…</p>
+      </div>
+    } @else if (analysisLoadError) {
+      <div class="hist-empty">
+        <strong>Could not load history</strong>
+        <p>{{ analysisLoadError }}</p>
+      </div>
+    } @else if (!analysisRuns.length) {
+      <div class="hist-empty">
+        <strong>No history found</strong>
+        <p>This document has not been used in an analysis yet.</p>
+      </div>
     } @else {
       <ul class="analysis-run-list">
         @for (run of analysisRuns; track run.id) {

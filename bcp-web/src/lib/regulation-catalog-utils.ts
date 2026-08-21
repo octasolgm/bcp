@@ -161,6 +161,18 @@ export function regulationDocPointLabel(
   return `${stored ?? 0} pts`;
 }
 
+/** Empty manuals are a placeholder until the first point exists — they do not count as a regulation document. */
+export function regulationDocumentCountsTowardTotal(doc: {
+  isManual?: boolean;
+  source?: string;
+  isNdManual?: boolean;
+  pointCount?: number | null;
+}): boolean {
+  const isManual = doc.isManual === true || doc.source === 'manual' || doc.isNdManual === true;
+  if (!isManual) return true;
+  return (doc.pointCount ?? 0) > 0;
+}
+
 /** When the API returns both a legacy stored-doc row and an nd row, keep the richer nd card. */
 export function dedupeRegulationDocuments(docs: RegulationDocument[]): RegulationDocument[] {
   const manualOrUnstored: RegulationDocument[] = [];

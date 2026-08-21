@@ -11,6 +11,14 @@ import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.
 import { ToastService } from '../../../services/toast.service';
 import { startPanelResize } from '../../shared/panel-resize';
 import { formatBytes, formatDate, formatTableDate } from '../../../../lib/nd/utils';
+import { catalogPdfPageLabel } from '../../../../lib/nd/doc-page-count';
+import {
+  docAnalysisReadyClass,
+  docAnalysisReadyLabel,
+  internalAnalysisReadyState,
+  usedInAnalysesLabel,
+  type DocAnalysisReadyState,
+} from '../../../../lib/nd/doc-analysis-ready';
 import {
   compareDateIso,
   compareNumber,
@@ -25,7 +33,7 @@ import { ndAnalysisRunTarget } from '../../../../lib/nd/run-links';
 import type { AnalysisRunSummary, InternalDocument, InternalDocumentSection } from '../../../../lib/nd/types';
 import { NdInternalDocumentSectionsPanelComponent } from './nd-internal-document-sections-panel.component';
 
-type DocSortColumn = 'title' | 'uploaded' | 'size' | 'source';
+type DocSortColumn = 'title' | 'uploaded' | 'size' | 'source' | 'pages' | 'analyses';
 
 type InternalDocAnalysisRun = {
   id: string;
@@ -82,13 +90,13 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   message = '';
   /** Document id → upload timestamp, so fresh rows survive an eventually-consistent list. */
   private readonly recentUploads = new Map<string, number>();
-  historyFor: InternalDocument | null = null;
   sectionsFor: InternalDocument | null = null;
   sectionRows: InternalDocumentSection[] = [];
   loadingSections = false;
   analysisFor: InternalDocument | null = null;
   analysisRuns: InternalDocAnalysisRun[] = [];
   loadingAnalysisRuns = false;
+  analysisLoadError: string | null = null;
   selectedDocId: string | null = null;
   searchQuery = '';
   parseFilter = '';
@@ -503,6 +511,20 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     return 'pending';
   }
 
+  analysisReadyState(doc: InternalDocument): DocAnalysisReadyState {
+    return internalAnalysisReadyState(doc);
+  }
+
+  analysisReadyLabel(doc: InternalDocument): string {
+    return docAnalysisReadyLabel(this.analysisReadyState(doc));
+  }
+
+  analysisReadyClass(doc: InternalDocument): string {
+    return docAnalysisReadyClass(this.analysisReadyState(doc));
+  }
+
+  usedInAnalysesLabel = usedInAnalysesLabel;
+
   parseLabel(status?: string): string {
     if (status === 'parsed') return 'Parsed';
     if (status === 'processing') return 'Parsing…';
@@ -578,7 +600,12 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     }
     const res = await this.api.parseInternalDocument(doc.id);
     if (res.success) {
-      const data = res.data as { parseStatus?: string; parsedAt?: string; parsedByName?: string };
+      const data = res.data as {
+        parseStatus?: string;
+        parsedAt?: string;
+        parsedByName?: string;
+        pageCount?: number | null;
+      };
       const status = (data?.parseStatus ?? '').toLowerCase();
       if (status === 'processing') {
         this.message = `Parsing "${doc.title}"…`;
@@ -593,6 +620,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
           parseStatus: data?.parseStatus ?? 'parsed',
           parsedAt: data?.parsedAt ?? this.docs[idx].parsedAt,
           parsedByName: data?.parsedByName ?? this.docs[idx].parsedByName,
+          pageCount: data?.pageCount ?? this.docs[idx].pageCount,
           parseError: null,
         };
       }
@@ -726,6 +754,10 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
           return compareText(a.title, b.title, this.sortDir);
         case 'size':
           return compareNumber(a.sizeBytes ?? 0, b.sizeBytes ?? 0, this.sortDir);
+        case 'pages':
+          return compareNumber(a.pageCount ?? 0, b.pageCount ?? 0, this.sortDir);
+        case 'analyses':
+          return compareNumber(a.analysisRunCount ?? 0, b.analysisRunCount ?? 0, this.sortDir);
         case 'source':
           return compareText(a.source ?? 'nd', b.source ?? 'nd', this.sortDir);
         case 'uploaded':
@@ -888,10 +920,10 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.shellFocus.setRegulationPointsPanelOpen(false);
   }
 
-  /** Escape closes the topmost open panel — history overlays the sections panel. */
+  /** Escape closes the topmost open panel — analysis picker overlays the sections panel. */
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
-    if (this.historyFor) this.closeHistory();
+    if (this.analysisFor) this.closeAnalysisPicker();
     else if (this.sectionsFor) this.closeSections();
   }
 
@@ -1048,16 +1080,9 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     if (!ok) this.toast.show('Could not open document PDF', 'error');
   }
 
-  openHistory(doc: InternalDocument): void {
-    this.historyFor = doc;
-  }
-
-  closeHistory(): void {
-    this.historyFor = null;
-  }
-
   async viewAnalysis(doc: InternalDocument): Promise<void> {
     this.loadingAnalysisRuns = true;
+    this.analysisLoadError = null;
     this.selectedDocId = doc.id;
     this.analysisFor = doc;
     this.analysisRuns = [];
@@ -1066,8 +1091,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.loadingAnalysisRuns = false;
 
     if (!res.success || !res.data) {
-      this.analysisFor = null;
-      this.toast.show(res.message ?? 'Could not load analysis list', 'error');
+      this.analysisLoadError = res.message ?? 'Could not load analysis history.';
       return;
     }
 
@@ -1079,20 +1103,13 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     });
 
     this.analysisRuns = runs;
-    if (runs.length === 0) {
-      this.analysisFor = null;
-      this.toast.show('No analyses for this document yet', 'warning', 4000);
-      return;
-    }
-    if (runs.length === 1) {
-      this.openAnalysisRun(runs[0]);
-      this.analysisFor = null;
-    }
   }
 
   closeAnalysisPicker(): void {
     this.analysisFor = null;
     this.analysisRuns = [];
+    this.analysisLoadError = null;
+    this.loadingAnalysisRuns = false;
   }
 
   isRunInProgress(run: InternalDocAnalysisRun): boolean {
@@ -1152,4 +1169,8 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   formatDate = formatDate;
   formatTableDate = formatTableDate;
   formatBytes = formatBytes;
+
+  docPageMeta(doc: InternalDocument): string {
+    return catalogPdfPageLabel(doc.pageCount, this.isParsingDoc(doc));
+  }
 }

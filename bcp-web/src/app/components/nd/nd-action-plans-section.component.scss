@@ -78,6 +78,21 @@
   &.is-overdue {
     border-left-color: var(--critical, #dc2626);
   }
+
+  // Deep link from My actions — fades out so it reads as a pointer, not a state.
+  &.ap-card-focused {
+    animation: ap-card-focus-flash 2.4s ease-out 1;
+  }
+}
+
+@keyframes ap-card-focus-flash {
+  0%,
+  60% {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
 }
 
 .ap-card-new {

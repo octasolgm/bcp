@@ -60,6 +60,8 @@ export class NdRunReviewPanelComponent implements OnInit, OnChanges {
   @Input() evidenceUploading = false;
   @Input() evidenceRerunning = false;
   @Input() evidenceDeletingId: string | null = null;
+  /** When true, only the gap-document upload/rerun block is shown (no overall review form). */
+  @Input() evidenceOnly = false;
 
   @Output() submitReview = new EventEmitter<RunReviewSubmitEvent>();
   @Output() uploadEvidence = new EventEmitter<FileList>();

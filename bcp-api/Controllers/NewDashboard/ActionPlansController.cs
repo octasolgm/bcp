@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard;
 using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -57,7 +58,12 @@ public class ActionPlansController(
 
     public record ReorderRequest(string Direction);
 
-    public record SaveReviewRequest(string Comment);
+    public record SaveReviewRequest(
+        string Comment,
+        string? AssigneeType,
+        Guid? AssigneeDepartmentId,
+        Guid? AssigneeUserId,
+        string? AssigneeLabel);
 
     // ---------------------------------------------------------------- list
 
@@ -185,7 +191,122 @@ public class ActionPlansController(
             await db.SaveChangesAsync(ct);
         }
 
+        await NdClauseStatusResolver.RecomputeAsync(db, [row.AnalysisPointId], ct);
         return Ok(new { success = true, data = await MapSinglePlanAsync(row, ct) });
+    }
+
+    // ---------------------------------------------------------------- seed
+
+    public record SeedActionPlanItem(
+        Guid AnalysisPointId,
+        int GapIndex,
+        string ActionPlan,
+        string? Priority,
+        string? TargetDate,
+        string? OwnerLabel);
+
+    public record SeedActionPlansRequest(List<SeedActionPlanItem>? Items);
+
+    /// <summary>
+    /// Writes a first-draft action for each gap the caller found. Refuses once the run
+    /// has any action of its own, so re-opening a report never duplicates the draft and
+    /// never overwrites what a maker has since edited.
+    /// </summary>
+    [HttpPost("seed")]
+    public async Task<IActionResult> Seed(Guid runId, [FromBody] SeedActionPlansRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, AllRoles);
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct);
+        if (run == null) return NotFound(new { success = false, message = "Run not found." });
+
+        var accessError = await EnsureRunVisibleAsync(run, ct);
+        if (accessError != null) return accessError;
+
+        var alreadyHasPlans = await db.NdAnalysisActionPlans.AnyAsync(p => p.AnalysisRunId == runId, ct);
+        if (alreadyHasPlans)
+            return Ok(new { success = true, data = new { seeded = 0, skipped = true } });
+
+        var items = body.Items ?? [];
+        if (items.Count == 0)
+            return Ok(new { success = true, data = new { seeded = 0, skipped = false } });
+
+        var validPointIds = await db.NdAnalysisPoints.AsNoTracking()
+            .Where(p => p.AnalysisRunId == runId)
+            .Select(p => p.Id)
+            .ToListAsync(ct);
+        var validPoints = validPointIds.ToHashSet();
+
+        var departments = await db.NdDepartments.AsNoTracking()
+            .Where(d => d.IsActive)
+            .Select(d => new { d.Id, d.Name })
+            .ToListAsync(ct);
+
+        var rows = new List<NdAnalysisActionPlan>();
+        var ownerLabels = new List<string?>();
+        var orderByGap = new Dictionary<(Guid, int), int>();
+
+        foreach (var item in items)
+        {
+            if (!validPoints.Contains(item.AnalysisPointId)) continue;
+            if (string.IsNullOrWhiteSpace(item.ActionPlan)) continue;
+
+            var gapIndex = Math.Max(0, item.GapIndex);
+            var key = (item.AnalysisPointId, gapIndex);
+            var order = orderByGap.TryGetValue(key, out var last) ? last + 1 : 0;
+            orderByGap[key] = order;
+
+            var score = ResolveScore(null, item.Priority, ActionPlanPriorities.DefaultScore);
+            rows.Add(new NdAnalysisActionPlan
+            {
+                AnalysisRunId = runId,
+                AnalysisPointId = item.AnalysisPointId,
+                GapIndex = gapIndex,
+                ActionPlan = item.ActionPlan.Trim(),
+                Status = ActionPlanStatuses.Pending,
+                PriorityScore = score,
+                Priority = ActionPlanPriorities.TierFromScore(score),
+                TargetDate = ParseOptionalDueDate(item.TargetDate),
+                SortOrder = order,
+                CreatedBy = profile!.Id,
+                UpdatedBy = profile.Id,
+            });
+            ownerLabels.Add(item.OwnerLabel);
+        }
+
+        if (rows.Count == 0)
+            return Ok(new { success = true, data = new { seeded = 0, skipped = false } });
+
+        db.NdAnalysisActionPlans.AddRange(rows);
+        await db.SaveChangesAsync(ct);
+
+        // Owners come back as department names from the seed catalog; only attach the
+        // ones that match a real department so the picker stays consistent.
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var label = ownerLabels[i]?.Trim();
+            if (string.IsNullOrWhiteSpace(label)) continue;
+
+            var dept = departments.FirstOrDefault(d =>
+                string.Equals(d.Name, label, StringComparison.OrdinalIgnoreCase));
+            if (dept == null) continue;
+
+            rows[i].ResponsibilityType = "department";
+            rows[i].ResponsibilityDepartmentId = dept.Id;
+            rows[i].ResponsibilityLabel = dept.Name;
+            db.NdAnalysisActionPlanAssignees.Add(new NdAnalysisActionPlanAssignee
+            {
+                ActionPlanId = rows[i].Id,
+                AssigneeType = "department",
+                DepartmentId = dept.Id,
+                Label = dept.Name,
+                SortOrder = 0,
+            });
+        }
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new { success = true, data = new { seeded = rows.Count, skipped = false } });
     }
 
     // -------------------------------------------------------------- update
@@ -214,7 +335,8 @@ public class ActionPlansController(
             row.ActionPlan = body.ActionPlan.Trim();
 
         var newStatus = ActionPlanStatuses.Normalize(body.Status ?? row.Status);
-        if (newStatus != row.Status)
+        var statusChanged = newStatus != row.Status;
+        if (statusChanged)
         {
             row.Status = newStatus;
             row.ResolvedAt = newStatus == ActionPlanStatuses.Resolved ? DateTimeOffset.UtcNow : null;
@@ -260,6 +382,7 @@ public class ActionPlansController(
         row.UpdatedAt = DateTimeOffset.UtcNow;
 
         await db.SaveChangesAsync(ct);
+        if (statusChanged) await NdClauseStatusResolver.RecomputeAsync(db, [row.AnalysisPointId], ct);
         return Ok(new { success = true, data = await MapSinglePlanAsync(row, ct) });
     }
 
@@ -303,8 +426,10 @@ public class ActionPlansController(
             .FirstOrDefaultAsync(p => p.Id == planId && p.AnalysisRunId == runId, ct);
         if (row == null) return NotFound(new { success = false, message = "Action plan not found." });
 
+        var pointId = row.AnalysisPointId;
         db.NdAnalysisActionPlans.Remove(row);
         await db.SaveChangesAsync(ct);
+        await NdClauseStatusResolver.RecomputeAsync(db, [pointId], ct);
         return Ok(new { success = true });
     }
 
@@ -367,6 +492,7 @@ public class ActionPlansController(
             ReviewerId = profile!.Id,
             ReviewerRole = profile.Role,
         };
+        await ApplyReviewAssigneeAsync(row, body, ct);
         db.NdAnalysisActionPlanReviews.Add(row);
         await db.SaveChangesAsync(ct);
 
@@ -396,6 +522,7 @@ public class ActionPlansController(
             return StatusCode(403, new { success = false, message = "You can only edit your own review." });
 
         row.Comment = body.Comment.Trim();
+        await ApplyReviewAssigneeAsync(row, body, ct);
         row.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
 
@@ -639,7 +766,56 @@ public class ActionPlansController(
         reviewerId = r.ReviewerId,
         reviewerName = ProfileName(names, r.ReviewerId),
         reviewerRole = r.ReviewerRole,
+        assigneeType = r.AssigneeType,
+        assigneeDepartmentId = r.AssigneeDepartmentId,
+        assigneeUserId = r.AssigneeUserId,
+        assigneeLabel = r.AssigneeLabel,
         createdAt = r.CreatedAt,
         updatedAt = r.UpdatedAt,
     };
+
+    /// <summary>
+    /// Copies the routing a caller chose onto the review, resolving the display label
+    /// from the real department or profile so the two sides always read the same name.
+    /// </summary>
+    private async Task ApplyReviewAssigneeAsync(
+        NdAnalysisActionPlanReview row,
+        SaveReviewRequest body,
+        CancellationToken ct)
+    {
+        var type = (body.AssigneeType ?? "").Trim().ToLowerInvariant();
+        if (type is not ("department" or "user"))
+        {
+            row.AssigneeType = null;
+            row.AssigneeDepartmentId = null;
+            row.AssigneeUserId = null;
+            row.AssigneeLabel = null;
+            return;
+        }
+
+        string? label = body.AssigneeLabel?.Trim();
+        if (type == "department" && body.AssigneeDepartmentId is Guid deptId)
+        {
+            label = await db.NdDepartments.AsNoTracking()
+                .Where(d => d.Id == deptId).Select(d => d.Name).FirstOrDefaultAsync(ct) ?? label;
+            row.AssigneeDepartmentId = deptId;
+            row.AssigneeUserId = null;
+        }
+        else if (type == "user" && body.AssigneeUserId is Guid userId)
+        {
+            label = await db.NdProfiles.AsNoTracking()
+                .Where(p => p.Id == userId).Select(p => p.FullName).FirstOrDefaultAsync(ct) ?? label;
+            row.AssigneeUserId = userId;
+            row.AssigneeDepartmentId = null;
+        }
+        else
+        {
+            // A free-typed name with no matching record still records the intent.
+            row.AssigneeDepartmentId = null;
+            row.AssigneeUserId = null;
+        }
+
+        row.AssigneeType = type;
+        row.AssigneeLabel = string.IsNullOrWhiteSpace(label) ? null : label;
+    }
 }

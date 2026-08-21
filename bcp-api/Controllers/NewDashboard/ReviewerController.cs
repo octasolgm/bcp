@@ -13,7 +13,8 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class ReviewerController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
-    NdDemoUserDirectory demoDirectory) : NdControllerBase
+    NdDemoUserDirectory demoDirectory,
+    NdCorrectedDocumentService correctedDocuments) : NdControllerBase
 {
     [HttpGet("queue")]
     public async Task<IActionResult> Queue(CancellationToken ct)
@@ -81,7 +82,22 @@ public class ReviewerController(
         await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);
         await SaveActionItemReviewsAsync(db, review.Id, body.ActionItemReviews, profile.Id, ct);
         await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
-        return Ok(new { success = true });
+
+        var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile.Id, ct);
+
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                correctedDocuments = corrected.Select(c => new
+                {
+                    documentId = c.DocumentId,
+                    title = c.Title,
+                    version = c.VersionNumber,
+                }),
+            },
+        });
     }
 
     [HttpPost("review/{runId:guid}/pull-back")]

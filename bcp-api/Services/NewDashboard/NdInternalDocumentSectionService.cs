@@ -348,10 +348,8 @@ public class NdInternalDocumentSectionService(
             if (string.IsNullOrWhiteSpace(parseMarkdown) && !string.IsNullOrWhiteSpace(doc.FileHash))
                 parseMarkdown = (await cache.GetParseCacheAsync(doc.FileHash, ct))?.Markdown;
 
-            var clauseList = cachedClauses
-                .Select(c => new PolicyClause(c.ClauseNo, c.ClauseText, 0))
-                .ToList();
-            clauseList = PolicyClauseMarkdownRecovery.MergeMissing(clauseList, parseMarkdown);
+            var clauseList = cachedClauses.ToList();
+            clauseList = PolicyClauseOfficialRefAligner.AlignThenMerge(clauseList, parseMarkdown);
 
             var sections = await ReplaceLibrarySectionsAsync(doc, clauseList, ct);
             await sectionPageService.RefreshSectionPagesAsync(doc.Id, ct);
@@ -428,7 +426,7 @@ public class NdInternalDocumentSectionService(
                 StoredDocumentId = doc.Id,
                 SectionRef = clause.ClauseNo,
                 SectionText = clause.ClauseText,
-                SourcePage = null,
+                SourcePage = clause.SourcePage > 0 ? clause.SourcePage : null,
                 DisplayOrder = i,
             });
         }

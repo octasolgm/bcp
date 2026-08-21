@@ -264,7 +264,16 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
     }
     this.exporting = true;
     try {
-      await exportGapAnalysisExcelFromPoints(points);
+      const clauseByPointId = new Map<string, string>();
+      for (const point of this.ndRunData?.points ?? []) {
+        if (!point.id) continue;
+        const snap = parsePointSnapshot(point.pointSnapshot);
+        clauseByPointId.set(point.id, (snap.pointNumber ?? '').replace(/^§/, '').trim());
+      }
+      await exportGapAnalysisExcelFromPoints(points, undefined, undefined, {
+        actionPlans: this.ndRunData?.actionPlans ?? [],
+        clauseByPointId,
+      });
       this.toast.show('Exported gap analysis Excel file', 'success');
     } catch {
       this.toast.show('Export failed — try again', 'error');

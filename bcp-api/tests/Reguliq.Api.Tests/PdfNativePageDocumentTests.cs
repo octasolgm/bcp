@@ -35,6 +35,31 @@ public class PdfNativePageDocumentTests
     }
 
     [Fact]
+    public void ResolveSectionPage_does_not_use_running_header_on_next_page()
+    {
+        var body =
+            "The department has complete independence in relation to the investigation of Anti-Money Laundering";
+        var md = $"""
+            {PolicyPageResolver.PageMarkerPrefix}12 -->
+            6.2 Independence (contents)
+            {PolicyPageResolver.PageMarkerPrefix}14 -->
+            6.2 Independence of the Compliance / AML Department:
+            {body}
+            {PolicyPageResolver.PageMarkerPrefix}15 -->
+            6.2 Independence of the Compliance / AML Department
+            More policy text on the next page.
+            """;
+
+        var native = PdfNativePageDocument.FromMarkdown(md, 63);
+        var page = native.ResolveSectionPage(
+            "6.2",
+            "Independence of the Compliance / AML Department",
+            body);
+
+        Assert.Equal(14, page);
+    }
+
+    [Fact]
     public void ResolveSectionPage_finds_section_6_2_on_correct_page()
     {
         var body =

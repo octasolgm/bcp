@@ -248,6 +248,8 @@ public class RegulationDocumentsController(
         var cachedHashes = await NdLegacyDataQueries.GetExtractCachedHashesAsync(
             db, legacyRows.Select(d => d.FileHash), ct);
 
+        var analysisCounts = await NdDocumentAnalysisRunCountHelper.LoadAsync(db, ct);
+
         var items = new List<object>();
 
         if (hiddenOnly)
@@ -256,7 +258,7 @@ public class RegulationDocumentsController(
             {
                 allRegStored.TryGetValue(d.StoredDocumentId ?? Guid.Empty, out var stored);
                 items.Add(BuildRegulationListItem(
-                    d, stored, deptNames, pointCountMap, profileNames, isHidden: true, pageCountMap));
+                    d, stored, deptNames, pointCountMap, profileNames, isHidden: true, pageCountMap, analysisCounts));
             }
 
             foreach (var leg in hiddenLegacyRows)
@@ -273,7 +275,8 @@ public class RegulationDocumentsController(
                     profileNames,
                     isHidden: true,
                     allRegStored.GetValueOrDefault(leg.Id),
-                    pageCountMap));
+                    pageCountMap,
+                    analysisCounts));
             }
 
             var sortedHidden = items
@@ -312,7 +315,8 @@ public class RegulationDocumentsController(
                 profileNames,
                 isHidden: false,
                 allRegStored.GetValueOrDefault(leg.Id),
-                pageCountMap));
+                pageCountMap,
+                analysisCounts));
         }
 
         foreach (var d in ndDocs)
@@ -333,6 +337,7 @@ public class RegulationDocumentsController(
                     extractionStatus = "manual",
                     pointCount = manualCount,
                     pageCount = ResolveExtractedPageCount(d.Id, pageCountMap),
+                    analysisRunCount = analysisCounts.CountForRegulation(d.Id, null, null),
                     extractedAt = d.ExtractedAt,
                     createdAt = d.CreatedAt,
                     updatedAt = d.UpdatedAt,
@@ -364,7 +369,7 @@ public class RegulationDocumentsController(
                 allRegStored.TryGetValue(sid, out storedDoc);
 
             items.Add(BuildRegulationListItem(
-                d, storedDoc, deptNames, pointCountMap, profileNames, isHidden: false, pageCountMap));
+                d, storedDoc, deptNames, pointCountMap, profileNames, isHidden: false, pageCountMap, analysisCounts));
         }
 
         if (!ndDocs.Any(d => d.IsManual))
@@ -391,6 +396,7 @@ public class RegulationDocumentsController(
                         extractionStatus = "manual",
                         pointCount = manualCount,
                         pageCount = ResolveExtractedPageCount(manualDoc.Id, pageCountMap),
+                        analysisRunCount = analysisCounts.CountForRegulation(manualDoc.Id, null, null),
                         extractedAt = manualDoc.ExtractedAt,
                         createdAt = manualDoc.CreatedAt,
                         updatedAt = manualDoc.UpdatedAt,
@@ -423,7 +429,7 @@ public class RegulationDocumentsController(
         [FromQuery] int limit = 80,
         CancellationToken ct = default)
     {
-        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
@@ -455,21 +461,27 @@ public class RegulationDocumentsController(
             .Select(d => d.StoredDocumentId!.Value)
             .ToHashSet();
 
-        var ndDocIds = ndDocs.Select(d => d.Id).ToList();
+        var searchableDocs = ndDocs
+            .Where(d => d.Status != StatusHidden && !IsDepartmentOverlay(d))
+            .ToList();
+        var searchableDocIds = searchableDocs.Select(d => d.Id).ToList();
         var manualByDocId = ndDocs.ToDictionary(d => d.Id, d => d.IsManual);
         var pointCountMap = new Dictionary<Guid, int>();
-        if (ndDocIds.Count > 0)
+        if (searchableDocIds.Count > 0)
         {
             try
             {
                 pointCountMap = await NdRegulationPointCanonicalFilter.BuildCanonicalCountMapAsync(
-                    db, ndDocIds, manualByDocId, ct);
+                    db, searchableDocIds, manualByDocId, ct);
             }
             catch { /* table may not exist */ }
         }
 
-        var ndByStoredId = ndDocs
-            .Where(d => d.Status != StatusHidden && d.StoredDocumentId.HasValue && !IsDepartmentOverlay(d))
+        await EnsureDemoSearchableRegulationPointsAsync(
+            searchableDocs, pointCountMap, demoCtx, profile!.Id, ct);
+
+        var ndByStoredId = searchableDocs
+            .Where(d => d.StoredDocumentId.HasValue)
             .GroupBy(d => d.StoredDocumentId!.Value)
             .ToDictionary(
                 g => g.Key,
@@ -484,14 +496,18 @@ public class RegulationDocumentsController(
 
         var hits = new List<PointSearchHit>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var markdownByStoredId = new Dictionary<Guid, string?>();
 
         try
         {
+            if (searchableDocIds.Count > 0)
+            {
             var ndRows = await db.NdRegulationPoints.AsNoTracking()
+                .Where(p =>
+                    searchableDocIds.Contains(p.RegulationDocumentId)
+                    && p.Status == NdRegulationPointStatus.Active)
                 .Join(
                     db.NdRegulationDocuments.AsNoTracking()
-                        .Where(d => d.Status != StatusHidden && !IsDepartmentOverlay(d)),
+                        .Where(d => searchableDocIds.Contains(d.Id)),
                     p => p.RegulationDocumentId,
                     d => d.Id,
                     (p, d) => new { Point = p, Doc = d })
@@ -510,7 +526,6 @@ public class RegulationDocumentsController(
                 var key = $"{x.Doc.Id}:{x.Point.PointNumber}";
                 if (!seen.Add(key)) continue;
                 var ndSourceStoredId = x.Doc.StoredDocumentId ?? x.Doc.Id;
-                var (pointSection, storedPageHint) = ParsePointPageReference(x.Point.PageReference);
                 hits.Add(new PointSearchHit(
                     x.Doc.Id,
                     x.Doc.Name,
@@ -521,16 +536,9 @@ public class RegulationDocumentsController(
                     x.Point.PointTitle,
                     SnippetForSearch(x.Point.PointContent, term),
                     x.Point.PageReference,
-                    await ResolveStoredPointPdfPageAsync(
-                        ndSourceStoredId,
-                        x.Point.PointNumber,
-                        pointSection ?? x.Point.PointNumber,
-                        x.Point.PointTitle,
-                        x.Point.PointContent,
-                        storedPageHint,
-                        markdownByStoredId,
-                        ct),
+                    null,
                     ndSourceStoredId));
+            }
             }
         }
         catch
@@ -540,7 +548,7 @@ public class RegulationDocumentsController(
 
         if (hits.Count < take)
         {
-            var legacyRows = await LoadLegacyExtractSearchRowsAsync(pattern, ct);
+            var legacyRows = await LoadLegacyExtractSearchRowsAsync(pattern, demoCtx, ct);
             foreach (var row in legacyRows)
             {
                 if (hiddenStoredIds.Contains(row.DocumentId)) continue;
@@ -588,15 +596,7 @@ public class RegulationDocumentsController(
                         p.Title,
                         SnippetForSearch(p.Text, term),
                         p.Section,
-                        await ResolveStoredPointPdfPageAsync(
-                            row.DocumentId,
-                            p.PointId,
-                            p.Section,
-                            p.Title,
-                            p.Text,
-                            p.PageHint,
-                            markdownByStoredId,
-                            ct),
+                        null,
                         row.DocumentId));
                 }
 
@@ -648,13 +648,49 @@ public class RegulationDocumentsController(
         string DocumentName,
         string PointsJson);
 
+    private async Task EnsureDemoSearchableRegulationPointsAsync(
+        IReadOnlyList<NdRegulationDocument> searchableDocs,
+        IReadOnlyDictionary<Guid, int> pointCountMap,
+        NdDemoIsolationContext demoCtx,
+        Guid userId,
+        CancellationToken ct)
+    {
+        if (!demoCtx.ViewerIsDemo) return;
+
+        foreach (var doc in searchableDocs)
+        {
+            if (doc.IsManual) continue;
+            if (!NdDemoDataFilters.IsDemoOwned(doc.CreatedBy, demoCtx)) continue;
+            if (pointCountMap.GetValueOrDefault(doc.Id) > 0) continue;
+
+            var status = (doc.ExtractionStatus ?? "").Trim().ToLowerInvariant();
+            if (status is not ("parsed" or "completed")) continue;
+
+            var tracked = await db.NdRegulationDocuments.FirstOrDefaultAsync(d => d.Id == doc.Id, ct);
+            if (tracked == null) continue;
+
+            await demoInterception.TryEnsureRegulationPointsSeededAsync(
+                db, tracked, userId, demoCtx, ct);
+        }
+    }
+
     private async Task<List<LegacyExtractSearchRow>> LoadLegacyExtractSearchRowsAsync(
         string pattern,
+        NdDemoIsolationContext demoCtx,
         CancellationToken ct)
     {
         try
         {
-            return await db.Database.SqlQueryRaw<LegacyExtractSearchRow>(
+            var allowedStoredIds = await NdDemoDataFilters.ApplyToStoredDocuments(
+                    db.StoredDocuments.AsNoTracking().Where(d => d.DocKind == "regulation"),
+                    demoCtx)
+                .Select(d => d.Id)
+                .ToListAsync(ct);
+            if (allowedStoredIds.Count == 0)
+                return [];
+
+            var allowed = allowedStoredIds.ToHashSet();
+            var rows = await db.Database.SqlQueryRaw<LegacyExtractSearchRow>(
                     """
                     SELECT sd.id AS "DocumentId",
                            sd.title AS "DocumentName",
@@ -670,6 +706,7 @@ public class RegulationDocumentsController(
                     LandingAiGovExtractService.GovSchemaKey,
                     pattern)
                 .ToListAsync(ct);
+            return rows.Where(r => allowed.Contains(r.DocumentId)).ToList();
         }
         catch
         {
@@ -1677,6 +1714,171 @@ public class RegulationDocumentsController(
         });
     }
 
+    [HttpGet("{id:guid}/analysis-runs")]
+    public async Task<IActionResult> ListAnalysisRuns(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var ndDoc = await db.NdRegulationDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id, ct)
+            ?? await db.NdRegulationDocuments.AsNoTracking()
+                .FirstOrDefaultAsync(d => d.StoredDocumentId == id, ct);
+
+        StoredDocument? stored = null;
+        if (ndDoc?.StoredDocumentId is Guid storedId)
+            stored = await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == storedId, ct);
+        stored ??= await db.StoredDocuments.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == id && d.DocKind == "regulation", ct);
+
+        if (ndDoc == null && stored == null)
+            return NotFound(new { success = false, message = "Document not found." });
+
+        var docName = ndDoc?.Name ?? stored?.Title ?? "Regulation";
+        var candidateIds = new HashSet<Guid> { id };
+        if (ndDoc != null) candidateIds.Add(ndDoc.Id);
+        if (stored != null) candidateIds.Add(stored.Id);
+
+        var items = new List<object>();
+
+        List<NdAnalysisRun> ndRuns;
+        try
+        {
+            ndRuns = await db.NdAnalysisRuns.AsNoTracking()
+                .Where(r => r.Status != "deleted")
+                .OrderByDescending(r => r.CreatedAt)
+                .Take(200)
+                .ToListAsync(ct);
+        }
+        catch
+        {
+            ndRuns = [];
+        }
+
+        foreach (var run in ndRuns)
+        {
+            var selected = ParseSelectedRegulationDocIds(run.SelectedRegulationDocIds);
+            if (!selected.Any(candidateIds.Contains)) continue;
+
+            items.Add(new
+            {
+                id = run.Id,
+                source = "nd_analysis",
+                name = run.Name,
+                regulationFileName = docName,
+                internalFileName = (string?)null,
+                status = run.Status,
+                pointCount = run.TotalPointsCount,
+                completedPoints = run.ProcessedPointsCount,
+                failedPoints = run.DualVerifyFailedCount,
+                runningPoints = 0,
+                isActive = run.Status is "draft" or "running",
+                sessionAvailable = true,
+                dualVerifySessionId = (string?)null,
+                complianceSessionId = (string?)null,
+                createdAt = run.CreatedAt.ToString("o"),
+                updatedAt = run.UpdatedAt.ToString("o"),
+            });
+        }
+
+        var fileHash = stored?.FileHash;
+        var legacyRuns = await db.DocumentAnalysisRuns.AsNoTracking()
+            .Where(r =>
+                (r.RegulationDocumentId != null && candidateIds.Contains(r.RegulationDocumentId.Value))
+                || (!string.IsNullOrWhiteSpace(fileHash) && r.GovFileHash == fileHash))
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(50)
+            .ToListAsync(ct);
+
+        var sessionIds = legacyRuns
+            .Where(r => r.DualVerifySessionId.HasValue)
+            .Select(r => r.DualVerifySessionId!.Value)
+            .Distinct()
+            .ToList();
+        var sessions = sessionIds.Count == 0
+            ? new Dictionary<Guid, DualVerifySession>()
+            : await db.DualVerifySessions.AsNoTracking()
+                .Where(s => sessionIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, ct);
+
+        foreach (var r in legacyRuns)
+        {
+            DualVerifySession? s = null;
+            var hasSession = r.DualVerifySessionId is Guid dvId && sessions.TryGetValue(dvId, out s);
+            string status;
+            int completed;
+            int total;
+            bool isActive;
+            bool sessionAvailable;
+            int failed = 0;
+            int running = 0;
+            if (r.DualVerifySessionId is Guid && !hasSession)
+            {
+                status = "unavailable";
+                completed = r.CompletedPoints;
+                total = r.PointCount;
+                isActive = false;
+                sessionAvailable = false;
+            }
+            else
+            {
+                status = s?.Status ?? r.Status;
+                completed = s?.CompletedPoints ?? r.CompletedPoints;
+                total = s?.TotalPoints ?? r.PointCount;
+                failed = s?.FailedPoints ?? 0;
+                running = s?.RunningPoints ?? 0;
+                var updatedAt = s != null
+                    ? new DateTimeOffset(DateTime.SpecifyKind(s.UpdatedAt, DateTimeKind.Utc))
+                    : r.UpdatedAt;
+                isActive = AnalysisActivityHelper.IsStillActive(
+                    status, completed, failed, total, updatedAt, running);
+                status = AnalysisActivityHelper.NormalizeDisplayStatus(
+                    status, completed, failed, total, updatedAt, running);
+                if (isActive) status = "in_progress";
+                else if (total > 0 && completed + failed >= total
+                    && !string.Equals(status, "cancelled", StringComparison.OrdinalIgnoreCase))
+                    status = failed > 0 && completed == 0 ? "failed" : "completed";
+                sessionAvailable = !r.DualVerifySessionId.HasValue || hasSession;
+            }
+
+            items.Add(new
+            {
+                id = r.Id,
+                source = "legacy_analysis",
+                name = string.IsNullOrWhiteSpace(r.Label)
+                    ? $"{r.RegulationFileName ?? docName} × {r.InternalFileName ?? "Internal"}"
+                    : r.Label,
+                regulationFileName = r.RegulationFileName ?? docName,
+                internalFileName = r.InternalFileName,
+                status,
+                pointCount = total,
+                completedPoints = completed,
+                failedPoints = failed,
+                runningPoints = running,
+                isActive,
+                sessionAvailable,
+                dualVerifySessionId = r.DualVerifySessionId?.ToString(),
+                complianceSessionId = r.ComplianceSessionId?.ToString(),
+                createdAt = r.CreatedAt.ToString("o"),
+                updatedAt = (s?.UpdatedAt ?? r.UpdatedAt.UtcDateTime).ToString("o"),
+            });
+        }
+
+        var sorted = items
+            .OrderByDescending(i =>
+            {
+                var activeProp = i.GetType().GetProperty("isActive");
+                if (activeProp?.GetValue(i) is true) return DateTimeOffset.MaxValue;
+                var createdProp = i.GetType().GetProperty("createdAt");
+                var created = createdProp?.GetValue(i)?.ToString();
+                return DateTimeOffset.TryParse(created, out var dt) ? dt : DateTimeOffset.MinValue;
+            })
+            .ToList();
+
+        return Ok(new { success = true, data = sorted });
+    }
+
     [HttpGet("{id:guid}/export/points")]
     public async Task<IActionResult> ExportPoints(Guid id, CancellationToken ct)
     {
@@ -1949,6 +2151,7 @@ public class RegulationDocumentsController(
             return StatusCode(500, new { success = false, message = $"Could not save point: {inner}" });
         }
 
+        dashboardCache.Invalidate();
         return Ok(new { success = true, data = MapNdPoint(point) });
     }
 
@@ -2012,6 +2215,7 @@ public class RegulationDocumentsController(
         point.Status = NdRegulationPointStatus.Removed;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
+        dashboardCache.Invalidate();
         return Ok(new { success = true });
     }
 
@@ -2094,12 +2298,11 @@ public class RegulationDocumentsController(
         return pageCountMap?.GetValueOrDefault(regulationDocumentId) ?? 0;
     }
 
-    /// <summary>Hide PDF page totals until parse completes — avoids showing upload-time PdfPig counts during Parsing.</summary>
+    /// <summary>Hide PDF page totals until parse starts completing — show stored PDF count whenever it exists.</summary>
     private static bool ShouldExposeListPageCount(string displayStatus, bool isManual)
     {
         if (isManual) return true;
-        if (string.Equals(displayStatus, "pending", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(displayStatus, "processing", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(displayStatus, "pending", StringComparison.OrdinalIgnoreCase))
             return false;
         return true;
     }
@@ -2126,7 +2329,8 @@ public class RegulationDocumentsController(
         IReadOnlyDictionary<Guid, int> pointCountMap,
         IReadOnlyDictionary<Guid, string> profileNames,
         bool isHidden,
-        IReadOnlyDictionary<Guid, int>? pageCountMap = null)
+        IReadOnlyDictionary<Guid, int>? pageCountMap = null,
+        NdDocumentAnalysisRunCounts? analysisCounts = null)
     {
         var resolvedCount = pointCountMap.GetValueOrDefault(d.Id);
         var rawStatus = ResolveRegulationRawStatus(d.ExtractionStatus, "pending", stored);
@@ -2152,6 +2356,8 @@ public class RegulationDocumentsController(
             pointCount = resolvedCount,
             // Total PDF pages (PdfPig at upload/parse); not distinct point page refs.
             pageCount = ResolveListPageCountForList(d.Id, stored, pageCountMap, displayStatus, isManual: false),
+            analysisRunCount = (analysisCounts ?? NdDocumentAnalysisRunCountHelper.Empty)
+                .CountForRegulation(d.Id, d.StoredDocumentId, stored?.FileHash),
             extractedAt = d.ExtractedAt,
             createdAt = d.CreatedAt,
             updatedAt = d.UpdatedAt,
@@ -2180,7 +2386,8 @@ public class RegulationDocumentsController(
         IReadOnlyDictionary<Guid, string> profileNames,
         bool isHidden,
         StoredDocument? storedDoc = null,
-        IReadOnlyDictionary<Guid, int>? pageCountMap = null)
+        IReadOnlyDictionary<Guid, int>? pageCountMap = null,
+        NdDocumentAnalysisRunCounts? analysisCounts = null)
     {
         var legacyStatus = NdLegacyDataQueries.LegacyRegulationExtractionStatus(
             leg.PointCount, leg.FileHash, cachedHashes);
@@ -2203,6 +2410,8 @@ public class RegulationDocumentsController(
                 : ShouldExposeListPageCount(displayStatus, isManual: false) && storedDoc?.Pages is > 0
                     ? storedDoc.Pages
                     : 0,
+            analysisRunCount = (analysisCounts ?? NdDocumentAnalysisRunCountHelper.Empty)
+                .CountForRegulation(ndForLegacy?.Id ?? leg.Id, leg.Id, storedDoc?.FileHash ?? leg.FileHash),
             extractedAt = ndForLegacy?.ExtractedAt,
             createdAt = leg.CreatedAt,
             updatedAt = leg.UpdatedAt,

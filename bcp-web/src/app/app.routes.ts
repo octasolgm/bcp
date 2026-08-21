@@ -22,7 +22,7 @@ const ndAnalyseV9Route = {
 const ndAnalyseRegulRoute = {
   canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
-  title: 'Regul Workflow · Comply Solutions',
+  title: 'Regul Workflow · Comply Solution',
   loadComponent: () =>
     import('./pages/analyse-regul/analyse-regul.component').then((m) => m.AnalyseRegulComponent),
 };
@@ -30,7 +30,7 @@ const ndAnalyseRegulRoute = {
 const ndAnalyseRegulFullRoute = {
   canActivate: [ndRoleGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
-  title: 'Regul Full Markdown · Comply Solutions',
+  title: 'Regul Full Markdown · Comply Solution',
   loadComponent: () =>
     import('./pages/analyse-regul-full/analyse-regul-full.component').then(
       (m) => m.AnalyseRegulFullComponent,
@@ -42,61 +42,61 @@ const legacyAppRoutes: Routes = [
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
   {
     path: 'dashboard',
-    title: 'Dashboard · Comply Solutions',
+    title: 'Dashboard · Comply Solution',
     loadComponent: () =>
       import('./pages/dashboard/dashboard.component').then((m) => m.DashboardComponent),
   },
   {
     path: 'analyse',
-    title: 'New Gap Analysis · Comply Solutions',
+    title: 'New Gap Analysis · Comply Solution',
     loadComponent: () =>
       import('./pages/analyse/analyse.component').then((m) => m.AnalyseComponent),
   },
   {
     path: 'analyse-v2',
-    title: 'New Gap Analysis V2 · Comply Solutions',
+    title: 'New Gap Analysis V2 · Comply Solution',
     loadComponent: () =>
       import('./pages/analyse-v2/analyse-v2.component').then((m) => m.AnalyseV2Component),
   },
   {
     path: 'analyse-v3',
-    title: 'New Gap Analysis V3 · Comply Solutions',
+    title: 'New Gap Analysis V3 · Comply Solution',
     loadComponent: () =>
       import('./pages/analyse-v3/analyse-v3.component').then((m) => m.AnalyseV3Component),
   },
   {
     path: 'analyse-v4',
-    title: 'New Gap Analysis V4 · Comply Solutions',
+    title: 'New Gap Analysis V4 · Comply Solution',
     loadComponent: () =>
       import('./pages/analyse-v4/analyse-v4.component').then((m) => m.AnalyseV4Component),
   },
   {
     path: 'analyse-v5',
-    title: 'New Gap Analysis V5 · Comply Solutions',
+    title: 'New Gap Analysis V5 · Comply Solution',
     loadComponent: () =>
       import('./pages/analyse-v5/analyse-v5.component').then((m) => m.AnalyseV5Component),
   },
   {
     path: 'analyse-v6',
-    title: 'New Gap Analysis V6 · Comply Solutions',
+    title: 'New Gap Analysis V6 · Comply Solution',
     loadComponent: () =>
       import('./pages/analyse-v6/analyse-v6.component').then((m) => m.AnalyseV6Component),
   },
   {
     path: 'analyse-v7',
-    title: 'New Gap Analysis V7 · Comply Solutions',
+    title: 'New Gap Analysis V7 · Comply Solution',
     loadComponent: () =>
       import('./pages/analyse-v7/analyse-v7.component').then((m) => m.AnalyseV7Component),
   },
   {
     path: 'analyse-v8',
-    title: 'New Gap Analysis V8 · Comply Solutions',
+    title: 'New Gap Analysis V8 · Comply Solution',
     loadComponent: () =>
       import('./pages/analyse-v8/analyse-v8.component').then((m) => m.AnalyseV8Component),
   },
   {
     path: 'gap-analysis',
-    title: 'Gap Analysis · Comply Solutions',
+    title: 'Gap Analysis · Comply Solution',
     loadComponent: () =>
       import('./pages/gap-analysis-report/gap-analysis-report.component').then(
         (m) => m.GapAnalysisReportComponent,
@@ -104,7 +104,7 @@ const legacyAppRoutes: Routes = [
   },
   {
     path: 'regulations',
-    title: 'Regulation Docs Library · Comply Solutions',
+    title: 'Regulation Docs Library · Comply Solution',
     loadComponent: () =>
       import('./pages/regulation-library/regulation-library.component').then(
         (m) => m.RegulationLibraryComponent,
@@ -112,19 +112,19 @@ const legacyAppRoutes: Routes = [
   },
   {
     path: 'documents',
-    title: 'Document Library · Comply Solutions',
+    title: 'Document Library · Comply Solution',
     loadComponent: () =>
       import('./pages/documents/documents.component').then((m) => m.DocumentsComponent),
   },
   {
     path: 'in-progress',
-    title: 'Analyses in progress · Comply Solutions',
+    title: 'Analyses in progress · Comply Solution',
     loadComponent: () =>
       import('./pages/in-progress/in-progress.component').then((m) => m.InProgressComponent),
   },
   {
     path: 'dual-verify',
-    title: 'Advanced Workbench · Comply Solutions',
+    title: 'Advanced Workbench · Comply Solution',
     loadComponent: () =>
       import('./pages/dual-verify/dual-verify.component').then((m) => m.DualVerifyComponent),
   },
@@ -153,7 +153,7 @@ export const routes: Routes = [
   { path: 'overview', redirectTo: 'nd/overview', pathMatch: 'full' },
   {
     path: 'login',
-    title: 'Sign in · Comply Solutions',
+    title: 'Sign in · Comply Solution',
     canActivate: [guestGuard],
     loadComponent: () =>
       import('./pages/login/login.component').then((m) => m.LoginComponent),
@@ -171,14 +171,14 @@ export const routes: Routes = [
     children: [
       {
         path: 'auth/login',
-        title: 'Sign in · Comply Solutions ND',
+        title: 'Sign in · Comply Solution ND',
         canActivate: [ndGuestGuard],
         loadComponent: () =>
           import('./pages/nd/auth/nd-login.component').then((m) => m.NdLoginComponent),
       },
       {
         path: 'auth/forgot-password',
-        title: 'Forgot password · Comply Solutions ND',
+        title: 'Forgot password · Comply Solution ND',
         canActivate: [ndGuestGuard],
         loadComponent: () =>
           import('./pages/nd/auth/nd-forgot-password.component').then(
@@ -187,7 +187,7 @@ export const routes: Routes = [
       },
       {
         path: 'auth/reset-password',
-        title: 'Reset password · Comply Solutions ND',
+        title: 'Reset password · Comply Solution ND',
         loadComponent: () =>
           import('./pages/nd/auth/nd-reset-password.component').then(
             (m) => m.NdResetPasswordComponent,
@@ -195,7 +195,7 @@ export const routes: Routes = [
       },
       {
         path: 'auth/accept-invite',
-        title: 'Accept invite · Comply Solutions ND',
+        title: 'Accept invite · Comply Solution ND',
         loadComponent: () =>
           import('./pages/nd/auth/nd-accept-invite.component').then(
             (m) => m.NdAcceptInviteComponent,
@@ -277,13 +277,13 @@ export const routes: Routes = [
           },
           {
             path: 'inbox',
-            title: 'My actions · Comply Solutions',
+            title: 'My actions · Comply Solution',
             loadComponent: () =>
               import('./pages/nd/inbox/nd-inbox.component').then((m) => m.NdInboxComponent),
           },
           {
             path: 'profile',
-            title: 'My profile · Comply Solutions',
+            title: 'My profile · Comply Solution',
             loadComponent: () =>
               import('./pages/nd/profile/nd-profile.component').then((m) => m.NdProfileComponent),
           },
@@ -293,7 +293,7 @@ export const routes: Routes = [
           },
           {
             path: 'analyse-v9',
-            title: 'New Gap Analysis V2 · Comply Solutions',
+            title: 'New Gap Analysis V2 · Comply Solution',
             ...ndAnalyseV9Route,
           },
           {
@@ -308,7 +308,7 @@ export const routes: Routes = [
             path: 'analysis-versions',
             canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
             data: { ndRoles: ['maker', 'super_admin'] },
-            title: 'Analysis versions · Comply Solutions',
+            title: 'Analysis versions · Comply Solution',
             loadComponent: () =>
               import('./pages/nd/analysis-versions/nd-analysis-versions.component').then(
                 (m) => m.NdAnalysisVersionsComponent,
@@ -328,7 +328,7 @@ export const routes: Routes = [
           },
           {
             path: 'action-plans/:priority',
-            title: 'Action plans by priority · Comply Solutions',
+            title: 'Action plans by priority · Comply Solution',
             loadComponent: () =>
               import('./pages/nd/action-plans/nd-action-plan-priority.component').then(
                 (m) => m.NdActionPlanPriorityComponent,
@@ -481,7 +481,7 @@ export const routes: Routes = [
             path: 'admin/demo',
             canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
             data: { ndRoles: ['super_admin'] },
-            title: 'Demo group · Comply Solutions',
+            title: 'Demo group · Comply Solution',
             loadComponent: () =>
               import('./pages/nd/admin/nd-admin-demo.component').then((m) => m.NdAdminDemoComponent),
           },
