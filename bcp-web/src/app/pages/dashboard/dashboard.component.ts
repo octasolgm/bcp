@@ -386,6 +386,43 @@ export class DashboardComponent implements OnInit {
     return 0;
   }
 
+  get criticalGapResolved(): number {
+    return this.ndDashboardStats?.criticalGapsResolved ?? 0;
+  }
+
+  get criticalGapPending(): number {
+    return this.ndDashboardStats?.criticalGapsPending ?? 0;
+  }
+
+  get mediumGapResolved(): number {
+    return this.ndDashboardStats?.mediumGapsResolved ?? 0;
+  }
+
+  get mediumGapPending(): number {
+    return this.ndDashboardStats?.mediumGapsPending ?? 0;
+  }
+
+  get lowGapResolved(): number {
+    return this.ndDashboardStats?.lowGapsResolved ?? 0;
+  }
+
+  get lowGapPending(): number {
+    return this.ndDashboardStats?.lowGapsPending ?? 0;
+  }
+
+  get totalActionsCount(): number {
+    if (this.ndStatsLoading) return -1;
+    return this.ndDashboardStats?.totalActions ?? 0;
+  }
+
+  get totalActionsResolved(): number {
+    return this.ndDashboardStats?.totalActionsResolved ?? 0;
+  }
+
+  get totalActionsPending(): number {
+    return this.ndDashboardStats?.totalActionsPending ?? 0;
+  }
+
   get criticalCount(): number {
     if (this.inNdShell) {
       if (this.ndStatsLoading) return 0;

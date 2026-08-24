@@ -647,9 +647,9 @@ export class NdResultsComponent implements OnInit, OnChanges {
     this.openPdf.emit(event);
   }
 
-  exportPdf(): void {
+  async exportPdf(): Promise<void> {
     if (!this.data) return;
-    exportGapAnalysisPdfFromPoints(this.data.points, {
+    await exportGapAnalysisPdfFromPoints(this.data.points, {
       runName: this.data.run.name || 'Gap Analysis Report',
       ...this.exportOptions(),
     });

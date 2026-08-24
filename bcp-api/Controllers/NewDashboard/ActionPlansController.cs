@@ -208,9 +208,11 @@ public class ActionPlansController(
     public record SeedActionPlansRequest(List<SeedActionPlanItem>? Items);
 
     /// <summary>
-    /// Writes a first-draft action for each gap the caller found. Refuses once the run
-    /// has any action of its own, so re-opening a report never duplicates the draft and
-    /// never overwrites what a maker has since edited.
+    /// Writes a first-draft action for each gap the caller found that doesn't already
+    /// have one. Skipping only the gaps already covered — rather than refusing outright
+    /// once the run owns any action — means a gap added after the first seeding pass
+    /// (e.g. gap-numbering fixes landing later) still gets a draft, while never
+    /// duplicating or overwriting what a maker has since edited.
     /// </summary>
     [HttpPost("seed")]
     public async Task<IActionResult> Seed(Guid runId, [FromBody] SeedActionPlansRequest body, CancellationToken ct)
@@ -224,13 +226,19 @@ public class ActionPlansController(
         var accessError = await EnsureRunVisibleAsync(run, ct);
         if (accessError != null) return accessError;
 
-        var alreadyHasPlans = await db.NdAnalysisActionPlans.AnyAsync(p => p.AnalysisRunId == runId, ct);
-        if (alreadyHasPlans)
-            return Ok(new { success = true, data = new { seeded = 0, skipped = true } });
-
         var items = body.Items ?? [];
         if (items.Count == 0)
             return Ok(new { success = true, data = new { seeded = 0, skipped = false } });
+
+        var coveredGaps = (await db.NdAnalysisActionPlans.AsNoTracking()
+            .Where(p => p.AnalysisRunId == runId)
+            .Select(p => new { p.AnalysisPointId, p.GapIndex })
+            .ToListAsync(ct))
+            .Select(p => (p.AnalysisPointId, p.GapIndex))
+            .ToHashSet();
+        items = items.Where(i => !coveredGaps.Contains((i.AnalysisPointId, Math.Max(0, i.GapIndex)))).ToList();
+        if (items.Count == 0)
+            return Ok(new { success = true, data = new { seeded = 0, skipped = true } });
 
         var validPointIds = await db.NdAnalysisPoints.AsNoTracking()
             .Where(p => p.AnalysisRunId == runId)

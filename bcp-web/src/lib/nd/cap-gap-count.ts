@@ -6,7 +6,7 @@ import {
 import type { DualVerifyReportItem } from '../dual-verify-report';
 import type { AnalysisPoint } from './types';
 import { resolveAnalysisPointSeverity } from './point-compliance-status';
-import { normalizeRegulGapDisplayText, parseRegulElementCapSegments, parseRegulElementGapSegments } from './regul-fields';
+import { normalizeRegulGapDisplayText, parseRegulElementCapSegments } from './regul-fields';
 
 function extractAiMessage(raw?: string | null): string {
   if (!raw?.trim()) return '';
@@ -166,10 +166,48 @@ function regulGapAnalysisTextFromPoint(p: AnalysisPoint): string {
   return normalizeRegulGapDisplayText(block.gapAnalysis ?? '');
 }
 
+/**
+ * Canonical gap list for a point — mirrors nd-gap-point-detail's own computation so the
+ * roster sync, gap badges/rollups, and risk lookups number gaps the same way the detail
+ * panel does. Without this, a regul-workflow point's "Gap 2" in the panel (element gaps
+ * parsed from AI prose) could be a different gap than "Gap 2" in the list view (CAP-text
+ * gaps), so editing risk on one would attach to the wrong gap in the other.
+ */
+export function capGapsForAnalysisPoint(p: AnalysisPoint, isRegulWorkflow: boolean): CapGap[] {
+  const fallback = meaningfulCapGaps(resolveCapSourceForAnalysisPoint(p));
+  if (!isRegulWorkflow) return fallback;
+
+  const severity = resolveAnalysisPointSeverity(p);
+  if (!severity || severity === 'compliant') return fallback;
+
+  const originalPlan = p.originalAiActionPlan?.trim() ?? '';
+  const userEditedPlan =
+    Boolean(p.finalActionPlan?.trim()) &&
+    p.finalActionPlan!.trim() !== originalPlan &&
+    !looksLikeRegulElementAssessment(p.finalActionPlan!);
+  if (userEditedPlan) return fallback;
+
+  const gapRaw = regulGapAnalysisTextFromPoint(p);
+  if (!gapRaw) return fallback;
+
+  const fixFromCap = resolveAiCorrectiveActionForPoint(p);
+  const fix = fixFromCap && !isWeakCorrectivePlan(fixFromCap) ? fixFromCap : '';
+  const elementGaps = parseRegulElementCapGaps(gapRaw);
+  if (elementGaps.length > 0) {
+    return elementGaps.map((g, i) => ({ ...g, index: i + 1, fix: g.fix || fix }));
+  }
+  return [{ index: 1, missing: gapRaw, fix, priority: 'Medium' }];
+}
+
+/**
+ * Same segment source as capGapsForAnalysisPoint's regul branch — this must count the
+ * same gaps the roster registers and the detail panel edits, or the "N gaps" badge
+ * shown beside a clause tells the user a different number than what they can act on.
+ */
 export function countRegulElementGapsForPoint(p: AnalysisPoint): number {
   const gapText = regulGapAnalysisTextFromPoint(p);
   if (!gapText) return 0;
-  return parseRegulElementGapSegments(gapText).length;
+  return parseRegulElementCapSegments(gapText).length;
 }
 
 export function countCapGapsForAnalysisPoint(p: AnalysisPoint): number {

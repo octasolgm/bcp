@@ -38,7 +38,7 @@ export class NdReviewSummaryPanelComponent {
   fromDate = '';
   toDate = '';
 
-  collapsed = false;
+  collapsed = true;
 
   get pendingPlans(): ActionPlanEntry[] {
     return this.plans.filter((p) => p.status !== 'resolved');

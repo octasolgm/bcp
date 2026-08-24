@@ -149,12 +149,24 @@ public static class NdRunEnrichmentHelper
         int Partial,
         int NonCompliant,
         int CriticalGaps,
+        int CriticalGapsResolved,
         int MediumGaps,
+        int MediumGapsResolved,
         int LowGaps,
+        int LowGapsResolved,
+        int TotalActions,
+        int TotalActionsResolved,
         int TotalRuns,
         DateTimeOffset? LastAnalysisAt);
 
     private sealed record WorkspaceComplianceTotals(int Compliant, int Partial, int NonCompliant);
+
+    private sealed record WorkspaceGapRiskTotals(
+        int High, int HighResolved,
+        int Medium, int MediumResolved,
+        int Low, int LowResolved);
+
+    private sealed record WorkspaceActionTotals(int Total, int Resolved);
 
     /// <summary>
     /// Fast list rows for nav, analysis-runs table, and dashboard cards.
@@ -308,12 +320,16 @@ public static class NdRunEnrichmentHelper
             .FirstOrDefaultAsync(ct);
 
         WorkspaceComplianceTotals totals;
+        WorkspaceGapRiskTotals gapTotals;
         if (demoCtx is { Enabled: true })
         {
             var runIds = await runsQ.Select(r => r.Id).ToListAsync(ct);
             totals = runIds.Count == 0
                 ? new WorkspaceComplianceTotals(0, 0, 0)
                 : await ComputeComplianceTotalsForRunsAsync(db, runIds, ct);
+            gapTotals = runIds.Count == 0
+                ? new WorkspaceGapRiskTotals(0, 0, 0, 0, 0, 0)
+                : await ComputeGapRiskTotalsForRunsAsync(db, runIds, ct);
         }
         else if (mineOnly && profileId.HasValue)
         {
@@ -337,6 +353,21 @@ public static class NdRunEnrichmentHelper
                 ) t
                 """,
                 profileId.Value).FirstOrDefaultAsync(ct) ?? new WorkspaceComplianceTotals(0, 0, 0);
+
+            gapTotals = await db.Database.SqlQueryRaw<WorkspaceGapRiskTotals>(
+                """
+                SELECT
+                  COUNT(*) FILTER (WHERE g.risk = 'high')::int AS "High",
+                  COUNT(*) FILTER (WHERE g.risk = 'high' AND g.status = 'resolved')::int AS "HighResolved",
+                  COUNT(*) FILTER (WHERE g.risk = 'medium')::int AS "Medium",
+                  COUNT(*) FILTER (WHERE g.risk = 'medium' AND g.status = 'resolved')::int AS "MediumResolved",
+                  COUNT(*) FILTER (WHERE g.risk = 'low')::int AS "Low",
+                  COUNT(*) FILTER (WHERE g.risk = 'low' AND g.status = 'resolved')::int AS "LowResolved"
+                FROM analysis_gaps g
+                INNER JOIN analysis_runs r ON r.id = g.analysis_run_id
+                WHERE r.status <> 'deleted' AND r.created_by = {0}
+                """,
+                profileId.Value).FirstOrDefaultAsync(ct) ?? new WorkspaceGapRiskTotals(0, 0, 0, 0, 0, 0);
         }
         else
         {
@@ -359,16 +390,69 @@ public static class NdRunEnrichmentHelper
                   WHERE r.status <> 'deleted'
                 ) t
                 """).FirstOrDefaultAsync(ct) ?? new WorkspaceComplianceTotals(0, 0, 0);
+
+            gapTotals = await db.Database.SqlQueryRaw<WorkspaceGapRiskTotals>(
+                """
+                SELECT
+                  COUNT(*) FILTER (WHERE g.risk = 'high')::int AS "High",
+                  COUNT(*) FILTER (WHERE g.risk = 'high' AND g.status = 'resolved')::int AS "HighResolved",
+                  COUNT(*) FILTER (WHERE g.risk = 'medium')::int AS "Medium",
+                  COUNT(*) FILTER (WHERE g.risk = 'medium' AND g.status = 'resolved')::int AS "MediumResolved",
+                  COUNT(*) FILTER (WHERE g.risk = 'low')::int AS "Low",
+                  COUNT(*) FILTER (WHERE g.risk = 'low' AND g.status = 'resolved')::int AS "LowResolved"
+                FROM analysis_gaps g
+                INNER JOIN analysis_runs r ON r.id = g.analysis_run_id
+                WHERE r.status <> 'deleted'
+                """).FirstOrDefaultAsync(ct) ?? new WorkspaceGapRiskTotals(0, 0, 0, 0, 0, 0);
         }
 
-        var gapRisk = new NdGapRiskCounter.Counts(totals.NonCompliant, totals.Partial, 0);
+        WorkspaceActionTotals actionTotals;
+        if (demoCtx is { Enabled: true })
+        {
+            var runIds = await runsQ.Select(r => r.Id).ToListAsync(ct);
+            actionTotals = runIds.Count == 0
+                ? new WorkspaceActionTotals(0, 0)
+                : await ComputeActionTotalsForRunsAsync(db, runIds, ct);
+        }
+        else if (mineOnly && profileId.HasValue)
+        {
+            actionTotals = await db.Database.SqlQueryRaw<WorkspaceActionTotals>(
+                """
+                SELECT
+                  COUNT(*)::int AS "Total",
+                  COUNT(*) FILTER (WHERE a.status = 'resolved')::int AS "Resolved"
+                FROM analysis_action_plans a
+                INNER JOIN analysis_runs r ON r.id = a.analysis_run_id
+                WHERE r.status <> 'deleted' AND r.created_by = {0}
+                """,
+                profileId.Value).FirstOrDefaultAsync(ct) ?? new WorkspaceActionTotals(0, 0);
+        }
+        else
+        {
+            actionTotals = await db.Database.SqlQueryRaw<WorkspaceActionTotals>(
+                """
+                SELECT
+                  COUNT(*)::int AS "Total",
+                  COUNT(*) FILTER (WHERE a.status = 'resolved')::int AS "Resolved"
+                FROM analysis_action_plans a
+                INNER JOIN analysis_runs r ON r.id = a.analysis_run_id
+                WHERE r.status <> 'deleted'
+                """).FirstOrDefaultAsync(ct) ?? new WorkspaceActionTotals(0, 0);
+        }
+
+        var gapRisk = new NdGapRiskCounter.Counts(gapTotals.High, gapTotals.Medium, gapTotals.Low);
         return new WorkspaceDashboardStats(
             totals.Compliant,
             totals.Partial,
             totals.NonCompliant,
             gapRisk.Critical,
+            gapTotals.HighResolved,
             gapRisk.Medium,
+            gapTotals.MediumResolved,
             gapRisk.Low,
+            gapTotals.LowResolved,
+            actionTotals.Total,
+            actionTotals.Resolved,
             runMeta?.Total ?? 0,
             runMeta?.LastAt);
     }
@@ -420,6 +504,82 @@ public static class NdRunEnrichmentHelper
         }
 
         return new WorkspaceComplianceTotals(compliant, partial, nonCompliant);
+    }
+
+    /// <summary>Gap-risk tally restricted to a run-id list, chunked for the same reason as above.</summary>
+    private static async Task<WorkspaceGapRiskTotals> ComputeGapRiskTotalsForRunsAsync(
+        AppDbContext db,
+        List<Guid> runIds,
+        CancellationToken ct)
+    {
+        if (runIds.Count == 0) return new WorkspaceGapRiskTotals(0, 0, 0, 0, 0, 0);
+
+        var high = 0;
+        var highResolved = 0;
+        var medium = 0;
+        var mediumResolved = 0;
+        var low = 0;
+        var lowResolved = 0;
+        foreach (var chunk in runIds.Chunk(50))
+        {
+            var batch = chunk.ToArray();
+            var placeholders = string.Join(", ", batch.Select((_, i) => $"{{{i}}}"));
+            var sql = $"""
+                SELECT
+                  COUNT(*) FILTER (WHERE risk = 'high')::int AS "High",
+                  COUNT(*) FILTER (WHERE risk = 'high' AND status = 'resolved')::int AS "HighResolved",
+                  COUNT(*) FILTER (WHERE risk = 'medium')::int AS "Medium",
+                  COUNT(*) FILTER (WHERE risk = 'medium' AND status = 'resolved')::int AS "MediumResolved",
+                  COUNT(*) FILTER (WHERE risk = 'low')::int AS "Low",
+                  COUNT(*) FILTER (WHERE risk = 'low' AND status = 'resolved')::int AS "LowResolved"
+                FROM analysis_gaps
+                WHERE analysis_run_id IN ({placeholders})
+                """;
+
+            var row = await db.Database
+                .SqlQueryRaw<WorkspaceGapRiskTotals>(sql, batch.Cast<object>().ToArray())
+                .FirstOrDefaultAsync(ct) ?? new WorkspaceGapRiskTotals(0, 0, 0, 0, 0, 0);
+            high += row.High;
+            highResolved += row.HighResolved;
+            medium += row.Medium;
+            mediumResolved += row.MediumResolved;
+            low += row.Low;
+            lowResolved += row.LowResolved;
+        }
+
+        return new WorkspaceGapRiskTotals(high, highResolved, medium, mediumResolved, low, lowResolved);
+    }
+
+    /// <summary>Action-plan tally restricted to a run-id list, chunked for the same reason as above.</summary>
+    private static async Task<WorkspaceActionTotals> ComputeActionTotalsForRunsAsync(
+        AppDbContext db,
+        List<Guid> runIds,
+        CancellationToken ct)
+    {
+        if (runIds.Count == 0) return new WorkspaceActionTotals(0, 0);
+
+        var total = 0;
+        var resolved = 0;
+        foreach (var chunk in runIds.Chunk(50))
+        {
+            var batch = chunk.ToArray();
+            var placeholders = string.Join(", ", batch.Select((_, i) => $"{{{i}}}"));
+            var sql = $"""
+                SELECT
+                  COUNT(*)::int AS "Total",
+                  COUNT(*) FILTER (WHERE status = 'resolved')::int AS "Resolved"
+                FROM analysis_action_plans
+                WHERE analysis_run_id IN ({placeholders})
+                """;
+
+            var row = await db.Database
+                .SqlQueryRaw<WorkspaceActionTotals>(sql, batch.Cast<object>().ToArray())
+                .FirstOrDefaultAsync(ct) ?? new WorkspaceActionTotals(0, 0);
+            total += row.Total;
+            resolved += row.Resolved;
+        }
+
+        return new WorkspaceActionTotals(total, resolved);
     }
 
     private static async Task<Dictionary<Guid, RunPointStatusAggregate>> LoadPointStatusAggregatesAsync(

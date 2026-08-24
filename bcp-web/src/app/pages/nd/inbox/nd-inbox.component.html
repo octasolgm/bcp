@@ -1,9 +1,9 @@
 <section class="nd-page inbox-page">
   <header class="inbox-head">
     <div>
-      <h1>My actions</h1>
+      <h1>Inbox</h1>
       <p class="inbox-sub">
-        Corrective actions assigned to {{ profileName }}
+        Corrective actions and reviews routed to {{ profileName }}
         @if (data?.departmentName) {
           or to <strong>{{ data?.departmentName }}</strong>
         }
@@ -21,6 +21,43 @@
     </div>
   }
 
+  <div class="inbox-tabs inbox-type-tabs" role="tablist">
+    <button
+      type="button"
+      role="tab"
+      class="inbox-tab"
+      [class.active]="typeTab === 'all'"
+      [attr.aria-selected]="typeTab === 'all'"
+      (click)="setTypeTab('all')"
+    >
+      All
+      <span class="tab-count">{{ allCount }}</span>
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="inbox-tab"
+      [class.active]="typeTab === 'actions'"
+      [attr.aria-selected]="typeTab === 'actions'"
+      (click)="setTypeTab('actions')"
+    >
+      Actions
+      <span class="tab-count">{{ actionsCount }}</span>
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="inbox-tab"
+      [class.active]="typeTab === 'reviews'"
+      [attr.aria-selected]="typeTab === 'reviews'"
+      (click)="setTypeTab('reviews')"
+    >
+      Reviews
+      <span class="tab-count">{{ reviewsCount }}</span>
+    </button>
+  </div>
+
+  @if (typeTab !== 'reviews') {
   <div class="inbox-stats">
     <div class="stat">
       <span class="stat-value">{{ countFor('pending') }}</span>
@@ -108,6 +145,9 @@
             <div class="inbox-date">
               <span class="date-label">Target</span>
               <span class="date-value" [class.overdue]="item.overdue">{{ formatDate(item.targetDate) }}</span>
+              @if (item.status !== 'resolved' && item.targetDate) {
+                <span class="date-remaining" [class.overdue]="item.overdue">{{ formatRemaining(item.targetDate) }}</span>
+              }
             </div>
             <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="gapLinkParams(item)">
               Open gap
@@ -117,8 +157,14 @@
       }
     </ul>
   }
+  }
 
-  @if (reviewItems.length) {
+  @if (typeTab !== 'actions') {
+  @if (!reviewItems.length) {
+    @if (typeTab === 'reviews') {
+      <p class="inbox-empty">No reviews addressed to you or your department yet.</p>
+    }
+  } @else {
     <section class="inbox-reviews">
       <h2>Review requests</h2>
       <p class="inbox-sub">
@@ -126,10 +172,13 @@
       </p>
       <ul class="inbox-list">
         @for (review of reviewItems; track review.id) {
-          <li class="inbox-card">
+          <li class="inbox-card" [class.review-received]="review.direction === 'received'">
             <div class="inbox-card-main">
               <div class="inbox-card-top">
-                <span class="pill soft">{{ reviewDirectionLabel(review) }}</span>
+                <span class="pill type-review">Review</span>
+                <span class="pill" [class.soft]="review.direction !== 'received'" [class.status]="review.direction === 'received'">
+                  {{ reviewDirectionLabel(review) }}
+                </span>
                 @if (review.assigneeLabel) {
                   <span class="pill soft">{{ review.assigneeLabel }}</span>
                 }
@@ -138,6 +187,10 @@
               <p class="inbox-action">{{ review.comment }}</p>
               <p class="inbox-context">
                 <span class="context-clause">{{ review.clauseNo || 'Gap' }}</span>
+                @if (review.gapIndex) {
+                  <span class="context-sep">·</span>
+                  <span>Gap {{ review.gapIndex }}</span>
+                }
                 <span class="context-sep">·</span>
                 <span>{{ review.actionPlan }}</span>
               </p>
@@ -152,6 +205,7 @@
               <div class="inbox-date">
                 <span class="date-label">Sent</span>
                 <span class="date-value">{{ formatDate(review.createdAt) }}</span>
+                <span class="date-remaining">{{ formatAgo(review.createdAt) }}</span>
               </div>
               <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="reviewLinkParams(review)">
                 Open action
@@ -161,5 +215,6 @@
         }
       </ul>
     </section>
+  }
   }
 </section>

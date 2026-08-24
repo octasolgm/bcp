@@ -167,21 +167,34 @@ public class WorkspaceController(
                 }
             }
 
-            // Inbox badge: pending actions owned by this user or their department, across
-            // every run they can see (not just their own runs).
+            // Inbox badge: pending actions owned by this user or their department, plus
+            // reviews addressed to them that they didn't send themselves — across every
+            // run they can see (not just their own runs). Both halves feed the same
+            // Inbox page, so the badge undercounts if it only reflects one of them.
             var inboxPending = await InParallelScopeAsync(async (sdb, sct) =>
             {
-                var visibleRuns = NdDemoDataFilters
+                // Materialized up front (matching the review-inbox and action-plan-inbox
+                // endpoints) rather than left as an IQueryable — composing it as a live
+                // subquery inside two further OR/Any-laden queries below was silently
+                // returning zero rows for reviews, undercounting the badge.
+                var visibleRunIds = await NdDemoDataFilters
                     .ApplyToAnalysisRuns(sdb.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != DeletedStatus), demoCtx)
-                    .Select(r => r.Id);
-                return await NdActionPlanInbox
+                    .Select(r => r.Id)
+                    .ToListAsync(sct);
+                var pendingActions = await NdActionPlanInbox
                     .AssignedTo(
                         sdb,
                         sdb.NdAnalysisActionPlans.AsNoTracking()
-                            .Where(p => p.Status == "pending" && visibleRuns.Contains(p.AnalysisRunId)),
+                            .Where(p => p.Status == "pending" && visibleRunIds.Contains(p.AnalysisRunId)),
                         profile.Id,
                         profile.DepartmentId)
                     .CountAsync(sct);
+                var receivedReviews = await sdb.NdAnalysisActionPlanReviews.AsNoTracking()
+                    .Where(r => visibleRunIds.Contains(r.AnalysisRunId) && r.ReviewerId != profile.Id)
+                    .Where(r => r.AssigneeUserId == profile.Id
+                        || (profile.DepartmentId != null && r.AssigneeDepartmentId == profile.DepartmentId))
+                    .CountAsync(sct);
+                return pendingActions + receivedReviews;
             }, innerCt);
 
             var runCounts = await runCountsTask;
@@ -261,8 +274,17 @@ public class WorkspaceController(
                 partial = stats.Partial,
                 nonCompliant = stats.NonCompliant,
                 criticalGaps = stats.CriticalGaps,
+                criticalGapsResolved = stats.CriticalGapsResolved,
+                criticalGapsPending = stats.CriticalGaps - stats.CriticalGapsResolved,
                 mediumGaps = stats.MediumGaps,
+                mediumGapsResolved = stats.MediumGapsResolved,
+                mediumGapsPending = stats.MediumGaps - stats.MediumGapsResolved,
                 lowGaps = stats.LowGaps,
+                lowGapsResolved = stats.LowGapsResolved,
+                lowGapsPending = stats.LowGaps - stats.LowGapsResolved,
+                totalActions = stats.TotalActions,
+                totalActionsResolved = stats.TotalActionsResolved,
+                totalActionsPending = stats.TotalActions - stats.TotalActionsResolved,
                 totalRuns = stats.TotalRuns,
                 lastAnalysisAt = stats.LastAnalysisAt,
             },

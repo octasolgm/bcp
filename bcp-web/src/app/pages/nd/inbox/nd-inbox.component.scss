@@ -94,6 +94,15 @@
   }
 }
 
+/* Top-level type switch (All / Actions / Reviews) — bigger than the status sub-tabs
+   so the two tab rows read as different levels of the same hierarchy. */
+.inbox-type-tabs {
+  .inbox-tab {
+    font-size: 0.875rem;
+    padding: 0.4rem 1rem;
+  }
+}
+
 .tab-count {
   padding: 0 0.35rem;
   border-radius: var(--radius-pill, 999px);
@@ -138,6 +147,10 @@
   &.resolved {
     opacity: 0.82;
     border-left-color: #16a34a;
+  }
+
+  &.review-received {
+    border-left-color: #2563eb;
   }
 }
 
@@ -201,6 +214,12 @@
     background: rgba(220, 38, 38, 0.14);
     border-color: rgba(220, 38, 38, 0.4);
     color: #b91c1c;
+  }
+
+  &.type-review {
+    background: rgba(37, 99, 235, 0.14);
+    border-color: rgba(37, 99, 235, 0.4);
+    color: #1d4ed8;
   }
 }
 
@@ -278,6 +297,15 @@
 .date-value {
   font-size: 0.8125rem;
   font-weight: 600;
+
+  &.overdue {
+    color: #dc2626;
+  }
+}
+
+.date-remaining {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
 
   &.overdue {
     color: #dc2626;

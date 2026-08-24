@@ -32,7 +32,7 @@ import {
   buildSeededActionPlansForGap,
   type SeededActionPlan,
 } from '../../../../lib/nd/action-plan-seed';
-import { meaningfulCapGaps, resolveCapSourceForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
+import { capGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
 import { isAnalysisRunResultsReady } from '../../../../lib/nd/analysis-run-status';
 import { normalizeGapRisk } from '../../../../lib/nd/doc-analysis-ready';
 import { gapStateKey, indexGapStates, rollupClause, type ClauseRollup, type GapState } from '../../../../lib/nd/gap-state';
@@ -363,7 +363,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   private itemHasGapRisk(item: GapItemData, tier: ActionPlanPriority): boolean {
     const point = this.analysisPointForGap(item);
     if (!point?.id) return false;
-    return meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point)).some((gap) => {
+    return capGapsForAnalysisPoint(point, this.isNdRegulWorkflow).some((gap) => {
       const state = this.gapStates.get(gapStateKey(point.id!, gap.index));
       return (state?.risk ?? normalizeGapRisk(gap.priority)) === tier;
     });
@@ -544,7 +544,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     const items: { analysisPointId: string; gapIndex: number; risk: string }[] = [];
     for (const point of data.points) {
       if (!point.id) continue;
-      for (const gap of meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point))) {
+      for (const gap of capGapsForAnalysisPoint(point, this.isNdRegulWorkflow)) {
         items.push({
           analysisPointId: point.id,
           gapIndex: gap.index,
@@ -574,7 +574,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   /** Gap indexes a clause is showing, read from the same CAP text the cards render. */
   private gapIndexesForPoint(point: AnalysisPoint | null): number[] {
     if (!point?.id) return [];
-    return meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point)).map((g) => g.index);
+    return capGapsForAnalysisPoint(point, this.isNdRegulWorkflow).map((g) => g.index);
   }
 
   /** Gap/action/review tallies for one clause, shown beside it in the clause list. */
@@ -619,21 +619,27 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Give every gap a first-draft action the maker can edit. The API ignores this once
-   * the run owns any action, so it only ever fires on a report nobody has worked yet.
+   * Give every gap a first-draft action the maker can edit. Tops up gaps that don't
+   * carry any action yet rather than requiring the run to start with zero — gap
+   * numbering can change (e.g. a regul-workflow fix landing after a run was first
+   * seeded), and gaps added after the first pass would otherwise never get a draft.
    */
   private async seedDefaultActionPlans(data: ResultsData): Promise<void> {
     if (!this.ndRunId || this.actionPlanSeedAttempted) return;
-    if ((data.actionPlans ?? []).length > 0) return;
     if (!isAnalysisRunResultsReady(data.run.status)) return;
 
     this.actionPlanSeedAttempted = true;
+
+    const covered = new Set(
+      (data.actionPlans ?? []).map((p) => `${p.analysisPointId}:${p.gapIndex ?? 0}`),
+    );
 
     const items: SeededActionPlan[] = [];
     for (const point of data.points) {
       if (!point.id) continue;
       if (resolveAnalysisPointSeverity(point) === 'compliant') continue;
-      for (const gap of meaningfulCapGaps(resolveCapSourceForAnalysisPoint(point))) {
+      for (const gap of capGapsForAnalysisPoint(point, this.isNdRegulWorkflow)) {
+        if (covered.has(`${point.id}:${gap.index}`)) continue;
         items.push(...buildSeededActionPlansForGap(point.id, gap));
       }
     }
@@ -714,13 +720,26 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     });
   }
 
-  private scrollToFocusedActionPlanGap(itemId: string): void {
+  /**
+   * Inbox deep links land before the 94-point rail has finished rendering, and the
+   * progressive gap-count enrichment that follows (enrichGapCountsFrom) keeps shifting
+   * row heights for a few frames after that — a `smooth` scroll started too early gets
+   * cut short by that layout churn, landing short of the target. Poll for the row, then
+   * jump straight there once things have had a moment to settle.
+   */
+  private scrollToFocusedActionPlanGap(itemId: string, attempt = 0): void {
     if (this.actionPlanFocusApplied) return;
-    this.actionPlanFocusApplied = true;
-    setTimeout(() => {
-      const el = document.querySelector<HTMLElement>(`[data-gap-item-id="${itemId}"]`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 400);
+    const el = document.querySelector<HTMLElement>(`[data-gap-item-id="${itemId}"]`);
+    if (el) {
+      this.actionPlanFocusApplied = true;
+      setTimeout(() => el.scrollIntoView({ behavior: 'auto', block: 'center' }), 300);
+      return;
+    }
+    if (attempt >= 20) {
+      this.actionPlanFocusApplied = true;
+      return;
+    }
+    setTimeout(() => this.scrollToFocusedActionPlanGap(itemId, attempt + 1), 150);
   }
 
   /** Deep-link targets only apply to the point the inbox link named. */
@@ -804,6 +823,13 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   private applyActionPlanFocusFromQuery(params: { get(name: string): string | null }): void {
     this.applyActionPlanFocusParams(params.get('apPriority'), params.get('apStatus'));
+    // Inbox deep links (and the checker/reviewer redirect above, which forwards them)
+    // carry point/plan/gap too — embed/review-workspace mode skips the full
+    // queryParamMap subscription below, so it has to pick these up here instead.
+    this.focusPointId = params.get('point');
+    this.focusPlanId = params.get('plan');
+    const gap = params.get('gap');
+    this.focusGapIndex = gap && Number.isFinite(Number(gap)) ? Number(gap) : null;
   }
 
   private applyActionPlanFocusParams(apPriority: string | null, apStatus: string | null): void {
@@ -1930,15 +1956,17 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
-  exportPdf(): void {
+  async exportPdf(): Promise<void> {
     if (this.exporting) return;
     const points = this.analysisPointsForExport();
     if (!points.length) {
       this.toast.show('No analysis results to export', 'info');
       return;
     }
+    this.exporting = true;
+    this.cdr.markForCheck();
     try {
-      exportGapAnalysisPdfFromPoints(points, {
+      await exportGapAnalysisPdfFromPoints(points, {
         runName: this.sourceLabel || 'Gap Analysis Report',
         subtitle: this.subtitle,
         ...this.exportOptions(),
@@ -1946,6 +1974,9 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       this.toast.show('Exported gap analysis PDF', 'success');
     } catch {
       this.toast.show('Export failed — try again', 'error');
+    } finally {
+      this.exporting = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -2254,7 +2285,15 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         const status = data.run.status;
         const role = this.auth.getRole();
         if (status?.toLowerCase() === 'pulled_back' && role === 'maker') {
-          void this.router.navigate(['/nd/correction/review', runId]);
+          void this.router.navigate(['/nd/correction/review', runId], {
+            queryParams: {
+              apPriority: this.actionPlanFocusPriority,
+              apStatus: this.actionPlanFocusStatus,
+              point: this.focusPointId,
+              plan: this.focusPlanId,
+              gap: this.focusGapIndex,
+            },
+          });
           return;
         }
         const reviewRoute = reviewWorkspaceLink(role, runId, status);
@@ -2263,6 +2302,9 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
             queryParams: {
               apPriority: this.actionPlanFocusPriority,
               apStatus: this.actionPlanFocusStatus,
+              point: this.focusPointId,
+              plan: this.focusPlanId,
+              gap: this.focusGapIndex,
             },
           });
           return;

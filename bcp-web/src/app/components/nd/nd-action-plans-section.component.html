@@ -304,14 +304,16 @@
                       </button>
                     </div>
 
-                    @if (reviewAssigneeLabelSelected) {
+                    @if (reviewAssignees.length) {
                       <div class="ap-owner-chips">
-                        <span [ngClass]="reviewAssigneeChipClass">
-                          {{ reviewAssigneeLabelSelected }}
-                          <button type="button" class="ap-owner-chip-x" (click)="clearReviewAssignee()" aria-label="Remove recipient">
-                            ×
-                          </button>
-                        </span>
+                        @for (recipient of reviewAssignees; track recipient.key) {
+                          <span [ngClass]="reviewAssigneeChipClass(recipient)">
+                            {{ recipient.label }}
+                            <button type="button" class="ap-owner-chip-x" (click)="removeReviewAssignee(recipient)" aria-label="Remove recipient">
+                              ×
+                            </button>
+                          </span>
+                        }
                       </div>
                     }
 

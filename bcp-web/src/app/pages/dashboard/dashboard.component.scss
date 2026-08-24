@@ -61,6 +61,16 @@
     color: var(--text-secondary);
   }
 
+  .stat-breakdown {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+
+    .resolved { color: var(--compliant); }
+    .pending { color: var(--text-secondary); }
+  }
+
   &.critical .stat-value { color: var(--critical); }
   &.medium .stat-value { color: var(--medium); }
   &.low .stat-value { color: var(--low); }
@@ -69,6 +79,13 @@
   &.compliant .stat-value { color: var(--compliant); }
   &.partial .stat-value { color: var(--medium, #f97316); }
   &.non-compliant .stat-value { color: var(--critical); }
+  &.actions {
+    cursor: default;
+    opacity: 1;
+    .stat-value { color: var(--text-primary); }
+    &:hover, &:disabled { border-color: var(--border); transform: none; }
+    &:disabled { color: inherit; }
+  }
 }
 
 .risk-standard-note {
@@ -79,7 +96,7 @@
 }
 
 .stats-row.gap-risk-row {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
 
   @media (max-width: 1280px) {
     grid-template-columns: repeat(4, 1fr);

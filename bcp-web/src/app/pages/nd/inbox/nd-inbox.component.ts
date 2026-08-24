@@ -16,9 +16,12 @@ import {
   actionPlanScoreLabel,
   actionPlanStatusLabel,
   formatActionPlanDate,
+  formatActionPlanRemaining,
+  formatRelativeTimeAgo,
 } from '../../../../lib/nd/action-plan';
 
 type Tab = { id: NdInboxFilter; label: string };
+type InboxType = 'all' | 'actions' | 'reviews';
 
 /**
  * Personal bucket of corrective actions. An action lands here when it is assigned to the
@@ -48,8 +51,13 @@ export class NdInboxComponent implements OnInit {
   readonly scoreLabel = actionPlanScoreLabel;
   readonly statusLabel = actionPlanStatusLabel;
   readonly formatDate = formatActionPlanDate;
+  readonly formatRemaining = formatActionPlanRemaining;
+  readonly formatAgo = formatRelativeTimeAgo;
 
   activeTab: NdInboxFilter = 'pending';
+  /** Which of the two inbox halves to show — lets you jump straight to one without
+   *  scrolling past a long list in the other. */
+  typeTab: InboxType = 'all';
   loading = true;
   error = '';
   data: NdActionPlanInbox | null = null;
@@ -78,6 +86,24 @@ export class NdInboxComponent implements OnInit {
     if (this.activeTab === tab) return;
     this.activeTab = tab;
     await this.load();
+  }
+
+  setTypeTab(type: InboxType): void {
+    if (this.typeTab === type) return;
+    this.typeTab = type;
+    this.cdr.markForCheck();
+  }
+
+  get actionsCount(): number {
+    return this.data?.counts.total ?? 0;
+  }
+
+  get reviewsCount(): number {
+    return this.reviews?.counts.total ?? 0;
+  }
+
+  get allCount(): number {
+    return this.actionsCount + this.reviewsCount;
   }
 
   async load(): Promise<void> {

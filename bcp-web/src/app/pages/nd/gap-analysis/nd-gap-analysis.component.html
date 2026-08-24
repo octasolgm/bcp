@@ -425,8 +425,11 @@
                   @if (rollup.actions) {
                     <span class="rollup-chip">{{ rollup.actions }} action{{ rollup.actions === 1 ? '' : 's' }}</span>
                   }
+                  @if (rollup.resolvedActions) {
+                    <span class="rollup-chip is-resolved">{{ rollup.resolvedActions }} action resolved</span>
+                  }
                   @if (rollup.pendingActions) {
-                    <span class="rollup-chip is-pending">{{ rollup.pendingActions }} open</span>
+                    <span class="rollup-chip is-pending">{{ rollup.pendingActions }} action pending</span>
                   }
                   @if (rollup.reviews) {
                     <span class="rollup-chip">{{ rollup.reviews }} review{{ rollup.reviews === 1 ? '' : 's' }}</span>

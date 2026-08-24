@@ -648,7 +648,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     const inbox = this.link({
       id: 'inbox',
       path: '/nd/inbox',
-      label: 'My actions',
+      label: 'Inbox',
       icon: 'inbox',
       badgeAlways: true,
     });

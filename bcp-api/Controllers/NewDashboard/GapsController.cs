@@ -18,7 +18,8 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class GapsController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
-    NdDemoUserDirectory demoDirectory) : NdControllerBase
+    NdDemoUserDirectory demoDirectory,
+    NdDashboardCacheService dashboardCache) : NdControllerBase
 {
     private static readonly string[] AllRoles = ["super_admin", "maker", "checker", "reviewer"];
 
@@ -80,6 +81,7 @@ public class GapsController(
 
         // A first sync can reveal gaps whose actions are already resolved.
         await NdGapStatusResolver.RecomputeAsync(db, items.Select(i => i.AnalysisPointId), ct);
+        if (added > 0) dashboardCache.Invalidate();
         return Ok(new { success = true, data = new { added } });
     }
 
@@ -147,6 +149,7 @@ public class GapsController(
             await ApplyRiskToActionsAsync(row, ct);
 
         await NdGapStatusResolver.RecomputeAsync(db, [pointId], ct);
+        dashboardCache.Invalidate();
 
         var names = await LoadProfileNamesAsync(db, [row.ResolvedBy], ct);
         return Ok(new { success = true, data = Map(row, names) });

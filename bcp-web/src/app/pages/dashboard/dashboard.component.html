@@ -20,17 +20,48 @@
     <span class="stat-label">High risk gaps</span>
     <strong class="stat-value">{{ criticalGapCount < 0 ? '…' : criticalGapCount }}</strong>
     <span class="stat-hint">Score 67–100</span>
+    @if (inNdShell && !ndStatsLoading) {
+      <span class="stat-breakdown">
+        <span class="resolved">{{ criticalGapResolved }} resolved</span> ·
+        <span class="pending">{{ criticalGapPending }} pending</span>
+      </span>
+    }
   </button>
   <button type="button" class="stat-card medium" (click)="openMetricBreakdown('medium')">
     <span class="stat-label">Medium risk gaps</span>
     <strong class="stat-value">{{ mediumGapCount < 0 ? '…' : mediumGapCount }}</strong>
     <span class="stat-hint">Score 34–66</span>
+    @if (inNdShell && !ndStatsLoading) {
+      <span class="stat-breakdown">
+        <span class="resolved">{{ mediumGapResolved }} resolved</span> ·
+        <span class="pending">{{ mediumGapPending }} pending</span>
+      </span>
+    }
   </button>
   <button type="button" class="stat-card low" (click)="openMetricBreakdown('low')">
     <span class="stat-label">Low risk gaps</span>
     <strong class="stat-value">{{ lowGapCount < 0 ? '…' : lowGapCount }}</strong>
     <span class="stat-hint">Score 0–33</span>
+    @if (inNdShell && !ndStatsLoading) {
+      <span class="stat-breakdown">
+        <span class="resolved">{{ lowGapResolved }} resolved</span> ·
+        <span class="pending">{{ lowGapPending }} pending</span>
+      </span>
+    }
   </button>
+  @if (inNdShell) {
+    <button type="button" class="stat-card actions" disabled>
+      <span class="stat-label">Actions</span>
+      <strong class="stat-value">{{ totalActionsCount < 0 ? '…' : totalActionsCount }}</strong>
+      <span class="stat-hint">Corrective actions across all gaps</span>
+      @if (!ndStatsLoading) {
+        <span class="stat-breakdown">
+          <span class="resolved">{{ totalActionsResolved }} resolved</span> ·
+          <span class="pending">{{ totalActionsPending }} pending</span>
+        </span>
+      }
+    </button>
+  }
   <button type="button" class="stat-card neutral" (click)="openMetricBreakdown('findings')">
     <span class="stat-label">Total Findings</span>
     <strong class="stat-value">{{ totalFindings }}</strong>

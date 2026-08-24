@@ -264,8 +264,17 @@ export type NdDashboardStats = {
   partial: number;
   nonCompliant: number;
   criticalGaps: number;
+  criticalGapsResolved: number;
+  criticalGapsPending: number;
   mediumGaps: number;
+  mediumGapsResolved: number;
+  mediumGapsPending: number;
   lowGaps: number;
+  lowGapsResolved: number;
+  lowGapsPending: number;
+  totalActions: number;
+  totalActionsResolved: number;
+  totalActionsPending: number;
   totalRuns: number;
   lastAnalysisAt?: string | null;
 };

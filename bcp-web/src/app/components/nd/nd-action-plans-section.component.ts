@@ -510,7 +510,7 @@ export class NdActionPlansSectionComponent implements OnChanges {
     this.reviewDraftPlanId = plan.id;
     this.editingReviewId = null;
     this.reviewDraftText = '';
-    this.reviewAssigneeKey = '';
+    this.reviewAssignees = [];
     this.reviewAssigneeType = 'department';
     this.reviewAssigneeQuery = '';
   }
@@ -519,9 +519,17 @@ export class NdActionPlansSectionComponent implements OnChanges {
     this.reviewDraftPlanId = plan.id;
     this.editingReviewId = review.id;
     this.reviewDraftText = review.comment;
-    this.reviewAssigneeKey = review.assigneeType
-      ? `${review.assigneeType}:${review.assigneeDepartmentId ?? review.assigneeUserId ?? ''}`
-      : '';
+    const id = review.assigneeDepartmentId ?? review.assigneeUserId ?? '';
+    this.reviewAssignees =
+      review.assigneeType && id
+        ? [
+            {
+              key: `${review.assigneeType}:${id}`,
+              label: review.assigneeLabel ?? '',
+              group: review.assigneeType === 'user' ? 'People' : 'Departments',
+            },
+          ]
+        : [];
     this.reviewAssigneeType = review.assigneeType === 'user' ? 'user' : 'department';
     this.reviewAssigneeQuery = '';
   }
@@ -530,18 +538,20 @@ export class NdActionPlansSectionComponent implements OnChanges {
     this.reviewDraftPlanId = null;
     this.editingReviewId = null;
     this.reviewDraftText = '';
-    this.reviewAssigneeKey = '';
+    this.reviewAssignees = [];
     this.reviewAssigneeQuery = '';
     this.reviewAssigneeOpen = false;
   }
 
   /**
    * Review routing uses the same department/individual picker as an action's
-   * responsibility, so both read the same way.
+   * responsibility, so both read the same way — including multiple recipients and
+   * showing each person's email so two people with the same name stay distinguishable.
    */
   reviewAssigneeType: ActionPlanResponsibilityType = 'department';
   reviewAssigneeQuery = '';
   reviewAssigneeOpen = false;
+  reviewAssignees: { key: string; label: string; group: string }[] = [];
 
   get reviewAssigneeChoices(): { key: string; label: string; group: string }[] {
     return [
@@ -552,18 +562,15 @@ export class NdActionPlansSectionComponent implements OnChanges {
       })),
       ...this.options.users.map((u) => ({
         key: `user:${u.id}`,
-        label: u.fullName,
+        label: u.email ? `${u.fullName} — ${u.email}` : u.fullName,
         group: 'People',
       })),
     ];
   }
 
-  get reviewAssigneeLabelSelected(): string {
-    return this.reviewAssigneeChoices.find((c) => c.key === this.reviewAssigneeKey)?.label ?? '';
-  }
-
-  get reviewAssigneeChipClass(): string {
-    return `ap-owner-chip ap-owner-chip-${this.reviewAssigneeType}`;
+  reviewAssigneeChipClass(assignee: { key: string }): string {
+    const type = assignee.key.startsWith('user:') ? 'user' : 'department';
+    return `ap-owner-chip ap-owner-chip-${type}`;
   }
 
   get reviewAssigneeSuggestions(): { key: string; label: string; group: string }[] {
@@ -572,6 +579,7 @@ export class NdActionPlansSectionComponent implements OnChanges {
     return this.reviewAssigneeChoices
       .filter((c) => c.group === wanted)
       .filter((c) => !q || c.label.toLowerCase().includes(q))
+      .filter((c) => !this.reviewAssignees.some((a) => a.key === c.key))
       .slice(0, 8);
   }
 
@@ -586,27 +594,26 @@ export class NdActionPlansSectionComponent implements OnChanges {
     this.reviewAssigneeOpen = true;
   }
 
-  pickReviewAssignee(choice: { key: string; label: string }): void {
-    this.reviewAssigneeKey = choice.key;
+  pickReviewAssignee(choice: { key: string; label: string; group: string }): void {
+    if (this.reviewAssignees.some((a) => a.key === choice.key)) return;
+    // Editing an existing review keeps its one-recipient shape; a new review can fan out.
+    this.reviewAssignees = this.editingReviewId ? [choice] : [...this.reviewAssignees, choice];
     this.reviewAssigneeQuery = '';
     this.reviewAssigneeOpen = false;
   }
 
-  clearReviewAssignee(): void {
-    this.reviewAssigneeKey = '';
-    this.reviewAssigneeQuery = '';
+  removeReviewAssignee(choice: { key: string }): void {
+    this.reviewAssignees = this.reviewAssignees.filter((a) => a.key !== choice.key);
   }
 
-  private reviewAssigneePayload(): NdReviewAssignee | undefined {
-    if (!this.reviewAssigneeKey) return undefined;
-    const [type, id] = this.reviewAssigneeKey.split(':');
-    const label = this.reviewAssigneeChoices.find((c) => c.key === this.reviewAssigneeKey)?.label;
-    if (!label || (type !== 'department' && type !== 'user')) return undefined;
+  private static assigneePayloadFor(choice: { key: string; label: string }): NdReviewAssignee | undefined {
+    const [type, id] = choice.key.split(':');
+    if (!id || (type !== 'department' && type !== 'user')) return undefined;
     return {
       assigneeType: type,
       assigneeDepartmentId: type === 'department' ? id : null,
       assigneeUserId: type === 'user' ? id : null,
-      assigneeLabel: label,
+      assigneeLabel: choice.label,
     };
   }
 
@@ -619,15 +626,34 @@ export class NdActionPlansSectionComponent implements OnChanges {
     const comment = this.reviewDraftText.trim();
     if (!comment) return;
 
-    const assignee = this.reviewAssigneePayload();
     this.savingReview = true;
-    const res = this.editingReviewId
-      ? await this.api.updateActionPlanReview(this.runId, plan.id, this.editingReviewId, comment, assignee)
-      : await this.api.addActionPlanReview(this.runId, plan.id, comment, assignee);
+
+    let allOk = true;
+    let lastMessage: string | undefined;
+    if (this.editingReviewId) {
+      const assignee = this.reviewAssignees[0] ? NdActionPlansSectionComponent.assigneePayloadFor(this.reviewAssignees[0]) : undefined;
+      const res = await this.api.updateActionPlanReview(this.runId, plan.id, this.editingReviewId, comment, assignee);
+      allOk = res.success;
+      lastMessage = res.message;
+    } else if (this.reviewAssignees.length === 0) {
+      const res = await this.api.addActionPlanReview(this.runId, plan.id, comment, undefined);
+      allOk = res.success;
+      lastMessage = res.message;
+    } else {
+      // One row per recipient, same comment — the schema addresses a review to one owner at a time.
+      for (const choice of this.reviewAssignees) {
+        const res = await this.api.addActionPlanReview(this.runId, plan.id, comment, NdActionPlansSectionComponent.assigneePayloadFor(choice));
+        if (!res.success) {
+          allOk = false;
+          lastMessage = res.message;
+        }
+      }
+    }
+
     this.savingReview = false;
 
-    if (!res.success) {
-      this.error = res.message ?? 'Could not save the review.';
+    if (!allOk) {
+      this.error = lastMessage ?? 'Could not save the review.';
       this.cdr.markForCheck();
       return;
     }

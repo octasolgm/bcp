@@ -869,7 +869,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     this.cdr.markForCheck();
     try {
       const options = await this.gapAnalysisExportOptions();
-      exportGapAnalysisPdfFromPoints(points, {
+      await exportGapAnalysisPdfFromPoints(points, {
         runName: 'Gap Analysis Report',
         subtitle: `${rows.length} done point(s)`,
         ...options,

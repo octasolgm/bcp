@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf';
 import { downloadExcelSheets, type ExcelSheetSpec } from '../../ai-lab/excel-write';
 import type { AnalysisPoint } from '../types';
 import {
@@ -357,10 +356,10 @@ export type GapAnalysisExportMeta = {
   clauseByPointId?: Map<string, string>;
 };
 
-export function exportGapAnalysisPdfFromPoints(
+export async function exportGapAnalysisPdfFromPoints(
   points: AnalysisPoint[],
   meta: GapAnalysisExportMeta = {},
-): void {
+): Promise<void> {
   const rows = buildGapAnalysisExportRows(points);
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
@@ -372,6 +371,9 @@ export function exportGapAnalysisPdfFromPoints(
     else plansByClause.set(clause, [plan]);
   }
 
+  // Loaded on demand — jsPDF is large and only PDF export needs it, so keep it out
+  // of every route's initial bundle.
+  const { jsPDF } = await import('jspdf');
   const doc = new jsPDF();
   const margin = 14;
   const maxW = 182;
@@ -455,9 +457,9 @@ export function exportGapAnalysisPdfFromPoints(
 }
 
 /** @deprecated Use exportGapAnalysisPdfFromPoints */
-export function exportGapAnalysisPdf(
+export async function exportGapAnalysisPdf(
   points: AnalysisPoint[],
   meta: GapAnalysisExportMeta = {},
-): void {
-  exportGapAnalysisPdfFromPoints(points, meta);
+): Promise<void> {
+  await exportGapAnalysisPdfFromPoints(points, meta);
 }

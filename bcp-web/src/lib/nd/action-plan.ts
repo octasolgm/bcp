@@ -238,6 +238,65 @@ export function formatActionPlanDate(iso?: string | null): string {
   return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+/** Calendar-aware year/month/day breakdown between two dates, larger unit first. */
+function calendarSpan(from: Date, to: Date): { years: number; months: number; days: number } {
+  let years = to.getFullYear() - from.getFullYear();
+  let months = to.getMonth() - from.getMonth();
+  let days = to.getDate() - from.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    days += new Date(to.getFullYear(), to.getMonth(), 0).getDate();
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  return { years, months, days };
+}
+
+/** "1 year 2 months 3 days" — drops leading zero units so short spans read as just "3 days". */
+function calendarSpanLabel(span: { years: number; months: number; days: number }): string {
+  const { years, months, days } = span;
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} year${years === 1 ? '' : 's'}`);
+  if (months > 0) parts.push(`${months} month${months === 1 ? '' : 's'}`);
+  if (days > 0 || parts.length === 0) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+  return parts.join(' ');
+}
+
+/**
+ * Calendar-aware countdown to a target date — "1 year 2 months 3 days left", dropping
+ * whichever leading units are zero (months+days only, or just days, when the date is
+ * close), so the inbox doesn't force everyone to do the year-month-day math themselves.
+ */
+export function formatActionPlanRemaining(iso?: string | null): string {
+  if (!iso?.trim()) return '';
+  const target = new Date(iso);
+  if (Number.isNaN(target.getTime())) return '';
+
+  const now = new Date();
+  const overdue = target.getTime() < now.getTime();
+  const span = overdue ? calendarSpan(target, now) : calendarSpan(now, target);
+  const label = calendarSpanLabel(span);
+
+  if (overdue) return `${label} overdue`;
+  if (span.years === 0 && span.months === 0 && span.days === 0) return 'Due today';
+  return `${label} left`;
+}
+
+/** Same calendar-aware breakdown, phrased backwards — "3 days ago" for a past timestamp. */
+export function formatRelativeTimeAgo(iso?: string | null): string {
+  if (!iso?.trim()) return '';
+  const past = new Date(iso);
+  if (Number.isNaN(past.getTime())) return '';
+
+  const now = new Date();
+  const span = calendarSpan(past, now);
+  if (span.years === 0 && span.months === 0 && span.days === 0) return 'Today';
+  return `${calendarSpanLabel(span)} ago`;
+}
+
 export function isActionPlanOverdue(plan: ActionPlanEntry): boolean {
   if (normalizeActionPlanStatus(plan.status) === 'resolved') return false;
   if (!plan.targetDate) return false;

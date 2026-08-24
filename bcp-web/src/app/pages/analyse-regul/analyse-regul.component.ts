@@ -3062,7 +3062,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.cdr.markForCheck();
     try {
       const options = await this.gapAnalysisExportOptions();
-      exportGapAnalysisPdfFromPoints(points, {
+      await exportGapAnalysisPdfFromPoints(points, {
         runName: 'Gap Analysis Report',
         subtitle: `Regul workflow · ${rows.length} point(s)`,
         ...options,
