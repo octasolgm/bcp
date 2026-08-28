@@ -12,13 +12,14 @@ export function regulationAnalysisReadyState(doc: {
 }): DocAnalysisReadyState {
   const analysed = (doc.analysisRunCount ?? 0) > 0;
   const isManual = doc.isManual === true || doc.isNdManual === true;
+  // Manual entries never go through parse/extract, so there is nothing for the red
+  // "not ready" state to warn about — they always read as good to go.
+  if (isManual) return 'analysed';
   const status = (doc.extractionStatus ?? '').trim();
   const hasPoints = (doc.pointCount ?? 0) > 0;
   // A blank status means the caller has no extraction metadata (legacy list),
   // so points alone decide readiness.
-  const extracted =
-    hasPoints &&
-    (isManual || status === '' || /^(extracted|completed|manual)$/i.test(status));
+  const extracted = hasPoints && (status === '' || /^(extracted|completed)$/i.test(status));
   if (!extracted) return 'not_ready';
   return analysed ? 'analysed' : 'ready';
 }
@@ -28,7 +29,12 @@ export function internalAnalysisReadyState(doc: {
   sectionExtractStatus?: string | null;
   sectionCount?: number | null;
   analysisRunCount?: number | null;
+  generatedByAnalysis?: boolean | null;
 }): DocAnalysisReadyState {
+  // Written by a reviewer's finalize step, never uploaded — it has no parse/extract
+  // step to wait on, so it never reads as an unprocessed (red) document. It also isn't
+  // itself the output of a run, so it reads as 'ready' (uncolored), not 'analysed' (green).
+  if (doc.generatedByAnalysis) return 'ready';
   const parseStatus = (doc.parseStatus ?? '').trim();
   const extractStatus = (doc.sectionExtractStatus ?? '').trim();
   // Blank means the caller has no metadata for that step, which must not be
@@ -48,10 +54,11 @@ export function docAnalysisReadyLabel(state: DocAnalysisReadyState): string {
   return 'Already analysed';
 }
 
+/** Green = analysed, red = not parsed/extracted, no color = ready but no run yet. */
 export function docAnalysisReadyClass(state: DocAnalysisReadyState): string {
+  if (state === 'analysed') return 'doc-ready-green';
   if (state === 'not_ready') return 'doc-ready-red';
-  if (state === 'ready') return 'doc-ready-blue';
-  return 'doc-ready-green';
+  return '';
 }
 
 export function usedInAnalysesLabel(count: number | null | undefined): string {

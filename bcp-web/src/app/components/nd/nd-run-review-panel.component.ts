@@ -1,18 +1,14 @@
 import {
   Component,
-  ElementRef,
   EventEmitter,
-  HostListener,
   Input,
   OnChanges,
   OnInit,
   Output,
   SimpleChanges,
-  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { NdApiService } from '../../services/nd/nd-api.service';
 import {
   RUN_REVIEW_STATUS_OPTIONS,
   emptyRunReviewDraft,
@@ -24,10 +20,6 @@ import {
   actionPlanPriorityClass,
   actionPlanPriorityFromScore,
   actionPlanScoreLabel,
-  sameAssignee,
-  type ActionPlanAssignee,
-  type ActionPlanResponsibilityOptions,
-  type ActionPlanResponsibilityType,
 } from '../../../lib/nd/action-plan';
 import type { PointGapAttachment } from '../../../lib/nd/types';
 
@@ -38,6 +30,25 @@ export type RunReviewSubmitEvent = {
   draft: RunReviewDraft;
 };
 
+export type SubmitTargetOption = {
+  role: 'maker' | 'checker' | 'reviewer';
+  label: string;
+  action: RunReviewSubmitEvent['action'];
+};
+
+/** Who a report can be sent to from each role — the sender's own role is never an option. */
+const SUBMIT_TARGETS: Record<Exclude<RunReviewPanelMode, 'none'>, SubmitTargetOption[]> = {
+  maker: [{ role: 'checker', label: 'Checker', action: 'submit' }],
+  checker: [
+    { role: 'reviewer', label: 'Reviewer', action: 'approve' },
+    { role: 'maker', label: 'Maker', action: 'pullback' },
+  ],
+  reviewer: [
+    { role: 'checker', label: 'Checker', action: 'pullback_to_checker' },
+    { role: 'maker', label: 'Maker', action: 'pullback_to_maker' },
+  ],
+};
+
 @Component({
   selector: 'app-nd-run-review-panel',
   standalone: true,
@@ -46,9 +57,6 @@ export type RunReviewSubmitEvent = {
   styleUrl: './nd-run-review-panel.component.scss',
 })
 export class NdRunReviewPanelComponent implements OnInit, OnChanges {
-  private readonly ndApi = inject(NdApiService);
-  private readonly host = inject(ElementRef<HTMLElement>);
-
   @Input({ required: true }) mode: RunReviewPanelMode = 'none';
   @Input() submitting = false;
   @Input() error = '';
@@ -62,32 +70,35 @@ export class NdRunReviewPanelComponent implements OnInit, OnChanges {
   @Input() evidenceDeletingId: string | null = null;
   /** When true, only the gap-document upload/rerun block is shown (no overall review form). */
   @Input() evidenceOnly = false;
+  /** Shows the Export Excel button in the panel header when the caller supports it. */
+  @Input() canExport = false;
+  @Input() exporting = false;
 
   @Output() submitReview = new EventEmitter<RunReviewSubmitEvent>();
   @Output() uploadEvidence = new EventEmitter<FileList>();
   @Output() deleteEvidence = new EventEmitter<string>();
   @Output() viewEvidence = new EventEmitter<string>();
   @Output() rerunAllGaps = new EventEmitter<void>();
+  @Output() exportExcel = new EventEmitter<void>();
 
   draft: RunReviewDraft = emptyRunReviewDraft();
   statusOptions = RUN_REVIEW_STATUS_OPTIONS;
   readonly priorityScale = ACTION_PLAN_PRIORITY_SCALE;
 
-  options: ActionPlanResponsibilityOptions = { departments: [], users: [] };
-  responsibilityType: ActionPlanResponsibilityType = 'department';
-  assignees: ActionPlanAssignee[] = [];
-  ownerQuery = '';
-  ownerSuggestionsOpen = false;
   pendingRemoveId: string | null = null;
 
-  async ngOnInit(): Promise<void> {
+  /** Who this report can be sent to from the current role — never includes the sender's own role. */
+  submitTargets: SubmitTargetOption[] = [];
+  submitTargetRole = '';
+
+  ngOnInit(): void {
     this.applyInitialDraft();
-    const res = await this.ndApi.getActionPlanResponsibilityOptions();
-    if (res.success && res.data) this.options = res.data;
+    this.syncSubmitTargets();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['initialDraft']) this.applyInitialDraft();
+    if (changes['mode']) this.syncSubmitTargets();
     if (
       this.pendingRemoveId &&
       !this.uniqueReportAttachments.some((a) => a.storedDocumentId === this.pendingRemoveId)
@@ -96,14 +107,23 @@ export class NdRunReviewPanelComponent implements OnInit, OnChanges {
     }
   }
 
+  private syncSubmitTargets(): void {
+    this.submitTargets = this.mode === 'none' ? [] : SUBMIT_TARGETS[this.mode];
+    this.submitTargetRole = this.submitTargets[0]?.role ?? '';
+  }
+
+  get selectedSubmitTarget(): SubmitTargetOption | undefined {
+    return this.submitTargets.find((t) => t.role === this.submitTargetRole);
+  }
+
+  submitToSelectedTarget(): void {
+    const target = this.selectedSubmitTarget;
+    if (target) this.emit(target.action);
+  }
+
   private applyInitialDraft(): void {
     if (!this.initialDraft) return;
     this.draft = { ...emptyRunReviewDraft(), ...this.initialDraft };
-    const labels = (this.draft.responsibility ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    this.assignees = labels.map((label) => ({ type: this.responsibilityType, label }));
   }
 
   get uniqueReportAttachments(): PointGapAttachment[] {
@@ -166,16 +186,8 @@ export class NdRunReviewPanelComponent implements OnInit, OnChanges {
     return actionPlanPriorityClass(actionPlanPriorityFromScore(this.draft.priority));
   }
 
-  get showCheckerActions(): boolean {
-    return this.mode === 'checker';
-  }
-
   get showReviewerActions(): boolean {
     return this.mode === 'reviewer';
-  }
-
-  get showMakerActions(): boolean {
-    return this.mode === 'maker';
   }
 
   get reviewProgressComplete(): boolean {
@@ -196,81 +208,6 @@ export class NdRunReviewPanelComponent implements OnInit, OnChanges {
     this.draft = { ...this.draft, priority: Math.min(100, Math.max(0, value)) };
   }
 
-  setResponsibilityType(value: ActionPlanResponsibilityType): void {
-    this.responsibilityType = value;
-    this.ownerQuery = '';
-    this.ownerSuggestionsOpen = false;
-  }
-
-  get ownerSuggestions(): ActionPlanAssignee[] {
-    const q = this.ownerQuery.trim().toLowerCase();
-    const pool: ActionPlanAssignee[] =
-      this.responsibilityType === 'user'
-        ? this.options.users.map((u) => ({
-            type: 'user' as const,
-            userId: u.id,
-            label: u.email ? `${u.fullName} — ${u.email}` : u.fullName,
-          }))
-        : this.options.departments.map((d) => ({
-            type: 'department' as const,
-            departmentId: d.id,
-            label: d.name,
-          }));
-    return pool
-      .filter((o) => !q || o.label.toLowerCase().includes(q))
-      .filter((o) => !this.assignees.some((a) => sameAssignee(a, o)))
-      .slice(0, 8);
-  }
-
-  onOwnerQueryChange(value: string): void {
-    this.ownerQuery = value;
-    this.ownerSuggestionsOpen = true;
-  }
-
-  addOwner(owner: ActionPlanAssignee): void {
-    if (this.assignees.some((a) => sameAssignee(a, owner))) return;
-    this.assignees = [...this.assignees, owner];
-    this.ownerQuery = '';
-    this.ownerSuggestionsOpen = false;
-    this.syncResponsibility();
-  }
-
-  commitTypedOwner(): void {
-    const first = this.ownerSuggestions[0];
-    if (first) {
-      this.addOwner(first);
-      return;
-    }
-    const label = this.ownerQuery.trim();
-    if (!label) return;
-    this.addOwner({ type: this.responsibilityType, label });
-  }
-
-  removeOwner(owner: ActionPlanAssignee): void {
-    this.assignees = this.assignees.filter((a) => !sameAssignee(a, owner));
-    this.syncResponsibility();
-  }
-
-  ownerChipClass(owner: ActionPlanAssignee): string {
-    return owner.type === 'user' ? 'ap-owner-chip is-user' : 'ap-owner-chip is-department';
-  }
-
-  private syncResponsibility(): void {
-    this.draft = {
-      ...this.draft,
-      responsibility: this.assignees.map((a) => a.label).join(', '),
-    };
-  }
-
-  @HostListener('document:click', ['$event'])
-  onDocumentClick(event: MouseEvent): void {
-    if (!this.ownerSuggestionsOpen) return;
-    const target = event.target as Node | null;
-    const field = this.host.nativeElement.querySelector('.ap-owner-field');
-    if (target && field?.contains(target)) return;
-    this.ownerSuggestionsOpen = false;
-  }
-
   onReportFilesSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files?.length) this.uploadEvidence.emit(input.files);
@@ -278,7 +215,6 @@ export class NdRunReviewPanelComponent implements OnInit, OnChanges {
   }
 
   emit(action: RunReviewSubmitEvent['action']): void {
-    this.syncResponsibility();
     this.submitReview.emit({ action, draft: { ...this.draft } });
   }
 }

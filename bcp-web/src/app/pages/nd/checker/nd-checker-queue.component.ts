@@ -20,14 +20,14 @@ import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badg
 import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
 import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-actions.component';
 import {
-  analysisRunWorkflowLabel,
-  analysisRunComplianceSummary,
-  analysisRunGapsSummary,
+  analysisRunComplianceBreakdown,
   analysisRunSubmittedByLabel,
   analysisRunSubmittedByCaption,
 } from '../../../../lib/nd/analysis-run-status';
+import { canRecallRun } from '../../../../lib/nd/analysis-run-actions';
+import { ToastService } from '../../../services/toast.service';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
-import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
+import { runGapStatsFromSummary, runWorkCounts, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 import { ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../../lib/nd/run-links';
 
 type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
@@ -43,6 +43,7 @@ export class NdCheckerQueueComponent implements OnInit {
   private readonly api = inject(NdApiService);
   private readonly auth = inject(NdAuthService);
   private readonly route = inject(ActivatedRoute);
+  private readonly toast = inject(ToastService);
 
   showHistory = false;
   allRuns: AnalysisRunSummary[] = [];
@@ -51,6 +52,8 @@ export class NdCheckerQueueComponent implements OnInit {
   statusFilter = '';
   sortColumn: QueueSortColumn = 'date';
   sortDir: SortDir = 'desc';
+  recallingRunId: string | null = null;
+  roleActingRunId: string | null = null;
   historyOpen = false;
   historyRunId: string | null = null;
   historyRunName = '';
@@ -134,10 +137,42 @@ export class NdCheckerQueueComponent implements OnInit {
     return ndAnalysisRunQuery(run, this.auth.getRole());
   }
 
+  canRecall(run: AnalysisRunSummary): boolean {
+    return !this.isViewOnly && canRecallRun(run, this.auth.getRole(), this.auth.profile()?.id);
+  }
+
+  async recallRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    event?.preventDefault();
+    if (!this.canRecall(run)) return;
+    this.recallingRunId = run.id;
+    const res = await this.api.recallFromReviewer(run.id);
+    this.recallingRunId = null;
+    if (res.success) {
+      this.toast.show('Recalled from reviewer', 'success');
+      await this.load();
+    } else {
+      this.toast.show(res.message ?? 'Could not recall this run', 'error');
+    }
+  }
+
+  async runRoleAction(payload: { run: AnalysisRunSummary; target: string }): Promise<void> {
+    const { run, target } = payload;
+    this.roleActingRunId = run.id;
+    const res =
+      target === 'maker' ? await this.api.pullBackAnalysis(run.id, {}) : await this.api.approveAnalysis(run.id, {});
+    this.roleActingRunId = null;
+    if (res.success) {
+      this.toast.show(target === 'maker' ? 'Sent back to maker' : 'Submitted to reviewer', 'success');
+      await this.load();
+    } else {
+      this.toast.show(res.message ?? 'Could not submit this run', 'error');
+    }
+  }
+
   formatDate = formatDate;
-  workflowStatusLabel = analysisRunWorkflowLabel;
-  complianceSummary = analysisRunComplianceSummary;
-  gapsSummary = analysisRunGapsSummary;
+  complianceBreakdown = analysisRunComplianceBreakdown;
+  workCounts = runWorkCounts;
   submittedByLabel = analysisRunSubmittedByLabel;
   submittedByCaption = analysisRunSubmittedByCaption;
 

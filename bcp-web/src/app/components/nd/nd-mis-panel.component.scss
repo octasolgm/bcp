@@ -70,15 +70,15 @@
   --mis-box-accent: var(--text-primary);
 
   &.is-pending {
-    --mis-box-accent: #dc2626;
-    background: color-mix(in srgb, #dc2626 8%, transparent);
-    border-color: color-mix(in srgb, #dc2626 25%, var(--border));
+    --mis-box-accent: var(--critical);
+    background: var(--critical-bg);
+    border-color: color-mix(in srgb, var(--critical) 25%, var(--border));
   }
 
   &.is-resolved {
-    --mis-box-accent: #16a34a;
-    background: color-mix(in srgb, #16a34a 8%, transparent);
-    border-color: color-mix(in srgb, #16a34a 25%, var(--border));
+    --mis-box-accent: var(--low);
+    background: var(--low-bg);
+    border-color: color-mix(in srgb, var(--low) 25%, var(--border));
   }
 
   &.active {
@@ -104,7 +104,7 @@
 .mis-box-note {
   font-size: 0.65rem;
   font-weight: 700;
-  color: #b91c1c;
+  color: var(--critical);
 }
 
 /* Red for open work, green once it is resolved. */
@@ -114,19 +114,19 @@
   height: 8px;
   margin-top: 0.35rem;
   border-radius: 999px;
-  background: #dc2626;
+  background: var(--critical);
 
   &.is-resolved {
-    background: #16a34a;
+    background: var(--low);
   }
 }
 
 .mis-status-tag {
   font-weight: 700;
-  color: #b91c1c;
+  color: var(--critical);
 
   &.is-resolved {
-    color: #15803d;
+    color: var(--low);
   }
 }
 
@@ -150,11 +150,14 @@
   gap: 0.6rem;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--border);
+  border-left: 3px solid var(--critical);
   border-radius: 8px;
   font-size: 0.78rem;
+  background: var(--critical-bg);
 
   &.is-resolved {
-    background: color-mix(in srgb, #16a34a 5%, transparent);
+    background: var(--low-bg);
+    border-left-color: var(--low);
   }
 }
 
@@ -251,18 +254,18 @@
   color: var(--text-secondary);
 
   &.overdue {
-    background: color-mix(in srgb, #dc2626 16%, transparent);
-    color: #b91c1c;
+    background: var(--critical-bg);
+    color: var(--critical);
   }
 
   &.pending {
-    background: color-mix(in srgb, #dc2626 12%, transparent);
-    color: #b91c1c;
+    background: var(--critical-bg);
+    color: var(--critical);
   }
 
   &.resolved {
-    background: color-mix(in srgb, #16a34a 12%, transparent);
-    color: #15803d;
+    background: var(--low-bg);
+    color: var(--low);
   }
 }
 
@@ -281,11 +284,19 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.9rem;
-  padding: 0.4rem 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border-left: 3px solid var(--critical);
+  background: var(--critical-bg);
   font-size: 0.78rem;
 
+  &.is-resolved {
+    border-left-color: var(--low);
+    background: var(--low-bg);
+  }
+
   & + & {
-    border-top: 1px dashed var(--border);
+    margin-top: 0.3rem;
   }
 }
 

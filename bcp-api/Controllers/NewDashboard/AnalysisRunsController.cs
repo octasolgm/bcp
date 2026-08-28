@@ -436,10 +436,9 @@ public class AnalysisRunsController(
         if (run.Status == DeletedStatus)
             return NotFound(new { success = false, message = "Not found" });
 
-        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
-            return StatusCode(403, new { success = false, message = "Forbidden" });
-
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, demoCtx))
+            return StatusCode(403, new { success = false, message = "Forbidden" });
         if (!NdDemoDataFilters.CanAccessCreatedBy(run.CreatedBy, demoCtx))
             return NotFound(new { success = false, message = "Not found" });
 
@@ -519,7 +518,8 @@ public class AnalysisRunsController(
         if (run == null) return NotFound(new { success = false, message = "Not found" });
         if (run.Status == DeletedStatus)
             return NotFound(new { success = false, message = "Not found" });
-        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+        var statusDemoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, statusDemoCtx))
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
         if (await NdStaleRunRecovery.TryRecoverRunAsync(id, db, runCancellation, logger, ct))
@@ -685,6 +685,16 @@ public class AnalysisRunsController(
 
         if (run.Status is "running" or "processing" && runCancellation.HasActiveWorker(id))
             return Ok(new { success = true, message = "Analysis already in progress", id, status = run.Status });
+        // A stray duplicate kick-off after the worker already finished (double click, a
+        // race between two status polls) must not replay the simulation from scratch.
+        if (run.Status == "completed")
+            return Ok(new { success = true, message = "Analysis already complete", id, status = run.Status });
+        // "running" with no in-process worker means the server restarted mid-run (or the
+        // worker crashed) and orphaned it — recover it to a terminal state first, otherwise
+        // falling through would silently zero its progress and replay the whole simulation,
+        // which reads to the viewer as the run finishing then restarting on its own.
+        if (run.Status is "running" or "processing")
+            await NdStaleRunRecovery.TryRecoverRunAsync(id, db, runCancellation, logger, ct);
 
         var useDemoSimulation = await ShouldUseDemoSimulationAsync(demoCtx, run, ct);
         var useRegul = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine);
@@ -706,7 +716,12 @@ public class AnalysisRunsController(
             }
         }
 
-        var linkedCt = runCancellation.Register(id);
+        // Atomic claim: two near-simultaneous requests for the same run (double submit, retry,
+        // two tabs) must not both spawn a simulation worker — TryRegister fails for the loser
+        // instead of silently cancelling the winner's token, which used to let both proceed and
+        // reset/replay the run's progress a second time.
+        if (!runCancellation.TryRegister(id, out var linkedCt))
+            return Ok(new { success = true, message = "Analysis already in progress", id, status = "running" });
         _ = Task.Run(async () =>
         {
             using var scope = scopeFactory.CreateScope();
@@ -762,6 +777,16 @@ public class AnalysisRunsController(
 
         if (run.Status is "running" or "processing" && runCancellation.HasActiveWorker(id))
             return Ok(new { success = true, message = "Analysis already in progress", id, status = run.Status });
+        // A stray duplicate kick-off after the worker already finished (double click, a
+        // race between two status polls) must not replay the simulation from scratch.
+        if (run.Status == "completed")
+            return Ok(new { success = true, message = "Analysis already complete", id, status = run.Status });
+        // "running" with no in-process worker means the server restarted mid-run (or the
+        // worker crashed) and orphaned it — recover it to a terminal state first, otherwise
+        // falling through would silently zero its progress and replay the whole simulation,
+        // which reads to the viewer as the run finishing then restarting on its own.
+        if (run.Status is "running" or "processing")
+            await NdStaleRunRecovery.TryRecoverRunAsync(id, db, runCancellation, logger, ct);
 
         var useDemoSimulation = await ShouldUseDemoSimulationAsync(demoCtx, run, ct);
         const bool useRegul = true;
@@ -783,6 +808,11 @@ public class AnalysisRunsController(
             }
         }
 
+        // Atomic claim before touching run state: two near-simultaneous requests for the same
+        // run (double submit, retry, two tabs) must not both spawn a simulation worker.
+        if (!runCancellation.TryRegister(id, out var linkedCt))
+            return Ok(new { success = true, message = "Analysis already in progress", id, status = "running" });
+
         if (useDemoSimulation)
         {
             run.Status = "running";
@@ -797,7 +827,6 @@ public class AnalysisRunsController(
         await db.SaveChangesAsync(ct);
         dashboardCache.Invalidate();
 
-        var linkedCt = runCancellation.Register(id);
         _ = Task.Run(async () =>
         {
             using var scope = scopeFactory.CreateScope();
@@ -969,7 +998,7 @@ public class AnalysisRunsController(
                     ?? await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(demoDirectory, run.CreatedBy, ct);
                 return block ?? (IActionResult)StatusCode(403);
             }
-            return await SimulateDemoEvidenceRerunAsync(id, pointId, ct);
+            return await SimulateDemoEvidenceRerunAsync(id, pointId, profile.Id, ct);
         }
 
         return QueuePointProcessing(run, id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex);
@@ -991,7 +1020,7 @@ public class AnalysisRunsController(
         var demoOwned = run.CreatedBy != null
             && await demoDirectory.IsDemoProfileAsync(run.CreatedBy.Value, ct);
         if (demoCtx.ViewerIsDemo || demoOwned)
-            return await SimulateDemoEvidenceRerunAsync(id, null, ct);
+            return await SimulateDemoEvidenceRerunAsync(id, null, profile.Id, ct);
 
         var openPointIds = await db.NdAnalysisPoints
             .Where(p => p.AnalysisRunId == id
@@ -1017,10 +1046,10 @@ public class AnalysisRunsController(
         });
     }
 
-    private async Task<IActionResult> SimulateDemoEvidenceRerunAsync(Guid runId, Guid? pointId, CancellationToken ct)
+    private async Task<IActionResult> SimulateDemoEvidenceRerunAsync(Guid runId, Guid? pointId, Guid resolvedBy, CancellationToken ct)
     {
         var label = await ResolveLatestEvidenceLabelAsync(runId, pointId, ct);
-        var updated = await demoIntercept.SimulateEvidenceRerunAsync(runId, pointId, label, ct);
+        var updated = await demoIntercept.SimulateEvidenceRerunAsync(runId, pointId, label, resolvedBy, ct);
         return Ok(new
         {
             success = true,
@@ -1169,7 +1198,7 @@ public class AnalysisRunsController(
                     ?? await NdDemoIsolationHelper.ForbidLiveAiOnDemoOwnedRunAsync(demoDirectory, run.CreatedBy, ct);
                 return block ?? (IActionResult)StatusCode(403);
             }
-            return await SimulateDemoEvidenceRerunAsync(id, pointId, ct);
+            return await SimulateDemoEvidenceRerunAsync(id, pointId, profile.Id, ct);
         }
 
         return QueuePointProcessing(run, id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex);
@@ -1299,6 +1328,42 @@ public class AnalysisRunsController(
 
         await db.SaveChangesAsync(ct);
         await RecordStatusChangeAsync(db, id, from, run.Status, profile.Id, "Resubmitted", ct);
+        dashboardCache.Invalidate();
+        return Ok(new { success = true });
+    }
+
+    /// <summary>
+    /// Maker recalls a run back from the checker's queue before the checker has acted on it.
+    /// </summary>
+    [HttpPost("{id:guid}/recall")]
+    public async Task<IActionResult> Recall(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound();
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+            return StatusCode(403);
+
+        if (run.Status != "submitted_for_review")
+            return BadRequest(new { success = false, message = "Run is not with the checker." });
+
+        var from = run.Status;
+        run.Status = "completed";
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var review = new NdAnalysisReview
+        {
+            AnalysisRunId = id,
+            ReviewerId = profile.Id,
+            ReviewerRole = "maker",
+            Action = "recalled",
+        };
+        db.NdAnalysisReviews.Add(review);
+
+        await db.SaveChangesAsync(ct);
+        await RecordStatusChangeAsync(db, id, from, run.Status, profile.Id, "Recalled from checker", ct);
         dashboardCache.Invalidate();
         return Ok(new { success = true });
     }

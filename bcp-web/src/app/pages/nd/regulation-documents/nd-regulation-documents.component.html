@@ -240,7 +240,8 @@
                 class="clickable-row"
                 [class.selected-row]="isSelected(d)"
                 [class.row-saving]="savingDeptId === d.id || extractingId === d.id || hidingId === d.id"
-                [class.doc-ready-red]="analysisReadyState(d) === 'not_ready'"
+                [class.doc-ready-red]="rowReadyState(d) === 'not_ready'"
+                [class.doc-ready-green]="rowReadyState(d) === 'analysed'"
                 (click)="viewPoints(d)"
               >
                 <td class="reg-cell col-reg">
@@ -284,9 +285,29 @@
                 <td class="muted col-actor" [title]="actorLabel(d.uploadedByName)">{{ actorLabel(d.uploadedByName) }}</td>
                 <td class="muted col-actor" [title]="isManualDoc(d) ? '—' : actorLabel(d.extractedByName)">{{ isManualDoc(d) ? '—' : actorLabel(d.extractedByName) }}</td>
                 <td class="col-status">
-                  <span class="severity-badge" [ngClass]="analysisReadyClass(d)">{{ analysisReadyLabel(d) }}</span>
+                  @if (showsParsedPendingExtractChips(d)) {
+                    <div class="nd-status-chip-stack">
+                      <span class="severity-badge doc-ready-green">Parsed</span>
+                      <span class="severity-badge doc-ready-red">Pending extract</span>
+                    </div>
+                  } @else {
+                    <span class="severity-badge" [ngClass]="analysisReadyClass(d)">{{ analysisReadyLabel(d) }}</span>
+                  }
                   @if (isParsingDoc(d) || isExtractingDoc(d)) {
                     <span class="cell-subline">{{ workflowStatusLabel(d) }}</span>
+                    <span
+                      class="nd-progress-track"
+                      role="progressbar"
+                      [attr.aria-valuenow]="d.extractionProgressPct"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                    >
+                      <span
+                        class="nd-progress-fill"
+                        [class.is-indeterminate]="d.extractionProgressPct == null"
+                        [style.width.%]="d.extractionProgressPct ?? 100"
+                      ></span>
+                    </span>
                   }
                 </td>
                 <td class="col-actions nd-catalog-actions-cell" (click)="$event.stopPropagation()">

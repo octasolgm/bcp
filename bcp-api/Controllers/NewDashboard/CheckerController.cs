@@ -118,4 +118,36 @@ public class CheckerController(
         await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
         return Ok(new { success = true });
     }
+
+    /// <summary>
+    /// Checker recalls a run back from the reviewer's queue before the reviewer has acted on it.
+    /// </summary>
+    [HttpPost("review/{runId:guid}/recall")]
+    public async Task<IActionResult> Recall(Guid runId, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "checker");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
+        if (run == null) return NotFound();
+        if (run.Status != "checker_approved")
+            return BadRequest(new { success = false, message = "Run is not with the reviewer." });
+
+        var from = run.Status;
+        run.Status = "submitted_for_review";
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var review = new NdAnalysisReview
+        {
+            AnalysisRunId = runId,
+            ReviewerId = profile!.Id,
+            ReviewerRole = "checker",
+            Action = "recalled",
+        };
+        db.NdAnalysisReviews.Add(review);
+
+        await db.SaveChangesAsync(ct);
+        await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, "Recalled from reviewer", ct);
+        return Ok(new { success = true });
+    }
 }

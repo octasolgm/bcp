@@ -62,13 +62,22 @@
   }
 
   .stat-breakdown {
-    display: block;
-    margin-top: 0.4rem;
-    font-size: 0.6875rem;
-    color: var(--text-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
 
-    .resolved { color: var(--compliant); }
-    .pending { color: var(--text-secondary); }
+    .chip {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .resolved { background: var(--low-bg); color: var(--low); }
+    .pending { background: var(--critical-bg); color: var(--critical); }
   }
 
   &.critical .stat-value { color: var(--critical); }
@@ -76,8 +85,8 @@
   &.low .stat-value { color: var(--low); }
   &.high .stat-value { color: var(--high); }
   &.neutral .stat-value { color: var(--text-primary); }
-  &.compliant .stat-value { color: var(--compliant); }
-  &.partial .stat-value { color: var(--medium, #f97316); }
+  &.compliant .stat-value { color: var(--low); }
+  &.partial .stat-value { color: var(--medium); }
   &.non-compliant .stat-value { color: var(--critical); }
   &.actions {
     cursor: default;

@@ -81,6 +81,12 @@ public class InternalDocumentsController(
                 parseStatus,
                 parsedAt = live.ParsedAt,
                 parseError = live.ParseError,
+                parseProgressLabel = string.Equals(parseStatus, "processing", StringComparison.OrdinalIgnoreCase)
+                    ? live.ParseProgressLabel
+                    : null,
+                parseProgressPct = string.Equals(parseStatus, "processing", StringComparison.OrdinalIgnoreCase)
+                    ? live.ParseProgressPct
+                    : null,
                 pageCount = exposePages && live.Pages > 0 ? live.Pages : (int?)null,
                 analysisRunCount = analysisCounts.CountForInternal(d.Id, d.FileHash),
                 uploadedBy = d.UploadedBy,
@@ -106,6 +112,7 @@ public class InternalDocumentsController(
                     ? d.OriginalFileName
                     : null,
                 landingAiFileName = Path.GetFileName(d.StoragePath),
+                generatedByAnalysis = IsGeneratedByAnalysis(d.HistoryJson),
             });
         }
 
@@ -820,6 +827,14 @@ public class InternalDocumentsController(
 
     private static bool ShowsSectionExtractProgress(string? status) =>
         string.Equals(status, "processing", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True for the corrected version a reviewer's finalize step writes (see
+    /// NdCorrectedDocumentService). It never went through a real upload, so it should not
+    /// read as an unprocessed document waiting on parse/extract.
+    /// </summary>
+    private static bool IsGeneratedByAnalysis(string? historyJson) =>
+        !string.IsNullOrEmpty(historyJson) && historyJson.Contains("\"generatedFromRunId\"", StringComparison.Ordinal);
 
     private async Task<string?> LoadInternalParsedMarkdownAsync(StoredDocument doc, CancellationToken ct)
     {

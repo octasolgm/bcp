@@ -543,9 +543,9 @@ export class DashboardComponent implements OnInit {
 
   get complianceDonutSegments(): { color: string; value: number; offset: number }[] {
     const items = [
-      { color: '#3b82f6', value: this.compliantCount },
-      { color: '#f97316', value: this.partialCount },
-      { color: '#ef4444', value: this.nonCompliantCount },
+      { color: 'var(--low)', value: this.compliantCount },
+      { color: 'var(--medium)', value: this.partialCount },
+      { color: 'var(--critical)', value: this.nonCompliantCount },
     ];
     const total = items.reduce((s, i) => s + i.value, 0) || 1;
     let offset = 0;

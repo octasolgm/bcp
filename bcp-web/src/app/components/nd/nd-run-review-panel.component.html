@@ -1,13 +1,20 @@
 <section class="run-review-panel card-surface" aria-labelledby="run-review-heading">
   <header class="run-review-head">
-    <h2 id="run-review-heading">{{ evidenceOnly ? 'Overall analysis report' : 'Overall analysis report review' }}</h2>
-    <p class="run-review-sub">
-      @if (evidenceOnly) {
-        Upload a supporting document for the whole analysis, then rerun all open gaps against it.
-      } @else {
-        Report-level review applies to the whole analysis — not individual points.
-      }
-    </p>
+    <div>
+      <h2 id="run-review-heading">{{ evidenceOnly ? 'Overall analysis report' : 'Overall analysis report review' }}</h2>
+      <p class="run-review-sub">
+        @if (evidenceOnly) {
+          Upload a supporting document for the whole analysis, then rerun all open gaps against it.
+        } @else {
+          Report-level review applies to the whole analysis — not individual points.
+        }
+      </p>
+    </div>
+    @if (canExport) {
+      <button type="button" class="btn-secondary" [disabled]="exporting" (click)="exportExcel.emit()">
+        {{ exporting ? 'Exporting…' : 'Export Excel' }}
+      </button>
+    }
   </header>
 
   <div class="gap-docs-panel">
@@ -116,73 +123,6 @@
     </label>
   </div>
 
-  <div class="run-review-row">
-    <div class="run-review-field run-review-field-wide ap-owner-field">
-      <span class="field-label">Responsibility</span>
-      <div class="ap-owner-tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          class="ap-owner-tab"
-          [class.active]="responsibilityType === 'department'"
-          [attr.aria-selected]="responsibilityType === 'department'"
-          (click)="setResponsibilityType('department')"
-        >
-          Departments
-        </button>
-        <button
-          type="button"
-          role="tab"
-          class="ap-owner-tab"
-          [class.active]="responsibilityType === 'user'"
-          [attr.aria-selected]="responsibilityType === 'user'"
-          (click)="setResponsibilityType('user')"
-        >
-          Individuals
-        </button>
-      </div>
-
-      @if (assignees.length) {
-        <div class="ap-owner-chips">
-          @for (owner of assignees; track owner.label + owner.type) {
-            <span [ngClass]="ownerChipClass(owner)">
-              {{ owner.label }}
-              <button type="button" class="ap-owner-chip-x" (click)="removeOwner(owner)" aria-label="Remove owner">
-                ×
-              </button>
-            </span>
-          }
-        </div>
-      }
-
-      <div class="ap-owner-input-wrap">
-        <input
-          type="text"
-          class="run-review-input"
-          autocomplete="off"
-          [placeholder]="
-            responsibilityType === 'department'
-              ? 'Start typing a department name…'
-              : 'Start typing a name or email…'
-          "
-          [ngModel]="ownerQuery"
-          (ngModelChange)="onOwnerQueryChange($event)"
-          (focus)="ownerSuggestionsOpen = true"
-          (keydown.enter)="$event.preventDefault(); commitTypedOwner()"
-        />
-        @if (ownerSuggestionsOpen && ownerSuggestions.length) {
-          <ul class="ap-owner-suggestions">
-            @for (suggestion of ownerSuggestions; track suggestion.label) {
-              <li>
-                <button type="button" (click)="addOwner(suggestion)">{{ suggestion.label }}</button>
-              </li>
-            }
-          </ul>
-        }
-      </div>
-    </div>
-  </div>
-
   <div class="run-review-row run-review-row-priority">
     <div class="run-review-field run-review-field-wide">
       <div class="priority-head">
@@ -244,30 +184,24 @@
   }
 
   <footer class="run-review-actions">
-    @if (showMakerActions) {
-      <button type="button" class="btn-primary" [disabled]="submitting" (click)="emit('submit')">
-        {{ submitting ? 'Sending…' : (resubmitLabel ? 'Resubmit for review' : 'Submit for review') }}
-      </button>
+    @if (submitTargets.length > 0) {
+      <label class="run-review-field submit-target-field">
+        <span class="field-label">Submit to</span>
+        <select class="run-review-input" [(ngModel)]="submitTargetRole" [disabled]="submitTargets.length === 1">
+          @for (target of submitTargets; track target.role) {
+            <option [ngValue]="target.role">{{ target.label }}</option>
+          }
+        </select>
+      </label>
     }
 
-    @if (showCheckerActions) {
-      <button type="button" class="btn-primary" [disabled]="submitting" (click)="emit('approve')">
-        Submit for final review
-      </button>
-      <button type="button" class="btn-secondary" [disabled]="submitting" (click)="emit('pullback')">
-        Pull back to maker
-      </button>
-    }
+    <button type="button" class="btn-primary" [disabled]="submitting || !selectedSubmitTarget" (click)="submitToSelectedTarget()">
+      {{ submitting ? 'Sending…' : (resubmitLabel && mode === 'maker' ? 'Resubmit' : 'Submit') }}
+    </button>
 
     @if (showReviewerActions) {
-      <button type="button" class="btn-primary" [disabled]="submitting" (click)="emit('finalize')">
+      <button type="button" class="btn-secondary" [disabled]="submitting" (click)="emit('finalize')">
         Finalize
-      </button>
-      <button type="button" class="btn-secondary" [disabled]="submitting" (click)="emit('pullback_to_checker')">
-        Pull back to checker
-      </button>
-      <button type="button" class="btn-secondary" [disabled]="submitting" (click)="emit('pullback_to_maker')">
-        Pull back to maker
       </button>
     }
   </footer>

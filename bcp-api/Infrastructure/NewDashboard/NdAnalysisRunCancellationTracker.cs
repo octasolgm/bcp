@@ -22,6 +22,26 @@ public sealed class NdAnalysisRunCancellationTracker
         return cts.Token;
     }
 
+    /// <summary>
+    /// Atomically claims the worker slot for a run — unlike <see cref="Register"/>, this fails
+    /// instead of silently cancelling a prior token, so two near-simultaneous start requests for
+    /// the same run can't both spawn a simulation worker (the loser's request should report the
+    /// run as already in progress rather than proceeding).
+    /// </summary>
+    public bool TryRegister(Guid runId, out CancellationToken token)
+    {
+        _stopped.TryRemove(runId, out _);
+        var cts = new CancellationTokenSource();
+        if (!_sources.TryAdd(runId, cts))
+        {
+            cts.Dispose();
+            token = CancellationToken.None;
+            return false;
+        }
+        token = cts.Token;
+        return true;
+    }
+
     /// <summary>Marks a run stopped and cancels the in-flight token when present.</summary>
     public bool RequestStop(Guid runId)
     {

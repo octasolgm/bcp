@@ -99,9 +99,7 @@
           <th class="sortable col-source" (click)="toggleSort('source')">
             Source <span class="sort-indicator">{{ sortIndicator('source') }}</span>
           </th>
-          <th class="sortable col-workflow" (click)="toggleSort('workflow')">
-            Workflow <span class="sort-indicator">{{ sortIndicator('workflow') }}</span>
-          </th>
+          <th class="col-workflow">Summary</th>
           <th class="col-gaps" title="Gaps and action plans, with how many are resolved">Gaps / actions</th>
           <th class="sortable col-status" (click)="toggleSort('status')">
             Status <span class="sort-indicator">{{ sortIndicator('status') }}</span>
@@ -137,11 +135,19 @@
                 }
               </span>
             </td>
-            <td class="col-workflow" data-label="Workflow">
-              @if (workflowStatusLabel(run); as workflow) {
-                <span class="workflow-badge" [title]="workflow">{{ workflow }}</span>
-              } @else if (run.workflowHolder) {
-                <span class="workflow-badge" [title]="run.workflowHolder">{{ run.workflowHolder }}</span>
+            <td class="col-workflow" data-label="Summary">
+              @if (complianceBreakdown(run); as breakdown) {
+                <div class="stat-chips">
+                  @if (breakdown.compliant) {
+                    <span class="stat-chip stat-chip--compliant">{{ breakdown.compliant }} compliant</span>
+                  }
+                  @if (breakdown.partial) {
+                    <span class="stat-chip stat-chip--partial">{{ breakdown.partial }} partial</span>
+                  }
+                  @if (breakdown.nonCompliant) {
+                    <span class="stat-chip stat-chip--non-compliant">{{ breakdown.nonCompliant }} non compliant</span>
+                  }
+                </div>
               } @else {
                 <span class="muted">—</span>
               }
@@ -172,10 +178,12 @@
               <app-nd-run-table-actions
                 [run]="run"
                 [submittingRunId]="submittingRunId"
+                [recallingRunId]="recallingRunId"
                 [deletingId]="deletingId"
                 [stoppingId]="stoppingId"
                 (historyClick)="openHistory($event)"
                 (submitClick)="submitRunForReview($event)"
+                (recallClick)="recallRun($event)"
                 (deleteClick)="deleteRun($event)"
                 (stopClick)="stopRun($event)"
               />

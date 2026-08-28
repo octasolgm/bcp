@@ -22,13 +22,14 @@ import {
 import {
   canDeleteRun,
   canEditRunPlans,
+  canRecallRun,
   canReviewRun as canReviewAnalysisRun,
   canSendRunForReview,
 } from '../../../../lib/nd/analysis-run-actions';
 import { isLegacyAnalysisRun, ndAnalysisRunLink, ndAnalysisRunQuery, analysisRunNeedsExecutionView } from '../../../../lib/nd/run-links';
 import {
   analysisRunDisplayStatusLabel,
-  analysisRunWorkflowLabel,
+  analysisRunComplianceBreakdown,
   analysisRunSubmittedByLabel,
   analysisRunSubmittedByCaption,
   analysisRunSubmittedDate,
@@ -41,7 +42,7 @@ import {
   type RunGapStatsSummary,
 } from '../../../../lib/nd/run-gap-stats';
 
-type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'status' | 'maker';
+type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'status' | 'maker';
 
 @Component({
   selector: 'app-nd-analysis-runs',
@@ -77,6 +78,7 @@ export class NdAnalysisRunsComponent implements OnInit {
   sortDir: 'asc' | 'desc' = 'desc';
   deletingId: string | null = null;
   submittingRunId: string | null = null;
+  recallingRunId: string | null = null;
   stoppingId: string | null = null;
   historyOpen = false;
   historyRunId: string | null = null;
@@ -209,10 +211,6 @@ export class NdAnalysisRunsComponent implements OnInit {
           return dir * (a.processedPointsCount - b.processedPointsCount || a.totalPointsCount - b.totalPointsCount);
         case 'source':
           return dir * this.sourceLabel(a).localeCompare(this.sourceLabel(b));
-        case 'workflow':
-          return dir * (a.workflowHolder ?? analysisRunWorkflowLabel(a)).localeCompare(
-            b.workflowHolder ?? analysisRunWorkflowLabel(b),
-          );
         case 'status':
           return dir * analysisRunDisplayStatusLabel(a.status).localeCompare(
             analysisRunDisplayStatusLabel(b.status),
@@ -305,7 +303,7 @@ export class NdAnalysisRunsComponent implements OnInit {
     return analysisRunNeedsExecutionView(run);
   }
 
-  workflowStatusLabel = analysisRunWorkflowLabel;
+  complianceBreakdown = analysisRunComplianceBreakdown;
   submittedByLabel = analysisRunSubmittedByLabel;
   submittedByCaption = analysisRunSubmittedByCaption;
   submittedDate = analysisRunSubmittedDate;
@@ -363,6 +361,26 @@ export class NdAnalysisRunsComponent implements OnInit {
       this.workspaceNav.requestNavBadgeRefresh();
     } else {
       this.toast.show(res.message ?? 'Could not submit for review', 'error');
+    }
+  }
+
+  canRecall(run: AnalysisRunSummary): boolean {
+    return canRecallRun(run, this.auth.getRole(), this.auth.profile()?.id);
+  }
+
+  async recallRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    event?.preventDefault();
+    if (!this.canRecall(run)) return;
+    this.recallingRunId = run.id;
+    const res = await this.api.recallFromChecker(run.id);
+    this.recallingRunId = null;
+    if (res.success) {
+      this.toast.show('Recalled from checker', 'success');
+      await this.load();
+      this.workspaceNav.requestNavBadgeRefresh();
+    } else {
+      this.toast.show(res.message ?? 'Could not recall this run', 'error');
     }
   }
 

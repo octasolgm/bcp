@@ -55,9 +55,20 @@
       Reviews
       <span class="tab-count">{{ reviewsCount }}</span>
     </button>
+    <button
+      type="button"
+      role="tab"
+      class="inbox-tab"
+      [class.active]="typeTab === 'reports'"
+      [attr.aria-selected]="typeTab === 'reports'"
+      (click)="setTypeTab('reports')"
+    >
+      Reports
+      <span class="tab-count">{{ reportsCount }}</span>
+    </button>
   </div>
 
-  @if (typeTab !== 'reviews') {
+  @if (typeTab === 'all' || typeTab === 'actions') {
   <div class="inbox-stats">
     <div class="stat">
       <span class="stat-value">{{ countFor('pending') }}</span>
@@ -159,7 +170,7 @@
   }
   }
 
-  @if (typeTab !== 'actions') {
+  @if (typeTab === 'all' || typeTab === 'reviews') {
   @if (!reviewItems.length) {
     @if (typeTab === 'reviews') {
       <p class="inbox-empty">No reviews addressed to you or your department yet.</p>
@@ -172,9 +183,16 @@
       </p>
       <ul class="inbox-list">
         @for (review of reviewItems; track review.id) {
-          <li class="inbox-card" [class.review-received]="review.direction === 'received'">
+          <li
+            class="inbox-card"
+            [class.review-received]="review.direction === 'received'"
+            [class.is-unread]="isReviewUnread(review)"
+          >
             <div class="inbox-card-main">
               <div class="inbox-card-top">
+                @if (isReviewUnread(review)) {
+                  <span class="unread-dot" aria-label="Unread"></span>
+                }
                 <span class="pill type-review">Review</span>
                 <span class="pill" [class.soft]="review.direction !== 'received'" [class.status]="review.direction === 'received'">
                   {{ reviewDirectionLabel(review) }}
@@ -207,8 +225,50 @@
                 <span class="date-value">{{ formatDate(review.createdAt) }}</span>
                 <span class="date-remaining">{{ formatAgo(review.createdAt) }}</span>
               </div>
-              <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="reviewLinkParams(review)">
+              <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="reviewLinkParams(review)" (click)="markReviewRead(review)">
                 Open action
+              </a>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+  }
+
+  @if (typeTab === 'all' || typeTab === 'reports') {
+  @if (!reportItems.length) {
+    @if (typeTab === 'reports') {
+      <p class="inbox-empty">No reports pending your action right now.</p>
+    }
+  } @else {
+    <section class="inbox-reviews">
+      <h2>Report submissions</h2>
+      <p class="inbox-sub">Whole-report submissions pending your review, or pulled back to you.</p>
+      <ul class="inbox-list">
+        @for (item of reportItems; track item.id) {
+          <li class="inbox-card" [class.is-unread]="isReportUnread(item)">
+            <div class="inbox-card-main">
+              <div class="inbox-card-top">
+                @if (isReportUnread(item)) {
+                  <span class="unread-dot" aria-label="Unread"></span>
+                }
+                <span class="pill status">{{ reportStatusLabel(item) }}</span>
+                @if (item.makerName) {
+                  <span class="pill soft">By {{ item.makerName }}</span>
+                }
+              </div>
+              <p class="inbox-action">{{ item.name }}</p>
+            </div>
+
+            <div class="inbox-card-side">
+              <div class="inbox-date">
+                <span class="date-label">Submitted</span>
+                <span class="date-value">{{ formatDate(item.submittedAt || item.createdAt) }}</span>
+                <span class="date-remaining">{{ formatAgo(item.submittedAt || item.createdAt) }}</span>
+              </div>
+              <a class="nd-btn small" routerLink="/nd/gap-analysis" [queryParams]="{ run: item.id }" (click)="markReportRead(item)">
+                Open report
               </a>
             </div>
           </li>

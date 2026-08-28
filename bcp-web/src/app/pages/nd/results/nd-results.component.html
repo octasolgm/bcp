@@ -82,10 +82,12 @@
       [evidenceUploading]="reportEvidenceBusy"
       [evidenceRerunning]="reportEvidenceRerunning"
       [evidenceDeletingId]="reportEvidenceDeletingId"
+      [canExport]="true"
       (uploadEvidence)="onReportEvidenceSelected($event)"
       (deleteEvidence)="onDeleteReportEvidence($event)"
       (viewEvidence)="onOpenPdf({ docId: $event })"
       (rerunAllGaps)="onRerunAllGaps()"
+      (exportExcel)="exportExcel()"
     />
 
     @if (embedMode) {
@@ -339,3 +341,13 @@
     }
   }
 </div>
+
+@if (showExportDialog) {
+  <app-nd-export-options-dialog
+    [gapColumns]="exportDialogColumns"
+    [hasActionPlans]="exportDialogHasActionPlans"
+    [hasReviews]="exportDialogHasReviews"
+    (cancelled)="closeExportDialog()"
+    (confirmed)="runXlsxExport($event)"
+  />
+}

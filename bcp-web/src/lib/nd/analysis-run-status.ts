@@ -115,6 +115,18 @@ export function analysisRunDisplayStatusLabel(status: string): string {
 
 /** Next workflow step or in-progress hint for a run row. */
 export function analysisRunWorkflowLabel(run: AnalysisRunSummary): string {
+  // Once a run has left the maker's desk, the workflow label reflects who currently
+  // owns it. This must take priority over the regul pipeline phase below — otherwise
+  // a regul run that finished its pipeline (phase 'done') keeps showing "Finalizing"
+  // even after it has been submitted for review, which disagrees with the "With
+  // checker"/"With reviewer" label shown once the run is opened from the queue.
+  const s = normalizeRunStatus(run.status);
+  if (isAnalysisRunSubmitReviewPending(s)) return 'Submit for review pending';
+  if (s === 'pulled_back') return 'Resubmit pending';
+  if (s === 'submitted_for_review') return 'With checker';
+  if (s === 'checker_approved') return 'With reviewer';
+  if (s === 'reviewer_approved') return 'Review complete';
+
   if (isRegulWorkflow(run.workflowEngine)) {
     const phase = (run.regulPipelinePhase ?? '').toLowerCase();
     if (phase === 'forward') return 'Forward judgment';
@@ -132,13 +144,6 @@ export function analysisRunWorkflowLabel(run: AnalysisRunSummary): string {
     return 'Continue analysis';
   }
 
-  const s = normalizeRunStatus(run.status);
-  if (isAnalysisRunSubmitReviewPending(s)) return 'Submit for review pending';
-  if (s === 'pulled_back') return 'Resubmit pending';
-  if (s === 'submitted_for_review') return 'With checker';
-  if (s === 'checker_approved') return 'With reviewer';
-  if (s === 'reviewer_approved') return 'Review complete';
-
   if (run.workflowHolder?.trim()) return run.workflowHolder.trim();
   return '';
 }
@@ -154,21 +159,15 @@ export function analysisRunPointsLabel(run: AnalysisRunSummary): string {
   return `${processed}/${total} points`;
 }
 
-export function analysisRunComplianceSummary(run: AnalysisRunSummary): string | null {
-  const { compliant, partial, nonCompliant } = run;
-  if (compliant == null && partial == null && nonCompliant == null) return null;
-  const parts: string[] = [];
-  if (compliant) parts.push(`${compliant} compliant`);
-  if (partial) parts.push(`${partial} partial`);
-  if (nonCompliant) parts.push(`${nonCompliant} non compliant`);
-  return parts.length ? parts.join(' · ') : null;
+export interface AnalysisRunComplianceBreakdown {
+  compliant: number;
+  partial: number;
+  nonCompliant: number;
 }
 
-export function analysisRunGapsSummary(run: AnalysisRunSummary): string | null {
-  if (run.totalGaps == null || run.totalGaps <= 0) return null;
-  let text = `${run.totalGaps} gap${run.totalGaps === 1 ? '' : 's'}`;
-  if (run.reviewedGaps != null && run.totalGaps > 0) {
-    text += ` · ${run.reviewedGaps}/${run.totalGaps} reviewed`;
-  }
-  return text;
+/** Compliant/partial/non-compliant point counts for a run's Summary column. */
+export function analysisRunComplianceBreakdown(run: AnalysisRunSummary): AnalysisRunComplianceBreakdown | null {
+  const { compliant, partial, nonCompliant } = run;
+  if (compliant == null && partial == null && nonCompliant == null) return null;
+  return { compliant: compliant ?? 0, partial: partial ?? 0, nonCompliant: nonCompliant ?? 0 };
 }

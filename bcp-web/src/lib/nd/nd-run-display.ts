@@ -66,6 +66,7 @@ export function buildNdGapListItems(
     pointIds.push(pointKey);
     items.push({
       id: String(displayIndex).padStart(2, '0'),
+      pointId: point.id,
       section: sectionLabel,
       title: snap.pointTitle?.trim() || pointKey,
       severity: normalizeGapSeverity(severity),

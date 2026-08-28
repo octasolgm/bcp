@@ -116,8 +116,17 @@ public class RegulationDocumentsController(
         {
             try
             {
-                pointCountMap = await NdRegulationPointCanonicalFilter.BuildCanonicalCountMapAsync(
-                    db, ndDocIds, manualByDocId, ct);
+                // The canonical count runs an in-memory dedup/repair pass per document, which
+                // gets expensive as point counts grow — cache it so reopening the picker or
+                // refreshing the list within the TTL doesn't redo that work every time.
+                // dashboardCache.Invalidate() already fires on extract/parse/repair, so a
+                // point-count change is reflected immediately.
+                var scope = "reg-point-counts:" + string.Join(",", ndDocIds.OrderBy(id => id));
+                pointCountMap = await dashboardCache.GetOrCreateAsync(
+                    scope,
+                    innerCt => NdRegulationPointCanonicalFilter.BuildCanonicalCountMapAsync(
+                        db, ndDocIds, manualByDocId, innerCt),
+                    ct);
             }
             catch { /* table may not exist */ }
         }

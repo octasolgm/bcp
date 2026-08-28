@@ -16,7 +16,13 @@ import {
   resolveAnalysisPointSeverity,
   resolvePointComplianceLabel,
 } from '../../../../lib/nd/point-compliance-status';
-import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints } from '../../../../lib/nd/export/gap-analysis-export';
+import {
+  exportGapAnalysisExcelFromPoints,
+  exportGapAnalysisPdfFromPoints,
+  gapAnalysisExportColumns,
+  type GapAnalysisExportSelection,
+} from '../../../../lib/nd/export/gap-analysis-export';
+import { NdExportOptionsDialogComponent } from '../../../components/nd/nd-export-options-dialog.component';
 import type { ActionPlanHistoryEntry, AnalysisPoint, PointGapAttachment, ResultsData } from '../../../../lib/nd/types';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus } from '../../../../lib/nd/action-item-review';
 import { tempCommentsForPoint, type TempPointReviewComment, type TempReviewCommentsChangeEvent } from '../../../../lib/nd/temp-point-review-comment';
@@ -28,7 +34,7 @@ import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sor
 @Component({
   selector: 'app-nd-results',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdExportOptionsDialogComponent],
   templateUrl: './nd-results.component.html',
   styleUrls: ['./nd-results.component.scss', '../nd-shared.scss'],
 })
@@ -74,6 +80,11 @@ export class NdResultsComponent implements OnInit, OnChanges {
   reportEvidenceBusy = false;
   reportEvidenceRerunning = false;
   reportEvidenceDeletingId: string | null = null;
+
+  showExportDialog = false;
+  exportDialogColumns: string[] = [];
+  exportDialogHasActionPlans = false;
+  exportDialogHasReviews = false;
 
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
@@ -655,9 +666,27 @@ export class NdResultsComponent implements OnInit, OnChanges {
     });
   }
 
-  async exportExcel(): Promise<void> {
-    if (!this.data) return;
-    await exportGapAnalysisExcelFromPoints(this.data.points, undefined, undefined, this.exportOptions());
+  /** Excel goes through the column picker; the dialog calls back into runXlsxExport. */
+  exportExcel(): void {
+    if (!this.data?.points?.length) return;
+    const plans = this.data.actionPlans ?? [];
+    this.exportDialogColumns = gapAnalysisExportColumns(this.data.points);
+    this.exportDialogHasActionPlans = plans.length > 0;
+    this.exportDialogHasReviews = plans.some((p) => (p.reviews ?? []).length > 0);
+    this.showExportDialog = true;
+  }
+
+  closeExportDialog(): void {
+    this.showExportDialog = false;
+  }
+
+  async runXlsxExport(selection: GapAnalysisExportSelection): Promise<void> {
+    this.showExportDialog = false;
+    if (!this.data?.points?.length) return;
+    await exportGapAnalysisExcelFromPoints(this.data.points, undefined, undefined, {
+      ...this.exportOptions(),
+      selection,
+    });
   }
 
   private exportOptions() {

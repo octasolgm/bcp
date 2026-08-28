@@ -5,6 +5,7 @@ import {
   EventEmitter,
   Input,
   OnChanges,
+  OnDestroy,
   Output,
   SimpleChanges,
   inject,
@@ -106,7 +107,7 @@ import type { TempPointReviewComment, TempReviewCommentsChangeEvent } from '../.
   styleUrl: './nd-gap-point-detail.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class NdGapPointDetailComponent implements OnChanges {
+export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   private readonly ndApi = inject(NdApiService);
   private readonly auth = inject(NdAuthService);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -116,9 +117,24 @@ export class NdGapPointDetailComponent implements OnChanges {
   private collapsedActionsInit = false;
   private departmentsLoaded = false;
 
+  /** Purely cosmetic staged progress for an evidence rerun — the demo call itself is a
+   * single short request, so this simulates the feel of a multi-step analysis run. */
+  private static readonly RERUN_PROGRESS_STEPS: { label: string; pct: number }[] = [
+    { label: 'Analysing evidence…', pct: 25 },
+    { label: 'Finding gap…', pct: 55 },
+    { label: 'Updating action plan…', pct: 85 },
+  ];
+  private rerunProgressTimer: ReturnType<typeof setInterval> | null = null;
+  private rerunProgressStepIndex = 0;
+  rerunProgressLabel: string | null = null;
+  rerunProgressPct = 0;
+
   collapsedActionIndexes = new Set<number>();
   departments: Department[] = [];
   @Input({ required: true }) point!: AnalysisPoint;
+  /** True once every gap under this point's clause number is compliant (a clause can have
+   * several gaps, several points sharing one clause number). */
+  @Input() clauseCompliant = false;
   @Input() snapshot: PointSnapshot | null = null;
   @Input() canEdit = false;
   @Input() editing = false;
@@ -246,7 +262,42 @@ export class NdGapPointDetailComponent implements OnChanges {
     return Boolean(this.runId?.trim());
   }
 
+  ngOnDestroy(): void {
+    this.stopRerunProgress();
+  }
+
+  private startRerunProgress(): void {
+    if (this.rerunProgressTimer) return;
+    this.rerunProgressStepIndex = 0;
+    const first = NdGapPointDetailComponent.RERUN_PROGRESS_STEPS[0];
+    this.rerunProgressLabel = first.label;
+    this.rerunProgressPct = first.pct;
+    this.rerunProgressTimer = setInterval(() => {
+      this.rerunProgressStepIndex = Math.min(
+        this.rerunProgressStepIndex + 1,
+        NdGapPointDetailComponent.RERUN_PROGRESS_STEPS.length - 1,
+      );
+      const step = NdGapPointDetailComponent.RERUN_PROGRESS_STEPS[this.rerunProgressStepIndex];
+      this.rerunProgressLabel = step.label;
+      this.rerunProgressPct = step.pct;
+      this.cdr.markForCheck();
+    }, 600);
+  }
+
+  private stopRerunProgress(): void {
+    if (this.rerunProgressTimer) {
+      clearInterval(this.rerunProgressTimer);
+      this.rerunProgressTimer = null;
+    }
+    this.rerunProgressLabel = null;
+    this.rerunProgressPct = 0;
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['evidenceRerunning']) {
+      if (this.evidenceRerunning) this.startRerunProgress();
+      else this.stopRerunProgress();
+    }
     const nextKey = [
       this.point?.id ?? '',
       this.point?.pointSnapshot ?? '',

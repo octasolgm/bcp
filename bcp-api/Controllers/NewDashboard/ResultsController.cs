@@ -5,6 +5,7 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -15,6 +16,7 @@ public class ResultsController(
     SupabaseJwtValidator jwt,
     NdRegulationPointPageService pointPages,
     IServiceScopeFactory scopeFactory,
+    NdDemoUserDirectory demoDirectory,
     ILogger<ResultsController> logger) : NdControllerBase
 {
     public record UpdateActionPlanRequest(string Content, int? RevertToVersion);
@@ -22,7 +24,7 @@ public class ResultsController(
     [HttpGet("{runId:guid}")]
     public async Task<IActionResult> Get(Guid runId, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
@@ -32,88 +34,121 @@ public class ResultsController(
             .FirstOrDefaultAsync(r => r.Id == runId, ct);
         if (run == null) return NotFound();
 
-        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+        // Same demo-aware check every other run endpoint uses: a production maker is limited
+        // to their own runs, but demo makers can view any run in the shared demo workspace —
+        // a report currently with the checker/reviewer was still created inside that same
+        // demo group, just not necessarily by this exact demo persona.
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, demoCtx))
             return StatusCode(403);
 
         if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             StartBackgroundTemplateSync(runId, profile.Id);
 
-        var creator = run.CreatedBy.HasValue
-            ? await db.NdProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == run.CreatedBy, ct)
-            : null;
+        var pointIds = run.Points.Select(p => p.Id).ToList();
+        var isRegulFamily = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine);
 
-        var reviews = await db.NdAnalysisReviews.AsNoTracking()
+        // None of these depend on each other, so fan them out on their own DbContext scopes
+        // instead of paying each query's round trip to the (remote) database in sequence —
+        // this endpoint backs the working-document load, and on a run with many points and
+        // action plans the sequential version visibly dragged.
+        var creatorTask = run.CreatedBy.HasValue
+            ? RunInScopeAsync((scopedDb, sct) => scopedDb.NdProfiles.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == run.CreatedBy, sct), ct)
+            : Task.FromResult<NdProfile?>(null);
+        var reviewsTask = RunInScopeAsync((scopedDb, sct) => scopedDb.NdAnalysisReviews.AsNoTracking()
             .Where(r => r.AnalysisRunId == runId)
             .OrderBy(r => r.CreatedAt)
-            .ToListAsync(ct);
-
-        var pointIds = run.Points.Select(p => p.Id).ToList();
-        var comments = await db.NdAnalysisPointComments.AsNoTracking()
+            .ToListAsync(sct), ct);
+        var commentsTask = RunInScopeAsync((scopedDb, sct) => scopedDb.NdAnalysisPointComments.AsNoTracking()
             .Where(c => pointIds.Contains(c.AnalysisPointId))
-            .ToListAsync(ct);
-
-        var actionItemReviews = await db.NdActionPlanItemReviews.AsNoTracking()
+            .ToListAsync(sct), ct);
+        var actionItemReviewsTask = RunInScopeAsync((scopedDb, sct) => scopedDb.NdActionPlanItemReviews.AsNoTracking()
             .Where(r => pointIds.Contains(r.AnalysisPointId))
             .OrderByDescending(r => r.SortOrder)
             .ThenByDescending(r => r.CreatedAt)
-            .ToListAsync(ct);
-
-        var actionPlans = await db.NdAnalysisActionPlans.AsNoTracking()
+            .ToListAsync(sct), ct);
+        var actionPlansTask = RunInScopeAsync((scopedDb, sct) => scopedDb.NdAnalysisActionPlans.AsNoTracking()
             .Where(p => p.AnalysisRunId == runId)
             .OrderBy(p => p.GapIndex).ThenBy(p => p.SortOrder).ThenBy(p => p.CreatedAt)
-            .ToListAsync(ct);
+            .ToListAsync(sct), ct);
+        var tempReviewCommentsTask = RunInScopeAsync((scopedDb, sct) => scopedDb.NdTempPointReviewComments.AsNoTracking()
+            .Where(c => pointIds.Contains(c.AnalysisPointId))
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(sct), ct);
+        var historyTask = RunInScopeAsync((scopedDb, sct) => scopedDb.NdAnalysisStatusHistories.AsNoTracking()
+            .Where(h => h.AnalysisRunId == runId)
+            .OrderBy(h => h.CreatedAt)
+            .ToListAsync(sct), ct);
+        var attachmentsTask = RunInScopeAsync((scopedDb, sct) => scopedDb.NdAnalysisPointAttachments.AsNoTracking()
+            .Where(a => pointIds.Contains(a.AnalysisPointId))
+            .OrderBy(a => a.CreatedAt)
+            .ToListAsync(sct), ct);
+        var qualitativeRowTask = isRegulFamily
+            ? RunInScopeAsync((scopedDb, sct) => scopedDb.NdRegulQualitativeAssessments.AsNoTracking()
+                .FirstOrDefaultAsync(q => q.AnalysisRunId == runId, sct), ct)
+            : Task.FromResult<NdRegulQualitativeAssessment?>(null);
+
+        await Task.WhenAll(
+            creatorTask, reviewsTask, commentsTask, actionItemReviewsTask, actionPlansTask,
+            tempReviewCommentsTask, historyTask, attachmentsTask, qualitativeRowTask);
+
+        var creator = creatorTask.Result;
+        var reviews = reviewsTask.Result;
+        var comments = commentsTask.Result;
+        var actionItemReviews = actionItemReviewsTask.Result;
+        var actionPlans = actionPlansTask.Result;
+        var tempReviewComments = tempReviewCommentsTask.Result;
+        var history = historyTask.Result;
+        var attachments = attachmentsTask.Result;
+        var qualitativeRow = qualitativeRowTask.Result;
+
+        // Second wave: independent of each other, but each needs an id list from the first wave.
         var actionPlanIds = actionPlans.Select(p => p.Id).ToList();
-        var actionPlanReviews = actionPlanIds.Count == 0
-            ? []
-            : await db.NdAnalysisActionPlanReviews.AsNoTracking()
-                .Where(r => actionPlanIds.Contains(r.ActionPlanId))
-                .OrderBy(r => r.CreatedAt)
-                .ToListAsync(ct);
-        var actionPlanAssignees = actionPlanIds.Count == 0
-            ? []
-            : await db.NdAnalysisActionPlanAssignees.AsNoTracking()
-                .Where(a => actionPlanIds.Contains(a.ActionPlanId))
-                .OrderBy(a => a.SortOrder)
-                .ToListAsync(ct);
-        var actionPlanPeople = await LoadProfileNamesAsync(
-            db,
-            actionPlans.SelectMany(p => new[] { p.CreatedBy, p.UpdatedBy, p.ResponsibilityUserId })
-                .Concat(actionPlanReviews.Select(r => r.ReviewerId)),
-            ct);
         var actionPlanDeptIds = actionPlans
             .Where(p => p.ResponsibilityDepartmentId.HasValue)
             .Select(p => p.ResponsibilityDepartmentId!.Value).Distinct().ToList();
-        var actionPlanDepartments = actionPlanDeptIds.Count == 0
-            ? new Dictionary<Guid, string>()
-            : await db.NdDepartments.AsNoTracking()
-                .Where(d => actionPlanDeptIds.Contains(d.Id))
-                .ToDictionaryAsync(d => d.Id, d => d.Name, ct);
-
-        var tempReviewComments = await db.NdTempPointReviewComments.AsNoTracking()
-            .Where(c => pointIds.Contains(c.AnalysisPointId))
-            .OrderBy(c => c.CreatedAt)
-            .ToListAsync(ct);
-
         var tempCommentAuthorIds = tempReviewComments
             .Where(c => c.CommentedBy.HasValue)
             .Select(c => c.CommentedBy!.Value)
             .Distinct()
             .ToList();
-        var tempCommentAuthors = tempCommentAuthorIds.Count == 0
-            ? new Dictionary<Guid, string>()
-            : await db.NdProfiles.AsNoTracking()
+
+        var actionPlanReviewsTask = actionPlanIds.Count == 0
+            ? Task.FromResult(new List<NdAnalysisActionPlanReview>())
+            : RunInScopeAsync((scopedDb, sct) => scopedDb.NdAnalysisActionPlanReviews.AsNoTracking()
+                .Where(r => actionPlanIds.Contains(r.ActionPlanId))
+                .OrderBy(r => r.CreatedAt)
+                .ToListAsync(sct), ct);
+        var actionPlanAssigneesTask = actionPlanIds.Count == 0
+            ? Task.FromResult(new List<NdAnalysisActionPlanAssignee>())
+            : RunInScopeAsync((scopedDb, sct) => scopedDb.NdAnalysisActionPlanAssignees.AsNoTracking()
+                .Where(a => actionPlanIds.Contains(a.ActionPlanId))
+                .OrderBy(a => a.SortOrder)
+                .ToListAsync(sct), ct);
+        var actionPlanDepartmentsTask = actionPlanDeptIds.Count == 0
+            ? Task.FromResult(new Dictionary<Guid, string>())
+            : RunInScopeAsync((scopedDb, sct) => scopedDb.NdDepartments.AsNoTracking()
+                .Where(d => actionPlanDeptIds.Contains(d.Id))
+                .ToDictionaryAsync(d => d.Id, d => d.Name, sct), ct);
+        var tempCommentAuthorsTask = tempCommentAuthorIds.Count == 0
+            ? Task.FromResult(new Dictionary<Guid, string>())
+            : RunInScopeAsync((scopedDb, sct) => scopedDb.NdProfiles.AsNoTracking()
                 .Where(p => tempCommentAuthorIds.Contains(p.Id))
-                .ToDictionaryAsync(p => p.Id, p => p.FullName, ct);
+                .ToDictionaryAsync(p => p.Id, p => p.FullName, sct), ct);
 
-        var history = await db.NdAnalysisStatusHistories.AsNoTracking()
-            .Where(h => h.AnalysisRunId == runId)
-            .OrderBy(h => h.CreatedAt)
-            .ToListAsync(ct);
+        await Task.WhenAll(actionPlanReviewsTask, actionPlanAssigneesTask, actionPlanDepartmentsTask, tempCommentAuthorsTask);
 
-        var attachments = await db.NdAnalysisPointAttachments.AsNoTracking()
-            .Where(a => pointIds.Contains(a.AnalysisPointId))
-            .OrderBy(a => a.CreatedAt)
-            .ToListAsync(ct);
+        var actionPlanReviews = actionPlanReviewsTask.Result;
+        var actionPlanAssignees = actionPlanAssigneesTask.Result;
+        var actionPlanDepartments = actionPlanDepartmentsTask.Result;
+        var tempCommentAuthors = tempCommentAuthorsTask.Result;
+
+        var actionPlanPeople = await LoadProfileNamesAsync(
+            db,
+            actionPlans.SelectMany(p => new[] { p.CreatedBy, p.UpdatedBy, p.ResponsibilityUserId })
+                .Concat(actionPlanReviews.Select(r => r.ReviewerId)),
+            ct);
 
         var runRegDocIds = ParseSelectedRegulationDocIds(run.SelectedRegulationDocIds);
         var enrichedPoints = run.Points.Select(p => new
@@ -134,11 +169,6 @@ public class ResultsController(
             finalActionPlan = p.FinalActionPlan,
             originalAiActionPlan = p.OriginalAiActionPlan,
         }).ToList();
-
-        var qualitativeRow = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
-            ? await db.NdRegulQualitativeAssessments.AsNoTracking()
-                .FirstOrDefaultAsync(q => q.AnalysisRunId == runId, ct)
-            : null;
 
         object? regulQualitativeAssessment = null;
         if (qualitativeRow != null)
@@ -303,6 +333,21 @@ public class ResultsController(
                 logger.LogWarning(ex, "Background demo template sync failed for run {RunId}", runId);
             }
         });
+    }
+
+    /// <summary>
+    /// Runs one read query on its own scoped <see cref="AppDbContext"/> so it can execute
+    /// concurrently with the request's other independent reads — a single DbContext can only
+    /// run one operation at a time, so fanning queries out for Task.WhenAll needs one context
+    /// per query.
+    /// </summary>
+    private async Task<T> RunInScopeAsync<T>(
+        Func<AppDbContext, CancellationToken, Task<T>> query,
+        CancellationToken ct)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var scopedDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await query(scopedDb, ct);
     }
 
     public record UpdateClauseStatusRequest(string? FinalStatus);

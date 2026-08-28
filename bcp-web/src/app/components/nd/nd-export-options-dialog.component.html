@@ -2,55 +2,132 @@
 
 <div class="xo-dialog" role="dialog" aria-modal="true" aria-labelledby="xo-title">
   <header class="xo-head">
-    <h2 id="xo-title">Export to Excel</h2>
-    <p class="xo-sub">Pick the sheets and columns to include.</p>
+    <div class="xo-head-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+        <path d="M6 3.5h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M15 3.5v4h4" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M8.5 13.5l2.4 4 2-3 2.6 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="xo-head-text">
+      <h2 id="xo-title">Export to Excel</h2>
+      <p class="xo-sub">Choose which sheets and columns to include, and rename any header.</p>
+    </div>
+    <button type="button" class="xo-close" (click)="cancelled.emit()" aria-label="Close">
+      <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
+        <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </button>
   </header>
 
   <div class="xo-body">
-    <section class="xo-section">
+    <section class="xo-section" [class.is-collapsed]="collapsed.gap">
       <div class="xo-section-head">
-        <h3>Gaps</h3>
+        <button type="button" class="xo-collapse-toggle" (click)="toggleCollapsed('gap')" [attr.aria-expanded]="!collapsed.gap">
+          <svg class="xo-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none">
+            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <h3>Gaps</h3>
+          <span class="xo-count">{{ selectedGap.size }}/{{ gapCols.length }}</span>
+        </button>
         <div class="xo-bulk">
           <button type="button" (click)="toggleAll(selectedGap, gapCols, true)">All</button>
           <button type="button" (click)="toggleAll(selectedGap, gapCols, false)">None</button>
         </div>
       </div>
-      <div class="xo-cols">
-        @for (col of gapCols; track col) {
-          <label class="xo-col">
-            <input type="checkbox" [checked]="isOn(selectedGap, col)" (change)="toggle(selectedGap, col)" />
-            <span>{{ col }}</span>
-          </label>
+      @if (!collapsed.gap) {
+        <div class="xo-cols">
+          @for (col of gapCols; track col) {
+            <div class="xo-col-row" [class.is-on]="isOn(selectedGap, col)">
+              <label class="xo-col">
+                <span class="xo-checkbox">
+                  <input type="checkbox" [checked]="isOn(selectedGap, col)" (change)="toggle(selectedGap, col)" />
+                  <span class="xo-checkbox-box" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="none">
+                      <path d="M3 8.2l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </span>
+                <span class="xo-col-name">{{ col }}</span>
+              </label>
+              @if (isOn(selectedGap, col)) {
+                <input
+                  type="text"
+                  class="xo-label-input"
+                  [(ngModel)]="gapLabels[col]"
+                  [attr.aria-label]="'Header text for ' + col"
+                />
+              }
+            </div>
+          }
+        </div>
+        @if (!canConfirm) {
+          <p class="xo-warn">Keep at least one gap column.</p>
         }
-      </div>
-      @if (!canConfirm) {
-        <p class="xo-warn">Keep at least one gap column.</p>
       }
     </section>
 
     @if (hasActionPlans) {
-      <section class="xo-section">
+      <section class="xo-section" [class.is-collapsed]="collapsed.actionPlan">
         <div class="xo-section-head">
-          <label class="xo-sheet-toggle">
-            <input type="checkbox" [(ngModel)]="includeActionPlans" />
+          <button
+            type="button"
+            class="xo-collapse-toggle"
+            (click)="toggleCollapsed('actionPlan')"
+            [attr.aria-expanded]="!collapsed.actionPlan"
+          >
+            <svg class="xo-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none">
+              <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
             <h3>Action plans</h3>
-          </label>
-          <div class="xo-bulk">
-            <button type="button" (click)="toggleAll(selectedActionPlan, actionPlanCols, true)">All</button>
-            <button type="button" (click)="toggleAll(selectedActionPlan, actionPlanCols, false)">None</button>
+            <span class="xo-count">{{ selectedActionPlan.size }}/{{ actionPlanCols.length }}</span>
+          </button>
+          <div class="xo-section-actions">
+            <label class="xo-sheet-toggle" (click)="$event.stopPropagation()">
+              <span class="xo-checkbox">
+                <input type="checkbox" [(ngModel)]="includeActionPlans" />
+                <span class="xo-checkbox-box" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="11" height="11" fill="none">
+                    <path d="M3 8.2l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+              </span>
+              Include
+            </label>
+            <div class="xo-bulk">
+              <button type="button" (click)="toggleAll(selectedActionPlan, actionPlanCols, true)">All</button>
+              <button type="button" (click)="toggleAll(selectedActionPlan, actionPlanCols, false)">None</button>
+            </div>
           </div>
         </div>
-        @if (includeActionPlans) {
+        @if (!collapsed.actionPlan && includeActionPlans) {
           <div class="xo-cols">
             @for (col of actionPlanCols; track col) {
-              <label class="xo-col">
-                <input
-                  type="checkbox"
-                  [checked]="isOn(selectedActionPlan, col)"
-                  (change)="toggle(selectedActionPlan, col)"
-                />
-                <span>{{ col }}</span>
-              </label>
+              <div class="xo-col-row" [class.is-on]="isOn(selectedActionPlan, col)">
+                <label class="xo-col">
+                  <span class="xo-checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="isOn(selectedActionPlan, col)"
+                      (change)="toggle(selectedActionPlan, col)"
+                    />
+                    <span class="xo-checkbox-box" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" width="11" height="11" fill="none">
+                        <path d="M3 8.2l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </span>
+                  </span>
+                  <span class="xo-col-name">{{ col }}</span>
+                </label>
+                @if (isOn(selectedActionPlan, col)) {
+                  <input
+                    type="text"
+                    class="xo-label-input"
+                    [(ngModel)]="actionPlanLabels[col]"
+                    [attr.aria-label]="'Header text for ' + col"
+                  />
+                }
+              </div>
             }
           </div>
         }
@@ -58,28 +135,66 @@
     }
 
     @if (hasReviews) {
-      <section class="xo-section">
+      <section class="xo-section" [class.is-collapsed]="collapsed.review">
         <div class="xo-section-head">
-          <label class="xo-sheet-toggle">
-            <input type="checkbox" [(ngModel)]="includeReviews" />
+          <button
+            type="button"
+            class="xo-collapse-toggle"
+            (click)="toggleCollapsed('review')"
+            [attr.aria-expanded]="!collapsed.review"
+          >
+            <svg class="xo-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none">
+              <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
             <h3>Reviews</h3>
-          </label>
-          <div class="xo-bulk">
-            <button type="button" (click)="toggleAll(selectedReview, reviewCols, true)">All</button>
-            <button type="button" (click)="toggleAll(selectedReview, reviewCols, false)">None</button>
+            <span class="xo-count">{{ selectedReview.size }}/{{ reviewCols.length }}</span>
+          </button>
+          <div class="xo-section-actions">
+            <label class="xo-sheet-toggle" (click)="$event.stopPropagation()">
+              <span class="xo-checkbox">
+                <input type="checkbox" [(ngModel)]="includeReviews" />
+                <span class="xo-checkbox-box" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="11" height="11" fill="none">
+                    <path d="M3 8.2l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+              </span>
+              Include
+            </label>
+            <div class="xo-bulk">
+              <button type="button" (click)="toggleAll(selectedReview, reviewCols, true)">All</button>
+              <button type="button" (click)="toggleAll(selectedReview, reviewCols, false)">None</button>
+            </div>
           </div>
         </div>
-        @if (includeReviews) {
+        @if (!collapsed.review && includeReviews) {
           <div class="xo-cols">
             @for (col of reviewCols; track col) {
-              <label class="xo-col">
-                <input
-                  type="checkbox"
-                  [checked]="isOn(selectedReview, col)"
-                  (change)="toggle(selectedReview, col)"
-                />
-                <span>{{ col }}</span>
-              </label>
+              <div class="xo-col-row" [class.is-on]="isOn(selectedReview, col)">
+                <label class="xo-col">
+                  <span class="xo-checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="isOn(selectedReview, col)"
+                      (change)="toggle(selectedReview, col)"
+                    />
+                    <span class="xo-checkbox-box" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" width="11" height="11" fill="none">
+                        <path d="M3 8.2l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </span>
+                  </span>
+                  <span class="xo-col-name">{{ col }}</span>
+                </label>
+                @if (isOn(selectedReview, col)) {
+                  <input
+                    type="text"
+                    class="xo-label-input"
+                    [(ngModel)]="reviewLabels[col]"
+                    [attr.aria-label]="'Header text for ' + col"
+                  />
+                }
+              </div>
             }
           </div>
         }

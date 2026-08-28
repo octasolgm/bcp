@@ -1442,11 +1442,30 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   }
 
   analysisReadyLabel(doc: RegulationDocument): string {
+    if (this.isManualDoc(doc)) return 'Manual';
     return docAnalysisReadyLabel(this.analysisReadyState(doc));
   }
 
   analysisReadyClass(doc: RegulationDocument): string {
+    // Manual entries are a neutral container, not a pass/fail state — no red or green.
+    if (this.isManualDoc(doc)) return '';
     return docAnalysisReadyClass(this.analysisReadyState(doc));
+  }
+
+  /** For the row-level tint — manual docs never get the red/green row background. */
+  rowReadyState(doc: RegulationDocument): DocAnalysisReadyState | null {
+    return this.isManualDoc(doc) ? null : this.analysisReadyState(doc);
+  }
+
+  /** True once parsed but still waiting on extraction — shown as two chips, not one pill. */
+  showsParsedPendingExtractChips(doc: RegulationDocument): boolean {
+    return (
+      !this.isManualDoc(doc)
+      && this.analysisReadyState(doc) === 'not_ready'
+      && this.isParsedDoc(doc)
+      && !this.isParsingDoc(doc)
+      && !this.isExtractingDoc(doc)
+    );
   }
 
   usedInAnalysesLabel = usedInAnalysesLabel;

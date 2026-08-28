@@ -396,6 +396,8 @@ export interface StoredDocumentDto {
   sectionExtractStatus?: string | null;
   sectionCount?: number | null;
   analysisRunCount?: number | null;
+  /** Written by a reviewer's finalize step, not uploaded — never needs parse/extract. */
+  generatedByAnalysis?: boolean | null;
 }
 
 export interface DocumentAnalysisRunDto {

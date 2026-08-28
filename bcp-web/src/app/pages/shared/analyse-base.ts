@@ -1732,9 +1732,11 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   get filteredComplianceDocs(): StoredDocumentDto[] {
+    // Generated-by-analysis copies are run outputs, not inputs to attach to a new run.
+    const selectable = this.complianceDocs.filter((d) => !d.generatedByAnalysis);
     const q = this.complianceSearch.trim().toLowerCase();
-    if (!q) return this.complianceDocs;
-    return this.complianceDocs.filter((d) => {
+    if (!q) return selectable;
+    return selectable.filter((d) => {
       const label = `${d.title} ${d.originalFileName} ${d.category} ${d.version}`.toLowerCase();
       return label.includes(q);
     });

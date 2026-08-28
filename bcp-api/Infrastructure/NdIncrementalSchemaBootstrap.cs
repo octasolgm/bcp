@@ -271,6 +271,11 @@ public static class NdIncrementalSchemaBootstrap
             'pending', 'processing', 'parsed', 'paused', 'completed', 'failed'
           ));
         """,
+        """
+        ALTER TABLE stored_documents
+          ADD COLUMN IF NOT EXISTS parse_progress_label TEXT NULL,
+          ADD COLUMN IF NOT EXISTS parse_progress_pct INTEGER NULL;
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

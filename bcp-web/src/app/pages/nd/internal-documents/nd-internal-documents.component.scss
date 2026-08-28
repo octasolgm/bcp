@@ -264,9 +264,9 @@
 }
 
 .alert.success {
-  background: var(--success-bg, #ecfdf5);
-  border: 1px solid color-mix(in srgb, var(--success, #059669) 35%, transparent);
-  color: var(--success, #059669);
+  background: var(--low-bg);
+  border: 1px solid color-mix(in srgb, var(--low) 35%, transparent);
+  color: var(--low);
 }
 
 .empty-state {

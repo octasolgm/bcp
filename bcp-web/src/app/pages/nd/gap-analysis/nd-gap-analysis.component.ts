@@ -61,6 +61,7 @@ import {
 import { analysisPointToReportItem } from '../../../../lib/nd/analysis-point-mapper';
 import type { AnalysisPoint, PointGapAttachment, PointSnapshot } from '../../../../lib/nd/types';
 import { NdApiService } from '../../../services/nd/nd-api.service';
+import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
@@ -131,6 +132,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   private readonly router = inject(Router);
   private readonly api = inject(ApiService);
   private readonly ndApi = inject(NdApiService);
+  private readonly workspaceNav = inject(NdWorkspaceNavService);
   private readonly cdr = inject(ChangeDetectorRef);
   readonly auth = inject(NdAuthService);
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -440,8 +442,26 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return this.reportByPointId.get(key) ?? null;
   }
 
+  /**
+   * True once every gap sharing this item's clause number is compliant — a clause can have
+   * several gaps (several NdAnalysisPoint rows with the same section/point number), and it
+   * only reads as compliant overall when none of its siblings still have an open gap.
+   */
+  clauseFullyResolved(item: GapItemData): boolean {
+    const siblings = this.items.filter((i) => i.section === item.section);
+    if (siblings.length === 0) return false;
+    return siblings.every((i) => i.severity === 'compliant');
+  }
+
   analysisPointForGap(item: GapItemData): AnalysisPoint | null {
     if (!this.ndRunData) return null;
+    // `section` is the clause/point-number key, which multiple gaps under the same clause
+    // share — resolving by it alone returns whichever point happened to be indexed last.
+    // `pointId` is this row's own NdAnalysisPoint id, so prefer it when present.
+    if (item.pointId) {
+      const byId = this.analysisPointByKey.get(item.pointId);
+      if (byId) return byId;
+    }
     const rawKey = item.section.replace(/^§/, '').trim();
     const candidates = [
       rawKey,
@@ -1569,7 +1589,10 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   get subtitle(): string {
     if (this.loading) return 'Loading analysis results…';
     if (this.loadError) return this.sourceLabel;
-    const n = this.items.length;
+    // `items` drops points still missing saved output (buildNdGapListItems), which
+    // undercounts right after a run finishes but before every point has synced —
+    // the raw point list from the run is the true total.
+    const n = this.ndRunData?.points.length ?? this.items.length;
     return `${this.sourceLabel} — ${n} finding${n === 1 ? '' : 's'}`;
   }
 
@@ -1651,6 +1674,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.workflowLoading = false;
     if (res.success) {
       this.toast.show('Sent to checker for review', 'success');
+      this.workspaceNav.requestNavBadgeRefresh();
       if (this.reviewWorkspaceMode === 'maker') {
         void this.router.navigate(['/nd/analysis-runs'], {
           queryParams: this.reviewWorkspaceBackQueryParams ?? { correction: '1' },
@@ -1668,10 +1692,56 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     await this.submitNdReview(draft);
   }
 
+  /**
+   * Every gap needs a complete action (text, responsible role, target date) before the
+   * maker can send the report on — otherwise the checker/reviewer inherit blanks they
+   * can't fill in themselves.
+   */
+  private incompleteGapActionPlans(): string[] {
+    // Keyed by clause, not by plan row: a clause can carry several action-plan records
+    // (several gaps, or duplicate rows from an earlier bug), and listing every row
+    // separately turned this into an unreadable wall of the same clause repeated dozens
+    // of times. One line per clause, union of everything missing across its rows.
+    const missingByClause = new Map<string, Set<string>>();
+    for (const plan of this.allActionPlans) {
+      const gaps: string[] = [];
+      if (!plan.actionPlan?.trim()) gaps.push('action');
+      const hasResponsibility =
+        !!plan.responsibilityName?.trim() || !!plan.responsibilityDepartmentId || !!plan.responsibilityUserId
+        || !!(plan.assignees && plan.assignees.length);
+      if (!hasResponsibility) gaps.push('responsible role');
+      if (!plan.targetDate?.trim()) gaps.push('target date');
+      if (!gaps.length) continue;
+      const clause = this.clauseByPointId.get(plan.analysisPointId) || 'a clause';
+      const existing = missingByClause.get(clause);
+      if (existing) gaps.forEach((g) => existing.add(g));
+      else missingByClause.set(clause, new Set(gaps));
+    }
+    return [...missingByClause.entries()].map(
+      ([clause, gaps]) => `${clause} (missing ${[...gaps].join(', ')})`,
+    );
+  }
+
   async onRunReviewSubmit(event: RunReviewSubmitEvent): Promise<void> {
     if (!this.ndRunId || !this.ndRunData) return;
 
     if (event.action === 'submit') {
+      // Incomplete gaps (missing a responsible role, target date, or action text) no longer
+      // block the maker from submitting — for a run with dozens of gaps, requiring every one
+      // filled in before the checker even sees the report was impractical. Surface it as a
+      // heads-up only.
+      if (this.effectiveReviewMode === 'maker') {
+        const missing = this.incompleteGapActionPlans();
+        if (missing.length) {
+          const shown = missing.slice(0, 15);
+          const suffix = missing.length > shown.length ? `; and ${missing.length - shown.length} more` : '';
+          this.toast.show(
+            `Submitting with ${missing.length} incomplete gap${missing.length === 1 ? '' : 's'} — ${shown.join('; ')}${suffix}`,
+            'warning',
+            6000,
+          );
+        }
+      }
       this.runReviewSubmitting = true;
       await this.submitNdReviewFromPanel(event.draft);
       this.runReviewSubmitting = false;
@@ -1721,6 +1791,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
     this.runReviewSubmitting = false;
     if (res.success) {
+      this.workspaceNav.requestNavBadgeRefresh();
       if (this.reviewWorkspaceMode === 'checker') {
         void this.router.navigate(['/nd/checker']);
       } else if (this.reviewWorkspaceMode === 'reviewer') {
@@ -2023,11 +2094,18 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     focus: string | null,
     runId: string | null,
   ): void {
-    this.loading = true;
+    // A reload of the SAME run (embed re-fires on a token bump, poll-driven refresh, etc.)
+    // must update in place — wiping `items`/`loading` here blanked the whole panel back to
+    // the spinner on every refresh, which read as "loads, then clears, then loads again"
+    // even though nothing had actually changed yet.
+    const isRefreshOfSameRun = !!runId && runId === this.ndRunId && this.items.length > 0;
+    if (!isRefreshOfSameRun) {
+      this.loading = true;
+      this.items = [];
+      this.filteredItemsList = [];
+      this.expandedItemId.set(null);
+    }
     this.loadError = null;
-    this.items = [];
-    this.filteredItemsList = [];
-    this.expandedItemId.set(null);
     this.reportByPointId = new Map();
     this.pointIds = [];
     this.deletableSessionId = null;
@@ -2277,6 +2355,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
       const data = res.data as ResultsData;
       this.ndRunData = data;
+      // Flip off loading as soon as real data lands — the status badge already renders off
+      // ndRunData, so leaving `loading` true through the rest of this method (role redirects,
+      // index rebuilding, metadata fetch) made the subtitle show "Loading analysis results…"
+      // for a beat after the badge and rollup counts were already visible.
+      this.loading = false;
       this.ndRunWorkflowEngine = data.run.workflowEngine ?? null;
       this.rebuildNdRunIndexes(data);
       this.ndRunStatus = data.run.status;

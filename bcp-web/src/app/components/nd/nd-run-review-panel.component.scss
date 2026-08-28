@@ -5,6 +5,10 @@
 }
 
 .run-review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
   margin-bottom: 1rem;
 
   h2 {
@@ -566,8 +570,13 @@
 .run-review-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-end;
   gap: 0.5rem;
   padding-top: 0.25rem;
+}
+
+.submit-target-field {
+  min-width: 10rem;
 }
 
 .btn-primary,

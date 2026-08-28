@@ -88,6 +88,11 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private navSub: Subscription | null = null;
   private navRefreshSub: Subscription | null = null;
   private badgeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Cross-session changes (e.g. a maker submitting a report) have no push to other open
+   * sessions — a checker sitting on their inbox otherwise sees a stale badge until they
+   * navigate or reload. Poll periodically so it catches up on its own within a short wait. */
+  private badgePollTimer: ReturnType<typeof setInterval> | null = null;
+  private static readonly BADGE_POLL_MS = 30000;
   private badgeRefreshInFlight = false;
   private badgeRefreshQueued = false;
   private badgeApplyGeneration = 0;
@@ -154,6 +159,10 @@ export class NdShellComponent implements OnInit, OnDestroy {
       setTimeout(() => void this.refreshPass2LlmSummary(), 2500);
     }
     this.syncActiveSessionPolling();
+    this.badgePollTimer = setInterval(
+      () => void this.refreshNavBadges(),
+      NdShellComponent.BADGE_POLL_MS,
+    );
     this.navRefreshSub = this.workspaceNav.refreshRequested.subscribe(() => {
       if (this.badgeRefreshTimer) {
         clearTimeout(this.badgeRefreshTimer);
@@ -182,6 +191,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     this.navSub?.unsubscribe();
     this.navRefreshSub?.unsubscribe();
     if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
+    if (this.badgePollTimer) clearInterval(this.badgePollTimer);
     if (this.sessionsWatching) {
       this.activeSessions.unwatch();
       this.sessionsWatching = false;

@@ -95,9 +95,9 @@ type PriorityBucket = {
       transform: translateY(-1px);
       border-color: var(--accent);
     }
-    .priority-card.priority-high { border-left-color: var(--danger, #dc2626); }
-    .priority-card.priority-medium { border-left-color: var(--warning, #d97706); }
-    .priority-card.priority-low { border-left-color: var(--success, #16a34a); }
+    .priority-card.priority-high { border-left-color: var(--critical); }
+    .priority-card.priority-medium { border-left-color: var(--medium); }
+    .priority-card.priority-low { border-left-color: var(--low); }
     .priority-label {
       font-size: 0.75rem;
       font-weight: 600;
@@ -115,7 +115,7 @@ type PriorityBucket = {
       color: var(--text-muted);
     }
     .priority-overdue {
-      color: var(--danger, #dc2626);
+      color: var(--critical);
     }
   `],
 })

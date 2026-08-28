@@ -207,11 +207,14 @@
     [evidenceUploading]="reportEvidenceBusy"
     [evidenceRerunning]="reportEvidenceRerunning"
     [evidenceDeletingId]="reportEvidenceDeletingId"
+    [canExport]="true"
+    [exporting]="exporting"
     (submitReview)="onRunReviewSubmit($event)"
     (uploadEvidence)="onReportEvidenceSelected($event)"
     (deleteEvidence)="onDeleteReportEvidence($event)"
     (viewEvidence)="openPdfFromNd({ docId: $event })"
     (rerunAllGaps)="onRerunAllGaps()"
+    (exportExcel)="exportXlsx()"
   />
 }
 
@@ -295,6 +298,7 @@
     }
     <app-nd-gap-point-detail
       [point]="ndPoint"
+      [clauseCompliant]="clauseFullyResolved(item)"
       [snapshot]="snapshotForPoint(ndPoint)"
       [isRegulWorkflow]="isNdRegulWorkflow"
       [canEdit]="canEditNdCap"

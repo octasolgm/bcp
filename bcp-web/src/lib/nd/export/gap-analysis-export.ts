@@ -25,10 +25,14 @@ const BASE_COL_WIDTHS = [32, 12, 50, 32, 50, 16, 14, 40, 14];
  */
 export type GapAnalysisExportSelection = {
   gapColumns?: string[];
+  /** Custom header text keyed by the original column name, e.g. { 'Clause #': 'Reference' }. */
+  gapColumnLabels?: Record<string, string>;
   includeActionPlans?: boolean;
   actionPlanColumns?: string[];
+  actionPlanColumnLabels?: Record<string, string>;
   includeReviews?: boolean;
   reviewColumns?: string[];
+  reviewColumnLabels?: Record<string, string>;
 };
 
 export type GapAnalysisExcelOptions = {
@@ -90,23 +94,33 @@ const REVIEW_COL_WIDTHS: Record<string, number> = {
 };
 
 /**
- * Drop the columns the dialog unchecked. `wanted === undefined` keeps everything,
- * and an explicitly empty list also keeps everything so a sheet is never blank.
+ * Drop the columns the dialog unchecked, and apply any custom header text it typed in.
+ * `wanted === undefined` keeps everything, and an explicitly empty list also keeps
+ * everything so a sheet is never blank. `headers` stays the original column names (used
+ * to look up fixed column widths); `displayHeaders` is what actually gets written to the
+ * sheet, so a renamed column still gets the width tuned for its original meaning.
  */
 function pickColumns(
   headers: readonly string[],
   rows: string[][],
   wanted: string[] | undefined,
-): { headers: string[]; rows: string[][]; keep: number[] } {
+  labels?: Record<string, string>,
+): { headers: string[]; displayHeaders: string[]; rows: string[][]; keep: number[] } {
   const all = [...headers];
+  const applyLabels = (list: string[]): string[] =>
+    labels ? list.map((h) => labels[h]?.trim() || h) : list;
   if (!wanted || !wanted.length) {
-    return { headers: all, rows, keep: all.map((_, i) => i) };
+    return { headers: all, displayHeaders: applyLabels(all), rows, keep: all.map((_, i) => i) };
   }
   const set = new Set(wanted);
   const keep = all.map((h, i) => (set.has(h) ? i : -1)).filter((i) => i >= 0);
-  if (!keep.length) return { headers: all, rows, keep: all.map((_, i) => i) };
+  if (!keep.length) {
+    return { headers: all, displayHeaders: applyLabels(all), rows, keep: all.map((_, i) => i) };
+  }
+  const kept = keep.map((i) => all[i]);
   return {
-    headers: keep.map((i) => all[i]),
+    headers: kept,
+    displayHeaders: applyLabels(kept),
     rows: rows.map((r) => keep.map((i) => r[i] ?? '')),
     keep,
   };
@@ -177,14 +191,24 @@ function rowsToMatrix(
   });
 }
 
+/** Numeric-aware clause sort, e.g. 3.9 before 3.10 — matches the Gap Analysis sheet's order. */
+function sortByClause<T>(items: T[], clauseByPointId: Map<string, string>, pointIdOf: (item: T) => string): T[] {
+  return [...items].sort((a, b) =>
+    (clauseByPointId.get(pointIdOf(a)) ?? '').localeCompare(clauseByPointId.get(pointIdOf(b)) ?? '', undefined, {
+      numeric: true,
+    }),
+  );
+}
+
 /** One row per action plan. Reviews live on their own sheet, not in a cell here. */
 function actionPlansSheet(
   plans: ActionPlanEntry[],
   clauseByPointId: Map<string, string>,
   regulationDocumentName: string,
   wanted: string[] | undefined,
+  labels: Record<string, string> | undefined,
 ): ExcelSheetSpec {
-  const rows = plans.map((plan) => [
+  const rows = sortByClause(plans, clauseByPointId, (p) => p.analysisPointId).map((plan) => [
     regulationDocumentName,
     clauseByPointId.get(plan.analysisPointId) ?? '',
     plan.actionPlan ?? '',
@@ -196,10 +220,10 @@ function actionPlansSheet(
     plan.createdByName ?? '',
     formatActionPlanDate(plan.createdAt),
   ]);
-  const picked = pickColumns(ACTION_PLAN_EXPORT_COLUMNS, rows, wanted);
+  const picked = pickColumns(ACTION_PLAN_EXPORT_COLUMNS, rows, wanted, labels);
   return {
     sheetName: 'Action Plans',
-    headers: picked.headers,
+    headers: picked.displayHeaders,
     rows: picked.rows,
     colWidths: picked.headers.map((h) => ACTION_PLAN_COL_WIDTHS[h] ?? 20),
   };
@@ -211,9 +235,10 @@ function reviewsSheet(
   clauseByPointId: Map<string, string>,
   regulationDocumentName: string,
   wanted: string[] | undefined,
+  labels: Record<string, string> | undefined,
 ): ExcelSheetSpec | null {
   const rows: string[][] = [];
-  for (const plan of plans) {
+  for (const plan of sortByClause(plans, clauseByPointId, (p) => p.analysisPointId)) {
     for (const review of plan.reviews ?? []) {
       rows.push([
         regulationDocumentName,
@@ -227,10 +252,10 @@ function reviewsSheet(
     }
   }
   if (!rows.length) return null;
-  const picked = pickColumns(REVIEW_EXPORT_COLUMNS, rows, wanted);
+  const picked = pickColumns(REVIEW_EXPORT_COLUMNS, rows, wanted, labels);
   return {
     sheetName: 'Reviews',
-    headers: picked.headers,
+    headers: picked.displayHeaders,
     rows: picked.rows,
     colWidths: picked.headers.map((h) => REVIEW_COL_WIDTHS[h] ?? 20),
   };
@@ -245,10 +270,12 @@ function extraSheets(options: GapAnalysisExcelOptions): ExcelSheetSpec[] {
   const sheets: ExcelSheetSpec[] = [];
 
   if (selection.includeActionPlans !== false) {
-    sheets.push(actionPlansSheet(plans, clauses, docName, selection.actionPlanColumns));
+    sheets.push(
+      actionPlansSheet(plans, clauses, docName, selection.actionPlanColumns, selection.actionPlanColumnLabels),
+    );
   }
   if (selection.includeReviews !== false) {
-    const sheet = reviewsSheet(plans, clauses, docName, selection.reviewColumns);
+    const sheet = reviewsSheet(plans, clauses, docName, selection.reviewColumns, selection.reviewColumnLabels);
     if (sheet) sheets.push(sheet);
   }
   return sheets;
@@ -280,7 +307,7 @@ export function gapAnalysisExportColumns(
 /** Regul.ai Book 6 gap sheet — clause no, rule, gaps, document ref, policy extract. */
 export async function exportRegulGapAnalysisExcelFromPoints(
   points: AnalysisPoint[],
-  filename = defaultFilename('reguliq-gap-analysis'),
+  filename = defaultFilename('comply-solution-gap-analysis'),
   requirementColumnHeader = REGULATORY_CLAUSE_HEADER,
   options: GapAnalysisExcelOptions = {},
 ): Promise<void> {
@@ -300,11 +327,11 @@ export async function exportRegulGapAnalysisExcelFromPoints(
     r.confidence,
   ]);
   const colWidths = [32, 12, 50, 45, 36, 50, 16, 14, 12];
-  const picked = pickColumns(headers, matrix, options.selection?.gapColumns);
+  const picked = pickColumns(headers, matrix, options.selection?.gapColumns, options.selection?.gapColumnLabels);
   await downloadExcelSheets(filename, [
     {
       sheetName: 'Gap Analysis',
-      headers: picked.headers,
+      headers: picked.displayHeaders,
       rows: picked.rows,
       colWidths: picked.keep.map((i) => colWidths[i] ?? 20),
     },
@@ -315,7 +342,7 @@ export async function exportRegulGapAnalysisExcelFromPoints(
 /** Client gap analysis Excel (sample layout + confidence, gaps, optional Phase 1/2). */
 export async function exportGapAnalysisExcelFromPoints(
   points: AnalysisPoint[],
-  filename = defaultFilename('reguliq-gap-analysis'),
+  filename = defaultFilename('comply-solution-gap-analysis'),
   requirementColumnHeader = REGULATORY_CLAUSE_HEADER,
   options: GapAnalysisExcelOptions = {},
 ): Promise<void> {
@@ -327,11 +354,12 @@ export async function exportGapAnalysisExcelFromPoints(
     buildHeaders(includePhases, requirementColumnHeader),
     rowsToMatrix(rows, includePhases, options.regulationDocumentName ?? ''),
     options.selection?.gapColumns,
+    options.selection?.gapColumnLabels,
   );
   await downloadExcelSheets(filename, [
     {
       sheetName: 'Gap Analysis',
-      headers: picked.headers,
+      headers: picked.displayHeaders,
       rows: picked.rows,
       colWidths: picked.keep.map((i) => colWidths[i] ?? 20),
     },

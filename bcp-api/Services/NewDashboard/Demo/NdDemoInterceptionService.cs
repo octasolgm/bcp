@@ -329,8 +329,14 @@ public sealed class NdDemoInterceptionService(
         doc.UpdatedAt = DateTimeOffset.UtcNow;
         await dbCtx.SaveChangesAsync(ct);
 
-        foreach (var (_, _) in DemoParseProgressSteps)
+        foreach (var (label, pct) in DemoParseProgressSteps)
+        {
+            doc.ParseProgressLabel = label;
+            doc.ParseProgressPct = pct;
+            doc.UpdatedAt = DateTimeOffset.UtcNow;
+            await dbCtx.SaveChangesAsync(ct);
             await Task.Delay(DemoStepDelayMs(), ct);
+        }
 
         var demoIds = await directory.GetDemoProfileIdsAsync(ct);
         var fileName = NormalizeFileName(doc.OriginalFileName, doc.Title, doc.StoragePath);
@@ -349,6 +355,8 @@ public sealed class NdDemoInterceptionService(
         doc.ParseStatus = "parsed";
         doc.FileHash = source.FileHash ?? doc.FileHash;
         doc.ParseError = null;
+        doc.ParseProgressLabel = null;
+        doc.ParseProgressPct = null;
         doc.ParsedAt ??= DateTimeOffset.UtcNow;
         doc.ParsedBy = parsedBy;
         doc.SectionExtractStatus ??= "pending";
@@ -386,7 +394,8 @@ public sealed class NdDemoInterceptionService(
         CompleteDemoRegulationParseAsync(dbCtx, regDoc, userId, demoCtx, ct);
 
     /// <summary>
-    /// Demo parse: count real PDF pages from the uploaded file and mark parsed — no Landing AI, no cache clone, no fake progress.
+    /// Demo parse: step through the same label/pct progress internal parse uses, then count real
+    /// PDF pages from the uploaded file and mark parsed — no Landing AI, no cache clone.
     /// </summary>
     public async Task CompleteDemoRegulationParseAsync(
         AppDbContext dbCtx,
@@ -407,6 +416,19 @@ public sealed class NdDemoInterceptionService(
             var status = (regDoc.ExtractionStatus ?? "").Trim().ToLowerInvariant();
             if (status is "parsed" or "completed")
                 return;
+
+            regDoc.ExtractionStatus = "processing";
+            regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+            await dbCtx.SaveChangesAsync(ct);
+
+            foreach (var (label, pct) in DemoParseProgressSteps)
+            {
+                regDoc.ExtractionProgressLabel = label;
+                regDoc.ExtractionProgressPct = pct;
+                regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+                await dbCtx.SaveChangesAsync(ct);
+                await Task.Delay(DemoStepDelayMs(), ct);
+            }
 
             var pages = 0;
             if (regDoc.StoredDocumentId is Guid storedId)
@@ -610,7 +632,8 @@ public sealed class NdDemoInterceptionService(
         CompleteDemoRegulationExtractAsync(dbCtx, regDoc, userId, demoCtx, ct);
 
     /// <summary>
-    /// Demo extract: clone canonical points from the configured admin demo template — no Landing AI, no progress theatre.
+    /// Demo extract: step through label/pct progress (same pattern as internal section extract),
+    /// then clone canonical points from the configured admin demo template — no Landing AI.
     /// </summary>
     public async Task CompleteDemoRegulationExtractAsync(
         AppDbContext dbCtx,
@@ -633,6 +656,19 @@ public sealed class NdDemoInterceptionService(
             var alreadyCompleted = string.Equals(regDoc.ExtractionStatus, "completed", StringComparison.OrdinalIgnoreCase);
             if (existingCount > 0 && alreadyCompleted)
                 return;
+
+            regDoc.ExtractionStatus = "processing";
+            regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+            await dbCtx.SaveChangesAsync(ct);
+
+            foreach (var (label, pct) in DemoRegulationExtractProgressSteps)
+            {
+                regDoc.ExtractionProgressLabel = label;
+                regDoc.ExtractionProgressPct = pct;
+                regDoc.UpdatedAt = DateTimeOffset.UtcNow;
+                await dbCtx.SaveChangesAsync(ct);
+                await Task.Delay(DemoStepDelayMs(), ct);
+            }
 
             regDoc.ExtractionParseChunkCompleted = null;
             await MarkExistingRegulationPointsRemovedAsync(dbCtx, regDoc.Id, ct);
@@ -1111,6 +1147,11 @@ public sealed class NdDemoInterceptionService(
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
 
+        // Mirrors the guard in SimulateRegulCbuaeRunAsync: a stray duplicate kick-off must not
+        // replay a finished run from scratch.
+        if (string.Equals(run.Status, "completed", StringComparison.OrdinalIgnoreCase))
+            return;
+
         var demoIds = await directory.GetDemoProfileIdsAsync(ct);
         var sourceRun = await db.NdAnalysisRuns
             .Include(r => r.Points)
@@ -1230,6 +1271,7 @@ public sealed class NdDemoInterceptionService(
         Guid runId,
         Guid? pointId,
         string evidenceLabel,
+        Guid resolvedBy,
         CancellationToken ct)
     {
         var run = await db.NdAnalysisRuns
@@ -1265,13 +1307,50 @@ public sealed class NdDemoInterceptionService(
             point.LandingAiRerunCount += 1;
             point.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
-            await Task.Delay(DemoDelayMs(180, 340), ct);
+
+            // The clause only reads as compliant once every gap raised against it is
+            // resolved, so a full upgrade here must close out its open corrective actions
+            // too — otherwise the report would show "compliant" with gaps still pending.
+            if (judgment.OverallStatus == "compliant")
+                await ResolveOpenActionPlansForPointAsync(point.Id, resolvedBy, ct);
+
+            // A single-gap rerun should feel immediate; a whole-report rerun over many
+            // open gaps must not turn into a multi-second wait, so the per-item pause
+            // shrinks as the batch grows — same scaling the seed/extract simulations use.
+            await Task.Delay(DemoDelayMs(120, 260, targets.Count), ct);
         }
 
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         dashboardCache.Invalidate();
         return targets.Count;
+    }
+
+    /// <summary>Marks every still-open action plan on a point resolved, with a status-history row each.</summary>
+    private async Task ResolveOpenActionPlansForPointAsync(Guid pointId, Guid resolvedBy, CancellationToken ct)
+    {
+        var openPlans = await db.NdAnalysisActionPlans
+            .Where(p => p.AnalysisPointId == pointId && p.Status != ActionPlanStatuses.Resolved)
+            .ToListAsync(ct);
+        if (openPlans.Count == 0) return;
+
+        var now = DateTimeOffset.UtcNow;
+        foreach (var plan in openPlans)
+        {
+            db.NdAnalysisActionPlanStatusHistories.Add(new NdAnalysisActionPlanStatusHistory
+            {
+                ActionPlanId = plan.Id,
+                PreviousStatus = plan.Status,
+                NewStatus = ActionPlanStatuses.Resolved,
+                ChangedBy = resolvedBy,
+            });
+            plan.Status = ActionPlanStatuses.Resolved;
+            plan.ResolvedAt = now;
+            plan.ResolvedBy = resolvedBy;
+            plan.UpdatedBy = resolvedBy;
+            plan.UpdatedAt = now;
+        }
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>One compliance step better, evidenced by the newly uploaded document.</summary>
@@ -1291,6 +1370,13 @@ public sealed class NdDemoInterceptionService(
             ? $"The uploaded document \"{evidenceLabel}\" sets out the full procedure required by clause {clauseNo}, including ownership, frequency and escalation."
             : $"The uploaded document \"{evidenceLabel}\" partially addresses clause {clauseNo}: the control is described, but ownership and review frequency are still missing.";
 
+        // The gap list must stay populated even once a clause turns compliant — its rows
+        // just show as resolved (via the action plan status flip below), rather than
+        // vanishing because the gap text got wiped out here.
+        var existingGapText = point.FinalActionPlan?.Trim();
+        if (string.IsNullOrWhiteSpace(existingGapText)) existingGapText = point.LandingAiActionPlan?.Trim();
+        if (string.IsNullOrWhiteSpace(existingGapText)) existingGapText = point.OriginalAiActionPlan?.Trim();
+
         return new RegulJudgmentResult
         {
             OverallStatus = upgraded,
@@ -1298,11 +1384,11 @@ public sealed class NdDemoInterceptionService(
             Confidence = upgraded == "compliant" ? 0.94 : 0.62,
             DocumentReference = reference,
             PolicyExtract = [extract],
-            GapDescription = upgraded == "compliant"
-                ? ""
+            GapDescription = !string.IsNullOrWhiteSpace(existingGapText)
+                ? existingGapText
                 : $"Clause {clauseNo} is now partially covered by the uploaded evidence; assign an owner and a review cycle to close it fully.",
-            SuggestedAction = upgraded == "compliant"
-                ? "N/A"
+            SuggestedAction = !string.IsNullOrWhiteSpace(existingGapText)
+                ? existingGapText
                 : "Assign a named owner and a documented review frequency for this control, then re-upload the updated procedure.",
         };
     }
@@ -1329,6 +1415,13 @@ public sealed class NdDemoInterceptionService(
             .Include(r => r.Points)
             .FirstOrDefaultAsync(r => r.Id == runId, ct)
             ?? throw new InvalidOperationException("Analysis run not found.");
+
+        // A stray duplicate kick-off (double click, race between two status polls, a second
+        // tab) must not replay the whole simulation — that zeroes ProcessedPointsCount and
+        // reprocesses every point, which reads to the viewer as progress resetting partway
+        // back down and climbing again after it had already reached 100%.
+        if (string.Equals(run.Status, "completed", StringComparison.OrdinalIgnoreCase))
+            return;
 
         run.Status = "running";
         run.RegulPipelinePhase = "queued";
@@ -1786,6 +1879,8 @@ public sealed class NdDemoInterceptionService(
             doc.ParseError = string.IsNullOrWhiteSpace(message)
                 ? "Demo parse failed. Retry parse."
                 : message;
+            doc.ParseProgressLabel = null;
+            doc.ParseProgressPct = null;
             doc.UpdatedAt = DateTimeOffset.UtcNow;
             await innerDb.SaveChangesAsync();
         }

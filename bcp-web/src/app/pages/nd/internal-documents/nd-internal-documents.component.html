@@ -145,6 +145,7 @@
             class="clickable-row"
             [class.selected-row]="isSelected(d)"
             [class.doc-ready-red]="analysisReadyState(d) === 'not_ready'"
+            [class.doc-ready-green]="analysisReadyState(d) === 'analysed'"
             (click)="openSections(d)"
           >
             <td class="doc-cell col-doc">
@@ -168,9 +169,36 @@
             <td class="col-pts muted">{{ docPageMeta(d) }}</td>
             <td class="col-pts muted" [title]="usedInAnalysesLabel(d.analysisRunCount)">{{ d.analysisRunCount ?? 0 }}</td>
             <td class="col-status">
-              <span class="severity-badge" [ngClass]="analysisReadyClass(d)">{{ analysisReadyLabel(d) }}</span>
+              @if (showsParsedPendingExtractChips(d)) {
+                <div class="nd-status-chip-stack">
+                  <span class="severity-badge doc-ready-green">Parsed</span>
+                  <span class="severity-badge doc-ready-red">Pending extract</span>
+                </div>
+              } @else {
+                <span class="severity-badge" [ngClass]="analysisReadyClass(d)">{{ analysisReadyLabel(d) }}</span>
+              }
+              @if (isParsingDoc(d)) {
+                <span class="cell-subline">{{ parseStatusText(d) }}</span>
+                <span
+                  class="nd-progress-track"
+                  role="progressbar"
+                  [attr.aria-valuenow]="parseProgressPct(d)"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  [attr.aria-label]="parseStatusText(d)"
+                >
+                  <span
+                    class="nd-progress-fill"
+                    [class.is-indeterminate]="parseProgressPct(d) == null"
+                    [style.width.%]="parseProgressPct(d) ?? 100"
+                  ></span>
+                </span>
+              }
             </td>
             <td class="col-status">
+              @if (d.generatedByAnalysis) {
+                <span class="severity-badge completed">Not applicable</span>
+              } @else {
               <span class="severity-badge extract-status-cell" [ngClass]="sectionExtractClass(d.sectionExtractStatus)">
                 @if (isExtractingSections(d)) {
                   <span class="extract-status-stack">
@@ -195,6 +223,7 @@
                   }
                 }
               </span>
+              }
             </td>
             <td class="col-actions nd-catalog-actions-cell" (click)="$event.stopPropagation()">
               <div class="nd-catalog-row-actions">

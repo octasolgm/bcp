@@ -152,6 +152,21 @@
   &.review-received {
     border-left-color: #2563eb;
   }
+
+  &.is-unread {
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+}
+
+.unread-dot {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 0.35rem;
+  vertical-align: middle;
 }
 
 .inbox-card-main {

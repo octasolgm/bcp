@@ -20,14 +20,13 @@ import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badg
 import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
 import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-actions.component';
 import {
-  analysisRunWorkflowLabel,
-  analysisRunComplianceSummary,
-  analysisRunGapsSummary,
+  analysisRunComplianceBreakdown,
   analysisRunSubmittedByLabel,
   analysisRunSubmittedByCaption,
 } from '../../../../lib/nd/analysis-run-status';
+import { ToastService } from '../../../services/toast.service';
 import type { AnalysisRunSummary } from '../../../../lib/nd/types';
-import { runGapStatsFromSummary, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
+import { runGapStatsFromSummary, runWorkCounts, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 import { ndAnalysisRunLink, ndAnalysisRunQuery } from '../../../../lib/nd/run-links';
 
 type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
@@ -43,6 +42,7 @@ export class NdReviewerQueueComponent implements OnInit {
   private readonly api = inject(NdApiService);
   private readonly auth = inject(NdAuthService);
   private readonly route = inject(ActivatedRoute);
+  private readonly toast = inject(ToastService);
 
   showHistory = false;
   allRuns: AnalysisRunSummary[] = [];
@@ -51,6 +51,7 @@ export class NdReviewerQueueComponent implements OnInit {
   statusFilter = '';
   sortColumn: QueueSortColumn = 'date';
   sortDir: SortDir = 'desc';
+  roleActingRunId: string | null = null;
   historyOpen = false;
   historyRunId: string | null = null;
   historyRunName = '';
@@ -128,10 +129,29 @@ export class NdReviewerQueueComponent implements OnInit {
     return ndAnalysisRunQuery(run, this.auth.getRole());
   }
 
+  async runRoleAction(payload: { run: AnalysisRunSummary; target: string }): Promise<void> {
+    const { run, target } = payload;
+    this.roleActingRunId = run.id;
+    const res =
+      target === 'checker'
+        ? await this.api.pullBackToChecker(run.id, {})
+        : target === 'maker'
+          ? await this.api.pullBackToMaker(run.id, {})
+          : await this.api.finalizeAnalysis(run.id, {});
+    this.roleActingRunId = null;
+    if (res.success) {
+      const message =
+        target === 'checker' ? 'Sent back to checker' : target === 'maker' ? 'Sent back to maker' : 'Analysis finalized';
+      this.toast.show(message, 'success');
+      await this.load();
+    } else {
+      this.toast.show(res.message ?? 'Could not submit this run', 'error');
+    }
+  }
+
   formatDate = formatDate;
-  workflowStatusLabel = analysisRunWorkflowLabel;
-  complianceSummary = analysisRunComplianceSummary;
-  gapsSummary = analysisRunGapsSummary;
+  complianceBreakdown = analysisRunComplianceBreakdown;
+  workCounts = runWorkCounts;
   submittedByLabel = analysisRunSubmittedByLabel;
   submittedByCaption = analysisRunSubmittedByCaption;
 

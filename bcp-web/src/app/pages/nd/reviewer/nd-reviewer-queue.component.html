@@ -74,7 +74,7 @@
           <th>With</th>
           <th>Submitted</th>
           <th>Summary</th>
-          <th>Workflow</th>
+          <th class="col-gaps" title="Gaps and action plans, with how many are resolved">Gaps / actions</th>
           <th>Status</th>
           <th></th>
         </tr>
@@ -98,22 +98,37 @@
             </td>
             <td class="muted col-date" data-label="Submitted">{{ formatDate(run.submittedAt ?? run.createdAt) }}</td>
             <td class="col-workflow" data-label="Summary">
-              @if (complianceSummary(run) || gapsSummary(run)) {
+              @if (complianceBreakdown(run); as breakdown) {
                 <div class="stat-chips">
-                  @if (complianceSummary(run); as compliance) {
-                    <span class="stat-chip">{{ compliance }}</span>
+                  @if (breakdown.compliant) {
+                    <span class="stat-chip stat-chip--compliant">{{ breakdown.compliant }} compliant</span>
                   }
-                  @if (gapsSummary(run); as gaps) {
-                    <span class="stat-chip">{{ gaps }}</span>
+                  @if (breakdown.partial) {
+                    <span class="stat-chip stat-chip--partial">{{ breakdown.partial }} partial</span>
+                  }
+                  @if (breakdown.nonCompliant) {
+                    <span class="stat-chip stat-chip--non-compliant">{{ breakdown.nonCompliant }} non compliant</span>
                   }
                 </div>
               } @else {
                 <span class="muted">—</span>
               }
             </td>
-            <td class="col-gaps" data-label="Workflow">
-              @if (workflowStatusLabel(run); as workflow) {
-                <span class="workflow-badge">{{ workflow }}</span>
+            <td class="muted col-gaps" data-label="Gaps / actions">
+              @if (workCounts(run); as work) {
+                <span class="work-tally">
+                  <span class="work-chip" [class.is-clear]="!work.pendingGaps">
+                    {{ work.resolvedGaps }}/{{ work.gaps }} gaps
+                  </span>
+                  @if (work.actions) {
+                    <span class="work-chip" [class.is-clear]="!work.pendingActions">
+                      {{ work.resolvedActions }}/{{ work.actions }} actions
+                    </span>
+                  }
+                  @if (run.totalReviews) {
+                    <span class="work-chip neutral">{{ run.totalReviews }} reviews</span>
+                  }
+                </span>
               } @else {
                 <span class="muted">—</span>
               }
@@ -126,6 +141,8 @@
                 [run]="run"
                 [queueReview]="!showHistory"
                 reviewLabel="Final review"
+                [roleActingRunId]="roleActingRunId"
+                (roleActionClick)="runRoleAction($event)"
                 (historyClick)="openHistory($event)"
               />
             </td>

@@ -248,6 +248,39 @@ public class ActionPlanInsightsController(
     }
 
     /// <summary>
+    /// Whole-report submissions relevant to the signed-in user's role: reports pending their
+    /// review/final-review, or pulled back to them for correction. A super admin sees all three
+    /// buckets. The list is a live query against run status, so a resubmit or forward simply
+    /// drops the report out of the bucket it was in — nothing to mark "resolved" separately.
+    /// </summary>
+    [HttpGet("report-inbox")]
+    public async Task<IActionResult> ReportInbox(CancellationToken ct)
+    {
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, AllRoles);
+        if (error != null) return error;
+
+        var ctx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var baseQuery = NdDemoDataFilters.ApplyToAnalysisRuns(
+            db.NdAnalysisRuns.AsNoTracking().Where(r => r.DeletedAt == null && r.Status != "deleted"),
+            ctx);
+
+        var role = (profile!.Role ?? "").Trim().ToLowerInvariant();
+        var runsQuery = role switch
+        {
+            "checker" => baseQuery.Where(r => r.Status == "submitted_for_review"),
+            "reviewer" => baseQuery.Where(r => r.Status == "checker_approved"),
+            "maker" => baseQuery.Where(r => r.CreatedBy == profile.Id && r.Status == "pulled_back"),
+            _ => baseQuery.Where(r =>
+                r.Status == "submitted_for_review" || r.Status == "checker_approved" || r.Status == "pulled_back"),
+        };
+
+        var runs = await runsQuery.OrderByDescending(r => r.UpdatedAt).ToListAsync(ct);
+        var items = await NdRunEnrichmentHelper.EnrichRunsAsync(db, runs, ct);
+
+        return Ok(new { success = true, data = new { counts = new { total = items.Count }, items } });
+    }
+
+    /// <summary>
     /// Reviews on actions that concern the signed-in user: the ones routed to them or
     /// their department, plus the ones they sent, so the sender keeps their own copy.
     /// </summary>

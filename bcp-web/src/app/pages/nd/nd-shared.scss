@@ -790,6 +790,21 @@
   background: var(--bg-muted);
   color: var(--text-secondary);
   white-space: nowrap;
+
+  &--compliant {
+    background: color-mix(in srgb, var(--low) 15%, transparent);
+    color: var(--low);
+  }
+
+  &--partial {
+    background: color-mix(in srgb, var(--medium) 18%, transparent);
+    color: var(--medium);
+  }
+
+  &--non-compliant {
+    background: color-mix(in srgb, var(--critical) 15%, transparent);
+    color: var(--critical);
+  }
 }
 
 .row-action-link {
@@ -918,6 +933,24 @@
     max-width: none;
     text-align: center;
   }
+}
+
+.role-action-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+  min-width: 8rem;
+}
+
+.role-target-select {
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong, var(--border));
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-family: inherit;
 }
 
 .nd-catalog-actions-cell {
@@ -1374,20 +1407,61 @@
 
 .severity-badge.doc-ready-red,
 .file-row.doc-ready-red {
-  background: color-mix(in srgb, #dc2626 14%, transparent);
-  color: #b91c1c;
-}
-
-.severity-badge.doc-ready-blue {
-  background: color-mix(in srgb, #2563eb 16%, transparent);
-  color: #1d4ed8;
+  background: var(--critical-bg);
+  color: var(--critical);
 }
 
 .severity-badge.doc-ready-green {
-  background: color-mix(in srgb, #16a34a 16%, transparent);
-  color: #15803d;
+  background: var(--low-bg);
+  color: var(--low);
 }
 
 tr.doc-ready-red td {
-  background: color-mix(in srgb, #dc2626 8%, transparent);
+  background: var(--critical-bg);
+}
+
+tr.doc-ready-green td {
+  background: var(--low-bg);
+}
+
+/* Two small status chips stacked (e.g. "Parsed" + "Pending extract") instead of one pill. */
+.nd-status-chip-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.nd-status-chip-stack .severity-badge {
+  display: inline-block;
+}
+
+/* Reusable progress bar for parse/extract activity in a table cell. */
+.nd-progress-track {
+  display: block;
+  width: 100%;
+  max-width: 7rem;
+  height: 5px;
+  margin-top: 0.3rem;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+
+.nd-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 0.25s ease;
+}
+
+.nd-progress-fill.is-indeterminate {
+  width: 40% !important;
+  animation: nd-progress-indeterminate 1.1s ease-in-out infinite;
+}
+
+@keyframes nd-progress-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
 }

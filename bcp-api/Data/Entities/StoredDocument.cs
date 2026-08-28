@@ -80,6 +80,12 @@ public class StoredDocument
     [Column("parse_error")]
     public string? ParseError { get; set; }
 
+    [Column("parse_progress_label")]
+    public string? ParseProgressLabel { get; set; }
+
+    [Column("parse_progress_pct")]
+    public int? ParseProgressPct { get; set; }
+
     /// <summary>Library section extract: pending | processing | extracted | failed</summary>
     [Column("section_extract_status")]
     public string SectionExtractStatus { get; set; } = "pending";

@@ -33,6 +33,13 @@ export function normalizeGapSeverity(value: string): GapSeverity {
 
 export type GapItemData = {
   id: string;
+  /**
+   * The originating NdAnalysisPoint's own id — distinct from `section`, which is the
+   * regulation point number/clause key and is NOT unique when a clause has multiple gaps
+   * (multiple points share one section). Lookups that need "this row's exact point" must
+   * key off `pointId`, not `section`.
+   */
+  pointId?: string;
   section: string;
   title: string;
   severity: GapSeverity;

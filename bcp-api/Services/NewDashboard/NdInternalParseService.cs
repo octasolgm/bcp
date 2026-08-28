@@ -179,6 +179,8 @@ public class NdInternalParseService(
 
         doc.ParseStatus = "processing";
         doc.ParseError = null;
+        doc.ParseProgressLabel = "Parsing document…";
+        doc.ParseProgressPct = 8;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
 
@@ -203,6 +205,8 @@ public class NdInternalParseService(
             doc.ParseStatus = "failed";
             doc.ParseError =
                 "Parse was cancelled (browser closed, tab left, or request timeout). Retry parse once.";
+            doc.ParseProgressLabel = null;
+            doc.ParseProgressPct = null;
             doc.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(CancellationToken.None);
             throw;
@@ -211,6 +215,8 @@ public class NdInternalParseService(
         {
             doc.ParseStatus = "failed";
             doc.ParseError = ex.Message;
+            doc.ParseProgressLabel = null;
+            doc.ParseProgressPct = null;
             doc.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
             throw;
@@ -236,6 +242,8 @@ public class NdInternalParseService(
         doc.ParseStatus = "parsed";
         doc.FileHash = hash;
         doc.ParseError = null;
+        doc.ParseProgressLabel = null;
+        doc.ParseProgressPct = null;
         doc.ParsedAt ??= DateTimeOffset.UtcNow;
         if (parsedBy.HasValue)
             doc.ParsedBy = parsedBy;

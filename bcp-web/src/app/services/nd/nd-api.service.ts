@@ -220,6 +220,22 @@ export type NdReviewInbox = {
   items: NdReviewInboxItem[];
 };
 
+export type NdReportInboxItem = {
+  id: string;
+  name: string;
+  status: string;
+  workflowHolder: string;
+  makerName?: string | null;
+  createdBy?: string | null;
+  submittedAt?: string | null;
+  createdAt: string;
+};
+
+export type NdReportInbox = {
+  counts: { total: number };
+  items: NdReportInboxItem[];
+};
+
 export type NdMisItem = {
   id: string;
   analysisRunId: string;
@@ -1224,6 +1240,10 @@ export class NdApiService {
     return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/resubmit-for-review`, body);
   }
 
+  recallFromChecker(runId: string) {
+    return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/recall`);
+  }
+
   softDeleteAnalysisRun(runId: string) {
     return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/soft-delete`);
   }
@@ -1426,6 +1446,11 @@ export class NdApiService {
     return this.request<NdReviewInbox>('GET', '/nd/action-plans/review-inbox');
   }
 
+  /** Whole-report submissions pending this role — submitted/pulled-back/etc. */
+  getReportInbox() {
+    return this.request<NdReportInbox>('GET', '/nd/action-plans/report-inbox');
+  }
+
   deleteActionPlanReview(runId: string, planId: string, reviewId: string) {
     return this.request<unknown>(
       'DELETE',
@@ -1624,6 +1649,10 @@ export class NdApiService {
 
   pullBackAnalysis(runId: string, body: NdRunReviewBody) {
     return this.request<unknown>('POST', `/nd/checker/review/${runId}/pull-back`, body);
+  }
+
+  recallFromReviewer(runId: string) {
+    return this.request<unknown>('POST', `/nd/checker/review/${runId}/recall`);
   }
 
   getReviewerQueue() {

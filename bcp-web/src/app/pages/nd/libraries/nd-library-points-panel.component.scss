@@ -28,7 +28,7 @@
   color: var(--text-secondary);
 
   &.panel-error {
-    color: var(--danger, #dc2626);
+    color: var(--critical);
   }
 }
 
@@ -63,7 +63,7 @@
   font-size: 0.8125rem;
 
   &.error {
-    color: var(--danger, #dc2626);
+    color: var(--critical);
   }
 }
 

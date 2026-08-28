@@ -6,6 +6,8 @@ import {
   type NdActionPlanInbox,
   type NdInboxFilter,
   type NdInboxItem,
+  type NdReportInbox,
+  type NdReportInboxItem,
   type NdReviewInbox,
   type NdReviewInboxItem,
 } from '../../../services/nd/nd-api.service';
@@ -19,9 +21,16 @@ import {
   formatActionPlanRemaining,
   formatRelativeTimeAgo,
 } from '../../../../lib/nd/action-plan';
+import { InboxReadTracker } from '../../../../lib/nd/inbox-read-tracker';
 
 type Tab = { id: NdInboxFilter; label: string };
-type InboxType = 'all' | 'actions' | 'reviews';
+type InboxType = 'all' | 'actions' | 'reviews' | 'reports';
+
+const REPORT_STATUS_LABELS: Record<string, string> = {
+  submitted_for_review: 'Pending your review',
+  checker_approved: 'Pending final review',
+  pulled_back: 'Pulled back — needs correction',
+};
 
 /**
  * Personal bucket of corrective actions. An action lands here when it is assigned to the
@@ -62,6 +71,9 @@ export class NdInboxComponent implements OnInit {
   error = '';
   data: NdActionPlanInbox | null = null;
   reviews: NdReviewInbox | null = null;
+  reports: NdReportInbox | null = null;
+
+  private readonly readTracker = new InboxReadTracker();
 
   get profileName(): string {
     return this.auth.profile()?.fullName ?? 'You';
@@ -102,8 +114,12 @@ export class NdInboxComponent implements OnInit {
     return this.reviews?.counts.total ?? 0;
   }
 
+  get reportsCount(): number {
+    return this.reports?.counts.total ?? 0;
+  }
+
   get allCount(): number {
-    return this.actionsCount + this.reviewsCount;
+    return this.actionsCount + this.reviewsCount + this.reportsCount;
   }
 
   async load(): Promise<void> {
@@ -111,13 +127,15 @@ export class NdInboxComponent implements OnInit {
     this.error = '';
     this.cdr.markForCheck();
 
-    const [res, reviewRes] = await Promise.all([
+    const [res, reviewRes, reportRes] = await Promise.all([
       this.api.getActionPlanInbox(this.activeTab),
       this.api.getActionPlanReviewInbox(),
+      this.api.getReportInbox(),
     ]);
     this.loading = false;
 
     if (reviewRes.success && reviewRes.data) this.reviews = reviewRes.data;
+    if (reportRes.success && reportRes.data) this.reports = reportRes.data;
 
     if (!res.success || !res.data) {
       this.error = res.message ?? 'Could not load your actions.';
@@ -146,6 +164,30 @@ export class NdInboxComponent implements OnInit {
     };
     if (review.gapIndex > 0) params['gap'] = String(review.gapIndex);
     return params;
+  }
+
+  isReviewUnread(review: NdReviewInboxItem): boolean {
+    return review.direction !== 'sent' && this.readTracker.isUnread(`review:${review.id}`);
+  }
+
+  markReviewRead(review: NdReviewInboxItem): void {
+    this.readTracker.markRead(`review:${review.id}`);
+  }
+
+  get reportItems(): NdReportInboxItem[] {
+    return this.reports?.items ?? [];
+  }
+
+  reportStatusLabel(item: NdReportInboxItem): string {
+    return REPORT_STATUS_LABELS[item.status] ?? item.workflowHolder;
+  }
+
+  isReportUnread(item: NdReportInboxItem): boolean {
+    return this.readTracker.isUnread(`report:${item.id}:${item.status}`);
+  }
+
+  markReportRead(item: NdReportInboxItem): void {
+    this.readTracker.markRead(`report:${item.id}:${item.status}`);
   }
 
   get items(): NdInboxItem[] {

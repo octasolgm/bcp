@@ -472,7 +472,8 @@ public class DocumentsController(
                         d.SizeBytes,
                         d.FileHash,
                         d.PointCount,
-                        0))
+                        0,
+                        d.HistoryJson != null && d.HistoryJson.Contains("\"generatedFromRunId\"")))
                     .FirstOrDefaultAsync(ct),
             });
         }
@@ -682,7 +683,16 @@ public class DocumentsController(
         d.SizeBytes,
         d.FileHash,
         d.PointCount,
-        activeAnalysisCount);
+        activeAnalysisCount,
+        IsGeneratedByAnalysis(d.HistoryJson));
+
+    /// <summary>
+    /// True for the corrected version a reviewer's finalize step writes (see
+    /// NdCorrectedDocumentService). It never went through a real upload, so it should not
+    /// read as an unprocessed document waiting on parse/extract.
+    /// </summary>
+    private static bool IsGeneratedByAnalysis(string? historyJson) =>
+        !string.IsNullOrEmpty(historyJson) && historyJson.Contains("\"generatedFromRunId\"", StringComparison.Ordinal);
 
     private async Task<Dictionary<Guid, int>> GetActiveAnalysisCountsAsync(
         List<StoredDocument> docs,
@@ -843,4 +853,5 @@ public record DocumentDto(
     long SizeBytes,
     string? FileHash,
     int? PointCount,
-    int ActiveAnalysisCount = 0);
+    int ActiveAnalysisCount = 0,
+    bool GeneratedByAnalysis = false);

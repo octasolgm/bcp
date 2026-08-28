@@ -383,13 +383,12 @@
 
   /*
    * Readiness colour standard, shared with the document libraries:
-   * red = not parsed/extracted, blue = ready to analyse, green = already analysed.
+   * red = not parsed/extracted yet, green = parsed and extracted (ready or already analysed).
    * The status word carries the colour so it reads without relying on the tint alone.
    */
   &.doc-ready-red {
     background: color-mix(in srgb, #dc2626 10%, transparent);
     box-shadow: inset 3px 0 0 #dc2626;
-    cursor: not-allowed;
 
     &:hover {
       background: color-mix(in srgb, #dc2626 15%, transparent);
@@ -401,13 +400,9 @@
     }
   }
 
-  &.doc-ready-blue {
-    box-shadow: inset 3px 0 0 #2563eb;
-
-    .ready-label {
-      background: #dbeafe;
-      color: #1d4ed8;
-    }
+  /* Only truly unselectable (not-parsed/not-extracted) rows get the blocked cursor. */
+  &:disabled {
+    cursor: not-allowed;
   }
 
   &.doc-ready-green {
@@ -419,7 +414,6 @@
     }
   }
 
-  &.selected.doc-ready-blue,
   &.selected.doc-ready-green {
     background: color-mix(in srgb, var(--accent) 10%, var(--bg-input));
   }

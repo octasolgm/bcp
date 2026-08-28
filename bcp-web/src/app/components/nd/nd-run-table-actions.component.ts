@@ -1,9 +1,11 @@
 import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import {
   canDeleteRun,
   canEditRunPlans,
+  canRecallRun,
   canSendRunForReview,
   runViewActionLabel,
   submitRunActionLabel,
@@ -19,7 +21,7 @@ import type { AnalysisRunSummary } from '../../../lib/nd/types';
 @Component({
   selector: 'app-nd-run-table-actions',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, FormsModule],
   template: `
     <div class="row-actions-compact">
       <div class="row-actions-icons">
@@ -118,7 +120,30 @@ import type { AnalysisRunSummary } from '../../../lib/nd/types';
         }
       </div>
 
-      @if (showSubmit || showEditPlans) {
+      @if (showRoleDropdown) {
+        <div class="role-action-group" (click)="$event.stopPropagation()">
+          <select
+            class="role-target-select"
+            [ngModel]="roleTarget"
+            (ngModelChange)="roleTarget = $event"
+            aria-label="Send to"
+          >
+            @for (opt of roleDropdownOptions; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+          <button
+            type="button"
+            class="row-action-btn primary compact"
+            [disabled]="roleActingRunId === run.id"
+            (click)="onRoleAction($event)"
+          >
+            {{ roleActingRunId === run.id ? 'Working…' : roleActionLabel }}
+          </button>
+        </div>
+      }
+
+      @if (showSubmit || showRecall || showEditPlans) {
         <div class="row-actions-labeled">
           @if (showSubmit) {
             <button
@@ -128,6 +153,17 @@ import type { AnalysisRunSummary } from '../../../lib/nd/types';
               (click)="onSubmit($event)"
             >
               {{ submittingRunId === run.id ? 'Submitting…' : submitLabel }}
+            </button>
+          }
+          @if (showRecall) {
+            <button
+              type="button"
+              class="row-action-btn compact"
+              title="Pull this run back before the next reviewer acts on it"
+              [disabled]="recallingRunId === run.id"
+              (click)="onRecall($event)"
+            >
+              {{ recallingRunId === run.id ? 'Recalling…' : 'Recall' }}
             </button>
           }
           @if (showEditPlans) {
@@ -151,6 +187,8 @@ export class NdRunTableActionsComponent {
 
   @Input({ required: true }) run!: AnalysisRunSummary;
   @Input() submittingRunId: string | null = null;
+  @Input() recallingRunId: string | null = null;
+  @Input() roleActingRunId: string | null = null;
   @Input() deletingId: string | null = null;
   @Input() stoppingId: string | null = null;
   /** Checker/reviewer queue: Review vs View only in icon row. */
@@ -162,6 +200,8 @@ export class NdRunTableActionsComponent {
 
   @Output() historyClick = new EventEmitter<AnalysisRunSummary>();
   @Output() submitClick = new EventEmitter<AnalysisRunSummary>();
+  @Output() recallClick = new EventEmitter<AnalysisRunSummary>();
+  @Output() roleActionClick = new EventEmitter<{ run: AnalysisRunSummary; target: string }>();
   @Output() deleteClick = new EventEmitter<AnalysisRunSummary>();
   @Output() stopClick = new EventEmitter<AnalysisRunSummary>();
 
@@ -182,6 +222,48 @@ export class NdRunTableActionsComponent {
 
   get showSubmit(): boolean {
     return !this.hideLabeledActions && canSendRunForReview(this.run, this.role);
+  }
+
+  get showRecall(): boolean {
+    return !this.hideLabeledActions && canRecallRun(this.run, this.role, this.auth.profile()?.id);
+  }
+
+  /** Where the checker/reviewer can send this run next, keyed to which queue currently holds it. */
+  get roleDropdownOptions(): { value: string; label: string }[] {
+    if (this.hideLabeledActions || this.viewOnly) return [];
+    const status = (this.run.status ?? '').toLowerCase();
+    if (this.role === 'checker' && status === 'submitted_for_review') {
+      return [
+        { value: 'reviewer', label: 'Send to reviewer' },
+        { value: 'maker', label: 'Send to maker' },
+      ];
+    }
+    if (this.role === 'reviewer' && status === 'checker_approved') {
+      return [
+        { value: 'finalize', label: 'Finalize' },
+        { value: 'checker', label: 'Send to checker' },
+        { value: 'maker', label: 'Send to maker' },
+      ];
+    }
+    return [];
+  }
+
+  get showRoleDropdown(): boolean {
+    return this.roleDropdownOptions.length > 0;
+  }
+
+  private _roleTarget: string | null = null;
+
+  get roleTarget(): string {
+    return this._roleTarget ?? this.roleDropdownOptions[0]?.value ?? '';
+  }
+
+  set roleTarget(value: string) {
+    this._roleTarget = value;
+  }
+
+  get roleActionLabel(): string {
+    return this.roleTarget === 'finalize' ? 'Finalize' : 'Submit';
   }
 
   get showEditPlans(): boolean {
@@ -226,6 +308,18 @@ export class NdRunTableActionsComponent {
     event.stopPropagation();
     event.preventDefault();
     this.submitClick.emit(this.run);
+  }
+
+  onRecall(event: Event): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.recallClick.emit(this.run);
+  }
+
+  onRoleAction(event: Event): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.roleActionClick.emit({ run: this.run, target: this.roleTarget });
   }
 
   onDelete(event: Event): void {

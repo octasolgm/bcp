@@ -13,6 +13,24 @@ export function canSendRunForReview(
   );
 }
 
+/** Whether the current role can pull a run back to itself before the next role has acted on it. */
+export function canRecallRun(
+  run: AnalysisRunSummary,
+  role: string | null | undefined,
+  profileId?: string | null,
+): boolean {
+  if (isLegacyAnalysisRun(run)) return false;
+  const status = (run.status ?? '').toLowerCase();
+  if (status === 'submitted_for_review') {
+    if (role === 'maker') return !run.createdBy || run.createdBy === profileId;
+    return role === 'super_admin';
+  }
+  if (status === 'checker_approved') {
+    return role === 'checker' || role === 'super_admin';
+  }
+  return false;
+}
+
 export function canReviewRun(
   run: AnalysisRunSummary,
   role: string | null | undefined,

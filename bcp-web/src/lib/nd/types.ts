@@ -142,6 +142,8 @@ export type InternalDocument = {
   parseStatus?: 'pending' | 'processing' | 'parsed' | 'failed' | string;
   parsedAt?: string | null;
   parseError?: string | null;
+  parseProgressLabel?: string | null;
+  parseProgressPct?: number | null;
   uploadedBy?: string | null;
   uploadedByName?: string | null;
   parsedBy?: string | null;
@@ -161,6 +163,8 @@ export type InternalDocument = {
   pageCount?: number | null;
   /** Analysis runs that selected this internal document. */
   analysisRunCount?: number | null;
+  /** Written by a reviewer's finalize step, not uploaded — never needs parse/extract. */
+  generatedByAnalysis?: boolean;
 };
 
 export type InternalDocumentSection = {

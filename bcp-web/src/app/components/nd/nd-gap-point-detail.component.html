@@ -4,6 +4,9 @@
     <header class="report-header">
       <h3>{{ pointHeading || 'Regulation point' }}</h3>
       <span class="compliance-pill" [ngClass]="compliancePillClass">{{ displayComplianceStatus }}</span>
+      @if (clauseCompliant) {
+        <span class="clause-compliant-pill" title="Every gap under this clause is now resolved">Clause compliant — all gaps resolved</span>
+      }
       @if (canOverrideClauseStatus) {
         <label class="clause-status-picker" [title]="clauseStatusHint">
           <span>Clause</span>
@@ -535,6 +538,21 @@
             </button>
           }
         </div>
+        @if (evidenceRerunning && rerunProgressLabel) {
+          <div class="rerun-progress">
+            <span class="cell-subline">{{ rerunProgressLabel }}</span>
+            <span
+              class="nd-progress-track"
+              role="progressbar"
+              [attr.aria-valuenow]="rerunProgressPct"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-label]="rerunProgressLabel"
+            >
+              <span class="nd-progress-fill" [style.width.%]="rerunProgressPct"></span>
+            </span>
+          </div>
+        }
       }
     </section>
   }

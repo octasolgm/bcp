@@ -22,8 +22,8 @@
     <span class="stat-hint">Score 67–100</span>
     @if (inNdShell && !ndStatsLoading) {
       <span class="stat-breakdown">
-        <span class="resolved">{{ criticalGapResolved }} resolved</span> ·
-        <span class="pending">{{ criticalGapPending }} pending</span>
+        <span class="chip resolved">{{ criticalGapResolved }} resolved</span>
+        <span class="chip pending">{{ criticalGapPending }} pending</span>
       </span>
     }
   </button>
@@ -33,8 +33,8 @@
     <span class="stat-hint">Score 34–66</span>
     @if (inNdShell && !ndStatsLoading) {
       <span class="stat-breakdown">
-        <span class="resolved">{{ mediumGapResolved }} resolved</span> ·
-        <span class="pending">{{ mediumGapPending }} pending</span>
+        <span class="chip resolved">{{ mediumGapResolved }} resolved</span>
+        <span class="chip pending">{{ mediumGapPending }} pending</span>
       </span>
     }
   </button>
@@ -44,8 +44,8 @@
     <span class="stat-hint">Score 0–33</span>
     @if (inNdShell && !ndStatsLoading) {
       <span class="stat-breakdown">
-        <span class="resolved">{{ lowGapResolved }} resolved</span> ·
-        <span class="pending">{{ lowGapPending }} pending</span>
+        <span class="chip resolved">{{ lowGapResolved }} resolved</span>
+        <span class="chip pending">{{ lowGapPending }} pending</span>
       </span>
     }
   </button>
@@ -56,8 +56,8 @@
       <span class="stat-hint">Corrective actions across all gaps</span>
       @if (!ndStatsLoading) {
         <span class="stat-breakdown">
-          <span class="resolved">{{ totalActionsResolved }} resolved</span> ·
-          <span class="pending">{{ totalActionsPending }} pending</span>
+          <span class="chip resolved">{{ totalActionsResolved }} resolved</span>
+          <span class="chip pending">{{ totalActionsPending }} pending</span>
         </span>
       }
     </button>
@@ -101,7 +101,7 @@
               class="donut-segment"
               cx="18" cy="18" r="15.915"
               fill="none"
-              [attr.stroke]="seg.color"
+              [style.stroke]="seg.color"
               stroke-width="3.5"
               [attr.stroke-dasharray]="(seg.value / complianceDonutTotal) * 100 + ' ' + (100 - (seg.value / complianceDonutTotal) * 100)"
               [attr.stroke-dashoffset]="25 - seg.offset"
@@ -114,9 +114,9 @@
         </div>
       </div>
       <ul class="legend">
-        <li><span class="dot" style="background:#3b82f6"></span> Compliant <strong>{{ compliantCount }}</strong></li>
-        <li><span class="dot" style="background:#f97316"></span> Partial <strong>{{ partialCount }}</strong></li>
-        <li><span class="dot" style="background:#ef4444"></span> Non-compliant <strong>{{ nonCompliantCount }}</strong></li>
+        <li><span class="dot" style="background:var(--low)"></span> Compliant <strong>{{ compliantCount }}</strong></li>
+        <li><span class="dot" style="background:var(--medium)"></span> Partial <strong>{{ partialCount }}</strong></li>
+        <li><span class="dot" style="background:var(--critical)"></span> Non-compliant <strong>{{ nonCompliantCount }}</strong></li>
       </ul>
     </div>
   </section>

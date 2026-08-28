@@ -867,13 +867,29 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     super.selectPointForDetail(this.resolveDetailPointId(pointId));
   }
 
+  /**
+   * True only when exactly one analysis point maps to this clause number. A clause with
+   * several gaps has several points sharing one clause number, and collapsing selection
+   * onto the clause key in that case makes every gap under it open the same one point.
+   */
+  private clauseHasSinglePoint(clause: string): boolean {
+    let count = 0;
+    for (const p of this.ndRunPointsList) {
+      if (this.metaForAnalysisPoint(p).clause === clause) {
+        count++;
+        if (count > 1) return false;
+      }
+    }
+    return count === 1;
+  }
+
   private resolveDetailPointId(pointId: string): string {
     const meta = this.runPointMetaByGovKey.get(pointId);
-    if (meta?.clause) return meta.clause;
+    if (meta?.clause) return this.clauseHasSinglePoint(meta.clause) ? meta.clause : pointId;
 
     for (const m of this.runPointMetaByAnalysisId.values()) {
       if (m.analysisPointId === pointId || m.govKey === pointId) {
-        if (m.clause) return m.clause;
+        if (m.clause) return this.clauseHasSinglePoint(m.clause) ? m.clause : pointId;
       }
     }
 
@@ -882,7 +898,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     for (const p of this.ndRunPointsList) {
       if (p.regulationPointId === pointId || p.id === pointId) {
         const m = this.metaForAnalysisPoint(p);
-        if (m.clause) return m.clause;
+        if (m.clause) return this.clauseHasSinglePoint(m.clause) ? m.clause : pointId;
       }
     }
 
@@ -891,7 +907,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     );
     if (cat) {
       const num = resolveGovPointDisplayNumber(cat);
-      if (num && !isUuidLike(num)) return num;
+      if (num && !isUuidLike(num) && this.clauseHasSinglePoint(num)) return num;
     }
 
     return pointId;
@@ -2358,7 +2374,15 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return this.exportableRegGapPointCount > 0;
   }
 
+  /** Run id `bumpGapEmbedReload` last actually bumped for — several independent code paths
+   * (poll-driven loadNdRunPoints, onAnalysisComplete) all react to the same completion event
+   * and each try to bump the embed's reload token, which reloaded the panel 2-3 times per
+   * completion ("loads, then clears, reloads"). Only the first bump per run should count. */
+  private gapEmbedReloadedForRunId: string | null = null;
+
   private bumpGapEmbedReload(): void {
+    if (this.ndRunId && this.gapEmbedReloadedForRunId === this.ndRunId) return;
+    this.gapEmbedReloadedForRunId = this.ndRunId;
     this.gapEmbedReloadToken++;
   }
 
@@ -4431,6 +4455,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         sectionExtractStatus: d.sectionExtractStatus ?? 'pending',
         sectionCount: d.sectionCount ?? 0,
         analysisRunCount: d.analysisRunCount ?? 0,
+        generatedByAnalysis: d.generatedByAnalysis ?? false,
       }));
       for (const id of [...this.selectedComplianceIds]) {
         if (!this.complianceDocs.some((doc) => doc.id === id)) {
