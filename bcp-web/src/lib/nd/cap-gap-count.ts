@@ -178,7 +178,9 @@ export function capGapsForAnalysisPoint(p: AnalysisPoint, isRegulWorkflow: boole
   if (!isRegulWorkflow) return fallback;
 
   const severity = resolveAnalysisPointSeverity(p);
-  if (!severity || severity === 'compliant') return fallback;
+  // A clause the auto-rule flipped to compliant still has real (now-resolved) element gaps
+  // to show — only a clause the AI itself scored compliant has none to parse.
+  if (!severity || (severity === 'compliant' && p.finalStatusSource !== 'auto')) return fallback;
 
   const originalPlan = p.originalAiActionPlan?.trim() ?? '';
   const userEditedPlan =
@@ -214,15 +216,21 @@ export function countCapGapsForAnalysisPoint(p: AnalysisPoint): number {
   return countDisplayGapsForAnalysisPoint(p);
 }
 
-/** Gap badges: compliant / unscored points show 0 unless manually uploaded evidence exists. */
+/**
+ * Gap badges: compliant / unscored points show 0 unless manually uploaded evidence exists.
+ * Exception — a clause the auto-rule flipped to compliant (finalStatusSource === 'auto')
+ * got there because every one of its gaps was individually resolved; those resolved gaps
+ * and their actions must keep counting, not vanish once the clause reads compliant.
+ */
 export function countDisplayGapsForAnalysisPoint(
   p: AnalysisPoint,
   manualEvidenceCount = 0,
 ): number {
   const severity = resolveAnalysisPointSeverity(p);
+  const autoResolved = p.finalStatusSource === 'auto';
   // Queued / pending — never invent "1 gap" before Landing has scored the point.
   if (!severity) return manualEvidenceCount > 0 ? manualEvidenceCount : 0;
-  if (severity === 'compliant') return manualEvidenceCount > 0 ? manualEvidenceCount : 0;
+  if (severity === 'compliant' && !autoResolved) return manualEvidenceCount > 0 ? manualEvidenceCount : 0;
 
   const elementGapCount = countRegulElementGapsForPoint(p);
   if (elementGapCount > 0) {

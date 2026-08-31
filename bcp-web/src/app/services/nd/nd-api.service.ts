@@ -1502,6 +1502,12 @@ export class NdApiService {
     }>('PUT', `/nd/results/${runId}/points/${pointId}/status`, { finalStatus });
   }
 
+  getPointStatuses(runId: string) {
+    return this.request<
+      { id: string; finalStatus: string | null; finalStatusSource: string | null; aiFinalStatus: string | null }[]
+    >('GET', `/nd/results/${runId}/point-statuses`);
+  }
+
   /** MIS workload rollup: who owns how many open actions, and which ones. */
   getActionPlanMis() {
     return this.request<NdActionPlanMis>('GET', '/nd/action-plans/mis');

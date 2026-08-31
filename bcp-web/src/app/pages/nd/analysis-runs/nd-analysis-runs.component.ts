@@ -365,7 +365,7 @@ export class NdAnalysisRunsComponent implements OnInit {
   }
 
   canRecall(run: AnalysisRunSummary): boolean {
-    return canRecallRun(run, this.auth.getRole(), this.auth.profile()?.id);
+    return canRecallRun(run, this.auth.getRole());
   }
 
   async recallRun(run: AnalysisRunSummary, event?: Event): Promise<void> {

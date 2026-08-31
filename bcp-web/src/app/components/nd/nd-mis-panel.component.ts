@@ -12,6 +12,13 @@ import { formatActionPlanDate } from '../../../lib/nd/action-plan';
 /** Which cut of the same action data the panel is showing. */
 export type MisView = 'plans' | 'owners';
 
+/** Clause order first (e.g. "2.10" after "2.2"), soonest target date breaks ties within a clause. */
+function sortByClause(a: NdMisItem, b: NdMisItem): number {
+  const clauseCmp = (a.clauseNo ?? '').localeCompare(b.clauseNo ?? '', undefined, { numeric: true });
+  if (clauseCmp !== 0) return clauseCmp;
+  return (a.targetDate ?? '9999').localeCompare(b.targetDate ?? '9999');
+}
+
 /** An action plan plus the owners it is assigned to, for the by-action-plan view. */
 type MisPlanRow = NdMisItem & { owners: string[] };
 
@@ -112,13 +119,7 @@ export class NdMisPanelComponent implements OnInit {
     }
     return [...byId.values()]
       .filter((row) => this.matchesStatusFilter(row.status))
-      .sort((a, b) => {
-        // Open work first, then the soonest target date.
-        if ((a.status === 'resolved') !== (b.status === 'resolved')) {
-          return a.status === 'resolved' ? 1 : -1;
-        }
-        return (a.targetDate ?? '9999').localeCompare(b.targetDate ?? '9999');
-      });
+      .sort((a, b) => sortByClause(a, b));
   }
 
   private matchesStatusFilter(status: string): boolean {
@@ -161,7 +162,7 @@ export class NdMisPanelComponent implements OnInit {
   }
 
   itemsFor(owner: NdMisOwner): NdMisItem[] {
-    return owner.items.filter((i) => this.matchesStatusFilter(i.status));
+    return owner.items.filter((i) => this.matchesStatusFilter(i.status)).sort((a, b) => sortByClause(a, b));
   }
 
   ownerLabel(owner: NdMisOwner): string {

@@ -138,7 +138,7 @@ export class NdCheckerQueueComponent implements OnInit {
   }
 
   canRecall(run: AnalysisRunSummary): boolean {
-    return !this.isViewOnly && canRecallRun(run, this.auth.getRole(), this.auth.profile()?.id);
+    return !this.isViewOnly && canRecallRun(run, this.auth.getRole());
   }
 
   async recallRun(run: AnalysisRunSummary, event?: Event): Promise<void> {

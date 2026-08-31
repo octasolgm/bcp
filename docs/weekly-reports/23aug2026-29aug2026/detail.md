@@ -62,6 +62,8 @@ If a maker submits a report to the checker, or a checker sends it on to the revi
 
 Checkers and reviewers can also now submit a report onward, or send it back, directly from their list, without needing to open the full report first: the checker can send a report to the reviewer or back to the maker, and the reviewer can finalize a report or send it back to the checker or maker.
 
+Today's latest build of the API and the web app has been published to the development environment.
+
 Being worked on
 
 A known issue affecting demo account document parsing in edge cases has been diagnosed and is scheduled for a fix.

@@ -46,7 +46,7 @@ Tasks
 - Added a Summary column (colored compliant, partial, non compliant counts) and a Gaps / actions column to every analysis list, so maker, checker and reviewer all see the same columns and the same data
 - Added a Recall action so a maker can pull a report back from the checker, or a checker can pull a report back from the reviewer, before the next person has acted on it
 - Added a Submit dropdown to the checker and reviewer list tables (send to reviewer or back to maker; finalize, send to checker, or send to maker) so these actions no longer require opening the full review page
-- Updated this week's report with today's work
+- Built and deployed the API and the web app to the Azure dev environment (version 2026.08.28.091336)
 
 Bug fixes
 - None today

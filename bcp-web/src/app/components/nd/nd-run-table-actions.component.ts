@@ -225,7 +225,7 @@ export class NdRunTableActionsComponent {
   }
 
   get showRecall(): boolean {
-    return !this.hideLabeledActions && canRecallRun(this.run, this.role, this.auth.profile()?.id);
+    return !this.hideLabeledActions && canRecallRun(this.run, this.role);
   }
 
   /** Where the checker/reviewer can send this run next, keyed to which queue currently holds it. */

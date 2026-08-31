@@ -583,11 +583,12 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
 
     this.capSourceLabel = userEditedPlan ? 'Edited' : 'Compliance AI draft';
 
+    // A clause the auto-rule flipped to compliant still has real (now-resolved) gaps and
+    // actions to show — only hide the section when there is truly nothing recorded.
     this.showCapSection =
       this.resolvedSeverity === 'partial_compliant' ||
       this.resolvedSeverity === 'non_compliant' ||
-      (this.capGaps.length > 0 && this.resolvedSeverity !== 'compliant') ||
-      (userEditedPlan && this.capGaps.length > 0);
+      this.capGaps.length > 0;
 
     if (!this.editing) {
       this.resetEditState();
@@ -790,8 +791,8 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
 
   readonly clauseStatusOptions = [
     { value: 'compliant', label: 'Compliant' },
-    { value: 'partial_compliant', label: 'Partial' },
-    { value: 'non_compliant', label: 'Non-compliant' },
+    { value: 'partial_compliant', label: 'Partial compliant' },
+    { value: 'non_compliant', label: 'Non compliant' },
   ];
 
   savingClauseStatus = false;

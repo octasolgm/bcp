@@ -587,6 +587,45 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   async onGapStateChanged(): Promise<void> {
     await this.reloadGapStates();
     await this.reloadActionPlans();
+    await this.reloadPointStatuses();
+  }
+
+  /**
+   * Refresh each point's compliance verdict after an action or gap changes. Resolving the
+   * last open action on a clause's last open gap can flip the clause to compliant on the
+   * server (the auto rule in NdGapStatusResolver), but reloadActionPlans/reloadGapStates
+   * only touch their own slices of ndRunData — without this, the clause badge stays on its
+   * old verdict until the whole page is reloaded.
+   */
+  private async reloadPointStatuses(): Promise<void> {
+    if (!this.ndRunId || !this.ndRunData) return;
+    const res = await this.ndApi.getPointStatuses(this.ndRunId);
+    if (!res.success || !res.data) return;
+
+    const byId = new Map(res.data.map((p) => [p.id, p]));
+    const points = this.ndRunData.points.map((p) => {
+      const fresh = p.id ? byId.get(p.id) : undefined;
+      if (!fresh) return p;
+      return {
+        ...p,
+        finalStatus: fresh.finalStatus,
+        finalStatusSource: fresh.finalStatusSource,
+        aiFinalStatus: fresh.aiFinalStatus,
+      };
+    });
+    this.ndRunData = { ...this.ndRunData, points };
+
+    // analysisPointByKey holds the point objects other views look them up by — repoint its
+    // entries at the refreshed objects without re-running the rest of rebuildNdRunIndexes
+    // (which also seeds default actions and syncs the gap roster; neither belongs here).
+    for (const [key, value] of this.analysisPointByKey) {
+      const fresh = value.id ? byId.get(value.id) : undefined;
+      if (!fresh) continue;
+      const updated = points.find((p) => p.id === value.id);
+      if (updated) this.analysisPointByKey.set(key, updated);
+    }
+
+    this.cdr.markForCheck();
   }
 
   // ------------------------------------------------------------- rollups

@@ -1333,7 +1333,8 @@ public class AnalysisRunsController(
     }
 
     /// <summary>
-    /// Maker recalls a run back from the checker's queue before the checker has acted on it.
+    /// Any maker recalls a run back from the checker's queue before the checker has acted on
+    /// it — role-based, not tied to who originally submitted it.
     /// </summary>
     [HttpPost("{id:guid}/recall")]
     public async Task<IActionResult> Recall(Guid id, CancellationToken ct)
@@ -1343,8 +1344,6 @@ public class AnalysisRunsController(
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound();
-        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
-            return StatusCode(403);
 
         if (run.Status != "submitted_for_review")
             return BadRequest(new { success = false, message = "Run is not with the checker." });

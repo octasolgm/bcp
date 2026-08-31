@@ -350,6 +350,39 @@ public class ResultsController(
         return await query(scopedDb, ct);
     }
 
+    /// <summary>
+    /// Every point's compliance verdict on a run — light enough to call after an action or
+    /// gap change, so a clause the auto-rule just flipped to compliant (or back) shows up
+    /// without re-fetching the whole results payload.
+    /// </summary>
+    [HttpGet("{runId:guid}/point-statuses")]
+    public async Task<IActionResult> PointStatuses(Guid runId, CancellationToken ct)
+    {
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct);
+        if (run == null) return NotFound();
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, demoCtx))
+            return StatusCode(403);
+
+        var points = await db.NdAnalysisPoints.AsNoTracking()
+            .Where(p => p.AnalysisRunId == runId)
+            .Select(p => new
+            {
+                id = p.Id,
+                finalStatus = p.FinalStatus,
+                finalStatusSource = p.FinalStatusSource,
+                aiFinalStatus = p.AiFinalStatus,
+            })
+            .ToListAsync(ct);
+
+        return Ok(new { success = true, data = points });
+    }
+
     public record UpdateClauseStatusRequest(string? FinalStatus);
 
     /// <summary>
