@@ -109,15 +109,35 @@
           }
         </svg>
         <div class="donut-center">
-          <strong>{{ compliantPercent }}%</strong>
-          <span>compliant</span>
+          <strong>{{ complianceDonutTotal }}</strong>
+          <span>Clauses</span>
         </div>
       </div>
       <ul class="legend">
-        <li><span class="dot" style="background:var(--low)"></span> Compliant <strong>{{ compliantCount }}</strong></li>
-        <li><span class="dot" style="background:var(--medium)"></span> Partial <strong>{{ partialCount }}</strong></li>
-        <li><span class="dot" style="background:var(--critical)"></span> Non-compliant <strong>{{ nonCompliantCount }}</strong></li>
+        <li>
+          <span class="dot" style="background:var(--low)"></span>
+          <span class="legend-label">Compliant</span>
+          <span class="legend-value" style="color:var(--low)">{{ compliantCount }}</span>
+          <span class="legend-total">/{{ complianceDonutTotal }}</span>
+        </li>
+        <li>
+          <span class="dot" style="background:var(--medium)"></span>
+          <span class="legend-label">Partial</span>
+          <span class="legend-value" style="color:var(--medium)">{{ partialCount }}</span>
+          <span class="legend-total">/{{ complianceDonutTotal }}</span>
+        </li>
+        <li>
+          <span class="dot" style="background:var(--critical)"></span>
+          <span class="legend-label">Non-compliant</span>
+          <span class="legend-value" style="color:var(--critical)">{{ nonCompliantCount }}</span>
+          <span class="legend-total">/{{ complianceDonutTotal }}</span>
+        </li>
       </ul>
+    </div>
+    <div class="compliance-bar" role="img" aria-label="Compliance breakdown">
+      <span class="bar-seg" style="background:var(--low)" [style.width.%]="(compliantCount / complianceDonutTotal) * 100"></span>
+      <span class="bar-seg" style="background:var(--medium)" [style.width.%]="(partialCount / complianceDonutTotal) * 100"></span>
+      <span class="bar-seg" style="background:var(--critical)" [style.width.%]="(nonCompliantCount / complianceDonutTotal) * 100"></span>
     </div>
   </section>
 

@@ -271,6 +271,92 @@ export const routes: Routes = [
               ),
           },
           {
+            // V2 — full clone of internal-documents above (same columns, filters, upload, sections
+            // panel, analysis history, delete), but "Parse & Extract" runs locally (PdfPig +
+            // Tesseract, no Landing AI). Separate route from internal-documents, which is untouched.
+            path: 'internal-documents-new',
+            data: { engine: 'tesseract' },
+            loadComponent: () =>
+              import('./pages/nd/internal-documents/nd-internal-documents-local.component').then(
+                (m) => m.NdInternalDocumentsLocalComponent,
+              ),
+          },
+          {
+            // V2 — same as regulation-documents above, but local parse+extract instead of Landing AI.
+            path: 'regulation-documents-new',
+            data: { engine: 'tesseract' },
+            loadComponent: () =>
+              import('./pages/nd/regulation-documents/nd-regulation-documents-local.component').then(
+                (m) => m.NdRegulationDocumentsLocalComponent,
+              ),
+          },
+          {
+            // Same page/component as internal-documents-new, but parse runs through RapidOCR (PaddleOCR
+            // ONNX models) instead of Tesseract — a separate route so both can be compared side by side.
+            path: 'internal-documents-rapidocr',
+            data: { engine: 'rapidocr' },
+            loadComponent: () =>
+              import('./pages/nd/internal-documents/nd-internal-documents-local.component').then(
+                (m) => m.NdInternalDocumentsLocalComponent,
+              ),
+          },
+          {
+            // Same page/component as regulation-documents-new, but parse runs through RapidOCR instead
+            // of Tesseract — a separate route so both can be compared side by side.
+            path: 'regulation-documents-rapidocr',
+            data: { engine: 'rapidocr' },
+            loadComponent: () =>
+              import('./pages/nd/regulation-documents/nd-regulation-documents-local.component').then(
+                (m) => m.NdRegulationDocumentsLocalComponent,
+              ),
+          },
+          {
+            // Same page/component as internal-documents-new, but parse runs through Docling's default
+            // (light) pipeline — layout model + RapidOCR under the hood, via a local Python service.
+            path: 'internal-documents-docling-light',
+            data: { engine: 'docling-light' },
+            loadComponent: () =>
+              import('./pages/nd/internal-documents/nd-internal-documents-local.component').then(
+                (m) => m.NdInternalDocumentsLocalComponent,
+              ),
+          },
+          {
+            path: 'regulation-documents-docling-light',
+            data: { engine: 'docling-light' },
+            loadComponent: () =>
+              import('./pages/nd/regulation-documents/nd-regulation-documents-local.component').then(
+                (m) => m.NdRegulationDocumentsLocalComponent,
+              ),
+          },
+          {
+            // Same page/component again, but Docling's VLM pipeline using GLM-OCR — far more accurate in
+            // testing, but ~21 min/page on this CPU-only setup. Only practical for short documents until
+            // this runs on a GPU. See docs/pipeline/LIBRARY-REFERENCE.md.
+            path: 'internal-documents-docling-glm',
+            data: { engine: 'docling-glm' },
+            loadComponent: () =>
+              import('./pages/nd/internal-documents/nd-internal-documents-local.component').then(
+                (m) => m.NdInternalDocumentsLocalComponent,
+              ),
+          },
+          {
+            path: 'regulation-documents-docling-glm',
+            data: { engine: 'docling-glm' },
+            loadComponent: () =>
+              import('./pages/nd/regulation-documents/nd-regulation-documents-local.component').then(
+                (m) => m.NdRegulationDocumentsLocalComponent,
+              ),
+          },
+          {
+            // Third, simple document library — no department, no analysis-run linkage. Local
+            // parse+extract, shown as a nested Point/Sub-point tree.
+            path: 'text-documents',
+            loadComponent: () =>
+              import('./pages/nd/text-documents/nd-text-documents.component').then(
+                (m) => m.NdTextDocumentsComponent,
+              ),
+          },
+          {
             path: 'in-progress',
             loadComponent: () =>
               import('./pages/in-progress/in-progress.component').then((m) => m.InProgressComponent),

@@ -14,8 +14,11 @@
 
 | Diagram | File | What it shows |
 |---------|------|---------------|
+| **Problem + guide (start here)** | [`REGUL-PIPELINE-COST-PROBLEM-AND-GUIDE.md`](REGUL-PIPELINE-COST-PROBLEM-AND-GUIDE.md) | What's wrong with V4 at real scale, why hybrid is needed, real numbers, rollout guide |
+| **Build plan (task by task)** | [`REGUL-PIPELINE-BUILD-PLAN.md`](REGUL-PIPELINE-BUILD-PLAN.md) | Local OCR (replaces Landing AI) → section detection → hybrid retrieval → cost levers, as shippable tasks |
 | **Analysis run (guide)** | [`regul-hybrid-pipeline-detail.md`](regul-hybrid-pipeline-detail.md) | **V1** — step-by-step per clause loop |
 | **Precompute + fast run** | [`regul-hybrid-pipeline-v2.md`](regul-hybrid-pipeline-v2.md) | **V2** — Ready Pipeline button, DB cache, runtime BM25 only |
+| **LLM cost reduction** | [`regul-hybrid-pipeline-cost-reduction-plan.md`](regul-hybrid-pipeline-cost-reduction-plan.md) | Cuts the one cost V1/V2 leave untouched — Step 8 judgment (~99% of spend) |
 | **Analysis run (image)** | [`regul-hybrid-pipeline-detail.png`](regul-hybrid-pipeline-detail.png) | Visual: gov clause vs internal sections per step |
 | **Architecture** | [`regul-hybrid-retrieval-architecture.png`](regul-hybrid-retrieval-architecture.png) | Prep → retrieval funnel → LLM (technical lanes) |
 | **Cost by phase** | [`regul-hybrid-retrieval-cost-breakdown.png`](regul-hybrid-retrieval-cost-breakdown.png) | FREE vs paid steps |

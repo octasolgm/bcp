@@ -171,13 +171,16 @@
   justify-content: center;
 
   strong {
-    font-size: 1.5rem;
+    font-size: 2rem;
     font-weight: 700;
+    line-height: 1.1;
   }
 
   span {
     font-size: 0.6875rem;
     color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 }
 
@@ -189,24 +192,53 @@
 
   li {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 0.5rem;
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     color: var(--text-secondary);
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.55rem;
 
-    strong {
-      margin-left: auto;
-      color: var(--text-primary);
+    &:last-child {
+      margin-bottom: 0;
     }
   }
 
   .dot {
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     flex-shrink: 0;
+    align-self: center;
   }
+
+  .legend-label {
+    flex: 1;
+  }
+
+  .legend-value {
+    font-weight: 700;
+    font-size: 1.0625rem;
+  }
+
+  .legend-total {
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+  }
+}
+
+.compliance-bar {
+  display: flex;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 1.25rem;
+  background: var(--border-subtle, #e5e7eb);
+}
+
+.bar-seg {
+  height: 100%;
+  transition: width 0.2s ease;
 }
 
 .clickable-row {

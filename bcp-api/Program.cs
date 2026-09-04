@@ -143,6 +143,20 @@ builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.XAiLlmClient), c 
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.XAiLlmClient>();
 builder.Services.AddHttpClient<NodeBridgeService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 
+builder.Services.AddSingleton<Reguliq.Api.Services.LocalDocs.TesseractOcrEngine>();
+builder.Services.AddSingleton<Reguliq.Api.Services.LocalDocs.RapidOcrEngine>();
+builder.Services.AddSingleton<Reguliq.Api.Services.LocalDocs.OcrEngineRegistry>();
+builder.Services.AddScoped<Reguliq.Api.Services.LocalDocs.LocalPdfExtractionService>();
+builder.Services.AddScoped<Reguliq.Api.Services.LocalDocs.LocalDocxExtractionService>();
+builder.Services.AddScoped<Reguliq.Api.Services.LocalDocs.LocalDocumentExtractionService>();
+// Local test-only Python service (docling-service/server.py) — GLM-OCR mode runs ~21 min/page on CPU
+// here, so this timeout is deliberately very long (short docs only, not a real per-request SLA).
+builder.Services.AddHttpClient<Reguliq.Api.Services.LocalDocs.DoclingClient>(c =>
+{
+    c.BaseAddress = new Uri(builder.Configuration["Docling:BaseUrl"] ?? "http://127.0.0.1:5055");
+    c.Timeout = TimeSpan.FromHours(6);
+});
+
 builder.Services.AddSingleton<KafkaConfig>();
 builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddSingleton<SessionPdfCache>();

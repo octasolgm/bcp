@@ -531,6 +531,13 @@ export class NdShellComponent implements OnInit, OnDestroy {
       { id: 'internal-documents', path: '/nd/internal-documents', label: 'Internal documents', icon: 'file' },
       { id: 'regulation-documents', path: '/nd/regulation-documents', label: 'Regulation docs', icon: 'library' },
       { id: 'libraries', path: '/nd/libraries', label: 'Regulation points library', icon: 'list' },
+      {
+        id: 'text-documents',
+        path: '/nd/text-documents',
+        label: 'Text documents',
+        icon: 'file',
+        secondary: true,
+      },
     ];
     if (role === 'super_admin') {
       children.push(
@@ -551,6 +558,100 @@ export class NdShellComponent implements OnInit, OnDestroy {
       );
     }
     return { id: 'documents', label: 'Documents', icon: 'file', children };
+  }
+
+  /// Local (non-AI) parse+extract pipelines, one nav group per OCR engine so the same document set can
+  /// be run through each engine and compared side by side — see docs/pipeline/ for how each engine works.
+  private localTesseractGroup(): NavGroup {
+    return {
+      id: 'local-tesseract',
+      label: 'Tesseract (Local)',
+      icon: 'file',
+      children: [
+        {
+          id: 'internal-documents-new',
+          path: '/nd/internal-documents-new',
+          label: 'Internal documents',
+          icon: 'file',
+        },
+        {
+          id: 'regulation-documents-new',
+          path: '/nd/regulation-documents-new',
+          label: 'Regulation docs',
+          icon: 'library',
+        },
+      ],
+    };
+  }
+
+  private localRapidOcrGroup(): NavGroup {
+    return {
+      id: 'local-rapidocr',
+      label: 'RapidOCR (Local)',
+      icon: 'file',
+      children: [
+        {
+          id: 'internal-documents-rapidocr',
+          path: '/nd/internal-documents-rapidocr',
+          label: 'Internal documents',
+          icon: 'file',
+        },
+        {
+          id: 'regulation-documents-rapidocr',
+          path: '/nd/regulation-documents-rapidocr',
+          label: 'Regulation docs',
+          icon: 'library',
+        },
+      ],
+    };
+  }
+
+  /// Docling's default (light) pipeline - layout model + RapidOCR under the hood, via a local Python
+  /// service. Fast - seconds per page, same rough ballpark as the two groups above.
+  private localDoclingLightGroup(): NavGroup {
+    return {
+      id: 'local-docling-light',
+      label: 'Docling Light (Local)',
+      icon: 'file',
+      children: [
+        {
+          id: 'internal-documents-docling-light',
+          path: '/nd/internal-documents-docling-light',
+          label: 'Internal documents',
+          icon: 'file',
+        },
+        {
+          id: 'regulation-documents-docling-light',
+          path: '/nd/regulation-documents-docling-light',
+          label: 'Regulation docs',
+          icon: 'library',
+        },
+      ],
+    };
+  }
+
+  /// Docling's VLM pipeline using GLM-OCR - far more accurate in testing, but ~21 min/page on this
+  /// CPU-only setup. Only practical for short/single-page documents until this runs on a GPU.
+  private localDoclingGlmGroup(): NavGroup {
+    return {
+      id: 'local-docling-glm',
+      label: 'Docling GLM-OCR (Local)',
+      icon: 'file',
+      children: [
+        {
+          id: 'internal-documents-docling-glm',
+          path: '/nd/internal-documents-docling-glm',
+          label: 'Internal documents',
+          icon: 'file',
+        },
+        {
+          id: 'regulation-documents-docling-glm',
+          path: '/nd/regulation-documents-docling-glm',
+          label: 'Regulation docs',
+          icon: 'library',
+        },
+      ],
+    };
   }
 
   private analysisGroup(role: string): NavGroup {
@@ -670,6 +771,10 @@ export class NdShellComponent implements OnInit, OnDestroy {
           overview,
           inbox,
           this.group(this.documentsGroup(role)),
+          this.group(this.localTesseractGroup()),
+          this.group(this.localRapidOcrGroup()),
+          this.group(this.localDoclingLightGroup()),
+          this.group(this.localDoclingGlmGroup()),
           this.group(this.analysisGroup(role)),
           ...(pending ? [this.group(pending)] : []),
           this.group(this.adminGroup()),
@@ -681,6 +786,10 @@ export class NdShellComponent implements OnInit, OnDestroy {
           overview,
           inbox,
           this.group(this.documentsGroup(role)),
+          this.group(this.localTesseractGroup()),
+          this.group(this.localRapidOcrGroup()),
+          this.group(this.localDoclingLightGroup()),
+          this.group(this.localDoclingGlmGroup()),
           this.group(this.analysisGroup(role)),
           ...(pending ? [this.group(pending)] : []),
         ];

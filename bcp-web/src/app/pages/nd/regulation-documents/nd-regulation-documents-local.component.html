@@ -1,0 +1,715 @@
+<div class="nd-catalog-page">
+<div class="page-header page-header--catalog">
+  <div class="page-header-title-block">
+    <div class="page-header-row">
+      <h1>{{ showDeleted ? 'Deleted regulations' : 'Regulation Docs Library' }}</h1>
+      <span class="severity-badge status-pending" [title]="'Parse/OCR engine for this page: ' + engine">
+        {{ engineLabel }}
+      </span>
+      @if (canUpload || canViewDeleted) {
+        <div class="header-actions">
+          @if (canUpload && !showDeleted) {
+            <label class="upload-dept">
+              <span class="upload-dept-label">Department</span>
+              <select class="upload-dept-select" [(ngModel)]="uploadDept" name="uploadDept" aria-label="Department for upload">
+                <option value="">Uncategorized</option>
+                @for (d of departments; track d.id) {
+                  <option [value]="d.id">{{ d.name }}</option>
+                }
+              </select>
+            </label>
+            <button type="button" class="btn-secondary btn-refresh" (click)="loadDocs()" [disabled]="loading">
+              <span>Refresh</span>
+              <svg class="btn-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+                <path d="M21 3v6h-6"/>
+              </svg>
+            </button>
+            <button type="button" class="btn-primary" [disabled]="uploading" (click)="uploadInput.click()">
+              {{ uploading ? 'Uploading…' : '+ Upload regulation' }}
+            </button>
+            <input #uploadInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
+          } @else {
+            <button type="button" class="btn-secondary btn-refresh" (click)="loadDocs()" [disabled]="loading">
+              <span>Refresh</span>
+              <svg class="btn-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+                <path d="M21 3v6h-6"/>
+              </svg>
+            </button>
+          }
+        </div>
+      }
+    </div>
+    <p class="subtitle">
+      @if (showDeleted) {
+        Soft-deleted regulations are hidden from the library but kept in the database — extraction credits and points are preserved. Restore to make them visible again.
+      } @else {
+        Regulation documents — <strong>Parse</strong> PDF to markdown, then <strong>Extract</strong> regulation points
+      }
+    </p>
+  </div>
+</div>
+
+<div class="nd-fill-panel reg-docs-fill">
+@if (!showDeleted) {
+<div class="filter-pills nd-list-toolbar nd-shrink reg-docs-toolbar">
+  <div class="point-search-wrap">
+    <input
+      type="search"
+      class="filter-search point-global-search"
+      [(ngModel)]="globalPointSearch"
+      (ngModelChange)="onGlobalPointSearch($event)"
+      placeholder="Search points across all files (e.g. 3.2.1, liquidity)…"
+      aria-label="Search regulation points across all files"
+      [attr.aria-busy]="pointSearchLoading"
+    />
+    @if (pointSearchLoading) {
+      <span class="point-search-spinner" aria-hidden="true"></span>
+      <span class="point-search-loading-label">Searching…</span>
+    }
+  </div>
+  @if (globalPointSearch.trim().length >= 2) {
+    <button type="button" class="filter-clear" (click)="clearGlobalPointSearch()">Clear point search</button>
+  }
+  @if (!loading && docs.length) {
+    <input
+      type="search"
+      class="filter-search reg-doc-search"
+      [(ngModel)]="searchQuery"
+      placeholder="Search regulations…"
+      aria-label="Search regulations"
+    />
+    <select class="filter-select" [(ngModel)]="deptFilter" (ngModelChange)="onFiltersChange()">
+      <option value="">All departments</option>
+      @for (d of departments; track d.id) {
+        <option [value]="d.id">{{ d.name }}</option>
+      }
+    </select>
+    <select class="filter-select" [(ngModel)]="statusFilter" (ngModelChange)="onFiltersChange()">
+      <option value="">All statuses</option>
+      <option value="extracted">Extracted</option>
+      <option value="parsed">Pending extract</option>
+      <option value="pending">Pending parse</option>
+    </select>
+    <span class="filter-count">{{ countableVisibleDocs.length }} of {{ countableDocs.length }}</span>
+    @if (hasActiveFilters) {
+      <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+    }
+  }
+</div>
+
+@if (globalPointSearch.trim().length >= 2) {
+  <div class="point-search-results nd-shrink card-surface">
+    @if (pointSearchLoading) {
+      <div class="point-search-loading-row">
+        <span class="point-search-spinner" aria-hidden="true"></span>
+        <p class="muted-loading">Searching points in all regulation files…</p>
+      </div>
+    } @else if (pointSearchError) {
+      <p class="muted-loading point-search-error">{{ pointSearchError }}</p>
+    } @else if (!pointSearchResults.length) {
+      <p class="muted-loading">No points match “{{ globalPointSearch.trim() }}” in any regulation file.</p>
+    } @else {
+      <p class="search-results-head">
+        {{ pointSearchTotal }} match{{ pointSearchTotal === 1 ? '' : 'es' }} in {{ pointSearchResults.length }} file{{ pointSearchResults.length === 1 ? '' : 's' }}
+      </p>
+      @for (group of pointSearchResults; track group.documentId) {
+        <div class="search-doc-group">
+          <div class="search-doc-head">
+            <strong>{{ group.documentName }}</strong>
+            @if (group.departmentName) {
+              <span class="muted"> · {{ group.departmentName }}</span>
+            }
+            <span class="muted"> · {{ group.points.length }} point{{ group.points.length === 1 ? '' : 's' }}</span>
+          </div>
+          <ul class="search-point-list">
+            @for (hit of group.points; track hit.id) {
+              <li class="search-point-row">
+                <button
+                  type="button"
+                  class="search-point-btn"
+                  [attr.title]="searchHitTooltip(hit)"
+                  (click)="openPointFromSearch(group, hit)"
+                >
+                  <span class="pid">{{ hit.pointNumber }}</span>
+                  @if (hit.pointTitle) {
+                    <span class="ptitle">{{ hit.pointTitle }}</span>
+                  }
+                  @if (searchHitPageLabel(group, hit); as pref) {
+                    <span class="pref">{{ pref }}</span>
+                  } @else if (hit.pageReference) {
+                    <span class="pref muted">{{ hit.pageReference }}</span>
+                  }
+                  @if (hit.snippet) {
+                    <span class="psnip">{{ hit.snippet }}</span>
+                  }
+                </button>
+                @if (canOpenSourceFromSearch(group)) {
+                  <button
+                    type="button"
+                    class="btn-open-source"
+                    [attr.title]="openSourceTooltip(group, hit)"
+                    (click)="openSourceFromSearch(group, hit, $event)"
+                  >
+                    Open source
+                    @if (searchHitPageLabel(group, hit); as pref) {
+                      <span class="btn-open-source-page">{{ pref }}</span>
+                    }
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    }
+  </div>
+}
+}
+
+@if (message || error) {
+  <div class="nd-alert-dock" aria-live="polite">
+    @if (message) {
+      <app-nd-page-alert kind="success" [text]="message" (dismiss)="message = ''" />
+    }
+    @if (error) {
+      <app-nd-page-alert kind="error" [text]="error" (dismiss)="error = ''" />
+    }
+  </div>
+}
+
+<div
+  class="library-layout"
+  [class.with-panel]="showPointsPanel"
+  [style.grid-template-columns]="panelGridColumns"
+>
+  <div class="library-main" [class.library-main-dimmed]="showPointsPanel">
+    @if (loading && docs.length === 0) {
+      <p class="muted-loading">Loading regulations…</p>
+    } @else if (!docs.length) {
+      <div class="card-surface empty-state">
+        @if (showDeleted) {
+          <strong>No deleted regulations</strong>
+          <p>When a regulation is deleted it stays in the database and appears here for super admins.</p>
+        } @else {
+          <strong>No regulations uploaded yet</strong>
+          <p>Upload a regulation PDF or add custom points in the manual entry row.</p>
+        }
+      </div>
+    } @else if (!visibleDocs.length) {
+      <div class="card-surface empty-state">
+        <strong>No regulations match your filters</strong>
+        <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
+      </div>
+    } @else {
+      <div class="card-surface table-wrap table-scroll-body nd-table-fit reg-docs-table-wrap">
+        <table class="reg-docs-table">
+          <colgroup>
+            <col class="col-reg" />
+            <col class="col-dept" />
+            <col class="col-pts" />
+            <col class="col-pts" />
+            <col class="col-pts" />
+            <col class="col-date" />
+            @if (showDeleted) {
+              <col class="col-date" />
+            }
+            <col class="col-actor" />
+            <col class="col-actor" />
+            <col class="col-status" />
+            <col class="col-actions" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="sortable col-reg" (click)="toggleSort('name')">Regulation <span class="sort-indicator">{{ sortMark('name') }}</span></th>
+              <th class="sortable col-dept" (click)="toggleSort('department')">Department <span class="sort-indicator">{{ sortMark('department') }}</span></th>
+              <th class="sortable col-pts" (click)="toggleSort('points')">Points <span class="sort-indicator">{{ sortMark('points') }}</span></th>
+              <th class="sortable col-pts" (click)="toggleSort('pages')" title="Total PDF pages in the uploaded document">Pages <span class="sort-indicator">{{ sortMark('pages') }}</span></th>
+              <th class="sortable col-pts" (click)="toggleSort('analyses')" title="Analysis runs that use this regulation">Used in analyses <span class="sort-indicator">{{ sortMark('analyses') }}</span></th>
+              <th class="sortable col-date" (click)="toggleSort('created')">Uploaded <span class="sort-indicator">{{ sortMark('created') }}</span></th>
+              @if (showDeleted) {
+                <th class="col-date">Deleted</th>
+              }
+              <th class="col-actor">Uploaded by</th>
+              <th class="col-actor">Extracted by</th>
+              <th class="sortable col-status" (click)="toggleSort('status')">Status <span class="sort-indicator">{{ sortMark('status') }}</span></th>
+              <th class="col-actions reg-doc-actions-cell">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of visibleDocs; track d.id) {
+              <tr
+                class="clickable-row"
+                [class.selected-row]="isSelected(d)"
+                [class.row-saving]="savingDeptId === d.id || extractingId === d.id || hidingId === d.id"
+                [class.doc-ready-red]="rowReadyState(d) === 'not_ready'"
+                [class.doc-ready-green]="rowReadyState(d) === 'analysed'"
+                (click)="viewPoints(d)"
+              >
+                <td class="reg-cell col-reg">
+                  <strong [title]="d.name">{{ d.name }}</strong>
+                  @if (d.convertedFromWord && d.sourceOriginalFileName) {
+                    <span class="original-source-label cell-subline">Original: {{ d.sourceOriginalFileName }}</span>
+                    @if (d.landingAiFileName) {
+                      <span class="manual-hint cell-subline">PDF: {{ d.landingAiFileName }}</span>
+                    }
+                  } @else if (d.originalFileName && d.originalFileName !== d.name) {
+                    <span class="manual-hint cell-subline" [title]="d.originalFileName">{{ d.originalFileName }}</span>
+                  }
+                  @if (isManualDoc(d)) {
+                    <span class="manual-hint cell-subline">Manual points</span>
+                  }
+                </td>
+                <td class="col-dept" (click)="$event.stopPropagation()">
+                  @if (canUpload) {
+                    <select
+                      class="inline-select"
+                      [ngModel]="d.departmentId ?? ''"
+                      [disabled]="savingDeptId === d.id"
+                      (ngModelChange)="handleDeptChange(d, $event)"
+                    >
+                      <option value="">Uncategorized</option>
+                      @for (dept of departments; track dept.id) {
+                        <option [value]="dept.id">{{ dept.name }}</option>
+                      }
+                    </select>
+                  } @else {
+                    <span class="muted">{{ d.departmentName ?? 'Uncategorized' }}</span>
+                  }
+                </td>
+                <td class="col-pts">{{ docPointMeta(d) }}</td>
+                <td class="col-pts muted">{{ docPageMeta(d) }}</td>
+                <td class="col-pts muted" [title]="usedInAnalysesLabel(d.analysisRunCount)">{{ d.analysisRunCount ?? 0 }}</td>
+                <td class="muted col-date">{{ isManualDoc(d) ? '—' : formatTableDate(d.createdAt) }}</td>
+                @if (showDeleted) {
+                  <td class="muted col-date">{{ d.hiddenAt ? formatTableDate(d.hiddenAt) : '—' }}</td>
+                }
+                <td class="muted col-actor" [title]="actorLabel(d.uploadedByName)">{{ actorLabel(d.uploadedByName) }}</td>
+                <td class="muted col-actor" [title]="isManualDoc(d) ? '—' : actorLabel(d.extractedByName)">{{ isManualDoc(d) ? '—' : actorLabel(d.extractedByName) }}</td>
+                <td class="col-status">
+                  @if (showsParsedPendingExtractChips(d)) {
+                    <div class="nd-status-chip-stack">
+                      <span class="severity-badge doc-ready-green">Parsed</span>
+                      <span class="severity-badge doc-ready-red">Pending extract</span>
+                    </div>
+                  } @else {
+                    <span class="severity-badge" [ngClass]="analysisReadyClass(d)">{{ analysisReadyLabel(d) }}</span>
+                  }
+                  @if (isParsingDoc(d) || isExtractingDoc(d)) {
+                    <span class="cell-subline">{{ workflowStatusLabel(d) }}</span>
+                    <span
+                      class="nd-progress-track"
+                      role="progressbar"
+                      [attr.aria-valuenow]="d.extractionProgressPct"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                    >
+                      <span
+                        class="nd-progress-fill"
+                        [class.is-indeterminate]="d.extractionProgressPct == null"
+                        [style.width.%]="d.extractionProgressPct ?? 100"
+                      ></span>
+                    </span>
+                  }
+                </td>
+                <td class="col-actions nd-catalog-actions-cell" (click)="$event.stopPropagation()">
+                  <div class="nd-catalog-row-actions">
+                    <button
+                      type="button"
+                      class="row-action-btn compact"
+                      [title]="viewButtonTitle(d)"
+                      [attr.aria-disabled]="!!viewDisabledReason(d)"
+                      [disabled]="!!viewDisabledReason(d)"
+                      (click)="viewPoints(d, $event)"
+                    >
+                      View
+                    </button>
+                    @if (showExtractProgressActions(d)) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact"
+                        title="View extraction progress"
+                        (click)="viewExtractionProgress(d, $event)"
+                      >
+                        Progress
+                      </button>
+                    }
+                    @if (isExtractingDoc(d) && canExtract) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact danger"
+                        title="Stop and save progress"
+                        (click)="handleStopExtract(d, $event)"
+                      >
+                        Stop
+                      </button>
+                    }
+                    @if (showRowParseButton(d)) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact"
+                        [class.primary]="needsParse(d)"
+                        [title]="parseButtonTitle(d)"
+                        [disabled]="!!parseDisabledReason(d)"
+                        (click)="handleParse(d, $event)"
+                      >
+                        {{ parseButtonLabel(d) }}
+                      </button>
+                    }
+                    @if (showRowExtractButton(d)) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact"
+                        [class.primary]="canShowExtract(d) && !hasExtractedPoints(d)"
+                        [title]="extractButtonTitle(d)"
+                        [disabled]="!!extractDisabledReason(d)"
+                        (click)="handleExtract(d, $event)"
+                      >
+                        {{ extractButtonLabel(d) }}
+                      </button>
+                    }
+                    @if (showRowRepairButton(d)) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact"
+                        title="Optional cleanup. Demo flow is Upload → Parse → Extract — repair is not required."
+                        [disabled]="repairingPointsId === d.id"
+                        (click)="handleRepairPoints(d, $event)"
+                      >
+                        {{ repairingPointsId === d.id ? 'Repairing…' : 'Repair' }}
+                      </button>
+                    }
+                    @if (showRowJsonButton(d) || !isManualDoc(d)) {
+                      <div class="row-export-actions">
+                        @if (showRowJsonButton(d)) {
+                          <button
+                            type="button"
+                            class="row-action-btn icon-only export-btn"
+                            [class.is-loading]="exportingPointsId === d.id"
+                            [attr.aria-busy]="exportingPointsId === d.id"
+                            [title]="exportingPointsId === d.id ? 'Downloading JSON…' : 'Download analysis points JSON'"
+                            aria-label="Download points JSON"
+                            [disabled]="exportingPointsId === d.id"
+                            (click)="exportPointsJson(d, $event)"
+                          >
+                            @if (exportingPointsId === d.id) {
+                              <span class="row-action-spinner" aria-hidden="true"></span>
+                            } @else {
+                              <span class="export-glyph" aria-hidden="true">JSON</span>
+                            }
+                          </button>
+                        }
+                        @if (!isManualDoc(d)) {
+                          <button
+                            type="button"
+                            class="row-action-btn icon-only export-btn"
+                            [class.is-loading]="exportingFileId === d.id"
+                            [attr.aria-busy]="exportingFileId === d.id"
+                            [title]="exportingFileId === d.id ? 'Downloading…' : 'Download source'"
+                            aria-label="Download source"
+                            [disabled]="exportingFileId === d.id"
+                            (click)="downloadRegulationFile(d, $event)"
+                          >
+                            @if (exportingFileId === d.id) {
+                              <span class="row-action-spinner" aria-hidden="true"></span>
+                            } @else {
+                              <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+                                <path fill="none" stroke="currentColor" stroke-width="1.6" d="M10 3.5v8.5m0 0l-3-3.5m3 3.5l3-3.5M4.5 15.5h11" />
+                              </svg>
+                            }
+                          </button>
+                        }
+                      </div>
+                    }
+                    <button
+                      type="button"
+                      class="row-action-btn icon-only ghost"
+                      [class.is-loading]="loadingAnalysisRuns && analysisFor?.id === d.id"
+                      title="Analysis runs history"
+                      aria-label="Analysis runs history"
+                      [disabled]="loadingAnalysisRuns && analysisFor?.id === d.id"
+                      (click)="viewAnalysis(d)"
+                    >
+                      @if (loadingAnalysisRuns && analysisFor?.id === d.id) {
+                        <span class="row-action-spinner" aria-hidden="true"></span>
+                      } @else {
+                        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                          <path
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            d="M10 4.5v5.25l3 1.75M10 18a8 8 0 100-16 8 8 0 000 16z"
+                          />
+                        </svg>
+                      }
+                    </button>
+                    @if (!isManualDoc(d)) {
+                      <button
+                        type="button"
+                        class="row-action-btn icon-only"
+                        title="Open source PDF in browser"
+                        aria-label="Open source PDF"
+                        (click)="openDocument(d, $event)"
+                      >
+                        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                          <path
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            d="M11 3.5H6.5A2 2 0 004.5 5.5v9A2 2 0 006.5 16.5h9a2 2 0 002-2V10M11 3.5h4.5V8M11 3.5L16.5 9"
+                          />
+                        </svg>
+                      </button>
+                      @if (canUpload && !showDeleted) {
+                        <button
+                          type="button"
+                          class="row-action-btn icon-only danger"
+                          title="Delete"
+                          aria-label="Delete"
+                          [disabled]="hidingId === d.id"
+                          (click)="handleHide(d, $event)"
+                        >
+                          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                            <path
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                              d="M5 6h10M8 6V4.5h4V6M7.5 6l.5 9h4l.5-9"
+                            />
+                          </svg>
+                        </button>
+                      }
+                      @if (showDeleted && canViewDeleted) {
+                        <button
+                          type="button"
+                          class="row-action-btn compact primary"
+                          [disabled]="hidingId === d.id"
+                          (click)="handleRestore(d, $event)"
+                        >
+                          {{ hidingId === d.id ? 'Restoring…' : 'Restore' }}
+                        </button>
+                      }
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @if (showPointsPanel) {
+    <div
+      class="panel-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize panels"
+      (mousedown)="startPointsPanelResize($event)"
+    ></div>
+    <aside class="library-points-panel card-surface">
+      <div class="panel-top">
+        <button type="button" class="btn-close" (click)="closePointsPanel()" aria-label="Close points panel">
+          ×
+        </button>
+        <div class="panel-top-main">
+          <strong>{{ selectedDoc?.name ?? 'Points' }}</strong>
+          @if (selectedDoc) {
+            <span class="muted panel-sub">
+              @if (isManualDoc(selectedDoc)) {
+                Manual entry · {{ docPointMeta(selectedDoc) }}
+              } @else if (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) {
+                {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
+              } @else {
+                {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
+              }
+            </span>
+            @if (selectedDoc && (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) && extractionProgressPct(selectedDoc); as pct) {
+              <span
+                class="extract-progress-track panel-progress"
+                role="progressbar"
+                [attr.aria-valuenow]="pct"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                [attr.aria-label]="workflowStatusLabel(selectedDoc)"
+              >
+                <span class="extract-progress-fill" [style.width.%]="pct"></span>
+              </span>
+            }
+          }
+        </div>
+        @if (selectedDoc && !auth.isDemoViewer()) {
+          <div class="panel-export-actions">
+            @if (hasExtractedPoints(selectedDoc) || isManualDoc(selectedDoc)) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                [disabled]="exportingPointsId === selectedDoc.id"
+                (click)="exportPointsJson(selectedDoc)"
+              >
+                {{ exportingPointsId === selectedDoc.id ? 'Downloading…' : 'Download JSON' }}
+              </button>
+            }
+            @if (!isManualDoc(selectedDoc)) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                [disabled]="exportingFileId === selectedDoc.id"
+                (click)="downloadRegulationFile(selectedDoc)"
+              >
+                {{ exportingFileId === selectedDoc.id ? 'Downloading…' : 'Download source' }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+      @if (canExtract && selectedDoc && !isManualDoc(selectedDoc)) {
+        <div class="panel-extract">
+          @if (needsParse(selectedDoc)) {
+            <button
+              type="button"
+              class="btn-primary btn-sm"
+              [disabled]="parsingId === selectedDoc.id || isParsingDoc(selectedDoc)"
+              (click)="handleParse(selectedDoc)"
+            >
+              {{ parsingId === selectedDoc.id || isParsingDoc(selectedDoc) ? 'Parsing…' : 'Parse document' }}
+            </button>
+          }
+          @if (showRowRepairButton(selectedDoc)) {
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              [disabled]="repairingPointsId === selectedDoc.id"
+              (click)="handleRepairPoints(selectedDoc)"
+              title="Optional cleanup (duplicates/junk). Demo flow is Upload → Parse → Extract — repair is not required."
+            >
+              {{ repairingPointsId === selectedDoc.id ? 'Repairing…' : 'Repair points' }}
+            </button>
+          }
+          @if ((hasExtractedPoints(selectedDoc) || (selectedDoc.pointCount ?? 0) > 0) && !auth.isDemoViewer()) {
+            <button
+              type="button"
+              class="btn-secondary btn-sm"
+              [disabled]="refreshingPagesId === selectedDoc.id"
+              (click)="handleRefreshPageReferences(selectedDoc)"
+              title="Recompute PDF pages from cached parse — does not call Landing AI"
+            >
+              {{ refreshingPagesId === selectedDoc.id ? 'Refreshing…' : 'Refresh PDF pages' }}
+            </button>
+          }
+          @if (showPanelExtractButton(selectedDoc)) {
+            <button
+              type="button"
+              class="btn-primary btn-sm"
+              [disabled]="extractingId === selectedDoc.id || isExtractingDoc(selectedDoc)"
+              (click)="handleExtract(selectedDoc)"
+            >
+              {{ extractingId === selectedDoc.id || isExtractingDoc(selectedDoc) ? 'Extracting…' : 'Run extraction' }}
+            </button>
+          }
+        </div>
+      }
+      @if (selectedDoc && parsedTextFor(selectedDoc); as parsedText) {
+        <div class="card-surface parsed-text-block">
+          <button type="button" class="row-action-btn compact" (click)="toggleParsedText()">
+            {{ showParsedText ? 'Hide parsed text' : 'View parsed text' }}
+          </button>
+          @if (showParsedText) {
+            <pre class="parsed-text-content">{{ parsedText }}</pre>
+          }
+        </div>
+      }
+      @if (selectedDoc && isManualDoc(selectedDoc)) {
+        <app-nd-manual-regulation-points-panel
+          [docId]="selectedDoc.id"
+          [docName]="selectedDoc.name"
+          [points]="selectedPoints"
+          [loading]="pointsLoading"
+          (pointsChanged)="onManualPointsChanged()"
+        />
+      } @else {
+        <div class="panel-busy-wrap points-panel-busy">
+          <app-nd-regulation-points-panel
+            [docName]="selectedDoc?.name ?? ''"
+            [points]="selectedPoints"
+            [source]="pointsSource"
+            [loading]="pointsLoading"
+            [reportedPointCount]="docListPointCount(selectedDoc)"
+            [highlightPointNumber]="highlightPointNumber"
+            [canOpenSource]="!isManualDoc(selectedDoc!)"
+            (openSourcePage)="openRegulationSourcePage(selectedDoc!, $event)"
+          />
+          @if (selectedDoc && (repairingPointsId === selectedDoc.id || refreshingPagesId === selectedDoc.id)) {
+            <div class="panel-busy-overlay" role="status" aria-live="polite">
+              <div class="panel-busy-spinner" aria-hidden="true"></div>
+              <p>
+                {{ repairingPointsId === selectedDoc.id ? 'Repairing points…' : 'Refreshing PDF pages…' }}
+                <br />
+                <span class="muted">This may take a minute for large documents.</span>
+              </p>
+            </div>
+          }
+        </div>
+      }
+    </aside>
+  }
+</div>
+</div>
+
+@if (analysisFor) {
+  <div class="hist-backdrop" (click)="closeAnalysisPicker()"></div>
+  <aside class="hist-panel analysis-panel" role="dialog" aria-label="Analysis runs">
+    <header>
+      <div>
+        <h3>{{ analysisFor.name }}</h3>
+        <p>
+          @if (loadingAnalysisRuns) {
+            Loading analysis history…
+          } @else if (analysisLoadError) {
+            Could not load history
+          } @else if (!analysisRuns.length) {
+            No history found
+          } @else {
+            {{ analysisRuns.length }} analysis run{{ analysisRuns.length === 1 ? '' : 's' }} — pick one to open
+          }
+        </p>
+      </div>
+      <button type="button" class="btn-close" (click)="closeAnalysisPicker()" aria-label="Close">✕</button>
+    </header>
+    @if (loadingAnalysisRuns) {
+      <div class="hist-loading" role="status" aria-live="polite">
+        <span class="panel-busy-spinner" aria-hidden="true"></span>
+        <p>Loading analysis history…</p>
+      </div>
+    } @else if (analysisLoadError) {
+      <div class="hist-empty">
+        <strong>Could not load history</strong>
+        <p>{{ analysisLoadError }}</p>
+      </div>
+    } @else if (!analysisRuns.length) {
+      <div class="hist-empty">
+        <strong>No history found</strong>
+        <p>This regulation has not been used in an analysis yet.</p>
+      </div>
+    } @else {
+      <ul class="analysis-run-list">
+        @for (run of analysisRuns; track run.id) {
+          <li class="analysis-run-item" [class.in-progress]="isRunInProgress(run)">
+            <button type="button" class="analysis-run-row" (click)="openAnalysisRun(run)">
+              <strong>{{ run.name }}</strong>
+              <span class="run-meta">
+                @if (run.internalFileName) {
+                  {{ run.internalFileName }} × {{ run.regulationFileName || analysisFor.name }} ·
+                }
+                {{ runStatusLabel(run) }} · {{ formatRunWhen(run.updatedAt || run.createdAt) }}
+              </span>
+              <span class="run-open">{{ isRunInProgress(run) ? 'Resume →' : 'Open →' }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </aside>
+}

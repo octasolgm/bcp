@@ -639,3 +639,23 @@
   cursor: pointer;
   font-size: 1rem;
 }
+
+.parsed-text-block {
+  flex-shrink: 0;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+}
+
+.parsed-text-content {
+  margin-top: 0.5rem;
+  max-height: 40vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  padding: 0.5rem;
+  border: 1px solid var(--nd-border, #e2e2e2);
+  border-radius: 6px;
+}

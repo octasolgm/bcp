@@ -1,0 +1,154 @@
+<div class="nd-catalog-page">
+<div class="page-header page-header--catalog nd-catalog-toolbar">
+  <div class="page-header-title-block">
+    <div class="page-header-row">
+      <h1>Text Documents</h1>
+      <div class="header-actions">
+        <button type="button" class="btn-secondary btn-refresh" (click)="load()" [disabled]="loading">
+          <span>Refresh</span>
+        </button>
+        <button type="button" class="btn-primary" [disabled]="uploading" (click)="fileInput.click()">
+          {{ uploading ? 'Uploading…' : '+ Upload' }}
+        </button>
+        <input #fileInput type="file" accept=".pdf,.docx" hidden (change)="onFileChange($event)" />
+      </div>
+    </div>
+    <p class="subtitle">
+      A simple document library — upload, Parse &amp; Extract locally (same local pipeline as Internal/Regulation
+      documents), and browse the result as numbered points and sub-points instead of a flat clause list.
+    </p>
+  </div>
+</div>
+
+<div class="nd-catalog-toolbar nd-fill-panel">
+@if (message || error) {
+  <div class="nd-alert-dock" aria-live="polite">
+    @if (message) {
+      <app-nd-page-alert kind="success" [text]="message" (dismiss)="message = ''" />
+    }
+    @if (error) {
+      <app-nd-page-alert kind="error" [text]="error" (dismiss)="error = ''" />
+    }
+  </div>
+}
+
+@if (loading && docs.length === 0) {
+  <p class="muted-loading">Loading documents…</p>
+} @else if (docs.length === 0) {
+  <div class="card-surface empty-state">
+    <strong>No documents yet</strong>
+    <p>Upload a PDF or Word (.docx) to get started.</p>
+  </div>
+} @else {
+  <div class="card-surface table-wrap table-scroll-body nd-table-fit">
+    <table class="nd-table">
+      <thead>
+        <tr>
+          <th>Document</th>
+          <th>Uploaded</th>
+          <th>Size</th>
+          <th>Parse</th>
+          <th>Extract</th>
+          <th>Points</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (doc of docs; track doc.id) {
+          <tr>
+            <td>
+              <strong [title]="doc.title">{{ doc.title }}</strong>
+              @if (doc.fileName) {
+                <div class="doc-meta muted cell-subline" [title]="doc.fileName">{{ doc.fileName }}</div>
+              }
+            </td>
+            <td class="muted">{{ doc.uploadedAt ? (doc.uploadedAt | date: 'medium') : '—' }}</td>
+            <td class="muted">{{ formatBytes(doc.sizeBytes) || '—' }}</td>
+            <td>
+              <span class="severity-badge" [ngClass]="statusClass(doc.id)">{{ statusLabel(doc.id) }}</span>
+            </td>
+            <td>
+              <span class="severity-badge" [ngClass]="extractStatusClass(doc.id)">{{ extractStatusLabel(doc.id) }}</span>
+            </td>
+            <td class="muted">{{ resultFor(doc.id)?.sectionCount ?? '—' }}</td>
+            <td class="nd-table-actions">
+              <button type="button" class="row-action-btn compact primary" [disabled]="isParsing(doc.id)" (click)="parse(doc)">
+                {{ isParsing(doc.id) ? 'Parsing…' : (statusFor(doc.id) === 'parsed' ? 'Re-parse (Local)' : 'Parse (Local)') }}
+              </button>
+              @if (statusFor(doc.id) === 'parsed') {
+                <button type="button" class="row-action-btn compact" [disabled]="isExtracting(doc.id)" (click)="extract(doc)">
+                  {{ isExtracting(doc.id) ? 'Extracting…' : (extractStatusFor(doc.id) === 'extracted' ? 'Re-extract (Local)' : 'Extract (Local)') }}
+                </button>
+              }
+              @if (resultFor(doc.id); as r) {
+                @if (r.sections.length > 0) {
+                  <button type="button" class="row-action-btn compact" (click)="toggleExpanded(doc.id)">
+                    {{ isExpanded(doc.id) ? 'Hide' : 'View points' }}
+                  </button>
+                }
+              }
+              <button type="button" class="row-action-btn compact" (click)="openDocument(doc)">Open</button>
+              <button type="button" class="row-action-btn icon-only danger" title="Remove" (click)="handleDelete(doc)">
+                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                  <path fill="none" stroke="currentColor" stroke-width="1.6" d="M5 6h10M8 6V4.5h4V6M7.5 6l.5 9h4l.5-9" />
+                </svg>
+              </button>
+            </td>
+          </tr>
+          @if (isExpanded(doc.id) && resultFor(doc.id); as result) {
+            <tr>
+              <td colspan="7">
+                <div class="card-surface local-result">
+                  <div class="local-result-summary">
+                    <span><strong>{{ result.totalPages }}</strong> page(s)</span>
+                    <span><strong>{{ result.ocrPageCount }}</strong> via OCR</span>
+                    <span><strong>{{ result.sectionCount }}</strong> point(s) detected</span>
+                  </div>
+                  @if (result.warnings.length > 0) {
+                    <ul class="local-result-warnings">
+                      @for (w of result.warnings; track w) {
+                        <li>{{ w }}</li>
+                      }
+                    </ul>
+                  }
+                  @if (pointTreeFor(doc.id).length > 0) {
+                    <div class="point-tree">
+                      <ng-container *ngTemplateOutlet="pointList; context: { $implicit: pointTreeFor(doc.id), docId: doc.id }" />
+                    </div>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+}
+</div>
+</div>
+
+<!-- Recursive Point / Sub-point tree — one <ul> per level, each <li> can render its own children. -->
+<ng-template #pointList let-nodes let-docId="docId">
+  <ul class="point-list">
+    @for (node of nodes; track node.clauseNo) {
+      <li class="point-item">
+        <div class="point-row">
+          @if (node.children.length > 0) {
+            <button type="button" class="point-toggle" (click)="toggleNode(docId, node.clauseNo)" [attr.aria-label]="isNodeCollapsed(docId, node.clauseNo) ? 'Expand' : 'Collapse'">
+              {{ isNodeCollapsed(docId, node.clauseNo) ? '▸' : '▾' }}
+            </button>
+          } @else {
+            <span class="point-toggle-spacer"></span>
+          }
+          <span class="point-no">{{ node.clauseNo }}</span>
+          <span class="point-page muted">{{ node.sourcePage ? 'p. ' + node.sourcePage : '' }}</span>
+        </div>
+        <p class="point-text">{{ node.clauseText.slice(0, 320) }}{{ node.clauseText.length > 320 ? '…' : '' }}</p>
+        @if (node.children.length > 0 && !isNodeCollapsed(docId, node.clauseNo)) {
+          <ng-container *ngTemplateOutlet="pointList; context: { $implicit: node.children, docId: docId }" />
+        }
+      </li>
+    }
+  </ul>
+</ng-template>

@@ -13,6 +13,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Tesseract OCR trained-language data — local/offline, no cloud call. Copied to the build
+         output so TesseractOcrEngine finds it at AppContext.BaseDirectory/tessdata. -->
+    <None Include="tessdata\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
     <PackageReference Include="PdfPig" Version="0.1.15" />
     <PackageReference Include="PdfSharpCore" Version="1.3.65" />
     <PackageReference Include="Confluent.Kafka" Version="2.6.1" />
@@ -23,7 +30,10 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="PDFtoImage" Version="4.1.1" />
+    <PackageReference Include="RapidOcrNet" Version="4.1.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+    <PackageReference Include="Tesseract" Version="5.2.0" />
   </ItemGroup>
 
   <ItemGroup>

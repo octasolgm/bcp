@@ -324,6 +324,9 @@ public static class SupabaseSchemaBootstrap
         }
 
         // Existing live DB — skip 50+ patch round-trips on every restart (each can take 60s+ on Supabase).
+        // NB: on a live DB this method is never even called — Program.cs calls
+        // NdIncrementalSchemaBootstrap.EnsureAsync instead once NdSchemaAlreadyPresentAsync is true.
+        // New tables for an already-live DB belong in NdIncrementalSchemaBootstrap's PatchSql, not here.
         if (await NdSchemaAlreadyPresentAsync(db, ct))
             return;
 

@@ -108,6 +108,40 @@ export type NdApiResult<T> = {
   };
 };
 
+export type NdLocalExtractionSection = {
+  clauseNo: string;
+  clauseText: string;
+  sourcePage: number | null;
+};
+
+/** Which local OCR engine parsed a document — each engine gets its own independent result per document,
+ * so the same upload can be run through more than one and compared. */
+export type NdOcrEngine = 'tesseract' | 'rapidocr' | 'docling-light' | 'docling-glm';
+
+/**
+ * Parse and Extract are two independent steps, not one combined status — matching the old pages'
+ * Parse / Extract-sections split. `status` covers step 1 (parse), `extractStatus` covers step 2.
+ */
+export type NdLocalExtractionResult = {
+  fileName?: string | null;
+  engine?: NdOcrEngine;
+  /** Parse status: pending | processing | parsed | failed */
+  status?: string;
+  totalPages: number | null;
+  ocrPageCount: number | null;
+  error?: string | null;
+  parsedAt?: string | null;
+  /** Parsed text with page-reference markers — present once status is 'parsed'. */
+  markdownText?: string | null;
+  /** Extract status: pending | processing | extracted | failed */
+  extractStatus?: string;
+  sectionCount: number | null;
+  warnings: string[];
+  sections: NdLocalExtractionSection[];
+  extractError?: string | null;
+  extractedAt?: string | null;
+};
+
 export type NdUserProfile = {
   id: string;
   fullName: string;
@@ -945,6 +979,68 @@ export class NdApiService {
     const form = new FormData();
     form.append('file', file);
     return this.postMultipart<unknown>('/nd/internal-documents/upload', form);
+  }
+
+  /** Simple third document library — upload, list, hide. Parse/extract reuses nd/local-documents (see below). */
+  getTextDocuments() {
+    return this.request<unknown[]>('GET', '/nd/text-documents', undefined, true, CATALOG_LIST_TIMEOUT_MS);
+  }
+
+  async uploadTextDocument(file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return this.postMultipart<{ id: string; title: string; originalFileName: string }>('/nd/text-documents/upload', form);
+  }
+
+  hideTextDocument(id: string) {
+    return this.request<unknown>('DELETE', `/nd/text-documents/${id}`);
+  }
+
+  getTextDocumentFileUrl(id: string) {
+    return this.request<{ url: string; fileName?: string }>('GET', `/nd/text-documents/${id}/file-url`);
+  }
+
+/**
+   * Step 1 — parse to text with page references (PdfPig + Tesseract, no Landing AI, no cost, nothing
+   * leaves the server). Does not detect clauses/points — call localExtractById for that afterward.
+   * See docs/discussion/REGUL-PIPELINE-BUILD-PLAN.md.
+   */
+  localParseById(docId: string, engine: NdOcrEngine = 'tesseract') {
+    // A scanned, multi-page PDF runs every page through local OCR (no cloud service, so no shortcut) —
+    // that can genuinely take several minutes longer than a normal API call. Docling's GLM-OCR mode is
+    // a different order of magnitude on CPU (~21 min/page in testing) — only try single/short pages
+    // with it for now, the timeout below is generous specifically to allow that, not a real SLA.
+    const timeoutMs = engine === 'docling-glm' ? 6 * 60 * 60_000 : 20 * 60_000;
+    return this.request<NdLocalExtractionResult>(
+      'POST',
+      `/nd/local-documents/${engine}/${docId}/parse`,
+      undefined,
+      true,
+      timeoutMs,
+    );
+  }
+
+  /** Step 2 — split the already-parsed text into clauses/points. Requires localParseById to have run first. */
+  localExtractById(docId: string, engine: NdOcrEngine = 'tesseract') {
+    return this.request<NdLocalExtractionResult>(
+      'POST',
+      `/nd/local-documents/${engine}/${docId}/extract`,
+      undefined,
+      true,
+      60_000,
+    );
+  }
+
+  /** Persisted local-extraction status for a batch of documents, keyed by document id — for list rendering. */
+  localExtractStatusBatch(ids: string[], engine: NdOcrEngine = 'tesseract') {
+    if (ids.length === 0) return Promise.resolve({ success: true, data: {} } as NdApiResult<Record<string, NdLocalExtractionResult>>);
+    return this.request<Record<string, NdLocalExtractionResult>>(
+      'GET',
+      `/nd/local-documents/${engine}/status?ids=${ids.join(',')}`,
+      undefined,
+      true,
+      CATALOG_LIST_TIMEOUT_MS,
+    );
   }
 
   private async postMultipart<T>(path: string, form: FormData, timeoutMs = API_TIMEOUT_MS): Promise<NdApiResult<T>> {

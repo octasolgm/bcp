@@ -1,6 +1,22 @@
 # Secrets (local dev only — copy from appsettings.Development.example.json)
 bcp-api/appsettings.Development.json
 bcp-api/appsettings.Secrets.json
+bcp-api/appsettings.*-old*.json
+
+# Local-only Python services for OCR library evaluation (see docs/pipeline/) — each has its own venv
+# and downloaded model weights, multi-GB, never committed. Only the .py source files are tracked.
+docling-service/venv/
+docling-service/__pycache__/
+docling-service/*.txt
+docling-service/*.pdf
+surya-service/
+
+# Large OCR trained-data binaries, downloaded once per environment rather than committed
+bcp-api/tessdata/
+
+# Generated at build/deploy time, not source
+bcp-api/deploy-version.json
+bcp-web/public/assets/deploy-version.json
 
 # .NET build + runtime artifacts
 bcp-api/bin/

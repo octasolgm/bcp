@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DualVerifyPointJob> DualVerifyPointJobs => Set<DualVerifyPointJob>();
     public DbSet<ComplianceSession> ComplianceSessions => Set<ComplianceSession>();
     public DbSet<StoredDocument> StoredDocuments => Set<StoredDocument>();
+    public DbSet<NdLocalDocumentExtraction> NdLocalDocumentExtractions => Set<NdLocalDocumentExtraction>();
     public DbSet<DocumentAnalysisRun> DocumentAnalysisRuns => Set<DocumentAnalysisRun>();
 
     public DbSet<NdProfile> NdProfiles => Set<NdProfile>();
@@ -131,6 +132,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.HistoryJson).HasColumnType("jsonb");
             e.Property(x => x.FileHash).HasColumnName("file_hash");
             e.Property(x => x.PointCount).HasColumnName("point_count");
+        });
+
+        modelBuilder.Entity<NdLocalDocumentExtraction>(e =>
+        {
+            e.ToTable("nd_local_document_extractions");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.StoredDocumentId, x.Engine }).IsUnique();
+            e.Property(x => x.Id).HasColumnName("id");
+            e.Property(x => x.StoredDocumentId).HasColumnName("stored_document_id");
+            e.Property(x => x.Engine).HasColumnName("engine");
+            e.Property(x => x.Status).HasColumnName("status");
+            e.Property(x => x.TotalPages).HasColumnName("total_pages");
+            e.Property(x => x.OcrPageCount).HasColumnName("ocr_page_count");
+            e.Property(x => x.SectionCount).HasColumnName("section_count");
+            e.Property(x => x.SectionsJson).HasColumnName("sections_json").HasColumnType("jsonb");
+            e.Property(x => x.WarningsJson).HasColumnName("warnings_json").HasColumnType("jsonb");
+            e.Property(x => x.Error).HasColumnName("error");
+            e.Property(x => x.ParsedAt).HasColumnName("parsed_at");
+            e.Property(x => x.ParsedBy).HasColumnName("parsed_by");
+            e.Property(x => x.MarkdownText).HasColumnName("markdown_text");
+            e.Property(x => x.ExtractStatus).HasColumnName("extract_status");
+            e.Property(x => x.ExtractError).HasColumnName("extract_error");
+            e.Property(x => x.ExtractedAt).HasColumnName("extracted_at");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
         });
 
         modelBuilder.Entity<DocumentAnalysisRun>(e =>

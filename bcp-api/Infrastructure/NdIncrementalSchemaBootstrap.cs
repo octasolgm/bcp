@@ -276,6 +276,48 @@ public static class NdIncrementalSchemaBootstrap
           ADD COLUMN IF NOT EXISTS parse_progress_label TEXT NULL,
           ADD COLUMN IF NOT EXISTS parse_progress_pct INTEGER NULL;
         """,
+        """
+        CREATE TABLE IF NOT EXISTS nd_local_document_extractions (
+          id UUID PRIMARY KEY,
+          stored_document_id UUID NOT NULL REFERENCES stored_documents(id) ON DELETE CASCADE,
+          status TEXT NOT NULL DEFAULT 'pending',
+          total_pages INTEGER NULL,
+          ocr_page_count INTEGER NULL,
+          section_count INTEGER NULL,
+          sections_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+          warnings_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+          error TEXT NULL,
+          parsed_at TIMESTAMPTZ NULL,
+          parsed_by UUID NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        -- Superseded by ix_nd_local_document_extractions_doc_engine below (stored_document_id is no
+        -- longer unique on its own now that a document can have one row per engine) — this step is now
+        -- just a safe no-op cleanup for anyone whose DB still has the old single-column index, kept as a
+        -- DROP rather than removed outright so `PatchSql` stays append-only/idempotent to rerun.
+        DROP INDEX IF EXISTS ix_nd_local_document_extractions_doc;
+        """,
+        """
+        ALTER TABLE nd_local_document_extractions
+          ADD COLUMN IF NOT EXISTS markdown_text TEXT NULL,
+          ADD COLUMN IF NOT EXISTS extract_status TEXT NOT NULL DEFAULT 'pending',
+          ADD COLUMN IF NOT EXISTS extract_error TEXT NULL,
+          ADD COLUMN IF NOT EXISTS extracted_at TIMESTAMPTZ NULL;
+        """,
+        """
+        ALTER TABLE nd_local_document_extractions
+          ADD COLUMN IF NOT EXISTS engine TEXT NOT NULL DEFAULT 'tesseract';
+        """,
+        """
+        DROP INDEX IF EXISTS ix_nd_local_document_extractions_doc;
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_nd_local_document_extractions_doc_engine
+          ON nd_local_document_extractions (stored_document_id, engine);
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

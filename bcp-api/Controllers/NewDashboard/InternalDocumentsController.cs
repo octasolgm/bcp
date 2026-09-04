@@ -88,7 +88,7 @@ public class InternalDocumentsController(
                     ? live.ParseProgressPct
                     : null,
                 pageCount = exposePages && live.Pages > 0 ? live.Pages : (int?)null,
-                analysisRunCount = analysisCounts.CountForInternal(d.Id, d.FileHash),
+                analysisRunCount = analysisCounts.CountForInternal(d.Id),
                 uploadedBy = d.UploadedBy,
                 uploadedByName = ProfileName(profileNames, d.UploadedBy),
                 parsedBy = d.ParsedBy,

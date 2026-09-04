@@ -6,20 +6,18 @@ using Reguliq.Api.Services.NewDashboard.Demo;
 namespace Reguliq.Api.Services.NewDashboard;
 
 /// <summary>
-/// Unique analysis-run counts per internal or regulation document (ND + legacy runs).
+/// Unique analysis-run counts per internal or regulation document (ND + legacy runs), matched by
+/// document id only. Two documents that happen to share file content (same hash, e.g. a re-upload
+/// of an identical PDF) are still distinct documents and must not share a run count.
 /// </summary>
-public sealed class NdDocumentAnalysisRunCounts(
-    Dictionary<Guid, HashSet<Guid>> runIdsByDocId,
-    Dictionary<string, HashSet<Guid>> runIdsByInternalHash,
-    Dictionary<string, HashSet<Guid>> runIdsByGovHash)
+public sealed class NdDocumentAnalysisRunCounts(Dictionary<Guid, HashSet<Guid>> runIdsByDocId)
 {
-    public int CountForInternal(Guid documentId, string? fileHash) =>
-        UniqueCount([documentId], fileHash, govHash: null);
+    public int CountForInternal(Guid documentId) => UniqueCount([documentId]);
 
-    public int CountForRegulation(Guid documentId, Guid? storedDocumentId, string? fileHash) =>
-        UniqueCount([documentId, storedDocumentId], internalHash: null, fileHash);
+    public int CountForRegulation(Guid documentId, Guid? storedDocumentId) =>
+        UniqueCount([documentId, storedDocumentId]);
 
-    private int UniqueCount(IEnumerable<Guid?> ids, string? internalHash, string? govHash)
+    private int UniqueCount(IEnumerable<Guid?> ids)
     {
         var runs = new HashSet<Guid>();
         foreach (var id in ids)
@@ -29,21 +27,13 @@ public sealed class NdDocumentAnalysisRunCounts(
                 runs.UnionWith(set);
         }
 
-        if (!string.IsNullOrWhiteSpace(internalHash)
-            && runIdsByInternalHash.TryGetValue(internalHash, out var byInternal))
-            runs.UnionWith(byInternal);
-
-        if (!string.IsNullOrWhiteSpace(govHash)
-            && runIdsByGovHash.TryGetValue(govHash, out var byGov))
-            runs.UnionWith(byGov);
-
         return runs.Count;
     }
 }
 
 public static class NdDocumentAnalysisRunCountHelper
 {
-    public static readonly NdDocumentAnalysisRunCounts Empty = new([], [], []);
+    public static readonly NdDocumentAnalysisRunCounts Empty = new([]);
 
     /// <summary>
     /// Builds the run-count map for the document lists.
@@ -58,8 +48,6 @@ public static class NdDocumentAnalysisRunCountHelper
         NdDemoIsolationContext? demoCtx = null)
     {
         var byDoc = new Dictionary<Guid, HashSet<Guid>>();
-        var byInternalHash = new Dictionary<string, HashSet<Guid>>(StringComparer.OrdinalIgnoreCase);
-        var byGovHash = new Dictionary<string, HashSet<Guid>>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -87,25 +75,16 @@ public static class NdDocumentAnalysisRunCountHelper
         {
             // Legacy runs predate demo isolation, so a demo viewer never counts them.
             if (demoCtx is { Enabled: true, ViewerIsDemo: true })
-                return new NdDocumentAnalysisRunCounts(byDoc, byInternalHash, byGovHash);
+                return new NdDocumentAnalysisRunCounts(byDoc);
 
             var legacy = await db.DocumentAnalysisRuns.AsNoTracking()
-                .Select(r => new
-                {
-                    r.Id,
-                    r.InternalDocumentId,
-                    r.RegulationDocumentId,
-                    r.InternalFileHash,
-                    r.GovFileHash,
-                })
+                .Select(r => new { r.Id, r.InternalDocumentId, r.RegulationDocumentId })
                 .ToListAsync(ct);
 
             foreach (var run in legacy)
             {
                 Add(byDoc, run.InternalDocumentId, run.Id);
                 Add(byDoc, run.RegulationDocumentId, run.Id);
-                AddHash(byInternalHash, run.InternalFileHash, run.Id);
-                AddHash(byGovHash, run.GovFileHash, run.Id);
             }
         }
         catch
@@ -113,7 +92,7 @@ public static class NdDocumentAnalysisRunCountHelper
             /* table may not exist */
         }
 
-        return new NdDocumentAnalysisRunCounts(byDoc, byInternalHash, byGovHash);
+        return new NdDocumentAnalysisRunCounts(byDoc);
     }
 
     private static void Add(Dictionary<Guid, HashSet<Guid>> map, Guid? documentId, Guid runId)
@@ -123,17 +102,6 @@ public static class NdDocumentAnalysisRunCountHelper
         {
             set = [];
             map[id] = set;
-        }
-        set.Add(runId);
-    }
-
-    private static void AddHash(Dictionary<string, HashSet<Guid>> map, string? hash, Guid runId)
-    {
-        if (string.IsNullOrWhiteSpace(hash)) return;
-        if (!map.TryGetValue(hash, out var set))
-        {
-            set = [];
-            map[hash] = set;
         }
         set.Add(runId);
     }

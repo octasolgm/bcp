@@ -346,7 +346,7 @@ public class RegulationDocumentsController(
                     extractionStatus = "manual",
                     pointCount = manualCount,
                     pageCount = ResolveExtractedPageCount(d.Id, pageCountMap),
-                    analysisRunCount = analysisCounts.CountForRegulation(d.Id, null, null),
+                    analysisRunCount = analysisCounts.CountForRegulation(d.Id, null),
                     extractedAt = d.ExtractedAt,
                     createdAt = d.CreatedAt,
                     updatedAt = d.UpdatedAt,
@@ -405,7 +405,7 @@ public class RegulationDocumentsController(
                         extractionStatus = "manual",
                         pointCount = manualCount,
                         pageCount = ResolveExtractedPageCount(manualDoc.Id, pageCountMap),
-                        analysisRunCount = analysisCounts.CountForRegulation(manualDoc.Id, null, null),
+                        analysisRunCount = analysisCounts.CountForRegulation(manualDoc.Id, null),
                         extractedAt = manualDoc.ExtractedAt,
                         createdAt = manualDoc.CreatedAt,
                         updatedAt = manualDoc.UpdatedAt,
@@ -1285,6 +1285,7 @@ public class RegulationDocumentsController(
                 data = new
                 {
                     id = doc.Id,
+                    storedDocumentId = doc.StoredDocumentId,
                     name = doc.Name,
                     departmentId = doc.DepartmentId,
                     extractionStatus = displayStatus,
@@ -2366,7 +2367,7 @@ public class RegulationDocumentsController(
             // Total PDF pages (PdfPig at upload/parse); not distinct point page refs.
             pageCount = ResolveListPageCountForList(d.Id, stored, pageCountMap, displayStatus, isManual: false),
             analysisRunCount = (analysisCounts ?? NdDocumentAnalysisRunCountHelper.Empty)
-                .CountForRegulation(d.Id, d.StoredDocumentId, stored?.FileHash),
+                .CountForRegulation(d.Id, d.StoredDocumentId),
             extractedAt = d.ExtractedAt,
             createdAt = d.CreatedAt,
             updatedAt = d.UpdatedAt,
@@ -2420,7 +2421,7 @@ public class RegulationDocumentsController(
                     ? storedDoc.Pages
                     : 0,
             analysisRunCount = (analysisCounts ?? NdDocumentAnalysisRunCountHelper.Empty)
-                .CountForRegulation(ndForLegacy?.Id ?? leg.Id, leg.Id, storedDoc?.FileHash ?? leg.FileHash),
+                .CountForRegulation(ndForLegacy?.Id ?? leg.Id, leg.Id),
             extractedAt = ndForLegacy?.ExtractedAt,
             createdAt = leg.CreatedAt,
             updatedAt = leg.UpdatedAt,
