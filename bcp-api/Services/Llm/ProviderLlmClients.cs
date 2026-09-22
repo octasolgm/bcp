@@ -481,3 +481,19 @@ public class DeepSeekLlmClient(IHttpClientFactory httpFactory, IConfiguration co
         "DeepSeek:ApiKey", "DEEPSEEK_API_KEY",
         "DeepSeek:BaseUrl", "DEEPSEEK_API_BASE",
         "https://api.deepseek.com", logger);
+
+/// <summary>Zhipu AI / GLM (OpenAI-compatible API, BigModel platform).</summary>
+public class ZhipuLlmClient(IHttpClientFactory httpFactory, IConfiguration config, ILogger<ZhipuLlmClient> logger)
+    : ChatCompletionsClientBase(
+        httpFactory, config, "Zhipu AI (GLM)",
+        "Zhipu:ApiKey", "ZHIPU_API_KEY",
+        "Zhipu:BaseUrl", "ZHIPU_API_BASE",
+        "https://open.bigmodel.cn/api/paas/v4", logger);
+
+/// <summary>Alibaba Qwen (OpenAI-compatible API via DashScope, international/Singapore endpoint).</summary>
+public class QwenLlmClient(IHttpClientFactory httpFactory, IConfiguration config, ILogger<QwenLlmClient> logger)
+    : ChatCompletionsClientBase(
+        httpFactory, config, "Alibaba (Qwen)",
+        "Qwen:ApiKey", "QWEN_API_KEY",
+        "Qwen:BaseUrl", "QWEN_API_BASE",
+        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", logger);

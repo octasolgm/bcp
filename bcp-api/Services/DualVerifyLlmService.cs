@@ -11,6 +11,8 @@ public class DualVerifyLlmService(
     XAiLlmClient xAi,
     MoonshotLlmClient moonshot,
     DeepSeekLlmClient deepSeek,
+    ZhipuLlmClient zhipu,
+    QwenLlmClient qwen,
     ILogger<DualVerifyLlmService> logger)
 {
     public async Task<string> AnalyzeWithPdfsAsync(
@@ -28,6 +30,8 @@ public class DualVerifyLlmService(
             "xai" => await xAi.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "moonshot" => await moonshot.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "deepseek" => await deepSeek.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
+            "zhipu" => await zhipu.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
+            "qwen" => await qwen.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }
@@ -44,6 +48,8 @@ public class DualVerifyLlmService(
             "xai" => await xAi.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "moonshot" => await moonshot.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "deepseek" => await deepSeek.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "zhipu" => await zhipu.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "qwen" => await qwen.AnalyzeTextAsync(prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }

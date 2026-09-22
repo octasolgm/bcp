@@ -99,6 +99,20 @@ public static class LlmProviderCatalog
                 "deepseek-flash",
                 "DeepSeek:ApiKey",
                 "DEEPSEEK_API_KEY"),
+            ["zhipu"] = new(
+                "zhipu",
+                "Zhipu AI (GLM)",
+                ["glm-4.6", "glm-4.6v-flash", "glm-4-flash"],
+                "glm-4.6",
+                "Zhipu:ApiKey",
+                "ZHIPU_API_KEY"),
+            ["qwen"] = new(
+                "qwen",
+                "Alibaba (Qwen)",
+                ["qwen3.8-max", "qwen3.5-plus", "qwen3.5-flash"],
+                "qwen3.5-plus",
+                "Qwen:ApiKey",
+                "QWEN_API_KEY"),
         };
 
     public static LlmProviderDefinition Get(string provider)

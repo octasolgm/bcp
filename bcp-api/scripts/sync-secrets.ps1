@@ -43,7 +43,7 @@ foreach ($key in $kafkaKeys) {
 }
 
 # Optional provider / Azure sections: pass through when present in Development.json
-foreach ($section in @("OpenAI", "XAi", "Moonshot", "DeepSeek", "AzureDocumentIntelligence", "AzureOpenAI")) {
+foreach ($section in @("OpenAI", "XAi", "Moonshot", "DeepSeek", "Zhipu", "Qwen", "AzureDocumentIntelligence", "AzureOpenAI")) {
     $prop = $dev.PSObject.Properties[$section]
     if ($null -ne $prop -and $null -ne $prop.Value) {
         $secrets[$section] = $prop.Value

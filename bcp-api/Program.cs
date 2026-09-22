@@ -149,6 +149,10 @@ builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.MoonshotLlmClient
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.MoonshotLlmClient>();
 builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.DeepSeekLlmClient), c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.DeepSeekLlmClient>();
+builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.ZhipuLlmClient), c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.ZhipuLlmClient>();
+builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.QwenLlmClient), c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.QwenLlmClient>();
 builder.Services.AddHttpClient<NodeBridgeService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 
 builder.Services.AddSingleton<Reguliq.Api.Services.LocalDocs.TesseractOcrEngine>();

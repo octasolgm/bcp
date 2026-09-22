@@ -307,7 +307,7 @@ export function gapAnalysisExportColumns(
 /** Regul.ai Book 6 gap sheet — clause no, rule, gaps, document ref, policy extract. */
 export async function exportRegulGapAnalysisExcelFromPoints(
   points: AnalysisPoint[],
-  filename = defaultFilename('comply-solution-gap-analysis'),
+  filename = defaultFilename('comply-solutions-gap-analysis'),
   requirementColumnHeader = REGULATORY_CLAUSE_HEADER,
   options: GapAnalysisExcelOptions = {},
 ): Promise<void> {
@@ -342,7 +342,7 @@ export async function exportRegulGapAnalysisExcelFromPoints(
 /** Client gap analysis Excel (sample layout + confidence, gaps, optional Phase 1/2). */
 export async function exportGapAnalysisExcelFromPoints(
   points: AnalysisPoint[],
-  filename = defaultFilename('comply-solution-gap-analysis'),
+  filename = defaultFilename('comply-solutions-gap-analysis'),
   requirementColumnHeader = REGULATORY_CLAUSE_HEADER,
   options: GapAnalysisExcelOptions = {},
 ): Promise<void> {
