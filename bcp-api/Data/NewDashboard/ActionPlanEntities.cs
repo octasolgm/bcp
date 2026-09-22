@@ -10,7 +10,7 @@ namespace Reguliq.Api.Data.NewDashboard.Entities;
 /// review verdicts with planning fields.
 /// </summary>
 [Table("analysis_action_plans")]
-public class NdAnalysisActionPlan
+public class NdAnalysisActionPlan : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -85,6 +85,9 @@ public class NdAnalysisActionPlan
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 /// <summary>
@@ -93,7 +96,7 @@ public class NdAnalysisActionPlan
 /// resolving one gap does not disturb its siblings on the same clause.
 /// </summary>
 [Table("analysis_gaps")]
-public class NdAnalysisGap
+public class NdAnalysisGap : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -135,6 +138,9 @@ public class NdAnalysisGap
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 public static class GapStatuses
@@ -153,7 +159,7 @@ public static class GapStatuses
 /// exports and older screens keep working.
 /// </summary>
 [Table("analysis_action_plan_assignees")]
-public class NdAnalysisActionPlanAssignee
+public class NdAnalysisActionPlanAssignee : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -184,6 +190,9 @@ public class NdAnalysisActionPlanAssignee
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 /// <summary>
@@ -191,7 +200,7 @@ public class NdAnalysisActionPlanAssignee
 /// lives on the run workflow, not here.
 /// </summary>
 [Table("analysis_action_plan_reviews")]
-public class NdAnalysisActionPlanReview
+public class NdAnalysisActionPlanReview : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -233,13 +242,16 @@ public class NdAnalysisActionPlanReview
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 /// <summary>
 /// Audit trail for target-date changes (re-targeting). Surfaced behind the clock icon.
 /// </summary>
 [Table("analysis_action_plan_date_history")]
-public class NdAnalysisActionPlanDateHistory
+public class NdAnalysisActionPlanDateHistory : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -262,6 +274,9 @@ public class NdAnalysisActionPlanDateHistory
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 /// <summary>
@@ -269,7 +284,7 @@ public class NdAnalysisActionPlanDateHistory
 /// card and in My actions so a resolve is never anonymous.
 /// </summary>
 [Table("analysis_action_plan_status_history")]
-public class NdAnalysisActionPlanStatusHistory
+public class NdAnalysisActionPlanStatusHistory : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -289,6 +304,9 @@ public class NdAnalysisActionPlanStatusHistory
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 public static class ActionPlanStatuses

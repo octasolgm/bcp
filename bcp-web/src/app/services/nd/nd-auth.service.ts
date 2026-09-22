@@ -40,6 +40,33 @@ export class NdAuthService {
     return this.profileSignal()?.isDemo === true;
   }
 
+  /** Platform super admin (all workspaces). A workspace admin has role super_admin but not this flag. */
+  isPlatformAdmin(): boolean {
+    const p = this.profileSignal();
+    return p?.role === 'super_admin' && p.isPlatformAdmin === true;
+  }
+
+  /** Workspace management is platform-only and never shown to demo accounts. */
+  canManageWorkspaces(): boolean {
+    return this.isPlatformAdmin() && !this.isDemoViewer();
+  }
+
+  /** "Super admin" for the platform owner, "Admin" for a workspace's own administrator. */
+  roleLabel(role: string | null | undefined = this.getRole()): string {
+    switch (role) {
+      case 'super_admin':
+        return this.isPlatformAdmin() ? 'Super admin' : 'Admin';
+      case 'maker':
+        return 'Maker';
+      case 'checker':
+        return 'Checker';
+      case 'reviewer':
+        return 'Reviewer';
+      default:
+        return role ?? '';
+    }
+  }
+
   /** Demo tenant admin (super_admin role, or profile name containing "admin"). */
   isDemoAdmin(): boolean {
     if (!this.isDemoViewer()) return false;

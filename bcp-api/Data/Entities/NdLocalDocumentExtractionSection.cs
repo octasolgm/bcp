@@ -1,3 +1,4 @@
+using Reguliq.Api.Data.NewDashboard.Entities;
 using Pgvector;
 
 namespace Reguliq.Api.Data.Entities;
@@ -11,7 +12,7 @@ namespace Reguliq.Api.Data.Entities;
 /// (<c>IndexingWorkerHosted</c>) right after Extract succeeds; re-extracting a document replaces all of
 /// its rows here rather than appending.
 /// </summary>
-public class NdLocalDocumentExtractionSection
+public class NdLocalDocumentExtractionSection : ITenantScoped
 {
     public Guid Id { get; set; }
     public Guid ExtractionId { get; set; }
@@ -29,4 +30,7 @@ public class NdLocalDocumentExtractionSection
     public Vector? Embedding { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }

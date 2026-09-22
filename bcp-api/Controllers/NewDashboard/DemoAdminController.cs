@@ -46,7 +46,7 @@ public class DemoAdminController(
     [HttpGet("overview")]
     public async Task<IActionResult> Overview(CancellationToken ct)
     {
-        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (profile, user, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
         if (demoCtx.ViewerIsDemo)
@@ -139,7 +139,7 @@ public class DemoAdminController(
     [HttpPost("clear")]
     public async Task<IActionResult> Clear([FromBody] DemoClearRequest body, CancellationToken ct)
     {
-        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, user, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
         if (demoCtx.ViewerIsDemo)
@@ -168,7 +168,7 @@ public class DemoAdminController(
     [HttpGet("templates")]
     public async Task<IActionResult> ListTemplates(CancellationToken ct)
     {
-        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, user, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
         if (demoCtx.ViewerIsDemo)
@@ -210,7 +210,7 @@ public class DemoAdminController(
     [HttpGet("templates/{id:guid}")]
     public async Task<IActionResult> GetTemplate(Guid id, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var template = await db.NdDemoAnalysisTemplates.AsNoTracking()
@@ -225,7 +225,7 @@ public class DemoAdminController(
     [HttpPut("templates/{id:guid}")]
     public async Task<IActionResult> UpdateTemplate(Guid id, [FromBody] TemplateUpdateRequest body, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var template = await db.NdDemoAnalysisTemplates.FirstOrDefaultAsync(t => t.Id == id, ct);
@@ -247,7 +247,7 @@ public class DemoAdminController(
     [HttpPost("templates/{id:guid}/points")]
     public async Task<IActionResult> AddPoint(Guid id, [FromBody] PointUpsertRequest body, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var template = await db.NdDemoAnalysisTemplates
@@ -274,7 +274,7 @@ public class DemoAdminController(
         [FromBody] PointUpsertRequest body,
         CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var point = await db.NdDemoAnalysisTemplatePoints
@@ -296,7 +296,7 @@ public class DemoAdminController(
     [HttpDelete("templates/{templateId:guid}/points/{pointId:guid}")]
     public async Task<IActionResult> DeletePoint(Guid templateId, Guid pointId, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var point = await db.NdDemoAnalysisTemplatePoints
@@ -317,7 +317,7 @@ public class DemoAdminController(
     [HttpPost("templates/{id:guid}/reload-from-seed-file")]
     public async Task<IActionResult> ReloadFromSeedFile(Guid id, CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var template = await db.NdDemoAnalysisTemplates

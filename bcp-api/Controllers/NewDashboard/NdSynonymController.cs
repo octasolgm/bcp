@@ -61,7 +61,7 @@ public class NdSynonymController(AppDbContext db, SupabaseJwtValidator jwt) : Nd
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] SynonymEntryRequest body, CancellationToken ct)
     {
-        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var termA = (body.TermA ?? "").Trim();
@@ -89,7 +89,7 @@ public class NdSynonymController(AppDbContext db, SupabaseJwtValidator jwt) : Nd
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] SynonymEntryRequest body, CancellationToken ct)
     {
-        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var row = await db.NdSynonymEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
@@ -106,7 +106,7 @@ public class NdSynonymController(AppDbContext db, SupabaseJwtValidator jwt) : Nd
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var row = await db.NdSynonymEntries.FirstOrDefaultAsync(e => e.Id == id, ct);

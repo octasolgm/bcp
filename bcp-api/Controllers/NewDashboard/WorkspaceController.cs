@@ -132,7 +132,8 @@ public class WorkspaceController(
                 var adminTask = isSuperAdmin
                     ? InParallelScopeAsync(async (sdb, sct) =>
                     {
-                        var usersQuery = sdb.NdProfiles.AsNoTracking();
+                        var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? WorkspaceScope.DefaultWorkspaceId;
+                        var usersQuery = sdb.NdProfiles.AsNoTracking().Where(p => p.TenantId == workspaceId);
                         if (demoProfileIds != null)
                         {
                             usersQuery = demoCtx.ViewerIsDemo

@@ -1,3 +1,4 @@
+using Reguliq.Api.Data.NewDashboard.Entities;
 namespace Reguliq.Api.Data.Entities;
 
 /// <summary>
@@ -12,7 +13,7 @@ namespace Reguliq.Api.Data.Entities;
 /// clause/point splitting, run against the already-parsed <see cref="MarkdownText"/> — cheap, instant,
 /// re-runnable without touching the PDF again).
 /// </summary>
-public class NdLocalDocumentExtraction
+public class NdLocalDocumentExtraction : ITenantScoped
 {
     public Guid Id { get; set; }
     public Guid StoredDocumentId { get; set; }
@@ -70,4 +71,7 @@ public class NdLocalDocumentExtraction
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }

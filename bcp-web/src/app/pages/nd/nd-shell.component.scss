@@ -83,6 +83,45 @@
   flex-shrink: 0;
 }
 
+.workspace-chip {
+  display: inline-block;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.workspace-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+
+  select {
+    max-width: 14rem;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 720px) {
+  .workspace-switcher-label {
+    display: none;
+  }
+}
+
 .role-badge {
   display: inline-block;
   padding: 0.15rem 0.55rem;

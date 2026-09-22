@@ -81,6 +81,9 @@ public abstract class NdControllerBase : ControllerBase
 
     protected JwtUser? ValidateJwt(SupabaseJwtValidator jwt)
     {
+        // WorkspaceResolutionMiddleware already validated this request's token; reuse it.
+        if (HttpContext?.Items[WorkspaceResolutionMiddleware.JwtUserItemKey] is JwtUser validated)
+            return validated;
         var authHeader = Request.Headers.Authorization.FirstOrDefault();
         return jwt.ValidateToken(authHeader);
     }
@@ -95,8 +98,37 @@ public abstract class NdControllerBase : ControllerBase
     private static string AuthProfileCacheKey(Guid profileId) => $"nd:auth-profile:{profileId}";
 
     /// <summary>Drop a cached profile after its role, department or active flag changes.</summary>
-    public static void InvalidateAuthProfile(IMemoryCache cache, Guid profileId) =>
+    public static void InvalidateAuthProfile(IMemoryCache cache, Guid profileId)
+    {
         cache.Remove(AuthProfileCacheKey(profileId));
+        cache.Remove(WorkspaceResolutionMiddleware.CacheKey(profileId));
+    }
+
+    /// <summary>Platform super admin (manages workspaces). Workspace admins are super_admin without the flag.</summary>
+    protected static bool IsPlatformAdmin(NdProfile profile) =>
+        profile.IsPlatformAdmin && string.Equals(profile.Role, "super_admin", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Platform-level endpoints (global settings, prompts, dictionaries, workspaces). Accounts that were
+    /// super admins before workspaces existed all carry the flag, so their access is unchanged.
+    /// </summary>
+    protected async Task<(NdProfile Profile, IActionResult? Error)> RequirePlatformAdminAsync(
+        AppDbContext db,
+        SupabaseJwtValidator jwt,
+        CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return (null!, error);
+        if (!IsPlatformAdmin(profile))
+        {
+            return (null!, StatusCode(403, new
+            {
+                success = false,
+                message = "Only the platform super admin can change this setting.",
+            }));
+        }
+        return (profile, null);
+    }
 
     protected async Task<(NdProfile Profile, IActionResult? Error)> RequireAuthAsync(
         AppDbContext db,
@@ -119,7 +151,23 @@ public abstract class NdControllerBase : ControllerBase
         if (allowedRoles.Length > 0 && !allowedRoles.Contains(profile.Role, StringComparer.OrdinalIgnoreCase))
             return (null!, StatusCode(403, new { success = false, message = "Forbidden" }));
 
+        if (WorkspaceScope.State is { WorkspaceIsActive: false } && !IsPlatformAdmin(profile))
+            return (null!, StatusCode(403, new { success = false, message = "Your workspace has been deactivated. Contact your administrator." }));
+
         return (profile, null);
+    }
+
+    protected async Task<(NdProfile Profile, JwtUser User, IActionResult? Error)> RequirePlatformAdminWithUserAsync(
+        AppDbContext db,
+        SupabaseJwtValidator jwt,
+        CancellationToken ct)
+    {
+        var user = ValidateJwt(jwt);
+        if (user == null)
+            return (null!, null!, Unauthorized(new { success = false, message = "Unauthorized" }));
+
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        return error != null ? (null!, null!, error) : (profile, user, null);
     }
 
     /// <summary>
@@ -153,6 +201,9 @@ public abstract class NdControllerBase : ControllerBase
         CreatedAt = p.CreatedAt,
         UpdatedAt = p.UpdatedAt,
         Department = p.Department,
+        TenantId = p.TenantId,
+        IsPlatformAdmin = p.IsPlatformAdmin,
+        ActiveTenantId = p.ActiveTenantId,
     };
 
     protected async Task<(NdProfile Profile, JwtUser User, IActionResult? Error)> RequireAuthWithUserAsync(
@@ -241,7 +292,8 @@ public abstract class NdControllerBase : ControllerBase
     protected static object MapProfile(
         NdProfile p,
         string? email = null,
-        IReadOnlySet<Guid>? demoProfileIds = null) => new
+        IReadOnlySet<Guid>? demoProfileIds = null,
+        object? workspace = null) => new
     {
         id = p.Id,
         fullName = p.FullName,
@@ -254,6 +306,10 @@ public abstract class NdControllerBase : ControllerBase
         isDemo = NdDemoIsolationHelper.IsDemoEmail(email)
             || NdDemoIsolationHelper.IsDemoName(p.FullName)
             || (demoProfileIds != null && demoProfileIds.Contains(p.Id)),
+        isPlatformAdmin = IsPlatformAdmin(p),
+        homeWorkspaceId = p.TenantId,
+        workspaceId = WorkspaceScope.CurrentWorkspaceId ?? p.TenantId,
+        workspace,
     };
 
     protected static async Task SavePointCommentsAsync(

@@ -31,8 +31,11 @@ public class UsersController(
     [HttpPost("{id:guid}/set-password")]
     public async Task<IActionResult> SetPassword(Guid id, [FromBody] SetPasswordRequest body, CancellationToken ct)
     {
-        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (admin, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var workspaceError = await GuardWorkspaceMemberAsync(admin, id, ct);
+        if (workspaceError != null) return workspaceError;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
         var authById = await FetchAuthUsersAsync(ct);
@@ -74,7 +77,9 @@ public class UsersController(
         var authById = await FetchAuthUsersAsync(ct);
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
+        var workspaceId = CurrentWorkspaceId;
         var users = await db.NdProfiles.AsNoTracking()
+            .Where(p => p.TenantId == workspaceId)
             .OrderBy(p => p.FullName)
             .ToListAsync(ct);
         users = NdDemoDataFilters.FilterProfilesForUserManagement(
@@ -97,6 +102,7 @@ public class UsersController(
                     fullName = u.FullName,
                     email = auth?.Email,
                     role = u.Role,
+                    isPlatformAdmin = IsPlatformAdmin(u),
                     departmentId = u.DepartmentId,
                     departmentName = u.DepartmentId is Guid did && departmentNames.TryGetValue(did, out var dn) ? dn : null,
                     isActive = u.IsActive,
@@ -165,7 +171,9 @@ public class UsersController(
         return string.IsNullOrWhiteSpace(s) ? null : DateTimeOffset.Parse(s);
     }
 
-    private HttpClient CreateAdminClient(SupabaseJwtOptions opts)
+    private HttpClient CreateAdminClient(SupabaseJwtOptions opts) => CreateAdminClient(httpClientFactory, opts);
+
+    private static HttpClient CreateAdminClient(IHttpClientFactory httpClientFactory, SupabaseJwtOptions opts)
     {
         var client = httpClientFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", opts.ServiceRoleKey);
@@ -176,8 +184,11 @@ public class UsersController(
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserRequest body, CancellationToken ct)
     {
-        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (admin, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var workspaceError = await GuardWorkspaceMemberAsync(admin, id, ct);
+        if (workspaceError != null) return workspaceError;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
         var authById = await FetchAuthUsersAsync(ct);
@@ -189,7 +200,15 @@ public class UsersController(
         if (user == null) return NotFound(new { success = false, message = "Not found" });
 
         if (!string.IsNullOrWhiteSpace(body.FullName)) user.FullName = body.FullName.Trim();
-        if (!string.IsNullOrWhiteSpace(body.Role)) user.Role = body.Role;
+        if (!string.IsNullOrWhiteSpace(body.Role))
+        {
+            var role = NormalizeManagedRole(body.Role);
+            if (role == null)
+                return BadRequest(new { success = false, message = "Unknown role." });
+            if (admin!.Id == id && role != user.Role)
+                return BadRequest(new { success = false, message = "You cannot change your own role." });
+            user.Role = role;
+        }
         if (body.IsActive.HasValue) user.IsActive = body.IsActive.Value;
         // Guid.Empty is how the picker clears a department, since a null field means "unchanged".
         if (body.DepartmentId.HasValue)
@@ -203,8 +222,11 @@ public class UsersController(
     [HttpPost("{id:guid}/deactivate")]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken ct)
     {
-        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (admin, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var workspaceError = await GuardWorkspaceMemberAsync(admin, id, ct);
+        if (workspaceError != null) return workspaceError;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
         var authById = await FetchAuthUsersAsync(ct);
@@ -224,8 +246,11 @@ public class UsersController(
     [HttpPost("{id:guid}/activate")]
     public async Task<IActionResult> Activate(Guid id, CancellationToken ct)
     {
-        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (admin, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var workspaceError = await GuardWorkspaceMemberAsync(admin, id, ct);
+        if (workspaceError != null) return workspaceError;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
         var authById = await FetchAuthUsersAsync(ct);
@@ -247,6 +272,9 @@ public class UsersController(
     {
         var (admin, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
+
+        var workspaceError = await GuardWorkspaceMemberAsync(admin, id, ct);
+        if (workspaceError != null) return workspaceError;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
         var authById = await FetchAuthUsersAsync(ct);
@@ -296,20 +324,49 @@ public class UsersController(
         var inviteIsolationError = GuardInviteEmail(demoCtx, email);
         if (inviteIsolationError != null) return inviteIsolationError;
 
-        var password = body.Password?.Trim();
+        var inviteRole = NormalizeManagedRole(body.Role);
+        if (inviteRole == null)
+            return BadRequest(new { success = false, message = "Unknown role." });
+
+        var (profileId, message, inviteError) = await CreateWorkspaceUserAsync(
+            db, jwtOptions.Value, httpClientFactory, memoryCache, demoDirectory,
+            admin!.Id, CurrentWorkspaceId, fullName, email, inviteRole, body.Password, body.DepartmentId, ct);
+        if (inviteError != null) return BadRequest(new { success = false, message = inviteError });
+        return Ok(new { success = true, message, data = new { id = profileId } });
+    }
+
+    /// <summary>
+    /// Creates the Supabase auth user and its profile in <paramref name="workspaceId"/>. Shared by user
+    /// invites and by workspace creation (first workspace admin).
+    /// </summary>
+    internal static async Task<(Guid Id, string? Message, string? Error)> CreateWorkspaceUserAsync(
+        AppDbContext db,
+        SupabaseJwtOptions opts,
+        IHttpClientFactory httpClientFactory,
+        IMemoryCache memoryCache,
+        NdDemoUserDirectory demoDirectory,
+        Guid createdBy,
+        Guid workspaceId,
+        string fullName,
+        string email,
+        string role,
+        string? rawPassword,
+        Guid? departmentId,
+        CancellationToken ct)
+    {
+        var password = rawPassword?.Trim();
         if (!string.IsNullOrWhiteSpace(password) && password.Length < MinPasswordLength)
-            return BadRequest(new { success = false, message = $"Password must be at least {MinPasswordLength} characters." });
+            return (Guid.Empty, null, $"Password must be at least {MinPasswordLength} characters.");
 
-        var opts = jwtOptions.Value;
         if (string.IsNullOrWhiteSpace(opts.Url) || string.IsNullOrWhiteSpace(opts.ServiceRoleKey))
-            return BadRequest(new { success = false, message = "Supabase admin API not configured." });
+            return (Guid.Empty, null, "Supabase admin API not configured.");
 
-        var client = CreateAdminClient(opts);
+        var client = CreateAdminClient(httpClientFactory, opts);
         var createPayload = new Dictionary<string, object?>
         {
             ["email"] = email,
             ["email_confirm"] = true,
-            ["user_metadata"] = new { full_name = fullName, role = body.Role },
+            ["user_metadata"] = new { full_name = fullName, role },
         };
         if (!string.IsNullOrWhiteSpace(password))
             createPayload["password"] = password;
@@ -318,7 +375,7 @@ public class UsersController(
         var res = await client.PostAsync($"{opts.Url.TrimEnd('/')}/auth/v1/admin/users", content, ct);
         var responseBody = await res.Content.ReadAsStringAsync(ct);
         if (!res.IsSuccessStatusCode)
-            return BadRequest(new { success = false, message = ParseSupabaseError(responseBody) });
+            return (Guid.Empty, null, ParseSupabaseError(responseBody));
 
         using var doc = JsonDocument.Parse(responseBody);
         var userId = doc.RootElement.TryGetProperty("id", out var idEl) && Guid.TryParse(idEl.GetString(), out var uid)
@@ -334,18 +391,20 @@ public class UsersController(
                 {
                     Id = userId,
                     FullName = fullName,
-                    Role = body.Role,
-                    DepartmentId = body.DepartmentId == Guid.Empty ? null : body.DepartmentId,
-                    CreatedBy = admin!.Id,
+                    Role = role,
+                    DepartmentId = departmentId == Guid.Empty ? null : departmentId,
+                    CreatedBy = createdBy,
                     IsActive = true,
+                    TenantId = workspaceId,
                 });
             }
             else
             {
                 existing.FullName = fullName;
-                existing.Role = body.Role;
-                if (body.DepartmentId.HasValue)
-                    existing.DepartmentId = body.DepartmentId.Value == Guid.Empty ? null : body.DepartmentId.Value;
+                existing.Role = role;
+                existing.TenantId = workspaceId;
+                if (departmentId.HasValue)
+                    existing.DepartmentId = departmentId.Value == Guid.Empty ? null : departmentId.Value;
             }
             await db.SaveChangesAsync(ct);
             InvalidateAuthProfile(memoryCache, userId);
@@ -355,7 +414,39 @@ public class UsersController(
         var message = string.IsNullOrWhiteSpace(password)
             ? "User created (email pre-confirmed). Set a password or share login credentials."
             : "User created and ready to sign in (no email verification required).";
-        return Ok(new { success = true, message, data = new { id = userId } });
+        return (userId, message, null);
+    }
+
+    private static Guid CurrentWorkspaceId => WorkspaceScope.CurrentWorkspaceId ?? WorkspaceScope.DefaultWorkspaceId;
+
+    private static readonly HashSet<string> ManagedRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "super_admin", "maker", "checker", "reviewer",
+    };
+
+    /// <summary>"admin" is accepted as the workspace-admin role name and stored as super_admin.</summary>
+    internal static string? NormalizeManagedRole(string? raw)
+    {
+        var r = raw?.Trim().ToLowerInvariant();
+        if (r == "admin") return "super_admin";
+        return r != null && ManagedRoles.Contains(r) ? r : null;
+    }
+
+    /// <summary>
+    /// Admins only manage users of the workspace they are acting in, and a workspace admin can never
+    /// touch the platform super admin account.
+    /// </summary>
+    private async Task<IActionResult?> GuardWorkspaceMemberAsync(NdProfile admin, Guid targetId, CancellationToken ct)
+    {
+        var target = await db.NdProfiles.AsNoTracking()
+            .Where(p => p.Id == targetId)
+            .Select(p => new { p.TenantId, p.IsPlatformAdmin, p.Role })
+            .FirstOrDefaultAsync(ct);
+        if (target == null || target.TenantId != CurrentWorkspaceId)
+            return NotFound(new { success = false, message = "User not found." });
+        if (target.IsPlatformAdmin && target.Role == "super_admin" && !IsPlatformAdmin(admin))
+            return StatusCode(403, new { success = false, message = "Only the platform super admin can change this account." });
+        return null;
     }
 
     private static string ParseSupabaseError(string raw)

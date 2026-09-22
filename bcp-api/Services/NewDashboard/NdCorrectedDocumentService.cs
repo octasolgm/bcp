@@ -39,7 +39,7 @@ public class NdCorrectedDocumentService(AppDbContext db, ILogger<NdCorrectedDocu
         foreach (var source in sources)
         {
             var siblings = await db.StoredDocuments
-                .Where(d => d.Title == source.Title && d.DocKind == source.DocKind)
+                .Where(d => d.Title == source.Title && d.DocKind == source.DocKind && d.TenantId == source.TenantId)
                 .ToListAsync(ct);
 
             var marker = RunMarker(runId);
@@ -66,6 +66,7 @@ public class NdCorrectedDocumentService(AppDbContext db, ILogger<NdCorrectedDocu
                 SourceStoragePath = source.SourceStoragePath,
                 FileHash = source.FileHash,
                 WorkspaceId = source.WorkspaceId,
+                TenantId = source.TenantId,
                 UploadedBy = actorId,
                 // The corrected copy has not been through Landing AI yet.
                 ParseStatus = "pending",

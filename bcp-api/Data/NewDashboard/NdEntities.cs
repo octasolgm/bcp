@@ -5,7 +5,7 @@ using Reguliq.Api.Services.NewDashboard;
 namespace Reguliq.Api.Data.NewDashboard.Entities;
 
 [Table("profiles")]
-public class NdProfile
+public class NdProfile : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -34,10 +34,24 @@ public class NdProfile
 
     [ForeignKey(nameof(DepartmentId))]
     public NdDepartment? Department { get; set; }
+
+    /// <summary>Home workspace (nd_workspaces.id). Workspace users only ever act inside it.</summary>
+    public Guid? TenantId { get; set; }
+
+    /// <summary>
+    /// Platform super admin: manages workspaces and may switch into any of them. A workspace admin is
+    /// role "super_admin" without this flag, so all in-workspace admin rights stay on the role.
+    /// </summary>
+    [Column("is_platform_admin")]
+    public bool IsPlatformAdmin { get; set; }
+
+    /// <summary>Workspace a platform admin has switched into (null = home workspace).</summary>
+    [Column("active_tenant_id")]
+    public Guid? ActiveTenantId { get; set; }
 }
 
 [Table("departments")]
-public class NdDepartment
+public class NdDepartment : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -60,10 +74,13 @@ public class NdDepartment
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("regulation_documents")]
-public class NdRegulationDocument
+public class NdRegulationDocument : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -126,10 +143,13 @@ public class NdRegulationDocument
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public ICollection<NdRegulationPoint> Points { get; set; } = [];
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("regulation_points")]
-public class NdRegulationPoint
+public class NdRegulationPoint : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -162,10 +182,13 @@ public class NdRegulationPoint
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("nd_internal_document_sections")]
-public class NdInternalDocumentSection
+public class NdInternalDocumentSection : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -188,10 +211,13 @@ public class NdInternalDocumentSection
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("libraries")]
-public class NdLibrary
+public class NdLibrary : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -216,10 +242,13 @@ public class NdLibrary
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public ICollection<NdLibraryPoint> LibraryPoints { get; set; } = [];
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("library_points")]
-public class NdLibraryPoint
+public class NdLibraryPoint : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -242,10 +271,13 @@ public class NdLibraryPoint
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("analysis_runs")]
-public class NdAnalysisRun
+public class NdAnalysisRun : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -352,10 +384,13 @@ public class NdAnalysisRun
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public ICollection<NdAnalysisPoint> Points { get; set; } = [];
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("analysis_points")]
-public class NdAnalysisPoint
+public class NdAnalysisPoint : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -431,10 +466,13 @@ public class NdAnalysisPoint
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("analysis_point_attachments")]
-public class NdAnalysisPointAttachment
+public class NdAnalysisPointAttachment : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -457,10 +495,13 @@ public class NdAnalysisPointAttachment
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("action_plan_history")]
-public class NdActionPlanHistory
+public class NdActionPlanHistory : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -489,10 +530,13 @@ public class NdActionPlanHistory
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("analysis_reviews")]
-public class NdAnalysisReview
+public class NdAnalysisReview : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -527,10 +571,13 @@ public class NdAnalysisReview
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("analysis_point_comments")]
-public class NdAnalysisPointComment
+public class NdAnalysisPointComment : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -550,10 +597,13 @@ public class NdAnalysisPointComment
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("action_plan_item_reviews")]
-public class NdActionPlanItemReview
+public class NdActionPlanItemReview : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -593,6 +643,9 @@ public class NdActionPlanItemReview
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 /// <summary>
@@ -621,7 +674,7 @@ public class NdHiddenLegacyRun
 }
 
 [Table("analysis_status_history")]
-public class NdAnalysisStatusHistory
+public class NdAnalysisStatusHistory : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -644,6 +697,9 @@ public class NdAnalysisStatusHistory
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("nd_analysis_prompt_suggestions")]
@@ -728,7 +784,7 @@ public class NdSystemSetting
 /// Temporary manual review notes per analysis point (easy to drop once workflow is finalized).
 /// </summary>
 [Table("temp_point_review_comments")]
-public class NdTempPointReviewComment
+public class NdTempPointReviewComment : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -745,4 +801,7 @@ public class NdTempPointReviewComment
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }

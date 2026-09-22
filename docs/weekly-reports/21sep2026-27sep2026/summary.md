@@ -42,3 +42,25 @@ Investigated, follow up pending
 - Remove the "Re-run forward" button from the result panel (per-clause rerun now exists)
 - Query Expansion Dictionary admin page: resolved/unresolved/all counts and collapsible acronym/synonym sections
 - Confirm with client which documents to use for testing (TFS, CBUAE_EN_3945_VER2, Internal AML Manual 290626)
+
+22 Sep 2026
+
+Tasks
+- Added Zhipu AI (GLM) and Alibaba Qwen as selectable AI providers, and added a Chinese LLM sheet and a recommendation sheet to the cost estimate workbook
+- Multi-workspace support (branch feature/multi-workspace): one workspace per client bank, each with its own users, departments, documents, libraries and analyses, fully isolated from other workspaces
+- Platform super admin gets a new Administration > Workspaces page: create a workspace together with its first admin, rename, deactivate/activate, see user/document/analysis counts, list members, and open any workspace
+- Workspace switcher in the top bar for the platform super admin; everyone else sees their workspace name
+- New "Admin" role per workspace: manages that workspace's users and departments only. Platform-wide pages (Platform settings, Analysis prompts, Query dictionary/synonyms, Demo group, Workspaces) stay with the platform super admin
+- All existing data, users and demo accounts moved into a "Default workspace" automatically, so nothing changes for current users or the demo
+- Deactivating a workspace blocks its users from signing in until it is activated again (no data deleted)
+- Tested end to end with two test bank workspaces (71 API checks and 16 new unit tests, all passing) and compared old vs new responses for demo and existing accounts (identical); test workspaces, accounts and files were removed afterwards
+
+Bug fixes
+- Fixed the gap analysis Excel export filename (comply-solution- to comply-solutions-)
+- "Manual custom points" is now one per workspace instead of one shared list
+
+Investigated, follow up pending
+- The deployed dev site still runs the pre-workspace version against the same database; deploy this branch before creating real client workspaces, otherwise the old version would show every workspace's data to everyone
+- The query expansion dictionary and synonyms stay shared across all workspaces (terminology only, no client documents); confirm this is acceptable
+- 21 existing automated tests already fail on the branch this work started from (not related to workspaces); worth a separate clean-up
+

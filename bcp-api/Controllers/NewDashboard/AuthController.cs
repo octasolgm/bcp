@@ -46,8 +46,16 @@ public class AuthController(
             if (!profile.IsActive)
                 return StatusCode(403, new { success = false, message = "Account deactivated" });
 
+            var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? profile.TenantId ?? WorkspaceScope.DefaultWorkspaceId;
+            var workspace = await db.NdWorkspaces.AsNoTracking()
+                .Where(w => w.Id == workspaceId)
+                .Select(w => new { id = w.Id, name = w.Name, slug = w.Slug, isActive = w.IsActive })
+                .FirstOrDefaultAsync(dbCts.Token);
+            if (workspace is { isActive: false } && !IsPlatformAdmin(profile))
+                return StatusCode(403, new { success = false, message = "Your workspace has been deactivated. Contact your administrator." });
+
             var demoIds = await demoDirectory.GetDemoProfileIdsAsync(dbCts.Token);
-            return Ok(new { success = true, data = MapProfile(profile, user.Email, demoIds) });
+            return Ok(new { success = true, data = MapProfile(profile, user.Email, demoIds, workspace) });
         }
         catch (Exception ex) when (ex is Npgsql.NpgsqlException or TimeoutException or SocketException or OperationCanceledException
             || ex.GetBaseException() is SocketException or TimeoutException or OperationCanceledException)

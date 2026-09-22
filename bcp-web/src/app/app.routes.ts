@@ -2,7 +2,7 @@ import { Routes } from '@angular/router';
 import { ShellComponent } from './layout/shell.component';
 import { authGuard, guestGuard } from './guards/auth.guard';
 import { ndAuthGuard, ndGuestGuard } from './guards/nd-auth.guard';
-import { ndRoleGuard } from './guards/nd-role.guard';
+import { ndPlatformAdminGuard, ndRoleGuard } from './guards/nd-role.guard';
 import { ndDenyDemoViewerGuard } from './guards/nd-deny-demo-viewer.guard';
 
 const ndAnalyseV8Route = {
@@ -564,6 +564,16 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'admin/workspaces',
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard, ndDenyDemoViewerGuard],
+            data: { ndRoles: ['super_admin'] },
+            title: 'Workspaces · Comply Solution',
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-workspaces.component').then(
+                (m) => m.NdAdminWorkspacesComponent,
+              ),
+          },
+          {
             path: 'admin/users',
             canActivate: [ndRoleGuard],
             data: { ndRoles: ['super_admin'] },
@@ -581,7 +591,7 @@ export const routes: Routes = [
           },
           {
             path: 'admin/dictionary',
-            canActivate: [ndRoleGuard],
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard],
             data: { ndRoles: ['super_admin'] },
             loadComponent: () =>
               import('./pages/nd/admin/nd-admin-dictionary.component').then(
@@ -590,7 +600,7 @@ export const routes: Routes = [
           },
           {
             path: 'admin/synonyms',
-            canActivate: [ndRoleGuard],
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard],
             data: { ndRoles: ['super_admin'] },
             loadComponent: () =>
               import('./pages/nd/admin/nd-admin-synonyms.component').then(
@@ -608,7 +618,7 @@ export const routes: Routes = [
           },
           {
             path: 'admin/settings',
-            canActivate: [ndRoleGuard],
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard],
             data: { ndRoles: ['super_admin'] },
             loadComponent: () =>
               import('./pages/nd/admin/nd-admin-settings.component').then(
@@ -617,7 +627,7 @@ export const routes: Routes = [
           },
           {
             path: 'admin/demo',
-            canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard, ndDenyDemoViewerGuard],
             data: { ndRoles: ['super_admin'] },
             title: 'Demo group · Comply Solution',
             loadComponent: () =>
@@ -625,7 +635,7 @@ export const routes: Routes = [
           },
           {
             path: 'admin/prompts',
-            canActivate: [ndRoleGuard],
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard],
             data: { ndRoles: ['super_admin'] },
             loadComponent: () =>
               import('./pages/nd/admin/nd-admin-prompts.component').then(

@@ -125,6 +125,7 @@ public static class NdLibraryPointPersistence
             FilePath = stored.StoragePath ?? "",
             ExtractionStatus = (stored.PointCount ?? 0) > 0 ? "completed" : "pending",
             CreatedBy = userId,
+            TenantId = stored.TenantId,
         };
         db.NdRegulationDocuments.Add(overlay);
         cache[documentOrStoredId] = overlay.Id;

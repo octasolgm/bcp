@@ -527,8 +527,10 @@ public class ActionPlanInsightsController(
             .ToListAsync(ct);
 
         var emails = await FetchAuthEmailsAsync(ct);
+        // Profiles are not tenant-filtered globally; assignees come from this workspace only.
+        var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? WorkspaceScope.DefaultWorkspaceId;
         var profiles = await db.NdProfiles.AsNoTracking()
-            .Where(p => p.IsActive)
+            .Where(p => p.IsActive && p.TenantId == workspaceId)
             .OrderBy(p => p.FullName)
             .ToListAsync(ct);
         profiles = NdDemoDataFilters.FilterProfiles(profiles, ctx, emails);

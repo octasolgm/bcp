@@ -3,7 +3,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
-import { NdApiService } from '../../services/nd/nd-api.service';
+import { NdApiService, type NdWorkspaceSummary } from '../../services/nd/nd-api.service';
 import { ThemeService, type ThemeMode } from '../../services/theme.service';
 import {
   ActiveAnalysisSessionsService,
@@ -110,6 +110,9 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private badgeApplyGeneration = 0;
   private lastBadgeBumpMs = 0;
   private badgesLoadedOnce = false;
+  /** Platform admin workspace switcher (empty for everyone else). */
+  workspaceOptions: NdWorkspaceSummary[] = [];
+  switchingWorkspace = false;
 
   /** Demo accounts: hide legacy version picker only (sidebar New analysis stays). */
   private static readonly DEMO_HIDDEN_NAV_IDS = new Set(['analysis-versions', 'analyse-v8']);
@@ -120,6 +123,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     if (!role) return;
     // Track isDemo so nav rebuilds when demo flag is normalized after profile load.
     void profile?.isDemo;
+    void profile?.isPlatformAdmin;
     this.navEntries = this.navForRole(role);
     this.cdr.markForCheck();
   });
@@ -132,7 +136,49 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   get roleLabel(): string {
     const role = this.auth.getRole();
-    return role ? role.replace(/_/g, ' ') : '';
+    if (!role) return '';
+    // A workspace's own administrator is "admin"; only the platform owner is "super admin".
+    if (role === 'super_admin' && !this.auth.isDemoViewer() && !this.auth.isPlatformAdmin()) return 'admin';
+    return role.replace(/_/g, ' ');
+  }
+
+  /** Workspace chip in the top bar. Demo accounts keep their existing header unchanged. */
+  get workspaceName(): string | null {
+    if (this.auth.isDemoViewer()) return null;
+    return this.profile()?.workspace?.name ?? null;
+  }
+
+  get activeWorkspaceId(): string | null {
+    return this.profile()?.workspace?.id ?? this.profile()?.workspaceId ?? null;
+  }
+
+  private async loadWorkspaceOptions(): Promise<void> {
+    if (!this.auth.canManageWorkspaces()) {
+      this.workspaceOptions = [];
+      return;
+    }
+    const res = await this.api.getWorkspaces();
+    if (res.success && res.data) {
+      const active = this.activeWorkspaceId;
+      this.workspaceOptions = res.data
+        .map((w) => w.workspace)
+        .filter((w) => w.isActive || w.id === active);
+      this.cdr.markForCheck();
+    }
+  }
+
+  async onSwitchWorkspace(id: string): Promise<void> {
+    if (!id || id === this.activeWorkspaceId || this.switchingWorkspace) return;
+    this.switchingWorkspace = true;
+    const res = await this.api.switchWorkspace(id);
+    if (!res.success) {
+      this.switchingWorkspace = false;
+      this.toast.show(res.message ?? 'Could not switch workspace', 'error');
+      return;
+    }
+    await this.auth.refreshProfile(true);
+    // Every page holds data from the old workspace; a full reload is the only clean reset.
+    window.location.assign('/nd/overview');
   }
 
   get showNewAnalysis(): boolean {
@@ -168,6 +214,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
       await this.router.navigate(['/nd/auth/login']);
       return;
     }
+    void this.loadWorkspaceOptions();
     this.navEntries = this.navForRole(role);
     this.sidebarWidth = this.loadSidebarWidth();
     this.sidebarManuallyCollapsed = this.loadSidebarCollapsed();
@@ -387,7 +434,8 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   private badgeCacheKey(role: string): string {
-    return `${NdShellComponent.BADGE_CACHE_KEY}:${role}:${this.auth.isDemoViewer() ? 'demo' : 'real'}`;
+    const ws = this.activeWorkspaceId ?? 'default';
+    return `${NdShellComponent.BADGE_CACHE_KEY}:${role}:${this.auth.isDemoViewer() ? 'demo' : 'real'}:${ws}`;
   }
 
   /** Paint the previous session's numbers instantly while the fresh counts are in flight. */
@@ -806,20 +854,31 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   private adminGroup(): NavGroup {
-    const children: NavItem[] = [
+    // Platform-wide pages (LLM settings, prompts, dictionaries, demo, workspaces) are for the platform
+    // super admin only; a workspace admin manages just their own workspace's users and departments.
+    const platform = this.auth.isPlatformAdmin();
+    const children: NavItem[] = [];
+    if (this.auth.canManageWorkspaces()) {
+      children.push({ id: 'admin-workspaces', path: '/nd/admin/workspaces', label: 'Workspaces', icon: 'building' });
+    }
+    children.push(
       { id: 'admin-users', path: '/nd/admin/users', label: 'User management', icon: 'users' },
       { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
-      { id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' },
-    ];
+    );
+    if (platform) {
+      children.push({ id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' });
+    }
     // Demo workspace tools, and the query-expansion dictionary (a local-pipeline feature — see
     // CLAUDE.md), are for real (non-demo) super admins only.
-    if (!this.auth.isDemoViewer()) {
+    if (platform && !this.auth.isDemoViewer()) {
       children.push({ id: 'admin-demo', path: '/nd/admin/demo', label: 'Demo group', icon: 'users' });
       children.push({ id: 'admin-dictionary', path: '/nd/admin/dictionary', label: 'Query dictionary', icon: 'file' });
       children.push({ id: 'admin-synonyms', path: '/nd/admin/synonyms', label: 'Query synonyms', icon: 'file' });
     }
+    if (platform) {
+      children.push({ id: 'admin-prompts', path: '/nd/admin/prompts', label: 'Analysis prompts', icon: 'file' });
+    }
     children.push(
-      { id: 'admin-prompts', path: '/nd/admin/prompts', label: 'Analysis prompts', icon: 'file' },
       {
         id: 'admin-deleted-runs',
         path: '/nd/admin/deleted-runs',

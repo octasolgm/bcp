@@ -30,6 +30,26 @@ pipeline. If a task explicitly asks to change something about demo accounts spec
 demo seed-data bug), that is fine - the point is pipeline work should never *accidentally* leak into or
 change the demo experience.
 
+## Workspaces (multi-tenant) - keep new data scoped
+
+Each client bank has its own workspace (`nd_workspaces`). Every tenant-owned row has a `tenant_id`, and
+`AppDbContext` filters all `ITenantScoped` entities to the request's workspace, which
+`WorkspaceResolutionMiddleware` sets per ND request (`WorkspaceScope`). Hosted workers and startup run
+unscoped on purpose.
+
+- A new table that holds client data must implement `ITenantScoped` and be added to the list in
+  `bcp-api/Infrastructure/NdWorkspaceSchemaBootstrap.cs` (column, backfill, insert trigger), or it will leak
+  across workspaces.
+- Raw SQL (`SqlQueryRaw`/`ExecuteSqlRaw`) and in-memory caches bypass the EF filter - scope them by tenant
+  yourself (see `NdDashboardCacheService` and `NdRunEnrichmentHelper`).
+- Roles: `super_admin` + `profiles.is_platform_admin` = platform super admin (workspaces, platform settings,
+  prompts, dictionaries, demo). `super_admin` without the flag = that workspace's Admin. Platform-only
+  endpoints use `RequirePlatformAdminAsync`.
+- Profiles are not globally filtered (auth and the demo directory look them up across workspaces); user lists
+  filter by `TenantId` explicitly.
+- All pre-workspace data and every demo account live in the Default workspace
+  (`00000000-0000-0000-0000-000000000001`), which is what keeps the demo unchanged.
+
 ## Weekly summary docs
 
 At the end of any session in this repo where real work gets done (features, fixes, investigations), update the current week's report in `docs/weekly-reports/`.

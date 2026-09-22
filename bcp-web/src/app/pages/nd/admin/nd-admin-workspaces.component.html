@@ -1,0 +1,202 @@
+<div class="nd-catalog-page">
+  <div class="page-header page-header--catalog">
+    <div class="page-header-title-block">
+      <h1>Workspaces</h1>
+      <p class="subtitle">
+        One workspace per client. Each workspace has its own users, documents and analyses, and
+        nobody inside a workspace can see another workspace's data.
+      </p>
+    </div>
+  </div>
+
+  @if (!canManage) {
+    <p class="nd-error">Access denied</p>
+  } @else {
+    <div class="nd-catalog-toolbar">
+      <form class="card-surface invite-form" (ngSubmit)="handleCreate()" autocomplete="off">
+        <h2>Create workspace</h2>
+        <div class="form-grid">
+          <label class="field">
+            <span>Workspace name</span>
+            <input
+              [ngModel]="name"
+              (ngModelChange)="onNameInput($event)"
+              name="wsName"
+              placeholder="e.g. Emirates Bank"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <label class="field">
+            <span>Short name</span>
+            <input [(ngModel)]="slug" name="wsSlug" placeholder="emirates-bank" autocomplete="off" />
+          </label>
+          <label class="field field-wide">
+            <span>Description (optional)</span>
+            <input [(ngModel)]="description" name="wsDescription" autocomplete="off" />
+          </label>
+        </div>
+
+        <h3 class="form-subheading">Workspace admin</h3>
+        <p class="muted-loading">
+          The admin manages this workspace's users and departments. Leave empty to add one later.
+        </p>
+        <div class="form-grid">
+          <label class="field">
+            <span>Full name</span>
+            <input [(ngModel)]="adminName" name="adminName" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input type="email" [(ngModel)]="adminEmail" name="adminEmail" autocomplete="off" placeholder="admin@bank.com" />
+          </label>
+          <label class="field">
+            <span>Initial password (optional)</span>
+            <input
+              type="password"
+              [(ngModel)]="adminPassword"
+              name="adminPassword"
+              autocomplete="new-password"
+              minlength="6"
+              placeholder="Min 6 characters"
+            />
+          </label>
+        </div>
+        <button type="submit" class="btn-primary" [disabled]="creating">
+          {{ creating ? 'Creating…' : 'Create workspace' }}
+        </button>
+      </form>
+
+      @if (message) {
+        <app-nd-page-alert kind="success" [text]="message" (dismiss)="message = ''" />
+      }
+      @if (error) {
+        <app-nd-page-alert kind="error" [text]="error" (dismiss)="error = ''" />
+      }
+    </div>
+
+    @if (loading) {
+      <p class="muted-loading">Loading workspaces…</p>
+    } @else {
+      <div class="nd-catalog-body">
+        <div class="filter-pills nd-list-toolbar nd-shrink">
+          <input
+            type="search"
+            class="filter-search"
+            [(ngModel)]="searchQuery"
+            placeholder="Search workspaces…"
+            aria-label="Search workspaces"
+          />
+          <span class="filter-count">{{ visibleItems.length }} of {{ items.length }}</span>
+        </div>
+
+        <div class="card-surface table-wrap table-scroll-body">
+          <table>
+            <thead>
+              <tr>
+                <th>Workspace</th>
+                <th>Admins</th>
+                <th class="num">Users</th>
+                <th class="num">Documents</th>
+                <th class="num">Analyses</th>
+                <th>Status</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of visibleItems; track item.workspace.id) {
+                <tr [class.row-saving]="savingId === item.workspace.id">
+                  <td>
+                    @if (editingId === item.workspace.id) {
+                      <div class="edit-stack">
+                        <input class="inline-input" [(ngModel)]="editName" name="editName-{{ item.workspace.id }}" aria-label="Workspace name" />
+                        <input
+                          class="inline-input"
+                          [(ngModel)]="editDescription"
+                          name="editDescription-{{ item.workspace.id }}"
+                          placeholder="Description"
+                          aria-label="Workspace description"
+                        />
+                      </div>
+                    } @else {
+                      <strong>{{ item.workspace.name }}</strong>
+                      @if (item.workspace.id === currentWorkspaceId) {
+                        <span class="you-tag">Viewing</span>
+                      }
+                      @if (item.workspace.isDefault) {
+                        <span class="ws-tag">Default</span>
+                      }
+                      <div class="muted">{{ item.workspace.slug }}@if (item.workspace.description) { · {{ item.workspace.description }} }</div>
+                    }
+                  </td>
+                  <td>
+                    @if (item.admins.length) {
+                      {{ adminNames(item) }}
+                    } @else {
+                      <span class="muted">{{ item.workspace.isDefault ? 'Platform super admin' : 'None yet' }}</span>
+                    }
+                  </td>
+                  <td class="num">{{ item.userCount }}</td>
+                  <td class="num">{{ item.documentCount }}</td>
+                  <td class="num">{{ item.analysisCount }}</td>
+                  <td>
+                    <app-nd-status-badge [status]="item.workspace.isActive ? 'active' : 'deactivated'" />
+                  </td>
+                  <td class="col-actions actions">
+                    @if (editingId === item.workspace.id) {
+                      <button type="button" class="btn-primary btn-sm" [disabled]="savingId === item.workspace.id" (click)="saveEdit()">Save</button>
+                      <button type="button" class="btn-secondary btn-sm" (click)="cancelEdit()">Cancel</button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn-primary btn-sm"
+                        [disabled]="item.workspace.id === currentWorkspaceId || switchingId !== null"
+                        (click)="switchTo(item)"
+                      >
+                        {{ switchingId === item.workspace.id ? 'Opening…' : 'Open' }}
+                      </button>
+                      <button type="button" class="btn-secondary btn-sm" (click)="toggleMembers(item)">
+                        {{ membersFor === item.workspace.id ? 'Hide users' : 'Users' }}
+                      </button>
+                      <button type="button" class="btn-secondary btn-sm" (click)="startEdit(item)">Rename</button>
+                      @if (!item.workspace.isDefault) {
+                        <button
+                          type="button"
+                          class="btn-secondary btn-sm"
+                          [disabled]="savingId === item.workspace.id"
+                          (click)="toggleActive(item)"
+                        >
+                          {{ item.workspace.isActive ? 'Deactivate' : 'Activate' }}
+                        </button>
+                      }
+                    }
+                  </td>
+                </tr>
+                @if (membersFor === item.workspace.id) {
+                  <tr class="members-row">
+                    <td colspan="7">
+                      @if (membersLoading) {
+                        <span class="muted">Loading users…</span>
+                      } @else if (!members.length) {
+                        <span class="muted">No users in {{ membersWorkspaceName }} yet.</span>
+                      } @else {
+                        <ul class="member-list">
+                          @for (m of members; track m.id) {
+                            <li>
+                              <strong>{{ m.fullName }}</strong>
+                              <span class="muted">{{ roleLabel(m) }}{{ m.isActive ? '' : ' · deactivated' }}</span>
+                            </li>
+                          }
+                        </ul>
+                      }
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+  }
+</div>

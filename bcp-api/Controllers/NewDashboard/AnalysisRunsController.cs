@@ -84,12 +84,16 @@ public class AnalysisRunsController(
                 .ToListAsync(ct);
 
             var deletedItems = deletedRuns.Select(r => NdLegacyDataQueries.MapNdRunSummary(r)).Cast<object>().ToList();
-            deletedItems.AddRange(await LoadHiddenLegacyRunsAsync(ct));
+            if (WorkspaceScope.InDefaultWorkspace)
+                deletedItems.AddRange(await LoadHiddenLegacyRunsAsync(ct));
             return Ok(new { success = true, data = deletedItems });
         }
 
+        // Legacy (pre-ND) runs belong to the Default workspace only.
+        var includeLegacy = !ndOnly && WorkspaceScope.InDefaultWorkspace;
+
         HashSet<Guid>? hiddenLegacySet = null;
-        if (!ndOnly)
+        if (includeLegacy)
         {
             var hiddenLegacy = await db.NdHiddenLegacyRuns.AsNoTracking()
                 .Select(h => h.LegacyId)
@@ -175,7 +179,7 @@ public class AnalysisRunsController(
 
         var items = runs.Select(r => NdLegacyDataQueries.MapNdRunSummary(r)).Cast<object>().ToList();
 
-        if (!ndOnly)
+        if (includeLegacy)
         {
             var linkedDvIds = await db.DocumentAnalysisRuns.AsNoTracking()
                 .Where(r => r.DualVerifySessionId != null)
@@ -1453,7 +1457,9 @@ public class AnalysisRunsController(
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null)
         {
-            var hidden = await db.NdHiddenLegacyRuns.FirstOrDefaultAsync(h => h.LegacyId == id, ct);
+            var hidden = WorkspaceScope.InDefaultWorkspace
+                ? await db.NdHiddenLegacyRuns.FirstOrDefaultAsync(h => h.LegacyId == id, ct)
+                : null;
             if (hidden == null) return NotFound(new { success = false, message = "Not found" });
             db.NdHiddenLegacyRuns.Remove(hidden);
             await db.SaveChangesAsync(ct);
@@ -1480,6 +1486,9 @@ public class AnalysisRunsController(
     /// <summary>Legacy analyses have no status column we own — hide via hidden_legacy_runs marker.</summary>
     private async Task<IActionResult> SoftDeleteLegacyAsync(Guid id, NdProfile profile, CancellationToken ct)
     {
+        if (!WorkspaceScope.InDefaultWorkspace)
+            return NotFound(new { success = false, message = "Not found" });
+
         string? source = null;
         if (await db.DocumentAnalysisRuns.AsNoTracking().AnyAsync(r => r.Id == id, ct))
             source = "legacy_analysis";

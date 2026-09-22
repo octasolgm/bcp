@@ -22,7 +22,9 @@ public sealed class NdDashboardCacheService(IMemoryCache cache)
         CancellationToken ct = default,
         TimeSpan? ttl = null)
     {
-        var key = $"nd-dash:{Volatile.Read(ref _generation)}:{scope}";
+        // Cached numbers are per workspace; the key must never let one workspace read another's.
+        var tenant = Reguliq.Api.Infrastructure.NewDashboard.WorkspaceScope.CurrentWorkspaceId?.ToString() ?? "all";
+        var key = $"nd-dash:{Volatile.Read(ref _generation)}:{tenant}:{scope}";
         if (cache.TryGetValue(key, out T? hit) && hit is not null)
             return hit;
 

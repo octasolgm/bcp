@@ -165,6 +165,38 @@ export type NdUserProfile = {
   isActive: boolean;
   createdAt?: string;
   isDemo?: boolean;
+  /** Platform super admin: manages workspaces. Workspace admins have role super_admin without this. */
+  isPlatformAdmin?: boolean;
+  homeWorkspaceId?: string | null;
+  /** Workspace this session is acting in (a platform admin may have switched into another one). */
+  workspaceId?: string | null;
+  workspace?: NdWorkspaceSummary | null;
+};
+
+export type NdWorkspaceSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  description?: string | null;
+  isDefault?: boolean;
+  createdAt?: string;
+};
+
+export type NdWorkspaceListItem = {
+  workspace: NdWorkspaceSummary;
+  userCount: number;
+  documentCount: number;
+  analysisCount: number;
+  admins: { id: string; fullName: string }[];
+};
+
+export type NdWorkspaceMember = {
+  id: string;
+  fullName: string;
+  role: NdUserProfile['role'];
+  isActive: boolean;
+  isPlatformAdmin: boolean;
 };
 
 export type NdRunReviewBody = {
@@ -468,6 +500,31 @@ export class NdApiService {
 
   getUsers() {
     return this.request<unknown[]>('GET', '/nd/users');
+  }
+
+  getWorkspaces() {
+    return this.request<NdWorkspaceListItem[]>('GET', '/nd/workspaces');
+  }
+
+  createWorkspace(body: {
+    name: string;
+    slug?: string;
+    description?: string;
+    admin?: { fullName: string; email: string; password?: string };
+  }) {
+    return this.request<NdWorkspaceSummary>('POST', '/nd/workspaces', body);
+  }
+
+  updateWorkspace(id: string, body: { name?: string; description?: string; isActive?: boolean }) {
+    return this.request<NdWorkspaceSummary>('PUT', `/nd/workspaces/${id}`, body);
+  }
+
+  switchWorkspace(id: string) {
+    return this.request<NdWorkspaceSummary>('POST', `/nd/workspaces/${id}/switch`);
+  }
+
+  getWorkspaceMembers(id: string) {
+    return this.request<NdWorkspaceMember[]>('GET', `/nd/workspaces/${id}/users`);
   }
 
   getDictionaryEntries() {

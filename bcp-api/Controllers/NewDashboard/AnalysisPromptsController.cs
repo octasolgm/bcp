@@ -36,7 +36,7 @@ public class AnalysisPromptsController(
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
     {
-        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
@@ -110,7 +110,7 @@ public class AnalysisPromptsController(
     [HttpGet("llm-providers")]
     public async Task<IActionResult> ListLlmProviders(CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var providers = LlmProviderCatalog.Providers.Values
@@ -140,7 +140,7 @@ public class AnalysisPromptsController(
         [FromBody] GeneratePromptRequest body,
         CancellationToken ct)
     {
-        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
@@ -208,7 +208,7 @@ public class AnalysisPromptsController(
         [FromBody] CreatePromptVersionRequest body,
         CancellationToken ct)
     {
-        var (profile, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (profile, jwtUser, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
@@ -245,7 +245,7 @@ public class AnalysisPromptsController(
     [HttpPost("versions/{versionId:guid}/set-current")]
     public async Task<IActionResult> SetCurrentVersion(Guid versionId, CancellationToken ct)
     {
-        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
@@ -290,7 +290,7 @@ public class AnalysisPromptsController(
         [FromBody] CreateSuggestionRequest body,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var promptKey = body.PromptKey?.Trim() ?? "";
@@ -327,7 +327,7 @@ public class AnalysisPromptsController(
         [FromBody] UpdateSuggestionRequest body,
         CancellationToken ct)
     {
-        var (profile, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (profile, jwtUser, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
@@ -356,7 +356,7 @@ public class AnalysisPromptsController(
     [HttpDelete("suggestions/{suggestionId:guid}")]
     public async Task<IActionResult> DeleteSuggestion(Guid suggestionId, CancellationToken ct)
     {
-        var (_, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, jwtUser, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);

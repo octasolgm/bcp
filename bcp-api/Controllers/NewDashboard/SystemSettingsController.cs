@@ -18,7 +18,7 @@ public class SystemSettingsController(
     [HttpGet("dual-verify-llm")]
     public async Task<IActionResult> GetDualVerifyLlm(CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var view = await llmSettings.GetAdminViewAsync(ct);
@@ -30,7 +30,7 @@ public class SystemSettingsController(
         [FromBody] DualVerifyLlmUpdateRequest body,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         try
@@ -54,7 +54,7 @@ public class SystemSettingsController(
     [HttpGet("regul-workflow-llm")]
     public async Task<IActionResult> GetRegulWorkflowLlm(CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         var view = await regulLlmSettings.GetAdminViewAsync(ct);
@@ -64,7 +64,7 @@ public class SystemSettingsController(
     [HttpGet("regul-retrieval-prompt-cache")]
     public async Task<IActionResult> GetRegulRetrievalPromptCache(CancellationToken ct)
     {
-        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
         return Ok(new { success = true, data = new { enabled = await regulLlmSettings.IsRetrievalPromptCacheEnabledAsync(ct) } });
     }
@@ -74,7 +74,7 @@ public class SystemSettingsController(
         [FromBody] RetrievalPromptCacheRequest body,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
         var enabled = await regulLlmSettings.SetRetrievalPromptCacheEnabledAsync(body.Enabled, profile.Id, ct);
         return Ok(new
@@ -92,7 +92,7 @@ public class SystemSettingsController(
         [FromBody] DualVerifyLlmUpdateRequest body,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
         if (error != null) return error;
 
         try

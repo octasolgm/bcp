@@ -21,3 +21,13 @@ export const ndRoleGuard: CanActivateFn = async (route) => {
 
   return router.createUrlTree(['/nd/overview']);
 };
+
+/** Platform-wide admin pages: the platform super admin only, never a workspace admin. */
+export const ndPlatformAdminGuard: CanActivateFn = async () => {
+  const auth = inject(NdAuthService);
+  const router = inject(Router);
+  if (!auth.profile()) {
+    await auth.refreshProfile();
+  }
+  return auth.isPlatformAdmin() ? true : router.createUrlTree(['/nd/overview']);
+};

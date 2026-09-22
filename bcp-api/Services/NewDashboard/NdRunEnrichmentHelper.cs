@@ -321,7 +321,10 @@ public static class NdRunEnrichmentHelper
 
         WorkspaceComplianceTotals totals;
         WorkspaceGapRiskTotals gapTotals;
-        if (demoCtx is { Enabled: true })
+        // The raw-SQL fast paths below scan every run, so inside a workspace (always, for ND requests)
+        // totals go through the tenant-filtered run ids instead.
+        var scopedToRunIds = demoCtx is { Enabled: true } || db.CurrentTenantId != null;
+        if (scopedToRunIds)
         {
             var runIds = await runsQ.Select(r => r.Id).ToListAsync(ct);
             totals = runIds.Count == 0
@@ -407,7 +410,7 @@ public static class NdRunEnrichmentHelper
         }
 
         WorkspaceActionTotals actionTotals;
-        if (demoCtx is { Enabled: true })
+        if (scopedToRunIds)
         {
             var runIds = await runsQ.Select(r => r.Id).ToListAsync(ct);
             actionTotals = runIds.Count == 0

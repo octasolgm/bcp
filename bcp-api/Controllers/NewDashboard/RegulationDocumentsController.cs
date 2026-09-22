@@ -1804,7 +1804,7 @@ public class RegulationDocumentsController(
         }
 
         var fileHash = stored?.FileHash;
-        var legacyRuns = await db.DocumentAnalysisRuns.AsNoTracking()
+        var legacyRuns = !WorkspaceScope.InDefaultWorkspace ? [] : await db.DocumentAnalysisRuns.AsNoTracking()
             .Where(r =>
                 (r.RegulationDocumentId != null && candidateIds.Contains(r.RegulationDocumentId.Value))
                 || (!string.IsNullOrWhiteSpace(fileHash) && r.GovFileHash == fileHash))

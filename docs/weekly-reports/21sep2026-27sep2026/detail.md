@@ -47,6 +47,27 @@ Fixes
 - Opening an existing analysis could leave the pipeline panel on "Pending". It now loads each step's output.
 - The per-clause "Rerun clause" button was missing for some clauses. It now appears.
 
+Separate workspaces for each client
+
+The platform now supports multiple workspaces, one per client organisation. Each bank gets its own space with its own users, departments, uploaded documents, regulation libraries and analyses. People inside one workspace cannot see anything that belongs to another, including in lists, dashboards, counts and direct links.
+
+The platform super admin has a new Workspaces page under Administration. From there a new workspace can be created together with its first administrator in one step, and existing workspaces can be renamed, deactivated or reactivated. The page shows how many users, documents and analyses each workspace holds. The super admin can open any workspace with one click, or use the workspace selector in the top bar, and from then on every page shows that workspace's data.
+
+Each workspace has its own Admin. A workspace admin creates and manages the users and departments of their own workspace and has the same day to day rights as before inside it, but cannot see other workspaces or change platform-wide settings such as the AI model, analysis prompts or the query dictionary. Those remain with the platform super admin.
+
+Everything that existed before this change, including all current users, documents, analyses and the demo accounts, now sits in a Default workspace, so current users and the demo experience are exactly as they were. Deactivating a workspace blocks its users from signing in until it is turned back on, and no data is deleted.
+
+We tested this with two separate test banks, checking that users, documents, departments, libraries and analyses created in one bank never appear in the other, that workspace admins cannot reach platform settings or other banks' users, and that demo and existing accounts see the same results as before. The test banks were removed afterwards.
+
+More AI providers
+
+Zhipu AI (GLM) and Alibaba Qwen can now be selected as the analysis model, alongside the providers added earlier this week. The cost estimate workbook now includes a sheet for these providers and a recommendation sheet.
+
+Fixes
+
+- The gap analysis Excel export now uses the correct file name prefix.
+- The list of manually added regulation points is now kept separately for each workspace.
+
 Being worked on
 
 - Analysis with Kimi K3 currently fails because the Kimi account has run out of balance. It needs a top up, or another model can be selected in Admin settings.
@@ -56,3 +77,6 @@ Being worked on
 - Removing the old "Re-run forward" button from the result panel now that each clause has its own rerun.
 - Adding resolved, unresolved and total counts, and collapsible acronym and synonym sections, to the Query Expansion Dictionary admin page.
 - Agreeing with the client which documents to use for the next round of testing.
+
+- Rolling out the workspace update to the hosted environment. Real client workspaces should be created only after that, because the currently hosted version does not yet separate workspaces.
+- Confirming that the shared acronym and synonym dictionary used to improve search can stay common to all workspaces, as it holds terminology only and no client documents.

@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Reguliq.Api.Data.NewDashboard.Entities;
 
 [Table("regul_forward_findings")]
-public class NdRegulForwardFinding
+public class NdRegulForwardFinding : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -43,10 +43,13 @@ public class NdRegulForwardFinding
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("regul_internal_sections")]
-public class NdRegulInternalSection
+public class NdRegulInternalSection : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -69,10 +72,13 @@ public class NdRegulInternalSection
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("regul_reverse_mappings")]
-public class NdRegulReverseMapping
+public class NdRegulReverseMapping : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -104,10 +110,13 @@ public class NdRegulReverseMapping
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }
 
 [Table("regul_qualitative_assessments")]
-public class NdRegulQualitativeAssessment
+public class NdRegulQualitativeAssessment : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -130,4 +139,7 @@ public class NdRegulQualitativeAssessment
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }

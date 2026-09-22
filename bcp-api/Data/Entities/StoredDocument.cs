@@ -1,10 +1,11 @@
+using Reguliq.Api.Data.NewDashboard.Entities;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Reguliq.Api.Data.Entities;
 
 [Table("stored_documents")]
-public class StoredDocument
+public class StoredDocument : ITenantScoped
 {
     [Key]
     [Column("id")]
@@ -135,4 +136,7 @@ public class StoredDocument
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
 }

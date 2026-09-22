@@ -96,6 +96,7 @@ public class NdRegulationUploadService(
             DepartmentId = departmentId,
             ExtractionStatus = "pending",
             CreatedBy = userId,
+            TenantId = stored.TenantId,
         };
         db.NdRegulationDocuments.Add(regDoc);
         await db.SaveChangesAsync(ct);
@@ -517,6 +518,7 @@ public class NdRegulationUploadService(
             FilePath = "",
             ExtractionStatus = "pending",
             CreatedBy = userId,
+            TenantId = stored.TenantId,
         };
         db.NdRegulationDocuments.Add(regDoc);
         await db.SaveChangesAsync(ct);

@@ -74,7 +74,8 @@ public static class NdDocumentAnalysisRunCountHelper
         try
         {
             // Legacy runs predate demo isolation, so a demo viewer never counts them.
-            if (demoCtx is { Enabled: true, ViewerIsDemo: true })
+            if (demoCtx is { Enabled: true, ViewerIsDemo: true }
+                || !Reguliq.Api.Infrastructure.NewDashboard.WorkspaceScope.InDefaultWorkspace)
                 return new NdDocumentAnalysisRunCounts(byDoc);
 
             var legacy = await db.DocumentAnalysisRuns.AsNoTracking()

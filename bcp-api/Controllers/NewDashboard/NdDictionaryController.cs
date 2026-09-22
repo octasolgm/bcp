@@ -61,7 +61,7 @@ public class NdDictionaryController(AppDbContext db, SupabaseJwtValidator jwt) :
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] DictionaryEntryRequest body, CancellationToken ct)
     {
-        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var acronym = body.Acronym.Trim();
@@ -89,7 +89,7 @@ public class NdDictionaryController(AppDbContext db, SupabaseJwtValidator jwt) :
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] DictionaryEntryRequest body, CancellationToken ct)
     {
-        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var row = await db.NdDictionaryEntries.FirstOrDefaultAsync(e => e.Id == id, ct);
@@ -106,7 +106,7 @@ public class NdDictionaryController(AppDbContext db, SupabaseJwtValidator jwt) :
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (_, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var row = await db.NdDictionaryEntries.FirstOrDefaultAsync(e => e.Id == id, ct);

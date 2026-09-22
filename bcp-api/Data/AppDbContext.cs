@@ -1,7 +1,9 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
+using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services.NewDashboard;
 
 namespace Reguliq.Api.Data;
@@ -50,6 +52,40 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdTempPointReviewComment> NdTempPointReviewComments => Set<NdTempPointReviewComment>();
     public DbSet<NdDemoAnalysisTemplate> NdDemoAnalysisTemplates => Set<NdDemoAnalysisTemplate>();
     public DbSet<NdDemoAnalysisTemplatePoint> NdDemoAnalysisTemplatePoints => Set<NdDemoAnalysisTemplatePoint>();
+    public DbSet<NdWorkspace> NdWorkspaces => Set<NdWorkspace>();
+
+    /// <summary>
+    /// Workspace the current request acts in; null outside a request (workers, startup) = no filter.
+    /// Read by the tenant query filters on every execution, so it must stay an instance member.
+    /// </summary>
+    public Guid? CurrentTenantId => WorkspaceScope.CurrentWorkspaceId;
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampTenantOnInserts();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StampTenantOnInserts();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>
+    /// New rows join the request's workspace. Rows inserted with no request scope are left null here and
+    /// filled by the database trigger (from the parent row or the creator's profile, see NdWorkspaceSchemaBootstrap).
+    /// </summary>
+    private void StampTenantOnInserts()
+    {
+        var tenant = CurrentTenantId;
+        if (tenant == null) return;
+        foreach (var entry in ChangeTracker.Entries<ITenantScoped>())
+        {
+            if (entry.State == EntityState.Added && entry.Entity.TenantId == null)
+                entry.Entity.TenantId = tenant;
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -233,7 +269,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<NdRegulationPoint>(e =>
         {
             e.Property(p => p.Status).HasDefaultValue(NdRegulationPointStatus.Active);
-            e.HasQueryFilter(p => p.Status == NdRegulationPointStatus.Active);
+            // EF 8 keeps one filter per entity, so the tenant check is folded in here instead of
+            // being added by ConfigureTenantScoping.
+            e.HasQueryFilter(p => p.Status == NdRegulationPointStatus.Active
+                && (CurrentTenantId == null || p.TenantId == CurrentTenantId));
             e.HasOne<NdRegulationDocument>()
                 .WithMany(d => d.Points)
                 .HasForeignKey(p => p.RegulationDocumentId)
@@ -359,7 +398,43 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasColumnType("jsonb");
         });
 
+        ConfigureTenantScoping(modelBuilder);
         ConfigureUtcDateTimes(modelBuilder);
+    }
+
+    /// <summary>
+    /// Maps tenant_id on every <see cref="ITenantScoped"/> entity and filters it to the request's workspace.
+    /// Profiles are deliberately not filtered: auth, name lookups and the demo directory resolve profiles by
+    /// id across workspaces, and user lists filter explicitly instead.
+    /// </summary>
+    private void ConfigureTenantScoping(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<NdWorkspace>(e => e.HasIndex(w => w.Slug).IsUnique());
+
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var clr = entityType.ClrType;
+            if (!typeof(ITenantScoped).IsAssignableFrom(clr)) continue;
+
+            modelBuilder.Entity(clr).Property(nameof(ITenantScoped.TenantId)).HasColumnName("tenant_id");
+            modelBuilder.Entity(clr).HasIndex(nameof(ITenantScoped.TenantId));
+
+            if (clr == typeof(NdProfile) || clr == typeof(NdRegulationPoint)) continue;
+
+            modelBuilder.Entity(clr).HasQueryFilter(BuildTenantFilter(clr));
+        }
+    }
+
+    private LambdaExpression BuildTenantFilter(Type clr)
+    {
+        // e => this.CurrentTenantId == null || e.TenantId == this.CurrentTenantId
+        var e = Expression.Parameter(clr, "e");
+        var current = Expression.Property(Expression.Constant(this), nameof(CurrentTenantId));
+        var rowTenant = Expression.Property(e, nameof(ITenantScoped.TenantId));
+        var body = Expression.OrElse(
+            Expression.Equal(current, Expression.Constant(null, typeof(Guid?))),
+            Expression.Equal(rowTenant, current));
+        return Expression.Lambda(body, e);
     }
 
     private static void ConfigureUtcDateTimes(ModelBuilder modelBuilder)

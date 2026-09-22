@@ -1,0 +1,67 @@
+.form-subheading {
+  margin: 0.25rem 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.field-wide {
+  grid-column: span 2;
+
+  @media (max-width: 640px) {
+    grid-column: auto;
+  }
+}
+
+.table-wrap {
+  th.num,
+  td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.ws-tag {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.edit-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.inline-input {
+  height: 32px;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+}
+
+.members-row td {
+  background: var(--bg-muted);
+}
+
+.member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    flex-direction: column;
+  }
+}

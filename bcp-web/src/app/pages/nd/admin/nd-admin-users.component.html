@@ -2,7 +2,11 @@
   <div class="page-header page-header--catalog">
     <div class="page-header-title-block">
       <h1>User Management</h1>
-      <p class="subtitle">Create demo or production users — email verification is not required</p>
+      @if (workspaceName) {
+        <p class="subtitle">Users of <strong>{{ workspaceName }}</strong>. People you create here can only see this workspace's documents and analyses.</p>
+      } @else {
+        <p class="subtitle">Create demo or production users — email verification is not required</p>
+      }
     </div>
   </div>
 
@@ -35,7 +39,7 @@
               <option value="maker">Maker</option>
               <option value="checker">Checker</option>
               <option value="reviewer">Reviewer</option>
-              <option value="super_admin">Super Admin</option>
+              <option value="super_admin">{{ adminRoleLabel }}</option>
             </select>
           </label>
           <label class="field">
@@ -116,7 +120,7 @@
             <option value="maker">Maker</option>
             <option value="checker">Checker</option>
             <option value="reviewer">Reviewer</option>
-            <option value="super_admin">Super Admin</option>
+            <option value="super_admin">{{ adminRoleLabel }}</option>
           </select>
           <select class="filter-select" [(ngModel)]="statusFilter" aria-label="Filter by status">
             <option value="">All statuses</option>
@@ -162,17 +166,21 @@
                     </td>
                     <td class="muted">{{ u.email ?? '—' }}</td>
                     <td>
-                      <select
-                        class="inline-select"
-                        [ngModel]="u.role"
-                        [disabled]="savingUserId === u.id"
-                        (ngModelChange)="handleRoleChange(u.id, $event)"
-                      >
-                        <option value="maker">Maker</option>
-                        <option value="checker">Checker</option>
-                        <option value="reviewer">Reviewer</option>
-                        <option value="super_admin">Super Admin</option>
-                      </select>
+                      @if (isLockedPlatformRow(u)) {
+                        <span class="platform-role-tag" title="Platform super admin - manages all workspaces">Super admin</span>
+                      } @else {
+                        <select
+                          class="inline-select"
+                          [ngModel]="u.role"
+                          [disabled]="savingUserId === u.id || u.id === currentUserId"
+                          (ngModelChange)="handleRoleChange(u.id, $event)"
+                        >
+                          <option value="maker">Maker</option>
+                          <option value="checker">Checker</option>
+                          <option value="reviewer">Reviewer</option>
+                          <option value="super_admin">{{ adminRoleLabel }}</option>
+                        </select>
+                      }
                     </td>
                     <td>
                       <select

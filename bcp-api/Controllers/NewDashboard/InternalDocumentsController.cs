@@ -172,7 +172,7 @@ public class InternalDocumentsController(
             });
         }
 
-        var legacyRuns = await appDb.DocumentAnalysisRuns.AsNoTracking()
+        var legacyRuns = !WorkspaceScope.InDefaultWorkspace ? [] : await appDb.DocumentAnalysisRuns.AsNoTracking()
             .Where(r =>
                 r.InternalDocumentId == id
                 || (!string.IsNullOrWhiteSpace(doc.FileHash)

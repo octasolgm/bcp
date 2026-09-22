@@ -308,6 +308,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting();
 app.UseCors();
+// Must run before controllers: scopes every ND request's EF queries to the caller's workspace.
+app.UseMiddleware<Reguliq.Api.Infrastructure.NewDashboard.WorkspaceResolutionMiddleware>();
 app.MapControllers();
 
 app.MapGet("/", () => Results.Ok(new

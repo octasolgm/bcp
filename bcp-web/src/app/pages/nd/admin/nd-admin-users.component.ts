@@ -22,6 +22,8 @@ type AdminUser = {
   departmentId?: string | null;
   departmentName?: string | null;
   isActive: boolean;
+  /** Platform super admin account: only another platform admin may change it. */
+  isPlatformAdmin?: boolean;
   accountStatus: 'active' | 'deactivated' | 'pending_invitation' | string;
   createdAt: string;
 };
@@ -70,6 +72,24 @@ export class NdAdminUsersComponent implements OnInit {
 
   get isSuperAdmin(): boolean {
     return this.auth.getRole() === 'super_admin';
+  }
+
+  /**
+   * Label for the super_admin role inside a workspace. Demo accounts keep the original wording so the
+   * demo experience is unchanged.
+   */
+  get adminRoleLabel(): string {
+    return this.auth.isDemoViewer() ? 'Super Admin' : 'Admin';
+  }
+
+  /** Real platform-admin rows show a fixed badge instead of the role picker. */
+  isLockedPlatformRow(u: AdminUser): boolean {
+    return u.isPlatformAdmin === true && !this.auth.isDemoViewer();
+  }
+
+  get workspaceName(): string | null {
+    if (this.auth.isDemoViewer()) return null;
+    return this.auth.profile()?.workspace?.name ?? null;
   }
 
   get currentUserId(): string | undefined {

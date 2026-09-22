@@ -397,5 +397,7 @@ public static class NdIncrementalSchemaBootstrap
     {
         foreach (var sql in PatchSql)
             await db.Database.ExecuteSqlRawAsync(sql, ct);
+
+        await NdWorkspaceSchemaBootstrap.EnsureAsync(db, ct);
     }
 }

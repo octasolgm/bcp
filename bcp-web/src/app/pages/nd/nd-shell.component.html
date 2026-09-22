@@ -11,6 +11,22 @@
       @if (showNewAnalysis) {
         <a [routerLink]="newAnalysisLink" class="btn-new-analysis">New analysis</a>
       }
+      @if (workspaceOptions.length > 1) {
+        <label class="workspace-switcher" title="Switch the workspace you are viewing">
+          <span class="workspace-switcher-label">Workspace</span>
+          <select
+            [disabled]="switchingWorkspace"
+            (change)="onSwitchWorkspace($any($event.target).value)"
+            aria-label="Switch workspace"
+          >
+            @for (ws of workspaceOptions; track ws.id) {
+              <option [value]="ws.id" [selected]="ws.id === activeWorkspaceId">{{ ws.name }}</option>
+            }
+          </select>
+        </label>
+      } @else if (workspaceName) {
+        <span class="workspace-chip" title="Your workspace">{{ workspaceName }}</span>
+      }
       @if (profile(); as p) {
         <span class="role-badge">{{ roleLabel }}</span>
       }
