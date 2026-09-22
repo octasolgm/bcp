@@ -56,3 +56,17 @@ tmp-*.txt
 .DS_Store
 Thumbs.db
 *.log
+
+# Claude Code local session state (worktrees, local permission overrides) — launch.json is tracked
+.claude/settings.local.json
+.claude/worktrees/
+
+# One-off local backups and captured build/console output, not source
+bcp-api/backups/
+bcp-api/scripts/__pycache__/
+bcp-api/scripts/*-old.ps1
+bcp-api/scripts/supabase/*-old.sql
+bcp-web/bo.txt
+bcp-web/src/environments/environment-old*.ts
+tools/db-test/bin/
+tools/db-test/obj/

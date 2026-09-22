@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "bcp-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "bcp-web", "start"],
+      "port": 3002
+    },
+    {
+      "name": "bcp-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "bcp-api/Bcp.Api.csproj", "--launch-profile", "http"],
+      "port": 5100
+    }
+  ]
+}

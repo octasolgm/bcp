@@ -31,7 +31,7 @@
     }
   }
 
-  <div class="compare-columns">
+  <div class="compare-columns" #compareColumns [style.gridTemplateColumns]="compareGridColumns">
     <section class="compare-col compare-col-reg">
       <p class="col-label col-label-reg">
         Regulatory requirement
@@ -44,6 +44,15 @@
       }
       <p class="col-body">{{ regulatoryText }}</p>
     </section>
+
+    <div
+      class="compare-splitter"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize regulatory requirement and policy extract columns"
+      title="Drag to resize"
+      (pointerdown)="startCompareResize($event, compareColumns)"
+    ></div>
 
     <section class="compare-col compare-col-policy">
       <p class="col-label col-label-policy">

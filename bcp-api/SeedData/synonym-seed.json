@@ -1,0 +1,12 @@
+[
+  { "termA": "beneficial owner", "termB": "ultimate beneficial owner" },
+  { "termA": "customer due diligence", "termB": "know your customer checks" },
+  { "termA": "sanctions screening", "termB": "sanctions checking" },
+  { "termA": "politically exposed person", "termB": "high-risk customer" },
+  { "termA": "money laundering", "termB": "financial crime" },
+  { "termA": "suspicious activity", "termB": "unusual transaction" },
+  { "termA": "policy", "termB": "manual" },
+  { "termA": "risk assessment", "termB": "risk evaluation" },
+  { "termA": "internal controls", "termB": "compliance controls" },
+  { "termA": "record keeping", "termB": "document retention" }
+]

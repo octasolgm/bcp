@@ -47,6 +47,7 @@ Bug fixes
 Tasks
 - Added Docling as a third and fourth local parsing option (a "light" mode and a more accurate mode using a vision-language model), each with its own pages and navigation group
 - Real side-by-side testing across all engines on the same real documents to compare accuracy and speed
+- Built and deployed the API and the web app to the Azure dev environment (version 2026.09.04.091018)
 
 Bug fixes
 - Fixed a database migration step that could crash the API on startup once a document could have more than one parse result (one per engine)

@@ -37,6 +37,18 @@ const ndAnalyseRegulFullRoute = {
     ),
 };
 
+/** V5 — isolated clone of V4 for query-expansion/synonym-matching work. See
+ * docs/roadmap/QUERY-EXPANSION-PLAN.md. V4's own route above is untouched. */
+const ndAnalyseRegulFullV2Route = {
+  canActivate: [ndRoleGuard],
+  data: { ndRoles: ['maker', 'super_admin'] },
+  title: 'Regul Full Markdown V2 · Comply Solution',
+  loadComponent: () =>
+    import('./pages/analyse-regul-full-v2/analyse-regul-full-v2.component').then(
+      (m) => m.AnalyseRegulFullV2Component,
+    ),
+};
+
 /** Legacy app pages (served under /old/*). */
 const legacyAppRoutes: Routes = [
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
@@ -348,6 +360,24 @@ export const routes: Routes = [
               ),
           },
           {
+            // Same page/component again, but parse runs through Azure AI Document Intelligence
+            // (prebuilt-layout model, cloud submit-then-poll REST API) instead of a local engine.
+            path: 'internal-documents-azure-di',
+            data: { engine: 'azure-di' },
+            loadComponent: () =>
+              import('./pages/nd/internal-documents/nd-internal-documents-local.component').then(
+                (m) => m.NdInternalDocumentsLocalComponent,
+              ),
+          },
+          {
+            path: 'regulation-documents-azure-di',
+            data: { engine: 'azure-di' },
+            loadComponent: () =>
+              import('./pages/nd/regulation-documents/nd-regulation-documents-local.component').then(
+                (m) => m.NdRegulationDocumentsLocalComponent,
+              ),
+          },
+          {
             // Third, simple document library — no department, no analysis-run linkage. Local
             // parse+extract, shown as a nested Point/Sub-point tree.
             path: 'text-documents',
@@ -389,6 +419,10 @@ export const routes: Routes = [
           {
             path: 'analyse-regul-full',
             ...ndAnalyseRegulFullRoute,
+          },
+          {
+            path: 'analyse-regul-full-v2',
+            ...ndAnalyseRegulFullV2Route,
           },
           {
             path: 'analysis-versions',
@@ -459,7 +493,7 @@ export const routes: Routes = [
           },
           {
             path: 'run-analysis',
-            redirectTo: 'analyse-regul-full',
+            redirectTo: 'analyse-regul-full-v2',
             pathMatch: 'full',
           },
           {
@@ -546,6 +580,24 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'admin/dictionary',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['super_admin'] },
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-dictionary.component').then(
+                (m) => m.NdAdminDictionaryComponent,
+              ),
+          },
+          {
+            path: 'admin/synonyms',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['super_admin'] },
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-synonyms.component').then(
+                (m) => m.NdAdminSynonymsComponent,
+              ),
+          },
+          {
             path: 'admin/deleted-runs',
             canActivate: [ndRoleGuard],
             data: { ndRoles: ['super_admin'] },
@@ -584,6 +636,6 @@ export const routes: Routes = [
       },
     ],
   },
-  { path: 'run-analysis', redirectTo: 'nd/analyse-regul-full', pathMatch: 'full' },
+  { path: 'run-analysis', redirectTo: 'nd/analyse-regul-full-v2', pathMatch: 'full' },
   { path: '**', redirectTo: 'nd/overview' },
 ];

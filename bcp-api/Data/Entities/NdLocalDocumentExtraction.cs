@@ -44,6 +44,30 @@ public class NdLocalDocumentExtraction
     public string? ExtractError { get; set; }
     public DateTimeOffset? ExtractedAt { get; set; }
 
+    /// <summary>Semantic extraction — a second, independent extract result alongside the regex-based
+    /// one above, run from the same <see cref="MarkdownText"/> without touching it. Splits by embedding
+    /// consecutive sentences and cutting where meaning shifts, instead of by numbering — see
+    /// docs/pipeline/STRUCTURAL-EXTRACTION-NESTED-NUMBERING-BUG.md for why this exists. Same status
+    /// convention: pending | processing | extracted | failed. Never overwrites the structural fields
+    /// above, and running one method does not require or affect the other.</summary>
+    public string SemanticExtractStatus { get; set; } = "pending";
+    public int? SemanticSectionCount { get; set; }
+
+    /// <summary>Same shape as <see cref="SectionsJson"/> — List&lt;LocalSection&gt;-shaped JSON.</summary>
+    public string SemanticSectionsJson { get; set; } = "[]";
+    public string SemanticWarningsJson { get; set; } = "[]";
+    public string? SemanticExtractError { get; set; }
+    public DateTimeOffset? SemanticExtractedAt { get; set; }
+
+    /// <summary>Index status: pending | processing | indexed | failed. Set automatically right after
+    /// Extract succeeds for an internal document (never for a regulation document — only the internal
+    /// side is embedded, see docs/pipeline/HYBRID-ANALYSIS-PIPELINE-PLAN.md Step 0). Tracks the
+    /// background job that computes and stores one embedding per row in
+    /// <see cref="NdLocalDocumentExtractionSection"/>.</summary>
+    public string IndexStatus { get; set; } = "pending";
+    public string? IndexError { get; set; }
+    public DateTimeOffset? IndexedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

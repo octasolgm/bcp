@@ -10,10 +10,12 @@ import {
 } from '../../services/active-analysis-sessions.service';
 import { ToastService } from '../../services/toast.service';
 import { NdShellFocusService } from '../../services/nd/nd-shell-focus.service';
+import { NdPipelinePanelService } from '../../services/nd/nd-pipeline-panel.service';
 import { NdWorkspaceNavService } from '../../services/nd/nd-workspace-nav.service';
 import type { NdNavBadgeBumps } from '../../../lib/nd/nav-badge-bumps';
 import { DeployVersionService } from '../../services/deploy-version.service';
 import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.component';
+import { NdPipelineProgressPanelComponent } from '../../components/nd/nd-pipeline-progress-panel.component';
 import { startPanelResize } from '../shared/panel-resize';
 
 type NavIcon =
@@ -57,13 +59,21 @@ type NavEntry =
 @Component({
   selector: 'app-nd-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, BrandLogoComponent, NgTemplateOutlet],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    BrandLogoComponent,
+    NgTemplateOutlet,
+    NdPipelineProgressPanelComponent,
+  ],
   templateUrl: './nd-shell.component.html',
   styleUrl: './nd-shell.component.scss',
 })
 export class NdShellComponent implements OnInit, OnDestroy {
   private static readonly SIDEBAR_WIDTH_KEY = 'nd-sidebar-width';
   private static readonly BADGE_CACHE_KEY = 'nd-sidebar-badges';
+  private static readonly SIDEBAR_COLLAPSED_KEY = 'nd-sidebar-manually-collapsed';
 
   readonly auth = inject(NdAuthService);
   readonly toast = inject(ToastService);
@@ -72,6 +82,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   readonly theme = inject(ThemeService);
   readonly activeSessions = inject(ActiveAnalysisSessionsService);
   readonly shellFocus = inject(NdShellFocusService);
+  readonly pipelinePanel = inject(NdPipelinePanelService);
   private readonly workspaceNav = inject(NdWorkspaceNavService);
   readonly deployVersion = inject(DeployVersionService);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -85,6 +96,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   ndActiveRunCount = 0;
   pass2LlmSummary = '';
   sidebarWidth = 240;
+  sidebarManuallyCollapsed = false;
   private navSub: Subscription | null = null;
   private navRefreshSub: Subscription | null = null;
   private badgeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -138,7 +150,15 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   get newAnalysisLink(): string[] {
-    return ['/nd/analyse-regul-full'];
+    return ['/nd/analyse-regul-full-v2'];
+  }
+
+  /** Sidebar's actual rendered width right now — drives the floating toggle button's position
+   * on the sidebar/content divider line, matching the same 56px collapsed width in scss. */
+  get effectiveSidebarWidth(): number {
+    return this.shellFocus.regulationPointsPanelOpen() || this.sidebarManuallyCollapsed
+      ? 56
+      : this.sidebarWidth;
   }
 
   async ngOnInit(): Promise<void> {
@@ -150,6 +170,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     }
     this.navEntries = this.navForRole(role);
     this.sidebarWidth = this.loadSidebarWidth();
+    this.sidebarManuallyCollapsed = this.loadSidebarCollapsed();
     this.expandedGroups = new Set();
     this.syncExpandedGroupsToRoute();
     this.hydrateBadgesFromCache(role);
@@ -233,6 +254,26 @@ export class NdShellComponent implements OnInit, OnDestroy {
       localStorage.setItem(NdShellComponent.SIDEBAR_WIDTH_KEY, String(this.sidebarWidth));
     } catch {
       /* ignore */
+    }
+  }
+
+  toggleSidebarCollapsed(): void {
+    this.sidebarManuallyCollapsed = !this.sidebarManuallyCollapsed;
+    try {
+      localStorage.setItem(
+        NdShellComponent.SIDEBAR_COLLAPSED_KEY,
+        String(this.sidebarManuallyCollapsed),
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private loadSidebarCollapsed(): boolean {
+    try {
+      return localStorage.getItem(NdShellComponent.SIDEBAR_COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
     }
   }
 
@@ -526,10 +567,14 @@ export class NdShellComponent implements OnInit, OnDestroy {
     return { kind: 'group', group };
   }
 
+  /// Primary Documents entry - runs on Azure Document Intelligence (parse via signed-URL
+  /// submit-then-poll, real per-page markers). Landing AI's own Internal/Regulation pages moved to
+  /// their own nav group below (landingAiGroup) - same pattern as Tesseract/RapidOCR/Docling, so the
+  /// legacy engine is still reachable but no longer the default one people land on.
   private documentsGroup(role: string): NavGroup {
     const children: NavItem[] = [
-      { id: 'internal-documents', path: '/nd/internal-documents', label: 'Internal documents', icon: 'file' },
-      { id: 'regulation-documents', path: '/nd/regulation-documents', label: 'Regulation docs', icon: 'library' },
+      { id: 'internal-documents', path: '/nd/internal-documents-azure-di', label: 'Internal documents', icon: 'file' },
+      { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation docs', icon: 'library' },
       { id: 'libraries', path: '/nd/libraries', label: 'Regulation points library', icon: 'list' },
       {
         id: 'text-documents',
@@ -538,6 +583,17 @@ export class NdShellComponent implements OnInit, OnDestroy {
         icon: 'file',
         secondary: true,
       },
+    ];
+    return { id: 'documents', label: 'Documents', icon: 'file', children };
+  }
+
+  /// Landing AI (legacy) - the original Internal/Regulation Documents pages, moved out of the primary
+  /// Documents entry now that Azure Document Intelligence is the default. Kept fully working and
+  /// reachable, same as Tesseract/RapidOCR/Docling below - just no longer what people land on first.
+  private landingAiGroup(role: string): NavGroup {
+    const children: NavItem[] = [
+      { id: 'landing-ai-internal-documents', path: '/nd/internal-documents', label: 'Internal documents', icon: 'file' },
+      { id: 'landing-ai-regulation-documents', path: '/nd/regulation-documents', label: 'Regulation docs', icon: 'library' },
     ];
     if (role === 'super_admin') {
       children.push(
@@ -557,7 +613,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         },
       );
     }
-    return { id: 'documents', label: 'Documents', icon: 'file', children };
+    return { id: 'landing-ai', label: 'Landing AI (Legacy)', icon: 'file', children };
   }
 
   /// Local (non-AI) parse+extract pipelines, one nav group per OCR engine so the same document set can
@@ -654,6 +710,30 @@ export class NdShellComponent implements OnInit, OnDestroy {
     };
   }
 
+  /// Azure AI Document Intelligence - cloud OCR/layout service (prebuilt-layout model), submit-then-poll
+  /// REST API. Same whole-document shape as Docling but runs in Azure instead of a local Python service.
+  private localAzureDocIntelligenceGroup(): NavGroup {
+    return {
+      id: 'local-azure-di',
+      label: 'Azure',
+      icon: 'file',
+      children: [
+        {
+          id: 'internal-documents-azure-di',
+          path: '/nd/internal-documents-azure-di',
+          label: 'Internal documents',
+          icon: 'file',
+        },
+        {
+          id: 'regulation-documents-azure-di',
+          path: '/nd/regulation-documents-azure-di',
+          label: 'Regulation docs',
+          icon: 'library',
+        },
+      ],
+    };
+  }
+
   private analysisGroup(role: string): NavGroup {
     const demo = this.auth.isDemoViewer();
     const children: NavItem[] = [
@@ -670,7 +750,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     if (role === 'maker' || role === 'super_admin') {
       children.push({
         id: 'analyse-regul-full',
-        path: '/nd/analyse-regul-full',
+        path: '/nd/analyse-regul-full-v2',
         label: 'New analysis',
         icon: 'plus',
         cta: true,
@@ -731,9 +811,12 @@ export class NdShellComponent implements OnInit, OnDestroy {
       { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
       { id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' },
     ];
-    // Demo workspace tools are for real (non-demo) super admins only.
+    // Demo workspace tools, and the query-expansion dictionary (a local-pipeline feature — see
+    // CLAUDE.md), are for real (non-demo) super admins only.
     if (!this.auth.isDemoViewer()) {
       children.push({ id: 'admin-demo', path: '/nd/admin/demo', label: 'Demo group', icon: 'users' });
+      children.push({ id: 'admin-dictionary', path: '/nd/admin/dictionary', label: 'Query dictionary', icon: 'file' });
+      children.push({ id: 'admin-synonyms', path: '/nd/admin/synonyms', label: 'Query synonyms', icon: 'file' });
     }
     children.push(
       { id: 'admin-prompts', path: '/nd/admin/prompts', label: 'Analysis prompts', icon: 'file' },
@@ -767,14 +850,22 @@ export class NdShellComponent implements OnInit, OnDestroy {
     switch (role) {
       case 'super_admin': {
         const pending = this.pendingReviewsGroup(role);
+        // Local OCR engine test pages (Tesseract/RapidOCR/Docling) are internal evaluation tools,
+        // not something a demo/client viewer should see in the nav.
+        const localEngineGroups = this.auth.isDemoViewer()
+          ? []
+          : [
+              this.group(this.landingAiGroup(role)),
+              this.group(this.localTesseractGroup()),
+              this.group(this.localRapidOcrGroup()),
+              this.group(this.localDoclingLightGroup()),
+              this.group(this.localDoclingGlmGroup()),
+            ];
         return [
           overview,
           inbox,
           this.group(this.documentsGroup(role)),
-          this.group(this.localTesseractGroup()),
-          this.group(this.localRapidOcrGroup()),
-          this.group(this.localDoclingLightGroup()),
-          this.group(this.localDoclingGlmGroup()),
+          ...localEngineGroups,
           this.group(this.analysisGroup(role)),
           ...(pending ? [this.group(pending)] : []),
           this.group(this.adminGroup()),
@@ -782,14 +873,20 @@ export class NdShellComponent implements OnInit, OnDestroy {
       }
       case 'maker': {
         const pending = this.pendingReviewsGroup(role);
+        const localEngineGroups = this.auth.isDemoViewer()
+          ? []
+          : [
+              this.group(this.landingAiGroup(role)),
+              this.group(this.localTesseractGroup()),
+              this.group(this.localRapidOcrGroup()),
+              this.group(this.localDoclingLightGroup()),
+              this.group(this.localDoclingGlmGroup()),
+            ];
         return [
           overview,
           inbox,
           this.group(this.documentsGroup(role)),
-          this.group(this.localTesseractGroup()),
-          this.group(this.localRapidOcrGroup()),
-          this.group(this.localDoclingLightGroup()),
-          this.group(this.localDoclingGlmGroup()),
+          ...localEngineGroups,
           this.group(this.analysisGroup(role)),
           ...(pending ? [this.group(pending)] : []),
         ];

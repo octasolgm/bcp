@@ -1,8 +1,11 @@
 import { isRegulFullMarkdownWorkflow } from './regul-fields';
 import type { AnalysisRunSummary } from './types';
 
-/** Default new-analysis route (Regul full markdown, forward-only). */
-export const ND_NEW_ANALYSIS_PATH = '/nd/analyse-regul-full';
+/** Default new-analysis route (Regul full markdown, forward-only). Points at V5
+ * (analyse-regul-full-v2), the isolated clone of V4 used for ongoing query-expansion /
+ * synonym-matching work — see docs/roadmap/QUERY-EXPANSION-PLAN.md. V4 itself
+ * (/nd/analyse-regul-full) stays untouched and reachable via /nd/analysis-versions. */
+export const ND_NEW_ANALYSIS_PATH = '/nd/analyse-regul-full-v2';
 
 /** @deprecated Use {@link ND_NEW_ANALYSIS_PATH}. */
 export const ND_DEMO_NEW_ANALYSIS_PATH = ND_NEW_ANALYSIS_PATH;

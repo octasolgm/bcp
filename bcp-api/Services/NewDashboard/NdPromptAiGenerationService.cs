@@ -15,6 +15,8 @@ public class NdPromptAiGenerationService(
     OpenAiCompatibleLlmClient openAi,
     AnthropicLlmClient anthropic,
     XAiLlmClient xAi,
+    MoonshotLlmClient moonshot,
+    DeepSeekLlmClient deepSeek,
     ILogger<NdPromptAiGenerationService> logger)
 {
     public record CoverageResult(Guid SuggestionId, bool Covered);
@@ -48,6 +50,8 @@ public class NdPromptAiGenerationService(
             "openai" => await openAi.AnalyzeTextAsync(metaPrompt, resolvedModel, ct),
             "anthropic" => await anthropic.AnalyzeTextAsync(metaPrompt, resolvedModel, ct),
             "xai" => await xAi.AnalyzeTextAsync(metaPrompt, resolvedModel, ct),
+            "moonshot" => await moonshot.AnalyzeTextAsync(metaPrompt, resolvedModel, ct),
+            "deepseek" => await deepSeek.AnalyzeTextAsync(metaPrompt, resolvedModel, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{def.Id}'."),
         };
 

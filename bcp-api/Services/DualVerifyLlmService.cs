@@ -9,6 +9,8 @@ public class DualVerifyLlmService(
     OpenAiCompatibleLlmClient openAi,
     AnthropicLlmClient anthropic,
     XAiLlmClient xAi,
+    MoonshotLlmClient moonshot,
+    DeepSeekLlmClient deepSeek,
     ILogger<DualVerifyLlmService> logger)
 {
     public async Task<string> AnalyzeWithPdfsAsync(
@@ -24,6 +26,8 @@ public class DualVerifyLlmService(
             "openai" => await openAi.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "anthropic" => await anthropic.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "xai" => await xAi.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
+            "moonshot" => await moonshot.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
+            "deepseek" => await deepSeek.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }
@@ -38,6 +42,8 @@ public class DualVerifyLlmService(
             "openai" => await openAi.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "anthropic" => await anthropic.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "xai" => await xAi.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "moonshot" => await moonshot.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "deepseek" => await deepSeek.AnalyzeTextAsync(prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }

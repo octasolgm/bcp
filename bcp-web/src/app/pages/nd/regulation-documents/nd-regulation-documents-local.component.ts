@@ -121,6 +121,10 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
    * /regulation-documents-rapidocr, just pointed at a different backend engine. */
   readonly engine: NdOcrEngine = (this.route.snapshot.data['engine'] as NdOcrEngine) ?? 'tesseract';
 
+  /** Semantic extract is parked: structural extract is the finalized method. Flip to true to show the
+   * "Extract (semantic)" / "View semantic" buttons again - the handlers below are untouched. */
+  readonly showSemanticExtract = false;
+
   get engineLabel(): string {
     switch (this.engine) {
       case 'rapidocr':
@@ -129,6 +133,8 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
         return 'Docling (Light)';
       case 'docling-glm':
         return 'Docling (GLM-OCR)';
+      case 'azure-di':
+        return 'Azure';
       default:
         return 'Tesseract';
     }
@@ -172,6 +178,8 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   pointsLoading = false;
   showPointsPanel = false;
   showParsedText = false;
+  /** Which extraction result selectedPoints currently reflects — for the two View buttons. */
+  viewMode: 'structural' | 'semantic' = 'structural';
   /** Left (table) share when points panel is open — kept small by default. */
   leftPanelPct = 20;
   analysisFor: RegulationDocument | null = null;
@@ -655,15 +663,43 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     }
   }
 
-  private mapLocalPoints(result: NdLocalExtractionResult): RegulationPoint[] {
-    return (result.sections ?? []).map((s, i) => ({
-      id: `${s.clauseNo}-${i}`,
-      pointNumber: s.clauseNo,
-      pointTitle: null,
-      pointContent: s.clauseText,
-      pageReference: s.sourcePage ? `p. ${s.sourcePage}` : null,
-      pdfPage: s.sourcePage ?? null,
-    }));
+  /** Matches a clause's own heading line ("2.1. Senior Management Commitment", "Annex 1. Red Flag
+   * Indicators for TF and PF") — same shapes LocalSectionSplitter uses server-side to detect headings. */
+  private static readonly NumberedHeadingLine = /^\d{1,3}(?:\.\d{1,3}){0,4}\.?\s+(.+)$/;
+  private static readonly LabelledHeadingLine =
+    /^(?:Article|Section|Rule|Clause|Chapter|Annex)\s+\d{1,3}(?:\.\d{1,3}){0,4}\.?\s*(.+)$/i;
+
+  /** clauseText always stores the heading line as its own first line (so nothing from the source is
+   * lost) — but the points panel shows a title separately, so leaving the same heading line at the top
+   * of the body duplicates it on screen. Split it out here for display only; the stored extraction JSON
+   * is untouched. Falls back to showing the full text with no separate title when the first line isn't
+   * heading-shaped (e.g. semantic chunks, which often start mid-sentence). */
+  private splitClauseHeading(clauseText: string): { title: string | null; body: string } {
+    const newlineIdx = clauseText.indexOf('\n');
+    const firstLine = (newlineIdx === -1 ? clauseText : clauseText.slice(0, newlineIdx)).trim();
+    const rest = newlineIdx === -1 ? '' : clauseText.slice(newlineIdx + 1).trim();
+
+    const match =
+      firstLine.match(NdRegulationDocumentsLocalComponent.NumberedHeadingLine) ??
+      firstLine.match(NdRegulationDocumentsLocalComponent.LabelledHeadingLine);
+    const title = match?.[1]?.trim();
+    if (!title || !rest) return { title: null, body: clauseText };
+    return { title, body: rest };
+  }
+
+  private mapLocalPoints(result: NdLocalExtractionResult, useSemantic = false): RegulationPoint[] {
+    const source = useSemantic ? result.semanticSections : result.sections;
+    return (source ?? []).map((s, i) => {
+      const { title, body } = this.splitClauseHeading(s.clauseText);
+      return {
+        id: `${s.clauseNo}-${i}`,
+        pointNumber: s.clauseNo,
+        pointTitle: title,
+        pointContent: body,
+        pageReference: s.sourcePage ? `p. ${s.sourcePage}` : null,
+        pdfPage: s.sourcePage ?? null,
+      };
+    });
   }
 
   /** Step 1 — convert the document to text/markdown with page references. Does not detect points. */
@@ -721,7 +757,12 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   private async runLocalExtract(doc: RegulationDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
     if (this.parsingId || this.extractingId) return;
-    if ((doc.extractionStatus ?? '').toLowerCase() !== 'parsed') {
+    // extractionStatus tracks Parse and Extract combined (pending -> parsed -> extracted), so it reads
+    // 'extracted' — not 'parsed' — once this has already run once. Checking "!== 'parsed'" here blocked
+    // every Re-extract forever after the first successful extract. Only block when Parse itself hasn't
+    // actually completed, matching the same pattern the semantic-extract guard already uses correctly.
+    const parseState = (doc.extractionStatus ?? '').toLowerCase();
+    if (parseState === 'pending' || parseState === 'failed') {
       this.toast.show(`Parse "${doc.name}" first, then extract.`, 'warning', 4000);
       return;
     }
@@ -772,6 +813,52 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     } finally {
       this.extractingId = null;
     }
+  }
+
+  /** Extract, alternative method — semantic (embedding-based, Azure OpenAI). Runs off the same already-
+   * parsed text as runLocalExtract; does not re-parse (no Azure Document Intelligence credit spent) and
+   * never overwrites the structural result — both are kept, independently viewable. */
+  extractingSemanticId: string | null = null;
+
+  private async runLocalExtractSemantic(doc: RegulationDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (this.parsingId || this.extractingId || this.extractingSemanticId) return;
+    if ((doc.extractionStatus ?? '').toLowerCase() === 'pending' || (doc.extractionStatus ?? '').toLowerCase() === 'failed') {
+      this.toast.show(`Parse "${doc.name}" first, then extract.`, 'warning', 4000);
+      return;
+    }
+    const storedDocId = doc.storedDocumentId ?? doc.id;
+    this.extractingSemanticId = doc.id;
+    this.error = '';
+    this.message = `Extracting semantically — embedding each sentence, this can take a moment…`;
+    try {
+      const res = await this.api.localExtractSemanticById(storedDocId, this.engine);
+      if (!res.success || !res.data) {
+        this.error = res.message || `Semantic extraction failed for "${doc.name}".`;
+        this.toast.show(this.error, 'error', 6000);
+        return;
+      }
+      const data = res.data;
+      this.localResults.set(doc.id, data);
+      const failed = (data.semanticExtractStatus ?? '').toLowerCase() === 'failed';
+      if (this.selectedDoc?.id === doc.id && this.viewMode === 'semantic') {
+        this.selectedPoints = this.mapLocalPoints(data, true);
+        this.pointsSource = 'local';
+      }
+      this.message = failed
+        ? `Semantic extraction failed for "${doc.name}".`
+        : `Semantically extracted ${data.semanticSectionCount ?? 0} chunk(s) from "${doc.name}".`;
+      if (!failed) this.toast.show(this.message, 'success', 4000);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : `Semantic extraction failed for "${doc.name}".`;
+      this.toast.show(this.error, 'error', 6000);
+    } finally {
+      this.extractingSemanticId = null;
+    }
+  }
+
+  async handleExtractSemantic(doc: RegulationDocument, event?: Event): Promise<void> {
+    await this.runLocalExtractSemantic(doc, event);
   }
 
   onFiltersChange(): void {
@@ -1038,22 +1125,19 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   async handleStopExtract(doc: RegulationDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
     this.error = '';
-    const res = await this.api.stopRegulationExtract(doc.id);
+    const res = await this.api.localStopExtract(doc.id, this.engine);
     if (!res.success) {
       this.error = res.message ?? 'Could not stop extraction';
       return;
     }
-    const data = res.data as RegulationDocument | undefined;
     const idx = this.docs.findIndex((d) => d.id === doc.id);
-    if (idx >= 0 && data) {
-      this.docs[idx] = { ...this.docs[idx], ...data, extractionStatus: 'paused' };
+    if (idx >= 0) {
+      this.docs[idx] = { ...this.docs[idx], extractionStatus: 'failed' };
       if (this.selectedDoc?.id === doc.id) this.selectedDoc = this.docs[idx];
     }
     this.pollingExtractIds.delete(doc.id);
     this.extractingId = null;
-    this.message =
-      (data as RegulationDocument | undefined)?.extractionProgressLabel ??
-      'Extraction stopped — click Extract to resume from saved progress.';
+    this.message = 'Extraction stopped — click Parse/Extract to retry.';
     await this.loadDocs(true);
   }
 
@@ -1068,6 +1152,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     this.selectedDoc = doc;
     this.showPointsPanel = true;
     this.showParsedText = false;
+    this.viewMode = 'structural';
     this.highlightPointNumber = highlightPoint?.trim() ?? '';
     this.shellFocus.setRegulationPointsPanelOpen(true);
     const local = this.localResults.get(doc.id);
@@ -1081,6 +1166,32 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
       return;
     }
     await this.loadPointsForDoc(doc.id);
+  }
+
+  /** Third view mode — shows the semantic (embedding-based) extraction result instead of structural.
+   * Independent of viewPoints; does not touch or require the structural result. */
+  viewSemanticPoints(doc: RegulationDocument, event?: Event): void {
+    event?.stopPropagation();
+    this.clearGlobalPointSearch();
+    this.selectedDoc = doc;
+    this.showPointsPanel = true;
+    this.showParsedText = false;
+    this.viewMode = 'semantic';
+    this.highlightPointNumber = '';
+    this.shellFocus.setRegulationPointsPanelOpen(true);
+    const local = this.localResults.get(doc.id);
+    this.selectedPoints = local ? this.mapLocalPoints(local, true) : [];
+    this.pointsSource = 'local';
+    this.pointsLoading = false;
+    if (!local || (local.semanticSectionCount ?? 0) === 0) {
+      const status = (local?.semanticExtractStatus ?? '').toLowerCase();
+      this.message =
+        status === 'processing'
+          ? 'Semantic extraction is still running (one embedding call per sentence — can take a while on a long document). Wait, then reopen this view.'
+          : local?.semanticExtractError
+            ? `Semantic extraction failed: ${local.semanticExtractError}`
+            : 'No semantic extraction result yet — click "Extract (semantic)" first.';
+    }
   }
 
   async onManualPointsChanged(): Promise<void> {
@@ -1118,6 +1229,20 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
 
   toggleParsedText(): void {
     this.showParsedText = !this.showParsedText;
+  }
+
+  /** First view mode — the raw parsed markdown, independent of either extraction method. */
+  viewParsedText(doc: RegulationDocument, event?: Event): void {
+    event?.stopPropagation();
+    this.clearGlobalPointSearch();
+    this.selectedDoc = doc;
+    this.showPointsPanel = true;
+    this.showParsedText = true;
+    this.highlightPointNumber = '';
+    this.shellFocus.setRegulationPointsPanelOpen(true);
+    if (!this.localResults.has(doc.id)) {
+      this.message = 'No parsed text yet — click Parse first.';
+    }
   }
 
   @HostListener('document:keydown.escape')
@@ -1232,8 +1357,9 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
 
   private async loadPointsForDoc(docId: string): Promise<void> {
     this.pointsLoading = true;
-    // Lite truncates long clause text — enough for the library panel and much faster to render.
-    const res = await this.api.getDocumentPoints(docId, { lite: true });
+    // Full text, not "lite": lite cuts every clause to 280 characters, which chops long clauses
+    // (e.g. a clause with a bullet list) mid-sentence and leaves "Show more" with nothing to show.
+    const res = await this.api.getDocumentPoints(docId);
     if (res.success && res.data) {
       const docName = this.selectedDoc?.name ?? this.docs.find((d) => d.id === docId)?.name;
       const prepared = prepareRegulationPointsResponse(res.data as unknown[], {

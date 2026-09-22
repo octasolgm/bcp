@@ -22,10 +22,18 @@
         </div>
       }
     </div>
-    <p class="subtitle">
-      Same document library as the main Internal Documents page — <strong>Parse &amp; Extract</strong> here runs
-      locally (PdfPig + Tesseract), with no Landing AI calls, no per-page cost, and nothing leaving this server.
-    </p>
+    @if (isCloudEngine) {
+      <p class="subtitle">
+        Same document library as the main Internal Documents page — <strong>Parse</strong> here runs on Azure
+        (cloud, billed per page, the document is sent to Azure). <strong>Extract</strong>
+        then splits the parsed text into sections on this server, with no Landing AI calls.
+      </p>
+    } @else {
+      <p class="subtitle">
+        Same document library as the main Internal Documents page — <strong>Parse &amp; Extract</strong> here runs
+        locally (PdfPig + Tesseract), with no Landing AI calls, no per-page cost, and nothing leaving this server.
+      </p>
+    }
   </div>
 </div>
 
@@ -160,7 +168,7 @@
               }
               @if (isParsingDoc(d)) {
                 <span class="cell-subline">{{ parseStatusText(d) }}</span>
-                <span class="nd-progress-track" role="progressbar" aria-label="Parsing locally">
+                <span class="nd-progress-track" role="progressbar" [attr.aria-label]="isCloudEngine ? 'Parsing with Azure' : 'Parsing locally'">
                   <span class="nd-progress-fill is-indeterminate" [style.width.%]="100"></span>
                 </span>
               }
@@ -186,7 +194,25 @@
                     title="View extracted sections"
                     (click)="openSections(d, $event)"
                   >
-                    View
+                    View structural
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="row-action-btn compact"
+                  title="View the raw parsed text, independent of either extraction method"
+                  (click)="openParsedText(d, $event)"
+                >
+                  View parsed
+                </button>
+                @if (showSemanticExtract) {
+                  <button
+                    type="button"
+                    class="row-action-btn compact"
+                    title="View the semantic (embedding-based) extraction result"
+                    (click)="openSemanticSections(d, $event)"
+                  >
+                    View semantic
                   </button>
                 }
                 @if (canParse && !d.generatedByAnalysis) {
@@ -194,7 +220,7 @@
                     type="button"
                     class="row-action-btn compact"
                     [class.primary]="!isDocParsed(d)"
-                    [title]="'Parse to text with page references, locally (PdfPig + Tesseract, no Landing AI)'"
+                    [title]="isCloudEngine ? 'Parse to text with page references using Azure (cloud, billed per page)' : 'Parse to text with page references, locally (PdfPig + Tesseract, no Landing AI)'"
                     [disabled]="parsingId === d.id"
                     (click)="handleParse(d, $event)"
                   >
@@ -211,6 +237,17 @@
                     >
                       {{ extractingId === d.id ? 'Extracting…' : (hasExtractedSections(d) ? 'Re-extract (Local)' : 'Extract (Local)') }}
                     </button>
+                    @if (showSemanticExtract) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact"
+                        title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result"
+                        [disabled]="extractingSemanticId === d.id"
+                        (click)="handleExtractSemanticSections(d, $event)"
+                      >
+                        {{ extractingSemanticId === d.id ? 'Extracting…' : 'Extract (semantic)' }}
+                      </button>
+                    }
                   }
                 }
                 <div class="row-export-actions">
@@ -351,6 +388,17 @@
               >
                 {{ extractingId === sectionsFor.id ? 'Extracting…' : (hasExtractedSections(sectionsFor) ? 'Re-extract (Local)' : 'Extract (Local)') }}
               </button>
+              @if (showSemanticExtract) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result above"
+                  [disabled]="extractingSemanticId === sectionsFor.id"
+                  (click)="handleExtractSemanticSections(sectionsFor)"
+                >
+                  {{ extractingSemanticId === sectionsFor.id ? 'Extracting…' : 'Extract (semantic)' }}
+                </button>
+              }
             }
           </div>
         }
@@ -369,7 +417,7 @@
           [sections]="sectionRows"
           [loading]="false"
           [extracting]="isParsingDoc(sectionsFor) || extractingId === sectionsFor.id"
-          [extractingLabel]="isParsingDoc(sectionsFor) ? 'Parsing locally…' : 'Extracting sections locally…'"
+          [extractingLabel]="isParsingDoc(sectionsFor) ? parseStatusText(sectionsFor) : 'Extracting sections locally…'"
           [extractingPct]="null"
           [repairing]="false"
           [repairingLabel]="''"

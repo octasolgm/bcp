@@ -72,7 +72,7 @@ export class InProgressComponent implements OnInit, OnDestroy {
   historyRunStats: RunGapStatsSummary | null = null;
 
   get newAnalysisPath(): string {
-    return shellRoute(this.router, '/analyse-regul-full');
+    return shellRoute(this.router, '/analyse-regul-full-v2');
   }
 
   private runLinkOpts(): { demoViewer: boolean } {

@@ -275,6 +275,33 @@ parallelize across pages the way our own RapidOCR pool was tuned to. Not
 a bug - a real, structural difference in how much work each pipeline
 actually does per page.
 
+**Timing is also inconsistent run to run in this local test setup** - a
+later run on the identical document exceeded the 20-minute client
+timeout (confirmed still genuinely working server-side, not stuck -
+memory was actively climbing). Root cause: `docling-service/server.py`
+caches every mode's loaded model in one long-lived process
+(`_converters` dict) so requests don't reload weights every time - but
+that means testing GLM-OCR mode first leaves its multi-GB model resident
+in memory, and a *later* Light-mode request in the same process now
+competes with it for RAM. Restart the Python service between testing
+different modes to get a clean timing read. The client timeout was
+raised from 20 to 45 minutes to give real headroom for this variance
+rather than tightening the setup itself, since this is a local test
+service, not the eventual production shape.
+
+**Accuracy is not meaningfully better than plain RapidOCR** - confirmed
+by the user testing real rows: some simple, clearly legible lines still
+come back as irrelevant/wrong text. This tracks with the architecture,
+not a surprise: Docling Light's actual character-reading step *is*
+RapidOCR internally (confirmed above) - Docling only adds layout/table
+structure analysis on top of it, it does not improve or replace the
+underlying OCR accuracy at all. So Docling Light and the standalone
+RapidOCR page share the same accuracy ceiling; Docling Light is strictly
+slower for the same reading quality, not more accurate. The one engine
+that showed genuinely different (better) accuracy in real testing so far
+is Docling's GLM-OCR mode, which uses a fundamentally different
+reading approach (a vision-language model) rather than RapidOCR at all.
+
 ## GLM-OCR via Docling - real test result
 
 A real test was run: the same table-of-contents page used in the

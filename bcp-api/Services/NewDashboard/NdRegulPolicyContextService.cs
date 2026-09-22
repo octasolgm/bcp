@@ -20,10 +20,15 @@ public static class NdRegulPolicyContextService
     {
         Standard,
         FullMarkdown,
+        /// <summary>V5 hybrid engine only — chunks are the run's own Step 1+3+4 retrieval output
+        /// for this specific clause (already ranked/selected), not the whole corpus. Behaves like
+        /// FullMarkdown for context-building purposes (send every chunk given, no further
+        /// client-side re-ranking) — the curation already happened at retrieval time.</summary>
+        RetrievalAware,
     }
 
     public static RegulPolicyContextMode ResolveMode(string? workflowEngine) =>
-        AnalysisWorkflowEngine.IsRegulPipelineFull(workflowEngine)
+        AnalysisWorkflowEngine.IsForwardOnlyFullMarkdown(workflowEngine)
             ? RegulPolicyContextMode.FullMarkdown
             : RegulPolicyContextMode.Standard;
 
@@ -41,7 +46,7 @@ public static class NdRegulPolicyContextService
         IReadOnlyDictionary<string, string> MarkdownByFile,
         RegulPolicyContextMode Mode = RegulPolicyContextMode.Standard)
     {
-        public bool UsesFullMarkdown => Mode == RegulPolicyContextMode.FullMarkdown
+        public bool UsesFullMarkdown => Mode is RegulPolicyContextMode.FullMarkdown or RegulPolicyContextMode.RetrievalAware
             || TotalPages <= FullManualMaxPages;
 
         public string BuildFullContext()
@@ -126,6 +131,16 @@ public static class NdRegulPolicyContextService
         var sourceText = string.Join("\n\n", markdownByFile.Values);
         return new PolicyBundle(chunks, totalPages, sourceText, markdownByFile, mode);
     }
+
+    /// <summary>
+    /// V5 hybrid engine's Step 8 context — one clause's own Step 1+3+4 retrieval output, already
+    /// ranked/deduped by the caller, as-is (no full corpus, no re-ranking here). Page count is
+    /// meaningless for a scoped chunk set, so <see cref="RegulPolicyContextMode.RetrievalAware"/>
+    /// makes <see cref="PolicyBundle.UsesFullMarkdown"/> true regardless of TotalPages.
+    /// </summary>
+    public static PolicyBundle FromRetrievalChunks(IReadOnlyList<PolicyChunk> chunks) =>
+        new(chunks, chunks.Count, string.Join("\n\n", chunks.Select(c => c.Text)),
+            new Dictionary<string, string>(), RegulPolicyContextMode.RetrievalAware);
 
     /// <summary>
     /// Forward judgment context from per-run internal sections (same corpus reverse uses).

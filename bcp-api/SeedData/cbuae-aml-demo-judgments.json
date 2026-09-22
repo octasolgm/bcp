@@ -138,7 +138,7 @@
       "The department has all the necessary power to access relevant information, records, technical systems, and data while performing its duties and responsibilities."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.11-19, 23-24",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (1) Scope and CDD measures -- PARTIALLY COVERED; general references to due diligence and enhanced due diligence exist (pp.23-24) but the excerpts do not show a defined scope of application with specific CDD measure procedures.  (2) Maintain adequate records -- PARTIALLY COVERED; training records and due diligence documents are mentioned (pp.46-48), but no explicit general record-retention policy/period is shown in the excerpts for all customer/transaction records. Overall, most elements are covered but scope/CDD measures definition and general record-keeping retention requirements are not clearly evidenced in the excerpts provided.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -159,7 +159,7 @@
       "All cases submitted to Anti Money Laundering Suspicious Cases Unit (FIU) in Central Bank UAE/DFSA are treated as strictly confidential. The customer, or any one potentially linked to, is never informed that there is a suspicion on him/ her; to do so would be a criminal offence (tipping off)."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.14, 38-42",
-    "gap_description": "",
+    "gap_description": "Element (maintain confidentiality of report/fact of reporting and protect info from unauthorized access): partially covered - manual states SAR information is confidential and treated strictly confidentially, but does not explicitly describe 'reasonable efforts to protect the information from unauthorized access' as a distinct control (e.g., access restrictions, data security measures around SAR records). Element (confidentiality does not restrict internal sharing within FI/affiliated group for identification/prevention/reporting purposes): NOT covered - no language in the excerpts addresses permitted internal information-sharing across the FI or affiliated group notwithstanding confidentiality obligations. Element (FI may not object to reporting on grounds of customer confidentiality/data privacy): NOT covered - no clause in the excerpts states that customer confidentiality or data privacy considerations cannot be used to refuse or delay statutory reporting.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -177,7 +177,7 @@
       "The employee who reports an STR will not be held liable whether the suspicion is proven true or not, as long as the report has been made and sent in good faith."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, p.14 and p.42",
-    "gap_description": "",
+    "gap_description": "The manual covers good-faith liability protection for the entity/DIFC (p.42: 'DIFC is protected from any criminal, civil or administrative liability... submitted in good faith') and for the reporting employee (p.14: 'employee who reports an STR will not be held liable whether the suspicion is proven true or not'). However, the clause also extends this protection explicitly to board members and authorised representatives, and clarifies protection applies even if the underlying criminal activity did not actually occur or was unknown -- this broader scope (board members, authorised representatives, and explicit 'even if underlying activity did not occur') is not explicitly stated anywhere in the excerpts provided.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -231,7 +231,7 @@
       "That they are not dealing with any Shell Bank."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.36-37 (Bank's risk appetite / prohibited activities) and pp.27-28 (Correspondent banking certification requirements)",
-    "gap_description": "",
+    "gap_description": "Element (prohibition on accepting funds or deposits FROM shell banks, i.e. the shell bank itself as the depositing/counterparty entity rather than only via correspondent relationships): Not clearly covered - the excerpts only address the correspondent-account-opening scenario and require counterparty FIs to certify they don't deal with shell banks, but there is no explicit standalone prohibition on the bank itself accepting deposits or funds directly from a shell bank outside the correspondent banking certification context.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -264,7 +264,7 @@
     "interpretation": "The regulator expects the Financial Institution to have an explicit policy prohibiting the issuance of, or dealing in, bearer shares or bearer share warrants, as these instruments obscure beneficial ownership and pose significant money laundering/terrorist financing risks.\n\nNo provision found in the reviewed excerpts of the Internal AML Manual addressing bearer shares or bearer share warrants at all -- neither a prohibition on issuing them, nor a prohibition on dealing in them, nor any related beneficial ownership control tied specifically to bearer instruments. The manual discusses beneficial ownership determination generally (p.28) and prohibited relationships/risk appetite (pp.36-37, e.g. anonymous accounts, fake bank accounts, payable-through accounts, shell banks) but does not mention bearer shares/warrants as a distinct prohibited item.",
     "policy_extract": [],
     "document_reference": "Internal AML Manual 290626.pdf (excerpts provided, pp.12-14, 14-15, 21-22, 27-29, 36-38, 56-57)",
-    "gap_description": "",
+    "gap_description": "No provision found in the reviewed excerpts of the Internal AML Manual addressing bearer shares or bearer share warrants at all -- neither a prohibition on issuing them, nor a prohibition on dealing in them, nor any related beneficial ownership control tied specifically to bearer instruments. The manual discusses beneficial ownership determination generally (p.28) and prohibited relationships/risk appetite (pp.36-37, e.g. anonymous accounts, fake bank accounts, payable-through accounts, shell banks) but does not mention bearer shares/warrants as a distinct prohibited item.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -301,7 +301,7 @@
       "A National risk assessment is a comprehensive evaluation carried out by a country to identify, analyze, and understand potential threats and vulnerabilities it faces from money laundering, terrorism financing and proliferation financing. The findings of these reports includes scoring the risks for each sector and highlight the most important risks factors for each sector that potentially will be more vulnerable to be misused by criminals for ML/TF/PF."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.31-32",
-    "gap_description": "",
+    "gap_description": "The AML Manual references the National/Sectorial Risk Assessment generically and requires it to be 'taken into consideration' but does not: (1) define or reference 'predicate offence' as defined under the AML-CFT Law; (2) reference or list the FATF's 21 designated categories of predicate offences; or (3) identify the specific 2018 NRA top threats (fraud, counterfeiting/piracy, illicit drug trafficking, professional third-party money laundering) and medium-high threats (insider trading/market manipulation, robbery/theft, trafficking in stolen goods, forgery, smuggling, tax crimes, terrorism) that FIs should pay special attention to. None of these specific elements appear anywhere in the excerpted text.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -321,7 +321,7 @@
       "Third-Party Intermediaries: The involvement of intermediaries or agents in transactions can complicate the understanding of the transaction's true nature."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.5-7 (Glossary - Terrorism Financing definition), pp.31-32 (Risk Factors)",
-    "gap_description": "",
+    "gap_description": "Element 1 (legal definition of TF offence, no statute of limitations, specific acts constituting the offence - money laundering of terrorist proceeds, providing/collecting/preparing/obtaining proceeds, acting on behalf of terrorist org/person): The manual's glossary defines 'Terrorism Financing' only in general descriptive terms (supporting a group to intimidate/compel) and does not reproduce or reference the specific statutory acts enumerated in the clause (money laundering with TF knowledge without intent to conceal, providing/collecting/preparing/obtaining proceeds, acting on behalf of terrorist organisation/person) nor the 'not subject to statute of limitations' provision. This is not found in the excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -339,7 +339,7 @@
       "Applying Enhanced due diligence measures on business relationships and transactions with natural and legal persons, and financial institutions from high-risk countries identified by  DIFC"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.35, 46",
-    "gap_description": "",
+    "gap_description": "Element (special attention to regulatory disclosure/accounting/financial reporting/audit requirements of non-profit, community, religious/cultural organisations, especially in unfamiliar or low-transparency jurisdictions) is only partially covered: the Manual lists 'Societies/ Charities/ Donations relationships' as a higher-risk category (p.35) and references EDD for high-risk countries (p.46), but it does not specifically instruct staff to scrutinize the disclosure, accounting, financial reporting, or audit requirements/practices of such non-profit/religious/cultural organisations as a distinct due diligence step.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -358,7 +358,7 @@
       "Integration \nDuring the integration phase an apparently legitimate explanation is derived for the\nmoney launderer’s wealth. This is generally accomplished through schemes, such as\nreal estate purchases, front companies or shell corporations, and investments in\nsecurities, artwork and other investments, in such a way that the funds re-enter the\nbanking system as apparently legitimate earnings."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.5-7 (Glossary definitions: Placement, Layering, Integration)",
-    "gap_description": "",
+    "gap_description": "Element 2 (Layering - definition and techniques like wire transfers, back-to-back loans, false letters of credit, breaking up deposits): Covered - found in Glossary definition on pp.5-6, though 'breaking up amounts' and 'converting cash into instruments' specifically are not explicitly named as layering techniques (loan-related items are described as 'back-to-back loan transactions' rather than 'loans for placement'). Element 3 (Integration - definition and techniques like real estate investment, shell companies, reselling high-value goods): Covered - found in Glossary definition on pp.5-6. Element 4 (requirement that FIs ensure their services are not misused at any of the three stages, i.e., an operational control/obligation tied to these definitions): Not clearly covered - the excerpts present these as glossary/definitional content only, with no explicit linkage to a control objective or business-relationship-level risk assessment requiring staff to actively prevent misuse at each stage. The Customer Risk Assessment section (pp.30-32) discusses risk factors generally but does not tie them back to the three ML stages or an explicit non-misuse obligation.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -387,7 +387,7 @@
       "B.11 Gatekeepers/professional services"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.58-62 (Section B - Red Flag Indicators)",
-    "gap_description": "",
+    "gap_description": "NOT COVERED in the excerpts: commodity barter, trade-based laundering, NPO abuse, capital markets investment, shell companies (as distinct from offshore companies), nominees/trusts, foreign bank accounts, identity fraud (though 'forged identity documents' is briefly mentioned), life and general insurance product misuse, overpayment of premiums. (2) Keeping personnel up-to-date on evolving trends via Supervisory Authorities, FATF, MENAFATF, FSRBs, Egmont Group - NOT COVERED: no excerpt found addressing ongoing personnel training updates or these specific source references. (3) Incorporating typology review into compliance training and risk assessment procedures - NOT COVERED: no explicit link found between the typology list and training/risk assessment update procedures. (4) UAE FIU Trends and Typologies reports via goAML - PARTIALLY referenced only via a general mention of 'FATF Alerting Bulletins' (p.45) and 'According to the FIU' (p.58) but no explicit reference to goAML-published Trends and Typologies reports.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -407,7 +407,7 @@
       "Moreover, employees who violate the (AML/CTF) Law and Cabinet Decisions, Guidelines for Dealing with the UN’s Security Council Resolutions, and related regulations and instructions will be subject to the measures stated in the internal policy for rewards and penalties approved by the DIFC."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.6, 14, 38, 40-41",
-    "gap_description": "",
+    "gap_description": "Element 3 (specific statutory sanctions -- imprisonment and fine amounts for failure to report and for tipping-off): Not covered -- the Manual references generically that violations are 'subject to the penalties mentioned in the relevant rules and regulations' and to internal disciplinary measures ('rewards and penalties' policy) but does not cite or restate the specific AML-CFT Law sanctions (imprisonment, AED100,000-1,000,000 fine for failure to report; imprisonment of no less than six months and AED100,000-500,000 fine for tipping-off). This granular statutory penalty detail is not found in the excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -474,7 +474,7 @@
       "The classification of identified risks are placed into different categories, such as very high, high, medium, low, or some combination of those categories."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.32-34, Section 7.5/7.6",
-    "gap_description": "",
+    "gap_description": "Element-by-element review:  Senior management approval and communication to appropriate levels of the risk assessment decisions -- NOT COVERED: the excerpts describe that DIFC Branch 'has decided' on frequency/methodology but do not show any documented senior management approval step or communication protocol for the risk assessment outputs to appropriate levels of staff/management.Overall: one required element (senior management approval and communication of the assessment) is missing from the Internal AML Manual excerpts provided.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -495,7 +495,7 @@
       "The findings of the recent National/ Sectorial Risk Assessment should be taken into consideration. In addition, to other reports and guidance's issued by the FATF, MENAFATF."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.31-34",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment:   . (4) Additional sources: ML/FT red-flag indicators -- PARTIALLY addressed only in context of transaction monitoring/STR ('Indicators of Suspected Money Laundering and Terrorist Financing' guidelines, p.52) but not explicitly linked to the business-wide risk assessment risk-factor identification process. (5) Internal input including compliance officer -- NOT explicitly mentioned as an input source into the risk assessment/risk factor identification process. (7) International publications: FATF, MENAFATF -- COVERED (p.32). FSRBs, Egmont Group, UNODC -- NOT mentioned. (9) Inventory of customers, products/services, business areas using up-to-date quantitative/qualitative information with holistic view for customer categories -- NOT clearly documented; no explicit inventory-maintenance procedure or holistic categorization methodology described in the excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -515,7 +515,7 @@
       "b. A law firm, notary, or other independent legal business, accounting firm or audit firm in another jurisdiction; ... Third-Party Intermediaries: The involvement of intermediaries or agents in transactions can complicate the understanding of the transaction's true nature."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.29-35 (Section 7.5 Customer Risk Assessment; Customer Risk Factors table)",
-    "gap_description": "",
+    "gap_description": "Gap description not provided by the model after retries -- manual review required to determine what is missing and in which document.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -554,7 +554,7 @@
       "The first step of conducting an ML/TF business risk assessment for DIFC Branch is to identify, assess and understand the inherent ML/FT risks (i.e., the risks that an DIFC Branch is exposed to if there were no control measures in place to mitigate them) across all business lines and processes with respect to the following risk factors: customers, products, services and transactions, delivery channels, geographic locations, and any other risk factors."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.31-33, Sections 7.5 Customer Risk Assessment / Applying the Risk Based Approach",
-    "gap_description": "",
+    "gap_description": "Element-by-element review: (1) Typology association with established ML/FT typologies - not explicitly addressed; the manual lists product/service risk factors (cash-intensive, luxury goods, off-shore structures, nominee services, anonymity) but does not reference matching against known ML/FT typologies. (2) Complexity (conceptual, operational, legal, technological) - partially covered via 'complex structure to hide beneficial owners' identity' and 'new or developing technologies', but not framed comprehensively across conceptual/operational/legal/technological dimensions. (3) Transparency and transferability of ownership/control, including pooled/co-mingled funds and anonymous parties - partially covered ('product...that might allow for anonymity or confusion of the true identity', 'complex structure to hide beneficial owners' identity', nominee services) but pooled/co-mingled funds is not mentioned at all. (4) Size/value parameters of products/services/transactions - partially covered via 'high value product', 'significant cash transactions', but not a systematic factor addressing size/value thresholds across all product types. Overall the manual addresses inherent risk assessment at product/service/transaction level generally but does not explicitly incorporate typology association or pooled/co-mingled funds considerations, both required by the regulatory clause.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -595,7 +595,7 @@
       "The RBA will be reviewed and updated regularly to reflect changes in customer profiles, emerging risks, and regulatory requirements.  DIFC will also integrate findings from the National Risk Assessment (NRA) and Sectoral Risk Assessment (SRA) into RBA to ensure comprehensive coverage of risks at both customer and institutional level."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.31-32 (Section 7.5 Customer/Other Risk Factors; RBA discussion)",
-    "gap_description": "",
+    "gap_description": "(2) New branches/subsidiaries as a risk factor - NOT COVERED; the excerpts list customer, geographic, product/service, and delivery-channel risk factors but do not mention new branches or subsidiaries as an additional risk factor to consider. (3) Regular consultation of NRA/Topical Risk Assessment results and official-source publications - PARTIALLY COVERED; the manual references NRA/SRA findings and FATF/MENAFATF reports/guidance being 'taken into consideration' (p.31-32) and states RBA 'will be reviewed and updated regularly', but does not explicitly reference 'Topical Risk Assessment' results or establish a defined regular/periodic cadence for consulting official-source publications specifically. (5) Cyber security and distributed network risks (e.g., CEO fraud) - PARTIALLY COVERED; manual mentions 'Assessment of operational processes with respect noncyber security, use of third parties and/or virtual assets' (ambiguous phrasing, possibly a typo for 'non-cyber security' or 'cyber security'), but there is no explicit mention of distributed network risks or CEO fraud as a specific risk factor example. Overall, most elements are covered or partially covered but new branches/subsidiaries and explicit Topical Risk Assessment/CEO fraud/distributed network references are missing or unclear in the Internal AML Manual.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -616,7 +616,7 @@
       "DIFC Branch is utilizing the methodologies of Basel II (as stated in the ORMD Manual) to analyze their risks, in keeping with the nature and size of their businesses."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.14-15, 31-33",
-    "gap_description": "",
+    "gap_description": "Element 2 (complete assessment and take risk management measures PRIOR TO LAUNCH of the new product/service) - NOT COVERED: no language in the excerpts specifies that the risk assessment must be completed and mitigation measures implemented before the product/service/technology is launched; the text only references these as ongoing risk factors within the overall CRA/business risk assessment framework. Element 3 (integrating this risk assessment into product/service development processes) - NOT COVERED: no reference to embedding the assessment into a new-product development/approval workflow. Element 4 (using similar methodology as business-wide risk assessment, with documentation) - PARTIALLY COVERED: the manual references use of Basel II methodology and documentation of risk assessments generally (section 7.5b: 'Documenting risk assessment operations, keeping them up to date...'), but does not explicitly state that new-product risk assessments follow the same methodology as the business-wide ML/FT risk assessment.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -661,7 +661,7 @@
       "b. Documenting risk assessment operations, keeping them up to date on on-going basis and making them available upon request."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.32-34 (Sections 7.5-7.6, RBA)",
-    "gap_description": "",
+    "gap_description": "(2) Based on quantitative/qualitative data via internal meetings, questionnaires, audit report reviews - NOT COVERED; no mention of internal meetings, questionnaires, or audit report reviews as data-gathering methods for the risk assessment methodology. (3) Reflects management-approved risk appetite/strategy - PARTIALLY COVERED; risk appetite is referenced ('residual risk falls outside the risk appetite') but no explicit statement that the methodology itself is approved by management or reflects an approved strategy. (4) Incorporates input from internal sources (compliance officer, risk management, internal control) - NOT COVERED in excerpts; no explicit mention of compliance officer/risk management/internal control providing input into the methodology. (5) Incorporates external information (NRA, Topical Risk Assessment, Supervisory Authorities, FATF, MENAFATF, FSRBs, Egmont Group) - PARTIALLY COVERED; NRA, Topical Risk Assessment, FATF and MENAFATF are referenced, but Supervisory Authorities, FSRBs and Egmont Group are not mentioned. (6) Describes weighting/classification/prioritisation of risks - COVERED (risk scale 3/5/10, classification into very high/high/medium/low categories). (11) Determines rationale for manual interventions/exceptions - NOT COVERED; no mention of manual interventions or override rationale in the risk assessment methodology. (12) Properly documented, maintained, evaluated, updated, communicated - PARTIALLY COVERED (review/update cadence and documentation obligation stated, but 'communicated' aspect not explicitly addressed). (13) Tested/audited for effectiveness and consistency - NOT COVERED explicitly for the risk assessment methodology itself (general internal audit coverage of AML/CTF exists elsewhere in the manual but not tied specifically to testing the risk assessment methodology's effectiveness/consistency).",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -702,7 +702,7 @@
       "DIFC Branch is to keep their ML/TF business risk assessment up-to-date on an ongoing basis. In fulfilling this obligation,  DIFC Branch review and evaluate their ML/FT business risk assessment processes, models, and methodologies semiannually, in keeping with the nature and size of its business."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.31-34",
-    "gap_description": "",
+    "gap_description": "Element-by-element review:  (2) Policies/procedures comprising clear high-level policies, workable procedures, technological/internal controls - PARTIALLY COVERED: policies and procedures are referenced but the excerpts do not explicitly describe 'technological/internal controls' as a distinct component or how they interrelate with policies/procedures. (3) Approval by senior management - NOT CLEARLY COVERED: no excerpt shows senior management sign-off/approval of the AML policies/procedures themselves (senior management approval is mentioned for correspondent banking relationships and PEP/high-risk account reviews, but not for the overall AML policy framework). (5) Application to all branches/subsidiaries/affiliates with majority interest - NOT COVERED: excerpts reference 'DIFC Branch' only; no explicit statement of group-wide application to majority-owned subsidiaries/affiliates.  (7) Reasonable, proportionate, documented, approved by senior management, communicated at appropriate levels - PARTIALLY COVERED: 'documenting risk assessment operations, keeping them up to date' is present, but no explicit evidence of communication of policies at appropriate levels across the organization or senior management approval process for policies. (8) Account for IT infrastructure and MIS capabilities - NOT COVERED: no excerpt discusses IT infrastructure or MIS capability considerations in the design of AML policies/controls. (9) Categorization into risk identification/assessment, CDD/EDD/SDD, monitoring/STR, governance, record-keeping - PARTIALLY COVERED: sections on risk assessment (7.5), SDD/EDD (7.6), monitoring (Monitoring Financial Transactions), investigations/reporting (STR) are evidenced in excerpts, but record-keeping and formal governance structure categorization are not directly shown in the provided excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -725,7 +725,7 @@
       "g. Developing a mechanism to apply KYC principles, and the customer identification process."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.10-11 (Purpose/Objectives), pp.19-20 (Roles/Investigations), pp.29-30 (Section 7.5 Customer Risk Assessment)",
-    "gap_description": "",
+    "gap_description": "Element-by-element coverage assessment: (1) Customer identification - partially covered via objective 'g. Developing a mechanism to apply KYC principles, and the customer identification process' (p.11) but no detailed identification procedure excerpt shown. (2) Customer profiles - not clearly covered; excerpts reference 'CTP'/'customer profile' updates (p.41) in passing but no dedicated profile-building procedure shown. (3) Customer acceptance - not covered; no customer acceptance policy or criteria found in the excerpts.  (7) Documentation - covered via 'Documenting risk assessment operations, keeping them up to date on on-going basis and making them available upon request' (p.29). Missing/not clearly evidenced in the excerpts: a dedicated Customer Acceptance Policy and a distinct Customer Profile-building requirement, and citation to specific AML-CFT Law/Decision articles for each CDD element (only DFSA AML Rule references appear, not explicit AML-CFT Law/Decision article citations for the full CDD program).",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -747,7 +747,7 @@
       "The RBA will be reviewed and updated regularly to reflect changes in customer profiles, emerging risks, and regulatory \nrequirements."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.30-34 (Sections on CRA, Risk Factors, RBA, Section 7.6 SDD/EDD)",
-    "gap_description": "",
+    "gap_description": "Element-level review:  SDD for low-risk customers absent suspicion -- NOT clearly covered: the heading '7.6 Simplified Due Diligence and Enhanced Due Diligence' references SDD in title, but the excerpted text only describes minimum/EDD procedures; no specific SDD measures, criteria, or reduced-measure list are provided in the excerpts, so it is unclear whether SDD is substantively defined elsewhere in the manual. (4) Dynamic risk profile / re-assessment when doubts arise about risk category -- partially covered: manual notes CRA is applied at onboarding, periodic reviews, and upon change in risk factors, and lists 'doubts about accuracy or adequacy of data' as an EDD trigger, but does not explicitly state the general principle that CDD is not a static/one-time formula or that risk categorization itself must be revisited when doubted, only that EDD applies in that scenario.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -768,7 +768,7 @@
       "Assigning a particular risk rating for products or clients and deciding on the controls to mitigate the posed risks should consider previous suspicion of money laundering"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.30-31, 32-34",
-    "gap_description": "",
+    "gap_description": "Element-by-element review:  (3) Internal stakeholder input including compliance officer specifically in the customer/business risk assessment process - NOT explicitly covered; excerpts describe risk factors and approval steps (e.g., Senior Management approval for high-risk relationships) but do not describe a structured input/consultation process with internal stakeholders including the compliance officer in designing or conducting the risk assessment. (4) Use of different methodologies (generic profiles vs. sophisticated scorecards) commensurate with FI size/complexity - PARTIALLY covered; manual references a numerical risk scale (3/5/10) and Basel II methodology but does not explicitly discuss tailoring methodology choice (simple vs. complex) to business size. (5) Documentation of assessment process and rationale - PARTIALLY covered (risk factors and scoring described) but no explicit statement that rationale for each assessment is documented. (6) Senior management approval of the risk assessment methodology itself - NOT clearly covered; excerpts show senior management approval for individual high-risk relationship acceptance, not approval of the overall risk assessment methodology/process. (7) Appropriate communication of the risk assessment approach - NOT explicitly covered. (8) Periodic review and update policy - COVERED (semiannual review, updates upon internal/external events, pp.33-34).",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -789,7 +789,7 @@
       "The bank updates its customer information periodically, and if necessary, updates the customer's risk profile using adequate risk-based measures, to ensure that the customer data are up to date and the ultimate beneficiary is identified."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.24-30 (sections 7.2-7.5)",
-    "gap_description": "",
+    "gap_description": "Element-by-element review: (3) Detailed ownership/control structure charts tracing to ultimate natural persons - NOT explicitly covered; manual mentions 'viewing and verifying the ownership structure' but does not require obtaining a documented structure chart tracing to ultimate natural persons. (4) Understanding internal management structure and senior positions - PARTIALLY covered (identification of directors/senior management officers mentioned for verification documents, p.26-27, but not framed as understanding management structure for risk profiling purposes). (5) Information about majority-owned/controlled subsidiaries - NOT found in excerpts. (8) Differentiated depth of information (more detailed for higher-risk/complex, generic for lower-risk) - PARTIALLY covered via EDD/CDD risk-based approach but the specific detailed factors listed (anticipated size/turnover, expected transaction types/volumes, known counterparties, transaction locations, anticipated timing) are not explicitly enumerated in the excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -830,7 +830,7 @@
       "The purpose of the relationship must be obtained. • It is necessary to know the nature of the customer's activity."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.25-27, 33-34",
-    "gap_description": "",
+    "gap_description": "Element 1 (definition/trigger of 'Business Relationship' as any ongoing act performed for/on behalf of a customer - assigning account numbers, effecting transactions, signing contracts, accepting compensation, receiving funds, etc.): NOT explicitly covered - the manual references 'before starting a new business relationship' and 'before conducting transactions' but does not define the broad scope of activities (account numbers, contracts, compensation, receiving funds/proceeds) that constitute establishing a Business Relationship as the clause enumerates. Element 2 (risk-based CDD applied when relationship established, with exceptions for exceptional circumstances): PARTIALLY covered - CDD/EDD procedures and risk-based application are described (7.3, 7.6) but exceptional-circumstances carve-out is not addressed. Overall the broad definitional trigger for what constitutes a 'Business Relationship' is missing in the AML Manual.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -849,7 +849,7 @@
       "No incoming transfers (loan repayments etc.) shall be accepted without the full originator information (name, address and account number)."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.33-34, pp.28-30",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (1) General requirement to conduct CDD before transactions for walk-in/non-business-relationship customers is present ('Before conducting any transactions in favor of a natural or legal person with no business relationship') - partially covered but generic, not tied to occasional transaction types (currency exchange, traveler's cheques, money transfer). (2) Specific AED 55,000 threshold for occasional/linked transactions - NOT found anywhere in excerpts. (3) Specific AED 3,500 wire transfer threshold - NOT found; only general wire transfer originator-information requirement exists without a monetary threshold. (4) ML/FT suspicion trigger for CDD - covered under EDD triggers ('suspicion of money laundering or terrorist financing transactions'). (5) Doubts about veracity/adequacy of previously obtained data trigger - covered ('In the event of doubts about the accuracy or adequacy of the data previously obtained from the customer'). (6) Indicators of linked transactions (matching reference codes, sequential/close-proximity transactions with related counterparties, multiple same-day attempts at different branches) - NOT found in excerpts. Overall, the specific monetary thresholds (AED 55,000, AED 3,500) and linked-transaction indicators required by Article 6 of the AML-CFT Decision are missing from the Internal AML Manual, though general CDD principles and suspicion/doubt triggers are present.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -866,7 +866,7 @@
       "Simplified due diligence measures can be applied when the risks of money laundering and terrorist financing is low and there aren't any suspicions of money laundering or terrorist financing activities. Simplified measures can be applied with low risk customers including measures to identify and verify the identity of the customer without violating any regulatory requirements."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.34-35 (Simplified Due Diligence Procedures)",
-    "gap_description": "",
+    "gap_description": "The manual addresses simplified due diligence for low-risk customers generally but does not explicitly address the specific scenario of deferring/completing identity verification AFTER establishing the business relationship. It does not specify: (1) a timeframe within which verification must be completed post-relationship establishment, or (2) interim risk management measures to be applied during the deferral period (e.g., holding funds in suspense/escrow, or making verification completion a condition precedent to closing a transaction). These specific mechanics required by the AML-CFT Decision are not found in the excerpted text.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -883,7 +883,7 @@
       "Identification and identity verification documents related to Beneficial Owners, shareholders, nominee shareholders, directors and senior management officers and, in the case of Legal Arrangements, settlors or founders, protectors, beneficiaries, trustees or executors, governing council or committee members, or similar controlling persons"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.26-27, Section 7.3",
-    "gap_description": "",
+    "gap_description": "The manual references identifying beneficiaries in Legal Arrangements generally (trusts/foundations settlors, protectors, beneficiaries) but does not address the specific scenario of unnamed beneficiaries belonging to a designated class. None of the three required elements are covered: (1) no provision requiring the bank to obtain sufficient information about the class of beneficiaries to establish identity at settlement/pay-out; (2) no requirement to verify beneficiary identity specifically at time of settlement/pay-out or prior to exercise of legally acquired rights; (3) no interim risk management measures (e.g., holding funds in suspense/escrow, verification as condition precedent to closing) are described anywhere in the excerpts. This is a distinct sub-requirement under CDD for legal arrangements/life insurance with class beneficiaries that is absent from the AML Manual.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -901,7 +901,7 @@
       "Simplified due diligence measures can be applied when the risks of money laundering and terrorist financing is low and there aren’t any suspicions of money laundering or terrorist financing activities. Simplified measures can be applied with low risk customers including measures to identify and verify the identity of the customer without violating any regulatory requirements."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.25-26, 34-35",
-    "gap_description": "",
+    "gap_description": "The internal AML Manual does not address the specific exemption scenario in Article 10.1-2 for publicly listed legal entity customers/controlling stakeholders. Missing elements: (1) No provision describing a conditional exemption from shareholder/partner/BO identity verification when the entity is publicly listed and 25%+ ownership info is available from reliable sources, and no requirement to assess/document that the exchange's disclosure/transparency standards are equivalent to the State's -- the Manual only generally requires identifying 25%+ beneficial owners without any listed-company carve-out. (2) No explicit statement that even where such exemption applies, the bank must still ascertain identity of senior management. (3) No enumeration of the specific reliable information sources (stock exchange disclosure reports/websites, annual reports, official/public registries, credit reporting agencies, recognized media) permitted for this purpose. The generic Simplified Due Diligence section references low-risk customers broadly but does not tie to the listed-company exemption or its conditions.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -943,7 +943,7 @@
       "Documenting risk assessment operations, keeping them up to date on on-going basis and making them available upon request."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.25-31, 38-39",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment:  (5) Transaction scrutiny for consistency with FI's knowledge including source of funds -- partially covered; source of funds mentioned in KYC updates (p.38) but not explicitly framed as an ongoing scrutiny requirement tied to CDD.  (8) Documented, senior-management-approved, communicated risk-based CDD policy considering business risk assessment outcomes, timing of CDD application, review frequency and monitoring extent -- the excerpts show CRA/risk assessment documentation requirements (p.29-30) and Senior Management approval for high-risk relationships, but there is no explicit statement that the overall CDD policy/procedures themselves (as a policy document) must be reviewed/approved by senior management and communicated to staff as a proportionate, risk-based framework. This element is not clearly evidenced in the excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -963,7 +963,7 @@
       "Identification and identity verification documents related to Beneficial Owners, shareholders, nominee shareholders, directors and senior management officers and, in the case of Legal Arrangements, settlors or founders, protectors, beneficiaries, trustees or executors, governing council or committee members, or similar controlling persons"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.25-27 (sections 7.2-7.3)",
-    "gap_description": "",
+    "gap_description": "Element-level review: (2) Core identification data elements (name, ID/passport, nationality, DOB/place of birth/establishment, principal address) -- NOT explicitly enumerated as a required data set anywhere in the excerpts; manual references 'personal and financial information' generally but does not list these specific mandatory fields. (4) Mandatory use of the ICA online validation gateway for UAE ID cards, and retention of ID copy plus digital verification record -- NOT FOUND in any excerpt. (5) Treating lack of official documents/alternative verification as a risk factor -- NOT FOUND explicitly (manual mentions alternative channels for natural persons but does not flag this as a risk factor for risk classification purposes). (6) Use of digital identification systems per FATF Guidance on Digital Identity (March 2020) -- NOT FOUND. (7) Specific requirements for foreign nationals: requesting only legally valid identification documents, and for high-risk foreign nationals validating authenticity via embassy/consulate/issuing authority or MRZ/biometric applications -- NOT FOUND in the excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -981,7 +981,7 @@
       "7.11 International and Local Payments\n• Complying with transparency standards and to ensure that local/international remittance messages contain complete and accurate inform"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.28-29 (Wire Transfers section) and pp.44-45 (7.11 International and Local Payments)",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (1) Originator/beneficiary identification & threshold (AED 3,500) - NOT covered; the manual only generically requires \"full originator information (name, address and account number)\" for incoming/outgoing transfers without specifying the AED 3,500 cross-border threshold, the full required data set (identification document number/customer ID, date/place of birth), or beneficiary account number requirement. (2) Exemption from verification for cross-border transfers under AED 3,500 absent suspicion - NOT covered, no such threshold-based exemption is mentioned. (3) Domestic transfer information requirement - NOT explicitly covered; manual references incoming/outgoing transfers generally but does not distinguish domestic vs cross-border treatment. (4) Non-execution/non-crediting without verified identity - PARTIALLY covered (\"Funds must be held with Operations until information is obtained... otherwise returned and reported\") but does not explicitly state the originator's FI shall not execute and beneficiary's FI shall not credit without verification. (5) Beneficiary FI risk-based procedures for transfers lacking information (execute/return/suspend/hold + follow-up) - NOT explicitly covered beyond generic \"held...until information obtained...otherwise returned.\" (6) Intermediary FI obligations to pass on/retain info and risk-based detection procedures - NOT covered anywhere in excerpts. (7) Graduated response to repeat non-compliant counterparties (warnings, deadlines, rejection, relationship restriction/termination) - NOT covered. (8) VASP/virtual asset transfer equivalent treatment - NOT covered. (9) Reviewing purpose of wire transfers for red-flag monitoring - NOT explicitly covered in excerpts (though general suspicious transaction monitoring exists elsewhere in the manual, it is not tied specifically to wire transfer purpose review). Overall, only a generic requirement for originator information on transfers is present; the detailed regulatory framework (thresholds, specific data fields, intermediary FI duties, graduated escalation, VASP treatment) is missing from the AML Manual excerpts provided.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1000,7 +1000,7 @@
       "Identification and identity verification documents related to Beneficial Owners, shareholders, nominee shareholders, directors and senior management officers and, in the case of Legal Arrangements, settlors or founders, protectors, beneficiaries, trustees or executors, governing council or committee members, or similar controlling persons"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.25-27",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (2) Look-through of layered ownership structures to identify natural persons with 25%+ aggregate ownership, and consideration of multiple sub-25% holders being related by common ownership reaching the threshold -- PARTIALLY COVERED: the manual states the 25% threshold and requires viewing/verifying ownership structure, but does not explicitly instruct look-through of multiple layers or aggregation logic for related sub-25% holders. (3) For Legal Arrangements permitting post-settlement contributions by non-settlors, verification of settlor, trustee(s), protector, beneficiaries/class of beneficiaries, and person with ultimate effective control, plus specific handling of beneficiaries designated by class (identity established at payout/vesting) -- NOT COVERED: no text found addressing post-settlement contributions scenario or class-beneficiary identification timing. (4) Obtaining basic information on intermediaries/service providers (consultants, investors, advisors, directors, accountants, tax advisors) from trustees/representatives/managing officials, and similar treatment for foundations, membership clubs, religious institutions -- NOT COVERED: no excerpt addresses this requirement.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1017,7 +1017,7 @@
       "In relation to a beneficiary of a life insurance or other similar policy, means a natural person who ultimately owns or controls the beneficiary."
     ],
     "document_reference": "Internal A M L Manual 290626.pdf, p.4 (Definitions - Beneficial Owner) and general CDD sections pp.25-34",
-    "gap_description": "",
+    "gap_description": "The excerpts contain only a definitional reference to 'beneficiary of a life insurance or other similar policy' within the Beneficial Owner definition, but there is no specific procedure requiring the bank to take/record the name of a specifically named natural or legal person or legal arrangement identified as a beneficiary under a life insurance/investment-related insurance policy. The manual's CDD/EDD sections (pp.33-34) and customer acceptance criteria (pp.25-27) address general beneficial ownership identification but do not address life insurance beneficiary naming requirements specifically. This element is not found in the provided excerpts of the AML Manual.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1032,7 +1032,7 @@
     "interpretation": "This clause applies to life insurance/insurance-related FIs and requires that, for policy beneficiaries designated by class, characteristic, or other indirect means (e.g., 'spouse at time of death', or under a will), the FI must: (1) obtain sufficient identifying information to establish the beneficiary's identity at the time of payout, (2) record and maintain that information along with information collected under prior sub-clauses (a)/(b), (3) verify the beneficiary's identity specifically at time of payout, (4) treat the beneficiary as a risk factor when determining whether EDD is required, (5) where the beneficiary is a legal person/legal arrangement presenting higher risk, apply enhanced measures to identify and verify the beneficial owner of that beneficiary at payout, and (6) file an STR with the FIU if unable to comply with these identification/verification requirements.\n\nThe excerpts reviewed contain no provisions addressing insurance policy beneficiaries designated by class/characteristic or by will, nor any requirement to: (1) obtain sufficient information to establish beneficiary identity at time of payout, (2) record/maintain that information, (3) verify beneficiary identity specifically at payout, (4) treat the beneficiary as an explicit risk factor for EDD determination, (5) apply enhanced measures to identify/verify beneficial owners of a legal-person/legal-arrangement beneficiary at payout, or (6) file an STR if unable to comply. The manual's due diligence and beneficial ownership sections (pp.25-34) address general customer/beneficial owner identification at onboarding but do not address the insurance-specific beneficiary-at-payout scenario at all. This appears to be an insurance-sector-specific requirement not covered in the excerpted general AML manual.",
     "policy_extract": [],
     "document_reference": "Internal AML Manual 290626.pdf (pp.25-58 excerpts reviewed)",
-    "gap_description": "",
+    "gap_description": "The excerpts reviewed contain no provisions addressing insurance policy beneficiaries designated by class/characteristic or by will, nor any requirement to: (1) obtain sufficient information to establish beneficiary identity at time of payout, (2) record/maintain that information, (3) verify beneficiary identity specifically at payout, (4) treat the beneficiary as an explicit risk factor for EDD determination, (5) apply enhanced measures to identify/verify beneficial owners of a legal-person/legal-arrangement beneficiary at payout, or (6) file an STR if unable to comply. The manual's due diligence and beneficial ownership sections (pp.25-34) address general customer/beneficial owner identification at onboarding but do not address the insurance-specific beneficiary-at-payout scenario at all. This appears to be an insurance-sector-specific requirement not covered in the excerpted general AML manual.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1053,7 +1053,7 @@
       "Perform the annual review of High-risk accounts and have it approved by the Compliance Head / Business Head."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.38-40",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment:  (2) Enhanced monitoring for high-risk, reduced frequency for low-risk - PARTIALLY COVERED: high-risk enhanced monitoring is explicit ('close monitoring by a senior RM', CTP applies to high-risk accounts), but no explicit statement that low-risk customers may be monitored at reduced frequency is found in the excerpts. (3) Monitoring for normalcy/reasonableness/legitimacy and obtaining sufficient counterparty information - PARTIALLY COVERED: general suspicious-transaction language exists but explicit counterparty due diligence/'sufficient information on counterparties' language is only found in correspondent banking context (pp.28-29), not as a general ongoing monitoring requirement. (4) Methods: threshold-based, transaction-based, location-based, customer-based, singly/combined, automated/manual - PARTIALLY COVERED: threshold-based, transaction/scenario-based, and CTP (customer-based) are described, but location-based monitoring is not explicitly mentioned. (5) Document monitoring methods and obtain senior management approval of the methods - NOT COVERED: the manual describes monitoring approaches but does not state that the methods themselves must be documented and approved by senior management (approvals mentioned are for PEP/high-risk relationship continuation, not for monitoring methodology). (6) Periodic review/update of monitoring methods - NOT CLEARLY COVERED: no explicit statement found requiring periodic review/update of the monitoring system/methods themselves. (7) Establish specific monitoring procedures for customers reported as suspicious to the FIU - NOT COVERED: the excerpts describe investigation/reporting of STRs (pp.45-46) but do not describe ongoing, specific monitoring procedures applied after a customer has been reported to the FIU.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1075,7 +1075,7 @@
       "Periodic Reviews: Whenever there is a change in the customer's circumstances or the nature of the business relationship. For example, change in ownership, nature of the products or services being offered, or transaction patterns (i.e., unusually complex transaction)."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.26-27 (Section 7.3) and pp.30-31 (Section 7.5)",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (2) Event-driven/interim review triggers - PARTIALLY COVERED: manual lists some triggers (change in ownership, transaction patterns, NRA/SRA changes, regulation/guidance changes, sanctions listings, adverse media, expiry of ID document) but does not explicitly list all regulator-specified triggers such as contradictory information received, legal proceedings against the customer, or qualified audit opinions - these are not found in the excerpts. (3) Components and extent of review (defining moments, contents/extent of review, use of checklists/manuals) - NOT CLEARLY COVERED: the manual references that 'more details will be mentioned in the KYC policy and procedures' but the excerpted AML Manual itself does not define the specific content/extent of a periodic review or checklist usage. (4) Organisational responsibilities for reviews (who conducts, escalates, approves/rejects, remediates CDD gaps, and audits review quality) - PARTIALLY COVERED: Internal Audit's periodic review role is described generally (p.23-24, p.49) and Senior Management approval for high-risk relationships is noted, but there is no specific assignment of responsibility for conducting periodic CDD reviews, escalation of review outcomes, approval/rejection of reviews, or CDD remediation steps within these excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1100,7 +1100,7 @@
       "Perform the annual review of High-risk accounts and have it approved by the Compliance Head / Business Head."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.28-33, 45-46",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment:  (4) Increased scrutiny into purpose of relationship, nature of business, source of funds/wealth - PARTIALLY COVERED; manual references 'source of wealth' update requirement (p.38) but does not explicitly list the detailed additional information items required by the clause (identifying information on controllers, occupation, financial statements, banking references, domicile, proximity to FI, trade area description, business operations description, explanations for account activity changes) - NOT FOUND in excerpts. (5) EDD applying where doubts about risk classification accuracy or red-flag indicators of suspicious activity - NOT CLEARLY ADDRESSED in excerpts; the manual discusses EDD triggers tied to defined categories (PEP, high-risk country) but does not explicitly state EDD applies upon doubts in risk classification or red-flag indicators generally. (6) Documented, senior-management-approved, risk-based internal EDD policies/procedures considering NRA/business risk assessment, timing/composition, and review frequency - PARTIALLY COVERED; the manual discusses risk assessment methodology and CRA factors (pp.29-33) and references EDD application, but does not explicitly describe a single documented EDD policy approved by senior management addressing timing/composition of EDD measures as a standalone framework element.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1125,7 +1125,7 @@
       "Where a customer has been accepted and the customer or beneficial owner is subsequently found to be, or subsequently becomes a PEP. Appropriate enhanced due diligence should be performed and approval to continue the business relationship should be obtained."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.26-29, 38-39, 43-44 (sections 7.4, 7.5, 7.8)",
-    "gap_description": "",
+    "gap_description": "Element-by-element review: (1) PEP identification systems - COVERED: manual requires classifying/coding PEPs, RM identification, and covers direct family/associates definitions (p.42-43). Automated screening system for PEP identification specifically (as opposed to sanctions screening) is not explicitly described - PARTIALLY covered. (2) Source of funds/wealth reasonable measures - COVERED: 'obtain the source of wealth, source of primary and additional funds' (p.43). However, the specific methodology (automated screening, manual internet searches, public/private databases, information aggregation services, commercial background investigation services) is NOT described anywhere in the excerpts - this is missing. (3) Evaluation of legitimacy including professional/financial background investigation - NOT explicitly covered; manual only says obtain source of wealth/funds but does not describe evaluating legitimacy via professional/financial background investigation. (5) Specific re-approval triggers - PARTIALLY covered: annual review trigger is covered (p.29, 38), and 'becomes PEP' trigger is covered (p.28-29, 43-44), but 'identification of a material unusual/illogical transaction' as a specific re-approval trigger for PEP is NOT explicitly tied to re-approval, and the life/family takaful insurance beneficiary/BO-as-PEP scenario with pre-payout senior management notification and STR consideration is NOT addressed anywhere in the excerpts. (6) Domestic PEP/former international organisation official differentiated risk-based approach (assessing continuing influence, seniority, linkage between past/current functions) - NOT addressed; the manual does not distinguish domestic PEPs or former international officials or list these specific risk factors.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1145,7 +1145,7 @@
       "Once identifying higher risk clients to implement Enhanced due diligence, the weight of some factors needs to be higher and affect the final risk score for the client, particularly when: - Dealing with PEPs (Local, Foreign). - Dealing with clients from FATF’s Black list (High-Risk Jurisdictions subject to a Call for Action). - Dealing with clients from FATF’s Grey list (Jurisdictions under Increased Monitoring)."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.26-27, 31-32, 45-46",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (1) Trigger categories for EDD (high-risk country customers, non-residents lacking ID, complex structures/operations, unclear economic objectives, cash-intensive operations, unknown third parties) - partially covered: the Manual's Customer Risk Factors list (p.30-31) references complex legal/ownership structures, cash-intensive businesses, non-resident customers, high-risk countries, and payments from unknown third parties as risk factors, but does not explicitly link these directly to a mandated EDD trigger list nor mention 'non-residents lacking ID' or 'unclear economic objectives' as EDD triggers. (2) Attention to reasonableness of information and evaluation of inconsistencies/unusual circumstances (illogical presence/establishment reasons, consistency between business nature and professional background, complexity/transparency of transactions and legal structures, other business interests, consistency with counterparty's line of business) - NOT found in the excerpts; the Manual does not detail this specific analytical framework for evaluating reasonableness/inconsistency of customer information. (3) Risk-mitigation measures such as background checks (sanctions lists, criminal activity, adverse information) - partially covered: Manual mentions sanctions screening (p.27, 'listed persons') and adverse media screening (p.30) as risk factors, but does not explicitly frame these as EDD risk-mitigation background-check measures. (4) More rigorous identity verification methods for High Risk Customers/Beneficial Owners - not explicitly detailed beyond general CDD/EDD references and annual KYC updates for high-risk customers; no specific 'more rigorous verification method' procedures found in excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1166,7 +1166,7 @@
       "iii. The approval of the senior management is required to establish the correspondent banking relationships, and approve the KYC update of the relationship in the case where the financial institution is located in a high-risk country."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.32-33, 34, 45-46",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (2) Increased scrutiny/verification, detailed inquiry into purpose/source of funds - PARTIALLY COVERED via general EDD language but not specifically tied to high-risk country context. (3) Increased PEP-status investigation for high-risk country customers - NOT explicitly linked; PEP section (pp.42-43) is generic, not high-risk-country specific. (4) Increased supervision (higher approval/reporting levels, more frequent monitoring) for high-risk country relationships - PARTIALLY COVERED only for correspondent banking (senior management approval, p.46) but not generalized to all high-risk country business relationships. (5) Implementation of NAMLCFTFC-specific CDD measures/countermeasures, UNSC Chapter VII decisions, FATF/FSRB directives - NOT FOUND in excerpts. (6) Documented risk appetite for high-risk country relationships - NOT FOUND. (7) Methodology for assessing/categorising country risk - NOT FOUND (general risk assessment methodology exists at pp.32-33 but not specific country-risk categorisation methodology). (8) Risk-based controls such as product/service restrictions or transaction limits for high-risk countries - NOT FOUND. (9) Organisational roles/responsibilities specific to high-risk country EDD - NOT FOUND (only Sanctions Function roles at pp.21-22, not high-risk-country EDD roles). (10) Independent audit policy for high-risk country EDD procedures - NOT FOUND. (11) Countermeasures as advised by supervisory authorities/FIU/NAMLCFTC - NOT FOUND.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1190,7 +1190,7 @@
       "The certification should be either renewed or confirmed by the FIs every three years."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.27-29, 45-46",
-    "gap_description": "",
+    "gap_description": "Element-by-element review: (1) Shell bank prohibition - PARTIALLY covered: manual requires certification that correspondent 'are not dealing with any Shell Bank' but does not explicitly state a prohibition on entering/maintaining relationships with shell banks themselves or institutions permitting shell bank account use. (5) Understanding each institution's ML/FT responsibilities - PARTIALLY covered via certification requirements but not explicitly framed as mutual understanding of responsibilities. (6) Periodic assessment/review of regulatory and supervisory framework of relevant countries - NOT explicitly found; only generic 'high-risk countries' EDD requirement (p.46) without a country-framework review process. (7) Assessment of ownership/management structure for shell bank characteristics and downstream/nested correspondent services, with follow-up interviews - PARTIALLY covered: 'the bank may conduct meetings with correspondent bank representatives' (p.46) but no explicit mention of assessing ownership/management structure for shell bank characteristics or nested/downstream correspondent services. (8) Periodic risk-based review/update of due diligence - PARTIALLY covered: certification renewed every three years, but not clearly tied to risk-based frequency. (9) Escalation to senior management on risk profile deterioration - NOT found in excerpts. (10) Maintenance of agreements/contracts describing responsibilities for ML/FT risk mitigation and third-party usage conditions - NOT found in excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1209,7 +1209,7 @@
       "• Classify the accounts as High Risk."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.28-29 (Financial Institutions relationships section)",
-    "gap_description": "",
+    "gap_description": "Element-by-element: (1) Licensing/registration check with physical checking and copying of Hawala Provider registration certificates -- NOT covered (manual only mentions 'dealing only with registered and regulated companies' generically, no Hawala-specific certificate verification/copying requirement); (2) Obtaining/assessing MVTS's AML/CFT policies including wire transfer requirements -- PARTIALLY covered (generic reference to obtaining written policies/procedures/controls exists for 'Financial Institutions' but no specific mention of wire transfer requirements or MVTS applicability); (3) Obtaining the MVTS's agent list and assessing ML/FT risk of agents especially in high-risk countries -- NOT covered (no mention of agent lists anywhere in excerpts); (4) Obtaining sufficient information on MVTS ownership/management structure including PEP involvement, business nature/scope, customer base, geographic areas -- NOT covered specifically for MVTS (PEP procedures exist generally but not tied to MVTS ownership/management review); (5) Documented, senior-management approved, risk-based internal policy specific to MVTS CDD extent, communicated to employees -- NOT covered; no MVTS-specific policy is documented in the excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1224,7 +1224,7 @@
     "interpretation": "The regulator expects FIs to have specific, documented, risk-based CDD policies and procedures for Non-Profit Organisation (NPO) customers, covering: (1) verifying proper licensing/registration of the NPO, including specific documentary requirements for donation-collection accounts (Minister of Community Development letter) and outbound transfers (via Ministry of Foreign Affairs); (2) obtaining and assessing the NPO's own AML/CFT policies and controls; (3) obtaining sufficient information on the NPO's legal/regulatory/supervisory status (disclosure, accounting, reporting, audit requirements); (4) obtaining sufficient information on ownership/management structure including PEP involvement, nature/scope of activities, donor/beneficiary base, and geographic areas of operation; (5) performing background/sanctions checks on key persons (senior management, branch/field managers, major donors/beneficiaries); and (6) ensuring this risk-based NPO CDD framework is documented, approved by senior management, and communicated to relevant staff.\n\nNone of the provided excerpts of the Internal AML Manual contain any NPO-specific CDD provisions. Element-by-element review: (1) NPO licensing/registration verification, donation-account Minister of Community Development letter requirement, and outbound transfer via Ministry of Foreign Affairs -- not covered anywhere in the excerpts. (2) Obtaining/assessing the NPO's own AML/CFT policies/controls -- not covered (only general Financial Institution due diligence questionnaire is mentioned for FI relationships, not NPOs). (3) Obtaining information on NPO's legal/regulatory/supervisory status (disclosure/accounting/reporting/audit requirements) -- not covered. (4) Information on ownership/management structure including PEP involvement, activity nature/scope, donor/beneficiary base, geographic areas -- not covered; general PEP and CDD/EDD sections (pp.26-29, 42-43) address PEPs generally but do not reference NPOs specifically. (5) Background/sanctions checks on key persons (senior management, branch/field managers, major donors/beneficiaries) of NPOs -- not covered; general sanctions screening exists (pp.24-25) but no NPO-specific key-person check requirement. (6) Documented, senior-management-approved, communicated risk-based NPO policy -- not evidenced. The manual addresses general CDD/EDD, PEPs, high-risk customers, and Financial Institution relationships, but contains no distinct NPO risk-based CDD framework as required by this clause.",
     "policy_extract": [],
     "document_reference": "Internal AML Manual 290626.pdf (excerpts pp.14-15, 17-20, 24-29, 32-33)",
-    "gap_description": "",
+    "gap_description": "None of the provided excerpts of the Internal AML Manual contain any NPO-specific CDD provisions. Element-by-element review: (1) NPO licensing/registration verification, donation-account Minister of Community Development letter requirement, and outbound transfer via Ministry of Foreign Affairs -- not covered anywhere in the excerpts. (2) Obtaining/assessing the NPO's own AML/CFT policies/controls -- not covered (only general Financial Institution due diligence questionnaire is mentioned for FI relationships, not NPOs). (3) Obtaining information on NPO's legal/regulatory/supervisory status (disclosure/accounting/reporting/audit requirements) -- not covered. (4) Information on ownership/management structure including PEP involvement, activity nature/scope, donor/beneficiary base, geographic areas -- not covered; general PEP and CDD/EDD sections (pp.26-29, 42-43) address PEPs generally but do not reference NPOs specifically. (5) Background/sanctions checks on key persons (senior management, branch/field managers, major donors/beneficiaries) of NPOs -- not covered; general sanctions screening exists (pp.24-25) but no NPO-specific key-person check requirement. (6) Documented, senior-management-approved, communicated risk-based NPO policy -- not evidenced. The manual addresses general CDD/EDD, PEPs, high-risk customers, and Financial Institution relationships, but contains no distinct NPO risk-based CDD framework as required by this clause.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1242,7 +1242,7 @@
       "Simplified measures can be applied with low risk customers including measures to identify and verify the identity of the customer without violating any regulatory requirements."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, p.34",
-    "gap_description": "",
+    "gap_description": "Element 1 (deferred verification for identified low-risk customers with compensating controls such as escrow/suspense of funds or verification as condition precedent, while still obtaining basic ID info upfront and info on relevant parties): NOT covered - the manual only states SDD can be applied to low-risk customers without violating regulatory requirements, but does not describe deferred verification timing, compensating risk-control measures, or the requirement to still obtain basic identification/relevant-party information upfront. Element 2 (listed company exemption from verifying shareholders/BOs, with equivalence assessment for foreign exchanges, and still verifying persons acting on the company's behalf): NOT covered anywhere in the excerpts. Element 3 (internal SDD policies/procedures/controls that are risk-based per NRA/BRA, specifying circumstances/timing/composition of SDD application, review/update frequency, monitoring extent, documented, senior-management approved, and communicated): NOT covered - the manual gives only a generic one-line statement on SDD applicability with no documented procedure, approval, or communication process specified.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1262,7 +1262,7 @@
       "If DIFC is not reasonably satisfied with the CDD undertaken by a third party, DIFC must perform the CDD itself with respect to any deficiencies identified. Notwithstanding reliance on a third party, it should be noted that DIFC remains responsible for compliance with, and liable for any failure to meet, / the CDD requirements in the DFSA AML module."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.34-36",
-    "gap_description": "",
+    "gap_description": "Element-by-element review: (2) Clearly defined procedures/tools (questionnaires, scorecards, on-site visits) to assess third-party CDD adequacy including policies, personnel numbers, audit/QA - NOT COVERED; manual does not describe any assessment tools, scorecards, or on-site visit procedures for vetting third-party CDD programs. (3) Service-level agreements defining roles/responsibilities - NOT COVERED; no mention of SLAs. (4) Procedures for third-party certification of documents as true copies - PARTIALLY COVERED; manual states DIFC must take 'adequate steps to satisfy itself that certified copies... will be available... without delay' but does not detail a certification procedure. (6) Document and periodically review methods ensuring third-party adherence - NOT COVERED; no periodic review cadence or documentation requirement specified for the assessment methodology itself. (9) Distinction between reliance and use of reliable/independent sources, with evidence of regulatory standing - PARTIALLY COVERED; general KYC section mentions using 'reliable and independent sources' but does not elaborate on obtaining evidence of the source's regulatory standing or certification distinct from third-party reliance.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1305,7 +1305,7 @@
       "Report cases of suspicion to the Financial Investigation Unit (FIU) through GoAml."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.14, 19, 51-52",
-    "gap_description": "",
+    "gap_description": "Element-level review: ((2) 'FIs shall register on GoAML, maintain active registration, and new licensed FIs must register immediately upon obtaining their license' -- the internal manual references reporting suspicious transactions to FIU 'through GoAml' (pp.14, 19) confirming GoAML is used as the filing channel, but it does not explicitly state an obligation to register on GoAML, maintain active registration status, or register immediately upon obtaining a new license. This specific registration/maintenance requirement is missing in the internal document.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1342,7 +1342,7 @@
       "In case of suspicion that the financial transaction may involve money laundering, the employee in charge must not tip-off or notify the customer of any information."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.37-39",
-    "gap_description": "",
+    "gap_description": "Element 1 (transactions/attempted transactions/funds suspected as proceeds of crime, or related to/intended for ML/FT/illegal org financing, regardless of amount): Partially covered - the manual states 'All suspicious transactions, including attempts to conduct a transaction, must be reported regardless of the amount of the transaction' and references ML/TF suspicion, but does not explicitly extend this to 'illegal organisation financing crimes' or explicitly state 'funds' (not just transactions) fall within scope, and does not explicitly say 'in whole or part' or 'regardless of...timing'. Element 2 (reasonable grounds suffice; no need to prove predicate offence, illicit source, or have actual knowledge): Not covered - the manual never states that mere reasonable grounds/suspicion is sufficient without proof of a predicate offence, illicit source of funds, or knowledge of underlying criminal activity (this concept appears only in the glossary describing the money laundering offence definition under Federal Decree-Law No. 20/2018, not in the context of what constitutes/must be reported as a suspicious transaction). Element 3 (attempted, unexecuted, and past transactions found upon review to give rise to suspicion must be reported): Partially covered - attempted transactions are explicitly captured, but there is no explicit mention that past/completed transactions reviewed later and found to raise suspicion must also be reported.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1362,7 +1362,7 @@
       "The department should lay down procedures for investigations and reporting of Money Laundering and Terrorist Financing that guarantee the effectiveness and efficiency of investigations. The procedures must also include a mechanism for keeping records and confidential arrangements."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.45-47 (Monitoring Financial Transactions; Investigations and Reporting)",
-    "gap_description": "",
+    "gap_description": "Element-by-element review: (1) Indicators for suspicious transactions - PARTIALLY covered: manual references 'Indicators of Suspected Money Laundering and Terrorist Financing Guidelines' but does not describe a process for updating these indicators based on FIU instructions, typology developments, or NRA/business risk assessment results. (2) Internal policies for indicator identification/implementation/updating, roles/responsibilities, IT/operational procedures, staff training - PARTIALLY covered: general monitoring and training sections exist but no explicit linkage of indicator design/update process to organisational roles, IT systems, and training specifically for indicator management. (4) Immediate reporting to FIU once suspicion is clear, demonstrating continuous action - PARTIALLY covered: reporting to FIU via GoAML is mentioned but 'immediate and continuous action from the alert' language and urgency emphasis not explicit. (5) Defined reporting procedure including examining earlier/related transactions and reconsidering risk profiles - NOT COVERED: no mention of examining earlier/related transactions or reconsidering customer risk profile during investigation. (7) Presence of non-obligatory indicator requiring immediate investigation considering product/service and customer risk context - NOT explicitly covered. (8) Example typologies of suspicious transactions provided - NOT found in excerpts (reference is only to external 'Indicators' guideline document, not internal list of example transaction types). (9) GoAML requirement to select at least one appropriate reporting reason - NOT COVERED: manual mentions GoAML reporting but not the requirement to select a reporting reason from the menu. Overall, several core elements (indicator update cycle, risk-profile reconsideration, examining earlier/related transactions, example typologies, GoAML reason selection) are missing or not evidenced in the excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1382,7 +1382,7 @@
       "Applying internal disciplinary procedures as well as criminal prosecution and/or external organizational penalties in the event of failure to follow any AML/CTF or Sanctions procedures."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.14, 24, 38, 40",
-    "gap_description": "",
+    "gap_description": "Element-level review:  (3) No statute of limitations on reporting - NOT COVERED; the manual does not state that there is no time-bar or limitation period on the obligation to report once suspicion arises. (4) FIU as designated Competent Authority regardless of mainland/Free Zone - PARTIALLY COVERED; the manual references reporting to FIU via GoAML and DFSA notification but does not explicitly state that FIU is the Competent Authority irrespective of mainland/Free Zone status of the reporting entity. (5) Criminal liability for failure to report (specific fine range AED100,000-1,000,000 and/or imprisonment) - NOT COVERED; the manual only generally references 'internal disciplinary procedures as well as criminal prosecution and/or external organizational penalties' without citing the specific statutory fine range or imprisonment consequence tied to failure to report. (6) No exemptions from reporting requirement - NOT COVERED; not explicitly stated in the manual.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1405,7 +1405,7 @@
       "The department maintains a record of all reports related to Anti-Money Laundering and Counterterrorist Financing, including investigation reports and studies related to cases of suspected money laundering, terrorist financing and sanctions."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.41-42, 46-51",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (2) Compliance officer/MLRO duty to review and decide whether to report - PARTIALLY COVERED (MLRO 'investigates the suspicious activity and considers whether an SAR should be lodged'), but no explicit requirement to document reasons when deciding NOT to report/maintain the transaction internally instead of filing - this is missing in the Manual. (4) Internal investigation policy prior to STR filing - PARTIALLY COVERED; MLRO 'investigates' but no detailed internal investigation policy/procedure is documented. (5) Conditions/timing/methods for internal reporting - PARTIALLY COVERED ('promptly notify the MLRO') but no specific timing standards or methods (e.g., form, escalation channel) beyond referencing an STR form generally. (6) Content/format requirements for internal reports - NOT CLEARLY COVERED; only a general STR form is mentioned, no detailed content/format standard for internal notifications is shown in excerpts. (7) Confidentiality/data protection controls for internal reporting specifically - PARTIALLY COVERED via general tipping-off/confidentiality provisions but no dedicated data protection control language. (8) Post-filing procedures for additional information/follow-up/business relationship handling - NOT COVERED in excerpts; no procedure describing how to handle the business relationship or respond to FIU follow-up requests after STR filing. (9) Compliance officer decision-making policy - PARTIALLY COVERED (MLRO has sole authority to decide) but no documented decision-making criteria/policy. (10) Documentation, senior management approval, and communication of these procedures - NOT EXPLICITLY SHOWN; no evidence that the internal reporting procedure itself was senior-management approved and communicated as a discrete policy.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1428,7 +1428,7 @@
       "The department should lay down procedures for investigations and reporting of Money Laundering and Terrorist Financing that guarantee the effectiveness and efficiency of investigations."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.41-42, 46-47",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (3) Distinction between obligatory indicators requiring immediate FIU reporting versus indicators requiring internal investigation first, with requirement to demonstrate investigation started immediately and continued until reporting -- NOT CLEARLY COVERED; the manual states the department 'must act immediately to conduct the necessary investigations' generically but does not distinguish obligatory/immediate-reporting indicators from those needing prior investigation, nor require documentation demonstrating investigation started immediately and continued until reporting decision. (4) Clear, documented, senior-management-approved policies/procedures and training on identification, investigation, and appropriate extent of investigation -- PARTIALLY COVERED; training section (pp.46-47) addresses general AML/CTF training but does not specifically address training on investigation of suspicious transactions and appropriate extent of investigation, nor confirm senior-management approval of these specific investigation procedures.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1450,7 +1450,7 @@
       "Information contained in an SAR is confidential.  DIFC is protected from any criminal, civil or administrative liability which may result from providing the required information in an SAR which has been submitted in good faith."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.14-15, 40-42",
-    "gap_description": "",
+    "gap_description": "Several elements of the clause are covered: (3) Confidentiality of SAR information itself - covered (p.42, 'Information contained in an SAR is confidential'). However, several required elements are NOT clearly evidenced in the excerpts: (a) an explicit statement that confidentiality requirements do NOT restrict intra-group communication for identifying/preventing/reporting suspicious transactions is absent from the manual; (b) a documented, senior-management-approved policy/procedure specifically covering 'appropriate access rights' and 'secure information flows' for STR confidentiality (beyond general department confidentiality) is not explicitly shown; (c) staff guidance/training specifically targeted at first-line customer-facing staff regarding tipping-off/confidentiality is not explicitly documented (training section on p.47-48 covers general AML training but does not call out first-line customer-facing staff specifically); (d) the specific penalty figures (AED100,000-500,000 fine, minimum six months imprisonment) for tipping off are not stated in the manual - it only says 'considered a crime' and 'will be held totally responsible' without citing the specific penalty range.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1470,7 +1470,7 @@
       "DIFC employees are reminded that in accordance with Federal AML legislation, firms or any of their Employees must not disclose, directly or indirectly, to the Customer or to any other person that they have reported, or are intending to report, a suspicious transaction."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.14, 40-42",
-    "gap_description": "",
+    "gap_description": "Element 1 (protection from liability for good-faith reporting): Covered - the manual states 'DIFC is protected from any criminal, civil or administrative liability which may result from providing the required information in an SAR which has been submitted in good faith' (p.42) and that employees reporting an STR 'will not be held liable whether the suspicion is proven true or not, as long as the report has been made and sent in good faith' (p.14). However, this protection is stated as applying to the entity/employee generally without explicitly extending it to board members and authorised representatives, and without the specific clarification that protection applies 'even without knowledge of the precise underlying criminal activity or whether illegal activity actually occurred.'",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1491,7 +1491,7 @@
       "Based on the alert investigation done by  DIFC Branch Compliance, RMs\\ BMs\\ Sales Representatives may be required to update customer profile/ CADD/ CTP or exercise enhance due diligence by creating CADD."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.41-42",
-    "gap_description": "",
+    "gap_description": "Several discrete elements of clause 7.10 are covered, but many are not: (3) PARTIAL - avoiding tipping off is addressed generally (CDD/tipping off, p.41) but not specifically tied to delay tactics during the FIU-feedback-waiting period. (4) NOT COVERED - no mandatory classification of the reported customer/relationship as 'High Risk' with EDD/ongoing monitoring specifically tied to STR filing; general EDD/CADD language exists but not linked to this trigger. (5) NOT COVERED - no guidance on confidentiality of FIU instructions being restricted to certain senior management/board members. (6) NOT COVERED - no specific list of delay techniques (citing operational/technical problems, lost paperwork, internal approval processes) for pending transactions awaiting FIU instruction. (7) NOT COVERED - no requirement to report additional suspicions arising during the delay period as follow-up. (8) NOT COVERED - no guidance on requesting specific FIU instructions when delay is no longer reasonably possible. (9) NOT COVERED - no guidance on determining reasonable time periods for FIU feedback based on transaction complexity/type, or on FI's discretion/no-obligation to execute transactions absent instructions. (10) NOT COVERED - no requirement to document decision rationale and implement/document additional EDD/monitoring/control measures (documentation requirements, product/service restrictions, transaction limits) with senior management approval of a plan including conditions, duration, removal requirements and implementation roles when maintaining a relationship absent FIU feedback. (11) NOT COVERED - no explicit requirement to advise FIU of intention to terminate a relationship absent official objection. None of these detailed procedural elements were found in the AML Manual excerpts provided.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1514,7 +1514,7 @@
       "Relevant Persons such as  DIFC are obliged under UAE Cabinet Decision No. 10 of 2019 to prepare and submit semi-annual reports to their senior management, and to keep a copy of those reports, with senior management remarks and decisions, for any review to be conducted by Supervisory Authority (i.e. the DFSA)."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.11-12, 15-16, 20-21, 47-48",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (1) Clear accountability lines for oversight of higher-risk staff activities -- NOT explicitly covered; the manual assigns general senior management/department responsibility but does not specifically address accountability for oversight of staff engaged in higher-AML/CFT-risk activities. (2) Mechanisms to inform board/senior management of compliance initiatives, deficiencies, STRs filed, corrective actions -- PARTIALLY covered via 'Submitting reports on the activities of the AML/CTF Department to senior management/group compliance office' and semi-annual reports to senior management with remarks/decisions (p.47-48), but no explicit board-level reporting mechanism or specific mention of STR statistics reaching the board is shown. (3) Accurate/timely AML/CFT programme status reporting including statistics on transactions monitored, alerts, cases, STRs filed -- PARTIALLY covered via 'Preparing the department's comprehensive MIS report' and periodic reports of suspicious cases (p.20-21), but statistics specifically on transactions monitored/alerts/cases/STRs are not itemized. 5. Accountable management structures and independent control functions -- PARTIALLY covered via Senior Management/SEO responsibilities and Internal Audit's independent periodic audit (pp.11-12, 15-16), but not framed explicitly as an 'accountable management structure for ML/FT risk management' separate from general senior management duties. Overall, several elements are only partially or not explicitly addressed in the excerpts provided.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1534,7 +1534,7 @@
       "Head Compliance reports directly to the SEO DIFC Branch."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.14-17",
-    "gap_description": "",
+    "gap_description": "Element-by-element coverage: (3) Conflict of interest prevention for CO/staff -- PARTIALLY COVERED ('No delegation should be appointed to the Head compliance or any employees...that may lead to a conflict of interest') but this addresses task-delegation conflicts only, not the broader requirement to identify/prevent conflicts between FI/personnel and customers, nor specifically between CO and senior management/Board (pecuniary or otherwise). (4) Appropriate competencies/experience for statutory duties at management level -- NOT COVERED; no language specifying required competencies, experience, or seniority criteria for the CO role. (5) Consideration of NRA/topical risk assessment results, business nature/size/complexity/risk profile, governance framework, and CO role duties when determining competencies/experience/reporting structure -- NOT COVERED; no such determination framework is described in the excerpts. (6) Optional dialogue with Supervisory Authorities/professional associations/industry peers -- NOT COVERED (though this is an optional element, not core to compliance).",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1581,7 +1581,7 @@
       "8. The bank must also educate all employees of their responsibilities, their personal duties and the penalties that they may be subject to under the law if they fail to comply with the relevant requirements as stipulated in the Anti-Money Laundering and Counter Terrorist Financing Laws."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.46-47, section 'Training and Raising Awareness of Employees (AML Module Chapter 12)'",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment:  (3) Screening staff for high standards when hiring -- NOT COVERED; no staff screening/vetting-at-hiring policy or procedure is described anywhere in the excerpts, only training obligations before employees 'start working'. (4) Training targeted at customer-facing staff, AML/CFT compliance staff, and senior management/board -- PARTIALLY COVERED; the manual lists Front-liners, Relationship Managers, Compliance, AML, Payment/Trade Operations, and 'responsible senior branch management' but does not explicitly reference the Board of Directors. (5) Application across organisation/financial group including foreign branches/majority-owned subsidiaries -- NOT COVERED; no group-wide/foreign-branch/subsidiary application language found for training/screening in these excerpts (only unrelated group-wide language appears re: AML/CTF requirements observance issues at pp.49-50, not training/screening specifically). (6) Factors for determining appropriate measures: NRA/topical risk assessment results -- NOT directly linked to training design in these excerpts (NRA is referenced elsewhere for CRA/business risk assessment, not specifically for staff training determination); business nature/size/complexity/risk profile -- PARTIALLY addressed via 'Frequency to be determined by the level of risk of the business groups' and considering products/services; effective screening/selection methods for cultural compatibility -- NOT COVERED; staff competency assessment for training needs -- PARTIALLY COVERED via 'Carrying out the necessary tests to assess the extent of the employees' understanding', though this is testing after training rather than a competency assessment to determine training needs; training programme type/frequency/structure/content/delivery -- PARTIALLY COVERED (frequency and content criteria given, but no explicit structure/delivery method or type discussion); internal/external training resource management -- NOT COVERED explicitly; effectiveness assessment methods/tools including screening procedures -- PARTIALLY COVERED via testing employees' understanding, but no broader effectiveness assessment methodology or staff screening procedure evaluation. Overall: staff screening for hiring, group-wide/foreign branch application, cultural-compatibility screening, and NRA-linked training design are missing from the AML Manual excerpts provided.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1599,7 +1599,7 @@
       "DIFC must provide to the DFSA or a law enforcement ag"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.14-15, 49-50",
-    "gap_description": "",
+    "gap_description": "Element 1 (group-wide AML/CFT programme applied to all branches/majority-owned subsidiaries): Not addressed in excerpts - the manual is written from the perspective of a single DIFC branch reporting to a 'Head Office'/'Compliance Group', implying it is itself a branch of a group, but there is no policy language establishing a group-wide programme that the branch imposes on its own subsidiaries/branches. Element 2 (policies/procedures for CDD and ML/FT risk information exchange between foreign branches/subsidiaries and head office): Only a fragmentary reference to 'Provide Head Office with adequate, relevant information on matters related to Anti-Money Laundering and Terro[rist Financing]' (p.15) is found; no dedicated policy on data-sharing mechanisms, scope, or frequency. Element 3 (additional measures where foreign restrictions prevent sharing - effectiveness/gap analysis, IT access policies, product/customer access policies, CDD acceptance/reliance policies, SLAs, certification protocols): Not found anywhere in the excerpts. Element 4 (host country less strict - apply home standard to extent permitted, additional risk mitigation, inform Supervisory Authority, comply with supervisory actions up to termination): Not found in the excerpts; the only related mention is a truncated line about a foreign branch/subsidiary being 'unable to observe appropriate AML/CTF requirements because it is prohibited by its local laws' near p.49, but this is cut off and does not show the required response steps (informing Supervisory Authority, additional mitigation, possible termination).",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1617,7 +1617,7 @@
       "The Internal Audit Division must perform an independent periodic audit of the department's activities as part of the approved audit plan and document the results of the inspection and send it to the higher management."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.11-12 (Statement section) and pp.49-50 (Internal Audit Review, 3rd Line of Defence)",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment:  (2) Staffing/competency commensurate with risk, and use of qualified external sources for smaller FIs with internal oversight - NOT COVERED: no mention of audit team staffing/competency requirements or provisions for outsourcing audit capability to qualified external providers with internal coordination/oversight. (3) Coverage of all branches/majority-owned subsidiaries domestic and foreign - NOT COVERED: no explicit statement that audit scope extends to all branches and majority-owned subsidiaries (domestic/foreign). (4) Factors determining audit frequency/extent (NRA results, business nature/size/complexity, product/customer risk profile, supervisory feedback, risk developments) - NOT COVERED: the Manual does not specify how audit frequency or scope is determined based on these risk factors. (5) Audit scope specifics: (a) examining AML/CFT/CDD policy adequacy and regulatory compliance - PARTIALLY COVERED (generic statement that audit 'covers Compliance and AML&CTF requirements' but no detail on assessing policy/procedure adequacy specifically); (b) assessing training adequacy (comprehensiveness, accuracy, schedule, attendance tracking, escalation) - NOT COVERED: no mention of audit reviewing training programme adequacy; (c) reviewing outsourced AML/CFT compliance functions (personnel qualifications, contract, performance, reputation) - NOT COVERED: no mention in the audit section; (d) reviewing case management/STR systems including research/referral of unusual transactions - NOT COVERED: no mention of audit function reviewing STR/case management systems specifically. Overall, while the existence of an independent internal audit function reviewing AML/CTF is established, the detailed scope requirements, risk-based frequency determination, external-sourcing provisions for smaller FIs, and coverage across branches/subsidiaries are missing from the AML Manual excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1639,7 +1639,7 @@
       "The AML-CFT Law and the Cabinet Decisions require DIFC to promptly apply directives issued by the competent authorities of the UAE for implementing the decisions issued by the United Nations Security Council (“UNSC”). In furtherance of this requirement, the Cabinet Decision 74 sets out the legislative and regulatory framework regarding the Targeted Financial Sanctions (“TFS”)"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.11-12, 17-20, 26-27, 45-48",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (2) Setting risk appetite / tone at the top - NOT explicitly covered; no clause found stating senior management sets ML/FT risk appetite. (3) Appointing a qualified CO - NOT explicitly covered as a senior management duty (MLRO appointment is mentioned but not framed as a senior management responsibility to appoint a 'qualified' CO). (4) Ensuring independent audit function - PARTIALLY covered (Internal Audit performs periodic audits, reported to higher management, but not framed as senior management 'ensuring' this function). (5) Adequate MIS/controls - NOT explicitly tied to senior management responsibility in excerpts. (6) Approval of internal policies/procedures (risk appetite, ML/FT risk framework, CDD/EDD/SDD, suspicious transaction indicators, record retention/data protection, staff screening/training) - NOT found as senior management approval requirement in excerpts (policy approval responsibilities are attributed to Compliance/AML department, e.g. section 6.14, not senior management). (11) Ensuring programme application to all branches/subsidiaries including foreign - NOT explicitly covered in excerpts. (12) Applying UNSC Chapter VII/Cabinet Decision 74 directives - COVERED at an institutional level but not explicitly framed as a senior management responsibility. (13) Implementing High Risk Country CDD measures per NAMLCFTFC - COVERED partially via high-risk country EDD language but not explicitly tied to senior management application of NAMLCFTFC-defined measures. Overall, several oversight/approval elements (high-risk/PEP/correspondent/high-risk country approvals, semi-annual report review) are well covered, but risk appetite setting, CO appointment qualification, MIS/controls adequacy, and explicit senior management approval of policies/procedures (CDD/EDD/SDD, STR indicators, record retention, staff screening/training) are missing or only found attributed to the Compliance Department rather than Senior Management in the excerpted text.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1654,7 +1654,7 @@
     "interpretation": "The regulator expects small/mid-sized FIs to still meet all AML-CFT obligations despite limited staff/IT resources, and specifically to: (1) ensure the Compliance Officer, if given other duties, does not also hold day-to-day sales/customer relationship management responsibility; (2) where segregation of duties is not achievable due to size, ensure that core AML/CFT policies (CDD, STR, High Risk Country CDD, sanctions monitoring) are clearly formulated, documented and adhered to; (3) clearly document the rationale for any policy/procedural exceptions and additional mitigating measures, retain these per record-keeping rules, and consider referencing significant exceptions in the CO's semi-annual report to the Supervisory Authority; and (4) where clear separation of AML/CFT duties from business management is not achievable, consider enhanced independent audit measures (exception-focused audits, increased audit/inspection frequency, stricter transaction review criteria).\n\nThe excerpts do not address governance considerations for small/mid-sized institutions at all. Specifically: (1) No provision stating the CO/MLRO must not hold day-to-day sales/relationship management duties when responsibilities are combined due to small size - not found. (2) No statement that where segregation is not possible, core AML/CFT policies (CDD, STR, High Risk Country CDD, sanctions monitoring) must be clearly formulated/documented/adhered to as a compensating control for small-org structure - not found (general CDD/STR/sanctions procedures exist elsewhere in the manual but not framed as a small-org governance mitigant). (3) No requirement to document rationale for policy/procedural exceptions and retain per record-keeping rules, nor to consider referencing significant exceptions in the semi-annual report to DFSA - the semi-annual report reference exists (p.47-48) but nothing ties it to documenting exceptions arising from small-org governance gaps. (4) No provision for enhanced independent audit measures (exception-focused audits, increased audit frequency, stricter review criteria/sample sizes) specifically tied to inadequate separation of AML/CFT duties from business management - the Internal Audit section (p.49-50) covers general AML/CFT audit coverage but not this small-org contingency.",
     "policy_extract": [],
     "document_reference": "Internal AML Manual 290626.pdf - no matching section found in excerpts (reviewed pp.29-50)",
-    "gap_description": "",
+    "gap_description": "The excerpts do not address governance considerations for small/mid-sized institutions at all. Specifically: (1) No provision stating the CO/MLRO must not hold day-to-day sales/relationship management duties when responsibilities are combined due to small size - not found. (2) No statement that where segregation is not possible, core AML/CFT policies (CDD, STR, High Risk Country CDD, sanctions monitoring) must be clearly formulated/documented/adhered to as a compensating control for small-org structure - not found (general CDD/STR/sanctions procedures exist elsewhere in the manual but not framed as a small-org governance mitigant). (3) No requirement to document rationale for policy/procedural exceptions and retain per record-keeping rules, nor to consider referencing significant exceptions in the semi-annual report to DFSA - the semi-annual report reference exists (p.47-48) but nothing ties it to documenting exceptions arising from small-org governance gaps. (4) No provision for enhanced independent audit measures (exception-focused audits, increased audit frequency, stricter review criteria/sample sizes) specifically tied to inadequate separation of AML/CFT duties from business management - the Internal Audit section (p.49-50) covers general AML/CFT audit coverage but not this small-org contingency.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1676,7 +1676,7 @@
       "The DFSA would ordinarily expect the Firm to be able to provide a copy of a record or assessment referred to above within 24 hours of a request by the DFSA."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.49-52",
-    "gap_description": "",
+    "gap_description": "Element-by-element review: (2) Organization to permit data analysis/transaction tracking - PARTIALLY COVERED, generic statement about easy reference and transaction tracking but no detail on data analysis capability requirements. (4) Sufficiency to permit reconstruction of transactions for prosecution evidence - NOT explicitly addressed; no mention of evidentiary reconstruction standard. (5) Retention period - the Manual specifies 10 years (exceeds the 5-year minimum, so compliant on duration) but the trigger events differ: it lists relationship termination/transaction conclusion/account closure/contract end, but does NOT include 'completion of a Supervisory Authority records inspection', 'issue date of a final judicial judgment', or 'liquidation/dissolution/termination of a legal person/arrangement' as retention start triggers - these specific triggers are missing in the AML Manual. (6) Documented, senior-management-approved retention policies - NOT explicitly evidenced in excerpts (no approval reference found). (7) Record-keeping roles/responsibilities for risk assessment/AML policy implementation - PARTIALLY addressed via department record-keeping duties but not tied comprehensively to record retention governance. (8) Record-keeping functional roles (logging, cataloguing, archiving, handling, transferring, destruction of expired records) - PARTIALLY COVERED; archiving mentioned generically but no destruction/handling/transferring procedures documented. (9) Physical/cyber security protections for records - NOT addressed in excerpts. (10) Audit/QA testing of record-keeping - NOT specifically addressed (general internal audit coverage exists but not focused on record-keeping QA).",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1696,7 +1696,7 @@
       "DIFC is required to maintain records of all SARs and any relevant supporting documents and information, including internal findings and analysis plus any relevant communications with the FIU for at least six years"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.49-51",
-    "gap_description": "",
+    "gap_description": "Element-by-element assessment: (3) Company Information - PARTIALLY COVERED: 'entity incorporation documents' mentioned but no distinct sub-category for company-specific records (e.g., ownership structure, registration documents beyond incorporation) is clearly enumerated. (4) Reliance on Third Parties for CDD - NOT COVERED: no explicit mention in the excerpts of retaining records related to reliance on third parties for CDD purposes. (5) Ongoing Monitoring of Business Relationships - PARTIALLY COVERED: general references to 'update forms', 'field visit forms', and periodic KYC updates exist, but not explicitly framed as a 'monitoring records' retention sub-category. Overall, the manual addresses most elements but does not explicitly address record retention for reliance on third-party CDD providers, and Company Information / Ongoing Monitoring are only implicitly covered.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1715,7 +1715,7 @@
       "Internal audits, self-assessment and inquiry work papers investigating suspicious or abnormal transactions"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.49-51",
-    "gap_description": "",
+    "gap_description": "Element 1 (retain transaction records for minimum 5 years, covering specific enumerated record types e.g. credit/debit advices, deal tickets/trade blotters, escrow/fiduciary records, insurance policy transaction records, money transfer originator/beneficiary records, transaction statistics/analytical data): PARTIALLY covered -- the AML Manual states records are kept for 'no less than ten years' (exceeds the 5-year minimum, satisfying the duration requirement) and references 'financial transactions, account statements... cash transactions and money transfers' but does not enumerate or specifically address credit/debit advices, deal tickets/trade blotters/settlement records, escrow/fiduciary account records, or insurance policy transaction records, nor customer transaction statistics/analytical data as a distinct retained category. Element 2 (compile and keep notes on particularly large/unusual transactions): PARTIALLY covered -- the manual references 'inquiry work papers investigating suspicious or abnormal transactions' kept for no less than ten years, but this is framed around suspicious activity investigation rather than a general requirement to compile notes on all large/unusual transactions regardless of suspicion. Element 3 (examine and document in writing the background/purpose of all complex, unusual, large transactions and unusual patterns lacking apparent economic/lawful purpose, including those not reported as suspicious, retaining findings for 5 years for Central Bank inspection): NOT explicitly covered -- the excerpts do not show a documented written-examination requirement for complex/unusual/large transactions independent of the SAR/STR reporting process, nor an explicit statement that findings are retained for Central Bank inspection purposes specifically.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1750,7 +1750,7 @@
       "DIFC is required to maintain records of all SARs and any relevant supporting documents and information, including internal findings and analysis plus any relevant communications with the FIU for at least six years from the date on which the notification or report was made, the business relationship ends or the transaction is completed, whichever occurs last."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.51-52 (Record keeping requirements for SARs)",
-    "gap_description": "",
+    "gap_description": "The excerpts contain a general record-retention requirement only for SARs (6 years) and general KYC/beneficial ownership identification obligations during onboarding, but there is no provision addressing: (1) retention obligations specific to company dissolution/liquidation/termination scenarios where the bank acts as administrator, liquidator or holds a controlling interest; (2) the specific 5-year retention period from date of dissolution/liquidation/termination for corporate documents (formation, registration, deregistration, liquidation, dissolution/expiry documents, share registers, MOA/AOA, deeds of settlement, foundation charters and amendments) and BO/shareholder/director/senior manager identification documents; (3) documented policies, procedures and controls for this scenario approved by senior management and communicated to relevant staff. None of this is found in the Internal AML Manual excerpts provided.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1769,7 +1769,7 @@
       "If  DIFC is not reasonably satisfied with the CDD undertaken by a third party,  DIFC must perform the CDD itself with respect to any deficiencies identified.  Notwithstanding reliance on a third party, it should be noted that  DIFC remains responsible for compliance with, and liable for any failure to meet,  / the CDD requirements in the DFSA AML module."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.34-36",
-    "gap_description": "",
+    "gap_description": "Element 2 (third party adherence to record-keeping standards) - Partially covered: manual references FATF record-keeping standards for third parties in other jurisdictions but does not explicitly reference adherence to the AML-CFT Decision's specific record-keeping provisions. Element 3 (documented, senior-management-approved policies/procedures/controls for assessment, monitoring, and testing of third parties' record-retention frameworks) - Not covered: no text found describing a structured program to assess, monitor, or test third-party record-retention frameworks, nor senior management approval of such a program. Element 4 (specific factors: roles/responsibilities for assessment/monitoring/testing, SLA implementation responsibilities, operational procedures for record request/transfer/physical-cyber security, audit/QA testing of third-party's record-retention framework) - Not covered: none of these specific sub-elements appear in the excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1791,7 +1791,7 @@
       "Copies of rejected transactions due to their abnormality and copies of account documentations where relationship is denied due to suspicion."
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.49-51",
-    "gap_description": "",
+    "gap_description": "Element-by-element review: (1) Transaction review/analysis/investigation files with related correspondence -- partially covered via 'Internal audits, self-assessment and inquiry work papers investigating suspicious or abnormal transactions' and 'results of any analysis carried out should be kept', but explicit retention of investigation-related correspondence is not clearly documented. (2) Customer correspondence (email/fax) and call reports/meeting minutes/recordings/transcripts/logs of calls related to transaction analysis/investigation -- not addressed anywhere in the excerpts; the manual only mentions general 'correspondence' and 'meeting' records for compliance corrective actions, not customer call/meeting records tied to transaction analysis. (3) CDD records/profiles/information gathered during review/analysis/investigation of transactions, including background search results on customers, beneficial owners, beneficiaries, controlling persons or counterparties -- partially covered ('All records obtained through due diligence measures... KYC documents and results of any analysis') but background-search results on beneficiaries/controlling persons/counterparties specifically are not mentioned. (4) Transaction handling decisions including approval/rejection records with related analysis and correspondence -- partially covered ('Copies of rejected transactions due to their abnormality and copies of account documentations where relationship is denied due to suspicion') but approval records and related correspondence for accepted transactions are not explicitly mentioned. Overall the manual establishes strong general record-retention requirements (10-year retention, various document categories) but does not explicitly enumerate call recordings/transcripts/logs, meeting minutes, or comprehensive transaction approval/rejection documentation with correspondence as required by this clause.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1812,7 +1812,7 @@
       "Internal audits, self-assessment and inquiry work papers investigating suspicious or abnormal transactions"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, pp.49-51",
-    "gap_description": "",
+    "gap_description": "Element-by-element review:  (5) Suspicious transaction indicator alert records/logs and specific decision records tied to alerts - NOT explicitly covered; the manual references general 'inquiry work papers investigating suspicious or abnormal transactions' but does not specifically mention alert logs, indicator alert records, or STR statistics/logs. (6) STR logs and statistics - NOT covered; no mention of maintaining STR statistics or logs distinct from case records. (7) CDD and Business Relationship monitoring records/documents obtained specifically in the course of analysing/investigating potentially suspicious transactions - NOT explicitly tied to STR investigation record-keeping (general CDD record retention exists elsewhere in the manual but not linked to STR analysis). (8) Notes on FIU feedback regarding reported STRs and other FIU-required actions - NOT explicitly covered; manual mentions FIU communications generally but does not specifically require retention of feedback notes from FIU. Overall, several core elements (SAR docs, internal reports, FIU submissions, external inquiries) are covered, but alert/indicator logs, STR statistics, CDD/monitoring records tied to STR analysis, and FIU feedback notes are not explicitly addressed, making this a partial match.",
     "suggested_action": "",
     "gap_direction": ""
   },
@@ -1867,7 +1867,7 @@
       "UN page | EXECUTIVE OFFICE FOR CONTROL & NON-PROLIFERATION (uaeiec.gov.ae)"
     ],
     "document_reference": "Internal AML Manual 290626.pdf, Section 5 'References and Regulations', pp.11-12",
-    "gap_description": "",
+    "gap_description": "The Internal AML Manual's 'References and Regulations' section lists some relevant links (DFSA AML Rulebook, Ministry of Economy, Executive Office for Control & Non-Proliferation) but does not provide the comprehensive 'Useful Links' list required by the clause. Missing from the excerpts: Abu Dhabi Global Market, Abu Dhabi Securities Exchange, Basel Committee on Banking Supervision (BCBS), Central Bank of the UAE, Dubai Financial Market, Egmont Group, FATF (only mentioned by name, no URL), GCC, IOSCO, Interpol/Money Laundering, MENAFATF, Securities and Commodities Authority, United Nations, UNODC, and Wolfsberg Group. No dedicated 'Useful Links' section with URLs for these bodies was found in the provided excerpts.",
     "suggested_action": "",
     "gap_direction": ""
   }

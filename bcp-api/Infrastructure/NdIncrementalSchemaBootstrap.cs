@@ -318,6 +318,79 @@ public static class NdIncrementalSchemaBootstrap
         CREATE UNIQUE INDEX IF NOT EXISTS ix_nd_local_document_extractions_doc_engine
           ON nd_local_document_extractions (stored_document_id, engine);
         """,
+        """
+        ALTER TABLE nd_local_document_extractions
+          ADD COLUMN IF NOT EXISTS index_status TEXT NOT NULL DEFAULT 'pending',
+          ADD COLUMN IF NOT EXISTS index_error TEXT NULL,
+          ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ NULL;
+        """,
+        """
+        CREATE EXTENSION IF NOT EXISTS vector;
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS nd_local_document_extraction_sections (
+          id UUID PRIMARY KEY,
+          extraction_id UUID NOT NULL REFERENCES nd_local_document_extractions(id) ON DELETE CASCADE,
+          section_index INTEGER NOT NULL,
+          clause_no TEXT NULL,
+          clause_text TEXT NOT NULL,
+          source_page INTEGER NULL,
+          embedding vector(384) NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS ix_nd_local_document_extraction_sections_extraction
+          ON nd_local_document_extraction_sections (extraction_id);
+        """,
+        """
+        ALTER TABLE nd_local_document_extractions
+          ADD COLUMN IF NOT EXISTS semantic_extract_status TEXT NOT NULL DEFAULT 'pending',
+          ADD COLUMN IF NOT EXISTS semantic_section_count INTEGER NULL,
+          ADD COLUMN IF NOT EXISTS semantic_sections_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+          ADD COLUMN IF NOT EXISTS semantic_warnings_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+          ADD COLUMN IF NOT EXISTS semantic_extract_error TEXT NULL,
+          ADD COLUMN IF NOT EXISTS semantic_extracted_at TIMESTAMPTZ NULL;
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS nd_dictionary_entries (
+          id UUID PRIMARY KEY,
+          acronym TEXT NOT NULL,
+          definition TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'auto',
+          source_document_id UUID NULL,
+          source_page INTEGER NULL,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_nd_dictionary_entries_pair
+          ON nd_dictionary_entries (lower(acronym), lower(definition));
+        """,
+        """
+        ALTER TABLE regul_forward_findings
+          ADD COLUMN IF NOT EXISTS retrieval_json JSONB NULL;
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS nd_synonym_entries (
+          id UUID PRIMARY KEY,
+          term_a TEXT NOT NULL,
+          term_b TEXT NOT NULL,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_nd_synonym_entries_pair
+          ON nd_synonym_entries (lower(term_a), lower(term_b));
+        """,
+        """
+        ALTER TABLE nd_synonym_entries
+          ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual',
+          ADD COLUMN IF NOT EXISTS source_document_id UUID NULL,
+          ADD COLUMN IF NOT EXISTS source_page INTEGER NULL;
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

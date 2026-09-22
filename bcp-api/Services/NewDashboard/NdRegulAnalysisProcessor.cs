@@ -30,6 +30,7 @@ public class NdRegulAnalysisProcessor(
     SupabaseStorageService storage,
     NdAnalysisRunCancellationTracker runCancellation,
     NdDemoUserDirectory demoDirectory,
+    RegulEmbeddingRetrievalService embeddingRetrieval,
     ILogger<NdRegulAnalysisProcessor> logger)
 {
     private const string ReverseMappingJsonInstruction =
@@ -111,6 +112,20 @@ public class NdRegulAnalysisProcessor(
         {
             await PrepareRegulRunPreForwardAsync(run, ct);
             await EnsureForwardFindingsAsync(run, ct);
+
+            if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
+            {
+                run.RegulPipelinePhase = "retrieval";
+                run.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+                logger.LogInformation("Regul pipeline phase=retrieval for run {RunId}", runId);
+                await embeddingRetrieval.RunRetrievalAsync(run, ct);
+                // Falls through to the normal forward phase below — Step 8's actual LLM call is
+                // paused per-clause instead (see the PAUSED block in CallForwardJudgmentAsync),
+                // so the rest of the pipeline (context building, per-clause looping, save) still
+                // runs for real and is fully testable while consuming zero LLM credit.
+            }
+
             run.RegulPipelinePhase = "forward";
             run.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
@@ -122,7 +137,7 @@ public class NdRegulAnalysisProcessor(
                 return;
             }
 
-            if (AnalysisWorkflowEngine.IsRegulPipelineFull(run.WorkflowEngine))
+            if (AnalysisWorkflowEngine.IsForwardOnlyFullMarkdown(run.WorkflowEngine))
             {
                 run.RegulPipelinePhase = "done";
                 run.Status = "completed";
@@ -233,6 +248,18 @@ public class NdRegulAnalysisProcessor(
         {
             await PrepareRegulRunPreForwardAsync(run, ct);
             await EnsureForwardFindingsAsync(run, ct);
+
+            if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
+            {
+                run.RegulPipelinePhase = "retrieval";
+                run.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+                logger.LogInformation("Regul pipeline phase=retrieval for run {RunId}", runId);
+                await embeddingRetrieval.RunRetrievalAsync(run, ct);
+                // Falls through to the normal forward phase below — see the matching comment in
+                // ProcessRunAsync for why (Step 8's LLM call is paused per-clause instead).
+            }
+
             run.RegulPipelinePhase = "forward";
             run.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
@@ -276,7 +303,18 @@ public class NdRegulAnalysisProcessor(
             .ToListAsync(ct);
 
         var existingSet = existing.Where(id => id.HasValue).Select(id => id!.Value).ToHashSet();
-        foreach (var point in run.Points.Where(p => p.RegulationPointId.HasValue))
+
+        // Hybrid engine (V5) points come from local structural chunking, not the legacy
+        // NdRegulationPoint table — their id is a synthetic "{regDocId}:{clauseNo}" string, which
+        // never parses as a Guid, so RegulationPointId stays null for every one of them (see
+        // AnalysisRunsController's point-creation Guid.TryParse). Gating on RegulationPointId.
+        // HasValue like every other engine does would silently create zero findings for every V5
+        // run. This engine's whole retrieval pipeline only ever reads PointSnapshot/ClauseText —
+        // it has no use for a real NdRegulationPoint row — so a non-empty snapshot is sufficient.
+        var isHybrid = AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine);
+        var eligiblePoints = run.Points.Where(p =>
+            p.RegulationPointId.HasValue || (isHybrid && !string.IsNullOrWhiteSpace(p.PointSnapshot)));
+        foreach (var point in eligiblePoints)
         {
             if (existingSet.Contains(point.Id)) continue;
 
@@ -352,10 +390,17 @@ public class NdRegulAnalysisProcessor(
 
             try
             {
+                // V5 hybrid engine: use this clause's own Step 1+3+4 retrieval output instead of
+                // the run-wide bundle every other engine shares — same LLM call, same prompt,
+                // different context, per finding.RetrievalJson (see BuildRetrievalPolicyBundleAsync).
+                var clauseBundle = AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine)
+                    ? await BuildRetrievalPolicyBundleAsync(finding, ct)
+                    : policyBundle;
+
                 var judgment = await CallForwardJudgmentAsync(
                     finding.ClauseNo,
                     finding.ClauseText,
-                    policyBundle,
+                    clauseBundle,
                     cacheContext,
                     run.WorkflowEngine,
                     ct);
@@ -426,6 +471,93 @@ public class NdRegulAnalysisProcessor(
             !policyBundle.UsesFullMarkdown);
     }
 
+    // camelCase — RetrievalJson was written with this same policy (see RegulEmbeddingRetrievalService).
+    private static readonly JsonSerializerOptions RetrievalJsonReadOptions =
+        new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    /// <summary>Builds this one clause's judgment context straight from its own Step 1+3+4
+    /// retrieval output (finding.RetrievalJson) instead of the run-wide bundle — the actual
+    /// point of Step 8 being "retrieval-aware". The stored preview only carries a truncated
+    /// TextPreview (kept small for the UI panel), so this re-fetches each matched section's real
+    /// full text before handing it to the LLM. Embedding and BM25 matches are deduped by section
+    /// id (embedding first — typically the more precise signal); if RetrievalJson is missing or
+    /// empty (e.g. no internal docs were indexed for this clause), returns an empty bundle rather
+    /// than silently falling back to full markdown — an empty context is a visible, honest signal
+    /// that retrieval found nothing, not a hidden cost regression back to sending everything.</summary>
+    private async Task<NdRegulPolicyContextService.PolicyBundle> BuildRetrievalPolicyBundleAsync(
+        NdRegulForwardFinding finding, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(finding.RetrievalJson))
+            return NdRegulPolicyContextService.FromRetrievalChunks([]);
+
+        RegulEmbeddingRetrievalService.RetrievalPreview? preview;
+        try
+        {
+            preview = JsonSerializer.Deserialize<RegulEmbeddingRetrievalService.RetrievalPreview>(
+                finding.RetrievalJson, RetrievalJsonReadOptions);
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex, "Malformed RetrievalJson for finding {FindingId} — using empty context", finding.Id);
+            return NdRegulPolicyContextService.FromRetrievalChunks([]);
+        }
+
+        if (preview == null || (preview.Matches.Count == 0 && preview.Bm25Matches.Count == 0))
+            return NdRegulPolicyContextService.FromRetrievalChunks([]);
+
+        NdRegulPolicyContextService.PolicyChunk ToChunk(Guid sectionId, string? clauseNo, string textPreview, string? sourceDocumentName, int? sourcePage, Dictionary<Guid, string> fullTextById)
+        {
+            var text = fullTextById.GetValueOrDefault(sectionId, textPreview);
+            var docLabel = sourceDocumentName ?? "internal policy";
+            var refLabel = string.IsNullOrWhiteSpace(clauseNo) ? "" : $" — {clauseNo}";
+            var pageLabel = sourcePage.HasValue ? $" p.{sourcePage}" : "";
+            return new NdRegulPolicyContextService.PolicyChunk(
+                $"{docLabel}{refLabel}{pageLabel}", text, sourceDocumentName, clauseNo, sourcePage);
+        }
+
+        var chunks = new List<NdRegulPolicyContextService.PolicyChunk>();
+
+        // Step 5/6 — preferred path: the already-fused, already-trimmed ranked list. Falls back to
+        // the raw union (old behavior) only for a RetrievalJson row saved before fusion existed,
+        // where FusedMatches is null.
+        if (preview.FusedMatches is { Count: > 0 } fused)
+        {
+            var fusedSectionIds = fused.Select(m => m.SectionId).ToList();
+            var fusedFullTextById = await db.NdLocalDocumentExtractionSections
+                .AsNoTracking()
+                .Where(s => fusedSectionIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id, s => s.ClauseText, ct);
+
+            foreach (var m in fused)
+                chunks.Add(ToChunk(m.SectionId, m.ClauseNo, m.TextPreview, m.SourceDocumentName, m.SourcePage, fusedFullTextById));
+
+            return NdRegulPolicyContextService.FromRetrievalChunks(chunks);
+        }
+
+        var sectionIds = preview.Matches.Select(m => m.SectionId)
+            .Concat(preview.Bm25Matches.Select(m => m.SectionId))
+            .Distinct()
+            .ToList();
+        var fullTextById = await db.NdLocalDocumentExtractionSections
+            .AsNoTracking()
+            .Where(s => sectionIds.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.ClauseText, ct);
+
+        var seen = new HashSet<Guid>();
+        foreach (var m in preview.Matches)
+        {
+            if (!seen.Add(m.SectionId)) continue;
+            chunks.Add(ToChunk(m.SectionId, m.ClauseNo, m.TextPreview, m.SourceDocumentName, m.SourcePage, fullTextById));
+        }
+        foreach (var m in preview.Bm25Matches)
+        {
+            if (!seen.Add(m.SectionId)) continue;
+            chunks.Add(ToChunk(m.SectionId, m.ClauseNo, m.TextPreview, m.SourceDocumentName, m.SourcePage, fullTextById));
+        }
+
+        return NdRegulPolicyContextService.FromRetrievalChunks(chunks);
+    }
+
     private async Task<RegulJudgmentResult> CallForwardJudgmentAsync(
         string clauseNo,
         string clauseText,
@@ -447,6 +579,9 @@ public class NdRegulAnalysisProcessor(
         var contextBlock = await promptVersions.BuildJudgmentContextAsync(policyContext, workflowEngine, ct);
         var queryBlock = await promptVersions.BuildJudgmentQueryAsync(clauseNo, clauseText, workflowEngine, ct);
 
+        // Step 8 is live for the hybrid engine: same admin-configured LLM (regulLlm) and same
+        // admin prompt versions as every other Regul engine — the only difference is the context
+        // block, which for V5 is the fused/trimmed retrieval chunks (Step 7) instead of full markdown.
         RegulJudgmentResult judgment = null!;
         for (var attempt = 0; attempt <= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries; attempt++)
         {
@@ -466,7 +601,7 @@ public class NdRegulAnalysisProcessor(
                 contextChunks,
                 policyBundle.MarkdownByFile);
 
-            if (AnalysisWorkflowEngine.IsRegulPipelineFull(workflowEngine))
+            if (AnalysisWorkflowEngine.IsForwardOnlyFullMarkdown(workflowEngine))
             {
                 judgment = NdRegulJudgmentPostProcessor.ApplyFalseAbsenceCorrection(
                     judgment,
@@ -488,10 +623,20 @@ public class NdRegulAnalysisProcessor(
         NdRegulPolicyContextService.RegulPolicyContextMode mode,
         CancellationToken ct)
     {
+        if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
+        {
+            // V5: this run-level bundle is only used for logging/cacheContext here — the actual
+            // per-clause judgment context comes from BuildRetrievalPolicyBundleAsync (built from
+            // Step 1+3+4 retrieval output). Skip the legacy Landing AI-based full-document parse
+            // below entirely — it's a separate paid service unrelated to the judgment call, not
+            // needed for retrieval-based context, and must never be called for this engine.
+            return NdRegulPolicyContextService.FromRetrievalChunks([]);
+        }
+
         var internalDocIds = JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [];
         var payloads = await LoadInternalDocPayloadsAsync(internalDocIds, ct);
 
-        if (AnalysisWorkflowEngine.IsRegulPipelineFull(run.WorkflowEngine))
+        if (AnalysisWorkflowEngine.IsForwardOnlyFullMarkdown(run.WorkflowEngine))
         {
             if (payloads.Count == 0)
             {
@@ -799,7 +944,19 @@ public class NdRegulAnalysisProcessor(
         if (runCancellation.IsStopRequested(run.Id))
             throw new OperationCanceledException();
 
-        if (AnalysisWorkflowEngine.IsRegulPipelineFull(run.WorkflowEngine))
+        if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
+        {
+            // V5: retrieval reads directly from the already-indexed local-docs pipeline tables
+            // (NdLocalDocumentExtractionSection), not from parsed markdown payloads — skip the
+            // legacy Landing AI-based parse entirely, it's not needed here and hits a separate
+            // paid service this engine has no reason to depend on.
+            logger.LogInformation(
+                "Regul V5 pre-forward prep for run {RunId}: no legacy parse needed, retrieval reads the local-docs index directly",
+                run.Id);
+            return;
+        }
+
+        if (AnalysisWorkflowEngine.IsForwardOnlyFullMarkdown(run.WorkflowEngine))
         {
             // V4 full markdown: clauses are frozen in point snapshots and internal markdown is
             // already parse-cached. Skip library repair/page-refresh here — RefreshPagesAsync
@@ -1050,7 +1207,13 @@ public class NdRegulAnalysisProcessor(
         var points = await db.NdAnalysisPoints
             .Where(p => p.AnalysisRunId == run.Id)
             .ToListAsync(ct);
-        var regulatory = points.Where(p => p.RegulationPointId != null).ToList();
+        // Same reasoning as EnsureForwardFindingsAsync — hybrid engine (V5) points never have a
+        // real RegulationPointId, so this must count non-empty-snapshot points for that engine
+        // too, or every V5 run's totals/completed counts would read 0 no matter what happened.
+        var isHybrid = AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine);
+        var regulatory = points
+            .Where(p => p.RegulationPointId != null || (isHybrid && !string.IsNullOrWhiteSpace(p.PointSnapshot)))
+            .ToList();
         var completed = regulatory.Count(p => p.LandingAiStatus == "completed");
         var failed = regulatory.Count(p => p.LandingAiStatus == "failed");
         run.TotalPointsCount = regulatory.Count;
@@ -1095,7 +1258,10 @@ public class NdRegulAnalysisProcessor(
         var point = run.Points.FirstOrDefault(p => p.Id == pointId)
             ?? throw new InvalidOperationException("Analysis point not found.");
 
-        if (!point.RegulationPointId.HasValue)
+        // Same reasoning as EnsureForwardFindingsAsync — hybrid engine (V5) points never have a
+        // real RegulationPointId.
+        var isHybridPoint = AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine);
+        if (!point.RegulationPointId.HasValue && !(isHybridPoint && !string.IsNullOrWhiteSpace(point.PointSnapshot)))
             throw new InvalidOperationException("Forward rerun applies to regulatory clauses only, not INT rows.");
 
         if (runCancellation.IsStopRequested(runId))
@@ -1221,8 +1387,11 @@ public class NdRegulAnalysisProcessor(
 
         await EnsureInternalSectionsForRunAsync(run, ct);
 
+        // Same reasoning as EnsureForwardFindingsAsync — hybrid engine (V5) points never have a
+        // real RegulationPointId.
+        var isHybridRerun = AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine);
         var regulatoryPointIds = run.Points
-            .Where(p => p.RegulationPointId.HasValue)
+            .Where(p => p.RegulationPointId.HasValue || (isHybridRerun && !string.IsNullOrWhiteSpace(p.PointSnapshot)))
             .Select(p => p.Id)
             .ToHashSet();
 

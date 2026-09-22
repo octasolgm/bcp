@@ -11,13 +11,20 @@ public static class OcrEngineNames
     public const string RapidOcr = "rapidocr";
     public const string DoclingLight = "docling-light";
     public const string DoclingGlm = "docling-glm";
+    public const string AzureDocIntelligence = "azure-di";
 
-    public static readonly IReadOnlyList<string> All = [Tesseract, RapidOcr, DoclingLight, DoclingGlm];
+    public static readonly IReadOnlyList<string> All =
+        [Tesseract, RapidOcr, DoclingLight, DoclingGlm, AzureDocIntelligence];
 
     /// <summary>The two Docling variants don't implement IOcrEngine (whole-document, not per-page).</summary>
     public static bool IsDocling(string engine) =>
         string.Equals(engine, DoclingLight, StringComparison.OrdinalIgnoreCase)
         || string.Equals(engine, DoclingGlm, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Azure Document Intelligence also converts the whole document in one cloud call —
+    /// same shape as Docling (not per-page IOcrEngine).</summary>
+    public static bool IsAzureDocIntelligence(string engine) =>
+        string.Equals(engine, AzureDocIntelligence, StringComparison.OrdinalIgnoreCase);
 
     public static bool IsValid(string engine) => All.Contains(engine, StringComparer.OrdinalIgnoreCase);
 }

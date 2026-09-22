@@ -88,6 +88,10 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
    * /internal-documents-rapidocr, just pointed at a different backend engine. */
   readonly engine: NdOcrEngine = (this.route.snapshot.data['engine'] as NdOcrEngine) ?? 'tesseract';
 
+  /** Semantic extract is parked: structural extract is the finalized method. Flip to true to show the
+   * "Extract (semantic)" / "View semantic" buttons again - the handlers below are untouched. */
+  readonly showSemanticExtract = false;
+
   get engineLabel(): string {
     switch (this.engine) {
       case 'rapidocr':
@@ -96,9 +100,21 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
         return 'Docling (Light)';
       case 'docling-glm':
         return 'Docling (GLM-OCR)';
+      case 'azure-di':
+        return 'Azure';
       default:
         return 'Tesseract';
     }
+  }
+
+  /** Azure Document Intelligence parses in Microsoft's cloud; every other engine runs on this server.
+   * (Extract is always our own local section splitter, whichever engine parsed the text.) */
+  get isCloudEngine(): boolean {
+    return this.engine === 'azure-di';
+  }
+
+  get parseTag(): string {
+    return this.isCloudEngine ? 'Azure' : 'Local';
   }
 
   private static readonly PANEL_SPLIT_KEY = 'nd-internal-docs-local-sections-panel-split';
@@ -120,6 +136,9 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
   sectionsFor: InternalDocument | null = null;
   showParsedText = false;
   sectionRows: InternalDocumentSection[] = [];
+  /** Which extraction result sectionRows currently reflects — for the two View buttons. */
+  viewMode: 'structural' | 'semantic' = 'structural';
+  extractingSemanticId: string | null = null;
   analysisFor: InternalDocument | null = null;
   analysisRuns: InternalDocAnalysisRun[] = [];
   loadingAnalysisRuns = false;
@@ -262,7 +281,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
   }
 
   parseStatusText(_doc: InternalDocument): string {
-    return 'Parsing locally…';
+    return this.isCloudEngine ? 'Parsing with Azure…' : 'Parsing locally…';
   }
 
   parseProgressPct(_doc: InternalDocument): number | null {
@@ -271,9 +290,11 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
 
   parseButtonLabel(doc: InternalDocument): string {
     if (this.isParsingDoc(doc)) return 'Parsing…';
-    if (doc.parseStatus === 'failed') return 'Retry parse (Local)';
-    if (this.isDocParsed(doc)) return 'Re-parse (Local)';
-    return 'Parse (Local)';
+    // Local engines keep the "(Local)" tag; the Azure DI page just says "Parse".
+    const tag = this.isCloudEngine ? '' : ' (Local)';
+    if (doc.parseStatus === 'failed') return `Retry parse${tag}`;
+    if (this.isDocParsed(doc)) return `Re-parse${tag}`;
+    return `Parse${tag}`;
   }
 
   /** Step 1 only — parse to text with page references. Does not touch section/point extraction. */
@@ -290,7 +311,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
     try {
       const res = await this.api.localParseById(doc.id, this.engine);
       if (!res.success || !res.data) {
-        this.error = res.message || `Local parse failed for "${doc.title}".`;
+        this.error = res.message || `${this.parseTag} parse failed for "${doc.title}".`;
         if (idx >= 0) this.docs[idx] = { ...this.docs[idx], parseStatus: 'failed' };
         return;
       }
@@ -313,11 +334,11 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
         };
       }
       this.message = failed
-        ? `Local parse failed for "${doc.title}".`
-        : `Parsed "${doc.title}" locally — ${data.totalPages ?? 0} page(s), ${data.ocrPageCount ?? 0} via OCR. Click Extract to find sections.`;
+        ? `${this.parseTag} parse failed for "${doc.title}".`
+        : `Parsed "${doc.title}" ${this.isCloudEngine ? 'with Azure' : 'locally'} — ${data.totalPages ?? 0} page(s), ${data.ocrPageCount ?? 0} via OCR. Click Extract to find sections.`;
       if (!failed) this.toast.show(this.message, 'success', 4000);
     } catch (err) {
-      this.error = err instanceof Error ? err.message : `Local parse failed for "${doc.title}".`;
+      this.error = err instanceof Error ? err.message : `${this.parseTag} parse failed for "${doc.title}".`;
       if (idx >= 0) this.docs[idx] = { ...this.docs[idx], parseStatus: 'failed' };
     } finally {
       this.parsingId = null;
@@ -370,8 +391,9 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
     }
   }
 
-  private mapLocalSections(result: NdLocalExtractionResult): InternalDocumentSection[] {
-    return (result.sections ?? []).map((s, i) => ({
+  private mapLocalSections(result: NdLocalExtractionResult, useSemantic = false): InternalDocumentSection[] {
+    const source = useSemantic ? result.semanticSections : result.sections;
+    return (source ?? []).map((s, i) => ({
       id: `${s.clauseNo}-${i}`,
       sectionRef: s.clauseNo,
       sectionText: s.clauseText,
@@ -602,12 +624,82 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
     event?.stopPropagation();
     this.selectedDocId = doc.id;
     this.sectionsFor = doc;
+    this.viewMode = 'structural';
     const local = this.localResults.get(doc.id);
     this.sectionRows = local ? this.mapLocalSections(local) : [];
     // Nothing extracted yet but the doc has been parsed — show the parsed text right away instead
     // of an empty sections list the user has to click past.
     this.showParsedText = this.sectionRows.length === 0 && !!local?.markdownText;
     this.shellFocus.setRegulationPointsPanelOpen(true);
+  }
+
+  /** Third view mode — semantic (embedding-based) extraction result. Independent of openSections. */
+  openSemanticSections(doc: InternalDocument, event?: Event): void {
+    event?.stopPropagation();
+    this.selectedDocId = doc.id;
+    this.sectionsFor = doc;
+    this.viewMode = 'semantic';
+    this.showParsedText = false;
+    const local = this.localResults.get(doc.id);
+    this.sectionRows = local ? this.mapLocalSections(local, true) : [];
+    if (!local || (local.semanticSectionCount ?? 0) === 0) {
+      const status = (local?.semanticExtractStatus ?? '').toLowerCase();
+      this.message =
+        status === 'processing'
+          ? 'Semantic extraction is still running (one embedding call per sentence — can take a while on a long document). Wait, then reopen this view.'
+          : local?.semanticExtractError
+            ? `Semantic extraction failed: ${local.semanticExtractError}`
+            : 'No semantic extraction result yet — click "Extract (semantic)" first.';
+    }
+    this.shellFocus.setRegulationPointsPanelOpen(true);
+  }
+
+  /** First view mode — the raw parsed markdown, independent of either extraction method. */
+  openParsedText(doc: InternalDocument, event?: Event): void {
+    event?.stopPropagation();
+    this.selectedDocId = doc.id;
+    this.sectionsFor = doc;
+    this.showParsedText = true;
+    if (!this.localResults.has(doc.id)) {
+      this.message = 'No parsed text yet — click Parse first.';
+    }
+    this.shellFocus.setRegulationPointsPanelOpen(true);
+  }
+
+  /** Step 2, alternative method — semantic (embedding-based, Azure OpenAI) extraction, off the same
+   * already-parsed text. Independent of handleExtractSections — never overwrites the structural result. */
+  async handleExtractSemanticSections(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (doc.parseStatus !== 'parsed') {
+      this.toast.show('Parse the document first', 'warning', 4000);
+      return;
+    }
+    this.extractingSemanticId = doc.id;
+    this.error = '';
+    this.message = 'Extracting semantically — embedding each sentence, this can take a moment…';
+    try {
+      const res = await this.api.localExtractSemanticById(doc.id, this.engine);
+      if (!res.success || !res.data) {
+        this.error = res.message || `Semantic extraction failed for "${doc.title}".`;
+        this.toast.show(this.error, 'error', 6000);
+        return;
+      }
+      const data = res.data;
+      this.localResults.set(doc.id, data);
+      const failed = (data.semanticExtractStatus ?? '').toLowerCase() === 'failed';
+      if (this.sectionsFor?.id === doc.id && this.viewMode === 'semantic') {
+        this.sectionRows = this.mapLocalSections(data, true);
+      }
+      this.message = failed
+        ? `Semantic extraction failed for "${doc.title}".`
+        : `Semantically extracted ${data.semanticSectionCount ?? 0} chunk(s) from "${doc.title}".`;
+      if (!failed) this.toast.show(this.message, 'success', 4000);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : `Semantic extraction failed for "${doc.title}".`;
+      this.toast.show(this.error, 'error', 6000);
+    } finally {
+      this.extractingSemanticId = null;
+    }
   }
 
   closeSections(): void {

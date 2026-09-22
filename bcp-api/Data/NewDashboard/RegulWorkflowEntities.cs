@@ -28,6 +28,13 @@ public class NdRegulForwardFinding
     [Column("result_json")]
     public string? ResultJson { get; set; }
 
+    /// <summary>V5/hybrid-engine-only: Step 1+4 retrieval preview for this clause — expanded query
+    /// terms plus the matched internal sections (id, text preview, source doc, similarity score),
+    /// stored before the LLM judgment call proceeds. Null for V3/V4 runs and for V5 clauses not
+    /// yet processed by the retrieval phase. See RegulEmbeddingRetrievalService.</summary>
+    [Column("retrieval_json")]
+    public string? RetrievalJson { get; set; }
+
     [Column("error_message")]
     public string? ErrorMessage { get; set; }
 

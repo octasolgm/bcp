@@ -203,11 +203,22 @@ public class RegulationDocumentsController(
             {
                 try
                 {
-                    var extraCounts = await NdRegulationPointCanonicalFilter.BuildCanonicalCountMapAsync(
-                        db,
-                        addedNdIds,
-                        addedNdIds.ToDictionary(id => id, _ => false),
-                        ct);
+                    // Same canonical count as the main map above, for linked documents the first query did not
+                    // return. It reloads every active point row of each of those documents from the database,
+                    // which took 5-18 s per request and ran on every list call — while the main map is cached.
+                    // Cached the same way (dropped by dashboardCache.Invalidate() on every point change), but
+                    // for minutes instead of the 20 s default so a page load does not pay for it every time.
+                    var extraScope = "reg-point-counts-linked:" + string.Join(",", addedNdIds.OrderBy(id => id));
+                    var linkedIds = addedNdIds;
+                    var extraCounts = await dashboardCache.GetOrCreateAsync(
+                        extraScope,
+                        innerCt => NdRegulationPointCanonicalFilter.BuildCanonicalCountMapAsync(
+                            db,
+                            linkedIds,
+                            linkedIds.ToDictionary(id => id, _ => false),
+                            innerCt),
+                        ct,
+                        ttl: TimeSpan.FromMinutes(5));
                     foreach (var kv in extraCounts)
                         pointCountMap[kv.Key] = kv.Value;
                 }

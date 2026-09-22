@@ -100,7 +100,13 @@ works.
   (`internal/regulation-documents-docling-light`,
   `internal/regulation-documents-docling-glm`):
   - **Docling Light** - Docling's default pipeline (layout model +
-    RapidOCR under the hood). Comparable speed to the RapidOCR page.
+    RapidOCR under the hood). Real testing: slower than the RapidOCR page
+    (~9 min for a 23-page document, with real run-to-run variance in this
+    local test setup - see the reference doc), and **not more accurate**
+    than plain RapidOCR - it uses RapidOCR for the actual reading step, so
+    it shares the same accuracy ceiling; the extra layout/table analysis
+    doesn't fix misreads. Confirmed by the user testing real rows: some
+    clearly legible lines still come back wrong.
   - **Docling GLM-OCR** - Docling's VLM pipeline using GLM-OCR (the model
     Zafar flagged on the team as needing hosted inference - turned out to
     be a selectable option *inside* Docling, no separate integration

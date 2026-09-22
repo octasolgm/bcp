@@ -42,5 +42,24 @@ foreach ($key in $kafkaKeys) {
     }
 }
 
+# Optional provider / Azure sections: pass through when present in Development.json
+foreach ($section in @("OpenAI", "XAi", "Moonshot", "DeepSeek", "AzureDocumentIntelligence", "AzureOpenAI")) {
+    $prop = $dev.PSObject.Properties[$section]
+    if ($null -ne $prop -and $null -ne $prop.Value) {
+        $secrets[$section] = $prop.Value
+    }
+}
+
+# Never drop a secret section that only lives in the current Secrets file (e.g. Azure keys that
+# are not in Development.json) - carry it over instead of silently deleting it on publish.
+if (Test-Path $outPath) {
+    $existing = Get-Content $outPath -Raw | ConvertFrom-Json
+    foreach ($p in $existing.PSObject.Properties) {
+        if (-not $secrets.Contains($p.Name)) {
+            $secrets[$p.Name] = $p.Value
+        }
+    }
+}
+
 $secrets | ConvertTo-Json -Depth 6 | Set-Content -Path $outPath -Encoding UTF8
 Write-Host "Wrote $outPath (from Development.json, not committed to git)"

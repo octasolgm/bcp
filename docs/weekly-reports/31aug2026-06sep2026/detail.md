@@ -32,6 +32,8 @@ Comparing different document-reading technologies
 
 To make sure the new local processing is as accurate as possible, several different underlying reading technologies are being tested side by side on the same real documents, each available on its own page for direct comparison. This is ongoing evaluation work, not yet a final decision - full findings and a recommendation will follow once testing is complete. One early finding: a more advanced, AI-assisted reading mode is showing noticeably better accuracy than the simpler options, but is currently too slow to use on full documents without dedicated hardware, which is a separate decision still under discussion.
 
+The latest development build, including these new local document-reading options, has been published to the shared development environment.
+
 Planning for future private/on-premise deployment
 
 With document processing now able to run without any external AI service, a written plan was put together for how the whole platform could eventually run entirely within a client's own private network, for clients with the strictest data-privacy requirements. This is a planning document only - nothing has changed about how the platform is deployed today.

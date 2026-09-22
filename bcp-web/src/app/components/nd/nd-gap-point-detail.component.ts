@@ -212,6 +212,50 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   readonly actionReviewStatusLabel = actionReviewStatusLabel;
   readonly pointReviewActionIndex = POINT_REVIEW_ACTION_INDEX;
   pointHeading = '';
+  /** Share (10–90) of the compare row given to the regulatory-requirement column; the policy
+   * extract column gets the rest. Dragged via the splitter between them, remembered per browser. */
+  compareRegPercent = NdGapPointDetailComponent.loadComparePercent();
+  private compareResizeCleanup: (() => void) | null = null;
+
+  get compareGridColumns(): string {
+    return `${this.compareRegPercent}fr 8px ${100 - this.compareRegPercent}fr`;
+  }
+
+  private static loadComparePercent(): number {
+    try {
+      const v = Number(localStorage.getItem('nd-compare-reg-percent'));
+      return v >= 10 && v <= 90 ? v : 50;
+    } catch {
+      return 50;
+    }
+  }
+
+  startCompareResize(event: PointerEvent, container: HTMLElement): void {
+    event.preventDefault();
+    this.compareResizeCleanup?.();
+    const rect = container.getBoundingClientRect();
+    const move = (e: PointerEvent) => {
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      this.compareRegPercent = Math.round(Math.min(90, Math.max(10, pct)));
+      this.cdr.detectChanges();
+    };
+    const up = () => {
+      this.compareResizeCleanup?.();
+      try {
+        localStorage.setItem('nd-compare-reg-percent', String(this.compareRegPercent));
+      } catch {
+        /* ignore */
+      }
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    this.compareResizeCleanup = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      this.compareResizeCleanup = null;
+    };
+  }
+
   regulatoryText = '';
   policyExtract = '';
   documentReference = '';
@@ -263,6 +307,7 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.compareResizeCleanup?.();
     this.stopRerunProgress();
   }
 

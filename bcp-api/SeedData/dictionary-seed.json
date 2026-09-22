@@ -1,0 +1,22 @@
+[
+  { "acronym": "AML", "definition": "Anti-Money Laundering" },
+  { "acronym": "CFT", "definition": "Combating the Financing of Terrorism" },
+  { "acronym": "CTF", "definition": "Countering the Financing of Terrorism" },
+  { "acronym": "KYC", "definition": "Know Your Customer" },
+  { "acronym": "CDD", "definition": "Customer Due Diligence" },
+  { "acronym": "EDD", "definition": "Enhanced Due Diligence" },
+  { "acronym": "TFS", "definition": "Targeted Financial Sanctions" },
+  { "acronym": "PF", "definition": "Proliferation Financing" },
+  { "acronym": "TF", "definition": "Terrorist Financing" },
+  { "acronym": "CBUAE", "definition": "Central Bank of the UAE" },
+  { "acronym": "UNSC", "definition": "United Nations Security Council" },
+  { "acronym": "UNSCR", "definition": "United Nations Security Council Resolution" },
+  { "acronym": "FATF", "definition": "Financial Action Task Force" },
+  { "acronym": "STR", "definition": "Suspicious Transaction Report" },
+  { "acronym": "SAR", "definition": "Suspicious Activity Report" },
+  { "acronym": "FIU", "definition": "Financial Intelligence Unit" },
+  { "acronym": "DNFBP", "definition": "Designated Non-Financial Business and Profession" },
+  { "acronym": "UBO", "definition": "Ultimate Beneficial Owner" },
+  { "acronym": "SCP", "definition": "Sanctions Compliance Program" },
+  { "acronym": "WMD", "definition": "Weapons of Mass Destruction" }
+]

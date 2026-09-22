@@ -53,10 +53,18 @@ export class NdAnalysisVersionsComponent implements OnInit {
     },
     {
       id: 'V4',
-      label: 'Analysis V4 — Regul Full Markdown',
+      label: 'Analysis V4 — Regul Full Markdown (prior version)',
       description:
-        'Clone of V3 with full internal markdown sent to the LLM (all files, no top-20 retrieval), forward-only (no reverse), and prompt caching when supported.',
+        'Clone of V3 with full internal markdown sent to the LLM (all files, no top-20 retrieval), forward-only (no reverse), and prompt caching when supported. Superseded by V5 as the default "New analysis" page — kept here unchanged, reachable directly.',
       path: '/nd/analyse-regul-full',
+      status: 'available',
+    },
+    {
+      id: 'V5',
+      label: 'Analysis V5 — Query Expansion (active development)',
+      description:
+        'Isolated clone of V4, currently identical in behavior. This is now the default "New analysis" page — query-expansion/synonym-matching work (hybrid pipeline retrieval steps) lands here without touching V3/V4.',
+      path: '/nd/analyse-regul-full-v2',
       status: 'available',
     },
   ];

@@ -629,6 +629,23 @@ public class AnalysisRunsController(
             }
         }
 
+        List<object>? regulRetrievalPreview = null;
+        if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
+        {
+            var findingRows = await db.NdRegulForwardFindings
+                .AsNoTracking()
+                .Where(f => f.AnalysisRunId == id && f.RetrievalJson != null)
+                .OrderBy(f => f.CreatedAt)
+                .Select(f => new { f.ClauseNo, f.RetrievalJson })
+                .ToListAsync(ct);
+
+            regulRetrievalPreview = findingRows.Select(f => (object)new
+            {
+                clauseNo = f.ClauseNo,
+                retrieval = System.Text.Json.Nodes.JsonNode.Parse(f.RetrievalJson!),
+            }).ToList();
+        }
+
         return Ok(new
         {
             success = true,
@@ -639,7 +656,8 @@ public class AnalysisRunsController(
                 regulReverseSectionCompleted,
                 regulReverseSectionFailed,
                 regulReverseSections,
-                litePoll),
+                litePoll,
+                regulRetrievalPreview),
         });
     }
 

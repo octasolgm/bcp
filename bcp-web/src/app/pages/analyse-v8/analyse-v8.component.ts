@@ -153,7 +153,7 @@ export class AnalyseV8Component extends AnalyseBase implements OnInit, OnDestroy
   override ngOnInit(): void {
     this.refreshNdShellState();
     if (this.isNdShell && this.ndAuth.isDemoViewer()) {
-      void this.router.navigate(['/nd/analyse-regul-full'], {
+      void this.router.navigate(['/nd/analyse-regul-full-v2'], {
         queryParams: this.route.snapshot.queryParams,
         replaceUrl: true,
       });

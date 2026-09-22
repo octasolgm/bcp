@@ -2,6 +2,9 @@ import type { AnalysisPoint } from './types';
 
 export const REGUL_PIPELINE_V3 = 'regul_pipeline';
 export const REGUL_PIPELINE_FULL = 'regul_pipeline_full';
+/** V5 — same forward-only flow as REGUL_PIPELINE_FULL, plus Step 1/4 dictionary+embedding
+ * retrieval preview surfaced in the right-side pipeline panel. */
+export const REGUL_PIPELINE_HYBRID_V5 = 'regul_pipeline_hybrid_v5';
 
 /** Regul pipeline run progress fields (API primary names for regul workflow engines). */
 export type RegulRunProgress = {
@@ -17,11 +20,16 @@ export type RegulRunProgress = {
 
 export function isRegulWorkflow(workflowEngine?: string | null): boolean {
   const engine = (workflowEngine ?? '').trim().toLowerCase();
-  return engine === REGUL_PIPELINE_V3 || engine === REGUL_PIPELINE_FULL;
+  return engine === REGUL_PIPELINE_V3 || engine === REGUL_PIPELINE_FULL || engine === REGUL_PIPELINE_HYBRID_V5;
 }
 
 export function isRegulFullMarkdownWorkflow(workflowEngine?: string | null): boolean {
-  return (workflowEngine ?? '').trim().toLowerCase() === REGUL_PIPELINE_FULL;
+  const engine = (workflowEngine ?? '').trim().toLowerCase();
+  return engine === REGUL_PIPELINE_FULL || engine === REGUL_PIPELINE_HYBRID_V5;
+}
+
+export function isRegulPipelineHybridWorkflow(workflowEngine?: string | null): boolean {
+  return (workflowEngine ?? '').trim().toLowerCase() === REGUL_PIPELINE_HYBRID_V5;
 }
 
 /** Normalize API point: prefer regulForward* when present. */

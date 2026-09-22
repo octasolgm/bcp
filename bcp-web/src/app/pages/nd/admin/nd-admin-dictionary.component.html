@@ -1,0 +1,249 @@
+<div class="page-header">
+  <div>
+    <h1>Query Expansion Dictionary</h1>
+    <p class="nd-muted">
+      Acronym / full-form pairs, auto-harvested from every document as it's extracted, plus any
+      manual entries. Rows highlighted in red are short forms seen in a document with no known
+      full form yet — fill in the definition to resolve them.
+    </p>
+  </div>
+</div>
+
+<div class="nd-page-body">
+<div class="nd-page nd-page-fill">
+  @if (!isSuperAdmin) {
+    <p class="nd-error">Access denied</p>
+  } @else {
+    <form class="nd-card nd-form-card nd-form-grid nd-shrink" (ngSubmit)="handleCreate()">
+      <label class="nd-label">
+        Acronym
+        <input class="nd-input" [(ngModel)]="acronym" name="acronym" placeholder="e.g. TFS" required />
+      </label>
+      <label class="nd-label">
+        Full form
+        <input class="nd-input" [(ngModel)]="definition" name="definition" placeholder="e.g. Targeted Financial Sanctions" />
+      </label>
+      <div class="nd-form-actions">
+        <button type="submit" class="nd-btn-primary" [disabled]="creating || !acronym.trim()">
+          {{ creating ? 'Adding…' : 'Add entry' }}
+        </button>
+      </div>
+    </form>
+
+    @if (error) {
+      <p class="nd-error">{{ error }}</p>
+    }
+
+    @if (loading && entries.length === 0) {
+      <p class="nd-muted">Loading…</p>
+    } @else {
+      <div class="filter-pills nd-list-toolbar nd-shrink">
+        <input
+          type="search"
+          class="filter-search"
+          [(ngModel)]="searchQuery"
+          placeholder="Search acronym, definition, or document…"
+          aria-label="Search dictionary"
+        />
+        <select class="filter-select" [(ngModel)]="sourceFilter" aria-label="Filter by source">
+          <option value="">All sources</option>
+          <option value="auto">Auto-harvested</option>
+          <option value="manual">Manual</option>
+        </select>
+        <select class="filter-select" [(ngModel)]="resolvedFilter" aria-label="Filter by resolved status">
+          <option value="">Resolved + unresolved</option>
+          <option value="unresolved">Unresolved only ({{ unresolvedCount }})</option>
+          <option value="resolved">Resolved only</option>
+        </select>
+        <select class="filter-select" [(ngModel)]="statusFilter" aria-label="Filter by active status">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <span class="filter-count">{{ visibleEntries.length }} of {{ entries.length }}</span>
+        @if (hasActiveFilters) {
+          <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+        }
+        <button type="button" class="nd-btn-secondary" (click)="downloadCsv()">Download CSV</button>
+      </div>
+
+      @if (selectedCount > 0) {
+        <div class="dict-bulk-bar nd-shrink">
+          <span class="dict-bulk-count">{{ selectedCount }} selected</span>
+          <button type="button" class="nd-btn-secondary" [disabled]="bulkWorking" (click)="bulkSetActive(true)">
+            {{ bulkWorking ? 'Working…' : 'Activate' }}
+          </button>
+          <button type="button" class="nd-btn-secondary" [disabled]="bulkWorking" (click)="bulkSetActive(false)">
+            {{ bulkWorking ? 'Working…' : 'Deactivate' }}
+          </button>
+          <button type="button" class="nd-btn-secondary nd-danger" [disabled]="bulkWorking" (click)="bulkDelete()">
+            {{ bulkWorking ? 'Working…' : 'Delete' }}
+          </button>
+          <button type="button" class="filter-clear" (click)="clearSelection()">Clear selection</button>
+        </div>
+      }
+
+      @if (!visibleEntries.length) {
+        <div class="nd-card nd-empty">
+          <strong>No dictionary entries match your filters</strong>
+        </div>
+      } @else {
+      <div class="card-surface nd-table-wrap nd-table-wrap--scroll nd-table-wrap--responsive dict-table-wrap">
+        <table class="dict-table">
+          <colgroup>
+            <col style="width: 2.5rem" />
+            <col style="width: 9%" />
+            <col style="width: 26%" />
+            <col style="width: 11%" />
+            <col style="width: 17%" />
+            <col style="width: 5%" />
+            <col style="width: 11%" />
+            <col style="width: 12rem" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="dict-col-check">
+                <input
+                  type="checkbox"
+                  [checked]="allVisibleSelected"
+                  [indeterminate]="someVisibleSelected"
+                  (change)="toggleSelectAll()"
+                  aria-label="Select all visible rows"
+                />
+              </th>
+              <th class="sortable" (click)="toggleSort('acronym')">
+                Acronym <span class="sort-indicator">{{ sortMark('acronym') }}</span>
+              </th>
+              <th class="sortable" (click)="toggleSort('definition')">
+                Full form <span class="sort-indicator">{{ sortMark('definition') }}</span>
+              </th>
+              <th class="sortable" (click)="toggleSort('source')">
+                Source <span class="sort-indicator">{{ sortMark('source') }}</span>
+              </th>
+              <th>Source document</th>
+              <th>Page</th>
+              <th class="sortable" (click)="toggleSort('status')">
+                Status <span class="sort-indicator">{{ sortMark('status') }}</span>
+              </th>
+              <th class="col-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (e of visibleEntries; track e.id) {
+              <tr [class.dict-row-unresolved]="e.isUnresolved" [class.row-saving]="savingId === e.id || deletingId === e.id">
+                <td class="dict-col-check" data-label="">
+                  <input
+                    type="checkbox"
+                    [checked]="isSelected(e.id)"
+                    (change)="toggleSelect(e.id)"
+                    [attr.aria-label]="'Select ' + e.acronym"
+                  />
+                </td>
+                <td data-label="Acronym">
+                  <input
+                    class="nd-input dict-cell-input"
+                    [(ngModel)]="e.draftAcronym"
+                    [name]="'acronym-' + e.id"
+                  />
+                </td>
+                <td data-label="Full form">
+                  <input
+                    class="nd-input dict-cell-input"
+                    [(ngModel)]="e.draftDefinition"
+                    [name]="'definition-' + e.id"
+                    [placeholder]="e.isUnresolved ? 'No full form found yet — fill in' : ''"
+                  />
+                </td>
+                <td data-label="Source">{{ e.source === 'auto' ? 'Auto-harvested' : 'Manual' }}</td>
+                <td class="muted" data-label="Source document" [title]="e.sourceDocumentName ?? ''">
+                  {{ e.sourceDocumentName ?? '—' }}
+                </td>
+                <td class="muted" data-label="Page">{{ e.sourcePage ?? '—' }}</td>
+                <td data-label="Status">
+                  <div class="dict-status-cell">
+                    @if (e.isUnresolved) {
+                      <span class="dict-unresolved-badge">Unresolved</span>
+                    }
+                    <span class="dict-active-badge" [class.dict-active-badge--off]="!e.isActive">
+                      {{ e.isActive ? 'Active' : 'Inactive' }}
+                    </span>
+                  </div>
+                </td>
+                <td class="row-actions col-actions" data-label="Actions">
+                  <div class="dict-actions-cell">
+                    @if (isDirty(e)) {
+                      <button
+                        type="button"
+                        class="row-action-btn primary compact"
+                        [disabled]="savingId === e.id"
+                        (click)="saveRow(e)"
+                      >
+                        {{ savingId === e.id ? 'Saving…' : 'Save' }}
+                      </button>
+                      <button
+                        type="button"
+                        class="row-action-btn ghost compact"
+                        [disabled]="savingId === e.id"
+                        (click)="revertRow(e)"
+                      >
+                        Revert
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="row-action-btn icon-only ghost"
+                      [title]="e.isActive ? 'Deactivate' : 'Activate'"
+                      [attr.aria-label]="e.isActive ? 'Deactivate' : 'Activate'"
+                      [disabled]="savingId === e.id || deletingId === e.id"
+                      (click)="toggleActive(e)"
+                    >
+                      @if (e.isActive) {
+                        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                          <path fill="none" stroke="currentColor" stroke-width="1.6" d="M10 4v5" />
+                          <path
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            d="M6.2 6.2a5.5 5.5 0 107.6 0"
+                          />
+                        </svg>
+                      } @else {
+                        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                          <path
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            d="M6 10l2.5 2.5L14 7M10 18a8 8 0 100-16 8 8 0 000 16z"
+                          />
+                        </svg>
+                      }
+                    </button>
+                    <button
+                      type="button"
+                      class="row-action-btn icon-only danger"
+                      title="Delete"
+                      aria-label="Delete"
+                      [disabled]="savingId === e.id || deletingId === e.id"
+                      (click)="handleDelete(e.id)"
+                    >
+                      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                        <path
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.6"
+                          d="M5 6h10M8 6V4.5h4V6M7.5 6l.5 9h4l.5-9"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      }
+    }
+  }
+</div>
+</div>

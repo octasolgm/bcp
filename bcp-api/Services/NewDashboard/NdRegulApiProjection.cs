@@ -348,7 +348,8 @@ public static class NdRegulApiProjection
         int? regulReverseSectionCompleted,
         int? regulReverseSectionFailed,
         List<object>? regulReverseSections,
-        bool lite = false)
+        bool lite = false,
+        List<object>? regulRetrievalPreview = null)
     {
         var node = System.Text.Json.JsonSerializer.SerializeToNode(
             MapRunPoll(run, regulReverseSectionTotal, regulReverseSectionCompleted, regulReverseSectionFailed)) as System.Text.Json.Nodes.JsonObject
@@ -373,6 +374,9 @@ public static class NdRegulApiProjection
 
         if (regulReverseSections != null)
             node["regulReverseSections"] = System.Text.Json.JsonSerializer.SerializeToNode(regulReverseSections);
+
+        if (regulRetrievalPreview != null)
+            node["regulRetrievalPreview"] = System.Text.Json.JsonSerializer.SerializeToNode(regulRetrievalPreview);
 
         return node;
     }

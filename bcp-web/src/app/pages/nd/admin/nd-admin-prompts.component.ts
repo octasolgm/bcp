@@ -53,6 +53,37 @@ export class NdAdminPromptsComponent implements OnInit {
   lastCoverage: AnalysisPromptCoverage[] = [];
   lastAppliedSuggestionIds = new Set<string>();
 
+  retrievalCacheEnabled = false;
+  retrievalCacheSaving = false;
+  retrievalCacheError = '';
+  retrievalCacheMessage = '';
+
+  /** V5 borrows the "Regul workflow (Analysis V3)" prompts, so the V5 caching switch lives on that tab. */
+  get showRetrievalCacheCard(): boolean {
+    return this.selectedWorkflow.includes('Analysis V3');
+  }
+
+  async loadRetrievalCache(): Promise<void> {
+    const res = await this.api.getRegulRetrievalPromptCache();
+    if (res.success && res.data) this.retrievalCacheEnabled = res.data.enabled;
+  }
+
+  async saveRetrievalCache(enabled: boolean): Promise<void> {
+    this.retrievalCacheSaving = true;
+    this.retrievalCacheError = '';
+    this.retrievalCacheMessage = '';
+    const res = await this.api.updateRegulRetrievalPromptCache(enabled);
+    this.retrievalCacheSaving = false;
+    if (!res.success || !res.data) {
+      this.retrievalCacheError = 'Could not save the caching setting. Please try again.';
+      return;
+    }
+    this.retrievalCacheEnabled = res.data.enabled;
+    this.retrievalCacheMessage = res.data.enabled
+      ? 'Prompt caching is on for V5 analyses.'
+      : 'Prompt caching is off for V5 analyses.';
+  }
+
   async ngOnInit(): Promise<void> {
     const saved = localStorage.getItem(NdAdminPromptsComponent.VERSIONS_PANEL_KEY);
     if (saved) {
@@ -60,7 +91,7 @@ export class NdAdminPromptsComponent implements OnInit {
       if (!Number.isNaN(n)) this.versionsPanelPct = Math.min(45, Math.max(18, n));
     }
     await this.auth.refreshProfile();
-    await Promise.all([this.load(), this.loadLlmProviders()]);
+    await Promise.all([this.load(), this.loadLlmProviders(), this.loadRetrievalCache()]);
   }
 
   async loadLlmProviders(): Promise<void> {

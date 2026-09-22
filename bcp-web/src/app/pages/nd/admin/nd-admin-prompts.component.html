@@ -321,6 +321,37 @@
               </section>
             }
           </div>
+          @if (showRetrievalCacheCard) {
+            <section class="nd-card cache-card">
+              <div class="cache-card-text">
+                <h2>Prompt caching (Analysis V5)</h2>
+                <p class="nd-muted">
+                  Off by default. V5 uses these prompts, but each clause retrieves different policy chunks, so a
+                  cache entry is written on every call (1.25x input price) and never read back. Turn it on only
+                  if that changes. Analysis V4 is not affected.
+                </p>
+                @if (retrievalCacheError) {
+                  <p class="nd-error">{{ retrievalCacheError }}</p>
+                }
+                @if (retrievalCacheMessage) {
+                  <p class="nd-success">{{ retrievalCacheMessage }}</p>
+                }
+              </div>
+              <div class="cache-card-actions">
+                <span class="cache-state" [class.cache-state-on]="retrievalCacheEnabled">
+                  {{ retrievalCacheEnabled ? 'On' : 'Off' }}
+                </span>
+                <button
+                  type="button"
+                  class="nd-btn-primary"
+                  [disabled]="retrievalCacheSaving"
+                  (click)="saveRetrievalCache(!retrievalCacheEnabled)"
+                >
+                  {{ retrievalCacheSaving ? 'Saving…' : retrievalCacheEnabled ? 'Turn caching off' : 'Turn caching on' }}
+                </button>
+              </div>
+            </section>
+          }
         </div>
 
         @if (selectedPrompt; as prompt) {

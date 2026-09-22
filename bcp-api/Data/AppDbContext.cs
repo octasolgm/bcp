@@ -13,6 +13,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ComplianceSession> ComplianceSessions => Set<ComplianceSession>();
     public DbSet<StoredDocument> StoredDocuments => Set<StoredDocument>();
     public DbSet<NdLocalDocumentExtraction> NdLocalDocumentExtractions => Set<NdLocalDocumentExtraction>();
+    public DbSet<NdLocalDocumentExtractionSection> NdLocalDocumentExtractionSections => Set<NdLocalDocumentExtractionSection>();
+    public DbSet<NdDictionaryEntry> NdDictionaryEntries => Set<NdDictionaryEntry>();
+    public DbSet<NdSynonymEntry> NdSynonymEntries => Set<NdSynonymEntry>();
     public DbSet<DocumentAnalysisRun> DocumentAnalysisRuns => Set<DocumentAnalysisRun>();
 
     public DbSet<NdProfile> NdProfiles => Set<NdProfile>();
@@ -155,8 +158,65 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.ExtractStatus).HasColumnName("extract_status");
             e.Property(x => x.ExtractError).HasColumnName("extract_error");
             e.Property(x => x.ExtractedAt).HasColumnName("extracted_at");
+            e.Property(x => x.SemanticExtractStatus).HasColumnName("semantic_extract_status");
+            e.Property(x => x.SemanticSectionCount).HasColumnName("semantic_section_count");
+            e.Property(x => x.SemanticSectionsJson).HasColumnName("semantic_sections_json").HasColumnType("jsonb");
+            e.Property(x => x.SemanticWarningsJson).HasColumnName("semantic_warnings_json").HasColumnType("jsonb");
+            e.Property(x => x.SemanticExtractError).HasColumnName("semantic_extract_error");
+            e.Property(x => x.SemanticExtractedAt).HasColumnName("semantic_extracted_at");
+            e.Property(x => x.IndexStatus).HasColumnName("index_status");
+            e.Property(x => x.IndexError).HasColumnName("index_error");
+            e.Property(x => x.IndexedAt).HasColumnName("indexed_at");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        modelBuilder.Entity<NdLocalDocumentExtractionSection>(e =>
+        {
+            e.ToTable("nd_local_document_extraction_sections");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ExtractionId);
+            e.Property(x => x.Id).HasColumnName("id");
+            e.Property(x => x.ExtractionId).HasColumnName("extraction_id");
+            e.Property(x => x.SectionIndex).HasColumnName("section_index");
+            e.Property(x => x.ClauseNo).HasColumnName("clause_no");
+            e.Property(x => x.ClauseText).HasColumnName("clause_text");
+            e.Property(x => x.SourcePage).HasColumnName("source_page");
+            e.Property(x => x.Embedding).HasColumnName("embedding").HasColumnType("vector(384)");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<NdDictionaryEntry>(e =>
+        {
+            e.ToTable("nd_dictionary_entries");
+            e.HasKey(x => x.Id);
+            // The real (case-insensitive, on lower(acronym)/lower(definition)) unique index is
+            // created via raw SQL in NdIncrementalSchemaBootstrap — EF's Fluent HasIndex can't
+            // express a functional index, so this table intentionally has no EF-level index here.
+            e.Property(x => x.Id).HasColumnName("id");
+            e.Property(x => x.Acronym).HasColumnName("acronym");
+            e.Property(x => x.Definition).HasColumnName("definition");
+            e.Property(x => x.Source).HasColumnName("source");
+            e.Property(x => x.SourceDocumentId).HasColumnName("source_document_id");
+            e.Property(x => x.SourcePage).HasColumnName("source_page");
+            e.Property(x => x.IsActive).HasColumnName("is_active");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<NdSynonymEntry>(e =>
+        {
+            e.ToTable("nd_synonym_entries");
+            e.HasKey(x => x.Id);
+            // Real (case-insensitive, on lower(term_a)/lower(term_b)) unique index is created via
+            // raw SQL in NdIncrementalSchemaBootstrap — same reasoning as NdDictionaryEntry above.
+            e.Property(x => x.Id).HasColumnName("id");
+            e.Property(x => x.TermA).HasColumnName("term_a");
+            e.Property(x => x.TermB).HasColumnName("term_b");
+            e.Property(x => x.Source).HasColumnName("source");
+            e.Property(x => x.SourceDocumentId).HasColumnName("source_document_id");
+            e.Property(x => x.SourcePage).HasColumnName("source_page");
+            e.Property(x => x.IsActive).HasColumnName("is_active");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
         });
 
         modelBuilder.Entity<DocumentAnalysisRun>(e =>
@@ -212,6 +272,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<NdRegulForwardFinding>(e =>
         {
             e.Property(f => f.ResultJson).HasColumnType("jsonb");
+            e.Property(f => f.RetrievalJson).HasColumnType("jsonb");
             e.HasIndex(f => f.AnalysisRunId);
         });
         modelBuilder.Entity<NdRegulReverseMapping>(e =>

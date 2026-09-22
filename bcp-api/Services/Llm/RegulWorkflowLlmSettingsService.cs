@@ -48,6 +48,49 @@ public class RegulWorkflowLlmSettingsService(
         return normalized;
     }
 
+    private const string RetrievalCacheSettingKey = "regul_retrieval_prompt_cache";
+    private const string RetrievalCacheMemoKey = "regul_retrieval_prompt_cache_enabled";
+
+    /// <summary>Whether the hybrid (V5) engine marks its per-clause retrieval context for Anthropic
+    /// prompt caching. Off by default: every clause retrieves a different set of chunks, so the
+    /// cache is written (1.25x input price) on every call and never read. Full-markdown engines are
+    /// unaffected — their context is identical across clauses, so caching genuinely pays there.
+    /// Flip on from Admin settings if that ever changes (e.g. a shared per-run context).</summary>
+    public async Task<bool> IsRetrievalPromptCacheEnabledAsync(CancellationToken ct = default)
+    {
+        if (cache.TryGetValue(RetrievalCacheMemoKey, out bool cached)) return cached;
+        var row = await db.NdSystemSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == RetrievalCacheSettingKey, ct);
+        var enabled = row != null && bool.TryParse(row.ValueJson, out var v) && v;
+        cache.Set(RetrievalCacheMemoKey, enabled, CacheTtl);
+        return enabled;
+    }
+
+    public async Task<bool> SetRetrievalPromptCacheEnabledAsync(bool enabled, Guid updatedBy, CancellationToken ct = default)
+    {
+        var row = await db.NdSystemSettings.FirstOrDefaultAsync(s => s.Key == RetrievalCacheSettingKey, ct);
+        var json = enabled ? "true" : "false";
+        if (row == null)
+        {
+            db.NdSystemSettings.Add(new NdSystemSetting
+            {
+                Key = RetrievalCacheSettingKey,
+                ValueJson = json,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                UpdatedBy = updatedBy,
+            });
+        }
+        else
+        {
+            row.ValueJson = json;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+            row.UpdatedBy = updatedBy;
+        }
+        await db.SaveChangesAsync(ct);
+        cache.Remove(RetrievalCacheMemoKey);
+        return enabled;
+    }
+
     public async Task<DualVerifyLlmSettingsResponse> GetAdminViewAsync(CancellationToken ct = default)
     {
         var cfg = await GetConfigAsync(ct);

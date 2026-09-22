@@ -116,7 +116,7 @@ export type NdLocalExtractionSection = {
 
 /** Which local OCR engine parsed a document — each engine gets its own independent result per document,
  * so the same upload can be run through more than one and compared. */
-export type NdOcrEngine = 'tesseract' | 'rapidocr' | 'docling-light' | 'docling-glm';
+export type NdOcrEngine = 'tesseract' | 'rapidocr' | 'docling-light' | 'docling-glm' | 'azure-di';
 
 /**
  * Parse and Extract are two independent steps, not one combined status — matching the old pages'
@@ -140,6 +140,19 @@ export type NdLocalExtractionResult = {
   sections: NdLocalExtractionSection[];
   extractError?: string | null;
   extractedAt?: string | null;
+  /** Semantic extraction — a second, independent extract result off the same parsed text, split by
+   * embedding similarity instead of numbering. Never overwrites the fields above. */
+  semanticExtractStatus?: string;
+  semanticSectionCount: number | null;
+  semanticWarnings: string[];
+  semanticSections: NdLocalExtractionSection[];
+  semanticExtractError?: string | null;
+  semanticExtractedAt?: string | null;
+  /** Index status: pending | processing | indexed | failed. Internal documents only — see
+   * docs/pipeline/HYBRID-ANALYSIS-PIPELINE-PLAN.md Step 0. */
+  indexStatus?: string | null;
+  indexError?: string | null;
+  indexedAt?: string | null;
 };
 
 export type NdUserProfile = {
@@ -457,6 +470,38 @@ export class NdApiService {
     return this.request<unknown[]>('GET', '/nd/users');
   }
 
+  getDictionaryEntries() {
+    return this.request<unknown[]>('GET', '/nd/dictionary');
+  }
+
+  createDictionaryEntry(body: { acronym: string; definition?: string }) {
+    return this.request<unknown>('POST', '/nd/dictionary', body);
+  }
+
+  updateDictionaryEntry(id: string, body: { acronym?: string; definition?: string; isActive?: boolean }) {
+    return this.request<unknown>('PUT', `/nd/dictionary/${id}`, body);
+  }
+
+  deleteDictionaryEntry(id: string) {
+    return this.request<unknown>('DELETE', `/nd/dictionary/${id}`);
+  }
+
+  getSynonymEntries() {
+    return this.request<unknown[]>('GET', '/nd/synonyms');
+  }
+
+  createSynonymEntry(body: { termA: string; termB: string }) {
+    return this.request<unknown>('POST', '/nd/synonyms', body);
+  }
+
+  updateSynonymEntry(id: string, body: { termA?: string; termB?: string; isActive?: boolean }) {
+    return this.request<unknown>('PUT', `/nd/synonyms/${id}`, body);
+  }
+
+  deleteSynonymEntry(id: string) {
+    return this.request<unknown>('DELETE', `/nd/synonyms/${id}`);
+  }
+
   getDualVerifyLlmSettings() {
     return this.request<import('../../../lib/nd/types').DualVerifyLlmSettings>(
       'GET',
@@ -564,6 +609,14 @@ export class NdApiService {
       '/nd/admin/settings/regul-workflow-llm',
       body,
     );
+  }
+
+  getRegulRetrievalPromptCache() {
+    return this.request<{ enabled: boolean }>('GET', '/nd/admin/settings/regul-retrieval-prompt-cache');
+  }
+
+  updateRegulRetrievalPromptCache(enabled: boolean) {
+    return this.request<{ enabled: boolean }>('PUT', '/nd/admin/settings/regul-retrieval-prompt-cache', { enabled });
   }
 
   getAnalysisPrompts() {
@@ -1010,7 +1063,12 @@ export class NdApiService {
     // that can genuinely take several minutes longer than a normal API call. Docling's GLM-OCR mode is
     // a different order of magnitude on CPU (~21 min/page in testing) — only try single/short pages
     // with it for now, the timeout below is generous specifically to allow that, not a real SLA.
-    const timeoutMs = engine === 'docling-glm' ? 6 * 60 * 60_000 : 20 * 60_000;
+    // Docling Light measured 9.2 min on a full 23-page document in one run, but a later run on the same
+    // document exceeded 20 min — the local test service caches every mode's model in one long-lived
+    // process, so a heavier mode (e.g. GLM) tested earlier can leave memory pressure that slows a later
+    // "light" run down; restart docling-service/server.py between testing different modes. 45 min gives
+    // real headroom for that variance rather than a tight bound.
+    const timeoutMs = engine === 'docling-glm' ? 6 * 60 * 60_000 : 45 * 60_000;
     return this.request<NdLocalExtractionResult>(
       'POST',
       `/nd/local-documents/${engine}/${docId}/parse`,
@@ -1031,16 +1089,71 @@ export class NdApiService {
     );
   }
 
-  /** Persisted local-extraction status for a batch of documents, keyed by document id — for list rendering. */
-  localExtractStatusBatch(ids: string[], engine: NdOcrEngine = 'tesseract') {
+  /** Step 2, alternative method — semantic (embedding-based) extraction off the same already-parsed
+   * text. Independent of localExtractById — runs no re-parse, requires no Azure Document Intelligence
+   * credit, and never overwrites the structural result. One embedding call per sentence server-side,
+   * so this can take longer than structural extraction on a long document. */
+  localExtractSemanticById(docId: string, engine: NdOcrEngine = 'tesseract') {
+    return this.request<NdLocalExtractionResult>(
+      'POST',
+      `/nd/local-documents/${engine}/${docId}/extract-semantic`,
+      undefined,
+      true,
+      180_000,
+    );
+  }
+
+  /** Stops an in-flight local Parse/Extract for this document+engine and marks it failed so it can be retried. */
+  localStopExtract(docId: string, engine: NdOcrEngine = 'tesseract') {
+    return this.request<NdLocalExtractionResult>('POST', `/nd/local-documents/${engine}/${docId}/stop`);
+  }
+
+  /** Manual re-trigger for Step 0 indexing — for the V5 pipeline panel's per-document actions. */
+  localReindexById(docId: string, engine: NdOcrEngine = 'tesseract') {
+    return this.request<NdLocalExtractionResult>('POST', `/nd/local-documents/${engine}/${docId}/reindex`);
+  }
+
+  /** Persisted local-extraction status for a batch of documents, keyed by document id — for list rendering.
+   * `lite` asks for statuses and counts only (no parsed text, no sections — those come back empty): use it for
+   * readiness checks and polling. The full response is hundreds of KB per document and slow to read. */
+  localExtractStatusBatch(ids: string[], engine: NdOcrEngine = 'tesseract', opts?: { lite?: boolean }) {
     if (ids.length === 0) return Promise.resolve({ success: true, data: {} } as NdApiResult<Record<string, NdLocalExtractionResult>>);
     return this.request<Record<string, NdLocalExtractionResult>>(
       'GET',
-      `/nd/local-documents/${engine}/status?ids=${ids.join(',')}`,
+      `/nd/local-documents/${engine}/status?ids=${ids.join(',')}${opts?.lite ? '&lite=true' : ''}`,
       undefined,
       true,
       CATALOG_LIST_TIMEOUT_MS,
     );
+  }
+
+  /** Same as localExtractStatusBatch, but checks every OCR engine and keeps whichever row has
+   * made the most progress per document — a document can have been parsed under any engine
+   * (Tesseract, RapidOCR, Docling, Azure DI), not just the default, and RegulEmbeddingRetrievalService
+   * itself is engine-agnostic (picks any indexed row). Used by the V5 pipeline panel so a
+   * document already ready under a non-default engine doesn't show as falsely missing. */
+  async localExtractStatusBatchAnyEngine(
+    ids: string[],
+    opts?: { lite?: boolean },
+  ): Promise<NdApiResult<Record<string, NdLocalExtractionResult>>> {
+    if (ids.length === 0) return { success: true, data: {} };
+    const engines: NdOcrEngine[] = ['tesseract', 'rapidocr', 'docling-light', 'docling-glm', 'azure-di'];
+    const results = await Promise.all(engines.map((e) => this.localExtractStatusBatch(ids, e, opts)));
+    const rank = (r?: NdLocalExtractionResult): number => {
+      if (!r) return 0;
+      if (r.indexStatus === 'indexed') return 4;
+      if (r.extractStatus === 'extracted') return 3;
+      if (r.status === 'parsed') return 2;
+      return 1;
+    };
+    const best: Record<string, NdLocalExtractionResult> = {};
+    for (const res of results) {
+      if (!res.success || !res.data) continue;
+      for (const [id, row] of Object.entries(res.data)) {
+        if (!best[id] || rank(row) > rank(best[id])) best[id] = row;
+      }
+    }
+    return { success: true, data: best };
   }
 
   private async postMultipart<T>(path: string, form: FormData, timeoutMs = API_TIMEOUT_MS): Promise<NdApiResult<T>> {

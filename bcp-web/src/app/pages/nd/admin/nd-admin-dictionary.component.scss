@@ -1,0 +1,114 @@
+// Fixed column widths (set on <colgroup> in the template) so every row lines up consistently
+// regardless of how long any one row's content is — the default auto table layout resizes
+// columns per the widest cell, which drifted as rows with longer document names or definitions
+// loaded.
+.dict-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 60rem;
+}
+
+.dict-table th,
+.dict-table td {
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+.dict-col-check {
+  text-align: center;
+}
+
+// Stack the "Unresolved" + "Active/Inactive" badges vertically instead of letting them run
+// inline and overflow into the next column on rows where both are present.
+.dict-status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.dict-actions-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: nowrap;
+}
+
+.dict-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--accent-tint, rgba(37, 99, 235, 0.08));
+  border-radius: 6px;
+}
+
+.dict-bulk-count {
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.dict-row-unresolved {
+  background: var(--critical-bg);
+}
+
+.dict-row-unresolved td:first-child {
+  border-left: 3px solid var(--critical);
+}
+
+.dict-unresolved-badge {
+  background: var(--critical-bg);
+  color: var(--critical);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  margin-right: 0.5rem;
+}
+
+// Purpose-built active/inactive pill — the shared app-nd-status-badge component's vocabulary is
+// analysis-run workflow statuses (draft/submitted/completed/...) and renders confusing text like
+// "Submit for review pending" for an unrelated 'completed'/'failed' active-flag hack. This is a
+// plain boolean, so it gets a plain badge instead of borrowing a component built for a different
+// domain.
+.dict-active-badge {
+  background: var(--success-bg, rgba(16, 185, 129, 0.15));
+  color: var(--success, #059669);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+
+  &--off {
+    background: var(--critical-bg);
+    color: var(--critical);
+  }
+}
+
+// Spreadsheet-style cell: looks like plain text until focused/hovered, so the table doesn't
+// look like a form full of input boxes at rest — but every acronym/definition cell is always
+// live-editable, no separate "edit mode" to enter first.
+.dict-cell-input {
+  width: 100%;
+  min-width: 8rem;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.25rem 0.375rem;
+  border-radius: 4px;
+  font: inherit;
+  color: inherit;
+
+  &:hover {
+    border-color: var(--border, rgba(148, 163, 184, 0.4));
+  }
+
+  &:focus {
+    border-color: var(--accent, #2563eb);
+    background: var(--surface, #fff);
+    outline: none;
+  }
+}

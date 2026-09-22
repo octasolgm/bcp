@@ -13,6 +13,12 @@ covers, satisfies, or gaps that clause. Nine steps per clause, most of them
 free local computation, with two steps that call an external model and
 carry real cost. The diagram's own example: 80 clauses, about $4.50 total.
 
+**Known bug affecting chunk quality**: structural extraction (the source of every "chunk"
+this whole plan depends on) currently mis-splits nested numbered sub-lists as if they were
+new top-level clauses - see
+`STRUCTURAL-EXTRACTION-NESTED-NUMBERING-BUG.md` for a real example and the fix options.
+Worth resolving before trusting retrieval quality on documents with multi-level numbering.
+
 ## Where the input "chunks" come from - already built
 
 This whole pipeline consumes the exact output of the local Parse + Extract

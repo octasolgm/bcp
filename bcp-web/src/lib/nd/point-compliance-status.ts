@@ -136,6 +136,12 @@ export function resolveAnalysisPointSeverity(point: AnalysisPoint): ComplianceSe
 
   const agreement = extractAgreement(point.googleAiResult);
   const structured = pickStructuredBlocks(landingMessage, llmMessage);
+  // "not_evaluated" (V5 hybrid engine, Step 8's LLM call paused) means nothing was assessed —
+  // it isn't compliant, partial, or non-compliant, it's simply not scored yet. Without this
+  // check it falls through severityFromAgreement's final default straight to 'partial_compliant',
+  // which then shows a misleading compliance pill and trips the gap-count fallback into
+  // inventing a phantom "1 gap" for a clause the LLM never looked at.
+  if ((structured?.status ?? '').trim().toLowerCase() === 'not_evaluated') return null;
   return severityFromAgreement(agreement, structured?.status ?? '');
 }
 

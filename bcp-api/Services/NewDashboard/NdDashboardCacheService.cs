@@ -13,17 +13,21 @@ public sealed class NdDashboardCacheService(IMemoryCache cache)
 
     public void Invalidate() => Interlocked.Increment(ref _generation);
 
+    /// <param name="ttl">How long to keep the value; the short default suits polled dashboard numbers. A longer
+    /// lifetime is safe for values that only change through actions that call <see cref="Invalidate"/>, which
+    /// drops every cached entry at once.</param>
     public async Task<T> GetOrCreateAsync<T>(
         string scope,
         Func<CancellationToken, Task<T>> factory,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        TimeSpan? ttl = null)
     {
         var key = $"nd-dash:{Volatile.Read(ref _generation)}:{scope}";
         if (cache.TryGetValue(key, out T? hit) && hit is not null)
             return hit;
 
         var value = await factory(ct);
-        cache.Set(key, value, TimeSpan.FromSeconds(20));
+        cache.Set(key, value, ttl ?? Ttl);
         return value;
     }
 }

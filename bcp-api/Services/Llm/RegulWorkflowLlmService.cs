@@ -11,6 +11,8 @@ public class RegulWorkflowLlmService(
     OpenAiCompatibleLlmClient openAi,
     AnthropicLlmClient anthropic,
     XAiLlmClient xAi,
+    MoonshotLlmClient moonshot,
+    DeepSeekLlmClient deepSeek,
     ILogger<RegulWorkflowLlmService> logger)
 {
   private const string JudgmentJsonInstruction =
@@ -28,6 +30,8 @@ public class RegulWorkflowLlmService(
             "openai" => await openAi.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "anthropic" => await anthropic.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "xai" => await xAi.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "moonshot" => await moonshot.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "deepseek" => await deepSeek.AnalyzeTextAsync(prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }
@@ -45,6 +49,11 @@ public class RegulWorkflowLlmService(
     {
         var cfg = await settings.GetConfigAsync(ct);
         var systemPrompt = await promptVersions.GetJudgmentSystemPromptAsync(workflowEngine, ct);
+        // Hybrid engine only: each clause sends different retrieved chunks, so caching just adds the
+        // cache-write surcharge with no reads. Admin-switchable (default off); full-markdown engines
+        // keep caching unconditionally because their context repeats across clauses.
+        if (cacheContextBlock && AnalysisWorkflowEngine.IsRegulPipelineHybrid(workflowEngine))
+            cacheContextBlock = await settings.IsRetrievalPromptCacheEnabledAsync(ct);
         logger.LogInformation(
             "Regul judgment LLM using {Provider}/{Model} (structured={Structured})",
             cfg.Provider,
@@ -87,6 +96,8 @@ public class RegulWorkflowLlmService(
             "openai" => await openAi.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "anthropic" => await anthropic.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "xai" => await xAi.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
+            "moonshot" => await moonshot.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
+            "deepseek" => await deepSeek.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }

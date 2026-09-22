@@ -323,8 +323,26 @@
                       [disabled]="!!viewDisabledReason(d)"
                       (click)="viewPoints(d, $event)"
                     >
-                      View
+                      View structural
                     </button>
+                    <button
+                      type="button"
+                      class="row-action-btn compact"
+                      title="View the raw parsed text, independent of either extraction method"
+                      (click)="viewParsedText(d, $event)"
+                    >
+                      View parsed
+                    </button>
+                    @if (showSemanticExtract) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact"
+                        title="View the semantic (embedding-based) extraction result"
+                        (click)="viewSemanticPoints(d, $event)"
+                      >
+                        View semantic
+                      </button>
+                    }
                     @if (showExtractProgressActions(d)) {
                       <button
                         type="button"
@@ -368,6 +386,17 @@
                       >
                         {{ extractButtonLabel(d) }}
                       </button>
+                      @if (showSemanticExtract) {
+                        <button
+                          type="button"
+                          class="row-action-btn compact"
+                          title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result above"
+                          [disabled]="extractingSemanticId === d.id"
+                          (click)="handleExtractSemantic(d, $event)"
+                        >
+                          {{ extractingSemanticId === d.id ? 'Extracting…' : 'Extract (semantic)' }}
+                        </button>
+                      }
                     }
                     @if (showRowRepairButton(d)) {
                       <button
@@ -608,6 +637,17 @@
             >
               {{ extractingId === selectedDoc.id || isExtractingDoc(selectedDoc) ? 'Extracting…' : 'Run extraction' }}
             </button>
+            @if (showSemanticExtract) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result above"
+                [disabled]="extractingSemanticId === selectedDoc.id"
+                (click)="handleExtractSemantic(selectedDoc)"
+              >
+                {{ extractingSemanticId === selectedDoc.id ? 'Extracting…' : 'Run extraction (semantic)' }}
+              </button>
+            }
           }
         </div>
       }

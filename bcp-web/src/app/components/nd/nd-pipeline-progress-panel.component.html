@@ -1,0 +1,365 @@
+<aside
+  class="pipeline-panel"
+  [class.collapsed]="collapsed()"
+  [style.width.px]="collapsed() ? null : panelWidth()"
+  [style.min-width.px]="collapsed() ? null : panelWidth()"
+>
+  @if (!collapsed()) {
+    <div
+      class="panel-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize pipeline panel"
+      title="Drag to resize"
+      (pointerdown)="startPanelResize($event)"
+    ></div>
+  }
+  <button
+    type="button"
+    class="panel-toggle"
+    (click)="toggleCollapsed()"
+    [attr.aria-label]="collapsed() ? 'Show pipeline panel' : 'Hide pipeline panel'"
+    [attr.aria-pressed]="!collapsed()"
+  >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      @if (collapsed()) {
+        <polyline points="15 18 9 12 15 6" />
+      } @else {
+        <polyline points="9 18 15 12 9 6" />
+      }
+    </svg>
+    @if (collapsed()) {
+      <span class="panel-toggle-label">Pipeline</span>
+    }
+  </button>
+
+  @if (!collapsed()) {
+    <div class="panel-body">
+      <header class="panel-header">
+        <div class="panel-title-row">
+          <h3>Pipeline</h3>
+          <span class="panel-progress-pill" [class.all-done]="doneStepCount() === 9">
+            {{ doneStepCount() }} / {{ steps.length }} steps
+          </span>
+        </div>
+        <p class="panel-subtitle">Hybrid pipeline progress for this run (V5)</p>
+      </header>
+
+      <section class="doc-section">
+        <h4 class="section-title">Documents — Parse · Extract · Index</h4>
+        @if (docStatuses().length === 0) {
+          <p class="empty-hint">No internal documents selected yet.</p>
+        }
+        <ul class="doc-list">
+          @for (doc of docStatuses(); track doc.id) {
+            <li class="doc-row">
+              <span class="doc-name" [title]="doc.name">{{ doc.name }}</span>
+              <div class="doc-badges">
+                <span class="doc-badge" [class.ok]="isParseDone(doc)" [class.bad]="!isParseDone(doc)">
+                  <span class="doc-badge-label">Parse</span>
+                  @if (!isParseDone(doc)) {
+                    <button
+                      type="button"
+                      class="doc-run-btn"
+                      (click)="runParse(doc)"
+                      [disabled]="actionBusyKey === doc.id + ':parse'"
+                    >
+                      {{ actionBusyKey === doc.id + ':parse' ? '…' : 'Run' }}
+                    </button>
+                  }
+                </span>
+                <span class="doc-badge" [class.ok]="isExtractDone(doc)" [class.bad]="!isExtractDone(doc)">
+                  <span class="doc-badge-label">Extract</span>
+                  @if (!isExtractDone(doc) && isParseDone(doc)) {
+                    <button
+                      type="button"
+                      class="doc-run-btn"
+                      (click)="runExtract(doc)"
+                      [disabled]="actionBusyKey === doc.id + ':extract'"
+                    >
+                      {{ actionBusyKey === doc.id + ':extract' ? '…' : 'Run' }}
+                    </button>
+                  }
+                </span>
+                <span class="doc-badge" [class.ok]="isIndexDone(doc)" [class.bad]="!isIndexDone(doc)">
+                  <span class="doc-badge-label">Index</span>
+                  @if (!isIndexDone(doc) && isExtractDone(doc)) {
+                    <button
+                      type="button"
+                      class="doc-run-btn"
+                      (click)="runIndex(doc)"
+                      [disabled]="actionBusyKey === doc.id + ':index'"
+                    >
+                      {{ actionBusyKey === doc.id + ':index' ? '…' : 'Run' }}
+                    </button>
+                  }
+                </span>
+              </div>
+            </li>
+          }
+        </ul>
+      </section>
+
+      <h4 class="section-title">Pipeline steps</h4>
+      <ol class="step-list">
+        @for (step of steps; track step.key) {
+          <li class="step-row" [class]="'status-' + statusFor(step)">
+            <div class="step-row-main">
+              <span class="step-icon" [attr.aria-hidden]="true">
+                @switch (statusFor(step)) {
+                  @case ('done') {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  }
+                  @case ('running') {
+                    <span class="spinner"></span>
+                  }
+                  @case ('not_built') {
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  }
+                  @default {
+                    <span class="dot"></span>
+                  }
+                }
+              </span>
+              <span class="step-label">{{ step.label }}</span>
+              <span class="step-status-text">{{ statusLabel(statusFor(step)) }}</span>
+              @if (step.key === 'step4' && processedCount() > 0) {
+                <span class="step-count">{{ processedCount() }} clause(s)</span>
+              }
+            </div>
+
+            @if (step.key === 'step1' && clauses().length > 0) {
+              <ul class="clause-feed">
+                @for (clause of clauses(); track clause.clauseNo) {
+                  <li class="clause-item">
+                    <button type="button" class="clause-summary" (click)="toggleClause(clause.clauseNo + ':exp')">
+                      <span class="clause-no">{{ clause.clauseNo }}</span>
+                      <span class="clause-meta">
+                        {{ clause.acronymMatches.length }} acronym · {{ clause.synonymMatches.length }} synonym
+                      </span>
+                    </button>
+
+                    @if (expandedClauseNo === clause.clauseNo + ':exp') {
+                      <div class="clause-detail">
+                        <div class="expansion-group">
+                          <span class="detail-label">Acronym matches:</span>
+                          @if (clause.acronymMatches.length === 0) {
+                            <p class="no-matches">No acronym match for this clause.</p>
+                          }
+                          @for (m of clause.acronymMatches; track m.entryId) {
+                            <div class="expansion-row">
+                              @if (editingEntryId === m.entryId) {
+                                <div class="expansion-edit">
+                                  <input class="expansion-input" [(ngModel)]="editDraftA" placeholder="Acronym" />
+                                  <input class="expansion-input" [(ngModel)]="editDraftB" placeholder="Full form" />
+                                  <button type="button" class="expansion-btn save" [disabled]="savingEntryId === m.entryId" (click)="saveEditMatch('acronym')">
+                                    {{ savingEntryId === m.entryId ? '…' : 'Save' }}
+                                  </button>
+                                  <button type="button" class="expansion-btn" (click)="cancelEditMatch()">Cancel</button>
+                                </div>
+                              } @else {
+                                <span class="expansion-text">{{ m.matchedText }} <span class="expansion-arrow">→</span> {{ m.addedText }}</span>
+                                <button type="button" class="expansion-edit-btn" title="Edit" aria-label="Edit" (click)="startEditMatch(m)">
+                                  <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+                                    <path fill="none" stroke="currentColor" stroke-width="1.6" d="M13.5 3.5l3 3L7 16l-4 1 1-4 9.5-9.5z" />
+                                  </svg>
+                                </button>
+                              }
+                            </div>
+                          }
+                        </div>
+                        <div class="expansion-group">
+                          <span class="detail-label">Synonym matches:</span>
+                          @if (clause.synonymMatches.length === 0) {
+                            <p class="no-matches">No synonym match for this clause.</p>
+                          }
+                          @for (m of clause.synonymMatches; track m.entryId) {
+                            <div class="expansion-row">
+                              @if (editingEntryId === m.entryId) {
+                                <div class="expansion-edit">
+                                  <input class="expansion-input" [(ngModel)]="editDraftA" placeholder="Term A" />
+                                  <input class="expansion-input" [(ngModel)]="editDraftB" placeholder="Term B" />
+                                  <button type="button" class="expansion-btn save" [disabled]="savingEntryId === m.entryId" (click)="saveEditMatch('synonym')">
+                                    {{ savingEntryId === m.entryId ? '…' : 'Save' }}
+                                  </button>
+                                  <button type="button" class="expansion-btn" (click)="cancelEditMatch()">Cancel</button>
+                                </div>
+                              } @else {
+                                <span class="expansion-text">{{ m.matchedText }} <span class="expansion-arrow">→</span> {{ m.addedText }}</span>
+                                <button type="button" class="expansion-edit-btn" title="Edit" aria-label="Edit" (click)="startEditMatch(m)">
+                                  <svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+                                    <path fill="none" stroke="currentColor" stroke-width="1.6" d="M13.5 3.5l3 3L7 16l-4 1 1-4 9.5-9.5z" />
+                                  </svg>
+                                </button>
+                              }
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+
+            @if (step.key === 'step2' && clauses().length > 0) {
+              <ul class="clause-feed">
+                @for (clause of clauses(); track clause.clauseNo) {
+                  <li class="clause-item">
+                    <button type="button" class="clause-summary" (click)="toggleClause(clause.clauseNo + ':split')">
+                      <span class="clause-no">{{ clause.clauseNo }}</span>
+                      <span class="clause-meta">
+                        {{ clause.subObligations.length > 1 ? clause.subObligations.length + ' sub-obligations' : 'not split' }}
+                      </span>
+                    </button>
+
+                    @if (expandedClauseNo === clause.clauseNo + ':split') {
+                      <div class="clause-detail">
+                        @if (clause.subObligations.length > 1) {
+                          <div class="matches">
+                            <span class="detail-label">Split into {{ clause.subObligations.length }} sub-obligations, each retrieved separately:</span>
+                            @for (sub of clause.subObligations; track $index) {
+                              <div class="match-row">
+                                <p class="match-preview">{{ sub }}</p>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <p class="no-matches">No confident evidence of more than one obligation — searched as a single clause.</p>
+                        }
+                      </div>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+
+            @if (step.key === 'step3' && clauses().length > 0) {
+              <ul class="clause-feed">
+                @for (clause of clauses(); track clause.clauseNo) {
+                  <li class="clause-item">
+                    <button type="button" class="clause-summary" (click)="toggleClause(clause.clauseNo + ':bm25')">
+                      <span class="clause-no">{{ clause.clauseNo }}</span>
+                      <span class="clause-meta">{{ clause.bm25Matches.length }} match(es)</span>
+                    </button>
+
+                    @if (expandedClauseNo === clause.clauseNo + ':bm25') {
+                      <div class="clause-detail">
+                        @if (clause.bm25Matches.length > 0) {
+                          <div class="matches">
+                            <span class="detail-label">Keyword matches (dynamic cutoff — not a fixed count):</span>
+                            @for (match of clause.bm25Matches; track match.sectionId) {
+                              <div class="match-row">
+                                <div class="match-row-header">
+                                  <span class="match-doc">{{ match.sourceDocumentName || 'Internal document' }}</span>
+                                  <span class="match-similarity">score {{ match.score }}</span>
+                                </div>
+                                @if (match.matchedSubObligation) {
+                                  <p class="match-sub-obligation">via: {{ match.matchedSubObligation }}</p>
+                                }
+                                <p class="match-preview">{{ match.textPreview }}</p>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <p class="no-matches">No keyword match cleared the relevance bar for this clause.</p>
+                        }
+                      </div>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+
+            @if (step.key === 'step4' && clauses().length > 0) {
+              <ul class="clause-feed">
+                @for (clause of clauses(); track clause.clauseNo) {
+                  <li class="clause-item">
+                    <button type="button" class="clause-summary" (click)="toggleClause(clause.clauseNo)">
+                      <span class="clause-no">{{ clause.clauseNo }}</span>
+                      <span class="clause-meta">{{ clause.matches.length }} match(es)</span>
+                    </button>
+
+                    @if (expandedClauseNo === clause.clauseNo) {
+                      <div class="clause-detail">
+                        @if (clause.matches.length > 0) {
+                          <div class="matches">
+                            <span class="detail-label">Top matched internal sections:</span>
+                            @for (match of clause.matches; track match.sectionId) {
+                              <div class="match-row">
+                                <div class="match-row-header">
+                                  <span class="match-doc">{{ match.sourceDocumentName || 'Internal document' }}</span>
+                                  <span class="match-similarity">{{ matchPercent(match.similarity) }}%</span>
+                                </div>
+                                @if (match.matchedSubObligation) {
+                                  <p class="match-sub-obligation">via: {{ match.matchedSubObligation }}</p>
+                                }
+                                <p class="match-preview">{{ match.textPreview }}</p>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <p class="no-matches">No matching internal sections found for this clause.</p>
+                        }
+                      </div>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+
+            @if ((step.key === 'step5' || step.key === 'step6') && clauses().length > 0) {
+              <ul class="clause-feed">
+                @for (clause of clauses(); track clause.clauseNo) {
+                  <li class="clause-item">
+                    <button type="button" class="clause-summary" (click)="toggleClause(clause.clauseNo + ':fused:' + step.key)">
+                      <span class="clause-no">{{ clause.clauseNo }}</span>
+                      <span class="clause-meta">{{ clause.fusedMatches.length }} match(es)</span>
+                    </button>
+
+                    @if (expandedClauseNo === clause.clauseNo + ':fused:' + step.key) {
+                      <div class="clause-detail">
+                        @if (clause.fusedMatches.length > 0) {
+                          <div class="matches">
+                            <span class="detail-label">
+                              @if (step.key === 'step5') {
+                                Fused ranking (0.4 BM25 + 0.6 embedding, each normalized to this clause's best):
+                              } @else {
+                                Selected for context — dynamic cutoff, not a fixed count:
+                              }
+                            </span>
+                            @for (match of clause.fusedMatches; track match.sectionId) {
+                              <div class="match-row">
+                                <div class="match-row-header">
+                                  <span class="match-doc">{{ match.sourceDocumentName || 'Internal document' }}</span>
+                                  <span class="match-similarity">fused {{ match.fusedScore }}</span>
+                                </div>
+                                <p class="match-sub-obligation">
+                                  bm25 {{ match.bm25Score ?? '—' }} · embedding {{ match.embeddingSimilarity ?? '—' }}
+                                  @if (match.matchedSubObligation) {
+                                    · via: {{ match.matchedSubObligation }}
+                                  }
+                                </p>
+                                <p class="match-preview">{{ match.textPreview }}</p>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <p class="no-matches">No matches to fuse for this clause.</p>
+                        }
+                      </div>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </li>
+        }
+      </ol>
+    </div>
+  }
+</aside>

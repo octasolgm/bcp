@@ -75,6 +75,10 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
                     maxRetryDelay: TimeSpan.FromSeconds(5),
                     errorCodesToAdd: null);
                 npgsql.CommandTimeout(60);
+                // pgvector column support for NdLocalDocumentExtractionSection.Embedding — Supabase has
+                // the extension available by default (CREATE EXTENSION vector, applied in
+                // NdIncrementalSchemaBootstrap.cs), this just teaches EF Core the CLR<->PG vector type.
+                npgsql.UseVector();
             });
     }
     else
@@ -141,6 +145,10 @@ builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.OpenAiCompatibleLlmClien
 builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.AnthropicLlmClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.XAiLlmClient), c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.XAiLlmClient>();
+builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.MoonshotLlmClient), c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.MoonshotLlmClient>();
+builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.DeepSeekLlmClient), c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.DeepSeekLlmClient>();
 builder.Services.AddHttpClient<NodeBridgeService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 
 builder.Services.AddSingleton<Reguliq.Api.Services.LocalDocs.TesseractOcrEngine>();
@@ -156,6 +164,46 @@ builder.Services.AddHttpClient<Reguliq.Api.Services.LocalDocs.DoclingClient>(c =
     c.BaseAddress = new Uri(builder.Configuration["Docling:BaseUrl"] ?? "http://127.0.0.1:5055");
     c.Timeout = TimeSpan.FromHours(6);
 });
+
+builder.Services.Configure<Reguliq.Api.Services.LocalDocs.AzureDocumentIntelligenceOptions>(
+    builder.Configuration.GetSection("AzureDocumentIntelligence"));
+// Cloud call (submit-then-poll REST API) — normal documents finish in seconds, 10 minutes gives
+// headroom for large scanned PDFs without hanging indefinitely.
+builder.Services.AddHttpClient<Reguliq.Api.Services.LocalDocs.AzureDocumentIntelligenceClient>(c =>
+{
+    var endpoint = builder.Configuration["AzureDocumentIntelligence:Endpoint"];
+    if (!string.IsNullOrWhiteSpace(endpoint))
+        c.BaseAddress = new Uri(endpoint.TrimEnd('/') + "/");
+    c.Timeout = TimeSpan.FromMinutes(10);
+});
+
+builder.Services.Configure<Reguliq.Api.Services.LocalDocs.AzureOpenAIOptions>(
+    builder.Configuration.GetSection("AzureOpenAI"));
+// Embeddings only (semantic extraction) — one call per sentence, small payloads, fast.
+builder.Services.AddHttpClient<Reguliq.Api.Services.LocalDocs.AzureOpenAIEmbeddingClient>(c =>
+{
+    var endpoint = builder.Configuration["AzureOpenAI:Endpoint"];
+    if (!string.IsNullOrWhiteSpace(endpoint))
+        c.BaseAddress = new Uri(endpoint.TrimEnd('/') + "/");
+    c.Timeout = TimeSpan.FromMinutes(2);
+});
+
+// Pgvector indexing — see docs/pipeline/HYBRID-ANALYSIS-PIPELINE-PLAN.md Step 0. Own queue, own
+// worker, deliberately not sharing LocalJobQueue/DualVerifyWorkerHosted below (see IndexingJobQueue's
+// own doc comment for why).
+builder.Services.AddSingleton<Reguliq.Api.Services.LocalDocs.LocalEmbeddingService>();
+builder.Services.AddSingleton<Reguliq.Api.Workers.IndexingJobQueue>();
+builder.Services.AddHostedService<Reguliq.Api.Workers.IndexingWorkerHosted>();
+
+// Query expansion — hybrid pipeline Step 1 (see docs/roadmap/QUERY-EXPANSION-PLAN.md). Runs
+// synchronously inline in Extract (no background queue — a regex pass over in-memory text,
+// unlike indexing above which genuinely needs one for its embedding calls).
+builder.Services.AddScoped<Reguliq.Api.Services.LocalDocs.DictionaryExpansionService>();
+
+// Hybrid pipeline Step 1 + Step 4 (V5 / regul_pipeline_hybrid_v5 engine only) — see
+// docs/pipeline/HYBRID-ANALYSIS-PIPELINE-PLAN.md. Bridges the local-docs indexing subsystem
+// above to the Regul analysis-run pipeline (NdRegulAnalysisProcessor).
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.RegulEmbeddingRetrievalService>();
 
 builder.Services.AddSingleton<KafkaConfig>();
 builder.Services.AddSingleton<KafkaProducerService>();
@@ -327,6 +375,17 @@ file static class StartupBootstrap
                 catch (Exception seedEx)
                 {
                     logger.LogWarning(seedEx, "Demo analysis template seed skipped.");
+                }
+                try
+                {
+                    var dictionaryService = scope.ServiceProvider
+                        .GetRequiredService<Reguliq.Api.Services.LocalDocs.DictionaryExpansionService>();
+                    await dictionaryService.LoadSeedAsync(CancellationToken.None);
+                    await dictionaryService.LoadSynonymSeedAsync(CancellationToken.None);
+                }
+                catch (Exception seedEx)
+                {
+                    logger.LogWarning(seedEx, "Query-expansion dictionary seed load skipped.");
                 }
                 state.SetStatus("ready");
                 logger.LogInformation("Live schema detected — API ready for login.");

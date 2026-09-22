@@ -319,6 +319,21 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     return isRegulWorkflow(this.ndWorkflowEngine);
   }
 
+  /** Regul runs list only run points that are tied to a regulation point — a point without a
+   * `regulationPointId` is a reverse-only internal row and is left out of the analysing list. An engine whose
+   * clauses never carry one (V5: they come from local structural chunking and are identified by clause
+   * number) overrides this to false; otherwise the poll drops every point and the page sits on 0/0. */
+  protected runPointNeedsRegulationPointId(): boolean {
+    return true;
+  }
+
+  /** Legacy Phase-1 runs keep the page on the execution view while any point's first-stage status is
+   * pending or failed. A forward-only run that ends with failed clauses (e.g. an LLM error) is finished:
+   * the page should settle and list them as failed instead of showing "running" forever. */
+  protected failedOrPendingPointKeepsRunOpen(): boolean {
+    return true;
+  }
+
   /** Forward-only Regul runs — hide legacy Phase 1 / Phase 2 dual-verify UI. */
   protected usesForwardOnlyRunUi(): boolean {
     return isRegulWorkflow(this.ndWorkflowEngine);
@@ -2205,7 +2220,11 @@ ${this.findingsPreview
     };
   }
 
-  private async fetchNdRegulationPoints(id: string): Promise<{
+  /** Visibility only (was private) — lets V5 override this one per-document fetch to source
+   * points from the local Azure DI/structural-chunking pipeline instead of the legacy Landing
+   * AI-based points endpoint, without touching V3/V4's own files or changing their behavior at
+   * all (this method's body and every caller in this shared base file are unchanged). */
+  protected async fetchNdRegulationPoints(id: string): Promise<{
     success: boolean;
     points: GovPoint[];
     message?: string;
@@ -4180,7 +4199,15 @@ ${this.findingsPreview
         regulForwardStatus: (live as AnalysisPoint).regulForwardStatus ?? p.regulForwardStatus,
         regulForwardResult: (live as AnalysisPoint).regulForwardResult ?? p.regulForwardResult,
         regulForwardError: (live as AnalysisPoint).regulForwardError ?? p.regulForwardError,
-        pointSnapshot: p.pointSnapshot || (live as AnalysisPoint).pointSnapshot || p.pointSnapshot,
+        // Detail's own pointSnapshot (p) is deliberately truncated in lite mode (see
+        // NdRegulApiProjection.MapPointLite / TruncatePointSnapshotLite — a fast-list-view
+        // optimization) while /status's pointSnapshot is always the full, untruncated text. The
+        // old `p.pointSnapshot || live.pointSnapshot || p.pointSnapshot` always picked detail's
+        // truncated string first since it's a non-empty value — confirmed live: the "Regulatory
+        // requirement" panel showed only 280 of a clause's real 2100 characters, cut off mid-word,
+        // even though the full text was sitting right there in the same poll response. Pick
+        // whichever side is actually longer instead.
+        pointSnapshot: pickLanding(p.pointSnapshot, (live as AnalysisPoint).pointSnapshot) ?? p.pointSnapshot,
       });
     });
 
@@ -4301,6 +4328,13 @@ ${this.findingsPreview
   /** Called after each ND /status poll merge so subclasses can refresh local indexes. */
   protected onNdRunPointsLiveUpdate(_points: AnalysisPoint[]): void {}
 
+  /** V5/hybrid-engine-only hook: Step 1+4 retrieval preview from the latest status poll, one
+   * entry per clause that has been processed by RegulEmbeddingRetrievalService so far. No-op for
+   * every other page (V3/V4 responses never include this field). */
+  protected onNdRetrievalPreviewUpdate(
+    _preview: Array<{ clauseNo: string; retrieval: unknown }>,
+  ): void {}
+
   /**
    * ND shell only — starts NdAnalysisProcessor and polls DB status.
    * Legacy {@link runAnalysis} (dual-verify-kafka jobs) is unchanged for /old/*.
@@ -4332,6 +4366,14 @@ ${this.findingsPreview
     this.resetSteps();
     this.markStep(0, true);
     this.analysisSteps[1].label = `Loading regulation clauses (${this.govPoints.length} found)`;
+
+    // Same gap as launchNdAnalysisRunForwardOnly (see its own comment) — this method never
+    // actually calls confirm-clauses server-side either, so /start rejects with "Confirm
+    // regulatory clauses before starting Regul workflow analysis" and the run is left stuck at
+    // status=draft while the UI shows a "running"-looking screen. Best-effort confirm first.
+    if (isRegulWorkflow(this.ndWorkflowEngine) && !this.isNdDemoSimulation()) {
+      await this.ndApi.confirmRegulClauses(runId, []).catch(() => null);
+    }
 
     const res = await this.ndApi.startAnalysisRun(runId);
     if (!res.success) {
@@ -4399,6 +4441,20 @@ ${this.findingsPreview
     this.resetSteps();
     this.markStep(0, true);
     this.analysisSteps[1].label = `Loading regulation clauses (${this.govPoints.length} found)`;
+
+    // start-forward requires RegulClausesConfirmedAt to already be set server-side — but this
+    // method only ever set a client-side `regulClausesConfirmed` flag, never actually called the
+    // confirm-clauses endpoint. Whenever this method is reached WITHOUT already going through the
+    // clause-review screen's own confirmRegulClauses() call first (confirmed live: happens for a
+    // brand new "Run forward only" click that skips that screen), start-forward would 400 with
+    // "Confirm regulatory clauses before starting forward analysis", and the run was left stuck
+    // showing a "running"-looking UI with the backend actually still at status=draft, 0 processed,
+    // forever. Best-effort confirm here first — if the run was already confirmed (or isn't a
+    // draft any more, e.g. a legitimate re-run), this 400s harmlessly and start-forward's own
+    // status-aware checks below still handle that case correctly and report any real problem.
+    if (!this.isNdDemoSimulation()) {
+      await this.ndApi.confirmRegulClauses(runId, []).catch(() => null);
+    }
 
     const res = await this.ndApi.startForwardOnlyAnalysis(runId);
     if (!res.success) {
@@ -4594,7 +4650,7 @@ ${this.findingsPreview
     }
 
     for (const p of points) {
-      if (this.isRegulPipelineRun() && !p.regulationPointId) continue;
+      if (this.isRegulPipelineRun() && this.runPointNeedsRegulationPointId() && !p.regulationPointId) continue;
       const mapped = this.mapNdAnalysisPoint(p);
       if (!mapped.pointId) continue;
       const pointStatus = this.resolveNdPointSessionStatus(p, mapped, runStatusLabel);
@@ -4664,9 +4720,9 @@ ${this.findingsPreview
     const allPointsProcessed =
       this.progressTotal > 0 && this.progressDone >= this.progressTotal;
     const inFlight = runStatus === 'draft' || runStatus === 'running';
-    const hasLandingPendingOrFailed = points.some(
-      (p) => p.landingAiStatus === 'pending' || p.landingAiStatus === 'failed',
-    );
+    const hasLandingPendingOrFailed =
+      this.failedOrPendingPointKeepsRunOpen() &&
+      points.some((p) => p.landingAiStatus === 'pending' || p.landingAiStatus === 'failed');
 
     this.ndRunDualVerifyFailedCount = this.isRegulPipelineInFlight() || isRegulWorkflow(this.ndWorkflowEngine)
       ? regulClauseFailedCount(run)
@@ -5237,6 +5293,7 @@ ${this.findingsPreview
           regulReverseSectionTotal?: number | null;
           regulReverseSectionCompleted?: number | null;
           regulReverseSections?: Array<{ sectionRef: string; title: string; status: string }> | null;
+          regulRetrievalPreview?: Array<{ clauseNo: string; retrieval: unknown }> | null;
           points: AnalysisPoint[];
         };
         const merged = this.mergeNdRunPoints(this.getPollMergeBasePoints(), data.points);
@@ -5249,6 +5306,7 @@ ${this.findingsPreview
           this.isDemoRun || this.isNdDemoSimulation(),
         );
         this.onNdRunPointsLiveUpdate(this.ndRunDetailPoints);
+        if (data.regulRetrievalPreview) this.onNdRetrievalPreviewUpdate(data.regulRetrievalPreview);
         if (
           this.ndRunSelectedSnapshot &&
           !this.isDemoRun &&
@@ -5294,6 +5352,7 @@ ${this.findingsPreview
             regulReverseSectionTotal?: number | null;
             regulReverseSectionCompleted?: number | null;
             regulReverseSections?: Array<{ sectionRef: string; title: string; status: string }> | null;
+            regulRetrievalPreview?: Array<{ clauseNo: string; retrieval: unknown }> | null;
             points: AnalysisPoint[];
           };
           const merged = this.mergeNdRunPoints(this.getPollMergeBasePoints(), data.points);
@@ -5306,6 +5365,7 @@ ${this.findingsPreview
             this.isDemoRun || this.isNdDemoSimulation(),
           );
           this.onNdRunPointsLiveUpdate(this.ndRunDetailPoints);
+          if (data.regulRetrievalPreview) this.onNdRetrievalPreviewUpdate(data.regulRetrievalPreview);
           if (
             this.ndRunSelectedSnapshot &&
             !this.isDemoRun &&

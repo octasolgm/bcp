@@ -21,8 +21,18 @@ public static class NdRegulAnalysisPointSync
         point.GoogleAiError = null;
         point.DualVerifyStatus = "completed";
         point.DualVerifyRunAt = DateTimeOffset.UtcNow;
-        point.FinalStatus = NdComplianceParser.NormalizeStatus(
-            NdRegulJudgmentFormatter.MapDisplayStatus(judgment.OverallStatus, judgment.DesignStatus));
+        // "not_evaluated" is a marker only Step 8's paused-LLM path (hybrid engine) ever produces
+        // — nothing was actually assessed, so it must not become a real severity. Left as-is it
+        // falls through NormalizeStatus's final default case straight to "non_compliant", which
+        // then (a) shows a misleading NON COMPLIANT pill for a clause the LLM never looked at, and
+        // (b) trips countDisplayGapsForAnalysisPoint's "no gap text found, assume 1 gap" fallback
+        // — a phantom gap badge with nothing behind it. Leaving FinalStatus null instead keeps the
+        // point in the same "queued/pending, no severity yet" state the UI already understands.
+        var isPaused = string.Equals(judgment.OverallStatus, "not_evaluated", StringComparison.OrdinalIgnoreCase);
+        point.FinalStatus = isPaused
+            ? null
+            : NdComplianceParser.NormalizeStatus(
+                NdRegulJudgmentFormatter.MapDisplayStatus(judgment.OverallStatus, judgment.DesignStatus));
         var capFromMessage = NdComplianceParser.ExtractActionPlan(landingMessage);
         var capFromJudgment = !string.IsNullOrWhiteSpace(judgment.SuggestedAction)
             ? judgment.SuggestedAction.Trim()

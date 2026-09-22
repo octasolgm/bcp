@@ -61,6 +61,32 @@ public class SystemSettingsController(
         return Ok(new { success = true, data = view });
     }
 
+    [HttpGet("regul-retrieval-prompt-cache")]
+    public async Task<IActionResult> GetRegulRetrievalPromptCache(CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+        return Ok(new { success = true, data = new { enabled = await regulLlmSettings.IsRetrievalPromptCacheEnabledAsync(ct) } });
+    }
+
+    [HttpPut("regul-retrieval-prompt-cache")]
+    public async Task<IActionResult> UpdateRegulRetrievalPromptCache(
+        [FromBody] RetrievalPromptCacheRequest body,
+        CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+        var enabled = await regulLlmSettings.SetRetrievalPromptCacheEnabledAsync(body.Enabled, profile.Id, ct);
+        return Ok(new
+        {
+            success = true,
+            data = new { enabled },
+            message = enabled ? "Prompt caching enabled for the V5 pipeline." : "Prompt caching disabled for the V5 pipeline.",
+        });
+    }
+
+    public sealed record RetrievalPromptCacheRequest(bool Enabled);
+
     [HttpPut("regul-workflow-llm")]
     public async Task<IActionResult> UpdateRegulWorkflowLlm(
         [FromBody] DualVerifyLlmUpdateRequest body,
