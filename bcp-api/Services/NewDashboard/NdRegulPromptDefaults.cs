@@ -243,6 +243,15 @@ Mark non_compliant only when no substantive procedural equivalent appears in the
     public static string BuildJudgmentRetryNote(string overallStatus) =>
         $"--- RETRY ---\nYour overall_status was '{overallStatus}' but gap_description was empty. A partial or non_compliant finding MUST have a non-empty gap_description stating exactly what is missing and naming the document it was/was not found in. Provide that now.";
 
+    /// <summary>V5 (hybrid) only retry: a partial / non_compliant finding needs BOTH a gap and an action plan.</summary>
+    public static string BuildHybridJudgmentRetryNote(string overallStatus, bool gapMissing, bool actionMissing)
+    {
+        var missing = gapMissing && actionMissing
+            ? "gap_description and suggested_action were empty or N/A"
+            : gapMissing ? "gap_description was empty or N/A" : "suggested_action was empty or N/A";
+        return $"--- RETRY ---\nYour overall_status was '{overallStatus}' but {missing}. A partial or non_compliant finding MUST have a non-empty gap_description stating exactly what is missing, and a non-empty suggested_action giving the concrete corrective action to close it. Provide both now. If on reflection the policy fully covers the clause, set overall_status to compliant and leave both as N/A.";
+    }
+
     public static string JudgmentUserContextTemplate =>
         BuildJudgmentContextText("{policy_context}");
 

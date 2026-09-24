@@ -15,12 +15,24 @@ public class RegulWorkflowLlmService(
     DeepSeekLlmClient deepSeek,
     ZhipuLlmClient zhipu,
     QwenLlmClient qwen,
+    OpenRouterLlmClient openRouter,
     ILogger<RegulWorkflowLlmService> logger)
 {
   private const string JudgmentJsonInstruction =
         "Respond with ONLY a JSON object (no markdown fences) with keys: " +
         "design_status, operating_status, overall_status, confidence, interpretation, " +
         "policy_extract (array of strings), document_reference, gap_description, suggested_action, gap_direction.";
+
+    // V5 (hybrid pipeline) only. Plain-text providers get no per-field descriptions, so the evidence rule is
+    // restated right where the output format is requested. Other engines keep JudgmentJsonInstruction unchanged.
+    private const string HybridJudgmentJsonInstruction =
+        "Respond with ONLY a JSON object (no markdown fences) with keys: " +
+        "design_status, operating_status, overall_status, confidence (0 to 1), interpretation, " +
+        "policy_extract, document_reference, gap_description, suggested_action, gap_direction. " +
+        "policy_extract MUST be an array of strings: quotes copied VERBATIM, character for character, from the internal policy " +
+        "excerpts above (keep OCR artifacts, never paraphrase), one item per supporting passage; return an empty array only if no " +
+        "excerpt is relevant at all. document_reference must use the exact [bracket label] of the excerpts you quoted. " +
+        "If overall_status is compliant, gap_description and suggested_action MUST both be \"N/A\" (a compliant clause has no gap). If it is partial or non_compliant, BOTH gap_description and suggested_action are REQUIRED and non-empty.";
 
     public async Task<string> AnalyzeTextAsync(string prompt, CancellationToken ct = default)
     {
@@ -36,6 +48,7 @@ public class RegulWorkflowLlmService(
             "deepseek" => await deepSeek.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "zhipu" => await zhipu.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "qwen" => await qwen.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "openrouter" => await openRouter.AnalyzeTextAsync(prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }
@@ -52,6 +65,7 @@ public class RegulWorkflowLlmService(
         CancellationToken ct = default)
     {
         var cfg = await settings.GetConfigAsync(ct);
+        var isHybrid = AnalysisWorkflowEngine.IsRegulPipelineHybrid(workflowEngine);
         var systemPrompt = await promptVersions.GetJudgmentSystemPromptAsync(workflowEngine, ct);
         // Hybrid engine only: each clause sends different retrieved chunks, so caching just adds the
         // cache-write surcharge with no reads. Admin-switchable (default off); full-markdown engines
@@ -71,7 +85,7 @@ public class RegulWorkflowLlmService(
                 contextBlock,
                 queryBlock,
                 NdRegulLlmSchemas.JudgmentToolName,
-                NdRegulLlmSchemas.JudgmentToolSchema(),
+                isHybrid ? NdRegulLlmSchemas.HybridJudgmentToolSchema() : NdRegulLlmSchemas.JudgmentToolSchema(),
                 cfg.Model,
                 cacheContextBlock,
                 ct);
@@ -82,7 +96,7 @@ public class RegulWorkflowLlmService(
             systemPrompt,
             contextBlock,
             queryBlock,
-            JudgmentJsonInstruction,
+            isHybrid ? HybridJudgmentJsonInstruction : JudgmentJsonInstruction,
         });
         return await AnalyzeTextAsync(prompt, ct);
     }
@@ -104,6 +118,7 @@ public class RegulWorkflowLlmService(
             "deepseek" => await deepSeek.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "zhipu" => await zhipu.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "qwen" => await qwen.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
+            "openrouter" => await openRouter.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }

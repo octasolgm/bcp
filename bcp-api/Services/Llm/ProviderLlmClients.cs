@@ -386,6 +386,10 @@ public abstract class ChatCompletionsClientBase(
     protected virtual IReadOnlyDictionary<string, object?> ExtraFields(string model) =>
         new Dictionary<string, object?>();
 
+    /// <summary>Extra provider-specific request headers (e.g. OpenRouter's optional app-attribution headers).</summary>
+    protected virtual IReadOnlyDictionary<string, string> ExtraHeaders() =>
+        new Dictionary<string, string>();
+
     public Task<string> AnalyzeTextAsync(string prompt, string model, CancellationToken ct = default) =>
         PostChatAsync(prompt, model, ct);
 
@@ -420,6 +424,8 @@ public abstract class ChatCompletionsClientBase(
             Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"),
         };
         req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiKey);
+        foreach (var (key, value) in ExtraHeaders())
+            req.Headers.TryAddWithoutValidation(key, value);
 
         var res = await http.SendAsync(req, ct);
         var text = await res.Content.ReadAsStringAsync(ct);
@@ -497,3 +503,23 @@ public class QwenLlmClient(IHttpClientFactory httpFactory, IConfiguration config
         "Qwen:ApiKey", "QWEN_API_KEY",
         "Qwen:BaseUrl", "QWEN_API_BASE",
         "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", logger);
+
+/// <summary>OpenRouter — one API/key that proxies to Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot,
+/// Zhipu, Qwen and many more (400+ models as of Sep 2026), at each vendor's own listed price (no markup on
+/// most models). Model ids use OpenRouter's own "vendor/model" form (e.g. "anthropic/claude-sonnet-5",
+/// "z-ai/glm-4.6"), not the vendor's native id — see LlmProviderCatalog for the ids we list.</summary>
+public class OpenRouterLlmClient(IHttpClientFactory httpFactory, IConfiguration config, ILogger<OpenRouterLlmClient> logger)
+    : ChatCompletionsClientBase(
+        httpFactory, config, "OpenRouter",
+        "OpenRouter:ApiKey", "OPENROUTER_API_KEY",
+        "OpenRouter:BaseUrl", "OPENROUTER_API_BASE",
+        "https://openrouter.ai/api/v1", logger)
+{
+    // Optional per OpenRouter's docs (attributes usage to this app on their dashboard) — not required for
+    // the API to work, harmless to include.
+    protected override IReadOnlyDictionary<string, string> ExtraHeaders() => new Dictionary<string, string>
+    {
+        ["HTTP-Referer"] = "https://comply-solutions.app",
+        ["X-Title"] = "Comply Solutions",
+    };
+}

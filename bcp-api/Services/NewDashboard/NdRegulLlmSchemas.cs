@@ -38,6 +38,33 @@ public static class NdRegulLlmSchemas
         ["additionalProperties"] = false,
     };
 
+    /// <summary>V5 (hybrid pipeline) only: same fields as <see cref="JudgmentToolSchema"/>, plus a description on each
+    /// field. In a forced tool call the model only sees the schema next to the field it is filling, so without
+    /// these the verbatim-quote rule that lives in the long system prompt was being skipped (empty policy_extract).</summary>
+    public static JsonObject HybridJudgmentToolSchema()
+    {
+        var schema = JudgmentToolSchema();
+        var props = (JsonObject)schema["properties"]!;
+        void Describe(string field, string text) => ((JsonObject)props[field]!)["description"] = text;
+        Describe("design_status", "Design adequacy of the policy for this clause: compliant, partial or non_compliant.");
+        Describe("operating_status", "Operating effectiveness evidenced by the excerpts: compliant, partial or non_compliant.");
+        Describe("overall_status", "Final verdict for this clause: compliant, partial or non_compliant.");
+        Describe("confidence", "Confidence in the verdict, a number between 0 and 1.");
+        Describe("interpretation", "Short reasoning that maps each requirement in the clause to the evidence found (or missing).");
+        Describe(
+            "policy_extract",
+            "REQUIRED evidence: quotes copied VERBATIM, character for character, from the internal policy excerpts provided " +
+            "(keep OCR artifacts, do not paraphrase). Give one array item per supporting passage, and include every passage " +
+            "that supports the verdict. Only return an empty array if no excerpt is relevant at all.");
+        Describe(
+            "document_reference",
+            "Document name and section/page taken from the exact [bracket label] of the excerpts you quoted in policy_extract. Never invent a page or section.");
+        Describe("gap_description", "What is missing versus the clause. REQUIRED when overall_status is partial or non_compliant. Must be \"N/A\" when overall_status is compliant: a compliant clause has no gap, so do not list minor observations here.");
+        Describe("suggested_action", "Concrete corrective action that closes the gap. REQUIRED whenever gap_description is not N/A (partial or non_compliant). Must be \"N/A\" when overall_status is compliant.");
+        Describe("gap_direction", "Kind of gap, or an empty string when there is none.");
+        return schema;
+    }
+
     public static JsonObject JudgmentToolDefinition() => new JsonObject
     {
         ["name"] = JudgmentToolName,

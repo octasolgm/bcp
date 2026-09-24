@@ -51,6 +51,7 @@ public static class NdWorkspaceSchemaBootstrap
         ("regul_qualitative_assessments", "analysis_runs", "analysis_run_id", null),
         ("nd_local_document_extractions", "stored_documents", "stored_document_id", null),
         ("nd_local_document_extraction_sections", "nd_local_document_extractions", "extraction_id", null),
+        ("nd_ai_credit_ledger", null, null, "created_by"),
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)
@@ -98,6 +99,38 @@ public static class NdWorkspaceSchemaBootstrap
               END IF;
             END $$;
             ALTER TABLE profiles ADD COLUMN IF NOT EXISTS active_tenant_id UUID NULL;
+            """,
+            ct);
+
+        // Prepaid AI credits per workspace: the balance is the SUM of this ledger, so top-ups, spend
+        // and corrections are all one insert and nothing is overwritten.
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS nd_ai_credit_ledger (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              tenant_id UUID NULL,
+              kind TEXT NOT NULL DEFAULT 'usage',
+              credits NUMERIC(18,4) NOT NULL DEFAULT 0,
+              usd_cost NUMERIC(18,6) NOT NULL DEFAULT 0,
+              usd_cost_estimated BOOLEAN NOT NULL DEFAULT false,
+              provider TEXT NULL,
+              model TEXT NULL,
+              feature TEXT NULL,
+              analysis_run_id UUID NULL,
+              prompt_tokens BIGINT NOT NULL DEFAULT 0,
+              completion_tokens BIGINT NOT NULL DEFAULT 0,
+              cached_tokens BIGINT NOT NULL DEFAULT 0,
+              generation_id TEXT NULL,
+              note TEXT NULL,
+              created_by UUID NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_ai_credit_ledger_tenant
+              ON nd_ai_credit_ledger (tenant_id, created_at DESC);
+            ALTER TABLE nd_ai_credit_ledger
+              ADD COLUMN IF NOT EXISTS billed_usd NUMERIC(18,6) NULL;
+            ALTER TABLE nd_workspaces
+              ADD COLUMN IF NOT EXISTS ai_credit_low_threshold_pct INTEGER NOT NULL DEFAULT 20;
             """,
             ct);
 

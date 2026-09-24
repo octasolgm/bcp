@@ -5,9 +5,11 @@ import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.compo
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
 import {
   NdApiService,
+  type NdWorkspaceCredits,
   type NdWorkspaceListItem,
   type NdWorkspaceMember,
 } from '../../../services/nd/nd-api.service';
+import { RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { matchesSearch } from '../../../../lib/nd/list-utils';
 
@@ -19,7 +21,7 @@ import { matchesSearch } from '../../../../lib/nd/list-utils';
 @Component({
   selector: 'app-nd-admin-workspaces',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdStatusBadgeComponent, NdPageAlertComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdPageAlertComponent],
   templateUrl: './nd-admin-workspaces.component.html',
   styleUrls: ['./nd-admin-users.component.scss', './nd-admin-workspaces.component.scss', '../nd-shared.scss'],
 })
@@ -52,9 +54,63 @@ export class NdAdminWorkspacesComponent implements OnInit {
   members: NdWorkspaceMember[] = [];
   membersLoading = false;
 
+  /** Credit balances per workspace id, filled as the list loads. */
+  credits = new Map<string, NdWorkspaceCredits>();
+  creditsFor: string | null = null;
+  creditsLoading = false;
+  topUpAmount: number | null = null;
+  topUpNote = '';
+  toppingUp = false;
+
+  /** AI credit price form (platform admin). */
+  priceUsdPerCredit = 0.01;
+  priceMarkup = 1;
+  priceMinMargin = 20;
+  pricingSaving = false;
+
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
     await this.load();
+    await this.loadPricing();
+  }
+
+  private async loadPricing(): Promise<void> {
+    if (!this.canManage) return;
+    const res = await this.api.getAiPricing();
+    if (res.success && res.data) {
+      this.priceUsdPerCredit = res.data.usdPerCredit;
+      this.priceMarkup = res.data.markup;
+      this.priceMinMargin = res.data.minMarginPct;
+    }
+  }
+
+  get previewCreditsPerDollar(): number {
+    return this.priceUsdPerCredit > 0 ? 1 / this.priceUsdPerCredit : 0;
+  }
+
+  /** What a client is charged for an AI call that costs us $1.00. */
+  get previewBilled(): number {
+    return this.priceMarkup > 0 ? this.priceMarkup : 1;
+  }
+
+  get previewMarginPct(): number {
+    return this.previewBilled > 0 ? ((this.previewBilled - 1) / this.previewBilled) * 100 : 0;
+  }
+
+  async savePricing(): Promise<void> {
+    this.pricingSaving = true;
+    const res = await this.api.setAiPricing({
+      usdPerCredit: Number(this.priceUsdPerCredit),
+      markup: Number(this.priceMarkup),
+      minMarginPct: Number(this.priceMinMargin),
+    });
+    this.pricingSaving = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not save the credit price';
+      return;
+    }
+    this.message = res.message ?? 'Credit price saved.';
+    await this.loadCredits();
   }
 
   get canManage(): boolean {
@@ -78,10 +134,81 @@ export class NdAdminWorkspacesComponent implements OnInit {
       this.items = res.data;
       this.currentWorkspaceId =
         (res as { currentWorkspaceId?: string | null }).currentWorkspaceId ?? this.auth.profile()?.workspaceId ?? null;
+      await this.loadCredits();
     } else {
       this.error = res.message ?? 'Failed to load workspaces';
     }
     this.loading = false;
+  }
+
+  /** Balances for the whole list, so the table can show them without a click. */
+  private async loadCredits(): Promise<void> {
+    const results = await Promise.all(
+      this.items.map(async (item) => {
+        const res = await this.api.getWorkspaceAiCredits(item.workspace.id);
+        return [item.workspace.id, res.success ? res.data ?? null : null] as const;
+      }),
+    );
+    for (const [id, data] of results) {
+      if (data) this.credits.set(id, data);
+    }
+  }
+
+  creditsOf(item: NdWorkspaceListItem): NdWorkspaceCredits | null {
+    return this.credits.get(item.workspace.id) ?? null;
+  }
+
+  creditLabel(item: NdWorkspaceListItem): string {
+    const c = this.creditsOf(item);
+    if (!c) return '-';
+    if (c.summary.unlimited) return 'No limit';
+    return `${c.summary.balance.toFixed(2)} left`;
+  }
+
+  creditState(item: NdWorkspaceListItem): 'ok' | 'low' | 'empty' | 'unlimited' {
+    const c = this.creditsOf(item);
+    if (!c || c.summary.unlimited) return 'unlimited';
+    if (c.summary.isExhausted) return 'empty';
+    if (c.summary.isLow) return 'low';
+    return 'ok';
+  }
+
+  async toggleCredits(item: NdWorkspaceListItem): Promise<void> {
+    if (this.creditsFor === item.workspace.id) {
+      this.creditsFor = null;
+      return;
+    }
+    this.creditsFor = item.workspace.id;
+    this.topUpAmount = null;
+    this.topUpNote = '';
+    this.creditsLoading = true;
+    const res = await this.api.getWorkspaceAiCredits(item.workspace.id);
+    this.creditsLoading = false;
+    if (res.success && res.data) this.credits.set(item.workspace.id, res.data);
+    else this.error = res.message ?? 'Could not load credits';
+  }
+
+  async handleTopUp(item: NdWorkspaceListItem): Promise<void> {
+    const amount = Number(this.topUpAmount);
+    if (!amount) {
+      this.error = 'Enter how many credits to add.';
+      return;
+    }
+    this.toppingUp = true;
+    const res = await this.api.topUpWorkspaceAiCredits(item.workspace.id, {
+      credits: amount,
+      note: this.topUpNote.trim() || undefined,
+    });
+    this.toppingUp = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not add credits';
+      return;
+    }
+    this.message = res.message ?? 'Credits updated.';
+    this.topUpAmount = null;
+    this.topUpNote = '';
+    const refreshed = await this.api.getWorkspaceAiCredits(item.workspace.id);
+    if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
   }
 
   /** Suggest the short name from the display name until the admin edits it by hand. */

@@ -28,6 +28,10 @@ public class NdWorkspace
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Warn the workspace once this share of its granted AI credits is left (default 20%).</summary>
+    [Column("ai_credit_low_threshold_pct")]
+    public int AiCreditLowThresholdPct { get; set; } = 20;
+
     [Column("created_by")]
     public Guid? CreatedBy { get; set; }
 

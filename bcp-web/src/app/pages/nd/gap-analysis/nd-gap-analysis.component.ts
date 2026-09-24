@@ -18,7 +18,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError, distinctUntilChanged, map } from 'rxjs/operators';
-import { isRegulWorkflow } from '../../../../lib/nd/regul-fields';
+import { isRegulPipelineHybridWorkflow, isRegulWorkflow } from '../../../../lib/nd/regul-fields';
 import {
   exportGapAnalysisExcelFromPoints,
   exportGapAnalysisPdfFromPoints,
@@ -169,6 +169,16 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   ndRunId: string | null = null;
   ndRunStatus = '';
   ndRunWorkflowEngine: string | null = null;
+
+  /** "provider / model" that judged this run - shown for the hybrid V5 engine only. */
+  get ndRunLlmLabel(): string {
+    if (!isRegulPipelineHybridWorkflow(this.ndRunWorkflowEngine)) return '';
+    const run = this.ndRunData?.run;
+    const model = run?.regulLlmModel?.trim();
+    if (!model) return '';
+    const provider = run?.regulLlmProvider?.trim();
+    return provider ? `${provider} / ${model}` : model;
+  }
 
   get isNdRegulWorkflow(): boolean {
     return isRegulWorkflow(this.ndRunWorkflowEngine);
@@ -2030,6 +2040,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     const plans = this.exportOptions().actionPlans;
     this.exportDialogColumns = gapAnalysisExportColumns(points, {
       regul: !!this.ndRunWorkflowEngine && isRegulWorkflow(this.ndRunWorkflowEngine),
+      withAiModel: !!this.ndRunLlmLabel,
     });
     this.exportDialogHasActionPlans = plans.length > 0;
     this.exportDialogHasReviews = plans.some((p) => (p.reviews ?? []).length > 0);
@@ -2051,7 +2062,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.exporting = true;
     this.cdr.markForCheck();
     try {
-      const options = { ...this.exportOptions(), selection };
+      const options = { ...this.exportOptions(), llmLabel: this.ndRunLlmLabel, selection };
       if (this.ndRunWorkflowEngine && isRegulWorkflow(this.ndRunWorkflowEngine)) {
         await exportRegulGapAnalysisExcelFromPoints(points, undefined, undefined, options);
       } else {

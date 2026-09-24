@@ -42,8 +42,12 @@ export type GapAnalysisExcelOptions = {
   actionPlans?: ActionPlanEntry[];
   /** Point id → clause number, so action plan rows can be traced back to a clause. */
   clauseByPointId?: Map<string, string>;
+  /** "provider / model" that judged the run; when set the gap sheet gets a trailing "AI model" column. */
+  llmLabel?: string;
   selection?: GapAnalysisExportSelection;
 };
+
+export const AI_MODEL_HEADER = 'AI model';
 
 /** Columns offered by the export dialog for the action plan sheet. */
 export const ACTION_PLAN_EXPORT_COLUMNS = [
@@ -281,7 +285,7 @@ function extraSheets(options: GapAnalysisExcelOptions): ExcelSheetSpec[] {
   return sheets;
 }
 
-const REGUL_GAP_HEADERS = (requirementColumnHeader: string): string[] => [
+const REGUL_GAP_HEADERS = (requirementColumnHeader: string, withAiModel = false): string[] => [
   REGULATION_DOC_HEADER,
   'Clause No.',
   requirementColumnHeader,
@@ -291,15 +295,16 @@ const REGUL_GAP_HEADERS = (requirementColumnHeader: string): string[] => [
   'Compliance Status',
   'Comply Yes/No',
   'Confidence %',
+  ...(withAiModel ? [AI_MODEL_HEADER] : []),
 ];
 
 /** Column names the export dialog should offer for the Gaps sheet of this run. */
 export function gapAnalysisExportColumns(
   points: AnalysisPoint[],
-  opts: { regul?: boolean; requirementColumnHeader?: string } = {},
+  opts: { regul?: boolean; requirementColumnHeader?: string; withAiModel?: boolean } = {},
 ): string[] {
   const header = opts.requirementColumnHeader ?? REGULATORY_CLAUSE_HEADER;
-  if (opts.regul) return REGUL_GAP_HEADERS(header);
+  if (opts.regul) return REGUL_GAP_HEADERS(header, opts.withAiModel);
   const rows = buildGapAnalysisExportRows(points);
   return buildHeaders(gapExportIncludesPhaseColumns(rows), header);
 }
@@ -314,7 +319,8 @@ export async function exportRegulGapAnalysisExcelFromPoints(
   const rows = buildGapAnalysisExportRows(points);
   if (!rows.length) return;
   const docName = options.regulationDocumentName ?? '';
-  const headers = REGUL_GAP_HEADERS(requirementColumnHeader);
+  const llmLabel = options.llmLabel?.trim() ?? '';
+  const headers = REGUL_GAP_HEADERS(requirementColumnHeader, !!llmLabel);
   const matrix = rows.map((r) => [
     docName,
     r.pointNumber,
@@ -325,8 +331,9 @@ export async function exportRegulGapAnalysisExcelFromPoints(
     r.status,
     r.complyYesNo,
     r.confidence,
+    ...(llmLabel ? [llmLabel] : []),
   ]);
-  const colWidths = [32, 12, 50, 45, 36, 50, 16, 14, 12];
+  const colWidths = [32, 12, 50, 45, 36, 50, 16, 14, 12, 34];
   const picked = pickColumns(headers, matrix, options.selection?.gapColumns, options.selection?.gapColumnLabels);
   await downloadExcelSheets(filename, [
     {

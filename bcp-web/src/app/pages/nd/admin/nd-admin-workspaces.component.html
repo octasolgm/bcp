@@ -67,6 +67,40 @@
         </button>
       </form>
 
+      <form class="card-surface pricing-card" (ngSubmit)="savePricing()" autocomplete="off">
+        <h2>AI credit price</h2>
+        <p class="muted">
+          Sets what a credit is worth and how much we add on top of the provider's real cost. It applies to new AI calls;
+          calls already recorded keep the price they were charged at.
+        </p>
+        <div class="pricing-fields">
+          <label>
+            <span>1 credit is worth ($)</span>
+            <input type="number" step="0.0001" min="0.0001" class="inline-input" [(ngModel)]="priceUsdPerCredit" name="priceUsdPerCredit" />
+          </label>
+          <label>
+            <span>Markup (× our cost)</span>
+            <input type="number" step="0.05" min="0.5" class="inline-input" [(ngModel)]="priceMarkup" name="priceMarkup" />
+          </label>
+          <label>
+            <span>Warn if margin below (%)</span>
+            <input type="number" step="1" min="0" max="95" class="inline-input" [(ngModel)]="priceMinMargin" name="priceMinMargin" />
+          </label>
+          <button type="submit" class="btn-primary btn-sm" [disabled]="pricingSaving">
+            {{ pricingSaving ? 'Saving…' : 'Save price' }}
+          </button>
+        </div>
+        <ul class="pricing-preview">
+          <li>$1 = <strong>{{ previewCreditsPerDollar | number: '1.0-2' }}</strong> credits, so a $5 credit pack is <strong>{{ previewCreditsPerDollar * 5 | number: '1.0-0' }}</strong> credits.</li>
+          <li>
+            An AI call that costs us <strong>$1.00</strong> is charged as <strong>${{ previewBilled | number: '1.2-2' }}</strong>
+            ({{ previewBilled / priceUsdPerCredit | number: '1.0-0' }} credits). We keep
+            <strong>${{ previewBilled - 1 | number: '1.2-2' }}</strong> ({{ previewMarginPct | number: '1.0-1' }}% of what the client pays).
+          </li>
+          <li>If a provider raises its price, the same call costs more credits, so the margin stays the same. Nothing is charged at a fixed price.</li>
+        </ul>
+      </form>
+
       @if (message) {
         <app-nd-page-alert kind="success" [text]="message" (dismiss)="message = ''" />
       }
@@ -99,6 +133,7 @@
                 <th class="num">Users</th>
                 <th class="num">Documents</th>
                 <th class="num">Analyses</th>
+                <th>AI credits</th>
                 <th>Status</th>
                 <th class="col-actions">Actions</th>
               </tr>
@@ -140,6 +175,16 @@
                   <td class="num">{{ item.documentCount }}</td>
                   <td class="num">{{ item.analysisCount }}</td>
                   <td>
+                    <span class="credit-chip" [class]="'credit-' + creditState(item)">{{ creditLabel(item) }}</span>
+                    @if (creditsOf(item); as cc) {
+                      @if (cc.summary.billedUsd) {
+                        <div class="credit-money muted">
+                          cost ${{ (cc.summary.costUsd ?? 0) | number: '1.2-2' }} · billed ${{ (cc.summary.billedUsd ?? 0) | number: '1.2-2' }}
+                        </div>
+                      }
+                    }
+                  </td>
+                  <td>
                     <app-nd-status-badge [status]="item.workspace.isActive ? 'active' : 'deactivated'" />
                   </td>
                   <td class="col-actions actions">
@@ -158,6 +203,9 @@
                       <button type="button" class="btn-secondary btn-sm" (click)="toggleMembers(item)">
                         {{ membersFor === item.workspace.id ? 'Hide users' : 'Users' }}
                       </button>
+                      <button type="button" class="btn-secondary btn-sm" (click)="toggleCredits(item)">
+                        {{ creditsFor === item.workspace.id ? 'Hide credits' : 'Credits' }}
+                      </button>
                       <button type="button" class="btn-secondary btn-sm" (click)="startEdit(item)">Rename</button>
                       @if (!item.workspace.isDefault) {
                         <button
@@ -172,9 +220,89 @@
                     }
                   </td>
                 </tr>
+                @if (creditsFor === item.workspace.id) {
+                  <tr class="members-row">
+                    <td colspan="8">
+                      @if (creditsOf(item); as c) {
+                        <div class="credit-panel">
+                          <div class="credit-summary">
+                            <span><strong>{{ c.summary.balance | number: '1.0-2' }}</strong> credits left</span>
+                            <span class="muted">{{ c.summary.used | number: '1.0-2' }} used of {{ c.summary.granted | number: '1.0-2' }} added</span>
+                            <span class="muted">warn at {{ 100 - c.summary.lowThresholdPct }}% used</span>
+                          </div>
+
+                          <div class="credit-money-grid">
+                            <div>
+                              <span class="muted">Balance worth</span>
+                              <strong>${{ (c.summary.balanceUsd ?? 0) | number: '1.2-2' }}</strong>
+                              <span class="muted">1 credit = ${{ (c.summary.usdPerCredit ?? 0) | number: '1.0-4' }}</span>
+                            </div>
+                            <div>
+                              <span class="muted">Our cost</span>
+                              <strong>${{ (c.summary.costUsd ?? 0) | number: '1.2-2' }}</strong>
+                              <span class="muted">what we paid providers</span>
+                            </div>
+                            <div>
+                              <span class="muted">Billed to client</span>
+                              <strong>${{ (c.summary.billedUsd ?? 0) | number: '1.2-2' }}</strong>
+                              <span class="muted">what they were charged</span>
+                            </div>
+                            <div [class.margin-low]="(c.summary.marginPct ?? 0) < (c.summary.minMarginPct ?? 0) && (c.summary.billedUsd ?? 0) > 0">
+                              <span class="muted">Our margin</span>
+                              <strong>${{ (c.summary.marginUsd ?? 0) | number: '1.2-2' }} ({{ (c.summary.marginPct ?? 0) | number: '1.0-1' }}%)</strong>
+                              <span class="muted">billed minus cost</span>
+                            </div>
+                          </div>
+
+                          <form class="credit-topup" (ngSubmit)="handleTopUp(item)">
+                            <input
+                              type="number"
+                              step="1"
+                              class="inline-input"
+                              [(ngModel)]="topUpAmount"
+                              name="topUpAmount-{{ item.workspace.id }}"
+                              placeholder="Credits to add"
+                              aria-label="Credits to add"
+                            />
+                            <input
+                              class="inline-input"
+                              [(ngModel)]="topUpNote"
+                              name="topUpNote-{{ item.workspace.id }}"
+                              placeholder="Note (optional)"
+                              aria-label="Note"
+                            />
+                            <button type="submit" class="btn-primary btn-sm" [disabled]="toppingUp">
+                              {{ toppingUp ? 'Adding…' : 'Add credits' }}
+                            </button>
+                          </form>
+
+                          <a class="credit-link" [routerLink]="['/nd/admin/ai-usage']" [queryParams]="{ workspace: item.workspace.id }">
+                            View full usage and filters
+                          </a>
+
+                          @if (c.byModel.length) {
+                            <div class="credit-models">
+                              <span class="muted">Spend by model:</span>
+                              @for (m of c.byModel; track m.model) {
+                                <span class="credit-model">
+                                  {{ m.model }} · {{ m.credits | number: '1.0-2' }} cr
+                                  <span class="muted">(cost ${{ m.usd | number: '1.2-2' }} · billed ${{ (m.billedUsd ?? 0) | number: '1.2-2' }}, {{ m.calls }} calls)</span>
+                                </span>
+                              }
+                            </div>
+                          } @else {
+                            <span class="muted">No AI usage yet.</span>
+                          }
+                        </div>
+                      } @else {
+                        <span class="muted">Loading credits…</span>
+                      }
+                    </td>
+                  </tr>
+                }
                 @if (membersFor === item.workspace.id) {
                   <tr class="members-row">
-                    <td colspan="7">
+                    <td colspan="8">
                       @if (membersLoading) {
                         <span class="muted">Loading users…</span>
                       } @else if (!members.length) {

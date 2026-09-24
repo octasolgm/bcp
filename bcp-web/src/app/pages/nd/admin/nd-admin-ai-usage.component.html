@@ -1,0 +1,237 @@
+<div class="nd-catalog-page">
+  <div class="page-header page-header--catalog">
+    <div class="page-header-title-block">
+      <h1>AI usage</h1>
+      <p class="subtitle">
+        What each business spent on AI, and what it cost us. Add or remove credits from the
+        <a routerLink="/nd/admin/workspaces">Workspaces</a> page.
+      </p>
+    </div>
+  </div>
+
+  @if (!canManage) {
+    <p class="nd-error">Access denied</p>
+  } @else {
+    <div class="nd-catalog-body">
+      <div class="filter-pills nd-list-toolbar nd-shrink usage-filters">
+        <select class="filter-select" [(ngModel)]="workspaceId" (ngModelChange)="onFilterChange()" aria-label="Filter by business">
+          <option value="">All businesses</option>
+          @for (w of report?.filters?.workspaces ?? []; track w.id) {
+            <option [value]="w.id">{{ w.name }}</option>
+          }
+        </select>
+
+        <select class="filter-select" [(ngModel)]="period" (ngModelChange)="onFilterChange()" aria-label="Filter by period">
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="month">This month</option>
+          <option value="all">All time</option>
+          <option value="custom">Custom range</option>
+        </select>
+
+        @if (period === 'custom') {
+          <input type="date" class="filter-select" [(ngModel)]="customFrom" (ngModelChange)="onFilterChange()" aria-label="From date" />
+          <input type="date" class="filter-select" [(ngModel)]="customTo" (ngModelChange)="onFilterChange()" aria-label="To date" />
+        }
+
+        <select class="filter-select" [(ngModel)]="model" (ngModelChange)="onFilterChange()" aria-label="Filter by model">
+          <option value="">All models</option>
+          @for (m of report?.filters?.models ?? []; track m) {
+            <option [value]="m">{{ m }}</option>
+          }
+        </select>
+
+        <select class="filter-select" [(ngModel)]="feature" (ngModelChange)="onFilterChange()" aria-label="Filter by activity">
+          <option value="">All activity</option>
+          @for (f of report?.filters?.features ?? []; track f) {
+            <option [value]="f">{{ featureLabel(f) }}</option>
+          }
+        </select>
+
+        <select class="filter-select" [(ngModel)]="kind" (ngModelChange)="onFilterChange()" aria-label="Filter by entry type">
+          <option value="">Usage and top-ups</option>
+          <option value="usage">AI calls only</option>
+          <option value="topup">Top-ups only</option>
+          <option value="adjustment">Adjustments only</option>
+        </select>
+
+        @if (hasFilters) {
+          <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+        }
+      </div>
+
+      @if (loading && !report) {
+        <p class="muted-loading">Loading usage…</p>
+      } @else if (error) {
+        <p class="nd-error">{{ error }}</p>
+      } @else if (report) {
+        <div class="usage-totals">
+          <div class="card-surface total-card">
+            <span class="total-label">Credits used</span>
+            <strong>{{ report.totals.credits | number: '1.0-2' }}</strong>
+          </div>
+          <div class="card-surface total-card">
+            <span class="total-label">Our cost (what we pay providers)</span>
+            <strong>${{ report.totals.usd | number: '1.2-2' }}</strong>
+          </div>
+          <div class="card-surface total-card">
+            <span class="total-label">Billed to clients</span>
+            <strong>${{ (report.totals.billedUsd ?? 0) | number: '1.2-2' }}</strong>
+          </div>
+          <div class="card-surface total-card" [class.margin-low]="marginIsLow(report.totals.marginPct, report.totals.minMarginPct)">
+            <span class="total-label">Our margin</span>
+            <strong>${{ (report.totals.marginUsd ?? 0) | number: '1.2-2' }}
+              <span class="margin-pct">{{ (report.totals.marginPct ?? 0) | number: '1.0-1' }}%</span></strong>
+          </div>
+          <div class="card-surface total-card">
+            <span class="total-label">AI calls</span>
+            <strong>{{ report.totals.calls | number }}</strong>
+          </div>
+          <div class="card-surface total-card">
+            <span class="total-label">Tokens</span>
+            <strong>{{ report.totals.promptTokens + report.totals.completionTokens | number }}</strong>
+          </div>
+        </div>
+
+        @if (report.pricing; as p) {
+          <p class="muted price-line">
+            Price: 1 credit = ${{ p.usdPerCredit | number: '1.0-4' }} ({{ p.creditsPerDollar | number: '1.0-2' }} credits per $1) ·
+            markup ×{{ p.markup | number: '1.0-2' }} ({{ p.marginPct | number: '1.0-1' }}% margin) ·
+            change it on the <a routerLink="/nd/admin/workspaces">Workspaces</a> page.
+          </p>
+        }
+
+        <h2 class="section-heading">By business</h2>
+        @if (!report.byWorkspace.length) {
+          <div class="card-surface empty-state">
+            <strong>No AI usage in this period</strong>
+            <p>Try a wider period or clear the filters.</p>
+          </div>
+        } @else {
+          <div class="card-surface table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Business</th>
+                  <th class="num">Credits used</th>
+                  <th class="num">Our cost</th>
+                  <th class="num">Billed to client</th>
+                  <th class="num">Margin</th>
+                  <th class="num">Calls</th>
+                  <th class="num">Balance left</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (w of report.byWorkspace; track w.workspaceId) {
+                  <tr class="clickable" (click)="filterToWorkspace(w.workspaceId)">
+                    <td><strong>{{ w.name }}</strong></td>
+                    <td class="num">{{ w.credits | number: '1.0-2' }}</td>
+                    <td class="num muted">${{ w.usd | number: '1.2-2' }}</td>
+                    <td class="num">${{ (w.billedUsd ?? 0) | number: '1.2-2' }}</td>
+                    <td class="num" [class.margin-low]="marginIsLow(w.marginPct, report.totals.minMarginPct)">
+                      ${{ (w.marginUsd ?? 0) | number: '1.2-2' }} <span class="muted">({{ (w.marginPct ?? 0) | number: '1.0-0' }}%)</span>
+                    </td>
+                    <td class="num muted">{{ w.calls | number }}</td>
+                    <td class="num">
+                      @if (w.balance === null) {
+                        <span class="muted">-</span>
+                      } @else {
+                        {{ w.balance | number: '1.0-2' }}
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @if (report.byModel.length) {
+          <h2 class="section-heading">By model</h2>
+          <div class="card-surface table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th class="num">Credits</th>
+                  <th class="num">Our cost</th>
+                  <th class="num">Billed to client</th>
+                  <th class="num">Margin</th>
+                  <th class="num">Calls</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of report.byModel; track m.model) {
+                  <tr>
+                    <td>{{ m.model }}</td>
+                    <td class="num">{{ m.credits | number: '1.0-2' }}</td>
+                    <td class="num muted">${{ m.usd | number: '1.2-2' }}</td>
+                    <td class="num">${{ (m.billedUsd ?? 0) | number: '1.2-2' }}</td>
+                    <td class="num" [class.margin-low]="marginIsLow(m.marginPct, report.totals.minMarginPct)">
+                      ${{ (m.marginUsd ?? 0) | number: '1.2-2' }} <span class="muted">({{ (m.marginPct ?? 0) | number: '1.0-0' }}%)</span>
+                    </td>
+                    <td class="num muted">{{ m.calls | number }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <h2 class="section-heading">Activity</h2>
+        @if (!report.rows.length) {
+          <div class="card-surface empty-state">
+            <strong>Nothing to show</strong>
+            <p>No entries match these filters.</p>
+          </div>
+        } @else {
+          <div class="card-surface table-wrap table-scroll-body">
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Business</th>
+                  <th>Type</th>
+                  <th>Model</th>
+                  <th>Activity</th>
+                  <th class="num">Credits</th>
+                  <th class="num">Our cost</th>
+                  <th class="num">Billed</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of report.rows; track r.id) {
+                  <tr>
+                    <td class="muted">{{ r.createdAt | date: 'dd MMM, HH:mm' }}</td>
+                    <td>{{ r.workspaceName ?? '-' }}</td>
+                    <td>{{ kindLabel(r.kind) }}</td>
+                    <td class="muted">{{ r.model ?? '-' }}</td>
+                    <td class="muted">{{ r.kind === 'usage' ? featureLabel(r.feature) : (r.note || (r.by ? 'by ' + r.by : '-')) }}</td>
+                    <td class="num" [class.credit-plus]="r.credits > 0">
+                      {{ r.credits > 0 ? '+' : '' }}{{ r.credits | number: '1.0-2' }}
+                    </td>
+                    <td class="num muted">
+                      @if (r.kind === 'usage') {
+                        ${{ r.usd | number: '1.2-4' }}@if (r.usdEstimated) { <span title="Estimated from the model price list">*</span> }
+                      } @else {
+                        -
+                      }
+                    </td>
+                    <td class="num">
+                      @if (r.kind === 'usage') {
+                        ${{ (r.billedUsd ?? 0) | number: '1.2-4' }}
+                      } @else {
+                        <span class="muted">{{ r.credits > 0 ? '$' + ((r.billedUsd ?? 0) | number: '1.2-2') : '-' }}</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <p class="muted footnote">* estimated from the model price list; other rows use the cost the provider reported.</p>
+        }
+      }
+    </div>
+  }
+</div>

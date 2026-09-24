@@ -64,3 +64,52 @@ Investigated, follow up pending
 - The query expansion dictionary and synonyms stay shared across all workspaces (terminology only, no client documents); confirm this is acceptable
 - 21 existing automated tests already fail on the branch this work started from (not related to workspaces); worth a separate clean-up
 
+23 Sep 2026
+
+Tasks
+- Investigated the Supabase "exceed_egress_quota" block that stopped sign-in: 8.67 GB used against a 5 GB free-plan allowance, 98 percent of it database reads through the pooler (storage was 73 MB, auth 27 MB)
+- Cut the three query patterns responsible: regulation document lists and nav counts no longer read the parsed text and extraction JSON (409 KB down to 4 KB per call), the local document pages poll statuses only and load parsed text for the one document opened (852 KB down to 2 KB per poll), and the analysis run detail no longer repeats the run row on every joined point row
+- Added a regression test so the heavy regulation columns cannot come back into list queries
+- Sidebar badge polling now pauses while the browser tab is in the background
+- AI credits per workspace: every AI call is now recorded against the business that made it, with the real cost read from the provider response (exact for OpenRouter, priced from a model list for direct provider keys)
+- Super admin can add credits to a business from the Workspaces page, see the balance, spend by model and full history, and set the warning level
+- Separate "AI usage" page for the super admin covering every business, with filters for business, period (7 days, 30 days, this month, all time, custom range), model, activity and entry type, plus totals and per business and per model breakdowns
+- The per business credits page has period and activity filters of its own
+- Each business gets an "AI credits" page showing what is left, how much was used and what used it
+- Starting or rerunning an analysis is refused when a workspace has used all its credits; runs already in progress finish normally, and demo accounts are unaffected
+
+Bug fixes
+- Fixed document and regulation lists transferring every document's full parsed text on every refresh and status poll
+
+Investigated, follow up pending
+- Service stays restricted until the Supabase plan is upgraded or the spend cap lifted; the fixes reduce future usage but cannot undo egress already spent this period
+- Text documents page still loads full extraction results in its list (small volume, left as is for now)
+- The local API on port 5100 is running older code from another session; restart it to pick up these fixes
+
+24 Sep 2026
+
+Tasks
+- Added OpenRouter as a provider (one key, many models) plus Zhipu GLM and Alibaba Qwen; free OpenRouter models added to the model list for zero-cost testing
+- Tested single clauses 3.5 and 3.1 end to end on a free model (3.5 compliant, 3.1 partial with a detailed gap analysis)
+- The analysis results page now shows which AI model judged the analysis
+- Gap analysis Excel export gets an "AI model" column for these analyses
+- Export file name changed to "comply-solutions-..."
+
+Bug fixes
+- Fixed real analyses on the CBUAE regulation and the AML manual being overwritten with the fixed demo answers when their results were opened; only demo accounts get the demo replay now
+
+- Fixed Sonnet leaving the policy extract empty on the new analysis page; both Sonnet and Kimi now return verbatim quotes with page references (new analysis page only)
+- Found an internal document uploaded under the wrong name (it held the regulator's guidelines, not the bank manual); re-uploaded and re-ran clause 3.1 on the correct manual
+
+- New analysis page: a Compliant clause now always shows no gap and no action plan, and a Partial or Non-compliant clause always has both a gap and an action plan
+- Workspaces page: new AI credit price card (dollars per credit and markup) with a live example; each workspace shows balance worth, our cost, billed to client and our margin
+- AI usage page: our cost, billed to clients and margin (red when below the warning line) by business, model and call; client credits page shows dollar value of credits
+- Added a costing guide covering the credit formula, where to set margin, and protection against provider price changes
+
+Bug fixes
+- Fixed OpenRouter AI calls not being recorded in credit usage (they were never billed)
+- Fixed a saved credit price not being read back (it silently reverted to the default)
+
+Investigated, follow up pending
+- Retrieval does not surface the record-retention section or KYC refresh rules for clause 3.1; prompt size (about 16k-27k tokens per clause) is higher than planned
+- Free model (Nemotron) judged 3.1 compliant while the demo answer was partial; free models need a quality comparison before real use

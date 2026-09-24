@@ -419,7 +419,9 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
     const ids = this.docs.map((d) => d.id).filter(Boolean);
     if (!ids.length) return;
     try {
-      const res = await this.api.localExtractStatusBatch(ids, this.engine);
+      // Statuses only: the parsed text and sections of every document would be megabytes per poll.
+      // ensureFullLocalResult loads them for the one document the user opens.
+      const res = await this.api.localExtractStatusBatch(ids, this.engine, { lite: true });
       if (!res.success || !res.data) return;
       for (const doc of this.docs) {
         const local = res.data[doc.id];
@@ -620,12 +622,25 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
     if (this.sectionsFor?.id === doc.id) this.closeSections();
   }
 
-  openSections(doc: InternalDocument, event?: Event): void {
+  /**
+   * The list only carries statuses, so the parsed text and sections are fetched for this one document
+   * the first time it is opened, then cached for the rest of the session.
+   */
+  private async ensureFullLocalResult(docId: string): Promise<NdLocalExtractionResult | null> {
+    const cached = this.localResults.get(docId);
+    if (cached && cached.lite !== true) return cached;
+    const res = await this.api.localExtractStatusBatch([docId], this.engine);
+    const full = res.success ? res.data?.[docId] ?? null : null;
+    if (full) this.localResults.set(docId, full);
+    return full ?? cached ?? null;
+  }
+
+  async openSections(doc: InternalDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
     this.selectedDocId = doc.id;
     this.sectionsFor = doc;
     this.viewMode = 'structural';
-    const local = this.localResults.get(doc.id);
+    const local = await this.ensureFullLocalResult(doc.id);
     this.sectionRows = local ? this.mapLocalSections(local) : [];
     // Nothing extracted yet but the doc has been parsed — show the parsed text right away instead
     // of an empty sections list the user has to click past.
@@ -634,13 +649,13 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
   }
 
   /** Third view mode — semantic (embedding-based) extraction result. Independent of openSections. */
-  openSemanticSections(doc: InternalDocument, event?: Event): void {
+  async openSemanticSections(doc: InternalDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
     this.selectedDocId = doc.id;
     this.sectionsFor = doc;
     this.viewMode = 'semantic';
     this.showParsedText = false;
-    const local = this.localResults.get(doc.id);
+    const local = await this.ensureFullLocalResult(doc.id);
     this.sectionRows = local ? this.mapLocalSections(local, true) : [];
     if (!local || (local.semanticSectionCount ?? 0) === 0) {
       const status = (local?.semanticExtractStatus ?? '').toLowerCase();
@@ -655,12 +670,13 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
   }
 
   /** First view mode — the raw parsed markdown, independent of either extraction method. */
-  openParsedText(doc: InternalDocument, event?: Event): void {
+  async openParsedText(doc: InternalDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
     this.selectedDocId = doc.id;
     this.sectionsFor = doc;
     this.showParsedText = true;
-    if (!this.localResults.has(doc.id)) {
+    const local = await this.ensureFullLocalResult(doc.id);
+    if (!local?.markdownText) {
       this.message = 'No parsed text yet — click Parse first.';
     }
     this.shellFocus.setRegulationPointsPanelOpen(true);

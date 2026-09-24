@@ -13,6 +13,7 @@ public class DualVerifyLlmService(
     DeepSeekLlmClient deepSeek,
     ZhipuLlmClient zhipu,
     QwenLlmClient qwen,
+    OpenRouterLlmClient openRouter,
     ILogger<DualVerifyLlmService> logger)
 {
     public async Task<string> AnalyzeWithPdfsAsync(
@@ -32,6 +33,7 @@ public class DualVerifyLlmService(
             "deepseek" => await deepSeek.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "zhipu" => await zhipu.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             "qwen" => await qwen.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
+            "openrouter" => await openRouter.AnalyzeWithPdfsAsync(pdfs, prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }
@@ -50,6 +52,7 @@ public class DualVerifyLlmService(
             "deepseek" => await deepSeek.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "zhipu" => await zhipu.AnalyzeTextAsync(prompt, cfg.Model, ct),
             "qwen" => await qwen.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "openrouter" => await openRouter.AnalyzeTextAsync(prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }

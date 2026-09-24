@@ -19,6 +19,7 @@ public class NdPromptAiGenerationService(
     DeepSeekLlmClient deepSeek,
     ZhipuLlmClient zhipu,
     QwenLlmClient qwen,
+    OpenRouterLlmClient openRouter,
     ILogger<NdPromptAiGenerationService> logger)
 {
     public record CoverageResult(Guid SuggestionId, bool Covered);
@@ -56,6 +57,7 @@ public class NdPromptAiGenerationService(
             "deepseek" => await deepSeek.AnalyzeTextAsync(metaPrompt, resolvedModel, ct),
             "zhipu" => await zhipu.AnalyzeTextAsync(metaPrompt, resolvedModel, ct),
             "qwen" => await qwen.AnalyzeTextAsync(metaPrompt, resolvedModel, ct),
+            "openrouter" => await openRouter.AnalyzeTextAsync(metaPrompt, resolvedModel, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{def.Id}'."),
         };
 

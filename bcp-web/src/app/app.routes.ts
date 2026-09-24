@@ -574,6 +574,26 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'admin/ai-usage',
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard, ndDenyDemoViewerGuard],
+            data: { ndRoles: ['super_admin'] },
+            title: 'AI usage · Comply Solution',
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-ai-usage.component').then(
+                (m) => m.NdAdminAiUsageComponent,
+              ),
+          },
+          {
+            path: 'admin/ai-credits',
+            canActivate: [ndRoleGuard],
+            data: { ndRoles: ['super_admin'] },
+            title: 'AI credits · Comply Solution',
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-ai-credits.component').then(
+                (m) => m.NdAdminAiCreditsComponent,
+              ),
+          },
+          {
             path: 'admin/users',
             canActivate: [ndRoleGuard],
             data: { ndRoles: ['super_admin'] },

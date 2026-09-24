@@ -153,6 +153,8 @@ builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.ZhipuLlmClient), 
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.ZhipuLlmClient>();
 builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.QwenLlmClient), c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.QwenLlmClient>();
+builder.Services.AddHttpClient(nameof(Reguliq.Api.Services.Llm.OpenRouterLlmClient), c => ConfigureAiHttpTimeout(c, httpTimeout));
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.OpenRouterLlmClient>();
 builder.Services.AddHttpClient<NodeBridgeService>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 
 builder.Services.AddSingleton<Reguliq.Api.Services.LocalDocs.TesseractOcrEngine>();
@@ -270,6 +272,19 @@ builder.Services.AddSingleton<Reguliq.Api.Services.NewDashboard.Demo.NdDemoUserD
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.Demo.NdDemoWorkspaceService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.Demo.NdDemoInterceptionService>();
 builder.Services.AddHttpClient();
+
+// AI credits: usage is captured from the LLM responses themselves (one handler attached to every
+// HttpClient, which ignores non-LLM calls) and charged to the workspace in NdAiUsageContext.
+builder.Services.AddSingleton<Reguliq.Api.Services.NewDashboard.Ai.NdAiPricingService>();
+builder.Services.AddSingleton<Reguliq.Api.Services.NewDashboard.Ai.NdAiUsageRecorder>();
+builder.Services.AddTransient<Reguliq.Api.Services.NewDashboard.Ai.LlmUsageHandler>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.Ai.NdAiCreditService>();
+builder.Services.ConfigureAll<Microsoft.Extensions.Http.HttpClientFactoryOptions>(options =>
+{
+    options.HttpMessageHandlerBuilderActions.Add(b =>
+        b.AdditionalHandlers.Add(
+            b.Services.GetRequiredService<Reguliq.Api.Services.NewDashboard.Ai.LlmUsageHandler>()));
+});
 
 var ndJwtSecret = BcpConfiguration.GetString(builder.Configuration, "Supabase:JwtSecret", "SUPABASE_JWT_SECRET");
 var ndSupabaseUrl = BcpConfiguration.GetString(builder.Configuration, "Supabase:Url", "SUPABASE_URL");

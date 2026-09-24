@@ -104,6 +104,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
    * sessions — a checker sitting on their inbox otherwise sees a stale badge until they
    * navigate or reload. Poll periodically so it catches up on its own within a short wait. */
   private badgePollTimer: ReturnType<typeof setInterval> | null = null;
+  private onVisibilityChange: (() => void) | null = null;
   private static readonly BADGE_POLL_MS = 30000;
   private badgeRefreshInFlight = false;
   private badgeRefreshQueued = false;
@@ -227,10 +228,18 @@ export class NdShellComponent implements OnInit, OnDestroy {
       setTimeout(() => void this.refreshPass2LlmSummary(), 2500);
     }
     this.syncActiveSessionPolling();
-    this.badgePollTimer = setInterval(
-      () => void this.refreshNavBadges(),
-      NdShellComponent.BADGE_POLL_MS,
-    );
+    // A forgotten background tab used to keep polling every 30s all night. Skip while hidden and
+    // catch up as soon as the tab is looked at again.
+    this.badgePollTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      void this.refreshNavBadges();
+    }, NdShellComponent.BADGE_POLL_MS);
+    if (typeof document !== 'undefined') {
+      this.onVisibilityChange = () => {
+        if (!document.hidden) void this.refreshNavBadges();
+      };
+      document.addEventListener('visibilitychange', this.onVisibilityChange);
+    }
     this.navRefreshSub = this.workspaceNav.refreshRequested.subscribe(() => {
       if (this.badgeRefreshTimer) {
         clearTimeout(this.badgeRefreshTimer);
@@ -260,6 +269,10 @@ export class NdShellComponent implements OnInit, OnDestroy {
     this.navRefreshSub?.unsubscribe();
     if (this.badgeRefreshTimer) clearTimeout(this.badgeRefreshTimer);
     if (this.badgePollTimer) clearInterval(this.badgePollTimer);
+    if (this.onVisibilityChange && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.onVisibilityChange);
+      this.onVisibilityChange = null;
+    }
     if (this.sessionsWatching) {
       this.activeSessions.unwatch();
       this.sessionsWatching = false;
@@ -860,11 +873,16 @@ export class NdShellComponent implements OnInit, OnDestroy {
     const children: NavItem[] = [];
     if (this.auth.canManageWorkspaces()) {
       children.push({ id: 'admin-workspaces', path: '/nd/admin/workspaces', label: 'Workspaces', icon: 'building' });
+      children.push({ id: 'admin-ai-usage', path: '/nd/admin/ai-usage', label: 'AI usage', icon: 'list' });
     }
     children.push(
       { id: 'admin-users', path: '/nd/admin/users', label: 'User management', icon: 'users' },
       { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
     );
+    // Every workspace admin sees their own AI credit balance; demo accounts have no credit account.
+    if (!this.auth.isDemoViewer()) {
+      children.push({ id: 'admin-ai-credits', path: '/nd/admin/ai-credits', label: 'AI credits', icon: 'list' });
+    }
     if (platform) {
       children.push({ id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' });
     }

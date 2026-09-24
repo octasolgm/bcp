@@ -153,6 +153,8 @@ export type NdLocalExtractionResult = {
   indexStatus?: string | null;
   indexError?: string | null;
   indexedAt?: string | null;
+  /** Statuses-only payload: markdownText and sections come back empty (see localExtractStatusBatch). */
+  lite?: boolean;
 };
 
 export type NdUserProfile = {
@@ -189,6 +191,98 @@ export type NdWorkspaceListItem = {
   documentCount: number;
   analysisCount: number;
   admins: { id: string; fullName: string }[];
+};
+
+export type NdAiCreditSummary = {
+  workspaceId: string;
+  granted: number;
+  used: number;
+  balance: number;
+  /** No credits were ever granted: the workspace is not limited yet. */
+  unlimited: boolean;
+  isLow: boolean;
+  isExhausted: boolean;
+  usedPct: number;
+  lowThresholdPct: number;
+  usdPerCredit?: number;
+  creditsPerDollar?: number;
+  /** What the credits are worth to the client at the current price (never our provider cost). */
+  grantedUsd?: number;
+  usedUsd?: number;
+  balanceUsd?: number;
+  /** Platform admin only: our provider cost, what the client was charged, and what we keep. */
+  costUsd?: number;
+  billedUsd?: number;
+  marginUsd?: number;
+  marginPct?: number;
+  minMarginPct?: number;
+};
+
+export type NdAiPricing = {
+  usdPerCredit: number;
+  markup: number;
+  minMarginPct: number;
+  creditsPerDollar: number;
+  marginPct: number;
+};
+
+export type NdAiCreditEntry = {
+  id: string;
+  kind: 'topup' | 'usage' | 'adjustment';
+  credits: number;
+  model?: string | null;
+  provider?: string | null;
+  feature?: string | null;
+  analysisRunId?: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  note?: string | null;
+  by?: string | null;
+  createdAt: string;
+  /** Platform admin only: what the call cost us. */
+  usd?: number | null;
+  usdEstimated?: boolean | null;
+  /** What these credits were worth to the client (credits x price per credit). */
+  billedUsd?: number | null;
+};
+
+export type NdWorkspaceCredits = {
+  summary: NdAiCreditSummary;
+  byModel: { model: string; credits: number; usd: number; billedUsd?: number; marginUsd?: number; calls: number }[];
+  history: NdAiCreditEntry[];
+};
+
+export type NdAiUsageReport = {
+  totals: {
+    credits: number;
+    usd: number;
+    billedUsd?: number;
+    marginUsd?: number;
+    marginPct?: number;
+    minMarginPct?: number;
+    calls: number;
+    promptTokens: number;
+    completionTokens: number;
+  };
+  pricing?: NdAiPricing;
+  byWorkspace: {
+    workspaceId: string | null;
+    name: string;
+    credits: number;
+    usd: number;
+    billedUsd?: number;
+    marginUsd?: number;
+    marginPct?: number;
+    calls: number;
+    balance: number | null;
+  }[];
+  byModel: { model: string; credits: number; usd: number; billedUsd?: number; marginUsd?: number; marginPct?: number; calls: number }[];
+  rows: (NdAiCreditEntry & { workspaceId: string | null; workspaceName?: string | null })[];
+  filters: {
+    workspaces: { id: string; name: string }[];
+    models: string[];
+    features: string[];
+  };
 };
 
 export type NdWorkspaceMember = {
@@ -525,6 +619,61 @@ export class NdApiService {
 
   getWorkspaceMembers(id: string) {
     return this.request<NdWorkspaceMember[]>('GET', `/nd/workspaces/${id}/users`);
+  }
+
+  /** The signed-in user's own workspace credits — every role may read this. */
+  getMyAiCredits() {
+    return this.request<NdAiCreditSummary>('GET', '/nd/ai-credits/me');
+  }
+
+  getMyAiCreditHistory(take = 50) {
+    return this.request<NdAiCreditEntry[]>('GET', `/nd/ai-credits/me/history?take=${take}`);
+  }
+
+  /** Platform admin reporting across every workspace; all filters are optional. */
+  getAiUsageReport(params?: {
+    workspaceId?: string;
+    from?: string;
+    to?: string;
+    model?: string;
+    feature?: string;
+    kind?: string;
+    take?: number;
+  }) {
+    const q = new URLSearchParams();
+    for (const [key, value] of Object.entries(params ?? {})) {
+      if (value) q.set(key, String(value));
+    }
+    const suffix = q.toString() ? `?${q}` : '';
+    return this.request<NdAiUsageReport>('GET', `/nd/ai-credits/usage${suffix}`);
+  }
+
+  getAiPricing() {
+    return this.request<NdAiPricing>('GET', '/nd/ai-credits/pricing');
+  }
+
+  setAiPricing(body: { usdPerCredit: number; markup: number; minMarginPct: number }) {
+    return this.request<NdAiPricing>('PUT', '/nd/ai-credits/pricing', body);
+  }
+
+  getWorkspaceAiCredits(workspaceId: string) {
+    return this.request<NdWorkspaceCredits>('GET', `/nd/ai-credits/workspaces/${workspaceId}`);
+  }
+
+  topUpWorkspaceAiCredits(workspaceId: string, body: { credits: number; note?: string }) {
+    return this.request<{ granted: number; used: number; balance: number }>(
+      'POST',
+      `/nd/ai-credits/workspaces/${workspaceId}/top-up`,
+      body,
+    );
+  }
+
+  setWorkspaceAiCreditThreshold(workspaceId: string, lowThresholdPct: number) {
+    return this.request<{ lowThresholdPct: number }>(
+      'PUT',
+      `/nd/ai-credits/workspaces/${workspaceId}/threshold`,
+      { lowThresholdPct },
+    );
   }
 
   getDictionaryEntries() {

@@ -1,0 +1,120 @@
+<div class="nd-catalog-page">
+  <div class="page-header page-header--catalog">
+    <div class="page-header-title-block">
+      <h1>AI credits</h1>
+      <p class="subtitle">
+        Analysis runs use AI credits for {{ workspaceName }}. When they run out, new analyses cannot be
+        started until your administrator adds more.
+      </p>
+    </div>
+  </div>
+
+  @if (loading && !summary) {
+    <p class="muted-loading">Loading credits…</p>
+  } @else if (error) {
+    <p class="nd-error">{{ error }}</p>
+  } @else if (summary) {
+    <div class="nd-catalog-body">
+      <div class="card-surface credit-card" [class.credit-low]="statusKind === 'low'" [class.credit-empty]="statusKind === 'empty'">
+        @if (statusKind === 'unlimited') {
+          <strong class="credit-headline">No credit limit set</strong>
+          <p class="muted">This workspace has no credit allowance yet, so analyses are not limited.</p>
+        } @else {
+          <div class="credit-numbers">
+            <div>
+              <span class="credit-label">Remaining</span>
+              <strong class="credit-balance">{{ summary.balance | number: '1.0-2' }}</strong>
+            </div>
+            <div>
+              <span class="credit-label">Used</span>
+              <strong>{{ summary.used | number: '1.0-2' }}</strong>
+            </div>
+            <div>
+              <span class="credit-label">Total added</span>
+              <strong>{{ summary.granted | number: '1.0-2' }}</strong>
+            </div>
+          </div>
+          @if (summary.usdPerCredit) {
+            <p class="muted">
+              1 credit = ${{ summary.usdPerCredit | number: '1.0-4' }}. Remaining is worth
+              <strong>${{ (summary.balanceUsd ?? 0) | number: '1.2-2' }}</strong>; used so far
+              <strong>${{ (summary.usedUsd ?? 0) | number: '1.2-2' }}</strong>.
+            </p>
+          }
+          <div class="credit-bar" role="img" [attr.aria-label]="summary.usedPct + '% of credits used'">
+            <span class="credit-bar-fill" [style.width.%]="usedBarPct"></span>
+          </div>
+          @if (statusKind === 'empty') {
+            <p class="credit-note">
+              All credits are used. Ask your administrator to add more before starting a new analysis.
+            </p>
+          } @else if (statusKind === 'low') {
+            <p class="credit-note">
+              {{ summary.usedPct | number: '1.0-0' }}% used. Ask your administrator to top up soon.
+            </p>
+          } @else {
+            <p class="muted">{{ summary.usedPct | number: '1.0-0' }}% of the added credits used.</p>
+          }
+        }
+      </div>
+
+      <h2 class="section-heading">Recent activity</h2>
+      <div class="filter-pills nd-list-toolbar nd-shrink">
+        <select class="filter-select" [(ngModel)]="periodFilter" aria-label="Filter by period">
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="all">All time</option>
+        </select>
+        <select class="filter-select" [(ngModel)]="kindFilter" aria-label="Filter by type">
+          <option value="">All activity</option>
+          <option value="usage">AI calls only</option>
+          <option value="topup">Credits added</option>
+          <option value="adjustment">Adjustments</option>
+        </select>
+        <span class="filter-count">{{ visibleHistory.length }} of {{ history.length }}</span>
+        @if (hasFilters) {
+          <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+        }
+      </div>
+      @if (!visibleHistory.length) {
+        <div class="card-surface empty-state">
+          <strong>{{ history.length ? 'Nothing matches these filters' : 'No credit activity yet' }}</strong>
+          <p>{{ history.length ? 'Try a wider period.' : 'Credits appear here as analyses run.' }}</p>
+        </div>
+      } @else {
+        <div class="card-surface table-wrap table-scroll-body">
+          <table>
+            <thead>
+              <tr>
+                <th>Activity</th>
+                <th class="num">Credits</th>
+                <th class="num">Tokens</th>
+                <th>Note</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (e of visibleHistory; track e.id) {
+                <tr>
+                  <td>{{ entryLabel(e) }}</td>
+                  <td class="num" [class.credit-plus]="e.credits > 0">
+                    {{ e.credits > 0 ? '+' : '' }}{{ e.credits | number: '1.0-2' }}
+                  </td>
+                  <td class="num muted">
+                    @if (e.kind === 'usage') {
+                      {{ e.promptTokens + e.completionTokens | number }}
+                    } @else {
+                      -
+                    }
+                  </td>
+                  <td class="muted">{{ e.note || (e.by ? 'by ' + e.by : '') }}</td>
+                  <td class="muted">{{ e.createdAt | date: 'dd MMM, HH:mm' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+</div>

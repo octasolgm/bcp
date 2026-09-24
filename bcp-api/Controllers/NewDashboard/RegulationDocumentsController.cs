@@ -90,9 +90,11 @@ public class RegulationDocumentsController(
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
         var deptNamesTask = LoadDepartmentNamesAsync(demoCtx, ct);
+        // List cards never show the extracted content, so the heavy columns stay in the database.
         var ndDocsTask = NdDemoDataFilters.ApplyToRegulationDocuments(
                 db.NdRegulationDocuments.AsNoTracking(),
                 demoCtx)
+            .SelectListColumns()
             .ToListAsync(ct);
 
         Dictionary<Guid, string> deptNames;
@@ -181,11 +183,12 @@ public class RegulationDocumentsController(
         var legacyStoredIds = legacyRows.Concat(hiddenLegacyRows).Select(l => l.Id).Distinct().ToList();
         if (legacyStoredIds.Count > 0)
         {
-            var             linkedNd = await db.NdRegulationDocuments.AsNoTracking()
+            var linkedNd = await db.NdRegulationDocuments.AsNoTracking()
                 .Where(d => d.StoredDocumentId != null
                     && legacyStoredIds.Contains(d.StoredDocumentId.Value)
                     && d.Status != StatusHidden
                     && !d.IsManual)
+                .SelectListColumns()
                 .ToListAsync(ct);
             // Do not demo-filter linked overlays: if the stored file row is visible in this list,
             // surface the linked NdRegulationDocument status (fixes super-admin list showing parsed/0).
@@ -395,7 +398,9 @@ public class RegulationDocumentsController(
         if (!ndDocs.Any(d => d.IsManual))
         {
             var manualDoc = await db.NdRegulationDocuments.AsNoTracking()
-                .FirstOrDefaultAsync(d => d.IsManual && d.Status != StatusHidden, ct);
+                .Where(d => d.IsManual && d.Status != StatusHidden)
+                .SelectListColumns()
+                .FirstOrDefaultAsync(ct);
             if (manualDoc == null && profile!.Role is "maker" or "super_admin")
                 manualDoc = await EnsureManualDocumentAsync(ct);
             if (manualDoc != null)
@@ -469,6 +474,7 @@ public class RegulationDocumentsController(
             ndDocs = await NdDemoDataFilters.ApplyToRegulationDocuments(
                     db.NdRegulationDocuments.AsNoTracking(),
                     demoCtx)
+                .SelectListColumns()
                 .ToListAsync(ct);
         }
         catch
@@ -527,7 +533,8 @@ public class RegulationDocumentsController(
                     && p.Status == NdRegulationPointStatus.Active)
                 .Join(
                     db.NdRegulationDocuments.AsNoTracking()
-                        .Where(d => searchableDocIds.Contains(d.Id)),
+                        .Where(d => searchableDocIds.Contains(d.Id))
+                        .SelectListColumns(),
                     p => p.RegulationDocumentId,
                     d => d.Id,
                     (p, d) => new { Point = p, Doc = d })

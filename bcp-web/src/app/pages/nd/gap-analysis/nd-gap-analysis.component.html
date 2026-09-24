@@ -60,6 +60,9 @@
   <div class="workflow-bar card-surface">
     <div class="workflow-bar-main">
       <app-nd-status-badge [status]="ndRunData.run.status" />
+      @if (ndRunLlmLabel) {
+        <span class="report-phase-chip" title="AI model that judged every clause in this analysis">AI: {{ ndRunLlmLabel }}</span>
+      }
       @if (reportPhaseLabel) {
         <span class="report-phase-chip">{{ reportPhaseLabel }}</span>
       }

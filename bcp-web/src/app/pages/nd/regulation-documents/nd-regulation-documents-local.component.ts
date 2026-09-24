@@ -642,7 +642,9 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     const ids = this.docs.map((d) => d.storedDocumentId ?? d.id).filter(Boolean);
     if (!ids.length) return;
     try {
-      const res = await this.api.localExtractStatusBatch(ids, this.engine);
+      // Statuses only: the clause text of every document would be megabytes per poll.
+      // ensureFullLocalResult loads it for the one document the user opens.
+      const res = await this.api.localExtractStatusBatch(ids, this.engine, { lite: true });
       if (!res.success || !res.data) return;
       for (const doc of this.docs) {
         const key = doc.storedDocumentId ?? doc.id;
@@ -1155,7 +1157,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     this.viewMode = 'structural';
     this.highlightPointNumber = highlightPoint?.trim() ?? '';
     this.shellFocus.setRegulationPointsPanelOpen(true);
-    const local = this.localResults.get(doc.id);
+    const local = await this.ensureFullLocalResult(doc);
     if (local) {
       this.selectedPoints = this.mapLocalPoints(local);
       this.pointsSource = 'local';
@@ -1170,7 +1172,21 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
 
   /** Third view mode — shows the semantic (embedding-based) extraction result instead of structural.
    * Independent of viewPoints; does not touch or require the structural result. */
-  viewSemanticPoints(doc: RegulationDocument, event?: Event): void {
+  /**
+   * The list only carries statuses, so the clause text is fetched for this one document the first time
+   * it is opened, then cached for the rest of the session.
+   */
+  private async ensureFullLocalResult(doc: RegulationDocument): Promise<NdLocalExtractionResult | null> {
+    const cached = this.localResults.get(doc.id);
+    if (cached && cached.lite !== true) return cached;
+    const key = doc.storedDocumentId ?? doc.id;
+    const res = await this.api.localExtractStatusBatch([key], this.engine);
+    const full = res.success ? res.data?.[key] ?? null : null;
+    if (full) this.localResults.set(doc.id, full);
+    return full ?? cached ?? null;
+  }
+
+  async viewSemanticPoints(doc: RegulationDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
     this.clearGlobalPointSearch();
     this.selectedDoc = doc;
@@ -1179,7 +1195,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     this.viewMode = 'semantic';
     this.highlightPointNumber = '';
     this.shellFocus.setRegulationPointsPanelOpen(true);
-    const local = this.localResults.get(doc.id);
+    const local = await this.ensureFullLocalResult(doc);
     this.selectedPoints = local ? this.mapLocalPoints(local, true) : [];
     this.pointsSource = 'local';
     this.pointsLoading = false;
@@ -1232,7 +1248,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   }
 
   /** First view mode — the raw parsed markdown, independent of either extraction method. */
-  viewParsedText(doc: RegulationDocument, event?: Event): void {
+  async viewParsedText(doc: RegulationDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
     this.clearGlobalPointSearch();
     this.selectedDoc = doc;
@@ -1240,7 +1256,8 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     this.showParsedText = true;
     this.highlightPointNumber = '';
     this.shellFocus.setRegulationPointsPanelOpen(true);
-    if (!this.localResults.has(doc.id)) {
+    const local = await this.ensureFullLocalResult(doc);
+    if (!local?.markdownText) {
       this.message = 'No parsed text yet — click Parse first.';
     }
   }

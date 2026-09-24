@@ -65,3 +65,128 @@
     flex-direction: column;
   }
 }
+
+.credit-chip {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg-muted);
+  color: var(--text-muted);
+
+  &.credit-ok {
+    background: var(--low-bg);
+    color: var(--low);
+  }
+
+  &.credit-low {
+    background: var(--medium-bg);
+    color: var(--medium);
+  }
+
+  &.credit-empty {
+    background: var(--critical-bg);
+    color: var(--critical);
+  }
+}
+
+.credit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.credit-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  font-size: 0.875rem;
+}
+
+.credit-topup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+
+  .inline-input {
+    min-width: 10rem;
+  }
+}
+
+.credit-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.credit-model {
+  white-space: nowrap;
+}
+
+.credit-link {
+  font-size: 0.8125rem;
+  color: var(--accent);
+  width: fit-content;
+}
+
+.pricing-card {
+  margin-top: 1rem;
+
+  h2 {
+    margin: 0 0 0.25rem;
+  }
+}
+
+.pricing-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin: 0.75rem 0;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+  }
+}
+
+.pricing-preview {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.credit-money {
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.credit-money-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+
+  > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    font-size: 0.8125rem;
+  }
+
+  strong {
+    font-size: 1rem;
+  }
+
+  .margin-low strong {
+    color: var(--danger, #b3261e);
+  }
+}

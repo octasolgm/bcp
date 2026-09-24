@@ -283,6 +283,8 @@ export type ResultsData = {
     name: string;
     status: string;
     workflowEngine?: string | null;
+    regulLlmProvider?: string | null;
+    regulLlmModel?: string | null;
     totalPointsCount: number;
     processedPointsCount: number;
     dualVerifyFailedCount: number;

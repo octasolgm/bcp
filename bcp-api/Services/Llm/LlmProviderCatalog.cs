@@ -113,6 +113,49 @@ public static class LlmProviderCatalog
                 "qwen3.5-plus",
                 "Qwen:ApiKey",
                 "QWEN_API_KEY"),
+            // One key routes to every vendor below via OpenRouter's proxy — ids are OpenRouter's own
+            // "vendor/model" form (confirmed live against https://openrouter.ai/api/v1/models on 23 Sep
+            // 2026), not the vendor's native id. Picking an OpenRouter model here calls OpenRouter, not
+            // the vendor directly, even though the same model is also listed under its own provider above.
+            ["openrouter"] = new(
+                "openrouter",
+                "OpenRouter (all models)",
+                [
+                    "anthropic/claude-opus-5",
+                    "anthropic/claude-sonnet-5",
+                    "anthropic/claude-haiku-4.5",
+                    "openai/gpt-5.6-sol",
+                    "openai/gpt-5",
+                    "openai/gpt-5-mini",
+                    "openai/gpt-4o",
+                    "openai/gpt-4o-mini",
+                    "google/gemini-3.6-flash",
+                    "google/gemini-3.5-flash",
+                    "google/gemini-2.5-flash",
+                    "google/gemini-2.5-flash-lite",
+                    "x-ai/grok-4.6",
+                    "x-ai/grok-4.3",
+                    "deepseek/deepseek-v4-pro",
+                    "deepseek/deepseek-v4.1-flash",
+                    "moonshotai/kimi-k3",
+                    "moonshotai/kimi-k2.6",
+                    "z-ai/glm-4.6",
+                    "z-ai/glm-4.5-air",
+                    "qwen/qwen3.8-max-0902",
+                    "qwen/qwen3.5-plus-20260420",
+                    "qwen/qwen3.5-flash-02-23",
+                    // Free tier ($0, rate-limited: ~50 requests/day, 1000/day with $10+ paid credit). Free
+                    // models may log prompts, so use them for pipeline/config tests, not confidential documents.
+                    "nvidia/nemotron-3-ultra-550b-a55b:free",
+                    "nvidia/nemotron-3-super-120b-a12b:free",
+                    "qwen/qwen3.8-27b:free",
+                    "google/gemma-4-31b-it:free",
+                    "z-ai/glm-5.2:free",
+                    "openrouter/free",
+                ],
+                "anthropic/claude-sonnet-5",
+                "OpenRouter:ApiKey",
+                "OPENROUTER_API_KEY"),
         };
 
     public static LlmProviderDefinition Get(string provider)
@@ -139,13 +182,14 @@ public static class LlmProviderCatalog
         return new DualVerifyLlmConfig(def.Id, model);
     }
 
-    /// <summary>Allow saved IDs not yet added to the dropdown catalog (e.g. new Anthropic releases).</summary>
+    /// <summary>Allow saved IDs not yet added to the dropdown catalog (e.g. new Anthropic releases, or an
+    /// OpenRouter "vendor/model" id beyond our curated list — OpenRouter has 400+).</summary>
     private static bool LooksLikeModelId(string model)
     {
         if (model.Length is < 3 or > 128) return false;
         foreach (var ch in model)
         {
-            if (char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.') continue;
+            if (char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.' or '/' or ':') continue;
             return false;
         }
 

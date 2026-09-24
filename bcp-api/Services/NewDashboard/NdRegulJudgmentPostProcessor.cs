@@ -44,6 +44,52 @@ public static class NdRegulJudgmentPostProcessor
         return string.IsNullOrWhiteSpace(judgment.GapDescription);
     }
 
+    /// <summary>True for a partial / non-compliant verdict, i.e. one that must carry a gap and an action plan.</summary>
+    public static bool IsGapStatus(string? overallStatus)
+    {
+        var status = (overallStatus ?? "").Trim().ToLowerInvariant();
+        return status is "partial" or "non_compliant" or "non-compliant" or "noncompliant";
+    }
+
+    private static bool IsBlankOrNotApplicable(string? text)
+    {
+        var t = (text ?? "").Trim();
+        return t.Length == 0 || t is "N/A" or "n/a" or "-" or "\u2014";
+    }
+
+    /// <summary>V5 (hybrid) only. A compliant verdict means fully compliant: no gap and no corrective action,
+    /// whatever commentary the model put in those fields (it may list "minor" points there).</summary>
+    public static RegulJudgmentResult ApplyStatusConsistency(RegulJudgmentResult judgment)
+    {
+        if (string.Equals(judgment.OverallStatus?.Trim(), "compliant", StringComparison.OrdinalIgnoreCase))
+        {
+            judgment.GapDescription = "";
+            judgment.SuggestedAction = "";
+            judgment.GapDirection = "";
+        }
+
+        return judgment;
+    }
+
+    /// <summary>V5 (hybrid) only. A partial / non-compliant verdict needs both a gap and an action plan.</summary>
+    public static bool RequiresGapOrActionRetry(RegulJudgmentResult judgment) =>
+        IsGapStatus(judgment.OverallStatus)
+        && (IsBlankOrNotApplicable(judgment.GapDescription) || IsBlankOrNotApplicable(judgment.SuggestedAction));
+
+    /// <summary>V5 (hybrid) only. Last resort after the retries: never leave a real gap without an action plan.</summary>
+    public static RegulJudgmentResult EnsureActionPlanForGap(RegulJudgmentResult judgment)
+    {
+        if (!IsGapStatus(judgment.OverallStatus) || !IsBlankOrNotApplicable(judgment.SuggestedAction))
+            return judgment;
+
+        var gap = (judgment.GapDescription ?? "").Trim();
+        if (gap.Length > 240) gap = gap[..240].TrimEnd() + "...";
+        judgment.SuggestedAction = gap.Length == 0 || gap is "N/A"
+            ? "Update the internal policy to fully cover this regulatory requirement, then have the policy owner approve it."
+            : $"Update the internal policy to close the gap identified above ({gap}) and have the policy owner approve the change.";
+        return judgment;
+    }
+
     public static bool VerifyQuote(string quote, string sourceText)
     {
         var normQuote = NdRegulPolicyContextService.NormalizeForMatching(quote);

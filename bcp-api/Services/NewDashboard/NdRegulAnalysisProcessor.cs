@@ -576,6 +576,12 @@ public class NdRegulAnalysisProcessor(
                 contextChunks.Count,
                 string.Join("; ", contextChunks.Select(c => c.Label)));
         }
+        logger.LogInformation(
+            "Regul judgment context for clause {ClauseNo}: {ChunkCount} chunk(s), {ContextChars} chars (~{ApproxTokens} tokens)",
+            clauseNo,
+            contextChunks.Count,
+            policyContext.Length,
+            policyContext.Length / 4);
         var contextBlock = await promptVersions.BuildJudgmentContextAsync(policyContext, workflowEngine, ct);
         var queryBlock = await promptVersions.BuildJudgmentQueryAsync(clauseNo, clauseText, workflowEngine, ct);
 
@@ -583,11 +589,17 @@ public class NdRegulAnalysisProcessor(
         // admin prompt versions as every other Regul engine — the only difference is the context
         // block, which for V5 is the fused/trimmed retrieval chunks (Step 7) instead of full markdown.
         RegulJudgmentResult judgment = null!;
+        var isHybridEngine = AnalysisWorkflowEngine.IsRegulPipelineHybrid(workflowEngine);
         for (var attempt = 0; attempt <= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries; attempt++)
         {
             var query = attempt == 0
                 ? queryBlock
-                : queryBlock + "\n\n" + NdRegulPromptDefaults.BuildJudgmentRetryNote(judgment.OverallStatus);
+                : queryBlock + "\n\n" + (isHybridEngine
+                    ? NdRegulPromptDefaults.BuildHybridJudgmentRetryNote(
+                        judgment.OverallStatus,
+                        string.IsNullOrWhiteSpace(judgment.GapDescription) || judgment.GapDescription.Trim() == "N/A",
+                        string.IsNullOrWhiteSpace(judgment.SuggestedAction) || judgment.SuggestedAction.Trim() == "N/A")
+                    : NdRegulPromptDefaults.BuildJudgmentRetryNote(judgment.OverallStatus));
 
             var raw = await regulLlm.CallJudgmentAsync(contextBlock, query, cacheContextBlock, workflowEngine, ct);
             judgment = NdRegulLlmJsonHelper.ParseJudgmentResult(raw);
@@ -606,6 +618,17 @@ public class NdRegulAnalysisProcessor(
                 judgment = NdRegulJudgmentPostProcessor.ApplyFalseAbsenceCorrection(
                     judgment,
                     policyBundle.SourceTextForQuotes);
+            }
+
+            if (isHybridEngine)
+            {
+                // V5 only: compliant => no gap / no action; gap => must also have an action plan.
+                judgment = NdRegulJudgmentPostProcessor.ApplyStatusConsistency(judgment);
+                if (!NdRegulJudgmentPostProcessor.RequiresGapOrActionRetry(judgment))
+                    return judgment;
+                if (attempt >= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries)
+                    return NdRegulJudgmentPostProcessor.EnsureActionPlanForGap(judgment);
+                continue;
             }
 
             if (!NdRegulJudgmentPostProcessor.RequiresGapDescriptionRetry(judgment))

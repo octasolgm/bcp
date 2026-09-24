@@ -16,9 +16,11 @@ public static class NdWorkspaceNavCountHelper
         NdDemoIsolationContext demoCtx,
         CancellationToken ct)
     {
+        // Nav counts only need ids and flags; never pull extraction_result / extraction_markdown here.
         var ndDocs = await NdDemoDataFilters.ApplyToRegulationDocuments(
                 db.NdRegulationDocuments.AsNoTracking(),
                 demoCtx)
+            .SelectListColumns()
             .ToListAsync(ct);
 
         var ndByStoredId = ndDocs

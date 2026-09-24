@@ -9,6 +9,7 @@ using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.Ai;
 using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -26,9 +27,30 @@ public class AnalysisRunsController(
     NdDemoUserDirectory demoDirectory,
     NdDemoWorkspaceService demoWorkspace,
     NdDemoInterceptionService demoIntercept,
+    NdAiCreditService aiCredits,
     ILogger<AnalysisRunsController> logger) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
+
+    /// <summary>
+    /// Refuses new AI work when the workspace has spent its prepaid credits. Work already running is left
+    /// alone, so a run in progress still finishes. Demo runs replay saved data and never call AI, so they
+    /// are not checked.
+    /// </summary>
+    private async Task<IActionResult?> GuardAiCreditsAsync(CancellationToken ct)
+    {
+        var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? WorkspaceScope.DefaultWorkspaceId;
+        var summary = await aiCredits.GetSummaryAsync(workspaceId, ct);
+        if (!summary.IsExhausted) return null;
+
+        return StatusCode(402, new
+        {
+            success = false,
+            code = "ai_credits_exhausted",
+            message = "This workspace has used all of its AI credits. Ask your administrator to add credits, "
+                + "then start the analysis again.",
+        });
+    }
 
     public record CreateRunRequest(
         string Name,
@@ -672,8 +694,11 @@ public class AnalysisRunsController(
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
+        // Split query: a single joined result repeats the run's own columns (including a ~30 KB
+        // selected_points_snapshot) on every point row, which dominated this endpoint's egress.
         var run = await db.NdAnalysisRuns
             .Include(r => r.Points)
+            .AsSplitQuery()
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
@@ -721,6 +746,12 @@ public class AnalysisRunsController(
         var useDemoSimulation = await ShouldUseDemoSimulationAsync(demoCtx, run, ct);
         var useRegul = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine);
 
+        if (!useDemoSimulation)
+        {
+            var creditError = await GuardAiCreditsAsync(ct);
+            if (creditError != null) return creditError;
+        }
+
         if (useRegul && run.RegulClausesConfirmedAt == null)
         {
             if (useDemoSimulation)
@@ -744,8 +775,10 @@ public class AnalysisRunsController(
         // reset/replay the run's progress a second time.
         if (!runCancellation.TryRegister(id, out var linkedCt))
             return Ok(new { success = true, message = "Analysis already in progress", id, status = "running" });
+        var billingTenantId = run.TenantId;
         _ = Task.Run(async () =>
         {
+            using var billing = NdAiUsageContext.Enter(billingTenantId, id, "analysis", profile.Id);
             using var scope = scopeFactory.CreateScope();
             try
             {
@@ -796,6 +829,9 @@ public class AnalysisRunsController(
 
         if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return BadRequest(new { success = false, message = "Forward-only start is for Regul workflow runs." });
+
+        var forwardCreditError = await GuardAiCreditsAsync(ct);
+        if (forwardCreditError != null) return forwardCreditError;
 
         if (run.Status is "running" or "processing" && runCancellation.HasActiveWorker(id))
             return Ok(new { success = true, message = "Analysis already in progress", id, status = run.Status });
@@ -849,8 +885,10 @@ public class AnalysisRunsController(
         await db.SaveChangesAsync(ct);
         dashboardCache.Invalidate();
 
+        var billingTenantId = run.TenantId;
         _ = Task.Run(async () =>
         {
+            using var billing = NdAiUsageContext.Enter(billingTenantId, id, "analysis", profile.Id);
             using var scope = scopeFactory.CreateScope();
             try
             {
@@ -889,8 +927,11 @@ public class AnalysisRunsController(
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
 
+        // Split query: a single joined result repeats the run's own columns (including a ~30 KB
+        // selected_points_snapshot) on every point row, which dominated this endpoint's egress.
         var run = await db.NdAnalysisRuns
             .Include(r => r.Points)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
@@ -1121,8 +1162,13 @@ public class AnalysisRunsController(
         if (!AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return BadRequest(new { success = false, message = "Forward-only rerun is for Regul workflow runs." });
 
+        var rerunCreditError = await GuardAiCreditsAsync(ct);
+        if (rerunCreditError != null) return rerunCreditError;
+
+        var rerunTenantId = run.TenantId;
         _ = Task.Run(async () =>
         {
+            using var billing = NdAiUsageContext.Enter(rerunTenantId, id, "rerun_forward", profile.Id);
             using var scope = scopeFactory.CreateScope();
             var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
             try
@@ -1245,10 +1291,15 @@ public class AnalysisRunsController(
             demoDirectory, run.CreatedBy, ct);
         if (demoOwnedBlock != null) return demoOwnedBlock;
 
+        var reverseCreditError = await GuardAiCreditsAsync(ct);
+        if (reverseCreditError != null) return reverseCreditError;
+
+        var reverseTenantId = run.TenantId;
         if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
         {
             _ = Task.Run(async () =>
             {
+                using var billing = NdAiUsageContext.Enter(reverseTenantId, id, "rerun_reverse", profile.Id);
                 using var scope = scopeFactory.CreateScope();
                 var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
                 try

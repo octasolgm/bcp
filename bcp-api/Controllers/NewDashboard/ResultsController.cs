@@ -28,8 +28,11 @@ public class ResultsController(
             "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
+        // Split query: a single joined result repeats the run's own columns (including a ~30 KB
+        // selected_points_snapshot) on every point row, which dominated this endpoint's egress.
         var run = await db.NdAnalysisRuns
             .Include(r => r.Points)
+            .AsSplitQuery()
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == runId, ct);
         if (run == null) return NotFound();
@@ -42,7 +45,11 @@ public class ResultsController(
         if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, demoCtx))
             return StatusCode(403);
 
-        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
+        // Template sync replays the seeded CBUAE x AML demo judgments over the run's points. Its own
+        // CBUAE/AML check is name-based only, so without this gate a real account's run on that
+        // document pair got overwritten with demo answers instead of the live model's output.
+        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine)
+            && NdDemoIsolationHelper.ShouldSimulateAi(demoCtx, run.CreatedBy))
             StartBackgroundTemplateSync(runId, profile.Id);
 
         var pointIds = run.Points.Select(p => p.Id).ToList();
@@ -205,6 +212,8 @@ public class ResultsController(
                     run.Name,
                     run.Status,
                     run.WorkflowEngine,
+                    run.RegulLlmProvider,
+                    run.RegulLlmModel,
                     run.RegulClausesConfirmedAt,
                     run.TotalPointsCount,
                     run.ProcessedPointsCount,
