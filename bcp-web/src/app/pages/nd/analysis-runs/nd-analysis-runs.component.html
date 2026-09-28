@@ -154,16 +154,44 @@
             </td>
             <td class="col-docs" data-label="Documents">
               @if (run.regulationDocNames?.length || run.internalDocNames?.length) {
-                <div class="doc-names">
-                  @for (n of run.regulationDocNames; track n) {
-                    <span class="doc-name-pill doc-name-pill--reg" [title]="n">{{ n }}</span>
+                <div class="doc-groups">
+                  @if (run.regulationDocNames?.length; as regCount) {
+                    <div class="doc-group">
+                      <span class="doc-group-label">Regulation documents ({{ regCount }})</span>
+                      @for (n of run.regulationDocNames; track n) {
+                        <span class="doc-group-name" [title]="n">{{ n }}</span>
+                      }
+                    </div>
                   }
-                  @for (n of run.internalDocNames; track n) {
-                    <span class="doc-name-pill doc-name-pill--internal" [title]="n">{{ n }}</span>
+                  @if (run.internalDocNames?.length; as intCount) {
+                    <div class="doc-group">
+                      <span class="doc-group-label">Internal documents ({{ intCount }})</span>
+                      @for (n of run.internalDocNames; track n) {
+                        <span class="doc-group-name" [title]="n">{{ n }}</span>
+                      }
+                    </div>
                   }
                 </div>
               } @else {
-                <span class="muted">—</span>
+                @let fb = fallbackDocNames(run);
+                @if (fb.internal || fb.regulation) {
+                  <div class="doc-groups">
+                    @if (fb.regulation) {
+                      <div class="doc-group">
+                        <span class="doc-group-label">Regulation documents (1)</span>
+                        <span class="doc-group-name" [title]="fb.regulation">{{ fb.regulation }}</span>
+                      </div>
+                    }
+                    @if (fb.internal) {
+                      <div class="doc-group">
+                        <span class="doc-group-label">Internal documents (1)</span>
+                        <span class="doc-group-name" [title]="fb.internal">{{ fb.internal }}</span>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <span class="muted">—</span>
+                }
               }
             </td>
             <td class="col-maker" data-label="Submitted by">

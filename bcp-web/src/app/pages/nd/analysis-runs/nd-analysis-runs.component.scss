@@ -200,36 +200,36 @@
 
   .col-docs {
     max-width: 16rem;
+    white-space: normal;
   }
 
-  .doc-names {
+  .doc-groups {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 
-  .doc-name-pill {
-    display: inline-block;
-    max-width: 12rem;
+  .doc-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .doc-group-label {
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+
+  .doc-group-name {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    padding: 0.1rem 0.5rem;
-    border-radius: 999px;
-    font-size: 0.6875rem;
-    font-weight: 500;
-    background: var(--bg-muted);
-    color: var(--text-secondary);
-
-    &--reg {
-      background: var(--accent-tint);
-      color: var(--accent);
-    }
-
-    &--internal {
-      background: var(--info-bg);
-      color: var(--info);
-    }
+    max-width: 15rem;
   }
 
   .run-rename-btn {

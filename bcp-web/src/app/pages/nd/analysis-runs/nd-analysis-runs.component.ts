@@ -495,6 +495,17 @@ export class NdAnalysisRunsComponent implements OnInit {
     }
   }
 
+  /** Older/legacy runs never got SelectedRegulationDocIds/SelectedInternalDocIds populated, so the
+   * server can't resolve real document names for them — fall back to splitting the run's own name,
+   * which was built at creation time as `${internalLabel} × ${regulationLabel}` (see
+   * buildNdCreateRunPayload in analyse-regul.component.ts — internal first, regulation second).
+   * Only used when the server didn't already resolve real names. */
+  fallbackDocNames(run: AnalysisRunSummary): { internal: string | null; regulation: string | null } {
+    const parts = (run.name ?? '').split(' × ');
+    if (parts.length !== 2) return { internal: null, regulation: null };
+    return { internal: parts[0]?.trim() || null, regulation: parts[1]?.trim() || null };
+  }
+
   async renameRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
     event?.stopPropagation();
     event?.preventDefault();
