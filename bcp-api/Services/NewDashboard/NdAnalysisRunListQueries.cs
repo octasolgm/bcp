@@ -30,5 +30,7 @@ public static class NdAnalysisRunListQueries
             UpdatedAt = r.UpdatedAt,
             SubmittedToCheckerAt = r.SubmittedToCheckerAt,
             SubmittedToReviewerAt = r.SubmittedToReviewerAt,
+            SelectedRegulationDocIds = r.SelectedRegulationDocIds,
+            SelectedInternalDocIds = r.SelectedInternalDocIds,
         });
 }

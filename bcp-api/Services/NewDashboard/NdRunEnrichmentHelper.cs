@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
@@ -8,6 +9,72 @@ namespace Reguliq.Api.Services.NewDashboard;
 
 public static class NdRunEnrichmentHelper
 {
+    private static List<Guid> ParseDocIds(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            var ids = JsonSerializer.Deserialize<List<string>>(json) ?? [];
+            var result = new List<Guid>(ids.Count);
+            foreach (var id in ids)
+                if (Guid.TryParse(id, out var guid)) result.Add(guid);
+            return result;
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Resolves each run's selected regulation/internal document ids to display names in bulk —
+    /// one query per document type for the whole page of runs, not one query per row. Used by the
+    /// All Analysis list so it can show which documents an analysis actually used instead of only
+    /// the run's own (often auto-generated, filename-derived) name.
+    /// </summary>
+    public static async Task<Dictionary<Guid, (List<string> RegulationDocs, List<string> InternalDocs)>>
+        LoadRunDocumentNamesAsync(AppDbContext db, IReadOnlyList<NdAnalysisRun> runs, CancellationToken ct)
+    {
+        var result = new Dictionary<Guid, (List<string>, List<string>)>();
+        if (runs.Count == 0) return result;
+
+        var regIdsByRun = runs.ToDictionary(r => r.Id, r => ParseDocIds(r.SelectedRegulationDocIds));
+        var intIdsByRun = runs.ToDictionary(r => r.Id, r => ParseDocIds(r.SelectedInternalDocIds));
+
+        var allRegIds = regIdsByRun.Values.SelectMany(x => x).Distinct().ToList();
+        var allIntIds = intIdsByRun.Values.SelectMany(x => x).Distinct().ToList();
+
+        var regNames = allRegIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.NdRegulationDocuments.AsNoTracking()
+                .Where(d => allRegIds.Contains(d.Id))
+                .Select(d => new { d.Id, d.Name })
+                .ToDictionaryAsync(d => d.Id, d => d.Name, ct);
+
+        var intNames = allIntIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await db.StoredDocuments.AsNoTracking()
+                .Where(d => allIntIds.Contains(d.Id))
+                .Select(d => new { d.Id, d.Title, d.OriginalFileName })
+                .ToDictionaryAsync(d => d.Id, d => string.IsNullOrWhiteSpace(d.Title) ? d.OriginalFileName : d.Title, ct);
+
+        foreach (var run in runs)
+        {
+            var regNamesForRun = regIdsByRun[run.Id]
+                .Select(id => regNames.GetValueOrDefault(id))
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n!)
+                .ToList();
+            var intNamesForRun = intIdsByRun[run.Id]
+                .Select(id => intNames.GetValueOrDefault(id))
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n!)
+                .ToList();
+            result[run.Id] = (regNamesForRun, intNamesForRun);
+        }
+
+        return result;
+    }
     public static string WorkflowHolderLabel(string status) => status switch
     {
         "submitted_for_review" => "With checker",
@@ -198,6 +265,8 @@ public static class NdRunEnrichmentHelper
             ? []
             : await LoadWorkCountsAsync(db, runIds, ct);
 
+        var docNamesByRun = await LoadRunDocumentNamesAsync(db, runs, ct);
+
         var list = new List<object>(runs.Count);
         foreach (var run in runs)
         {
@@ -223,6 +292,8 @@ public static class NdRunEnrichmentHelper
                 && demoProfileIds != null
                 && demoProfileIds.Contains(creatorId);
 
+            var (regDocNames, intDocNames) = docNamesByRun.GetValueOrDefault(run.Id, ([], []));
+
             list.Add(NdLegacyDataQueries.MapNdRunSummary(
                 run,
                 makerName,
@@ -235,7 +306,9 @@ public static class NdRunEnrichmentHelper
                 runningPoints,
                 isActive,
                 createdByIsDemo,
-                workByRun.GetValueOrDefault(run.Id)));
+                workByRun.GetValueOrDefault(run.Id),
+                regDocNames,
+                intDocNames));
         }
 
         return list;

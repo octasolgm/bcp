@@ -129,7 +129,9 @@ public static class NdLegacyDataQueries
         int runningPoints = 0,
         bool? isActive = null,
         bool createdByIsDemo = false,
-        NdRunWorkCounts? work = null) => new
+        NdRunWorkCounts? work = null,
+        List<string>? regulationDocNames = null,
+        List<string>? internalDocNames = null) => new
     {
         id = r.Id,
         source = "nd_analysis",
@@ -168,6 +170,8 @@ public static class NdLegacyDataQueries
         actionPlanCount = work?.Actions ?? 0,
         resolvedActionPlanCount = work?.ResolvedActions ?? 0,
         pendingActionPlanCount = work?.PendingActions ?? 0,
+        regulationDocNames = regulationDocNames ?? [],
+        internalDocNames = internalDocNames ?? [],
     };
 }
 

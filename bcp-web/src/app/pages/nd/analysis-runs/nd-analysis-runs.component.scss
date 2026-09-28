@@ -198,6 +198,40 @@
     font-size: 0.9375rem;
   }
 
+  .col-docs {
+    max-width: 16rem;
+  }
+
+  .doc-names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .doc-name-pill {
+    display: inline-block;
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    background: var(--bg-muted);
+    color: var(--text-secondary);
+
+    &--reg {
+      background: var(--accent-tint);
+      color: var(--accent);
+    }
+
+    &--internal {
+      background: var(--info-bg);
+      color: var(--info);
+    }
+  }
+
   .run-rename-btn {
     display: inline-flex;
     align-items: center;

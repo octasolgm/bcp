@@ -111,8 +111,9 @@
             Status <span class="sort-indicator">{{ sortIndicator('status') }}</span>
           </th>
           <th class="sortable col-run" (click)="toggleSort('name')">
-            Run <span class="sort-indicator">{{ sortIndicator('name') }}</span>
+            Title <span class="sort-indicator">{{ sortIndicator('name') }}</span>
           </th>
+          <th class="col-docs">Documents</th>
           <th class="sortable col-maker" (click)="toggleSort('maker')">
             Submitted by <span class="sort-indicator">{{ sortIndicator('maker') }}</span>
           </th>
@@ -149,6 +150,20 @@
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
                 </button>
+              }
+            </td>
+            <td class="col-docs" data-label="Documents">
+              @if (run.regulationDocNames?.length || run.internalDocNames?.length) {
+                <div class="doc-names">
+                  @for (n of run.regulationDocNames; track n) {
+                    <span class="doc-name-pill doc-name-pill--reg" [title]="n">{{ n }}</span>
+                  }
+                  @for (n of run.internalDocNames; track n) {
+                    <span class="doc-name-pill doc-name-pill--internal" [title]="n">{{ n }}</span>
+                  }
+                </div>
+              } @else {
+                <span class="muted">—</span>
               }
             </td>
             <td class="col-maker" data-label="Submitted by">

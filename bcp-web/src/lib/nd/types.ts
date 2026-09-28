@@ -226,6 +226,10 @@ export type AnalysisRunSummary = {
   actionPlanCount?: number;
   resolvedActionPlanCount?: number;
   pendingActionPlanCount?: number;
+  /** Regulation/internal document names this run's points were built from — resolved server-side
+   * from the run's selected doc ids, for the "which documents" column on the analysis lists. */
+  regulationDocNames?: string[];
+  internalDocNames?: string[];
   submittedAt?: string;
   workflowHolder?: string;
   totalGaps?: number;
