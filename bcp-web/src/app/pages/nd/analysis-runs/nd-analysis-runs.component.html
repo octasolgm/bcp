@@ -186,6 +186,8 @@
                 (recallClick)="recallRun($event)"
                 (deleteClick)="deleteRun($event)"
                 (stopClick)="stopRun($event)"
+                [forceStatusRunId]="forceStatusRunId"
+                (forceStatusClick)="forceRunStatus($event)"
               />
             </td>
           </tr>

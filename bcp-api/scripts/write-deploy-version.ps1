@@ -52,8 +52,15 @@ if (-not $Label.Trim()) {
     if ($commit) {
         $Label = "$datePart.$commit"
     } else {
-        # Unique build number when git is unavailable (replaces old "+local" suffix).
-        $Label = "$datePart.$((Get-Date).ToUniversalTime().ToString('HHmmss'))"
+        # No git commit available (e.g. running outside a git checkout) — fall back to a small,
+        # human-readable build counter for the day instead of a 6-digit HHmmss timestamp: 2 digits
+        # while it fits, 3 once a single day sees more than 99 builds.
+        $buildNumber = 1
+        if ($existing -and $existing.label -match '^(\d{4}\.\d{2}\.\d{2})\.(\d{1,3})$' -and $Matches[1] -eq $datePart) {
+            $buildNumber = [int]$Matches[2] + 1
+        }
+        $suffix = if ($buildNumber -gt 99) { "$buildNumber" } else { "{0:D2}" -f $buildNumber }
+        $Label = "$datePart.$suffix"
     }
 }
 

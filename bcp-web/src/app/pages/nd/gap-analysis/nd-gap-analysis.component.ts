@@ -18,7 +18,11 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError, distinctUntilChanged, map } from 'rxjs/operators';
-import { isRegulPipelineHybridWorkflow, isRegulWorkflow } from '../../../../lib/nd/regul-fields';
+import {
+  isRegulPipelineHybridWorkflow,
+  isRegulWorkflow,
+  v5CompliantScopeNote,
+} from '../../../../lib/nd/regul-fields';
 import {
   exportGapAnalysisExcelFromPoints,
   exportGapAnalysisPdfFromPoints,
@@ -178,6 +182,15 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     if (!model) return '';
     const provider = run?.regulLlmProvider?.trim();
     return provider ? `${provider} / ${model}` : model;
+  }
+
+  /** Scope note for compliant clauses; new analysis page (V5) only, empty for every other engine. */
+  get ndCompliantNote(): string {
+    if (!isRegulPipelineHybridWorkflow(this.ndRunWorkflowEngine)) return '';
+    const names = this.ndPolicyDocCatalog.map((d) =>
+      (d.title?.trim() || d.originalFileName?.trim() || '').replace(/\.(pdf|docx?)$/i, ''),
+    );
+    return v5CompliantScopeNote(names);
   }
 
   get isNdRegulWorkflow(): boolean {
@@ -2062,7 +2075,12 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.exporting = true;
     this.cdr.markForCheck();
     try {
-      const options = { ...this.exportOptions(), llmLabel: this.ndRunLlmLabel, selection };
+      const options = {
+        ...this.exportOptions(),
+        llmLabel: this.ndRunLlmLabel,
+        compliantNote: this.ndCompliantNote,
+        selection,
+      };
       if (this.ndRunWorkflowEngine && isRegulWorkflow(this.ndRunWorkflowEngine)) {
         await exportRegulGapAnalysisExcelFromPoints(points, undefined, undefined, options);
       } else {

@@ -6,7 +6,8 @@ export type NdWorkspaceTab =
   | 'all_analysis'
   | 'pending_correction'
   | 'pending_review'
-  | 'pending_final_review';
+  | 'pending_final_review'
+  | 'finalized';
 
 @Component({
   selector: 'app-nd-workspace-tabs',
@@ -43,6 +44,14 @@ export type NdWorkspaceTab =
           class="tab"
           [class.active]="active === 'pending_final_review' && primaryActive && !extraTabActive"
         >Pending final review</a>
+      }
+      @if (showFinalized) {
+        <a
+          routerLink="/nd/analysis-runs"
+          [queryParams]="finalizedParams"
+          class="tab"
+          [class.active]="active === 'finalized'"
+        >Finalized</a>
       }
       @if (extraTabLabel && extraTabLink.length) {
         <a
@@ -89,11 +98,19 @@ export class NdWorkspaceTabsComponent {
     return ['reviewer', 'super_admin'].includes(this.role);
   }
 
+  get showFinalized(): boolean {
+    return ['maker', 'checker', 'reviewer', 'super_admin'].includes(this.role);
+  }
+
   get allAnalysisParams(): Record<string, string> | null {
     return this.mineOnly ? { mine: '1' } : null;
   }
 
   get correctionParams(): Record<string, string> {
     return this.mineOnly ? { mine: '1', correction: '1' } : { correction: '1' };
+  }
+
+  get finalizedParams(): Record<string, string> {
+    return this.mineOnly ? { mine: '1', finalized: '1' } : { finalized: '1' };
   }
 }

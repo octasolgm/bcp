@@ -55,7 +55,7 @@ public class CheckerController(
     [HttpPost("review/{runId:guid}/approve")]
     public async Task<IActionResult> Approve(Guid runId, [FromBody] ReviewRequest body, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "checker");
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "checker");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
@@ -89,7 +89,7 @@ public class CheckerController(
     [HttpPost("review/{runId:guid}/pull-back")]
     public async Task<IActionResult> PullBack(Guid runId, [FromBody] ReviewRequest body, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "checker");
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "checker");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
@@ -125,7 +125,7 @@ public class CheckerController(
     [HttpPost("review/{runId:guid}/recall")]
     public async Task<IActionResult> Recall(Guid runId, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "checker");
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "checker");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);

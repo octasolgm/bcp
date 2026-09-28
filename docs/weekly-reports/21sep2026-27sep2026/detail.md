@@ -139,3 +139,19 @@ On the new analysis page, a clause judged Compliant is now shown with no gap and
 Costing and margin
 
 Platform administrators can now set the price of an AI credit and the markup on the real AI cost in one place, with an example that updates as the numbers change. Each business shows its balance in dollars, what the AI cost us, what the business was charged and the margin we keep, and the AI usage page shows the same by business, by model and for every call, highlighting when the margin falls below a chosen level. Businesses see their credits and what those credits are worth in dollars, but never our provider cost. Because each call is charged from its real cost, a price increase at an AI provider is passed through automatically and the margin percentage stays the same. We also fixed two problems: AI calls made through OpenRouter were not being counted, and a saved credit price was not being applied. A written costing guide explains the rules and day-to-day management.
+
+Pricing groundwork
+
+We put together two internal documents covering how AI usage should be priced and metered going forward: one lays out the cost formulas, three possible product architectures (local-only, fully managed, or a mix), and example scenarios for Basic, Pro and Max plans; the other designs how managed usage would be measured, reserved and capped so no single customer or a provider price change can create an unexpected bill. No prices were set. These are ready for review when you want to make that decision.
+
+New analysis page fixes
+
+Found and fixed a real bug on the new analysis page: starting an analysis directly from that page (rather than reopening an existing one) could leave the page frozen, showing zero points and no progress, even though the analysis itself was running correctly in the background. The page now updates live as expected, and the progress indicator shows the real step under way (retrieving relevant policy text, then judging the clause) instead of a generic message.
+
+Action plans embedded into the reviewer's finalized document
+
+When a reviewer finalizes an analysis, the platform already produces a clean copy of each internal document reviewed. That copy now also has the approved corrective actions written directly into it, placed right next to the regulatory clause they address, with a clear note naming exactly which clause each one satisfies. This applies to PDF and Word documents.
+
+Deployment and hosting
+
+Published this week's changes to the hosted API and web app. Also fixed a server configuration issue that was preventing the API from starting after the new local document-processing features were deployed.

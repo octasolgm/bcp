@@ -64,6 +64,7 @@ export class NdAnalysisRunsComponent implements OnInit {
   loadError = '';
   mineOnly = false;
   correctionOnly = false;
+  finalizedOnly = false;
   pageTitle = 'Analysis runs';
   subtitle = 'All compliance analysis runs';
   page = 1;
@@ -80,6 +81,7 @@ export class NdAnalysisRunsComponent implements OnInit {
   submittingRunId: string | null = null;
   recallingRunId: string | null = null;
   stoppingId: string | null = null;
+  forceStatusRunId: string | null = null;
   historyOpen = false;
   historyRunId: string | null = null;
   historyRunName = '';
@@ -97,16 +99,21 @@ export class NdAnalysisRunsComponent implements OnInit {
           ? params.get('mine') !== '0'
           : params.get('mine') === '1';
       this.correctionOnly = params.get('correction') === '1';
+      this.finalizedOnly = params.get('finalized') === '1';
       this.pageTitle = this.correctionOnly
         ? 'Pending correction'
-        : this.mineOnly && role === 'maker'
-          ? 'All analysis'
-          : 'All analysis';
+        : this.finalizedOnly
+          ? 'Finalized'
+          : this.mineOnly && role === 'maker'
+            ? 'All analysis'
+            : 'All analysis';
       this.subtitle = this.correctionOnly
         ? 'Analyses sent back to the maker by checker or reviewer — edit and resubmit when ready'
-        : this.mineOnly && role === 'maker'
-          ? 'Runs you created'
-          : 'All compliance analysis runs across the workspace';
+        : this.finalizedOnly
+          ? 'Analyses the reviewer has finalized'
+          : this.mineOnly && role === 'maker'
+            ? 'Runs you created'
+            : 'All compliance analysis runs across the workspace';
       this.page = 1;
       void this.load();
     });
@@ -141,9 +148,18 @@ export class NdAnalysisRunsComponent implements OnInit {
             pageSize: this.pageSize,
             ...(this.mineOnly ? { mineOnly: true } : {}),
           }
-        : this.mineOnly
-          ? { mineOnly: true, ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize }
-          : { ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize },
+        : this.finalizedOnly
+          ? {
+              ndOnly: true,
+              summaryOnly: true,
+              status: 'reviewer_approved',
+              page: this.page,
+              pageSize: this.pageSize,
+              ...(this.mineOnly ? { mineOnly: true } : {}),
+            }
+          : this.mineOnly
+            ? { mineOnly: true, ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize }
+            : { ndOnly: true, summaryOnly: true, page: this.page, pageSize: this.pageSize },
     );
     if (res.success && res.data) {
       // Demo CBUAE seeding is handled server-side on list (with cooldown + dedupe).
@@ -179,8 +195,8 @@ export class NdAnalysisRunsComponent implements OnInit {
     return `${start}–${end} of ${this.totalCount}`;
   }
 
-  get workspaceTabActive(): 'all_analysis' | 'pending_correction' {
-    return this.correctionOnly ? 'pending_correction' : 'all_analysis';
+  get workspaceTabActive(): 'all_analysis' | 'pending_correction' | 'finalized' {
+    return this.correctionOnly ? 'pending_correction' : this.finalizedOnly ? 'finalized' : 'all_analysis';
   }
 
   get showWorkspaceTabs(): boolean {
@@ -192,6 +208,7 @@ export class NdAnalysisRunsComponent implements OnInit {
     const query = this.searchQuery.trim().toLowerCase();
     let list = this.allRuns.filter((run) => {
       if (this.correctionOnly && run.status.toLowerCase() !== 'pulled_back') return false;
+      if (this.finalizedOnly && run.status.toLowerCase() !== 'reviewer_approved') return false;
       if (query && !run.name.toLowerCase().includes(query) && !(run.makerName ?? '').toLowerCase().includes(query)) {
         return false;
       }
@@ -459,6 +476,24 @@ export class NdAnalysisRunsComponent implements OnInit {
     } else {
       this.toast.show(res.message ?? 'Stop signalled — refresh in a moment', 'warning');
       await this.load();
+    }
+  }
+
+  async forceRunStatus(payload: { run: AnalysisRunSummary; status: string }): Promise<void> {
+    const { run, status } = payload;
+    if (status === (run.status ?? '').toLowerCase()) return;
+    if (!confirm(`Set this run's status to "${status}"? This bypasses the normal maker/checker/reviewer chain.`)) {
+      return;
+    }
+    this.forceStatusRunId = run.id;
+    const res = await this.api.forceRunStatus(run.id, status);
+    this.forceStatusRunId = null;
+    if (res.success) {
+      this.toast.show('Status updated', 'success');
+      await this.load();
+      this.workspaceNav.requestNavBadgeRefresh();
+    } else {
+      this.toast.show(res.message ?? 'Could not change status', 'error');
     }
   }
 }

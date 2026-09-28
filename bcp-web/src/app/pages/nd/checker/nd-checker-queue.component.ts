@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { formatDate } from '../../../../lib/nd/utils';
 import {
   compareDateIso,
@@ -44,6 +45,7 @@ export class NdCheckerQueueComponent implements OnInit {
   private readonly auth = inject(NdAuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
+  private readonly workspaceNav = inject(NdWorkspaceNavService);
 
   showHistory = false;
   allRuns: AnalysisRunSummary[] = [];
@@ -151,6 +153,7 @@ export class NdCheckerQueueComponent implements OnInit {
     if (res.success) {
       this.toast.show('Recalled from reviewer', 'success');
       await this.load();
+      this.workspaceNav.requestNavBadgeRefresh();
     } else {
       this.toast.show(res.message ?? 'Could not recall this run', 'error');
     }
@@ -165,6 +168,7 @@ export class NdCheckerQueueComponent implements OnInit {
     if (res.success) {
       this.toast.show(target === 'maker' ? 'Sent back to maker' : 'Submitted to reviewer', 'success');
       await this.load();
+      this.workspaceNav.requestNavBadgeRefresh();
     } else {
       this.toast.show(res.message ?? 'Could not submit this run', 'error');
     }

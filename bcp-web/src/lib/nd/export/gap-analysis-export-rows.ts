@@ -112,6 +112,7 @@ function gapsForPoint(
   point: AnalysisPoint,
   block: ReferenceComplianceBlock | null,
   agreement: DualVerifyAgreement | undefined,
+  compliantNote?: string,
 ): string {
   const cap =
     point.finalActionPlan?.trim() ||
@@ -122,7 +123,7 @@ function gapsForPoint(
   if (fromCap) return fromCap;
 
   const severity = resolveAnalysisPointSeverity(point);
-  if (severity === 'compliant') return '';
+  if (severity === 'compliant') return compliantNote?.trim() ?? '';
 
   const fromBlock = gapsFromBlock(block);
   if (fromBlock) return fromBlock;
@@ -206,7 +207,10 @@ function resolveExportClauseNumber(
 }
 
 /** Build client-style gap analysis Excel rows from ND analysis points. */
-export function buildGapAnalysisExportRows(points: AnalysisPoint[]): GapAnalysisExcelRow[] {
+export function buildGapAnalysisExportRows(
+  points: AnalysisPoint[],
+  options: { /** Written in the gaps column of compliant rows (new analysis page only). */ compliantNote?: string } = {},
+): GapAnalysisExcelRow[] {
   const keyed: { key: string; row: GapAnalysisExcelRow }[] = [];
   const seen = new Set<string>();
 
@@ -251,7 +255,7 @@ export function buildGapAnalysisExportRows(points: AnalysisPoint[]): GapAnalysis
       policyExtract: policyExtract ? normalizeMultiline(policyExtract) : '',
       status: exportStatusLabel(severity),
       complyYesNo: complyYesNoFromSeverity(severity),
-      gapsIdentified: gapsForPoint(point, structured, report.agreement),
+      gapsIdentified: gapsForPoint(point, structured, report.agreement, options.compliantNote),
       confidence: resolveDisplayConfidence(point),
     };
 

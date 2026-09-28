@@ -795,6 +795,29 @@ export class NdShellComponent implements OnInit, OnDestroy {
     };
   }
 
+  /// Landing AI (legacy) and the four local OCR-engine pipelines (Tesseract/RapidOCR/Docling Light/
+  /// Docling GLM-OCR) each used to be their own top-level nav group — five entries just for internal
+  /// pipeline evaluation tools most people never touch. Collapsed into one "Other" group whose children
+  /// are those same links flattened together, each one prefixed with its engine so it's still clear
+  /// which is which. Still gated behind the same isDemoViewer() check at the call site below (per
+  /// CLAUDE.md: these stay invisible to demo accounts, same as before).
+  private otherEnginesGroup(role: string): NavGroup {
+    const prefixed = (group: NavGroup): NavItem[] =>
+      group.children.map((c) => ({ ...c, label: `${group.label.replace(' (Local)', '').replace(' (Legacy)', '')} — ${c.label}` }));
+    return {
+      id: 'other-engines',
+      label: 'Other',
+      icon: 'file',
+      children: [
+        ...prefixed(this.landingAiGroup(role)),
+        ...prefixed(this.localTesseractGroup()),
+        ...prefixed(this.localRapidOcrGroup()),
+        ...prefixed(this.localDoclingLightGroup()),
+        ...prefixed(this.localDoclingGlmGroup()),
+      ],
+    };
+  }
+
   private analysisGroup(role: string): NavGroup {
     const demo = this.auth.isDemoViewer();
     const children: NavItem[] = [
@@ -929,15 +952,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         const pending = this.pendingReviewsGroup(role);
         // Local OCR engine test pages (Tesseract/RapidOCR/Docling) are internal evaluation tools,
         // not something a demo/client viewer should see in the nav.
-        const localEngineGroups = this.auth.isDemoViewer()
-          ? []
-          : [
-              this.group(this.landingAiGroup(role)),
-              this.group(this.localTesseractGroup()),
-              this.group(this.localRapidOcrGroup()),
-              this.group(this.localDoclingLightGroup()),
-              this.group(this.localDoclingGlmGroup()),
-            ];
+        const localEngineGroups = this.auth.isDemoViewer() ? [] : [this.group(this.otherEnginesGroup(role))];
         return [
           overview,
           inbox,
@@ -950,15 +965,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
       }
       case 'maker': {
         const pending = this.pendingReviewsGroup(role);
-        const localEngineGroups = this.auth.isDemoViewer()
-          ? []
-          : [
-              this.group(this.landingAiGroup(role)),
-              this.group(this.localTesseractGroup()),
-              this.group(this.localRapidOcrGroup()),
-              this.group(this.localDoclingLightGroup()),
-              this.group(this.localDoclingGlmGroup()),
-            ];
+        const localEngineGroups = this.auth.isDemoViewer() ? [] : [this.group(this.otherEnginesGroup(role))];
         return [
           overview,
           inbox,

@@ -131,6 +131,13 @@ public static class NdWorkspaceSchemaBootstrap
               ADD COLUMN IF NOT EXISTS billed_usd NUMERIC(18,6) NULL;
             ALTER TABLE nd_workspaces
               ADD COLUMN IF NOT EXISTS ai_credit_low_threshold_pct INTEGER NOT NULL DEFAULT 20;
+            -- NULL = no cap (unlimited credit usage); a value is a hard ceiling on total credits
+            -- ever consumed by this workspace, independent of how many credits were topped up.
+            ALTER TABLE nd_workspaces
+              ADD COLUMN IF NOT EXISTS ai_credit_limit NUMERIC(18,4) NULL;
+            -- NULL = use the platform's default markup; a value overrides it for this workspace only.
+            ALTER TABLE nd_workspaces
+              ADD COLUMN IF NOT EXISTS ai_markup_override NUMERIC(18,4) NULL;
             """,
             ct);
 

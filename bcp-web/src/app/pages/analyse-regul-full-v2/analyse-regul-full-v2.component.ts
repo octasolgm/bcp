@@ -328,9 +328,38 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   }
 
   override async loadNdRunPoints(runId: string): Promise<void> {
+    // Must run BEFORE super — see ensureRunSelectedSnapshotLoaded's own comment. super.loadNdRunPoints
+    // itself (synchronously, while still processing the GET /nd/results response) already calls into
+    // the shared runScopeGovKeys()/ndRegulatoryPointsInScope() cycle, so the snapshot has to be in
+    // place before that call, not after it returns.
+    await this.ensureRunSelectedSnapshotLoaded(runId);
     await super.loadNdRunPoints(runId);
     this.validateRunEngine();
     await this.loadPipelineRetrievalPreviewAndFullPoints(runId);
+  }
+
+  /**
+   * V5 only, fixes a real stack overflow reproduced live on this page (not present on V3/V4's own
+   * flows): super.loadNdRunPoints() (GET /nd/results) never returns selectedPointsSnapshot, and a
+   * run started directly from this page — click "Run forward only" from a fresh selection, never
+   * reloaded via ?run= — never goes through attachToNdAnalysisRun either, which is the only place
+   * that ever sets it. Without a snapshot, the shared runScopeGovKeys() has nothing to key off; once
+   * the run leaves "draft" (which happens within the same tick the run starts) its checkbox-based
+   * fallback branch is gated shut too, leaving only its "ndRegulatoryPointsInScope()" branch — which
+   * calls straight back into runScopeGovKeys(), recursing on every change-detection cycle until the
+   * call stack overflows. Angular's zone swallows the exception into console.error instead of
+   * surfacing it, so nothing crashes visibly — the whole page just silently stops updating: Points
+   * stays at 0, the progress label never advances past its first render, and the result panel never
+   * shows a completed clause. Fetching the same lite run detail the cold-open path already reads
+   * this same field from, purely to populate it here too, avoids all of that without changing the
+   * shared method (or anything V3/V4 exercise) at all.
+   */
+  private async ensureRunSelectedSnapshotLoaded(runId: string): Promise<void> {
+    if (this.ndRunSelectedSnapshot) return;
+    const res = await this.ndApi.getAnalysisRun(runId, { lite: true });
+    const snapshot = (res.data as { run?: { selectedPointsSnapshot?: string } } | undefined)?.run
+      ?.selectedPointsSnapshot;
+    if (snapshot) this.ndRunSelectedSnapshot = snapshot;
   }
 
   /** Fires once per run attach, for BOTH an actively-processing run and an already-completed
@@ -457,5 +486,36 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       return 'Wrong workflow engine (V3). Stop this run and start fresh without ?run= in the URL.';
     }
     return super.runBlockedReason;
+  }
+
+  /** V5 only. V3/V4 share one generic "Forward judgment" label regardless of what the pipeline
+   * is actually doing — this page has real phases (retrieval, then judgment) reported by the
+   * backend in regulPipelinePhase, so show which one is in flight instead of the misleading
+   * always-"Forward judgment" text. */
+  override get forwardClauseProgressSummary(): string {
+    const total = this.analysingListTotal;
+    if (!total) return this.regulPipelinePhaseLabel();
+    const done = this.analysingListDone;
+    const counts = this.analysingStatusCounts;
+    const phaseLabel = this.regulPipelinePhaseLabel();
+    if (counts.running > 0 || counts.queued > 0) {
+      return `${phaseLabel} (${done}/${total} done · ${counts.running} running · ${counts.queued} queued)`;
+    }
+    return `${phaseLabel} (${done}/${total})`;
+  }
+
+  private regulPipelinePhaseLabel(): string {
+    switch ((this.ndRegulPipelinePhase || '').toLowerCase()) {
+      case 'parsing':
+        return 'Preparing documents';
+      case 'retrieval':
+        return 'Retrieving relevant policy sections';
+      case 'forward':
+        return 'Judging clauses against policy';
+      case 'done':
+        return 'Done';
+      default:
+        return 'Starting analysis';
+    }
   }
 }

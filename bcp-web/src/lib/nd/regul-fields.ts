@@ -18,6 +18,21 @@ export type RegulRunProgress = {
   regulLlmModel?: string | null;
 };
 
+/**
+ * Shown on the new analysis page (V5) for a Compliant clause, in the "Identified Gaps" column and beside the result.
+ * A compliant clause has no gap, but the reader must know the review looked at policy-level coverage only.
+ * (Requested by the client: the outcome should make the reader aware of the scope of the analysis. We state only
+ * the reviewed documents, not what exists elsewhere, because we cannot know that.)
+ */
+export function v5CompliantScopeNote(reviewedDocNames: string[] = []): string {
+  const names = reviewedDocNames.map((n) => n.trim()).filter(Boolean);
+  const basis = names.length
+    ? `This result is based only on the reviewed document${names.length > 1 ? 's' : ''}: ${names.join('; ')}.`
+    : 'This result is based only on the internal document(s) selected for this analysis.';
+  // Only what we know: which documents were reviewed. We do not claim that any other document exists.
+  return `No gap identified. ${basis} Other documents were not part of this review.`;
+}
+
 export function isRegulWorkflow(workflowEngine?: string | null): boolean {
   const engine = (workflowEngine ?? '').trim().toLowerCase();
   return engine === REGUL_PIPELINE_V3 || engine === REGUL_PIPELINE_FULL || engine === REGUL_PIPELINE_HYBRID_V5;

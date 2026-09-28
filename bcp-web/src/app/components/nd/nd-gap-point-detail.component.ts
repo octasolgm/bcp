@@ -135,6 +135,8 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   /** True once every gap under this point's clause number is compliant (a clause can have
    * several gaps, several points sharing one clause number). */
   @Input() clauseCompliant = false;
+  /** Scope note shown under a compliant result. Empty (nothing shown) unless the page sets it. */
+  @Input() complianceNote = '';
   @Input() snapshot: PointSnapshot | null = null;
   @Input() canEdit = false;
   @Input() editing = false;

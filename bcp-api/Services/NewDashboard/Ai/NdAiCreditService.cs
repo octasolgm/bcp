@@ -12,16 +12,20 @@ public sealed record NdAiCreditSummary(
     decimal Used,
     decimal Balance,
     int LowThresholdPct,
-    bool Unlimited)
+    bool Unlimited,
+    decimal? CreditLimit = null,
+    decimal? MarkupOverride = null)
 {
     /// <summary>Share of granted credits already spent (0-1). 0 when nothing was ever granted.</summary>
     public decimal UsedFraction => Granted <= 0 ? 0 : Math.Min(1m, Used / Granted);
 
-    public bool IsExhausted => !Unlimited && Balance <= 0;
+    /// <summary>Out of prepaid balance, or hit the workspace's hard credit-limit ceiling (if one is set).</summary>
+    public bool IsExhausted => (!Unlimited && Balance <= 0) || (CreditLimit.HasValue && Used >= CreditLimit.Value);
 
     /// <summary>At or past the warning line (80% by default) but not yet out of credits.</summary>
-    public bool IsLow => !Unlimited && !IsExhausted && Granted > 0
-        && UsedFraction >= (100 - LowThresholdPct) / 100m;
+    public bool IsLow => !IsExhausted && (
+        (!Unlimited && Granted > 0 && UsedFraction >= (100 - LowThresholdPct) / 100m)
+        || (CreditLimit is decimal limit && limit > 0 && Used / limit >= (100 - LowThresholdPct) / 100m));
 }
 
 /// <summary>
@@ -54,10 +58,10 @@ public sealed class NdAiCreditService(AppDbContext db, IMemoryCache cache)
             })
             .FirstOrDefaultAsync(ct);
 
-        var threshold = await db.NdWorkspaces.AsNoTracking()
+        var workspace = await db.NdWorkspaces.AsNoTracking()
             .Where(w => w.Id == workspaceId)
-            .Select(w => (int?)w.AiCreditLowThresholdPct)
-            .FirstOrDefaultAsync(ct) ?? 20;
+            .Select(w => new { w.AiCreditLowThresholdPct, w.AiCreditLimit, w.AiMarkupOverride })
+            .FirstOrDefaultAsync(ct);
 
         var granted = totals?.Granted ?? 0m;
         var used = -(totals?.Spent ?? 0m);
@@ -66,8 +70,10 @@ public sealed class NdAiCreditService(AppDbContext db, IMemoryCache cache)
             granted,
             used,
             granted - used,
-            threshold,
-            Unlimited: granted <= 0);
+            workspace?.AiCreditLowThresholdPct ?? 20,
+            Unlimited: granted <= 0 && workspace?.AiCreditLimit is null,
+            CreditLimit: workspace?.AiCreditLimit,
+            MarkupOverride: workspace?.AiMarkupOverride);
 
         cache.Set(BalanceCacheKey(workspaceId), summary, CacheTtl);
         return summary;

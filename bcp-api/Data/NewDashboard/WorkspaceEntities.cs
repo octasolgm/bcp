@@ -32,6 +32,14 @@ public class NdWorkspace
     [Column("ai_credit_low_threshold_pct")]
     public int AiCreditLowThresholdPct { get; set; } = 20;
 
+    /// <summary>Hard cap on total credits this workspace may ever consume. Null = no limit.</summary>
+    [Column("ai_credit_limit")]
+    public decimal? AiCreditLimit { get; set; }
+
+    /// <summary>Per-workspace markup override. Null = use the platform default markup.</summary>
+    [Column("ai_markup_override")]
+    public decimal? AiMarkupOverride { get; set; }
+
     [Column("created_by")]
     public Guid? CreatedBy { get; set; }
 

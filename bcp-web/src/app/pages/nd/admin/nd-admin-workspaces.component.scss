@@ -116,6 +116,40 @@
   }
 }
 
+.credit-limit-margin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface-subtle, var(--surface));
+}
+
+.credit-limit-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+
+  .inline-input {
+    min-width: 7rem;
+  }
+}
+
+.inline-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  font-weight: 400;
+
+  input[type='radio'] {
+    margin: 0;
+  }
+}
+
 .credit-models {
   display: flex;
   flex-wrap: wrap;

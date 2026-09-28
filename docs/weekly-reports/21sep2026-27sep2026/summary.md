@@ -113,3 +113,18 @@ Bug fixes
 Investigated, follow up pending
 - Retrieval does not surface the record-retention section or KYC refresh rules for clause 3.1; prompt size (about 16k-27k tokens per clause) is higher than planned
 - Free model (Nemotron) judged 3.1 compliant while the demo answer was partial; free models need a quality comparison before real use
+
+27 Sep 2026
+
+Tasks
+- Wrote two product docs for pricing decisions: unit-economics.md (cost formulas, three architectures, scenario tables) and quota-design.md (managed-unit metering, reservation, hard caps, provider budget alerts). No prices decided, both are inputs for a pricing decision.
+- Fixed the new analysis page (analyse-regul-full-v2) freezing on Points 0, a stale progress label and no live result when a run is started fresh from that page (not reopened via a link) — real bug, reproduced and fixed
+- New analysis page now shows the real pipeline phase in progress (retrieval, then judging) instead of a generic label
+- Built real embedding of resolved gap action plans into the reviewer's finalized ("corrected") copy of an internal document: PDF gets a new page inserted right after the cited page, DOCX gets a real paragraph inserted after the matched passage, each one naming the exact clause it closes
+- Deployed the API and web app to bcp-api-dev / bcp-web-dev
+
+Bug fixes
+- Fixed the API failing to start on Azure after 500.30 (local OCR/embedding pipeline needs a 64-bit server; switched App Service to 64-bit)
+
+Investigated, follow up pending
+- Whether the client's manual, procedures and process documents should be one combined analysis or a separate "procedures only" run to see procedure-specific gaps clearly — pending a short call with the client

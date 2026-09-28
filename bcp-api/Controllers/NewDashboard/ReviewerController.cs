@@ -56,7 +56,7 @@ public class ReviewerController(
     [HttpPost("review/{runId:guid}/finalize")]
     public async Task<IActionResult> Finalize(Guid runId, [FromBody] ReviewRequest body, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "reviewer");
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "reviewer");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
@@ -103,7 +103,7 @@ public class ReviewerController(
     [HttpPost("review/{runId:guid}/pull-back")]
     public async Task<IActionResult> PullBack(Guid runId, [FromBody] ReviewRequest body, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "reviewer");
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "reviewer");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
@@ -134,7 +134,7 @@ public class ReviewerController(
     [HttpPost("review/{runId:guid}/pull-back-to-maker")]
     public async Task<IActionResult> PullBackToMaker(Guid runId, [FromBody] ReviewRequest body, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "reviewer");
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "reviewer");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);

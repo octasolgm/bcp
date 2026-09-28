@@ -1338,13 +1338,13 @@ public class AnalysisRunsController(
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ReviewRequest? body,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "maker");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound();
         if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
-            return StatusCode(403);
+            return StatusCode(403, new { success = false, message = "You can only submit your own analysis runs." });
 
         if (run.Status is not ("completed" or "dual_verify_failed" or "landing_ai_complete"))
             return BadRequest(new { success = false, message = "Run is not ready for review." });
@@ -1376,7 +1376,7 @@ public class AnalysisRunsController(
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ReviewRequest? body,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "maker");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
@@ -1412,7 +1412,7 @@ public class AnalysisRunsController(
     [HttpPost("{id:guid}/recall")]
     public async Task<IActionResult> Recall(Guid id, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "maker");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
@@ -1532,6 +1532,58 @@ public class AnalysisRunsController(
         dashboardCache.Invalidate();
 
         return Ok(new { success = true, message = "Analysis run restored.", status = restored });
+    }
+
+    public record ForceStatusRequest(string Status, string? Comment);
+
+    /// <summary>
+    /// Every non-deleted stage in the maker/checker/reviewer lifecycle, in order — the only statuses a
+    /// super admin's manual override may set a run to.
+    /// </summary>
+    private static readonly string[] ForceableStatuses =
+    [
+        "draft", "completed", "submitted_for_review", "checker_approved", "reviewer_approved", "pulled_back",
+    ];
+
+    /// <summary>
+    /// Super-admin-only escape hatch: sets a run's workflow status directly, skipping the normal
+    /// maker→checker→reviewer preconditions (mirrors <see cref="Restore"/>'s pattern of writing the
+    /// status straight onto the run while still recording it in the audit history).
+    /// </summary>
+    [HttpPost("{id:guid}/force-status")]
+    public async Task<IActionResult> ForceStatus(Guid id, [FromBody] ForceStatusRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound();
+
+        var target = (body.Status ?? "").Trim().ToLowerInvariant();
+        if (!ForceableStatuses.Contains(target, StringComparer.OrdinalIgnoreCase))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = $"'{body.Status}' isn't a valid status. Use one of: {string.Join(", ", ForceableStatuses)}.",
+            });
+        }
+
+        var from = run.Status;
+        run.Status = target;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        if (target == "reviewer_approved") run.ReviewerFinalizedAt ??= DateTimeOffset.UtcNow;
+        if (target == "checker_approved") run.CheckerReviewedAt ??= DateTimeOffset.UtcNow;
+        if (target == "submitted_for_review") run.SubmittedToCheckerAt ??= DateTimeOffset.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        await RecordStatusChangeAsync(
+            db, id, from, target, profile!.Id,
+            string.IsNullOrWhiteSpace(body.Comment) ? "Status changed by super admin override." : body.Comment.Trim(),
+            ct);
+        dashboardCache.Invalidate();
+
+        return Ok(new { success = true, message = "Status updated.", status = run.Status });
     }
 
     /// <summary>Legacy analyses have no status column we own — hide via hidden_legacy_runs marker.</summary>

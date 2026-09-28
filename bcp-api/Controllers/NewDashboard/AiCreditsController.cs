@@ -144,6 +144,8 @@ public class AiCreditsController(
                 grantedUsd = Math.Round(summary.Granted * rate.UsdPerCredit, 4),
                 usedUsd = Math.Round(summary.Used * rate.UsdPerCredit, 4),
                 balanceUsd = Math.Round(summary.Balance * rate.UsdPerCredit, 4),
+                creditLimit = summary.CreditLimit,
+                creditLimitUsd = summary.CreditLimit.HasValue ? rate.UsdFor(summary.CreditLimit.Value) : (decimal?)null,
             },
         });
     }
@@ -175,13 +177,16 @@ public class AiCreditsController(
         var perCredit = rate.UsdPerCredit > 0 ? rate.UsdPerCredit : NdAiCreditPricing.Default.UsdPerCredit;
         var minMarginPct = await LoadMinMarginPctAsync(ct);
 
-        // Spend for this workspace with our cost and what the client was charged, side by side.
+        // Spend for this workspace with our cost and what the client was charged, side by side —
+        // grouped by model AND provider together, since the same model name can be reached through
+        // more than one provider (e.g. Claude direct vs. Claude via OpenRouter) at different cost.
         var byModel = await db.NdAiCreditLedger.IgnoreQueryFilters().AsNoTracking()
             .Where(e => e.TenantId == workspaceId && e.Kind == AiCreditKinds.Usage)
-            .GroupBy(e => e.Model ?? "unknown")
+            .GroupBy(e => new { Model = e.Model ?? "unknown", Provider = e.Provider ?? "unknown" })
             .Select(g => new
             {
-                Model = g.Key,
+                g.Key.Model,
+                g.Key.Provider,
                 Credits = -g.Sum(e => e.Credits),
                 Usd = g.Sum(e => e.UsdCost),
                 Billed = g.Sum(e => (decimal?)(e.BilledUsd ?? (-e.Credits * perCredit))) ?? 0m,
@@ -218,10 +223,15 @@ public class AiCreditsController(
                     marginUsd = totalBilled - totalCost,
                     marginPct = MarginPct(totalBilled, totalCost),
                     minMarginPct,
+                    creditLimit = summary.CreditLimit,
+                    creditLimitUsd = summary.CreditLimit.HasValue ? rate.UsdFor(summary.CreditLimit.Value) : (decimal?)null,
+                    markupOverride = summary.MarkupOverride,
+                    effectiveMarkup = summary.MarkupOverride ?? rate.Markup,
                 },
                 byModel = byModel.Select(m => new
                 {
                     model = m.Model,
+                    provider = m.Provider,
                     credits = m.Credits,
                     usd = m.Usd,
                     billedUsd = m.Billed,
@@ -243,6 +253,7 @@ public class AiCreditsController(
         [FromQuery] DateTimeOffset? from,
         [FromQuery] DateTimeOffset? to,
         [FromQuery] string? model,
+        [FromQuery] string? provider,
         [FromQuery] string? feature,
         [FromQuery] string? kind,
         [FromQuery] int take = 100,
@@ -258,6 +269,7 @@ public class AiCreditsController(
         if (from is DateTimeOffset f) q = q.Where(e => e.CreatedAt >= f);
         if (to is DateTimeOffset t) q = q.Where(e => e.CreatedAt <= t);
         if (!string.IsNullOrWhiteSpace(model)) q = q.Where(e => e.Model != null && e.Model.Contains(model));
+        if (!string.IsNullOrWhiteSpace(provider)) q = q.Where(e => e.Provider == provider);
         if (!string.IsNullOrWhiteSpace(feature)) q = q.Where(e => e.Feature == feature);
         if (AiCreditKinds.IsValid(kind)) q = q.Where(e => e.Kind == kind);
 
@@ -292,10 +304,24 @@ public class AiCreditsController(
             .ToListAsync(ct);
 
         var perModel = await spend
-            .GroupBy(e => e.Model ?? "unknown")
+            .GroupBy(e => new { Model = e.Model ?? "unknown", Provider = e.Provider ?? "unknown" })
             .Select(g => new
             {
-                Model = g.Key,
+                g.Key.Model,
+                g.Key.Provider,
+                Credits = -g.Sum(e => e.Credits),
+                Usd = g.Sum(e => e.UsdCost),
+                Billed = g.Sum(e => (decimal?)(e.BilledUsd ?? (-e.Credits * perCredit))) ?? 0m,
+                Calls = g.LongCount(),
+            })
+            .OrderByDescending(x => x.Credits)
+            .ToListAsync(ct);
+
+        var perProvider = await spend
+            .GroupBy(e => e.Provider ?? "unknown")
+            .Select(g => new
+            {
+                Provider = g.Key,
                 Credits = -g.Sum(e => e.Credits),
                 Usd = g.Sum(e => e.UsdCost),
                 Billed = g.Sum(e => (decimal?)(e.BilledUsd ?? (-e.Credits * perCredit))) ?? 0m,
@@ -352,12 +378,23 @@ public class AiCreditsController(
                 byModel = perModel.Select(m => new
                 {
                     model = m.Model,
+                    provider = m.Provider,
                     credits = m.Credits,
                     usd = m.Usd,
                     billedUsd = m.Billed,
                     marginUsd = m.Billed - m.Usd,
                     marginPct = MarginPct(m.Billed, m.Usd),
                     calls = m.Calls,
+                }),
+                byProvider = perProvider.Select(p => new
+                {
+                    provider = p.Provider,
+                    credits = p.Credits,
+                    usd = p.Usd,
+                    billedUsd = p.Billed,
+                    marginUsd = p.Billed - p.Usd,
+                    marginPct = MarginPct(p.Billed, p.Usd),
+                    calls = p.Calls,
                 }),
                 pricing = PricingView(rate, minMarginPct),
                 rows = rows.Select(r => new
@@ -389,6 +426,12 @@ public class AiCreditsController(
                         .Select(e => e.Model!)
                         .Distinct()
                         .OrderBy(m => m)
+                        .ToListAsync(ct),
+                    providers = await db.NdAiCreditLedger.IgnoreQueryFilters().AsNoTracking()
+                        .Where(e => e.Provider != null)
+                        .Select(e => e.Provider!)
+                        .Distinct()
+                        .OrderBy(p => p)
                         .ToListAsync(ct),
                     features = await db.NdAiCreditLedger.IgnoreQueryFilters().AsNoTracking()
                         .Where(e => e.Feature != null)
@@ -448,6 +491,64 @@ public class AiCreditsController(
         NdAiCreditService.InvalidateBalance(memoryCache, workspaceId);
 
         return Ok(new { success = true, data = new { lowThresholdPct = ws.AiCreditLowThresholdPct } });
+    }
+
+    public record CreditLimitRequest(decimal? CreditLimit);
+
+    /// <summary>Sets (or clears, with null) a hard ceiling on total credits this workspace may ever
+    /// consume — independent of how many credits were topped up.</summary>
+    [HttpPut("workspaces/{workspaceId:guid}/credit-limit")]
+    public async Task<IActionResult> SetCreditLimit(Guid workspaceId, [FromBody] CreditLimitRequest body, CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        if (body.CreditLimit is < 0)
+            return BadRequest(new { success = false, message = "Credit limit can't be negative." });
+
+        var ws = await db.NdWorkspaces.FirstOrDefaultAsync(w => w.Id == workspaceId, ct);
+        if (ws == null) return NotFound(new { success = false, message = "Workspace not found." });
+
+        ws.AiCreditLimit = body.CreditLimit;
+        ws.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        NdAiCreditService.InvalidateBalance(memoryCache, workspaceId);
+
+        var rate = await pricing.GetPricingAsync(ct);
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                creditLimit = ws.AiCreditLimit,
+                creditLimitUsd = ws.AiCreditLimit.HasValue ? rate.UsdFor(ws.AiCreditLimit.Value) : (decimal?)null,
+            },
+        });
+    }
+
+    public record MarkupRequest(decimal? Markup);
+
+    /// <summary>Sets (or clears, with null — falls back to the platform default) this workspace's own
+    /// markup, used for every AI cost billed to it from now on (past ledger lines keep the rate they
+    /// were written with).</summary>
+    [HttpPut("workspaces/{workspaceId:guid}/markup")]
+    public async Task<IActionResult> SetMarkup(Guid workspaceId, [FromBody] MarkupRequest body, CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        if (body.Markup is <= 0)
+            return BadRequest(new { success = false, message = "Markup must be a positive multiplier (e.g. 1.5 for +50%)." });
+
+        var ws = await db.NdWorkspaces.FirstOrDefaultAsync(w => w.Id == workspaceId, ct);
+        if (ws == null) return NotFound(new { success = false, message = "Workspace not found." });
+
+        ws.AiMarkupOverride = body.Markup;
+        ws.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        NdAiCreditService.InvalidateBalance(memoryCache, workspaceId);
+
+        return Ok(new { success = true, data = new { markupOverride = ws.AiMarkupOverride } });
     }
 
     /// <summary>What a ledger line was worth to the client: the value stored at write time, else credits at the

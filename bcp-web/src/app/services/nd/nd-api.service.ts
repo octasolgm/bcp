@@ -183,6 +183,11 @@ export type NdWorkspaceSummary = {
   description?: string | null;
   isDefault?: boolean;
   createdAt?: string;
+  aiCreditLowThresholdPct?: number;
+  /** Hard cap on total credits this workspace may ever consume. Null/undefined = no limit. */
+  aiCreditLimit?: number | null;
+  /** This workspace's own markup, overriding the platform default. Null/undefined = uses the default. */
+  aiMarkupOverride?: number | null;
 };
 
 export type NdWorkspaceListItem = {
@@ -216,6 +221,14 @@ export type NdAiCreditSummary = {
   marginUsd?: number;
   marginPct?: number;
   minMarginPct?: number;
+  /** Hard cap on total credits this workspace may ever consume. Null/undefined = no limit. */
+  creditLimit?: number | null;
+  /** What that credit limit is worth in real dollars, at the current price per credit. */
+  creditLimitUsd?: number | null;
+  /** This workspace's own markup override. Null/undefined = uses the platform default. */
+  markupOverride?: number | null;
+  /** The markup actually applied to this workspace's calls (override, else the platform default). */
+  effectiveMarkup?: number;
 };
 
 export type NdAiPricing = {
@@ -246,9 +259,20 @@ export type NdAiCreditEntry = {
   billedUsd?: number | null;
 };
 
+export type NdAiSpendRow = {
+  model: string;
+  provider: string;
+  credits: number;
+  usd: number;
+  billedUsd?: number;
+  marginUsd?: number;
+  marginPct?: number;
+  calls: number;
+};
+
 export type NdWorkspaceCredits = {
   summary: NdAiCreditSummary;
-  byModel: { model: string; credits: number; usd: number; billedUsd?: number; marginUsd?: number; calls: number }[];
+  byModel: NdAiSpendRow[];
   history: NdAiCreditEntry[];
 };
 
@@ -276,11 +300,13 @@ export type NdAiUsageReport = {
     calls: number;
     balance: number | null;
   }[];
-  byModel: { model: string; credits: number; usd: number; billedUsd?: number; marginUsd?: number; marginPct?: number; calls: number }[];
+  byModel: NdAiSpendRow[];
+  byProvider: { provider: string; credits: number; usd: number; billedUsd?: number; marginUsd?: number; marginPct?: number; calls: number }[];
   rows: (NdAiCreditEntry & { workspaceId: string | null; workspaceName?: string | null })[];
   filters: {
     workspaces: { id: string; name: string }[];
     models: string[];
+    providers: string[];
     features: string[];
   };
 };
@@ -636,6 +662,7 @@ export class NdApiService {
     from?: string;
     to?: string;
     model?: string;
+    provider?: string;
     feature?: string;
     kind?: string;
     take?: number;
@@ -673,6 +700,24 @@ export class NdApiService {
       'PUT',
       `/nd/ai-credits/workspaces/${workspaceId}/threshold`,
       { lowThresholdPct },
+    );
+  }
+
+  /** Sets a hard cap on total credits this workspace may ever consume. Pass null to remove the cap. */
+  setWorkspaceCreditLimit(workspaceId: string, creditLimit: number | null) {
+    return this.request<{ creditLimit: number | null; creditLimitUsd: number | null }>(
+      'PUT',
+      `/nd/ai-credits/workspaces/${workspaceId}/credit-limit`,
+      { creditLimit },
+    );
+  }
+
+  /** Sets this workspace's own markup, overriding the platform default. Pass null to use the default. */
+  setWorkspaceMarkup(workspaceId: string, markup: number | null) {
+    return this.request<{ markupOverride: number | null }>(
+      'PUT',
+      `/nd/ai-credits/workspaces/${workspaceId}/markup`,
+      { markup },
     );
   }
 
@@ -1665,6 +1710,14 @@ export class NdApiService {
 
   restoreAnalysisRun(runId: string) {
     return this.request<unknown>('POST', `/nd/analysis-runs/${runId}/restore`);
+  }
+
+  /** Super-admin-only: sets a run's workflow status directly, skipping the normal maker/checker/reviewer chain. */
+  forceRunStatus(runId: string, status: string, comment?: string) {
+    return this.request<{ status: string }>('POST', `/nd/analysis-runs/${runId}/force-status`, {
+      status,
+      comment,
+    });
   }
 
   getResults(runId: string) {

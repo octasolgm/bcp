@@ -35,6 +35,16 @@ public sealed record NdAiCreditPricing(decimal UsdPerCredit, decimal Markup)
         var markup = Markup <= 0 ? 1m : Markup;
         return Math.Round(usdCost * markup / perCredit, 4, MidpointRounding.AwayFromZero);
     }
+
+    /// <summary>Dollar value a given number of credits represents at this rate — what a credit limit or
+    /// top-up "is worth" to the workspace, shown next to the credit number so it reads in real money.</summary>
+    public decimal UsdFor(decimal credits) =>
+        Math.Round(credits * (UsdPerCredit <= 0 ? Default.UsdPerCredit : UsdPerCredit), 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>Same rate, with this workspace's own markup in place of the platform default (null = keep
+    /// the default, i.e. no override set).</summary>
+    public NdAiCreditPricing WithMarkupOverride(decimal? workspaceMarkup) =>
+        workspaceMarkup is decimal m && m > 0 ? this with { Markup = m } : this;
 }
 
 /// <summary>Reads (and caches) the credit rate and the fallback model price list from system settings.</summary>

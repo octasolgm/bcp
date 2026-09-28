@@ -254,6 +254,83 @@
                             </div>
                           </div>
 
+                          <div class="credit-limit-margin-grid">
+                            <form class="credit-limit-form" (ngSubmit)="saveCreditLimit(item)">
+                              <span class="muted">Credit limit for this business</span>
+                              <label class="inline-radio">
+                                <input
+                                  type="radio"
+                                  [checked]="creditLimitNoLimit"
+                                  (change)="creditLimitNoLimit = true"
+                                  name="creditLimitMode-{{ item.workspace.id }}"
+                                />
+                                No limit
+                              </label>
+                              <label class="inline-radio">
+                                <input
+                                  type="radio"
+                                  [checked]="!creditLimitNoLimit"
+                                  (change)="creditLimitNoLimit = false"
+                                  name="creditLimitMode-{{ item.workspace.id }}"
+                                />
+                                Set a limit
+                              </label>
+                              @if (!creditLimitNoLimit) {
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  class="inline-input"
+                                  [(ngModel)]="creditLimitInput"
+                                  name="creditLimitInput-{{ item.workspace.id }}"
+                                  placeholder="Max credits"
+                                  aria-label="Max credits"
+                                />
+                                <span class="muted">≈ ${{ creditLimitInputUsd | number: '1.2-2' }}</span>
+                              }
+                              <button type="submit" class="btn-secondary btn-sm" [disabled]="savingCreditLimit">
+                                {{ savingCreditLimit ? 'Saving…' : 'Save limit' }}
+                              </button>
+                            </form>
+
+                            <form class="credit-limit-form" (ngSubmit)="saveMarkup(item)">
+                              <span class="muted">Margin for this business</span>
+                              <label class="inline-radio">
+                                <input
+                                  type="radio"
+                                  [checked]="markupUseDefault"
+                                  (change)="markupUseDefault = true"
+                                  name="markupMode-{{ item.workspace.id }}"
+                                />
+                                Use default ({{ priceMarkup }}x)
+                              </label>
+                              <label class="inline-radio">
+                                <input
+                                  type="radio"
+                                  [checked]="!markupUseDefault"
+                                  (change)="markupUseDefault = false"
+                                  name="markupMode-{{ item.workspace.id }}"
+                                />
+                                Set specific margin
+                              </label>
+                              @if (!markupUseDefault) {
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0.1"
+                                  class="inline-input"
+                                  [(ngModel)]="markupInput"
+                                  name="markupInput-{{ item.workspace.id }}"
+                                  placeholder="e.g. 1.5"
+                                  aria-label="Markup multiplier"
+                                />
+                              }
+                              <button type="submit" class="btn-secondary btn-sm" [disabled]="savingMarkup">
+                                {{ savingMarkup ? 'Saving…' : 'Save margin' }}
+                              </button>
+                            </form>
+                          </div>
+
                           <form class="credit-topup" (ngSubmit)="handleTopUp(item)">
                             <input
                               type="number"
@@ -283,9 +360,9 @@
                           @if (c.byModel.length) {
                             <div class="credit-models">
                               <span class="muted">Spend by model:</span>
-                              @for (m of c.byModel; track m.model) {
+                              @for (m of c.byModel; track m.model + m.provider) {
                                 <span class="credit-model">
-                                  {{ m.model }} · {{ m.credits | number: '1.0-2' }} cr
+                                  {{ m.model }} <span class="muted">via {{ m.provider }}</span> · {{ m.credits | number: '1.0-2' }} cr
                                   <span class="muted">(cost ${{ m.usd | number: '1.2-2' }} · billed ${{ (m.billedUsd ?? 0) | number: '1.2-2' }}, {{ m.calls }} calls)</span>
                                 </span>
                               }

@@ -59,6 +59,9 @@
         Policy extract
         <span class="ai-tag">AI extracted</span>
       </p>
+      @if (complianceNote && point.finalStatus === 'compliant') {
+        <p class="compliance-note" role="note">{{ complianceNote }}</p>
+      }
       @if (documentReference) {
         <p class="document-ref-line">
           <span class="document-ref-label">Document reference</span>

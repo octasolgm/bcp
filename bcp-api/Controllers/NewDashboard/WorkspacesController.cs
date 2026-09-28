@@ -253,6 +253,9 @@ public partial class WorkspacesController(
         isActive = w.IsActive,
         isDefault = w.Id == WorkspaceScope.DefaultWorkspaceId,
         createdAt = w.CreatedAt,
+        aiCreditLowThresholdPct = w.AiCreditLowThresholdPct,
+        aiCreditLimit = w.AiCreditLimit,
+        aiMarkupOverride = w.AiMarkupOverride,
     };
 
     internal static string Slugify(string raw)

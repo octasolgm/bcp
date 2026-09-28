@@ -149,7 +149,85 @@ public abstract class NdControllerBase : ControllerBase
             return (null!, StatusCode(403, new { success = false, message = "Account deactivated" }));
 
         if (allowedRoles.Length > 0 && !allowedRoles.Contains(profile.Role, StringComparer.OrdinalIgnoreCase))
-            return (null!, StatusCode(403, new { success = false, message = "Forbidden" }));
+        {
+            return (null!, StatusCode(403, new
+            {
+                success = false,
+                message = ForbiddenRoleMessage(profile.Role, allowedRoles),
+            }));
+        }
+
+        if (WorkspaceScope.State is { WorkspaceIsActive: false } && !IsPlatformAdmin(profile))
+            return (null!, StatusCode(403, new { success = false, message = "Your workspace has been deactivated. Contact your administrator." }));
+
+        return (profile, null);
+    }
+
+    /// <summary>
+    /// Review-workflow role order: a reviewer can also do everything a checker or maker can, and a
+    /// checker can also do everything a maker can — only maker sits alone. Ranked so call sites express
+    /// "checker or higher" as a single minimum role instead of listing every role at/above it by hand.
+    /// </summary>
+    private static readonly Dictionary<string, int> ReviewRoleRank = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["maker"] = 1,
+        ["checker"] = 2,
+        ["reviewer"] = 3,
+        ["super_admin"] = 4,
+    };
+
+    protected static string RoleLabel(string? role) => role?.Trim().ToLowerInvariant() switch
+    {
+        "maker" => "Maker",
+        "checker" => "Checker",
+        "reviewer" => "Reviewer",
+        "super_admin" => "Super Admin",
+        _ => string.IsNullOrWhiteSpace(role) ? "Unknown" : role,
+    };
+
+    private static string ForbiddenRoleMessage(string actualRole, string[] allowedRoles)
+    {
+        var lowestAllowed = allowedRoles
+            .OrderBy(r => ReviewRoleRank.GetValueOrDefault(r, int.MaxValue))
+            .FirstOrDefault();
+        return lowestAllowed != null && ReviewRoleRank.ContainsKey(lowestAllowed)
+            ? $"This action needs the {RoleLabel(lowestAllowed)} role or higher. Your role is {RoleLabel(actualRole)}."
+            : "Forbidden";
+    }
+
+    /// <summary>
+    /// Same checks as <see cref="RequireAuthAsync"/>, but role-ranked: any role at or above
+    /// <paramref name="minRole"/> in the maker &lt; checker &lt; reviewer &lt; super_admin order passes.
+    /// Use this for maker/checker/reviewer workflow actions instead of listing roles by hand, so a
+    /// reviewer can approve like a checker or submit like a maker without every call site tracking it.
+    /// </summary>
+    protected async Task<(NdProfile Profile, IActionResult? Error)> RequireRoleAtLeastAsync(
+        AppDbContext db,
+        SupabaseJwtValidator jwt,
+        CancellationToken ct,
+        string minRole)
+    {
+        var user = ValidateJwt(jwt);
+        if (user == null)
+            return (null!, Unauthorized(new { success = false, message = "Unauthorized" }));
+
+        var profile = await LoadAuthProfileAsync(db, user.UserId, ct);
+        if (profile == null)
+            return (null!, Unauthorized(new { success = false, message = "Profile not found" }));
+
+        if (!profile.IsActive)
+            return (null!, StatusCode(403, new { success = false, message = "Account deactivated" }));
+
+        var required = ReviewRoleRank.GetValueOrDefault(minRole, int.MaxValue);
+        var actual = ReviewRoleRank.GetValueOrDefault(profile.Role, 0);
+        if (actual < required)
+        {
+            return (null!, StatusCode(403, new
+            {
+                success = false,
+                message = $"This action needs the {RoleLabel(minRole)} role or higher. Your role is {RoleLabel(profile.Role)}.",
+            }));
+        }
 
         if (WorkspaceScope.State is { WorkspaceIsActive: false } && !IsPlatformAdmin(profile))
             return (null!, StatusCode(403, new { success = false, message = "Your workspace has been deactivated. Contact your administrator." }));

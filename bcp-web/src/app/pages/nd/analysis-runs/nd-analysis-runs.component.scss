@@ -126,13 +126,13 @@
 
 .row-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.45rem;
   align-items: center;
   justify-content: flex-end;
   width: 100%;
-  min-width: max-content;
-  white-space: nowrap;
+  max-width: 15rem;
+  margin-left: auto;
 }
 
 .row-action-link,

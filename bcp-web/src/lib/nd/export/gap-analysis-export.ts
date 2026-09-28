@@ -44,6 +44,8 @@ export type GapAnalysisExcelOptions = {
   clauseByPointId?: Map<string, string>;
   /** "provider / model" that judged the run; when set the gap sheet gets a trailing "AI model" column. */
   llmLabel?: string;
+  /** Written in the gaps column of compliant rows (new analysis page only). */
+  compliantNote?: string;
   selection?: GapAnalysisExportSelection;
 };
 
@@ -316,7 +318,7 @@ export async function exportRegulGapAnalysisExcelFromPoints(
   requirementColumnHeader = REGULATORY_CLAUSE_HEADER,
   options: GapAnalysisExcelOptions = {},
 ): Promise<void> {
-  const rows = buildGapAnalysisExportRows(points);
+  const rows = buildGapAnalysisExportRows(points, { compliantNote: options.compliantNote });
   if (!rows.length) return;
   const docName = options.regulationDocumentName ?? '';
   const llmLabel = options.llmLabel?.trim() ?? '';
@@ -353,7 +355,7 @@ export async function exportGapAnalysisExcelFromPoints(
   requirementColumnHeader = REGULATORY_CLAUSE_HEADER,
   options: GapAnalysisExcelOptions = {},
 ): Promise<void> {
-  const rows = buildGapAnalysisExportRows(points);
+  const rows = buildGapAnalysisExportRows(points, { compliantNote: options.compliantNote });
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
   const colWidths = buildColWidths(includePhases);

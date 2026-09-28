@@ -41,6 +41,13 @@
           }
         </select>
 
+        <select class="filter-select" [(ngModel)]="provider" (ngModelChange)="onFilterChange()" aria-label="Filter by provider">
+          <option value="">All providers</option>
+          @for (p of report?.filters?.providers ?? []; track p) {
+            <option [value]="p">{{ providerLabel(p) }}</option>
+          }
+        </select>
+
         <select class="filter-select" [(ngModel)]="feature" (ngModelChange)="onFilterChange()" aria-label="Filter by activity">
           <option value="">All activity</option>
           @for (f of report?.filters?.features ?? []; track f) {
@@ -148,11 +155,13 @@
 
         @if (report.byModel.length) {
           <h2 class="section-heading">By model</h2>
+          <p class="muted section-hint">Which LLM was used, and through which provider — the same model can be reached through more than one provider at a different cost.</p>
           <div class="card-surface table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Model</th>
+                  <th>Provider</th>
                   <th class="num">Credits</th>
                   <th class="num">Our cost</th>
                   <th class="num">Billed to client</th>
@@ -161,9 +170,10 @@
                 </tr>
               </thead>
               <tbody>
-                @for (m of report.byModel; track m.model) {
+                @for (m of report.byModel; track m.model + m.provider) {
                   <tr>
                     <td>{{ m.model }}</td>
+                    <td class="muted">{{ providerLabel(m.provider) }}</td>
                     <td class="num">{{ m.credits | number: '1.0-2' }}</td>
                     <td class="num muted">${{ m.usd | number: '1.2-2' }}</td>
                     <td class="num">${{ (m.billedUsd ?? 0) | number: '1.2-2' }}</td>
@@ -171,6 +181,38 @@
                       ${{ (m.marginUsd ?? 0) | number: '1.2-2' }} <span class="muted">({{ (m.marginPct ?? 0) | number: '1.0-0' }}%)</span>
                     </td>
                     <td class="num muted">{{ m.calls | number }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @if (report.byProvider.length) {
+          <h2 class="section-heading">By provider</h2>
+          <div class="card-surface table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th class="num">Credits</th>
+                  <th class="num">Our cost</th>
+                  <th class="num">Billed to client</th>
+                  <th class="num">Margin</th>
+                  <th class="num">Calls</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of report.byProvider; track p.provider) {
+                  <tr>
+                    <td>{{ providerLabel(p.provider) }}</td>
+                    <td class="num">{{ p.credits | number: '1.0-2' }}</td>
+                    <td class="num muted">${{ p.usd | number: '1.2-2' }}</td>
+                    <td class="num">${{ (p.billedUsd ?? 0) | number: '1.2-2' }}</td>
+                    <td class="num" [class.margin-low]="marginIsLow(p.marginPct, report.totals.minMarginPct)">
+                      ${{ (p.marginUsd ?? 0) | number: '1.2-2' }} <span class="muted">({{ (p.marginPct ?? 0) | number: '1.0-0' }}%)</span>
+                    </td>
+                    <td class="num muted">{{ p.calls | number }}</td>
                   </tr>
                 }
               </tbody>
@@ -193,6 +235,7 @@
                   <th>Business</th>
                   <th>Type</th>
                   <th>Model</th>
+                  <th>Provider</th>
                   <th>Activity</th>
                   <th class="num">Credits</th>
                   <th class="num">Our cost</th>
@@ -206,6 +249,7 @@
                     <td>{{ r.workspaceName ?? '-' }}</td>
                     <td>{{ kindLabel(r.kind) }}</td>
                     <td class="muted">{{ r.model ?? '-' }}</td>
+                    <td class="muted">{{ r.kind === 'usage' ? providerLabel(r.provider) : '-' }}</td>
                     <td class="muted">{{ r.kind === 'usage' ? featureLabel(r.feature) : (r.note || (r.by ? 'by ' + r.by : '-')) }}</td>
                     <td class="num" [class.credit-plus]="r.credits > 0">
                       {{ r.credits > 0 ? '+' : '' }}{{ r.credits | number: '1.0-2' }}

@@ -1,13 +1,25 @@
 import type { AnalysisRunSummary } from './types';
 import { analysisRunNeedsExecutionView, isLegacyAnalysisRun } from './run-links';
 
+/**
+ * Review-workflow role order, mirroring the backend's RequireRoleAtLeastAsync: a reviewer can
+ * also do everything a checker or maker can, and a checker can also do everything a maker can.
+ */
+const ROLE_RANK: Record<string, number> = { maker: 1, checker: 2, reviewer: 3, super_admin: 4 };
+
+export function roleAtLeast(role: string | null | undefined, min: string): boolean {
+  const actual = ROLE_RANK[(role ?? '').toLowerCase()] ?? 0;
+  const required = ROLE_RANK[min] ?? Number.POSITIVE_INFINITY;
+  return actual >= required;
+}
+
 export function canSendRunForReview(
   run: AnalysisRunSummary,
   role: string | null | undefined,
 ): boolean {
   if (analysisRunNeedsExecutionView(run)) return false;
   if (isLegacyAnalysisRun(run)) return false;
-  if (role !== 'maker' && role !== 'super_admin') return false;
+  if (!roleAtLeast(role, 'maker')) return false;
   return ['completed', 'dual_verify_failed', 'landing_ai_complete', 'pulled_back'].includes(
     (run.status ?? '').toLowerCase(),
   );
@@ -15,18 +27,17 @@ export function canSendRunForReview(
 
 /**
  * Whether the current role can pull a run back to itself before the next role has acted
- * on it. Role-based, not ownership-based: any maker can recall a run sitting with the
- * checker, any checker can recall one sitting with the reviewer, and super_admin can
- * always recall regardless of who currently holds it.
+ * on it. Role-based, not ownership-based: any maker (or higher) can recall a run sitting with
+ * the checker, any checker (or higher) can recall one sitting with the reviewer.
  */
 export function canRecallRun(run: AnalysisRunSummary, role: string | null | undefined): boolean {
   if (isLegacyAnalysisRun(run)) return false;
   const status = (run.status ?? '').toLowerCase();
   if (status === 'submitted_for_review') {
-    return role === 'maker' || role === 'super_admin';
+    return roleAtLeast(role, 'maker');
   }
   if (status === 'checker_approved') {
-    return role === 'checker' || role === 'super_admin';
+    return roleAtLeast(role, 'checker');
   }
   return false;
 }
@@ -37,8 +48,8 @@ export function canReviewRun(
 ): boolean {
   if (isLegacyAnalysisRun(run)) return false;
   const status = (run.status ?? '').toLowerCase();
-  if (role === 'checker' && status === 'submitted_for_review') return true;
-  if (role === 'reviewer' && status === 'checker_approved') return true;
+  if (status === 'submitted_for_review') return roleAtLeast(role, 'checker');
+  if (status === 'checker_approved') return roleAtLeast(role, 'reviewer');
   return false;
 }
 

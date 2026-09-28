@@ -34,6 +34,7 @@ export class NdAdminAiUsageComponent implements OnInit {
   customFrom = '';
   customTo = '';
   model = '';
+  provider = '';
   feature = '';
   kind = '';
 
@@ -50,7 +51,7 @@ export class NdAdminAiUsageComponent implements OnInit {
   }
 
   get hasFilters(): boolean {
-    return !!(this.workspaceId || this.model || this.feature || this.kind) || this.period !== '30d';
+    return !!(this.workspaceId || this.model || this.provider || this.feature || this.kind) || this.period !== '30d';
   }
 
   private range(): { from?: string; to?: string } {
@@ -82,6 +83,7 @@ export class NdAdminAiUsageComponent implements OnInit {
       from,
       to,
       model: this.model || undefined,
+      provider: this.provider || undefined,
       feature: this.feature || undefined,
       kind: this.kind || undefined,
     });
@@ -107,9 +109,40 @@ export class NdAdminAiUsageComponent implements OnInit {
     this.customFrom = '';
     this.customTo = '';
     this.model = '';
+    this.provider = '';
     this.feature = '';
     this.kind = '';
     await this.onFilterChange();
+  }
+
+  /** Human label for a ledger provider value — clarifies which real service it maps to. */
+  providerLabel(provider: string | null | undefined): string {
+    switch (provider) {
+      case 'openrouter':
+        return 'OpenRouter';
+      case 'anthropic':
+        return 'Anthropic (direct)';
+      case 'openai':
+        return 'OpenAI (direct)';
+      case 'azure-openai':
+        return 'Azure OpenAI';
+      case 'google':
+        return 'Google (direct)';
+      case 'xai':
+        return 'xAI (Grok)';
+      case 'deepseek':
+        return 'DeepSeek';
+      case 'moonshot':
+        return 'Moonshot (Kimi)';
+      case 'zhipu':
+        return 'Zhipu (GLM)';
+      case 'qwen':
+        return 'Alibaba (Qwen)';
+      case 'azure-document-intelligence':
+        return 'Azure Document Intelligence (OCR)';
+      default:
+        return provider ?? 'Unknown';
+    }
   }
 
   async filterToWorkspace(id: string | null | undefined): Promise<void> {

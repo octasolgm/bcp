@@ -2,6 +2,8 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
+using Reguliq.Api.Services.NewDashboard.CorrectedDocs;
+using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Services.NewDashboard;
 
@@ -10,10 +12,19 @@ namespace Reguliq.Api.Services.NewDashboard;
 /// run examined, with the gaps treated as addressed. The corrected file is stored as
 /// the next version of the same document so the library shows v1 → v2 for that title.
 ///
-/// The generation itself is simulated: the new version points at the same stored file
-/// as the original, and carries a note recording which run produced it.
+/// When the run has resolved gaps whose action plans were traced back to this document (see
+/// <see cref="NdActionPlanEmbedResolver"/>), the copy's actual file content is rewritten to embed
+/// each one as a real note next to where its evidence was found (<see cref="NdCorrectedPdfEmbedder"/>,
+/// <see cref="NdCorrectedDocxEmbedder"/>). A document with nothing resolved to embed, or a file type
+/// neither embedder handles, still gets the original placeholder behavior: the copy points at the same
+/// stored file as the source.
 /// </summary>
-public class NdCorrectedDocumentService(AppDbContext db, ILogger<NdCorrectedDocumentService> logger)
+public class NdCorrectedDocumentService(
+    AppDbContext db,
+    NdActionPlanEmbedResolver embedResolver,
+    SupabaseStorageService storage,
+    NdStoredDocumentUploadService uploadPrep,
+    ILogger<NdCorrectedDocumentService> logger)
 {
     public record CorrectedVersion(Guid DocumentId, string Title, int VersionNumber);
 
@@ -36,6 +47,9 @@ public class NdCorrectedDocumentService(AppDbContext db, ILogger<NdCorrectedDocu
             .Where(d => docIds.Contains(d.Id))
             .ToListAsync(ct);
 
+        var embedJobs = await embedResolver.ResolveForRunAsync(runId, ct);
+        var jobsByDocId = embedJobs.ToDictionary(j => j.StoredDocumentId);
+
         foreach (var source in sources)
         {
             var siblings = await db.StoredDocuments
@@ -47,10 +61,14 @@ public class NdCorrectedDocumentService(AppDbContext db, ILogger<NdCorrectedDocu
                 continue;
 
             var nextVersion = siblings.Max(d => d.VersionNumber) + 1;
+            var embedded = jobsByDocId.TryGetValue(source.Id, out var job)
+                ? await TryEmbedActionPlansAsync(source, job, ct)
+                : null;
+
             var copy = new StoredDocument
             {
                 Title = source.Title,
-                OriginalFileName = source.OriginalFileName,
+                OriginalFileName = VersionedFileName(embedded?.OriginalFileName ?? source.OriginalFileName, nextVersion),
                 FileType = source.FileType,
                 Category = source.Category,
                 FilterKey = source.FilterKey,
@@ -59,19 +77,19 @@ public class NdCorrectedDocumentService(AppDbContext db, ILogger<NdCorrectedDocu
                 VersionNumber = nextVersion,
                 Status = "review-due",
                 Pages = source.Pages,
-                SizeBytes = source.SizeBytes,
-                ContentType = source.ContentType,
+                SizeBytes = embedded?.SizeBytes ?? source.SizeBytes,
+                ContentType = embedded?.ContentType ?? source.ContentType,
                 StorageBucket = source.StorageBucket,
-                StoragePath = source.StoragePath,
+                StoragePath = embedded?.StoragePath ?? source.StoragePath,
                 SourceStoragePath = source.SourceStoragePath,
-                FileHash = source.FileHash,
+                FileHash = embedded?.FileHash ?? source.FileHash,
                 WorkspaceId = source.WorkspaceId,
                 TenantId = source.TenantId,
                 UploadedBy = actorId,
                 // The corrected copy has not been through Landing AI yet.
                 ParseStatus = "pending",
                 SectionExtractStatus = "pending",
-                HistoryJson = BuildHistory(source, runId, nextVersion),
+                HistoryJson = BuildHistory(source, runId, nextVersion, embedded?.Job),
             };
 
             db.StoredDocuments.Add(copy);
@@ -89,9 +107,77 @@ public class NdCorrectedDocumentService(AppDbContext db, ILogger<NdCorrectedDocu
         return created;
     }
 
+    /// <summary>
+    /// Marks a downloaded filename with its corrected-copy version, e.g. "AML Manual.pdf" becomes
+    /// "AML Manual (v2).pdf" — otherwise the download name is byte-identical to the source's, and the
+    /// reviewer has no way to tell v1 and v2 apart once the file lands in Downloads.
+    /// </summary>
+    private static string VersionedFileName(string? originalFileName, int version)
+    {
+        if (string.IsNullOrWhiteSpace(originalFileName)) return originalFileName ?? "";
+        var ext = Path.GetExtension(originalFileName);
+        var stem = Path.GetFileNameWithoutExtension(originalFileName);
+        return $"{stem} (v{version}){ext}";
+    }
+
+    private sealed record EmbeddedFile(
+        string StoragePath,
+        string OriginalFileName,
+        string ContentType,
+        string FileHash,
+        long SizeBytes,
+        NdActionPlanEmbedJob Job);
+
+    /// <summary>
+    /// Downloads the source file, writes its resolved action-plan notes into a real copy (PDF pages
+    /// inserted after the cited page; DOCX paragraphs inserted after the matched text), and uploads the
+    /// result as a brand new stored file — the corrected copy no longer points at the source's own
+    /// storage path once this succeeds. Returns null (falls back to the original placeholder behavior)
+    /// when the file type isn't PDF/DOCX, storage isn't configured, or anything about the download,
+    /// embed or upload fails — a broken embed must never block the review from finalizing.
+    /// </summary>
+    private async Task<EmbeddedFile?> TryEmbedActionPlansAsync(
+        StoredDocument source, NdActionPlanEmbedJob job, CancellationToken ct)
+    {
+        if (!storage.IsConfigured || string.IsNullOrWhiteSpace(source.StoragePath)) return null;
+        var fileType = (source.FileType ?? "").Trim().ToUpperInvariant();
+        if (fileType is not ("PDF" or "DOCX" or "DOC")) return null;
+
+        try
+        {
+            var original = await storage.DownloadAsync(source.StoragePath, ct);
+            var embeddedBytes = fileType == "PDF"
+                ? NdCorrectedPdfEmbedder.Embed(original, job.Targets)
+                : NdCorrectedDocxEmbedder.Embed(original, job.Targets);
+
+            var prepared = await uploadPrep.PrepareAsync(
+                embeddedBytes,
+                source.OriginalFileName,
+                source.ContentType,
+                "documents/nd/corrected",
+                ct);
+
+            return new EmbeddedFile(
+                prepared.StoragePath,
+                prepared.OriginalFileName,
+                prepared.ContentType,
+                prepared.FileHash,
+                prepared.SizeBytes,
+                job);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Could not embed resolved action plans into document {DocumentId} for run — corrected copy will point at the original file instead.",
+                source.Id);
+            return null;
+        }
+    }
+
     private static string RunMarker(Guid runId) => $"\"generatedFromRunId\":\"{runId}\"";
 
-    private static string BuildHistory(StoredDocument source, Guid runId, int version)
+    private static string BuildHistory(StoredDocument source, Guid runId, int version, NdActionPlanEmbedJob? embeddedJob = null)
     {
         var entries = new List<JsonElement>();
         try
@@ -109,9 +195,12 @@ public class NdCorrectedDocumentService(AppDbContext db, ILogger<NdCorrectedDocu
         {
             version = $"v{version}",
             action = "corrected_copy_generated",
-            note = "Corrected copy generated on final review, with identified gaps treated as addressed.",
+            note = embeddedJob is { Targets.Count: > 0 }
+                ? $"Corrected copy generated on final review, with {embeddedJob.Targets.Count} resolved action plan(s) embedded at their referenced clause(s)."
+                : "Corrected copy generated on final review, with identified gaps treated as addressed.",
             generatedFromRunId = runId.ToString(),
             generatedFromDocumentId = source.Id.ToString(),
+            embeddedClauses = embeddedJob?.Targets.Select(t => t.ClauseNo).Distinct().ToList() ?? [],
             at = DateTimeOffset.UtcNow,
         });
         entries.Add(entry);

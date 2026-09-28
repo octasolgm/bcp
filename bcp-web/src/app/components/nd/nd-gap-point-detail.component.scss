@@ -1926,3 +1926,13 @@
   color: var(--text-muted);
   white-space: pre-wrap;
 }
+
+.compliance-note {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--text-muted, inherit);
+  background: var(--surface-muted, rgba(127, 127, 127, 0.08));
+  border-radius: 6px;
+}

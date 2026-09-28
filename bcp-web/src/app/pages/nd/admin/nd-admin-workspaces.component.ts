@@ -62,6 +62,14 @@ export class NdAdminWorkspacesComponent implements OnInit {
   topUpNote = '';
   toppingUp = false;
 
+  /** Credit-limit + margin form for whichever workspace's credits panel is open. */
+  creditLimitNoLimit = true;
+  creditLimitInput: number | null = null;
+  savingCreditLimit = false;
+  markupUseDefault = true;
+  markupInput: number | null = null;
+  savingMarkup = false;
+
   /** AI credit price form (platform admin). */
   priceUsdPerCredit = 0.01;
   priceMarkup = 1;
@@ -161,15 +169,22 @@ export class NdAdminWorkspacesComponent implements OnInit {
   creditLabel(item: NdWorkspaceListItem): string {
     const c = this.creditsOf(item);
     if (!c) return '-';
+    const limit = c.summary.creditLimit;
+    if (limit != null) {
+      return c.summary.isExhausted
+        ? `Limit reached (${limit.toFixed(0)})`
+        : `${c.summary.used.toFixed(0)} / ${limit.toFixed(0)} used`;
+    }
     if (c.summary.unlimited) return 'No limit';
     return `${c.summary.balance.toFixed(2)} left`;
   }
 
   creditState(item: NdWorkspaceListItem): 'ok' | 'low' | 'empty' | 'unlimited' {
     const c = this.creditsOf(item);
-    if (!c || c.summary.unlimited) return 'unlimited';
+    if (!c) return 'unlimited';
     if (c.summary.isExhausted) return 'empty';
     if (c.summary.isLow) return 'low';
+    if (c.summary.unlimited && c.summary.creditLimit == null) return 'unlimited';
     return 'ok';
   }
 
@@ -181,11 +196,58 @@ export class NdAdminWorkspacesComponent implements OnInit {
     this.creditsFor = item.workspace.id;
     this.topUpAmount = null;
     this.topUpNote = '';
+    this.creditLimitNoLimit = item.workspace.aiCreditLimit == null;
+    this.creditLimitInput = item.workspace.aiCreditLimit ?? null;
+    this.markupUseDefault = item.workspace.aiMarkupOverride == null;
+    this.markupInput = item.workspace.aiMarkupOverride ?? null;
     this.creditsLoading = true;
     const res = await this.api.getWorkspaceAiCredits(item.workspace.id);
     this.creditsLoading = false;
     if (res.success && res.data) this.credits.set(item.workspace.id, res.data);
     else this.error = res.message ?? 'Could not load credits';
+  }
+
+  /** Dollar value of the credit-limit form's current number, at the platform's price per credit. */
+  get creditLimitInputUsd(): number {
+    return this.creditLimitInput ? this.creditLimitInput * this.priceUsdPerCredit : 0;
+  }
+
+  async saveCreditLimit(item: NdWorkspaceListItem): Promise<void> {
+    const limit = this.creditLimitNoLimit ? null : Number(this.creditLimitInput);
+    if (!this.creditLimitNoLimit && (!limit || limit < 0)) {
+      this.error = 'Enter a credit limit of 0 or more, or choose "No limit".';
+      return;
+    }
+    this.savingCreditLimit = true;
+    const res = await this.api.setWorkspaceCreditLimit(item.workspace.id, limit);
+    this.savingCreditLimit = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not save the credit limit';
+      return;
+    }
+    item.workspace.aiCreditLimit = limit;
+    this.message = limit == null ? `"${item.workspace.name}" now has no credit limit.` : 'Credit limit saved.';
+    const refreshed = await this.api.getWorkspaceAiCredits(item.workspace.id);
+    if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
+  }
+
+  async saveMarkup(item: NdWorkspaceListItem): Promise<void> {
+    const markup = this.markupUseDefault ? null : Number(this.markupInput);
+    if (!this.markupUseDefault && (!markup || markup <= 0)) {
+      this.error = 'Enter a positive markup (e.g. 1.5 for +50%), or choose "Use default".';
+      return;
+    }
+    this.savingMarkup = true;
+    const res = await this.api.setWorkspaceMarkup(item.workspace.id, markup);
+    this.savingMarkup = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not save the margin';
+      return;
+    }
+    item.workspace.aiMarkupOverride = markup;
+    this.message = markup == null ? `"${item.workspace.name}" now uses the default margin.` : 'Margin saved.';
+    const refreshed = await this.api.getWorkspaceAiCredits(item.workspace.id);
+    if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
   }
 
   async handleTopUp(item: NdWorkspaceListItem): Promise<void> {

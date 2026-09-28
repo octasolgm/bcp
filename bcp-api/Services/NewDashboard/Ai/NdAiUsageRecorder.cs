@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
@@ -42,10 +43,10 @@ public sealed class NdAiUsageRecorder(
             var estimated = usage.ReportedUsdCost is null;
             var usd = usage.ReportedUsdCost
                 ?? await pricing.EstimateUsdAsync(usage.Model, usage.PromptTokens, usage.CompletionTokens, ct);
-            var rate = await pricing.GetPricingAsync(ct);
 
             using var dbScope = scopeFactory.CreateScope();
             var db = dbScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var rate = await EffectivePricingAsync(db, tenantId, ct);
             db.NdAiCreditLedger.Add(new NdAiCreditLedgerEntry
             {
                 TenantId = tenantId,
@@ -72,5 +73,58 @@ public sealed class NdAiUsageRecorder(
         {
             logger.LogWarning(ex, "Recording AI usage failed (call itself was fine).");
         }
+    }
+
+    /// <summary>
+    /// Bills a non-LLM cost (currently Azure Document Intelligence OCR, priced per page) into the same
+    /// ledger, so it shows up in every existing usage/cost/margin report alongside LLM spend. Uses the
+    /// scope's <c>Feature</c>/workspace exactly like <see cref="RecordAsync"/>; provider/model are set to
+    /// distinguish it in the "by provider"/"by model" breakdowns.
+    /// </summary>
+    public async Task RecordNonLlmCostAsync(
+        string provider,
+        string? detail,
+        decimal usdCost,
+        CancellationToken ct = default)
+    {
+        var scope = NdAiUsageContext.Value;
+        if (scope?.TenantId is not Guid tenantId || usdCost <= 0) return;
+
+        try
+        {
+            using var dbScope = scopeFactory.CreateScope();
+            var db = dbScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var rate = await EffectivePricingAsync(db, tenantId, ct);
+            db.NdAiCreditLedger.Add(new NdAiCreditLedgerEntry
+            {
+                TenantId = tenantId,
+                Kind = AiCreditKinds.Usage,
+                Credits = -rate.CreditsFor(usdCost),
+                BilledUsd = rate.BilledUsdFor(usdCost),
+                UsdCost = usdCost,
+                UsdCostEstimated = true,
+                Provider = provider,
+                Model = detail,
+                Feature = scope.Feature,
+                AnalysisRunId = scope.AnalysisRunId,
+                CreatedBy = scope.UserId,
+            });
+            await db.SaveChangesAsync(ct);
+            NdAiCreditService.InvalidateBalance(cache, tenantId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Recording non-LLM AI cost failed ({Provider}).", provider);
+        }
+    }
+
+    private async Task<NdAiCreditPricing> EffectivePricingAsync(AppDbContext db, Guid tenantId, CancellationToken ct)
+    {
+        var basePricing = await pricing.GetPricingAsync(ct);
+        var markupOverride = await db.NdWorkspaces.AsNoTracking()
+            .Where(w => w.Id == tenantId)
+            .Select(w => (decimal?)w.AiMarkupOverride)
+            .FirstOrDefaultAsync(ct);
+        return basePricing.WithMarkupOverride(markupOverride);
     }
 }

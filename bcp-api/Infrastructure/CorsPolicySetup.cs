@@ -26,7 +26,11 @@ public static class CorsPolicySetup
         services.AddCors(o => o.AddDefaultPolicy(p => p
             .SetIsOriginAllowed(origin => IsOriginAllowed(origin, configured))
             .AllowAnyHeader()
-            .AllowAnyMethod()));
+            .AllowAnyMethod()
+            // Content-Disposition isn't in the browser's default exposed-headers safelist, so without
+            // this the frontend's fetch() can never read the real download filename cross-origin and
+            // always falls back to its hardcoded default name.
+            .WithExposedHeaders("Content-Disposition")));
     }
 
     private static HashSet<string> ParseOrigins(string? raw)

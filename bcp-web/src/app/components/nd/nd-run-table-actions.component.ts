@@ -7,6 +7,7 @@ import {
   canEditRunPlans,
   canRecallRun,
   canSendRunForReview,
+  roleAtLeast,
   runViewActionLabel,
   submitRunActionLabel,
 } from '../../../lib/nd/analysis-run-actions';
@@ -120,6 +121,23 @@ import type { AnalysisRunSummary } from '../../../lib/nd/types';
         }
       </div>
 
+      @if (showForceStatus) {
+        <div class="role-action-group" (click)="$event.stopPropagation()">
+          <select
+            class="role-target-select"
+            [ngModel]="forceStatusTarget"
+            (ngModelChange)="onForceStatusChange($event)"
+            [disabled]="forceStatusRunId === run.id"
+            aria-label="Set status"
+            title="Super admin: force this run to any workflow status (asks to confirm)"
+          >
+            @for (opt of forceStatusOptions; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+      }
+
       @if (showRoleDropdown) {
         <div class="role-action-group" (click)="$event.stopPropagation()">
           <select
@@ -204,6 +222,8 @@ export class NdRunTableActionsComponent {
   @Output() roleActionClick = new EventEmitter<{ run: AnalysisRunSummary; target: string }>();
   @Output() deleteClick = new EventEmitter<AnalysisRunSummary>();
   @Output() stopClick = new EventEmitter<AnalysisRunSummary>();
+  @Output() forceStatusClick = new EventEmitter<{ run: AnalysisRunSummary; status: string }>();
+  @Input() forceStatusRunId: string | null = null;
 
   get legacy(): boolean {
     return isLegacyAnalysisRun(this.run);
@@ -232,13 +252,16 @@ export class NdRunTableActionsComponent {
   get roleDropdownOptions(): { value: string; label: string }[] {
     if (this.hideLabeledActions || this.viewOnly) return [];
     const status = (this.run.status ?? '').toLowerCase();
-    if (this.role === 'checker' && status === 'submitted_for_review') {
+    // Checker (or higher — reviewer/super_admin can also act as checker) approving/rejecting
+    // a run sitting in the checker's queue.
+    if (roleAtLeast(this.role, 'checker') && status === 'submitted_for_review') {
       return [
         { value: 'reviewer', label: 'Send to reviewer' },
         { value: 'maker', label: 'Send to maker' },
       ];
     }
-    if (this.role === 'reviewer' && status === 'checker_approved') {
+    // Reviewer (or higher — super_admin) finalizing/rejecting a run sitting in the reviewer's queue.
+    if (roleAtLeast(this.role, 'reviewer') && status === 'checker_approved') {
       return [
         { value: 'finalize', label: 'Finalize' },
         { value: 'checker', label: 'Send to checker' },
@@ -250,6 +273,36 @@ export class NdRunTableActionsComponent {
 
   get showRoleDropdown(): boolean {
     return this.roleDropdownOptions.length > 0;
+  }
+
+  /** The 3 role stages the workflow actually moves through, plus the finalized end state — matches how
+   * the business talks about a report's status, not every internal status string. */
+  private static readonly FORCE_STATUS_OPTIONS = [
+    { value: 'completed', label: 'Submit for review pending (maker)' },
+    { value: 'submitted_for_review', label: 'Submitted for review (checker)' },
+    { value: 'checker_approved', label: 'Checker approved (reviewer)' },
+    { value: 'reviewer_approved', label: 'Reviewer approved (finalized)' },
+  ];
+
+  /** Super admin only: force this run to any workflow status, bypassing the normal chain. */
+  get showForceStatus(): boolean {
+    return !this.hideLabeledActions && !this.viewOnly && !this.legacy && this.role === 'super_admin';
+  }
+
+  get forceStatusOptions() {
+    return NdRunTableActionsComponent.FORCE_STATUS_OPTIONS;
+  }
+
+  get forceStatusTarget(): string {
+    return (this.run.status ?? '').toLowerCase();
+  }
+
+  /** Fires straight off the select — the parent asks the admin to confirm before it actually applies
+   * anything, and the select itself always reflects the run's real status (never a pending pick), so a
+   * "no" on that confirm needs no extra reset here. */
+  onForceStatusChange(status: string): void {
+    if (status === this.forceStatusTarget) return;
+    this.forceStatusClick.emit({ run: this.run, status });
   }
 
   private _roleTarget: string | null = null;
