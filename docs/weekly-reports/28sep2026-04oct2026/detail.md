@@ -37,6 +37,30 @@ Corrected document filename fix
 
 Downloading a reviewer's finalized document previously always showed a generic name ("internal-document") instead of the real document's name, because of a browser restriction that blocked the real filename from being read after download. This is fixed, and the downloaded file now also carries a version marker (for example "(v2)") so two versions of the same document no longer look identical once downloaded.
 
+Notifications and navigation
+
+Inbox has moved out of the left sidebar and into a notifications bell icon in the top bar, so it no longer takes up space in the main navigation. The sidebar itself was reordered for a clearer flow: Overview, Analysis, and Pending reviews at the top, then a divider, then Documents and Admin settings below.
+
+New Analysis page improvements
+
+Uploading a document on the New Analysis page no longer reloads the entire page; only the item you uploaded updates, with clear progress states (uploading, parsing, extracting, done) shown along the way. Internal document uploads now go through the same document processing pipeline used on the Documents pages, including Azure, so uploads from either place are handled consistently. The page also gained select-all and clear-selection controls, document count badges, and clearer step-by-step labeling.
+
+All Analysis table improvements
+
+The status of each report now shows as the very first column for faster scanning, and the separate Source column was removed since that information is already clear from context. Clicking a row now opens the report in a new tab instead of navigating away from the list, and the search box got a search icon for clarity.
+
+Per-business date format
+
+Each business can now choose how dates are displayed across their own workspace. The platform defaults to the UAE date format, and a business admin can switch their workspace to Pakistan, USA, UK, India, or ISO format instead, independent of every other business.
+
+Visual consistency pass
+
+This week included a broad visual cleanup pass across the app: status badges and table styling were standardized to the same colors and layout everywhere; document list pages no longer flood an entire row with red or green when flagged, using a left accent bar instead so text stays readable; search boxes and filter dropdowns got consistent focus and hover styling; document titles and metadata (file size, page count, points) are now shown more clearly with small pill-style tags; the Overview page's summary cards, compliance breakdown chart, and corrective actions list were restyled for a cleaner look; and spacing, heading sizes, and the sizing of buttons, dropdowns, and search boxes were standardized across the whole app.
+
+Text display fix
+
+Fixed a display issue where a section-reference symbol in extracted document text could render small enough to look like a dollar sign.
+
 Deployment
 
 Published this week's changes to the hosted API and web app.

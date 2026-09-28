@@ -16,8 +16,20 @@ Tasks
 - AI usage reporting now shows which LLM was used through which provider (not just OpenRouter — Anthropic, Google, Azure OpenAI, xAI, DeepSeek, Moonshot, Zhipu and Qwen are all tracked separately), with new "by provider" filtering and breakdown
 - Azure Document Intelligence (OCR) usage is now billed into the same AI cost/credit ledger as LLM calls, so it shows up in every cost and margin report — previously it was not tracked at all
 - Deployed the API and web app to bcp-api-dev / bcp-web-dev
+- Moved Inbox out of the left sidebar into a Notifications bell icon in the top bar
+- Reordered the left sidebar: Overview, Analysis, Pending reviews, then a divider, then Documents and Admin settings; the local OCR engine pages stay hidden from view as before
+- New Analysis page: uploading a document no longer reloads the whole page, only the affected item updates; internal document uploads now go through the same parse-and-extract pipeline as the Documents page (including Azure), with visible progress states (uploading, parsing, extracting, done); added Step 1/Step 2 labeling, select-all/clear-selection controls, and document count badges
+- All Analysis table: status moved to the first column, Source column removed, rows open the report in a new tab, search box got an icon, multi-line rows with clearer column names
+- Added a per-business date format setting: defaults to UAE format, with each business able to switch their own workspace to Pakistan, USA, UK, India or ISO format
+- Standardized status badge colors and table styling to the same look across every data table in the app
+- Fixed document list pages so a row no longer floods with a full red/green background — now uses a left accent bar so text stays easy to read
+- Standardized search box and filter dropdown focus/hover styling everywhere
+- Cleaned up document title and metadata display (file size, page count, points shown as small pill tags)
+- Restyled the Overview page's KPI cards, compliance breakdown chart legend, and corrective actions list for a cleaner, more modern look
+- Standardized global page spacing, heading sizes, and control sizing (dropdowns, search boxes, buttons) app-wide; increased main content padding
 
 Bug fixes
 - Fixed the reviewer's document-embedding feature: a gap with two resolved-and-pending action plans now gets its one resolved action embedded into the corrected document right away, instead of waiting for every action plan on that gap to be resolved
 - Fixed the downloaded corrected document always being named generically "internal-document" instead of matching the real document's name and new version — caused by the browser being blocked from reading the real filename cross-origin
 - Corrected document downloads are now named with a version marker (e.g. "... (v2).pdf") so v1 and v2 don't look identical once downloaded
+- Fixed a section-reference symbol ("§") in extracted document text rendering small enough to be misread as a dollar sign ("$")
