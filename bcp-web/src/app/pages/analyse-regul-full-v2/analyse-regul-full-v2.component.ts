@@ -17,6 +17,7 @@ import { AnalyseBase } from '../shared/analyse-base';
 import type { AnalysisPoint } from '../../../lib/nd/types';
 import { NdPipelinePanelService } from '../../services/nd/nd-pipeline-panel.service';
 import type { NdLocalExtractionSection } from '../../services/nd/nd-api.service';
+import { startPanelResize } from '../shared/panel-resize';
 
 /**
  * V5 — isolated clone of analyse-regul-full (V4), created specifically so the upcoming
@@ -69,6 +70,43 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * how long the doc lists actually took to load. */
   private hasSyncedPipelineDocsOnce = false;
 
+  private static readonly STEP1_HEIGHT_KEY = 'v2-step1-height-px';
+  /** Drag-resizable height of the Step 1 (Regulation sources) box — the handle sits between it
+   * and Step 2, matching the drag-to-resize pattern already used elsewhere in ND (e.g. the
+   * regulation-documents-local split panel). */
+  step1HeightPx = 360;
+
+  startStepResize(event: MouseEvent): void {
+    startPanelResize(
+      { kind: 'docs-height', startX: event.clientX, startY: event.clientY, startVal: this.step1HeightPx },
+      event,
+      (_kind, value) => {
+        this.step1HeightPx = value;
+      },
+      { 'docs-height': { min: 220, max: 720 } },
+    );
+    const onUp = () => {
+      window.removeEventListener('mouseup', onUp);
+      try {
+        localStorage.setItem(AnalyseRegulFullV2Component.STEP1_HEIGHT_KEY, String(this.step1HeightPx));
+      } catch {
+        /* ignore storage errors */
+      }
+    };
+    window.addEventListener('mouseup', onUp);
+  }
+
+  private restoreStep1Height(): void {
+    try {
+      const saved = localStorage.getItem(AnalyseRegulFullV2Component.STEP1_HEIGHT_KEY);
+      if (!saved) return;
+      const px = Number.parseFloat(saved);
+      if (Number.isFinite(px) && px >= 220 && px <= 720) this.step1HeightPx = px;
+    } catch {
+      /* ignore storage errors */
+    }
+  }
+
   /** Doc id -> whether the azure-di engine (the only engine actually used in production — see
    * /nd/regulation-documents-azure-di and /nd/internal-documents-azure-di) has it parsed+
    * extracted. V3/V4's own doc-picker readiness (complianceDocReadyState/regDocReadyState,
@@ -89,6 +127,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   private readonly localSectionsByDoc = new Map<string, NdLocalExtractionSection[]>();
 
   override ngOnInit(): void {
+    this.restoreStep1Height();
     this.pipelinePanel.activate();
     super.ngOnInit();
     // Doc lists themselves load asynchronously (super.ngOnInit kicks that off), and how long

@@ -40,7 +40,7 @@
   <section class="setup-row setup-row-resizable setup-row-v8">
     <div class="setup-row-inner">
       <!-- Section 1: Regulation + Reg. points -->
-      <div class="v8-reg-sources-block" [style.width.%]="setupRegSourcesPct">
+      <div class="v8-reg-sources-block" [style.width.%]="setupRegSourcesPct" [style.height.px]="step1HeightPx">
         @if (showNdPointSources) {
           <div class="v8-section-header">
             <div class="v8-section-header-top">
@@ -74,7 +74,6 @@
                 <div class="panel-header-top">
                   <h2>Regulation documents <span class="doc-count-badge">({{ filteredRegulationDocs.length }})</span></h2>
                   <div class="header-actions">
-                    <button type="button" class="toolbar-btn secondary" (click)="clearRegSelection()">Clear selection</button>
                     <label class="btn-upload" [class.busy]="uploadingReg">
                       <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" [disabled]="uploadingReg" />
                       {{ uploadingReg ? '…' : 'Upload' }}
@@ -586,6 +585,12 @@
         </div>
       </div>
 
+      <div
+        class="step-resize-handle"
+        title="Drag to resize"
+        (mousedown)="startStepResize($event)"
+      ></div>
+
       <!-- Section 2: Compliance -->
       <div class="v8-compliance-block">
         <div class="v8-section-header v8-section-header-standalone">
@@ -596,7 +601,6 @@
             <div class="panel-header-top">
               <h2>Internal documents <span class="doc-count-badge">({{ filteredComplianceDocs.length }})</span></h2>
               <div class="header-actions">
-                <button type="button" class="toolbar-btn secondary" (click)="clearComplianceSelection()">Clear selection</button>
                 <label class="btn-upload" [class.busy]="uploadingCompliance">
                   <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" [disabled]="uploadingCompliance" />
                   {{ uploadingCompliance ? '…' : 'Upload' }}

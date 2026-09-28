@@ -39,11 +39,45 @@
 
 .v8-reg-sources-block {
   flex: 0 0 auto;
-  max-height: 46vh;
+  // Height is user-resizable (step1HeightPx, bound inline) via the drag handle below it — no
+  // fixed max-height here, the resize's own min/max (220-720px) does the clamping instead.
 }
 
 .v8-compliance-block {
   flex: 1 1 auto;
+  min-height: 220px;
+}
+
+// Drag-to-resize bar between Step 1 and Step 2, same idiom as .sidebar-resize-handle in
+// nd-shell.component.scss — a thin invisible hit-target with a visible pill that highlights on
+// hover/drag, row-resize cursor.
+.step-resize-handle {
+  flex: 0 0 auto;
+  height: 12px;
+  margin: -0.15rem 0;
+  cursor: row-resize;
+  position: relative;
+  z-index: 2;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    top: 50%;
+    height: 4px;
+    transform: translateY(-50%);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--text-muted, #9ca3af) 35%, transparent);
+    transition: background 0.12s, box-shadow 0.12s;
+  }
+
+  &:hover::after,
+  &:active::after,
+  body.panel-resizing &::after {
+    background: color-mix(in srgb, var(--accent) 65%, #fff);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
 }
 
 .v8-section-header-standalone {
