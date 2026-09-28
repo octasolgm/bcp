@@ -74,7 +74,14 @@
                 <div class="panel-header-top">
                   <h2>Regulations <span class="doc-count-badge">({{ filteredRegulationDocs.length }})</span></h2>
                   <div class="header-actions">
-                    <button type="button" class="toolbar-btn secondary" (click)="selectAllFilteredRegs()">Select all</button>
+                    <label class="header-select-all" title="Select all regulations">
+                      <input
+                        type="checkbox"
+                        [checked]="allFilteredRegsSelected"
+                        (change)="toggleAllFilteredRegs($any($event.target).checked)"
+                      />
+                      <span>All</span>
+                    </label>
                     <button type="button" class="toolbar-btn secondary" (click)="clearRegSelection()">Clear selection</button>
                     <label class="btn-upload" [class.busy]="uploadingReg">
                       <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" [disabled]="uploadingReg" />
@@ -587,7 +594,14 @@
             <div class="panel-header-top">
               <h2>Internal Documents <span class="doc-count-badge">({{ filteredComplianceDocs.length }})</span></h2>
               <div class="header-actions">
-                <button type="button" class="toolbar-btn secondary" (click)="selectAllFilteredCompliance()">Select all</button>
+                <label class="header-select-all" title="Select all internal documents">
+                  <input
+                    type="checkbox"
+                    [checked]="allFilteredComplianceSelected"
+                    (change)="toggleAllFilteredCompliance($any($event.target).checked)"
+                  />
+                  <span>All</span>
+                </label>
                 <button type="button" class="toolbar-btn secondary" (click)="clearComplianceSelection()">Clear selection</button>
                 <label class="btn-upload" [class.busy]="uploadingCompliance">
                   <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" [disabled]="uploadingCompliance" />

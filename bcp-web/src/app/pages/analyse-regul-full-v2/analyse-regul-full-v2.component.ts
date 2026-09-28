@@ -623,6 +623,29 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     this.selectedRegDocs = this.regulationDocs.filter((d) => this.selectedRegIds.has(d.id));
   }
 
+  /** Drives the "select all" checkbox at the top of the Regulations list — matches the same
+   * checked-when-every-filtered-item-is-selected pattern used by the Reg. points / library lists. */
+  get allFilteredRegsSelected(): boolean {
+    const docs = this.filteredRegulationDocs;
+    return docs.length > 0 && docs.every((d) => this.selectedRegIds.has(d.id));
+  }
+
+  toggleAllFilteredRegs(checked: boolean): void {
+    if (checked) this.selectAllFilteredRegs();
+    else this.clearRegSelection();
+  }
+
+  /** Same pattern for the Internal Documents list's "select all" checkbox. */
+  get allFilteredComplianceSelected(): boolean {
+    const docs = this.filteredComplianceDocs;
+    return docs.length > 0 && docs.every((d) => this.selectedComplianceIds.has(d.id));
+  }
+
+  toggleAllFilteredCompliance(checked: boolean): void {
+    if (checked) this.selectAllFilteredCompliance();
+    else this.clearComplianceSelection();
+  }
+
   /** Overrides the base's onComplianceSelect, which uploads internal documents through a legacy,
    * non-ND endpoint that never parses or extracts them (they never become analyzable). Routes
    * through the ND internal-documents catalog instead — the same one the primary Documents page

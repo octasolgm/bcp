@@ -646,7 +646,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private documentsGroup(role: string): NavGroup {
     const children: NavItem[] = [
       { id: 'internal-documents', path: '/nd/internal-documents-azure-di', label: 'Internal documents', icon: 'file' },
-      { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation docs', icon: 'library' },
+      { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation documents', icon: 'library' },
       { id: 'libraries', path: '/nd/libraries', label: 'Regulation points library', icon: 'list' },
       {
         id: 'text-documents',
@@ -665,7 +665,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private landingAiGroup(role: string): NavGroup {
     const children: NavItem[] = [
       { id: 'landing-ai-internal-documents', path: '/nd/internal-documents', label: 'Internal documents', icon: 'file' },
-      { id: 'landing-ai-regulation-documents', path: '/nd/regulation-documents', label: 'Regulation docs', icon: 'library' },
+      { id: 'landing-ai-regulation-documents', path: '/nd/regulation-documents', label: 'Regulation documents', icon: 'library' },
     ];
     if (role === 'super_admin') {
       children.push(
@@ -705,7 +705,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'regulation-documents-new',
           path: '/nd/regulation-documents-new',
-          label: 'Regulation docs',
+          label: 'Regulation documents',
           icon: 'library',
         },
       ],
@@ -727,7 +727,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'regulation-documents-rapidocr',
           path: '/nd/regulation-documents-rapidocr',
-          label: 'Regulation docs',
+          label: 'Regulation documents',
           icon: 'library',
         },
       ],
@@ -751,7 +751,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'regulation-documents-docling-light',
           path: '/nd/regulation-documents-docling-light',
-          label: 'Regulation docs',
+          label: 'Regulation documents',
           icon: 'library',
         },
       ],
@@ -775,7 +775,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'regulation-documents-docling-glm',
           path: '/nd/regulation-documents-docling-glm',
-          label: 'Regulation docs',
+          label: 'Regulation documents',
           icon: 'library',
         },
       ],
@@ -799,7 +799,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'regulation-documents-azure-di',
           path: '/nd/regulation-documents-azure-di',
-          label: 'Regulation docs',
+          label: 'Regulation documents',
           icon: 'library',
         },
       ],
