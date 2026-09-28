@@ -74,14 +74,6 @@
                 <div class="panel-header-top">
                   <h2>Regulation documents <span class="doc-count-badge">({{ filteredRegulationDocs.length }})</span></h2>
                   <div class="header-actions">
-                    <label class="header-select-all" title="Select all regulations">
-                      <input
-                        type="checkbox"
-                        [checked]="allFilteredRegsSelected"
-                        (change)="toggleAllFilteredRegs($any($event.target).checked)"
-                      />
-                      <span>All</span>
-                    </label>
                     <button type="button" class="toolbar-btn secondary" (click)="clearRegSelection()">Clear selection</button>
                     <label class="btn-upload" [class.busy]="uploadingReg">
                       <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" [disabled]="uploadingReg" />
@@ -89,13 +81,23 @@
                     </label>
                   </div>
                 </div>
-                <input
-                  type="search"
-                  class="search-field header-search"
-                  placeholder="Search regulations…"
-                  [(ngModel)]="regSearch"
-                  aria-label="Search regulations"
-                />
+                <div class="header-search-row">
+                  <label class="header-select-all" title="Select all regulations">
+                    <input
+                      type="checkbox"
+                      [checked]="allFilteredRegsSelected"
+                      (change)="toggleAllFilteredRegs($any($event.target).checked)"
+                    />
+                    <span>All</span>
+                  </label>
+                  <input
+                    type="search"
+                    class="search-field header-search"
+                    placeholder="Search regulations…"
+                    [(ngModel)]="regSearch"
+                    aria-label="Search regulations"
+                  />
+                </div>
               </div>
 
               @if (loadingRegs && !regulationDocs.length) {
@@ -594,14 +596,6 @@
             <div class="panel-header-top">
               <h2>Internal documents <span class="doc-count-badge">({{ filteredComplianceDocs.length }})</span></h2>
               <div class="header-actions">
-                <label class="header-select-all" title="Select all internal documents">
-                  <input
-                    type="checkbox"
-                    [checked]="allFilteredComplianceSelected"
-                    (change)="toggleAllFilteredCompliance($any($event.target).checked)"
-                  />
-                  <span>All</span>
-                </label>
                 <button type="button" class="toolbar-btn secondary" (click)="clearComplianceSelection()">Clear selection</button>
                 <label class="btn-upload" [class.busy]="uploadingCompliance">
                   <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" [disabled]="uploadingCompliance" />
@@ -609,13 +603,23 @@
                 </label>
               </div>
             </div>
-            <input
-              type="search"
-              class="search-field header-search"
-              placeholder="Search Internal docs…"
-              [(ngModel)]="complianceSearch"
-              aria-label="Search Internal documents"
-            />
+            <div class="header-search-row">
+              <label class="header-select-all" title="Select all internal documents">
+                <input
+                  type="checkbox"
+                  [checked]="allFilteredComplianceSelected"
+                  (change)="toggleAllFilteredCompliance($any($event.target).checked)"
+                />
+                <span>All</span>
+              </label>
+              <input
+                type="search"
+                class="search-field header-search"
+                placeholder="Search Internal docs…"
+                [(ngModel)]="complianceSearch"
+                aria-label="Search Internal documents"
+              />
+            </div>
           </div>
 
           @if (loadingCompliance && !complianceDocs.length) {
