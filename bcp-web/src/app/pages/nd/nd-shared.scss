@@ -8,8 +8,9 @@
 
 .nd-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle, var(--border));
   border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text-primary) 4%, transparent);
 }
 
 .nd-input {
@@ -397,13 +398,13 @@
 .filter-search {
   min-width: 12rem;
   padding: 0.4rem 0.85rem;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   font-size: 0.8125rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   background: var(--surface, var(--bg-card));
   color: var(--text-primary);
   font-family: inherit;
-  height: 2.125rem;
+  height: 2.5rem;
   line-height: 1.25;
   box-sizing: border-box;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -422,13 +423,13 @@
   -webkit-appearance: none;
   display: inline-flex;
   align-items: center;
-  height: 2.125rem;
+  height: 2.5rem;
   line-height: 1.25;
   padding: 0 2rem 0 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 0.8125rem;
   font-weight: 500;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   background-color: var(--surface, var(--bg-card));
   color: var(--text-secondary);
   font-family: inherit;

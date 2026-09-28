@@ -256,7 +256,7 @@
   flex-shrink: 0;
   align-self: stretch;
   height: 100%;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-subtle, var(--border));
   padding: 1rem 0.65rem;
   background: var(--bg-sidebar);
   display: flex;
@@ -390,7 +390,7 @@
   align-items: center;
   gap: 0.55rem;
   padding: 0.45rem 0.6rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   font-size: 0.8125rem;
   font-weight: 500;
   text-decoration: none;
@@ -398,23 +398,19 @@
   margin-bottom: 2px;
   transition: background 0.15s, color 0.15s;
 
-  // A left accent bar on the active item is a common, unambiguous "you are here" marker in
-  // enterprise sidebars — scales in from zero height instead of just appearing.
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 20%;
-    bottom: 20%;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--accent);
-    transform: scaleY(0);
-    transition: transform 0.15s ease;
+  &:hover {
+    background: var(--bg-muted);
+    color: var(--text-primary);
   }
 
-  &.active::before {
-    transform: scaleY(1);
+  &.active {
+    background: var(--nav-active-bg);
+    color: var(--accent);
+    font-weight: 600;
+
+    .nav-icon {
+      color: var(--accent);
+    }
   }
 
   .nav-icon {
@@ -450,7 +446,7 @@
   }
 
   // Neutral by default — a badge count (e.g. "55" on All analysis) isn't itself an alert, so it
-  // reads calmer as a muted pill; the item still gets the accent left-bar + background when active.
+  // reads calmer as a muted pill; the item still gets the accent tint background when active.
   .nav-badge {
     margin-left: auto;
     min-width: 18px;
@@ -466,12 +462,6 @@
     justify-content: center;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
-  }
-
-  &.active,
-  &:hover {
-    background: var(--nav-active-bg);
-    color: var(--text-primary);
   }
 }
 
