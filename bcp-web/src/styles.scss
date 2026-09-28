@@ -374,12 +374,17 @@ app-nd-shell .content > :not(router-outlet) {
     &:hover {
       border-color: var(--border-strong);
       color: var(--text-primary);
+      background: var(--bg-muted);
     }
 
     &.active {
       background: var(--filter-active-bg);
       border-color: var(--filter-active-bg);
       color: var(--filter-active-text);
+
+      &:hover {
+        background: var(--filter-active-bg);
+      }
     }
   }
 }

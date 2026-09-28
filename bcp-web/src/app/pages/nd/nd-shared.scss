@@ -391,6 +391,9 @@
   }
 }
 
+// App-wide search input — same focus-ring formula everywhere it's used (this class, not a per-page
+// copy), a soft ring in the app's own accent color rather than a hardcoded hex so it still works
+// whatever the active theme's accent is.
 .filter-search {
   min-width: 12rem;
   padding: 0.4rem 0.85rem;
@@ -403,8 +406,17 @@
   height: 2.125rem;
   line-height: 1.25;
   box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  }
 }
 
+// 8px radius (not the pill shape used for search/tabs) — a select reads as a form control, not a
+// toggle, so it gets the more standard input corner.
 .filter-select {
   appearance: none;
   -webkit-appearance: none;
@@ -413,7 +425,7 @@
   height: 2.125rem;
   line-height: 1.25;
   padding: 0 2rem 0 0.85rem;
-  border-radius: var(--radius-pill);
+  border-radius: 8px;
   font-size: 0.8125rem;
   font-weight: 500;
   border: 1px solid var(--border);
@@ -427,10 +439,16 @@
   background-position: right 0.65rem center;
   background-size: 0.65rem;
   vertical-align: middle;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    background-color: var(--bg-muted);
+  }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
-    outline-offset: 1px;
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
   }
 }
 
@@ -1438,10 +1456,17 @@
   font-weight: 650;
 }
 
-.severity-badge.doc-ready-red,
-.file-row.doc-ready-red {
+// Badges stay tinted (a small pill reads fine in color); rows/list-items no longer flood their whole
+// background — a clean white/transparent row with a soft left-border accent reads as "this row needs
+// attention" without turning the entire table into a wash of red or green.
+.severity-badge.doc-ready-red {
   background: var(--critical-bg);
   color: var(--critical);
+}
+
+.file-row.doc-ready-red {
+  background: transparent;
+  border-left: 3px solid var(--critical);
 }
 
 .severity-badge.doc-ready-green {
@@ -1449,12 +1474,17 @@
   color: var(--low);
 }
 
-tr.doc-ready-red td {
-  background: var(--critical-bg);
+.file-row.doc-ready-green {
+  background: transparent;
+  border-left: 3px solid var(--low);
 }
 
-tr.doc-ready-green td {
-  background: var(--low-bg);
+tr.doc-ready-red td:first-child {
+  box-shadow: inset 3px 0 0 var(--critical);
+}
+
+tr.doc-ready-green td:first-child {
+  box-shadow: inset 3px 0 0 var(--low);
 }
 
 /* Two small status chips stacked (e.g. "Parsed" + "Pending extract") instead of one pill. */
