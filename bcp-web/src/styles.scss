@@ -280,13 +280,13 @@ app-nd-shell .content > :not(router-outlet) {
   -webkit-appearance: none;
   display: inline-flex;
   align-items: center;
-  height: 2.125rem;
+  height: 2.5rem;
   line-height: 1.25;
-  padding: 0 2rem 0 0.85rem;
-  border-radius: var(--radius-pill);
+  padding: 0 2rem 0 0.875rem;
+  border-radius: var(--radius-md);
   font-size: 0.8125rem;
   font-weight: 500;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   background-color: var(--surface, var(--bg-card));
   color: var(--text-secondary);
   font-family: inherit;
@@ -300,8 +300,9 @@ app-nd-shell .content > :not(router-outlet) {
 }
 
 .filter-search {
-  height: 2.125rem;
+  height: 2.5rem;
   line-height: 1.25;
+  border-radius: var(--radius-md);
   box-sizing: border-box;
 }
 
@@ -319,21 +320,24 @@ app-nd-shell .content > :not(router-outlet) {
   background: var(--accent);
   color: var(--accent-text);
   padding: 0.5rem 1rem;
+  height: 2.5rem;
   border-radius: var(--radius-md);
   border: none;
   font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
 
   &:hover {
     background: var(--accent-hover);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 35%, transparent);
   }
 
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    box-shadow: none;
   }
 }
 
@@ -341,9 +345,10 @@ app-nd-shell .content > :not(router-outlet) {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: transparent;
+  background: var(--bg-card);
   color: var(--text-primary);
   padding: 0.5rem 1rem;
+  height: 2.5rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-strong);
   font-size: 0.875rem;
