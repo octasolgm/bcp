@@ -119,6 +119,13 @@
   }
 }
 
+.empty-state-icon {
+  display: block;
+  margin: 0 auto 0.6rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
 .muted-loading {
   color: var(--text-muted);
   font-size: 0.875rem;
@@ -175,6 +182,7 @@
     vertical-align: middle;
     white-space: normal;
     line-height: 1.35;
+    padding: 0.75rem 1rem;
   }
 
   .col-status,
@@ -188,5 +196,89 @@
 
   .col-run strong {
     font-size: 0.9375rem;
+  }
+
+  // Subtle zebra striping, on top of the existing hover — both stay legible in light and dark
+  // since they're mixed from the same muted-background token rather than a fixed color.
+  tbody tr:nth-child(even):not(:hover) {
+    background: color-mix(in srgb, var(--bg-muted) 45%, transparent);
+  }
+
+  // A small color dot in front of each status/role pill — same colors the pill already uses
+  // (currentColor), just a clearer "at a glance" marker. Reaches into the shared badge
+  // component's own template with ::ng-deep, scoped to this page only — the badge component
+  // itself, and every other page that uses it, is untouched.
+  ::ng-deep .nd-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+
+    &::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+  }
+}
+
+// UI-polish pass (page-by-page redesign): search icon inset into the runs search field, and CSS-only
+// skeleton shimmer rows shown while the table is loading. Additive, component-scoped, existing color
+// tokens only.
+.search-field-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+
+  .search-field-icon {
+    position: absolute;
+    left: 0.65rem;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  .filter-search {
+    padding-left: 2rem;
+  }
+}
+
+.skeleton-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+.skeleton-bar {
+  display: block;
+  height: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--bg-muted) 25%,
+    color-mix(in srgb, var(--bg-muted) 40%, var(--border)) 50%,
+    var(--bg-muted) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar {
+    animation: none;
   }
 }

@@ -63,6 +63,9 @@ export class NdAnalysisRunsComponent implements OnInit {
   allRuns: AnalysisRunSummary[] = [];
   loading = true;
   loadError = '';
+  /** Purely cosmetic — number of shimmer rows/columns shown while the table loads. */
+  readonly skeletonRows = [0, 1, 2, 3, 4, 5];
+  readonly skeletonCols = [0, 1, 2, 3, 4, 5, 6, 7, 8];
   mineOnly = false;
   correctionOnly = false;
   finalizedOnly = false;
