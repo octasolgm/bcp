@@ -198,10 +198,10 @@
     font-size: 0.9375rem;
   }
 
-  // Subtle zebra striping, on top of the existing hover — both stay legible in light and dark
-  // since they're mixed from the same muted-background token rather than a fixed color.
-  tbody tr:nth-child(even):not(:hover) {
-    background: color-mix(in srgb, var(--bg-muted) 45%, transparent);
+  // Flat white rows + hairline divider + hover wash only (no zebra) — matches the plain-row look
+  // of the reference dashboards (Enrolliq/Hope UI) more closely than a striped table does.
+  tbody tr:hover {
+    background: var(--bg-muted);
   }
 
   // The dot-indicator + pill sizing on .nd-badge is now a global rule (nd-shared.scss) — every ND
