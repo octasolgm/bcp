@@ -64,14 +64,25 @@
   gap: 0.35rem;
 }
 
-// De-boxed: a plain label strip, not another bordered card sitting on top of the doc-panel cards
-// below it — the "box inside a box" look the panels had. The doc-panel cards' own thin border +
-// soft shadow (see the override further down) is the only "surface" line left in this stage.
+// Each step (Regulation sources / Internal documents) is now its own outer box — a distinct
+// surface + border wrapping the step's header and every panel inside it — so the two steps read
+// as clearly separate stages at a glance instead of blending into one continuous scroll. The
+// doc-panel cards inside keep their own thin border/shadow too; that's one level of nesting
+// (step box > panel card), not the flatter "box inside a box" repetition this page decluttered
+// away from earlier — a panel never sits inside another panel here.
+.v8-reg-sources-block,
+.v8-compliance-block {
+  padding: 0.85rem;
+  border: 1px solid var(--border-subtle, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+}
+
 .v8-section-header {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  padding: 0.1rem 0.15rem 0.35rem;
+  padding: 0.15rem 0.15rem 0.5rem;
   flex-shrink: 0;
 }
 
@@ -97,10 +108,10 @@
 }
 
 .v8-section-label {
-  font-size: 0.9375rem;
+  font-size: 1.25rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
   text-transform: none;
-  letter-spacing: normal;
   color: var(--text-primary);
   white-space: nowrap;
 }
