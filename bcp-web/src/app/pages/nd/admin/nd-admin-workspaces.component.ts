@@ -12,6 +12,7 @@ import {
 import { RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { matchesSearch } from '../../../../lib/nd/list-utils';
+import { ND_DATE_FORMAT_OPTIONS } from '../../../../lib/nd/date-format';
 
 /**
  * Platform super admin only: one workspace per client (bank). Each workspace has its own users,
@@ -69,6 +70,9 @@ export class NdAdminWorkspacesComponent implements OnInit {
   markupUseDefault = true;
   markupInput: number | null = null;
   savingMarkup = false;
+  dateFormatOptions = ND_DATE_FORMAT_OPTIONS;
+  dateFormatInput = 'default';
+  savingDateFormat = false;
 
   /** AI credit price form (platform admin). */
   priceUsdPerCredit = 0.01;
@@ -200,6 +204,7 @@ export class NdAdminWorkspacesComponent implements OnInit {
     this.creditLimitInput = item.workspace.aiCreditLimit ?? null;
     this.markupUseDefault = item.workspace.aiMarkupOverride == null;
     this.markupInput = item.workspace.aiMarkupOverride ?? null;
+    this.dateFormatInput = item.workspace.dateFormatRegion ?? 'default';
     this.creditsLoading = true;
     const res = await this.api.getWorkspaceAiCredits(item.workspace.id);
     this.creditsLoading = false;
@@ -248,6 +253,19 @@ export class NdAdminWorkspacesComponent implements OnInit {
     this.message = markup == null ? `"${item.workspace.name}" now uses the default margin.` : 'Margin saved.';
     const refreshed = await this.api.getWorkspaceAiCredits(item.workspace.id);
     if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
+  }
+
+  async saveDateFormat(item: NdWorkspaceListItem): Promise<void> {
+    const region = this.dateFormatInput === 'default' ? null : this.dateFormatInput;
+    this.savingDateFormat = true;
+    const res = await this.api.setWorkspaceDateFormat(item.workspace.id, region);
+    this.savingDateFormat = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not save the date format';
+      return;
+    }
+    item.workspace.dateFormatRegion = region;
+    this.message = `Date format saved for "${item.workspace.name}".`;
   }
 
   async handleTopUp(item: NdWorkspaceListItem): Promise<void> {

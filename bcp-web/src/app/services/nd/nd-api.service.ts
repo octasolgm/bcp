@@ -188,6 +188,8 @@ export type NdWorkspaceSummary = {
   aiCreditLimit?: number | null;
   /** This workspace's own markup, overriding the platform default. Null/undefined = uses the default. */
   aiMarkupOverride?: number | null;
+  /** Which country's date convention this workspace displays dates in. Null/undefined = UAE default. */
+  dateFormatRegion?: string | null;
 };
 
 export type NdWorkspaceListItem = {
@@ -718,6 +720,15 @@ export class NdApiService {
       'PUT',
       `/nd/ai-credits/workspaces/${workspaceId}/markup`,
       { markup },
+    );
+  }
+
+  /** Sets which country's date convention a workspace displays dates in. Pass null for the default (UAE). */
+  setWorkspaceDateFormat(workspaceId: string, region: string | null) {
+    return this.request<{ dateFormatRegion: string | null }>(
+      'PUT',
+      `/nd/workspaces/${workspaceId}/date-format`,
+      { region },
     );
   }
 

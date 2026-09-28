@@ -14,6 +14,7 @@ import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badg
 import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
 import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-actions.component';
 import { formatDate } from '../../../../lib/nd/utils';
+import { formatNdDateTime } from '../../../../lib/nd/date-format';
 import { ndNewAnalysisRoute, isDemoOwnedAnalysisRun } from '../../../../lib/nd/demo-analysis-routes';
 import {
   isPermanentDemoAnalysisDelete,
@@ -351,6 +352,11 @@ export class NdAnalysisRunsComponent implements OnInit {
   }
 
   formatDate = formatDate;
+
+  /** Dates on this table follow the workspace's own date-format setting (default UAE). */
+  formatRunDate(iso: string | null | undefined): string {
+    return formatNdDateTime(iso, this.auth.profile()?.workspace?.dateFormatRegion);
+  }
 
   canSendForReview(run: AnalysisRunSummary): boolean {
     return canSendRunForReview(run, this.auth.getRole());

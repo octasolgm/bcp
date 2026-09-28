@@ -122,7 +122,7 @@
               <app-nd-run-role-badge [status]="run.status" />
             </td>
             <td class="muted col-points" data-label="Points">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
-            <td class="muted col-date" data-label="Date">{{ formatDate(submittedDate(run)) }}</td>
+            <td class="muted col-date" data-label="Date">{{ formatRunDate(submittedDate(run)) }}</td>
             <td class="col-workflow" data-label="Summary">
               @if (complianceBreakdown(run); as breakdown) {
                 <div class="stat-chips">

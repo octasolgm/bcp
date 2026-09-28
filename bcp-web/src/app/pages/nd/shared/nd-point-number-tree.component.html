@@ -55,7 +55,7 @@
         <div class="tree-group-body">
           @if (node.row && !resolvePointId(node.row)) {
             <div class="point-line point-header-row point-header-inline">
-              <span class="point-header-mark">§</span>
+              <span class="point-header-mark" aria-label="Section header"></span>
               <span class="pid">{{ node.row.displayId }}</span>
               <div class="point-text-wrap">
                 @if (showRichDetails && hasSeparateTitle(node.row.point)) {
@@ -164,7 +164,7 @@
         @if (node.row.forAnalysis) {
           <span class="point-check" title="Compared in gap analysis">✓</span>
         } @else {
-          <span class="point-header-mark">§</span>
+          <span class="point-header-mark" aria-label="Section header"></span>
         }
         <span class="pid">{{ node.row.displayId }}</span>
         @if (showRichDetails) {

@@ -187,6 +187,52 @@ public partial class WorkspacesController(
         return Ok(new { success = true, data = MapWorkspace(ws) });
     }
 
+    public record DateFormatRequest(string? Region);
+
+    /// <summary>Every date convention a workspace may display in. Kept in sync with the frontend's
+    /// NdDateFormats map (bcp-web/src/lib/nd/date-format.ts) — add to both together.</summary>
+    private static readonly HashSet<string> ValidDateFormatRegions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "uae", "pakistan", "usa", "uk", "india", "iso",
+    };
+
+    /// <summary>Sets (or clears, with null/"default") which country's date convention this workspace's
+    /// UI displays dates in. A business admin manages their own workspace's setting; the platform admin
+    /// can set any workspace's.</summary>
+    [HttpPut("{id:guid}/date-format")]
+    public async Task<IActionResult> SetDateFormat(Guid id, [FromBody] DateFormatRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        // A workspace admin (super_admin without the platform flag) may only set their own workspace's
+        // date format, not another business's.
+        if (!IsPlatformAdmin(profile) && profile.TenantId != id)
+            return StatusCode(403, new { success = false, message = "You can only set your own workspace's date format." });
+
+        var region = string.IsNullOrWhiteSpace(body.Region) || body.Region.Equals("default", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : body.Region.Trim().ToLowerInvariant();
+        if (region != null && !ValidDateFormatRegions.Contains(region))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = $"'{body.Region}' isn't a supported date format. Use one of: {string.Join(", ", ValidDateFormatRegions)}, or default.",
+            });
+        }
+
+        var ws = await db.NdWorkspaces.FirstOrDefaultAsync(w => w.Id == id, ct);
+        if (ws == null) return NotFound(new { success = false, message = "Workspace not found." });
+
+        ws.DateFormatRegion = region;
+        ws.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        await InvalidateMembersAsync(id, ct);
+
+        return Ok(new { success = true, data = new { dateFormatRegion = ws.DateFormatRegion } });
+    }
+
     /// <summary>Platform admin enters a workspace; every page then shows that workspace's data.</summary>
     [HttpPost("{id:guid}/switch")]
     public async Task<IActionResult> Switch(Guid id, CancellationToken ct)
@@ -256,6 +302,7 @@ public partial class WorkspacesController(
         aiCreditLowThresholdPct = w.AiCreditLowThresholdPct,
         aiCreditLimit = w.AiCreditLimit,
         aiMarkupOverride = w.AiMarkupOverride,
+        dateFormatRegion = w.DateFormatRegion,
     };
 
     internal static string Slugify(string raw)

@@ -40,6 +40,11 @@ public class NdWorkspace
     [Column("ai_markup_override")]
     public decimal? AiMarkupOverride { get; set; }
 
+    /// <summary>Which country's date convention this workspace's UI displays dates in (see
+    /// NdDateFormats on the frontend). Null = platform default (UAE, DD/MM/YYYY).</summary>
+    [Column("date_format_region")]
+    public string? DateFormatRegion { get; set; }
+
     [Column("created_by")]
     public Guid? CreatedBy { get; set; }
 

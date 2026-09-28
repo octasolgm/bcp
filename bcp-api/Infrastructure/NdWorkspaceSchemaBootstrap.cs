@@ -138,6 +138,9 @@ public static class NdWorkspaceSchemaBootstrap
             -- NULL = use the platform's default markup; a value overrides it for this workspace only.
             ALTER TABLE nd_workspaces
               ADD COLUMN IF NOT EXISTS ai_markup_override NUMERIC(18,4) NULL;
+            -- NULL = platform default (UAE, DD/MM/YYYY); a value sets this workspace's own date format.
+            ALTER TABLE nd_workspaces
+              ADD COLUMN IF NOT EXISTS date_format_region TEXT NULL;
             """,
             ct);
 

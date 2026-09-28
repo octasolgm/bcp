@@ -331,6 +331,24 @@
                             </form>
                           </div>
 
+                          <form class="credit-limit-form" (ngSubmit)="saveDateFormat(item)">
+                            <span class="muted">Date format</span>
+                            <select
+                              class="inline-input"
+                              [(ngModel)]="dateFormatInput"
+                              name="dateFormatInput-{{ item.workspace.id }}"
+                              aria-label="Date format"
+                            >
+                              <option value="default">Default (UAE, DD/MM/YYYY)</option>
+                              @for (opt of dateFormatOptions; track opt.value) {
+                                <option [value]="opt.value">{{ opt.label }}</option>
+                              }
+                            </select>
+                            <button type="submit" class="btn-secondary btn-sm" [disabled]="savingDateFormat">
+                              {{ savingDateFormat ? 'Saving…' : 'Save date format' }}
+                            </button>
+                          </form>
+
                           <form class="credit-topup" (ngSubmit)="handleTopUp(item)">
                             <input
                               type="number"
