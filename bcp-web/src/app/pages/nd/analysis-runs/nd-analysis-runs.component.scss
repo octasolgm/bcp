@@ -204,24 +204,8 @@
     background: color-mix(in srgb, var(--bg-muted) 45%, transparent);
   }
 
-  // A small color dot in front of each status/role pill — same colors the pill already uses
-  // (currentColor), just a clearer "at a glance" marker. Reaches into the shared badge
-  // component's own template with ::ng-deep, scoped to this page only — the badge component
-  // itself, and every other page that uses it, is untouched.
-  ::ng-deep .nd-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-
-    &::before {
-      content: '';
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
-      flex-shrink: 0;
-    }
-  }
+  // The dot-indicator + pill sizing on .nd-badge is now a global rule (nd-shared.scss) — every ND
+  // table gets it, not just this page. Nothing page-specific needed here anymore.
 }
 
 // UI-polish pass (page-by-page redesign): search icon inset into the runs search field, and CSS-only
