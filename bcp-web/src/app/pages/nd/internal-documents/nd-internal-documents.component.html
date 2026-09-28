@@ -165,9 +165,9 @@
             }
             <td class="muted col-actor" [title]="actorLabel(d.uploadedByName)">{{ actorLabel(d.uploadedByName) }}</td>
             <td class="muted col-actor" [title]="actorLabel(d.parsedByName)">{{ actorLabel(d.parsedByName) }}</td>
-            <td class="muted col-size">{{ formatBytes(d.sizeBytes) }}</td>
-            <td class="col-pts muted">{{ docPageMeta(d) }}</td>
-            <td class="col-pts muted" [title]="usedInAnalysesLabel(d.analysisRunCount)">{{ d.analysisRunCount ?? 0 }}</td>
+            <td class="col-size"><span class="meta-pill">{{ formatBytes(d.sizeBytes) }}</span></td>
+            <td class="col-pts"><span class="meta-pill">{{ docPageMeta(d) }}</span></td>
+            <td class="col-pts" [title]="usedInAnalysesLabel(d.analysisRunCount)"><span class="meta-pill">{{ d.analysisRunCount ?? 0 }}</span></td>
             <td class="col-status">
               @if (showsParsedPendingExtractChips(d)) {
                 <div class="nd-status-chip-stack">

@@ -340,14 +340,29 @@
 
 .reg-cell strong {
   font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
-.manual-hint {
+.manual-hint,
+.reg-cell .cell-subline {
   display: block;
   margin-top: 0.15rem;
   font-size: 0.75rem;
   color: var(--text-muted);
   font-weight: 400;
+}
+
+// File size / page / point counts as soft neutral pill tags instead of plain text.
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.75rem;
 }
 
 .type-badge.manual-badge {

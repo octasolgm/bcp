@@ -93,6 +93,8 @@
   strong {
     display: block;
     font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
     margin-bottom: 0.15rem;
     white-space: nowrap;
     overflow: hidden;
@@ -103,10 +105,24 @@
     display: block;
     font-size: 0.75rem;
     color: var(--text-muted);
+    margin-top: 0.1rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+// File size / page / point counts as soft neutral pill tags instead of plain text. On the <span>
+// wrapping the value, not the <td> itself — a table cell can't safely become inline-flex.
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.75rem;
 }
 
 .severity-badge.completed {
