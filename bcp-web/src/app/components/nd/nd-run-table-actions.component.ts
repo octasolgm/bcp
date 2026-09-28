@@ -278,10 +278,10 @@ export class NdRunTableActionsComponent {
   /** The 3 role stages the workflow actually moves through, plus the finalized end state — matches how
    * the business talks about a report's status, not every internal status string. */
   private static readonly FORCE_STATUS_OPTIONS = [
-    { value: 'completed', label: 'Submit for review pending (maker)' },
+    { value: 'completed', label: 'Ready for review (maker)' },
     { value: 'submitted_for_review', label: 'Submitted for review (checker)' },
     { value: 'checker_approved', label: 'Checker approved (reviewer)' },
-    { value: 'reviewer_approved', label: 'Reviewer approved (finalized)' },
+    { value: 'reviewer_approved', label: 'Finalized' },
   ];
 
   /** Super admin only: force this run to any workflow status, bypassing the normal chain. */

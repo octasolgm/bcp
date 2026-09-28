@@ -101,7 +101,7 @@ export function analysisRunStatusLabel(status: string): string {
     submitted_for_review: 'Submitted for review',
     pulled_back: 'Pulled back',
     checker_approved: 'Checker approved',
-    reviewer_approved: 'Review complete',
+    reviewer_approved: 'Finalized',
     deleted: 'Deleted',
   };
   return labels[s] ?? s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -109,7 +109,7 @@ export function analysisRunStatusLabel(status: string): string {
 
 /** Status label shown on run rows/badges (may differ from raw DB status). */
 export function analysisRunDisplayStatusLabel(status: string): string {
-  if (isAnalysisRunSubmitReviewPending(status)) return 'Submit for review pending';
+  if (isAnalysisRunSubmitReviewPending(status)) return 'Ready for review';
   return analysisRunStatusLabel(status);
 }
 
@@ -121,11 +121,11 @@ export function analysisRunWorkflowLabel(run: AnalysisRunSummary): string {
   // even after it has been submitted for review, which disagrees with the "With
   // checker"/"With reviewer" label shown once the run is opened from the queue.
   const s = normalizeRunStatus(run.status);
-  if (isAnalysisRunSubmitReviewPending(s)) return 'Submit for review pending';
+  if (isAnalysisRunSubmitReviewPending(s)) return 'Ready for review';
   if (s === 'pulled_back') return 'Resubmit pending';
   if (s === 'submitted_for_review') return 'With checker';
   if (s === 'checker_approved') return 'With reviewer';
-  if (s === 'reviewer_approved') return 'Review complete';
+  if (s === 'reviewer_approved') return 'Finalized';
 
   if (isRegulWorkflow(run.workflowEngine)) {
     const phase = (run.regulPipelinePhase ?? '').toLowerCase();
