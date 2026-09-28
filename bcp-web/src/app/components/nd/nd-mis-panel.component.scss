@@ -138,10 +138,22 @@
 .mis-plan-list {
   list-style: none;
   margin: 0.9rem 0 0;
-  padding: 0;
+  padding: 0 0.15rem 0 0;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
+  max-height: 26rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+  }
 }
 
 // Clean list item: a bottom divider + a thin left-accent bar, not a boxed/tinted card per row —
@@ -200,10 +212,22 @@
 .mis-list {
   list-style: none;
   margin: 0.9rem 0 0;
-  padding: 0;
+  padding: 0 0.15rem 0 0;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  max-height: 26rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+  }
 }
 
 .mis-owner {
