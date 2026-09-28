@@ -95,16 +95,16 @@
                 <p class="empty-msg">Loading regulations…</p>
               } @else {
                 <ul class="file-list">
-                  @if (regUploadProgress) {
+                  @if (regUploadPipelineV2; as p) {
                     <li>
-                      <div class="file-row file-row-stack upload-row" [class.is-failed]="regUploadProgress.stage === 'failed'">
+                      <div class="file-row file-row-stack upload-row" [class.is-failed]="p.stage === 'failed'">
                         <span class="upload-row-spinner" aria-hidden="true"></span>
                         <span class="file-row-body">
                           <span class="fname-line">
-                            <span class="fname">{{ regUploadProgress.name }}</span>
+                            <span class="fname">{{ p.name }}</span>
                           </span>
                           <span class="fsub">
-                            <span class="fmeta ready-label">{{ regUploadStageLabel() }}</span>
+                            <span class="fmeta ready-label">{{ p.message ?? uploadPipelineLabel(p.stage) }}</span>
                           </span>
                         </span>
                       </div>
@@ -608,6 +608,21 @@
             <p class="empty-msg">Loading…</p>
           } @else {
             <ul class="file-list">
+              @if (complianceUploadPipelineV2; as p) {
+                <li>
+                  <div class="file-row file-row-stack upload-row" [class.is-failed]="p.stage === 'failed'">
+                    <span class="upload-row-spinner" aria-hidden="true"></span>
+                    <span class="file-row-body">
+                      <span class="fname-line">
+                        <span class="fname">{{ p.name }}</span>
+                      </span>
+                      <span class="fsub">
+                        <span class="fmeta ready-label">{{ p.message ?? uploadPipelineLabel(p.stage) }}</span>
+                      </span>
+                    </span>
+                  </div>
+                </li>
+              }
               @for (doc of filteredComplianceDocs; track doc.id) {
                 <li>
                   <button

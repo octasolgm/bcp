@@ -521,4 +521,200 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
         return 'Starting analysis';
     }
   }
+
+  // --------------------------------------------------------------------------------
+  // 28 Sep meeting: uploading a regulation or internal document on this page should run the
+  // same parse + extract pipeline the dedicated Documents pages run, automatically, with a
+  // visible step-by-step progress state instead of leaving the file "uploaded" and unusable
+  // until the user goes and parses it manually elsewhere. And it must not blank the panel while
+  // it happens — refreshRegulations()/refreshComplianceDocs() already only show a full "Loading…"
+  // state when the list is empty (see the V2 template), so a background refresh here just updates
+  // the list in place.
+  // --------------------------------------------------------------------------------
+
+  uploadPipelineLabel(stage: 'uploading' | 'parsing' | 'extracting' | 'done' | 'failed'): string {
+    switch (stage) {
+      case 'uploading':
+        return 'Uploading…';
+      case 'parsing':
+        return 'Parsing…';
+      case 'extracting':
+        return 'Extracting…';
+      case 'done':
+        return 'Parsed and extracted';
+      case 'failed':
+        return 'Failed';
+    }
+  }
+
+  regUploadPipelineV2: { name: string; stage: 'uploading' | 'parsing' | 'extracting' | 'done' | 'failed'; message?: string } | null = null;
+  complianceUploadPipelineV2: { name: string; stage: 'uploading' | 'parsing' | 'extracting' | 'done' | 'failed'; message?: string } | null = null;
+
+  /** Overrides the base's onRegulationUpload (which only uploads, then tells a real — non-demo —
+   * account to go parse/extract it manually from Regulation Docs) to also run parse + extract
+   * automatically, for every account. */
+  override onRegulationUpload(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    void this.runRegulationUploadPipeline(file);
+  }
+
+  private async runRegulationUploadPipeline(file: File): Promise<void> {
+    this.uploadingReg = true;
+    this.regUploadPipelineV2 = { name: file.name, stage: 'uploading' };
+    const keptRegIds = new Set(this.selectedRegIds);
+    try {
+      const uploaded = await this.ndApi.uploadRegulationDocument(file);
+      if (!uploaded.success) {
+        this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: uploaded.message ?? 'Upload failed' };
+        this.toast.show(this.regUploadPipelineV2.message!, 'error', 4000);
+        return;
+      }
+      const id = (uploaded.data as { id?: string } | undefined)?.id;
+      if (!id) {
+        this.regUploadPipelineV2 = null;
+        this.toast.show('Document uploaded', 'success', 3000);
+        this.refreshRegulations(() => this.reapplyRegSelection(keptRegIds));
+        return;
+      }
+
+      this.regUploadPipelineV2 = { name: file.name, stage: 'parsing' };
+      const parsed = await this.ndApi.parseRegulationDocument(id);
+      if (!parsed.success) {
+        this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: parsed.message ?? 'Parse failed' };
+        this.toast.show(this.regUploadPipelineV2.message!, 'error', 4000);
+        this.refreshRegulations(() => this.reapplyRegSelection(keptRegIds));
+        return;
+      }
+
+      this.regUploadPipelineV2 = { name: file.name, stage: 'extracting' };
+      const extracted = await this.ndApi.extractRegulationDocument(id);
+      if (!extracted.success) {
+        this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: extracted.message ?? 'Extract failed' };
+        this.toast.show(this.regUploadPipelineV2.message!, 'error', 4000);
+        this.refreshRegulations(() => this.reapplyRegSelection(keptRegIds));
+        return;
+      }
+
+      this.regUploadPipelineV2 = { name: file.name, stage: 'done' };
+      this.toast.show(`Parsed and extracted "${file.name}"`, 'success', 3500);
+      this.refreshRegulations(() => {
+        this.reapplyRegSelection(keptRegIds);
+        const doc = this.regulationDocs.find((d) => d.id === id);
+        if (doc && this.canSelectRegDoc(doc)) this.selectedRegIds.add(doc.id);
+        this.selectedRegDocs = this.regulationDocs.filter((d) => this.selectedRegIds.has(d.id));
+        this.loadPointsForSelectedFiles();
+      });
+      setTimeout(() => {
+        if (this.regUploadPipelineV2?.stage === 'done') this.regUploadPipelineV2 = null;
+      }, 2500);
+    } catch {
+      this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: 'Upload failed' };
+      this.toast.show('Regulation upload failed.', 'error', 4000);
+    } finally {
+      this.uploadingReg = false;
+    }
+  }
+
+  private reapplyRegSelection(keptRegIds: Set<string>): void {
+    for (const kept of keptRegIds) this.selectedRegIds.add(kept);
+    this.selectedRegDocs = this.regulationDocs.filter((d) => this.selectedRegIds.has(d.id));
+  }
+
+  /** Overrides the base's onComplianceSelect, which uploads internal documents through a legacy,
+   * non-ND endpoint that never parses or extracts them (they never become analyzable). Routes
+   * through the ND internal-documents catalog instead — the same one the primary Documents page
+   * uses (Azure Document Intelligence) — and runs parse + extract automatically, same as above. */
+  override onComplianceSelect(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    void this.runComplianceUploadPipeline(file);
+  }
+
+  private async runComplianceUploadPipeline(file: File): Promise<void> {
+    this.uploadingCompliance = true;
+    this.complianceUploadPipelineV2 = { name: file.name, stage: 'uploading' };
+    try {
+      const uploaded = await this.ndApi.uploadInternalDocument(file);
+      if (!uploaded.success) {
+        this.complianceUploadPipelineV2 = { name: file.name, stage: 'failed', message: uploaded.message ?? 'Upload failed' };
+        this.toast.show(this.complianceUploadPipelineV2.message!, 'error', 4000);
+        return;
+      }
+      const id = (uploaded.data as { id?: string } | undefined)?.id;
+      if (!id) {
+        this.complianceUploadPipelineV2 = null;
+        this.toast.show('Document uploaded', 'success', 3000);
+        return;
+      }
+
+      this.complianceUploadPipelineV2 = { name: file.name, stage: 'parsing' };
+      const parsed = await this.ndApi.parseInternalDocument(id);
+      const parseStatus = (parsed.data as { parseStatus?: string } | undefined)?.parseStatus?.toLowerCase();
+      if (!parsed.success) {
+        this.complianceUploadPipelineV2 = { name: file.name, stage: 'failed', message: parsed.message ?? 'Parse failed' };
+        this.toast.show(this.complianceUploadPipelineV2.message!, 'error', 4000);
+        return;
+      }
+      if (parseStatus === 'processing') {
+        // Azure is taking longer than this request waited for — a rare case, not worth a full
+        // polling loop here; the document is safely uploaded and can be finished from Internal
+        // Documents, same as any other long-running parse there.
+        this.complianceUploadPipelineV2 = null;
+        this.toast.show(`"${file.name}" uploaded — still parsing, check Internal Documents shortly.`, 'success', 5000);
+        return;
+      }
+
+      this.complianceUploadPipelineV2 = { name: file.name, stage: 'extracting' };
+      const extracted = await this.ndApi.extractInternalDocumentSections(id);
+      if (!extracted.success) {
+        this.complianceUploadPipelineV2 = { name: file.name, stage: 'failed', message: extracted.message ?? 'Extract failed' };
+        this.toast.show(this.complianceUploadPipelineV2.message!, 'error', 4000);
+        return;
+      }
+
+      // The dedicated Internal Documents page (this doc's real source of truth from here on)
+      // reads from the ND catalog; this page's own compliance list still reads from the older,
+      // separate document store, so the doc this pipeline just finished would otherwise never
+      // appear here to select. Inject it directly instead of switching this page's whole list
+      // source (a bigger change than this fix needs).
+      const sectionCount = (extracted.data as { sectionCount?: number } | undefined)?.sectionCount ?? null;
+      const readyDoc: StoredDocumentDto = {
+        id,
+        title: file.name,
+        category: 'Compliance',
+        pages: 0,
+        uploaded: new Date().toISOString(),
+        version: 'v1',
+        status: 'ready',
+        filter: 'aml',
+        fileType: file.name.split('.').pop()?.toUpperCase() ?? '',
+        docKind: 'document',
+        storagePath: '',
+        history: [],
+        originalFileName: file.name,
+        sizeBytes: file.size,
+        parseStatus: 'parsed',
+        sectionExtractStatus: 'extracted',
+        sectionCount,
+      };
+      this.complianceDocs = [readyDoc, ...this.complianceDocs.filter((d) => d.id !== id)];
+      this.selectedComplianceIds.add(id);
+
+      this.complianceUploadPipelineV2 = { name: file.name, stage: 'done' };
+      this.toast.show(`Parsed and extracted "${file.name}"`, 'success', 3500);
+      setTimeout(() => {
+        if (this.complianceUploadPipelineV2?.stage === 'done') this.complianceUploadPipelineV2 = null;
+      }, 2500);
+    } catch {
+      this.complianceUploadPipelineV2 = { name: file.name, stage: 'failed', message: 'Upload failed' };
+      this.toast.show('Internal document upload failed.', 'error', 4000);
+    } finally {
+      this.uploadingCompliance = false;
+    }
+  }
 }
