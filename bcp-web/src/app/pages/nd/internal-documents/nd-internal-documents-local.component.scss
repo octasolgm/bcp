@@ -1,0 +1,20 @@
+// See nd-regulation-documents-local.component.scss for why this internal pipeline/admin page
+// keeps the stronger tinted-row "ready vs not ready" signal instead of the softer left-accent-only
+// treatment used on the main Internal Documents catalog page.
+table.internal-docs-table {
+  tr.doc-ready-red td:first-child {
+    box-shadow: none;
+  }
+
+  tr.doc-ready-red td {
+    background: var(--critical-bg);
+  }
+
+  tr.doc-ready-green td:first-child {
+    box-shadow: none;
+  }
+
+  tr.doc-ready-green td {
+    background: var(--low-bg);
+  }
+}

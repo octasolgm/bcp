@@ -878,14 +878,14 @@ export function formatGovPointDisplayId(point: GovPoint): string {
   return id;
 }
 
-/** Chapter header — main body §N; annex chapters shown without § prefix. */
+/** Chapter header — clause number, no §-prefix (reads as "$" at small sizes). */
 export function formatChapterLabel(chapter: string, headingTitle?: string | null): string {
   const c = chapter.trim();
   let base: string;
   if (c === 'other') base = 'Other points';
-  else if (c === 'intro') base = '§1 Introduction';
+  else if (c === 'intro') base = '1 Introduction';
   else if (/^annex\s+\d+/i.test(c)) base = c;
-  else base = `§${c}`;
+  else base = c;
   const title = headingTitle?.trim();
   if (title && c !== 'intro' && c !== 'other') return `${base} ${title}`;
   return base;
@@ -1073,16 +1073,11 @@ export function resolveGovPointListTitle(point: GovPointWithNumber): string {
   return first.length > 120 ? `${first.slice(0, 117)}…` : first;
 }
 
-/** Section bar label — numeric groups get § prefix; annex headings stay verbatim. */
+/** Section bar label — clause number, no §-prefix (reads as "$" at small sizes). */
 export function formatSectionGroupLabel(key: string, headingTitle?: string | null): string {
   const k = key.trim();
   if (!k) return k;
-  let base: string;
-  if (/^annex\s+\d+/i.test(k)) base = k;
-  else if (/^annex\s+\d+\s*·\s*/i.test(k)) base = k;
-  else if (/^\d+\.\d+(?:\.\d+)*$/.test(k)) base = `§${k}`;
-  else if (/^\d+$/.test(k)) base = `§${k}`;
-  else base = k;
+  const base = k;
   const title = headingTitle?.trim();
   if (title) return `${base} ${title}`;
   return base;

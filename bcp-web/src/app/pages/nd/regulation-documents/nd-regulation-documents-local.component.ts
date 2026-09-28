@@ -101,7 +101,11 @@ type RegulationDocAnalysisRun = {
   standalone: true,
   imports: [CommonModule, FormsModule, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent, NdPageAlertComponent],
   templateUrl: './nd-regulation-documents-local.component.html',
-  styleUrls: ['./nd-regulation-documents.component.scss', '../nd-shared.scss'],
+  styleUrls: [
+    './nd-regulation-documents.component.scss',
+    '../nd-shared.scss',
+    './nd-regulation-documents-local.component.scss',
+  ],
 })
 export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   private static readonly PANEL_SPLIT_KEY = 'nd-reg-local-panel-split-left';

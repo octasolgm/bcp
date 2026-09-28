@@ -72,7 +72,11 @@ const RecentUploadKeepMs = 90_000;
   standalone: true,
   imports: [CommonModule, FormsModule, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent],
   templateUrl: './nd-internal-documents-local.component.html',
-  styleUrls: ['./nd-internal-documents.component.scss', '../nd-shared.scss'],
+  styleUrls: [
+    './nd-internal-documents.component.scss',
+    '../nd-shared.scss',
+    './nd-internal-documents-local.component.scss',
+  ],
 })
 export class NdInternalDocumentsLocalComponent implements OnInit {
   private readonly api = inject(NdApiService);

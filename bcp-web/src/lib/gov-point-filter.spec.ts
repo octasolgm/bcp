@@ -139,7 +139,7 @@ describe('gov-point-filter', () => {
       'Summary of Minimum Statutory Obligations of Supervised Institutions',
     );
     expect(formatSectionGroupLabel('3.1', sectionHeadingTitleForKey('3.1', points))).toBe(
-      '§3.1 Summary of Minimum Statutory Obligations of Supervised Institutions',
+      '3.1 Summary of Minimum Statutory Obligations of Supervised Institutions',
     );
   });
 

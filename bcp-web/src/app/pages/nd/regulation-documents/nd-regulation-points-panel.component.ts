@@ -133,7 +133,7 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
 
   get viewNote(): string {
     if (!this.storedCount || this.skippedCount === 0) return '';
-    return 'Introduction, annex, and section-header points are shown for reference. Gap analysis uses numbered requirement leaves only (from §2 onward).';
+    return 'Introduction, annex, and section-header points are shown for reference. Gap analysis uses numbered requirement leaves only (from clause 2 onward).';
   }
 
   get footnote(): string {

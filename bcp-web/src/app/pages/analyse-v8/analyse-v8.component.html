@@ -1026,7 +1026,7 @@
             <div class="result-point-heading">
               <h3 class="result-point-title">
                 @if (resultClauseLabel !== '—') {
-                  <span class="result-clause-num">§{{ resultClauseLabel }}</span>
+                  <span class="result-clause-num">{{ resultClauseLabel }}</span>
                 }
                 @if (selectedPointSnapshot?.pointTitle) {
                   <span class="result-clause-title">{{ selectedPointSnapshot?.pointTitle }}</span>
@@ -1357,7 +1357,7 @@
   <dialog class="run-confirm-dialog point-detail-dialog" open aria-labelledby="point-detail-title">
     <button type="button" class="point-detail-close" aria-label="Close" (click)="closePointDetailModal()">×</button>
     <h2 id="point-detail-title">
-      §{{ displayLabelForPoint(pointDetailModalId) }}
+      {{ displayLabelForPoint(pointDetailModalId) }}
       @if (pointDetailModalSnapshot()?.pointTitle) {
         — {{ pointDetailModalSnapshot()?.pointTitle }}
       }

@@ -1,0 +1,22 @@
+// This is an internal pipeline/admin tool (parse, extract, repair points), not the polished
+// customer-facing Documents catalog — a quick "ready vs not ready" color signal at a glance is
+// more useful here than the softer left-accent-only treatment used on the main catalog pages, so
+// this page keeps the stronger tinted-row look. Higher-specificity selectors (table.reg-docs-table)
+// override the shared nd-shared.scss default without touching it, so the main catalog is unaffected.
+table.reg-docs-table {
+  tr.doc-ready-red td:first-child {
+    box-shadow: none;
+  }
+
+  tr.doc-ready-red td {
+    background: var(--critical-bg);
+  }
+
+  tr.doc-ready-green td:first-child {
+    box-shadow: none;
+  }
+
+  tr.doc-ready-green td {
+    background: var(--low-bg);
+  }
+}

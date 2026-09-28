@@ -145,7 +145,7 @@
               [class.has-history]="historyPointId === p.id"
               (click)="selectPoint(p.id)"
             >
-              <span class="rail-point-num">§{{ snap.pointNumber }}</span>
+              <span class="rail-point-num">{{ snap.pointNumber }}</span>
               @if (gapCountForPoint(p); as gapCount) {
                 @if (gapCount > 0) {
                   <span class="gap-count-badge">{{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}</span>
@@ -167,7 +167,7 @@
             <div class="nd-card nd-point-card nd-point-detail-card">
               <div class="nd-point-row">
                 <span class="nd-list-title">
-                  §{{ snap.pointNumber }}
+                  {{ snap.pointNumber }}
                   @if (snap.pointTitle) { — {{ snap.pointTitle }} }
                 </span>
                 @if (pointSeverity(p); as severity) {
@@ -245,7 +245,7 @@
           @if (embedMode) {
             <button type="button" class="nd-point-toggle" (click)="togglePointExpanded(p.id)">
               <span class="nd-list-title">
-                §{{ snap.pointNumber }}
+                {{ snap.pointNumber }}
                 @if (snap.pointTitle) { — {{ snap.pointTitle }} }
               </span>
               @if (gapCountForPoint(p); as gapCount) {

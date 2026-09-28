@@ -241,7 +241,7 @@
             <div class="acc-item">
               <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
                 <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
-                <span>§{{ ch.chapter }}</span>
+                <span>{{ ch.chapter }}</span>
                 <span class="acc-meta">{{ ch.points.length }}</span>
                 <button
                   type="button"
