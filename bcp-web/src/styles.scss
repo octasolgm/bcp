@@ -201,6 +201,20 @@ a {
   }
 }
 
+// Baseline heading scale — a default every h2/h3 falls back to; page-specific rules with higher
+// specificity (e.g. a card's own "h2 { font-size: ... }") still win where they already exist.
+h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+}
+
 /* ND document catalog pages — global so layout updates always apply */
 .page-header.page-header--catalog {
   margin-bottom: 0;

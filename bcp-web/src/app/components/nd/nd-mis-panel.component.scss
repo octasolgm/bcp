@@ -144,19 +144,23 @@
   gap: 0.3rem;
 }
 
+// Clean list item: a bottom divider + a thin left-accent bar, not a boxed/tinted card per row —
+// the accent color alone (pending = critical, resolved = low) carries the status.
 .mis-plan {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid var(--border);
+  padding: 0.875rem 0.6rem;
   border-left: 3px solid var(--critical);
-  border-radius: 8px;
+  border-bottom: 1px solid var(--border-subtle, var(--border));
   font-size: 0.78rem;
-  background: var(--critical-bg);
+  background: transparent;
+
+  &:last-child {
+    border-bottom: none;
+  }
 
   &.is-resolved {
-    background: var(--low-bg);
     border-left-color: var(--low);
   }
 }
@@ -284,19 +288,18 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.9rem;
-  padding: 0.4rem 0.5rem;
-  border-radius: 6px;
+  padding: 0.75rem 0.5rem;
   border-left: 3px solid var(--critical);
-  background: var(--critical-bg);
+  border-bottom: 1px solid var(--border-subtle, var(--border));
+  background: transparent;
   font-size: 0.78rem;
 
   &.is-resolved {
     border-left-color: var(--low);
-    background: var(--low-bg);
   }
 
-  & + & {
-    margin-top: 0.3rem;
+  &:last-child {
+    border-bottom: none;
   }
 }
 

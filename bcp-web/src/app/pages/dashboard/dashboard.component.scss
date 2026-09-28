@@ -192,11 +192,11 @@
 
   li {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 0.5rem;
     font-size: 0.875rem;
     color: var(--text-secondary);
-    margin-bottom: 0.55rem;
+    margin-bottom: 0.6rem;
 
     &:last-child {
       margin-bottom: 0;
@@ -204,11 +204,10 @@
   }
 
   .dot {
-    width: 9px;
-    height: 9px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
-    align-self: center;
   }
 
   .legend-label {
