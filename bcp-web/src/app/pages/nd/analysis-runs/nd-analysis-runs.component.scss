@@ -191,7 +191,7 @@
   }
 
   .col-points {
-    text-align: right;
+    text-align: center;
   }
 
   .col-run strong {
@@ -216,11 +216,11 @@
   }
 
   .doc-group-label {
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: var(--text-muted);
+    color: var(--text-primary);
   }
 
   .doc-group-name {
@@ -232,20 +232,27 @@
     max-width: 15rem;
   }
 
+  .run-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
   .run-rename-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 22px;
     height: 22px;
-    margin-left: 0.4rem;
+    flex-shrink: 0;
+    margin-left: auto;
     padding: 0;
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
-    vertical-align: middle;
     opacity: 0;
     transition: opacity 0.1s, background 0.15s, color 0.15s;
 

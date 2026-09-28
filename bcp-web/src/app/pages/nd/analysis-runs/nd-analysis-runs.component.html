@@ -114,9 +114,6 @@
             Title <span class="sort-indicator">{{ sortIndicator('name') }}</span>
           </th>
           <th class="col-docs">Documents</th>
-          <th class="sortable col-maker" (click)="toggleSort('maker')">
-            Submitted by <span class="sort-indicator">{{ sortIndicator('maker') }}</span>
-          </th>
           <th class="col-with" title="Which role the report currently sits with">Stage</th>
           <th class="sortable col-points" (click)="toggleSort('points')">
             Points <span class="sort-indicator">{{ sortIndicator('points') }}</span>
@@ -126,6 +123,9 @@
           </th>
           <th class="col-workflow">Summary</th>
           <th class="col-gaps" title="Gaps and action plans, with how many are resolved">Gaps / actions</th>
+          <th class="sortable col-maker" (click)="toggleSort('maker')">
+            Submitted by <span class="sort-indicator">{{ sortIndicator('maker') }}</span>
+          </th>
           <th class="col-actions">Actions</th>
         </tr>
       </thead>
@@ -139,18 +139,20 @@
               <app-nd-status-badge [status]="run.status" />
             </td>
             <td class="col-run" data-label="Run" [title]="run.name">
-              <strong>{{ run.name }}</strong>
-              @if (!isLegacy(run)) {
-                <button
-                  type="button"
-                  class="run-rename-btn"
-                  title="Rename this analysis"
-                  aria-label="Rename this analysis"
-                  (click)="renameRun(run, $event)"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-                </button>
-              }
+              <div class="run-title-row">
+                <strong>{{ run.name }}</strong>
+                @if (!isLegacy(run)) {
+                  <button
+                    type="button"
+                    class="run-rename-btn"
+                    title="Rename this analysis"
+                    aria-label="Rename this analysis"
+                    (click)="renameRun(run, $event)"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                  </button>
+                }
+              </div>
             </td>
             <td class="col-docs" data-label="Documents">
               @if (run.regulationDocNames?.length || run.internalDocNames?.length) {
@@ -194,10 +196,6 @@
                 }
               }
             </td>
-            <td class="col-maker" data-label="Submitted by">
-              <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
-              <span class="submitted-by-name" [title]="submittedByLabel(run)">{{ submittedByLabel(run) }}</span>
-            </td>
             <td class="col-with" data-label="Stage">
               <app-nd-run-role-badge [status]="run.status" />
             </td>
@@ -238,6 +236,10 @@
               } @else {
                 —
               }
+            </td>
+            <td class="col-maker" data-label="Submitted by">
+              <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
+              <span class="submitted-by-name" [title]="submittedByLabel(run)">{{ submittedByLabel(run) }}</span>
             </td>
             <td class="row-actions col-actions" data-label="Actions" (click)="$event.stopPropagation()">
               <app-nd-run-table-actions
