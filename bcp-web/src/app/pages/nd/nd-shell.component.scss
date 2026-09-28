@@ -55,6 +55,9 @@
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
   flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .brand {
@@ -382,6 +385,7 @@
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -393,6 +397,25 @@
   color: var(--text-secondary);
   margin-bottom: 2px;
   transition: background 0.15s, color 0.15s;
+
+  // A left accent bar on the active item is a common, unambiguous "you are here" marker in
+  // enterprise sidebars — scales in from zero height instead of just appearing.
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 20%;
+    bottom: 20%;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent);
+    transform: scaleY(0);
+    transition: transform 0.15s ease;
+  }
+
+  &.active::before {
+    transform: scaleY(1);
+  }
 
   .nav-icon {
     width: 16px;
