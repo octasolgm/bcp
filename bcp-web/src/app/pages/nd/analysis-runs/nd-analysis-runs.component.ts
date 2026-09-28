@@ -316,6 +316,13 @@ export class NdAnalysisRunsComponent implements OnInit {
     return ndAnalysisRunQuery(run, this.auth.getRole(), this.runLinkOpts());
   }
 
+  /** Row click opens the report in a new tab instead of navigating away from the list. */
+  openRunInNewTab(run: AnalysisRunSummary, event: Event): void {
+    event.preventDefault();
+    const tree = this.router.createUrlTree(this.runLink(run), { queryParams: this.runQuery(run) ?? null });
+    window.open(this.router.serializeUrl(tree), '_blank', 'noopener');
+  }
+
   needsExecutionView(run: AnalysisRunSummary): boolean {
     return analysisRunNeedsExecutionView(run);
   }

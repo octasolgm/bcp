@@ -164,3 +164,29 @@
 .page-flash {
   margin: 0 0 1rem;
 }
+
+// 28 Sep meeting: readability pass on this table only (component-scoped, does not touch the shared
+// nd-shared.scss table styling other ND list pages use).
+.nd-table-wrap table {
+  font-size: 0.875rem;
+
+  th,
+  td {
+    vertical-align: middle;
+    white-space: normal;
+    line-height: 1.35;
+  }
+
+  .col-status,
+  .col-with {
+    text-align: left;
+  }
+
+  .col-points {
+    text-align: right;
+  }
+
+  .col-run strong {
+    font-size: 0.9375rem;
+  }
+}

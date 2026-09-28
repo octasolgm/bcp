@@ -393,7 +393,7 @@ export const routes: Routes = [
           },
           {
             path: 'inbox',
-            title: 'My actions · Comply Solutions',
+            title: 'Notifications · Comply Solutions',
             loadComponent: () =>
               import('./pages/nd/inbox/nd-inbox.component').then((m) => m.NdInboxComponent),
           },

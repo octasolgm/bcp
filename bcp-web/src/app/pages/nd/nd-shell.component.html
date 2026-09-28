@@ -30,6 +30,15 @@
       @if (profile(); as p) {
         <span class="role-badge">{{ roleLabel }}</span>
       }
+      <a routerLink="/nd/inbox" routerLinkActive="active" class="btn-notifications" aria-label="Notifications" title="Notifications">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        @if (notificationsBadge; as n) {
+          <span class="nav-badge notifications-badge">{{ n }}</span>
+        }
+      </a>
       <button type="button" class="btn-settings" (click)="toggleSettings()" aria-label="Settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
@@ -57,8 +66,10 @@
     <aside class="sidebar" [style.width.px]="shellFocus.regulationPointsPanelOpen() ? null : sidebarWidth">
       <div class="sidebar-nav">
         <p class="nav-label">Workspace</p>
-        @for (entry of navEntries; track entry.kind === 'link' ? entry.item.id : entry.group.id) {
-          @if (entry.kind === 'link') {
+        @for (entry of navEntries; track entry.kind === 'divider' ? entry.id : entry.kind === 'link' ? entry.item.id : entry.group.id) {
+          @if (entry.kind === 'divider') {
+            <hr class="nav-divider" />
+          } @else if (entry.kind === 'link') {
             <a
               [routerLink]="entry.item.path"
               [queryParams]="entry.item.queryParams"

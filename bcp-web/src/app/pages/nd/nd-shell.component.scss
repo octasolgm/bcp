@@ -172,7 +172,8 @@
   }
 }
 
-.btn-settings {
+.btn-settings,
+.btn-notifications {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -190,6 +191,22 @@
     background: var(--nav-active-bg);
     border-color: var(--border-strong);
   }
+}
+
+.btn-notifications {
+  position: relative;
+  text-decoration: none;
+
+  &.active {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+}
+
+.notifications-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
 }
 
 .body {
@@ -356,6 +373,12 @@
   .nav-chevron {
     display: none;
   }
+}
+
+.nav-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.5rem 0.25rem;
 }
 
 .nav-item {

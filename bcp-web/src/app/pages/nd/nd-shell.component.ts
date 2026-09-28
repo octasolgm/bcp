@@ -54,7 +54,8 @@ type NavGroup = {
 
 type NavEntry =
   | { kind: 'link'; item: NavItem }
-  | { kind: 'group'; group: NavGroup };
+  | { kind: 'group'; group: NavGroup }
+  | { kind: 'divider'; id: string };
 
 @Component({
   selector: 'app-nd-shell',
@@ -483,6 +484,12 @@ export class NdShellComponent implements OnInit, OnDestroy {
     return this.router.url.split('?')[0].startsWith('/nd/overview');
   }
 
+  /** Inbox count, now shown on the top-bar "Notifications" bell instead of a sidebar link. */
+  get notificationsBadge(): number | undefined {
+    const n = this.navBadges['inbox'] ?? 0;
+    return n > 0 ? n : undefined;
+  }
+
   badgeFor(item: NavItem): number | undefined {
     if (item.id === 'in-progress') {
       const n = this.ndActiveRunCount;
@@ -626,6 +633,10 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   private group(group: NavGroup): NavEntry {
     return { kind: 'group', group };
+  }
+
+  private divider(id: string): NavEntry {
+    return { kind: 'divider', id };
   }
 
   /// Primary Documents entry - runs on Azure Document Intelligence (parse via signed-URL
@@ -936,50 +947,39 @@ export class NdShellComponent implements OnInit, OnDestroy {
     };
   }
 
+  /// Menu order per the 28 Sep meeting: Overview, Analysis, Pending reviews, a divider, then
+  /// Documents, then Administration. Inbox moved out of the sidebar entirely (it's a top-bar
+  /// "Notifications" button now — see nd-shell.component.html). The old "Other" group (Landing AI +
+  /// local OCR engine test pages) is hidden from the menu, not just collapsed.
   private navForRole(role: string): NavEntry[] {
     const overview = this.link({ id: 'overview', path: '/nd/overview', label: 'Overview', icon: 'grid' });
-    // Every role owns actions, so the inbox sits directly under Overview for all of them.
-    const inbox = this.link({
-      id: 'inbox',
-      path: '/nd/inbox',
-      label: 'Inbox',
-      icon: 'inbox',
-      badgeAlways: true,
-    });
 
     switch (role) {
       case 'super_admin': {
         const pending = this.pendingReviewsGroup(role);
-        // Local OCR engine test pages (Tesseract/RapidOCR/Docling) are internal evaluation tools,
-        // not something a demo/client viewer should see in the nav.
-        const localEngineGroups = this.auth.isDemoViewer() ? [] : [this.group(this.otherEnginesGroup(role))];
         return [
           overview,
-          inbox,
-          this.group(this.documentsGroup(role)),
-          ...localEngineGroups,
           this.group(this.analysisGroup(role)),
           ...(pending ? [this.group(pending)] : []),
+          this.divider('after-pending-reviews'),
+          this.group(this.documentsGroup(role)),
           this.group(this.adminGroup()),
         ];
       }
       case 'maker': {
         const pending = this.pendingReviewsGroup(role);
-        const localEngineGroups = this.auth.isDemoViewer() ? [] : [this.group(this.otherEnginesGroup(role))];
         return [
           overview,
-          inbox,
-          this.group(this.documentsGroup(role)),
-          ...localEngineGroups,
           this.group(this.analysisGroup(role)),
           ...(pending ? [this.group(pending)] : []),
+          this.divider('after-pending-reviews'),
+          this.group(this.documentsGroup(role)),
         ];
       }
       case 'checker': {
         const pending = this.pendingReviewsGroup(role);
         return [
           overview,
-          inbox,
           this.group({
             id: 'analysis',
             label: 'Analysis',
@@ -1001,7 +1001,6 @@ export class NdShellComponent implements OnInit, OnDestroy {
         const pending = this.pendingReviewsGroup(role);
         return [
           overview,
-          inbox,
           this.group({
             id: 'analysis',
             label: 'Analysis',
@@ -1020,7 +1019,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         ];
       }
       default:
-        return [overview, inbox];
+        return [overview];
     }
   }
 }

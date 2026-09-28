@@ -83,27 +83,24 @@
     <table>
       <thead>
         <tr>
+          <th class="sortable col-status" (click)="toggleSort('status')">
+            Status <span class="sort-indicator">{{ sortIndicator('status') }}</span>
+          </th>
           <th class="sortable col-run" (click)="toggleSort('name')">
             Run <span class="sort-indicator">{{ sortIndicator('name') }}</span>
           </th>
           <th class="sortable col-maker" (click)="toggleSort('maker')">
             Submitted by <span class="sort-indicator">{{ sortIndicator('maker') }}</span>
           </th>
-          <th class="col-with">With</th>
+          <th class="col-with" title="Which role the report currently sits with">Stage</th>
           <th class="sortable col-points" (click)="toggleSort('points')">
             Points <span class="sort-indicator">{{ sortIndicator('points') }}</span>
           </th>
           <th class="sortable col-date" (click)="toggleSort('created')">
             Date <span class="sort-indicator">{{ sortIndicator('created') }}</span>
           </th>
-          <th class="sortable col-source" (click)="toggleSort('source')">
-            Source <span class="sort-indicator">{{ sortIndicator('source') }}</span>
-          </th>
           <th class="col-workflow">Summary</th>
           <th class="col-gaps" title="Gaps and action plans, with how many are resolved">Gaps / actions</th>
-          <th class="sortable col-status" (click)="toggleSort('status')">
-            Status <span class="sort-indicator">{{ sortIndicator('status') }}</span>
-          </th>
           <th class="col-actions">Actions</th>
         </tr>
       </thead>
@@ -111,30 +108,21 @@
         @for (run of visibleRuns; track run.id) {
           <tr
             class="clickable-row"
-            [routerLink]="runLink(run)"
-            [queryParams]="runQuery(run) || null"
+            (click)="openRunInNewTab(run, $event)"
           >
+            <td class="col-status" data-label="Status">
+              <app-nd-status-badge [status]="run.status" />
+            </td>
             <td class="col-run" data-label="Run" [title]="run.name"><strong>{{ run.name }}</strong></td>
             <td class="col-maker" data-label="Submitted by">
               <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
               <span class="submitted-by-name" [title]="submittedByLabel(run)">{{ submittedByLabel(run) }}</span>
             </td>
-            <td class="col-with" data-label="With">
+            <td class="col-with" data-label="Stage">
               <app-nd-run-role-badge [status]="run.status" />
             </td>
             <td class="muted col-points" data-label="Points">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
             <td class="muted col-date" data-label="Date">{{ formatDate(submittedDate(run)) }}</td>
-            <td class="col-source" data-label="Source">
-              <span class="type-badge">
-                @if (run.source === 'legacy_dual_verify') {
-                  Legacy DV
-                } @else if (run.source === 'legacy_analysis') {
-                  Legacy
-                } @else {
-                  ND
-                }
-              </span>
-            </td>
             <td class="col-workflow" data-label="Summary">
               @if (complianceBreakdown(run); as breakdown) {
                 <div class="stat-chips">
@@ -170,9 +158,6 @@
               } @else {
                 —
               }
-            </td>
-            <td class="col-status" data-label="Status">
-              <app-nd-status-badge [status]="run.status" />
             </td>
             <td class="row-actions col-actions" data-label="Actions" (click)="$event.stopPropagation()">
               <app-nd-run-table-actions

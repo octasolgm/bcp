@@ -47,8 +47,11 @@ import type { NdLocalExtractionSection } from '../../services/nd/nd-api.service'
     NdStatusBadgeComponent,
     NdGapAnalysisComponent,
   ],
-  templateUrl: '../analyse-regul/analyse-regul.component.html',
-  styleUrl: '../analyse-regul/analyse-regul.component.scss',
+  // V2 forked its own copy of the shared V3/V4 template+styles on 2026-09-28 (28 Sep meeting UI
+  // changes) specifically so this page's redesign never touches analyse-regul.component.html/.scss,
+  // which V3 and V4 still use unmodified. Edit only these two files for V2-only UI work.
+  templateUrl: './analyse-regul-full-v2.component.html',
+  styleUrl: './analyse-regul-full-v2.component.scss',
 })
 export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   override readonly versionLabel = '';
