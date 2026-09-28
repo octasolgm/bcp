@@ -1524,6 +1524,10 @@ export class NdApiService {
     return this.request<{ id: string }>('POST', '/nd/analysis-runs', body);
   }
 
+  renameAnalysisRun(id: string, name: string) {
+    return this.request<{ id: string; name: string }>('PUT', `/nd/analysis-runs/${id}/name`, { name });
+  }
+
   createDemoAnalysisFromSeed() {
     return this.request<{ id: string; pointCount: number; status: string }>(
       'POST',

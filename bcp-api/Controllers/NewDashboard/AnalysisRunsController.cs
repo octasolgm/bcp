@@ -1440,6 +1440,30 @@ public class AnalysisRunsController(
         return Ok(new { success = true });
     }
 
+    public record RenameRunRequest(string Name);
+
+    /// <summary>Lets any maker+ rename a run's display name/title at any point in its lifecycle.</summary>
+    [HttpPut("{id:guid}/name")]
+    public async Task<IActionResult> Rename(Guid id, [FromBody] RenameRunRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "maker");
+        if (error != null) return error;
+
+        var name = (body.Name ?? "").Trim();
+        if (string.IsNullOrEmpty(name))
+            return BadRequest(new { success = false, message = "Analysis name cannot be empty." });
+        if (name.Length > 240) name = name[..240];
+
+        var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound(new { success = false, message = "Analysis run not found." });
+
+        run.Name = name;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        dashboardCache.Invalidate();
+        return Ok(new { success = true, data = new { id = run.Id, name = run.Name } });
+    }
+
     [HttpPost("{id:guid}/soft-delete")]
     public async Task<IActionResult> SoftDelete(Guid id, CancellationToken ct)
     {

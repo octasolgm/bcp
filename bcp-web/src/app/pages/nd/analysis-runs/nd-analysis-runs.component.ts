@@ -495,6 +495,22 @@ export class NdAnalysisRunsComponent implements OnInit {
     }
   }
 
+  async renameRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    event?.preventDefault();
+    const next = prompt('Rename this analysis', run.name ?? '');
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === run.name) return;
+    const res = await this.api.renameAnalysisRun(run.id, trimmed);
+    if (res.success) {
+      run.name = trimmed;
+      this.toast.show('Analysis renamed', 'success');
+    } else {
+      this.toast.show(res.message ?? 'Could not rename analysis', 'error');
+    }
+  }
+
   async forceRunStatus(payload: { run: AnalysisRunSummary; status: string }): Promise<void> {
     const { run, status } = payload;
     if (status === (run.status ?? '').toLowerCase()) return;

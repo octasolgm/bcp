@@ -198,6 +198,34 @@
     font-size: 0.9375rem;
   }
 
+  .run-rename-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-left: 0.4rem;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    vertical-align: middle;
+    opacity: 0;
+    transition: opacity 0.1s, background 0.15s, color 0.15s;
+
+    &:hover {
+      background: var(--bg-muted);
+      color: var(--text-primary);
+    }
+  }
+
+  tr:hover .run-rename-btn,
+  .run-rename-btn:focus-visible {
+    opacity: 1;
+  }
+
   // Flat white rows + hairline divider + hover wash only (no zebra) — matches the plain-row look
   // of the reference dashboards (Enrolliq/Hope UI) more closely than a striped table does.
   tbody tr:hover {

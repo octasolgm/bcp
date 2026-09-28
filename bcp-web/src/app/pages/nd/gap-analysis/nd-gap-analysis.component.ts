@@ -1662,6 +1662,23 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return !!this.deletableSessionId && !!this.deletableSessionKind && !this.deletingSession;
   }
 
+  async renameRun(): Promise<void> {
+    if (!this.ndRunId) return;
+    const next = prompt('Rename this analysis', this.sourceLabel);
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === this.sourceLabel) return;
+    const res = await this.ndApi.renameAnalysisRun(this.ndRunId, trimmed);
+    if (res.success) {
+      this.sourceLabel = trimmed;
+      if (this.ndRunData) this.ndRunData.run.name = trimmed;
+      this.toast.show('Analysis renamed', 'success');
+      this.cdr.markForCheck();
+    } else {
+      this.toast.show(res.message ?? 'Could not rename analysis', 'error');
+    }
+  }
+
   confirmDeleteSession(): void {
     if (!this.deletableSessionId || !this.deletableSessionKind) return;
     const label = this.sourceLabel || this.deletableSessionId;

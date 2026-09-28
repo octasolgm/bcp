@@ -137,7 +137,20 @@
             <td class="col-status" data-label="Status">
               <app-nd-status-badge [status]="run.status" />
             </td>
-            <td class="col-run" data-label="Run" [title]="run.name"><strong>{{ run.name }}</strong></td>
+            <td class="col-run" data-label="Run" [title]="run.name">
+              <strong>{{ run.name }}</strong>
+              @if (!isLegacy(run)) {
+                <button
+                  type="button"
+                  class="run-rename-btn"
+                  title="Rename this analysis"
+                  aria-label="Rename this analysis"
+                  (click)="renameRun(run, $event)"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                </button>
+              }
+            </td>
             <td class="col-maker" data-label="Submitted by">
               <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
               <span class="submitted-by-name" [title]="submittedByLabel(run)">{{ submittedByLabel(run) }}</span>

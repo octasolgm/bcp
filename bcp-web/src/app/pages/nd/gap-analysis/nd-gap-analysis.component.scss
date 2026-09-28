@@ -1,5 +1,26 @@
 @import '../../../components/nd/nd-analysis-point-rail.scss';
 
+.run-rename-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 0.35rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  vertical-align: middle;
+
+  &:hover {
+    background: var(--bg-muted);
+    color: var(--text-primary);
+  }
+}
+
 /* Gap/action/review tallies under each clause in the left rail. */
 .rail-rollup {
   display: flex;
