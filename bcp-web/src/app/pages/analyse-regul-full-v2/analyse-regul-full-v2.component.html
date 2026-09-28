@@ -44,7 +44,7 @@
         @if (showNdPointSources) {
           <div class="v8-section-header">
             <div class="v8-section-header-top">
-              <span class="v8-section-label">Step 1 · Regulation sources</span>
+              <span class="v8-section-label">Step 1 · Regulation Sources</span>
             </div>
             <div class="points-source-tabs">
               <button
@@ -53,7 +53,7 @@
                 [class.active]="pointsSource === 'regulation'"
                 (click)="setPointsSource('regulation')"
               >
-                Regulation documents
+                Regulation Documents
               </button>
               <button
                 type="button"
@@ -61,7 +61,7 @@
                 [class.active]="pointsSource === 'library'"
                 (click)="setPointsSource('library')"
               >
-                From regulation points library
+                From Regulation Points Library
               </button>
             </div>
           </div>
@@ -72,7 +72,7 @@
             <div class="doc-panel doc-panel-stretch v8-reg-doc-panel" [style.width.%]="setupRegInnerPct">
               <div class="panel-header panel-header-v8">
                 <div class="panel-header-top">
-                  <h2>Regulation documents <span class="doc-count-badge">({{ filteredRegulationDocs.length }})</span></h2>
+                  <h2>Regulation Documents <span class="doc-count-badge">({{ filteredRegulationDocs.length }})</span></h2>
                   <div class="header-actions">
                     <label class="btn-upload" [class.busy]="uploadingReg">
                       <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onRegulationUpload($event)" [disabled]="uploadingReg" />
@@ -594,12 +594,12 @@
       <!-- Section 2: Compliance -->
       <div class="v8-compliance-block">
         <div class="v8-section-header v8-section-header-standalone">
-          <span class="v8-section-label">Step 2 · Internal documents</span>
+          <span class="v8-section-label">Step 2 · Internal Documents</span>
         </div>
         <div class="doc-panel doc-panel-stretch v8-compliance-panel">
           <div class="panel-header panel-header-v8">
             <div class="panel-header-top">
-              <h2>Internal documents <span class="doc-count-badge">({{ filteredComplianceDocs.length }})</span></h2>
+              <h2>Internal Documents <span class="doc-count-badge">({{ filteredComplianceDocs.length }})</span></h2>
               <div class="header-actions">
                 <label class="btn-upload" [class.busy]="uploadingCompliance">
                   <input type="file" class="hidden-input" accept=".pdf,.docx,.doc" (change)="onComplianceSelect($event)" [disabled]="uploadingCompliance" />

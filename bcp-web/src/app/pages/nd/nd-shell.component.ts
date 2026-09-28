@@ -645,9 +645,9 @@ export class NdShellComponent implements OnInit, OnDestroy {
   /// legacy engine is still reachable but no longer the default one people land on.
   private documentsGroup(role: string): NavGroup {
     const children: NavItem[] = [
-      { id: 'internal-documents', path: '/nd/internal-documents-azure-di', label: 'Internal documents', icon: 'file' },
-      { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation documents', icon: 'library' },
-      { id: 'libraries', path: '/nd/libraries', label: 'Regulation points library', icon: 'list' },
+      { id: 'internal-documents', path: '/nd/internal-documents-azure-di', label: 'Internal Documents', icon: 'file' },
+      { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation Documents', icon: 'library' },
+      { id: 'libraries', path: '/nd/libraries', label: 'Regulation Points Library', icon: 'list' },
       {
         id: 'text-documents',
         path: '/nd/text-documents',
@@ -664,8 +664,8 @@ export class NdShellComponent implements OnInit, OnDestroy {
   /// reachable, same as Tesseract/RapidOCR/Docling below - just no longer what people land on first.
   private landingAiGroup(role: string): NavGroup {
     const children: NavItem[] = [
-      { id: 'landing-ai-internal-documents', path: '/nd/internal-documents', label: 'Internal documents', icon: 'file' },
-      { id: 'landing-ai-regulation-documents', path: '/nd/regulation-documents', label: 'Regulation documents', icon: 'library' },
+      { id: 'landing-ai-internal-documents', path: '/nd/internal-documents', label: 'Internal Documents', icon: 'file' },
+      { id: 'landing-ai-regulation-documents', path: '/nd/regulation-documents', label: 'Regulation Documents', icon: 'library' },
     ];
     if (role === 'super_admin') {
       children.push(
@@ -699,13 +699,13 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'internal-documents-new',
           path: '/nd/internal-documents-new',
-          label: 'Internal documents',
+          label: 'Internal Documents',
           icon: 'file',
         },
         {
           id: 'regulation-documents-new',
           path: '/nd/regulation-documents-new',
-          label: 'Regulation documents',
+          label: 'Regulation Documents',
           icon: 'library',
         },
       ],
@@ -721,13 +721,13 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'internal-documents-rapidocr',
           path: '/nd/internal-documents-rapidocr',
-          label: 'Internal documents',
+          label: 'Internal Documents',
           icon: 'file',
         },
         {
           id: 'regulation-documents-rapidocr',
           path: '/nd/regulation-documents-rapidocr',
-          label: 'Regulation documents',
+          label: 'Regulation Documents',
           icon: 'library',
         },
       ],
@@ -745,13 +745,13 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'internal-documents-docling-light',
           path: '/nd/internal-documents-docling-light',
-          label: 'Internal documents',
+          label: 'Internal Documents',
           icon: 'file',
         },
         {
           id: 'regulation-documents-docling-light',
           path: '/nd/regulation-documents-docling-light',
-          label: 'Regulation documents',
+          label: 'Regulation Documents',
           icon: 'library',
         },
       ],
@@ -769,13 +769,13 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'internal-documents-docling-glm',
           path: '/nd/internal-documents-docling-glm',
-          label: 'Internal documents',
+          label: 'Internal Documents',
           icon: 'file',
         },
         {
           id: 'regulation-documents-docling-glm',
           path: '/nd/regulation-documents-docling-glm',
-          label: 'Regulation documents',
+          label: 'Regulation Documents',
           icon: 'library',
         },
       ],
@@ -793,13 +793,13 @@ export class NdShellComponent implements OnInit, OnDestroy {
         {
           id: 'internal-documents-azure-di',
           path: '/nd/internal-documents-azure-di',
-          label: 'Internal documents',
+          label: 'Internal Documents',
           icon: 'file',
         },
         {
           id: 'regulation-documents-azure-di',
           path: '/nd/regulation-documents-azure-di',
-          label: 'Regulation documents',
+          label: 'Regulation Documents',
           icon: 'library',
         },
       ],
