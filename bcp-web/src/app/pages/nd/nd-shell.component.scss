@@ -449,14 +449,16 @@
     color: color-mix(in srgb, var(--accent) 72%, var(--text-muted));
   }
 
+  // Neutral by default — a badge count (e.g. "55" on All analysis) isn't itself an alert, so it
+  // reads calmer as a muted pill; the item still gets the accent left-bar + background when active.
   .nav-badge {
     margin-left: auto;
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
     border-radius: var(--radius-pill);
-    background: var(--accent);
-    color: var(--accent-text);
+    background: var(--bg-muted);
+    color: var(--text-secondary);
     font-size: 0.625rem;
     font-weight: 700;
     display: flex;

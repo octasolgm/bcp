@@ -64,14 +64,14 @@
   gap: 0.35rem;
 }
 
+// De-boxed: a plain label strip, not another bordered card sitting on top of the doc-panel cards
+// below it — the "box inside a box" look the panels had. The doc-panel cards' own thin border +
+// soft shadow (see the override further down) is the only "surface" line left in this stage.
 .v8-section-header {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.45rem 0.55rem;
-  border: 1px solid var(--border-strong, var(--v-border));
-  border-radius: var(--v-panel-radius);
-  background: color-mix(in srgb, var(--bg-muted) 75%, var(--v-surface));
+  gap: 0.3rem;
+  padding: 0.1rem 0.15rem 0.35rem;
   flex-shrink: 0;
 }
 
@@ -158,13 +158,26 @@
 }
 
 .points-top-panel {
-  border-top: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border-strong, var(--v-border)));
   min-width: 0;
 }
 
-.v8-reg-doc-panel,
-.v8-library-panel {
-  border-top: 2px solid color-mix(in srgb, var(--accent) 55%, var(--border-strong, var(--v-border)));
+// Softer surfaces: thin neutral border + gentle shadow instead of the heavy 2px colored top-borders
+// every panel had — those, stacked with the section-header box above (now removed) and the
+// panels sitting right next to each other, were the "nested box" clutter. V2 only.
+.analyse-regul-page .doc-panel {
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+
+.v8-compliance-panel {
+  border-top: none;
+}
+
+// Point-count as a soft gray tag rather than plain text next to the filename. V2 only.
+.analyse-regul-page .fpts {
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-pill);
+  background: var(--bg-muted);
 }
 
 /* Three narrow columns — stack title/actions above full-width search */
