@@ -591,7 +591,11 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
 
   /** Overrides the base's onRegulationUpload (which only uploads, then tells a real — non-demo —
    * account to go parse/extract it manually from Regulation Docs) to also run parse + extract
-   * automatically, for every account. */
+   * automatically, for every account. Runs through the same azure-di local pipeline as
+   * /nd/regulation-documents-azure-di (localParseById/localExtractById) rather than the legacy
+   * Landing AI endpoints — this page's own readiness checks (syncLocalPipelineReadiness,
+   * regDocReadyState above) only ever look at azure-di local-pipeline status, so a document parsed
+   * via the old Landing AI endpoints never showed as ready here. */
   override onRegulationUpload(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -620,18 +624,26 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       }
 
       this.regUploadPipelineV2 = { name: file.name, stage: 'parsing' };
-      const parsed = await this.ndApi.parseRegulationDocument(id);
-      if (!parsed.success) {
-        this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: parsed.message ?? 'Parse failed' };
+      const parsed = await this.ndApi.localParseById(id, 'azure-di');
+      if (!parsed.success || parsed.data?.status === 'failed') {
+        this.regUploadPipelineV2 = {
+          name: file.name,
+          stage: 'failed',
+          message: parsed.message ?? parsed.data?.error ?? 'Parse failed',
+        };
         this.toast.show(this.regUploadPipelineV2.message!, 'error', 4000);
         this.refreshRegulations(() => this.reapplyRegSelection(keptRegIds));
         return;
       }
 
       this.regUploadPipelineV2 = { name: file.name, stage: 'extracting' };
-      const extracted = await this.ndApi.extractRegulationDocument(id);
-      if (!extracted.success) {
-        this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: extracted.message ?? 'Extract failed' };
+      const extracted = await this.ndApi.localExtractById(id, 'azure-di');
+      if (!extracted.success || extracted.data?.extractStatus === 'failed') {
+        this.regUploadPipelineV2 = {
+          name: file.name,
+          stage: 'failed',
+          message: extracted.message ?? extracted.data?.extractError ?? 'Extract failed',
+        };
         this.toast.show(this.regUploadPipelineV2.message!, 'error', 4000);
         this.refreshRegulations(() => this.reapplyRegSelection(keptRegIds));
         return;
@@ -639,6 +651,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
 
       this.regUploadPipelineV2 = { name: file.name, stage: 'done' };
       this.toast.show(`Parsed and extracted "${file.name}"`, 'success', 3500);
+      await this.syncLocalPipelineReadiness();
       this.refreshRegulations(() => {
         this.reapplyRegSelection(keptRegIds);
         const doc = this.regulationDocs.find((d) => d.id === id);
@@ -687,8 +700,12 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
 
   /** Overrides the base's onComplianceSelect, which uploads internal documents through a legacy,
    * non-ND endpoint that never parses or extracts them (they never become analyzable). Routes
-   * through the ND internal-documents catalog instead — the same one the primary Documents page
-   * uses (Azure Document Intelligence) — and runs parse + extract automatically, same as above. */
+   * through the ND internal-documents catalog instead, then runs parse + extract through the same
+   * azure-di local pipeline /nd/internal-documents-azure-di uses (localParseById/localExtractById)
+   * rather than the legacy Landing AI endpoints — this page's own readiness checks
+   * (syncLocalPipelineReadiness, complianceDocReadyState above) only ever look at azure-di
+   * local-pipeline status, so a document parsed via the old Landing AI endpoints never showed as
+   * ready here. */
   override onComplianceSelect(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -715,14 +732,17 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       }
 
       this.complianceUploadPipelineV2 = { name: file.name, stage: 'parsing' };
-      const parsed = await this.ndApi.parseInternalDocument(id);
-      const parseStatus = (parsed.data as { parseStatus?: string } | undefined)?.parseStatus?.toLowerCase();
-      if (!parsed.success) {
-        this.complianceUploadPipelineV2 = { name: file.name, stage: 'failed', message: parsed.message ?? 'Parse failed' };
+      const parsed = await this.ndApi.localParseById(id, 'azure-di');
+      if (!parsed.success || parsed.data?.status === 'failed') {
+        this.complianceUploadPipelineV2 = {
+          name: file.name,
+          stage: 'failed',
+          message: parsed.message ?? parsed.data?.error ?? 'Parse failed',
+        };
         this.toast.show(this.complianceUploadPipelineV2.message!, 'error', 4000);
         return;
       }
-      if (parseStatus === 'processing') {
+      if (parsed.data?.status === 'processing') {
         // Azure is taking longer than this request waited for — a rare case, not worth a full
         // polling loop here; the document is safely uploaded and can be finished from Internal
         // Documents, same as any other long-running parse there.
@@ -732,9 +752,13 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       }
 
       this.complianceUploadPipelineV2 = { name: file.name, stage: 'extracting' };
-      const extracted = await this.ndApi.extractInternalDocumentSections(id);
-      if (!extracted.success) {
-        this.complianceUploadPipelineV2 = { name: file.name, stage: 'failed', message: extracted.message ?? 'Extract failed' };
+      const extracted = await this.ndApi.localExtractById(id, 'azure-di');
+      if (!extracted.success || extracted.data?.extractStatus === 'failed') {
+        this.complianceUploadPipelineV2 = {
+          name: file.name,
+          stage: 'failed',
+          message: extracted.message ?? extracted.data?.extractError ?? 'Extract failed',
+        };
         this.toast.show(this.complianceUploadPipelineV2.message!, 'error', 4000);
         return;
       }
@@ -744,7 +768,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       // separate document store, so the doc this pipeline just finished would otherwise never
       // appear here to select. Inject it directly instead of switching this page's whole list
       // source (a bigger change than this fix needs).
-      const sectionCount = (extracted.data as { sectionCount?: number } | undefined)?.sectionCount ?? null;
+      const sectionCount = extracted.data?.sectionCount ?? null;
       const readyDoc: StoredDocumentDto = {
         id,
         title: file.name,
@@ -766,6 +790,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       };
       this.complianceDocs = [readyDoc, ...this.complianceDocs.filter((d) => d.id !== id)];
       this.selectedComplianceIds.add(id);
+      await this.syncLocalPipelineReadiness();
 
       this.complianceUploadPipelineV2 = { name: file.name, stage: 'done' };
       this.toast.show(`Parsed and extracted "${file.name}"`, 'success', 3500);
