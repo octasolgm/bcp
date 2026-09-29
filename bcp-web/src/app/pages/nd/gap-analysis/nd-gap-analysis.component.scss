@@ -98,6 +98,47 @@
   font-size: 1.15rem;
 }
 
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.panel-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg-muted);
+    color: var(--text-primary);
+  }
+}
+
+.panel-collapse-icon {
+  transition: transform 0.15s ease;
+
+  &.is-collapsed {
+    transform: rotate(-90deg);
+  }
+}
+
+/* Everything below the title bar (status pills, summary cards, gap list) — collapsible so
+   this panel takes less vertical space when embedded inside a longer page. Dialogs/side
+   panels (PDF preview, run history, review panel, export dialog) sit outside this wrapper
+   in the template and are never affected. */
+.gap-panel-collapsible.is-collapsed {
+  display: none;
+}
+
 .workflow-bar {
   display: flex;
   flex-wrap: wrap;

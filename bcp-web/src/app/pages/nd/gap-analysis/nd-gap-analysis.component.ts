@@ -155,6 +155,16 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   exporting = false;
   loading = true;
+  /** Collapses everything below the title bar (status pills, summary cards, gap list) down to
+   * just the header — useful when this panel is embedded inside a longer page (e.g. the New
+   * Analysis screen) and the working document's full body isn't needed at a glance. Dialogs/
+   * side panels (PDF preview, run history, review panel, export dialog) stay outside this and
+   * are never affected by it. */
+  collapsed = false;
+
+  toggleCollapsed(): void {
+    this.collapsed = !this.collapsed;
+  }
   deletingSession = false;
   loadError: string | null = null;
   sourceLabel = 'I M P T F S.pdf vs. TFS Guidelines';
