@@ -68,3 +68,11 @@ Published this week's changes to the hosted API and web app.
 Per-clause analysis cost
 
 On the New Analysis page, almost all of the work that compares one regulation clause to the bank's internal policy is done locally and costs nothing. The only paid step is the judgment call that decides whether the policy covers that clause. Using current OpenRouter prices, a typical clause is about 4 to 9 cents with Claude Sonnet 5, and about 6 to 13 cents with Kimi K3. Kimi costs more because it reasons more heavily by default and its token rates are higher. A clause that is only partly covered can be judged a second time, which roughly doubles that clause's cost.
+
+New Analysis document upload fix
+
+On the newest version of the New Analysis page, uploading a regulation or internal document runs it through a parse-and-extract pipeline in the background so it becomes ready to analyse automatically. That pipeline was, in some cases, running through an older process while the page's own readiness check was looking for results from the newer one, so a document could finish uploading and processing but still show as not ready until it was processed again from the Documents page. Uploads on this page now run through the same pipeline the page actually checks, so a document shows as ready as soon as it is genuinely done.
+
+Faster clause-by-clause analysis
+
+When a New Analysis run judges each regulation clause against the bank's policy, it previously did this one clause at a time, so the total wait grew directly with the number of clauses - a run with a dozen clauses took roughly twelve times as long as a single one. Clauses are now judged several at a time in the background, cutting the total wait time significantly for runs with more than a few clauses, with no change to the judgments themselves, the prompts used, or the accuracy of the results. Separately, one of the AI models available for this step (Kimi K3, reached through OpenRouter) was found to be running at its highest, slowest reasoning setting by default on every clause; that has been capped to match the faster setting already used when reaching the same model directly, further reducing time and cost per clause.

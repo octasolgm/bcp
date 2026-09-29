@@ -38,3 +38,9 @@ Bug fixes
 
 Tasks
 - Estimated per-clause AI cost on the New Analysis (hybrid) path for Claude Sonnet 5 and Kimi K3 through OpenRouter
+- New Analysis page (V2): regulation and internal document uploads now run parse-and-extract through the same Azure Document Intelligence pipeline as the dedicated Documents pages, instead of the older Landing AI-based flow
+- Sped up clause-by-clause judgment on the New Analysis page: clauses are now judged several at a time instead of strictly one at a time, cutting total run time roughly in proportion (same prompts, same accuracy, same results - only the scheduling changed)
+
+Bug fixes
+- Fixed a document-readiness mismatch on the New Analysis page (V2): a freshly uploaded regulation or internal document was parsed through the old pipeline but the page's own "ready to analyse" check only looked at the newer pipeline's status, so it never showed as ready until parsed again elsewhere
+- Fixed Kimi K3 (via OpenRouter) running at full, uncapped reasoning effort on every clause judgment call, adding unnecessary time and cost per clause - now capped the same way the direct Moonshot connection already was
