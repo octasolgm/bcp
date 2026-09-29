@@ -147,16 +147,37 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   }
 
   /** Recursive self-pacing poll: fires every ~200ms until the doc lists have actually populated
-   * and a readiness fetch has completed for them at least once, then drops to a slow ~4s
-   * steady-state cadence. Recursing off the end of each cycle (rather than a fixed setInterval)
-   * means the fast phase naturally stretches to cover however long the doc lists really take to
-   * load, instead of assuming a fixed number of milliseconds will be enough. */
+   * and a readiness fetch has completed for them at least once, then drops to a steady-state
+   * cadence. Recursing off the end of each cycle (rather than a fixed setInterval) means the fast
+   * phase naturally stretches to cover however long the doc lists really take to load, instead of
+   * assuming a fixed number of milliseconds will be enough.
+   *
+   * The steady-state cadence itself isn't fixed either: while every currently-listed document is
+   * already fully parsed+extracted and no analysis run is in flight, nothing here can actually
+   * change (a fresh upload already forces its own immediate sync — see runRegulationUploadPipeline/
+   * runComplianceUploadPipeline), so polling every 4s forever was just load with no payoff. Only
+   * poll that fast while something could plausibly still be in flight (a doc mid-parse/extract, or
+   * a run actively processing); otherwise fall back to a slow keep-alive cadence that still catches
+   * an out-of-band change (e.g. the same doc reprocessed from the dedicated Documents page in
+   * another tab) without hammering the status endpoint while nothing is happening. */
   private async pollPipelineDocs(): Promise<void> {
     if (this.pipelineDocsDestroyed) return;
     await this.syncPipelineDocs();
     if (this.pipelineDocsDestroyed) return;
-    const delayMs = this.hasSyncedPipelineDocsOnce ? 4000 : 200;
+    const delayMs = !this.hasSyncedPipelineDocsOnce
+      ? 200
+      : this.allTrackedDocsReady() && !this.isRegulPipelineInFlight()
+        ? 30000
+        : 4000;
     this.pipelineDocsTimer = setTimeout(() => void this.pollPipelineDocs(), delayMs);
+  }
+
+  /** True once every document currently listed in either picker has come back extracted on the
+   * azure-di engine — i.e. syncLocalPipelineReadiness has nothing left to wait on for them. */
+  private allTrackedDocsReady(): boolean {
+    const allDocs = [...this.complianceDocs, ...this.regulationDocs];
+    if (allDocs.length === 0) return false;
+    return allDocs.every((d) => this.localPipelineReady.has(this.storedDocId(d)));
   }
 
   /** Selected internal documents (pre-run selection or a resumed run's set) — pushed into the
