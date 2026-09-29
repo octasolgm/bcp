@@ -18,6 +18,9 @@ import type { AnalysisPoint } from '../../../lib/nd/types';
 import { NdPipelinePanelService } from '../../services/nd/nd-pipeline-panel.service';
 import type { NdLocalExtractionSection } from '../../services/nd/nd-api.service';
 import { startPanelResize } from '../shared/panel-resize';
+import { capGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
+import { resolveAnalysisPointSeverity } from '../../../lib/nd/point-compliance-status';
+import { buildSeededActionPlansForGap, type SeededActionPlan } from '../../../lib/nd/action-plan-seed';
 
 /**
  * V5 — isolated clone of analyse-regul-full (V4), created specifically so the upcoming
@@ -368,6 +371,53 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   ): void {
     this.pipelinePanel.setPhase(this.ndRegulPipelinePhase);
     this.pipelinePanel.setRetrievalPreview(preview);
+  }
+
+  /** Point ids already checked for a gap since the run started — avoids re-checking (and
+   * re-POSTing) a point on every ~3s poll tick once it's reached a terminal status. Cleared
+   * implicitly by page navigation (this whole component is torn down between runs). */
+  private readonly actionPlanSeededPointIds = new Set<string>();
+
+  /** V5 only: draft a first-pass action plan for a gap the instant its clause finishes judging,
+   * instead of waiting for the whole run to reach a terminal status (nd-gap-analysis's own
+   * seedDefaultActionPlans gates on isAnalysisRunResultsReady(run.status), and V3/V4's embedded
+   * panel only reloads once — on run completion — so on a run with a dozen clauses a gap found
+   * early could sit with no action plan for minutes). Reuses the same seed-rule logic the
+   * end-of-run path uses (capGapsForAnalysisPoint + buildSeededActionPlansForGap), fed by the
+   * same live per-clause point updates the picker already gets from the ~3s status poll. The
+   * backend /action-plans/seed endpoint dedupes by (pointId, gapIndex), so this is safe to call
+   * again for a point already seeded — it's just wasted otherwise, hence actionPlanSeededPointIds. */
+  private async seedActionPlansForCompletedPoints(points: AnalysisPoint[]): Promise<void> {
+    const runId = this.activeNdRunId;
+    if (!runId) return;
+
+    const terminalStatuses = new Set(['completed', 'failed', 'cancelled']);
+    const items: SeededActionPlan[] = [];
+    for (const point of points) {
+      if (!point.id || this.actionPlanSeededPointIds.has(point.id)) continue;
+      if (!terminalStatuses.has((point.landingAiStatus || '').toLowerCase())) continue;
+      this.actionPlanSeededPointIds.add(point.id);
+
+      if (resolveAnalysisPointSeverity(point) === 'compliant') continue;
+      for (const gap of capGapsForAnalysisPoint(point, true)) {
+        items.push(...buildSeededActionPlansForGap(point.id, gap));
+      }
+    }
+    if (!items.length) return;
+    const res = await this.ndApi.seedActionPlans(runId, items);
+    // The embedded gap-analysis panel (<app-nd-gap-analysis>) only reloads its own data when
+    // gapEmbedReloadToken changes — bump it here, right after a batch of gaps actually got an
+    // action plan, so the panel picks up the new rows without waiting for the whole run to
+    // finish. Only on an actual seed (not every poll tick) to avoid re-fetching the panel's full
+    // result set (points, sections, reviews, attachments) more often than something really changed.
+    if (res.success && res.data && res.data.seeded > 0) this.gapEmbedReloadToken++;
+  }
+
+  /** Keeps the base's own live-update handling (badges, progress steps, demo preview), then
+   * layers in this page's instant per-clause action-plan seeding on top. */
+  protected override onNdRunPointsLiveUpdate(points: AnalysisPoint[]): void {
+    super.onNdRunPointsLiveUpdate(points);
+    void this.seedActionPlansForCompletedPoints(points);
   }
 
   /** Always runs forward-only (full markdown); reverse is not used on this page — same as V4. */
