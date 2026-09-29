@@ -1219,6 +1219,15 @@ export class NdApiService {
     return this.downloadNdExport(`/nd/internal-documents/${docId}/export/file`, 'internal-document.pdf');
   }
 
+  /** The corrected/embedded document copies generated when a run was finalized (see
+   * NdCorrectedDocumentService) — for the "download the finalized document" action. */
+  getGeneratedDocumentsForRun(runId: string) {
+    return this.request<{ id: string; title: string; originalFileName: string; version: string; sizeBytes: number }[]>(
+      'GET',
+      `/nd/analysis-runs/${runId}/generated-documents`,
+    );
+  }
+
   hideInternalDocument(id: string) {
     return this.request<unknown>('DELETE', `/nd/internal-documents/${id}`);
   }

@@ -13,8 +13,9 @@ import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.c
 import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badge.component';
 import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
 import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-actions.component';
+import { NdPaginationComponent } from '../../../components/nd/nd-pagination.component';
 import { formatDate } from '../../../../lib/nd/utils';
-import { formatNdDateTime } from '../../../../lib/nd/date-format';
+import { formatNdDate, formatNdDateTime, formatNdTime, ndDatePattern } from '../../../../lib/nd/date-format';
 import { ndNewAnalysisRoute, isDemoOwnedAnalysisRun } from '../../../../lib/nd/demo-analysis-routes';
 import {
   isPermanentDemoAnalysisDelete,
@@ -48,7 +49,7 @@ type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'status' | 'make
 @Component({
   selector: 'app-nd-analysis-runs',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
   templateUrl: './nd-analysis-runs.component.html',
   styleUrls: ['./nd-analysis-runs.component.scss', '../nd-shared.scss'],
 })
@@ -86,6 +87,7 @@ export class NdAnalysisRunsComponent implements OnInit {
   recallingRunId: string | null = null;
   stoppingId: string | null = null;
   forceStatusRunId: string | null = null;
+  downloadingRunId: string | null = null;
   historyOpen = false;
   historyRunId: string | null = null;
   historyRunName = '';
@@ -189,6 +191,13 @@ export class NdAnalysisRunsComponent implements OnInit {
   goToPage(next: number): void {
     if (next < 1 || next > this.totalPages || next === this.page) return;
     this.page = next;
+    void this.load();
+  }
+
+  changePageSize(size: number): void {
+    if (size === this.pageSize) return;
+    this.pageSize = size;
+    this.page = 1;
     void this.load();
   }
 
@@ -361,6 +370,19 @@ export class NdAnalysisRunsComponent implements OnInit {
     return formatNdDateTime(iso, this.auth.profile()?.workspace?.dateFormatRegion);
   }
 
+  /** Date-only line for the two-line Date column cell (date on top, time underneath). */
+  formatRunDateOnly(iso: string | null | undefined): string {
+    return formatNdDate(iso, this.auth.profile()?.workspace?.dateFormatRegion);
+  }
+
+  formatRunTimeOnly(iso: string | null | undefined): string {
+    return formatNdTime(iso);
+  }
+
+  get dateColumnPattern(): string {
+    return ndDatePattern(this.auth.profile()?.workspace?.dateFormatRegion);
+  }
+
   canSendForReview(run: AnalysisRunSummary): boolean {
     return canSendRunForReview(run, this.auth.getRole());
   }
@@ -520,6 +542,27 @@ export class NdAnalysisRunsComponent implements OnInit {
     } else {
       this.toast.show(res.message ?? 'Could not rename analysis', 'error');
     }
+  }
+
+  /** Finalized tab only: downloads the corrected/embedded internal-document copy (or copies)
+   * NdCorrectedDocumentService generated on the backend when this run was finalized. */
+  async downloadFinalizedDocuments(run: AnalysisRunSummary, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    event?.preventDefault();
+    this.downloadingRunId = run.id;
+    const res = await this.api.getGeneratedDocumentsForRun(run.id);
+    this.downloadingRunId = null;
+    if (!res.success || !res.data?.length) {
+      this.toast.show(res.message ?? 'No finalized document found for this run.', 'warning');
+      return;
+    }
+    for (const doc of res.data) {
+      await this.api.downloadInternalFileExport(doc.id);
+    }
+    this.toast.show(
+      res.data.length === 1 ? 'Downloading finalized document' : `Downloading ${res.data.length} finalized documents`,
+      'success',
+    );
   }
 
   async forceRunStatus(payload: { run: AnalysisRunSummary; status: string }): Promise<void> {

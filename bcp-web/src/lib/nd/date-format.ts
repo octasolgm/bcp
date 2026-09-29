@@ -56,3 +56,21 @@ export function formatNdDateTime(iso: string | null | undefined, region?: string
   if (Number.isNaN(d.getTime())) return '—';
   return `${datePart(iso, normalizeRegion(region))}, ${timePart(iso)}`;
 }
+
+/** Time only (e.g. for stacking under a date on its own line). */
+export function formatNdTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  return timePart(iso);
+}
+
+/** The date pattern itself (e.g. "DD/MM/YY"), for labeling a column header — not a formatted date. */
+export function ndDatePattern(region?: string | null): string {
+  switch (normalizeRegion(region)) {
+    case 'usa':
+      return 'MM/DD/YY';
+    case 'iso':
+      return 'YY-MM-DD';
+    default:
+      return 'DD/MM/YY';
+  }
+}

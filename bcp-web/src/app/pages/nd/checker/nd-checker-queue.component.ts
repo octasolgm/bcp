@@ -20,6 +20,8 @@ import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.c
 import { NdRunRoleBadgeComponent } from '../../../components/nd/nd-run-role-badge.component';
 import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
 import { NdRunTableActionsComponent } from '../../../components/nd/nd-run-table-actions.component';
+import { NdPaginationComponent } from '../../../components/nd/nd-pagination.component';
+import { formatNdDate, formatNdTime, ndDatePattern } from '../../../../lib/nd/date-format';
 import {
   analysisRunComplianceBreakdown,
   analysisRunSubmittedByLabel,
@@ -36,7 +38,7 @@ type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
 @Component({
   selector: 'app-nd-checker-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
   templateUrl: './nd-checker-queue.component.html',
   styleUrls: ['./nd-checker-queue.component.scss', '../run-analysis/nd-run-analysis.component.scss', '../nd-shared.scss'],
 })
@@ -54,6 +56,8 @@ export class NdCheckerQueueComponent implements OnInit {
   statusFilter = '';
   sortColumn: QueueSortColumn = 'date';
   sortDir: SortDir = 'desc';
+  page = 1;
+  pageSize = 20;
   recallingRunId: string | null = null;
   roleActingRunId: string | null = null;
   historyOpen = false;
@@ -103,6 +107,43 @@ export class NdCheckerQueueComponent implements OnInit {
 
   get hasActiveFilters(): boolean {
     return hasListFilters(this.searchQuery, this.statusFilter);
+  }
+
+  get totalPages(): number {
+    return Math.max(1, Math.ceil(this.visibleRuns.length / this.pageSize));
+  }
+
+  /** Clamped so a filter/sort change that shrinks the list never leaves `page` pointing past the end. */
+  get displayPage(): number {
+    return Math.min(this.page, this.totalPages);
+  }
+
+  get pagedRuns(): AnalysisRunSummary[] {
+    const start = (this.displayPage - 1) * this.pageSize;
+    return this.visibleRuns.slice(start, start + this.pageSize);
+  }
+
+  goToPage(next: number): void {
+    if (next < 1 || next > this.totalPages || next === this.page) return;
+    this.page = next;
+  }
+
+  changePageSize(size: number): void {
+    if (size === this.pageSize) return;
+    this.pageSize = size;
+    this.page = 1;
+  }
+
+  formatRunDateOnly(iso: string | null | undefined): string {
+    return formatNdDate(iso, this.auth.profile()?.workspace?.dateFormatRegion);
+  }
+
+  formatRunTimeOnly(iso: string | null | undefined): string {
+    return formatNdTime(iso);
+  }
+
+  get dateColumnPattern(): string {
+    return ndDatePattern(this.auth.profile()?.workspace?.dateFormatRegion);
   }
 
   toggleSort(column: QueueSortColumn): void {

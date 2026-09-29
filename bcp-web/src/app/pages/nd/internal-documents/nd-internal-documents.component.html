@@ -158,6 +158,20 @@
               } @else {
                 <span class="doc-meta cell-subline" [title]="d.originalFileName">{{ d.originalFileName }}</span>
               }
+              @if (d.generatedByAnalysis) {
+                <span class="doc-meta cell-subline generated-from-label">
+                  Generated from:
+                  @if (d.generatedFromRunId) {
+                    <a
+                      [routerLink]="['/nd/gap-analysis']"
+                      [queryParams]="{ run: d.generatedFromRunId }"
+                      (click)="$event.stopPropagation()"
+                    >{{ d.generatedFromRunName || 'analysis run' }}</a>
+                  } @else {
+                    {{ d.generatedFromRunName || 'an analysis run' }}
+                  }
+                </span>
+              }
             </td>
             <td class="muted col-date">{{ formatTableDate(d.uploaded) }}</td>
             @if (showDeleted) {

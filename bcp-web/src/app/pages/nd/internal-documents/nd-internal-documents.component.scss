@@ -239,6 +239,19 @@
       white-space: normal;
     }
 
+    .generated-from-label {
+      color: var(--text-muted);
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+
     .doc-cell strong {
       display: block;
       overflow: visible;

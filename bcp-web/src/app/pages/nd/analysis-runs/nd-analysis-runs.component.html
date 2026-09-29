@@ -19,7 +19,7 @@
 }
 
 @if (showWorkspaceTabs) {
-  <div class="nd-shrink">
+  <div class="nd-shrink nd-run-tabs-header">
     <app-nd-workspace-tabs [active]="workspaceTabActive" />
   </div>
 }
@@ -91,9 +91,21 @@
       <option value="legacy_analysis">Legacy</option>
       <option value="legacy_dual_verify">Legacy DV</option>
     </select>
-    <span class="filter-count">{{ visibleRuns.length }} on page · {{ pageRangeLabel }}</span>
     @if (hasActiveFilters) {
       <button type="button" class="filter-clear" (click)="clearFilters()">Clear filters</button>
+    }
+    @if (totalCount > 0) {
+      <app-nd-pagination
+        class="nd-list-toolbar-pager"
+        [compact]="true"
+        [page]="page"
+        [pageSize]="pageSize"
+        [totalCount]="totalCount"
+        [totalPages]="totalPages"
+        [disabled]="loading"
+        (pageChange)="goToPage($event)"
+        (pageSizeChange)="changePageSize($event)"
+      />
     }
   </div>
 
@@ -115,14 +127,13 @@
           </th>
           <th class="col-docs">Documents</th>
           <th class="col-with" title="Which role the report currently sits with">Stage</th>
-          <th class="sortable col-points" (click)="toggleSort('points')">
-            Points <span class="sort-indicator">{{ sortIndicator('points') }}</span>
+          <th class="sortable col-workflow" (click)="toggleSort('points')">
+            Points summary <span class="sort-indicator">{{ sortIndicator('points') }}</span>
           </th>
-          <th class="sortable col-date" (click)="toggleSort('created')">
-            Date <span class="sort-indicator">{{ sortIndicator('created') }}</span>
-          </th>
-          <th class="col-workflow">Summary</th>
           <th class="col-gaps" title="Gaps and action plans, with how many are resolved">Gaps / actions</th>
+          <th class="sortable col-date" (click)="toggleSort('created')">
+            Date <span class="col-date-format">({{ dateColumnPattern }})</span> <span class="sort-indicator">{{ sortIndicator('created') }}</span>
+          </th>
           <th class="sortable col-maker" (click)="toggleSort('maker')">
             Submitted by <span class="sort-indicator">{{ sortIndicator('maker') }}</span>
           </th>
@@ -199,9 +210,8 @@
             <td class="col-with" data-label="Stage">
               <app-nd-run-role-badge [status]="run.status" />
             </td>
-            <td class="muted col-points" data-label="Points">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</td>
-            <td class="muted col-date" data-label="Date">{{ formatRunDate(submittedDate(run)) }}</td>
-            <td class="col-workflow" data-label="Summary">
+            <td class="col-workflow" data-label="Points summary">
+              <span class="points-tally">{{ run.processedPointsCount }}/{{ run.totalPointsCount }}</span>
               @if (complianceBreakdown(run); as breakdown) {
                 <div class="stat-chips">
                   @if (breakdown.compliant) {
@@ -237,25 +247,42 @@
                 —
               }
             </td>
+            <td class="muted col-date" data-label="Date">
+              <span class="date-line">{{ formatRunDateOnly(submittedDate(run)) }}</span>
+              <span class="date-line time-line">{{ formatRunTimeOnly(submittedDate(run)) }}</span>
+            </td>
             <td class="col-maker" data-label="Submitted by">
               <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
               <span class="submitted-by-name" [title]="submittedByLabel(run)">{{ submittedByLabel(run) }}</span>
             </td>
             <td class="row-actions col-actions" data-label="Actions" (click)="$event.stopPropagation()">
-              <app-nd-run-table-actions
-                [run]="run"
-                [submittingRunId]="submittingRunId"
-                [recallingRunId]="recallingRunId"
-                [deletingId]="deletingId"
-                [stoppingId]="stoppingId"
-                (historyClick)="openHistory($event)"
-                (submitClick)="submitRunForReview($event)"
-                (recallClick)="recallRun($event)"
-                (deleteClick)="deleteRun($event)"
-                (stopClick)="stopRun($event)"
-                [forceStatusRunId]="forceStatusRunId"
-                (forceStatusClick)="forceRunStatus($event)"
-              />
+              <div class="col-actions-stack">
+                <app-nd-run-table-actions
+                  [run]="run"
+                  [submittingRunId]="submittingRunId"
+                  [recallingRunId]="recallingRunId"
+                  [deletingId]="deletingId"
+                  [stoppingId]="stoppingId"
+                  (historyClick)="openHistory($event)"
+                  (submitClick)="submitRunForReview($event)"
+                  (recallClick)="recallRun($event)"
+                  (deleteClick)="deleteRun($event)"
+                  (stopClick)="stopRun($event)"
+                  [forceStatusRunId]="forceStatusRunId"
+                  (forceStatusClick)="forceRunStatus($event)"
+                />
+                @if (finalizedOnly) {
+                  <button
+                    type="button"
+                    class="row-action-btn compact"
+                    title="Download the finalized document(s) generated for this run"
+                    [disabled]="downloadingRunId === run.id"
+                    (click)="downloadFinalizedDocuments(run, $event)"
+                  >
+                    {{ downloadingRunId === run.id ? 'Downloading…' : 'Download' }}
+                  </button>
+                }
+              </div>
             </td>
           </tr>
         }
@@ -263,16 +290,16 @@
     </table>
   </div>
 
-  @if (totalPages > 1) {
-    <div class="nd-pagination nd-shrink">
-      <button type="button" class="btn-secondary" [disabled]="page <= 1 || loading" (click)="goToPage(page - 1)">
-        Previous
-      </button>
-      <span class="nd-pagination-label">Page {{ page }} of {{ totalPages }}</span>
-      <button type="button" class="btn-secondary" [disabled]="page >= totalPages || loading" (click)="goToPage(page + 1)">
-        Next
-      </button>
-    </div>
+  @if (totalCount > 0) {
+    <app-nd-pagination
+      [page]="page"
+      [pageSize]="pageSize"
+      [totalCount]="totalCount"
+      [totalPages]="totalPages"
+      [disabled]="loading"
+      (pageChange)="goToPage($event)"
+      (pageSizeChange)="changePageSize($event)"
+    />
   }
   }
 }

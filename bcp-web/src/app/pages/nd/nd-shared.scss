@@ -379,6 +379,60 @@
   }
 }
 
+// The status-category tabs (app-nd-workspace-tabs, or any similar tab row) read as a header strip
+// for the table section below instead of a floating row of pill buttons — underline-style active
+// tab, flush bottom border doubling as the divider between the tabs and the filters/table
+// underneath. Opt in per page by wrapping the tabs component in a `.nd-run-tabs-header` div.
+.nd-run-tabs-header {
+  margin-bottom: 1rem;
+
+  .filter-pills {
+    gap: 0;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 6%, transparent);
+  }
+
+  .filter-pills a {
+    position: relative;
+    margin-bottom: -1px;
+    padding: 0.65rem 1.1rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    font-weight: 600;
+
+    // Divider between tabs — skip the last one so it doesn't sit against the strip's own edge.
+    &:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 0.5rem;
+      bottom: 0.5rem;
+      right: 0;
+      width: 1px;
+      background: var(--border);
+    }
+
+    &:hover {
+      background: var(--bg-muted);
+      border-bottom-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+
+    &.active {
+      background: transparent;
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+
+      &:hover {
+        background: transparent;
+        border-bottom-color: var(--accent);
+      }
+    }
+  }
+}
+
 /* ── Shared list filter / sort toolbar ── */
 .nd-list-toolbar {
   display: flex;
@@ -390,6 +444,14 @@
   &.filter-pills {
     margin-bottom: 0;
   }
+}
+
+// A compact app-nd-pagination embedded in the toolbar row: stretches to fill the rest of the
+// row so its internal margin-left:auto on the page-number nav has room to push the page buttons
+// to the row's right edge, instead of sitting immediately after the filters.
+.nd-list-toolbar-pager {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 // App-wide search input — same focus-ring formula everywhere it's used (this class, not a per-page
@@ -551,7 +613,55 @@
     .col-workflow { min-width: 9rem; }
     .col-gaps { min-width: 8rem; }
     .col-status { min-width: 5.5rem; white-space: nowrap; }
-    .col-actions { min-width: 8rem; white-space: nowrap; }
+    .col-actions { min-width: 8rem; max-width: 11rem; white-space: nowrap; }
+
+    // Status pins to the left edge and Actions pins to the right edge while the columns in
+    // between scroll horizontally underneath them — same treatment across every ND list table.
+    .col-status {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: var(--bg-card, var(--surface, #fff));
+      box-shadow: 1px 0 0 var(--border);
+    }
+
+    .col-actions {
+      position: sticky;
+      right: 0;
+      z-index: 1;
+      background: var(--bg-card, var(--surface, #fff));
+      box-shadow: -1px 0 0 var(--border);
+    }
+
+    thead th.col-status,
+    thead th.col-actions {
+      z-index: 3;
+    }
+
+    // Sticky cells must stay fully opaque — var(--bg-muted) alone is semi-transparent, so on
+    // hover it let the horizontally-scrolled column underneath show through.
+    tbody tr:hover td.col-status,
+    tbody tr:hover td.col-actions {
+      background-color: var(--bg-card, var(--surface, #fff));
+      background-image: linear-gradient(var(--bg-muted), var(--bg-muted));
+    }
+
+    // Two-line Date cell (date on top, time underneath) + the region pattern hint in the header.
+    .col-date-format {
+      font-weight: 400;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    .date-line {
+      display: block;
+      line-height: 1.35;
+    }
+
+    .time-line {
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+    }
 
     .workflow-badge {
       max-width: 14rem;
@@ -908,6 +1018,48 @@
   gap: 0.3rem;
 }
 
+// Inside a table's Actions column, app-nd-run-table-actions's root `.row-actions-compact` wraps
+// ALL THREE groups (icons, status/role dropdown, Submit+Edit plans) — not just the icons, despite
+// the name. The 14rem cap above made sense only for a single packed row; it actively squeezed the
+// dropdown/labeled groups and produced inconsistent wrapping. Inside `.col-actions` specifically,
+// each group gets its own full-width line instead — narrower column, 2-3 short rows, every row
+// the same width edge to edge.
+.col-actions .row-actions-compact {
+  max-width: none;
+  width: 100%;
+}
+
+.col-actions .row-actions-icons {
+  flex: 1 0 100%;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+// The icon buttons only ever filled their own natural width and left the row short of the
+// dropdown/Submit+Edit plans rows below — stretch each to equal width so all 3 fill the row.
+.col-actions .row-actions-icons .row-action-btn.icon-only {
+  flex: 1;
+  width: auto;
+}
+
+.col-actions .role-action-group {
+  flex: 1 0 100%;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  margin-left: 0;
+}
+
+.col-actions .row-actions-labeled {
+  flex: 1 0 100%;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+// Submit + Edit plans equal width too, for one consistent row width overall.
+.col-actions .row-actions-labeled .row-action-btn {
+  flex: 1;
+}
+
 .row-action-btn {
   display: inline-flex;
   align-items: center;
@@ -1011,6 +1163,14 @@
   font-family: inherit;
   max-width: 7.5rem;
   min-width: 0;
+}
+
+// Stretch to fill its row like the icons and Submit/Edit plans rows do, instead of stopping at
+// the 7.5rem cap above (which is still right for a select sitting inline elsewhere).
+.col-actions .role-action-group .role-target-select {
+  flex: 1;
+  max-width: none;
+  width: 100%;
 }
 
 .nd-catalog-actions-cell {

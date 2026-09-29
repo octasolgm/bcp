@@ -33,3 +33,8 @@ Bug fixes
 - Fixed the downloaded corrected document always being named generically "internal-document" instead of matching the real document's name and new version — caused by the browser being blocked from reading the real filename cross-origin
 - Corrected document downloads are now named with a version marker (e.g. "... (v2).pdf") so v1 and v2 don't look identical once downloaded
 - Fixed a section-reference symbol ("§") in extracted document text rendering small enough to be misread as a dollar sign ("$")
+
+29 Sep 2026
+
+Tasks
+- Estimated per-clause AI cost on the New Analysis (hybrid) path for Claude Sonnet 5 and Kimi K3 through OpenRouter

@@ -2,7 +2,7 @@
 <div class="page-header page-header--catalog nd-catalog-toolbar">
   <div class="page-header-title-block">
     <div class="page-header-row">
-      <h1>Internal Documents (Local)</h1>
+      <h1>Internal Documents</h1>
       <span class="severity-badge status-pending" [title]="'Parse/OCR engine for this page: ' + engine">
         {{ engineLabel }}
       </span>
@@ -24,9 +24,7 @@
     </div>
     @if (isCloudEngine) {
       <p class="subtitle">
-        Same document library as the main Internal Documents page — <strong>Parse</strong> here runs on Azure
-        (cloud, billed per page, the document is sent to Azure). <strong>Extract</strong>
-        then splits the parsed text into sections on this server, with no Landing AI calls.
+        <strong>Parse</strong> runs on Azure, then <strong>Extract</strong> splits it into sections.
       </p>
     } @else {
       <p class="subtitle">
@@ -150,6 +148,20 @@
               } @else {
                 <span class="doc-meta cell-subline" [title]="d.originalFileName">{{ d.originalFileName }}</span>
               }
+              @if (d.generatedByAnalysis) {
+                <span class="doc-meta cell-subline generated-from-label">
+                  Generated from:
+                  @if (d.generatedFromRunId) {
+                    <a
+                      [routerLink]="['/nd/gap-analysis']"
+                      [queryParams]="{ run: d.generatedFromRunId }"
+                      (click)="$event.stopPropagation()"
+                    >{{ d.generatedFromRunName || 'analysis run' }}</a>
+                  } @else {
+                    {{ d.generatedFromRunName || 'an analysis run' }}
+                  }
+                </span>
+              }
             </td>
             <td class="muted col-date">{{ formatTableDate(d.uploaded) }}</td>
             <td class="muted col-actor" [title]="actorLabel(d.uploadedByName)">{{ actorLabel(d.uploadedByName) }}</td>
@@ -194,7 +206,7 @@
                     title="View extracted sections"
                     (click)="openSections(d, $event)"
                   >
-                    View structural
+                    View
                   </button>
                 }
                 <button
@@ -235,7 +247,7 @@
                       [disabled]="extractingId === d.id"
                       (click)="handleExtractSections(d, $event)"
                     >
-                      {{ extractingId === d.id ? 'Extracting…' : (hasExtractedSections(d) ? 'Re-extract (Local)' : 'Extract (Local)') }}
+                      {{ extractingId === d.id ? 'Extracting…' : extractButtonLabel(d) }}
                     </button>
                     @if (showSemanticExtract) {
                       <button
@@ -386,7 +398,7 @@
                 [disabled]="extractingId === sectionsFor.id"
                 (click)="handleExtractSections(sectionsFor)"
               >
-                {{ extractingId === sectionsFor.id ? 'Extracting…' : (hasExtractedSections(sectionsFor) ? 'Re-extract (Local)' : 'Extract (Local)') }}
+                {{ extractingId === sectionsFor.id ? 'Extracting…' : extractButtonLabel(sectionsFor) }}
               </button>
               @if (showSemanticExtract) {
                 <button

@@ -165,6 +165,9 @@ export type InternalDocument = {
   analysisRunCount?: number | null;
   /** Written by a reviewer's finalize step, not uploaded — never needs parse/extract. */
   generatedByAnalysis?: boolean;
+  /** Which analysis run's finalize step generated this version, when generatedByAnalysis is true. */
+  generatedFromRunId?: string | null;
+  generatedFromRunName?: string | null;
 };
 
 export type InternalDocumentSection = {

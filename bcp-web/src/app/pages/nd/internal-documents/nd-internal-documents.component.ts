@@ -60,7 +60,7 @@ const RecentUploadKeepMs = 90_000;
 @Component({
   selector: 'app-nd-internal-documents',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent],
   templateUrl: './nd-internal-documents.component.html',
   styleUrls: ['./nd-internal-documents.component.scss', '../nd-shared.scss'],
 })

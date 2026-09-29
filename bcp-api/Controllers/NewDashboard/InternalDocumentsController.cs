@@ -58,6 +58,18 @@ public class InternalDocumentsController(
 
         var analysisCounts = await NdDocumentAnalysisRunCountHelper.LoadAsync(appDb, ct, demoCtx);
 
+        var generatedFromRunIds = docs
+            .Select(d => TryGetGeneratedFromRunId(d.HistoryJson))
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+        var generatedFromRunNames = generatedFromRunIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await appDb.NdAnalysisRuns.AsNoTracking()
+                .Where(r => generatedFromRunIds.Contains(r.Id))
+                .ToDictionaryAsync(r => r.Id, r => r.Name, ct);
+
         var items = new List<object>();
         foreach (var d in docs)
         {
@@ -66,6 +78,7 @@ public class InternalDocumentsController(
             var parseStatus = await parseService.ResolveDisplayParseStatusAsync(live, ct);
             var exposePages = !string.Equals(parseStatus, "pending", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(parseStatus, "processing", StringComparison.OrdinalIgnoreCase);
+            var generatedFromRunId = TryGetGeneratedFromRunId(d.HistoryJson);
             items.Add(new
             {
                 id = d.Id,
@@ -113,6 +126,10 @@ public class InternalDocumentsController(
                     : null,
                 landingAiFileName = Path.GetFileName(d.StoragePath),
                 generatedByAnalysis = IsGeneratedByAnalysis(d.HistoryJson),
+                generatedFromRunId = generatedFromRunId,
+                generatedFromRunName = generatedFromRunId is Guid grid && generatedFromRunNames.TryGetValue(grid, out var grName)
+                    ? grName
+                    : null,
             });
         }
 
@@ -835,6 +852,31 @@ public class InternalDocumentsController(
     /// </summary>
     private static bool IsGeneratedByAnalysis(string? historyJson) =>
         !string.IsNullOrEmpty(historyJson) && historyJson.Contains("\"generatedFromRunId\"", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Pulls the run id out of the "corrected_copy_generated" history entry NdCorrectedDocumentService
+    /// writes (see BuildHistory there) so the library can show which analysis produced this version.
+    /// </summary>
+    private static Guid? TryGetGeneratedFromRunId(string? historyJson)
+    {
+        if (string.IsNullOrWhiteSpace(historyJson)) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(historyJson);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+            foreach (var entry in doc.RootElement.EnumerateArray())
+            {
+                if (entry.TryGetProperty("generatedFromRunId", out var runIdEl)
+                    && Guid.TryParse(runIdEl.GetString(), out var runId))
+                    return runId;
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // A malformed history should not break the document list.
+        }
+        return null;
+    }
 
     private async Task<string?> LoadInternalParsedMarkdownAsync(StoredDocument doc, CancellationToken ct)
     {

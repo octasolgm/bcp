@@ -4,23 +4,28 @@
   max-width: 100%;
 }
 
-// app-nd-run-table-actions is a child component with its own view-encapsulation scope, so a
-// plain class rule can't reach its internal .row-actions-compact from here — ::ng-deep is the
-// documented (if deprecated) escape hatch, scoped to this page only. Without this, the icon
-// buttons + status-force select + labeled buttons wrap into 3 stacked rows for lack of width,
-// which was the actual driver of the oversized table row height (not the Documents column).
-::ng-deep .col-actions .row-actions-compact,
-::ng-deep .col-actions .row-actions-icons,
-::ng-deep .col-actions .row-actions-labeled,
-::ng-deep .col-actions .role-action-group {
-  flex-wrap: nowrap;
-}
+// The Actions-column layout, sticky Status/Actions columns, two-line Date cell, and the compact
+// toolbar-embedded pagination (.nd-list-toolbar-pager) now all live in nd-shared.scss so every ND
+// list table gets the same treatment, not just this page.
 
 .header-actions {
   display: flex;
   gap: 0.5rem;
   flex-shrink: 0;
 }
+
+// Finalized tab only: stacks the shared run-actions block above the extra "Download" button for
+// the finalized document, both right-aligned, instead of squeezing them onto the same line.
+.col-actions-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+// Tab-strip-as-header styling (.nd-run-tabs-header) now lives in nd-shared.scss so every page
+// using app-nd-workspace-tabs gets the same look.
 
 .table-wrap {
   table {
@@ -191,14 +196,10 @@
 
   th,
   td {
-    vertical-align: top;
+    vertical-align: middle;
     white-space: normal;
     line-height: 1.35;
     padding: 0.625rem 0.875rem;
-  }
-
-  th {
-    vertical-align: middle;
   }
 
   .col-status,
@@ -206,8 +207,73 @@
     text-align: left;
   }
 
-  .col-points {
-    text-align: center;
+  .col-date {
+    white-space: nowrap;
+  }
+
+  .col-date-format {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  .date-line {
+    display: block;
+    line-height: 1.35;
+  }
+
+  .time-line {
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+  }
+
+  .points-tally {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  // Status pins to the left edge and Actions pins to the right edge while the columns in
+  // between scroll horizontally underneath them.
+  th.col-status,
+  td.col-status {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--bg-card, var(--surface, #fff));
+    box-shadow: 1px 0 0 var(--border);
+  }
+
+  th.col-actions,
+  td.col-actions {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background: var(--bg-card, var(--surface, #fff));
+    box-shadow: -1px 0 0 var(--border);
+    // Stacking icons / dropdown / Submit+Edit plans onto separate lines instead of one wide row
+    // means the column only ever needs to fit the widest SINGLE line — but table auto-layout
+    // still handed it leftover space from other columns, so cap it explicitly instead of relying
+    // on content alone to shrink it.
+    max-width: 11rem;
+  }
+
+  // Header cells are sticky on both axes at once (top from nd-table-wrap--scroll, left/right
+  // here) — bump above plain sticky headers so the corner never shows a scrolled column through it.
+  thead th.col-status,
+  thead th.col-actions {
+    z-index: 3;
+  }
+
+  // Sticky cells must stay fully opaque — var(--bg-muted) alone is semi-transparent, so on hover
+  // it let the horizontally-scrolled column underneath show through (looked like overlapping
+  // text). Layer it over the opaque card color instead of using it as the whole background.
+  tr.clickable-row:hover td.col-status,
+  tr.clickable-row:hover td.col-actions {
+    background-color: var(--bg-card, var(--surface, #fff));
+    background-image: linear-gradient(var(--bg-muted), var(--bg-muted));
   }
 
   .col-run strong {
@@ -219,12 +285,9 @@
     white-space: normal;
   }
 
-  // The action cell (icon buttons + status-force select + labeled buttons) needs real width to
-  // lay out in one row instead of wrapping into 3 stacked rows, which was the actual driver of
-  // the oversized row height — not the Documents column.
-  .col-actions {
-    min-width: 20rem;
-  }
+  // Icons / status dropdown / Submit+Edit plans now deliberately stack onto 3 separate lines
+  // (narrower column, taller row) instead of forcing one wide row — this used to set min-width:
+  // 20rem specifically to prevent that stacking, which is exactly what's wanted now.
 
   .doc-groups {
     display: flex;

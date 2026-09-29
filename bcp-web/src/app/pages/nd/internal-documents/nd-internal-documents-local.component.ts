@@ -1,7 +1,7 @@
 import { Component, HostListener, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdApiService, NdLocalExtractionResult, NdOcrEngine } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
@@ -70,7 +70,7 @@ const RecentUploadKeepMs = 90_000;
 @Component({
   selector: 'app-nd-internal-documents-local',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent],
   templateUrl: './nd-internal-documents-local.component.html',
   styleUrls: [
     './nd-internal-documents.component.scss',
@@ -299,6 +299,12 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
     if (doc.parseStatus === 'failed') return `Retry parse${tag}`;
     if (this.isDocParsed(doc)) return `Re-parse${tag}`;
     return `Parse${tag}`;
+  }
+
+  extractButtonLabel(doc: InternalDocument): string {
+    // Local engines keep the "(Local)" tag; the Azure DI page just says "Extract".
+    const tag = this.isCloudEngine ? '' : ' (Local)';
+    return this.hasExtractedSections(doc) ? `Re-extract${tag}` : `Extract${tag}`;
   }
 
   /** Step 1 only — parse to text with page references. Does not touch section/point extraction. */
@@ -565,10 +571,8 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
         parseStatus?: string;
       };
       this.addOptimisticUpload(data, file);
-      this.message = 'Uploaded — status is Not parsed. Click Parse &amp; Extract (Local) when ready.'.replace(
-        '&amp;',
-        '&',
-      );
+      const tag = this.isCloudEngine ? '' : ' (Local)';
+      this.message = `Uploaded — status is Not parsed. Click Parse & Extract${tag} when ready.`;
       this.error = '';
       this.toast.show(this.message, 'success', 4000);
       this.workspaceNav.bumpNavBadges({ internalDocuments: 1 });

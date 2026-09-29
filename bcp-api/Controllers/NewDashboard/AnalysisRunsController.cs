@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
+using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services;
@@ -713,6 +714,49 @@ public class AnalysisRunsController(
 
         var timeline = await NdRunHistoryHelper.BuildTimelineAsync(db, run, ct);
         return Ok(new { success = true, data = timeline });
+    }
+
+    /// <summary>
+    /// The corrected/embedded internal-document copies NdCorrectedDocumentService generated when this
+    /// run was finalized — for the "download the finalized document" action on the Finalized tab.
+    /// Matched via the exact "generatedFromRunId":"&lt;id&gt;" marker NdCorrectedDocumentService writes
+    /// into the copy's history_json (same marker it uses itself to stay idempotent per run).
+    /// </summary>
+    [HttpGet("{id:guid}/generated-documents")]
+    public async Task<IActionResult> GeneratedDocuments(Guid id, CancellationToken ct)
+    {
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound(new { success = false, message = "Not found" });
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+            return StatusCode(403, new { success = false, message = "Forbidden" });
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        if (!NdDemoDataFilters.CanAccessCreatedBy(run.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Not found" });
+
+        // history_json is stored as jsonb, and Postgres has no jsonb ~~ jsonb (LIKE) operator, so a
+        // plain LINQ .Contains() here fails at the SQL level ("operator does not exist: jsonb ~~
+        // jsonb") — cast it to text explicitly via raw SQL instead.
+        var likePattern = $"%\"generatedFromRunId\":\"{id}\"%";
+        var docs = await db.StoredDocuments
+            .FromSqlInterpolated($"SELECT * FROM stored_documents WHERE history_json::text LIKE {likePattern}")
+            .AsNoTracking()
+            .OrderBy(d => d.Title)
+            .Select(d => new
+            {
+                id = d.Id,
+                title = d.Title,
+                originalFileName = d.OriginalFileName,
+                version = d.Version,
+                sizeBytes = d.SizeBytes,
+            })
+            .ToListAsync(ct);
+
+        return Ok(new { success = true, data = docs });
     }
 
     [HttpPost("{id:guid}/start")]

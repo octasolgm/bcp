@@ -64,3 +64,7 @@ Fixed a display issue where a section-reference symbol in extracted document tex
 Deployment
 
 Published this week's changes to the hosted API and web app.
+
+Per-clause analysis cost
+
+On the New Analysis page, almost all of the work that compares one regulation clause to the bank's internal policy is done locally and costs nothing. The only paid step is the judgment call that decides whether the policy covers that clause. Using current OpenRouter prices, a typical clause is about 4 to 9 cents with Claude Sonnet 5, and about 6 to 13 cents with Kimi K3. Kimi costs more because it reasons more heavily by default and its token rates are higher. A clause that is only partly covered can be judged a second time, which roughly doubles that clause's cost.
