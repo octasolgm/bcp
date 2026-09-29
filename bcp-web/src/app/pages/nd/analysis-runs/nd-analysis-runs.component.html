@@ -261,17 +261,19 @@
                   [run]="run"
                   [submittingRunId]="submittingRunId"
                   [recallingRunId]="recallingRunId"
+                  [roleActingRunId]="roleActingRunId"
                   [deletingId]="deletingId"
                   [stoppingId]="stoppingId"
                   (historyClick)="openHistory($event)"
                   (submitClick)="submitRunForReview($event)"
                   (recallClick)="recallRun($event)"
+                  (roleActionClick)="runRoleAction($event)"
                   (deleteClick)="deleteRun($event)"
                   (stopClick)="stopRun($event)"
                   [forceStatusRunId]="forceStatusRunId"
                   (forceStatusClick)="forceRunStatus($event)"
                 />
-                @if (finalizedOnly) {
+                @if (isRunFinalized(run)) {
                   <button
                     type="button"
                     class="row-action-btn compact"
@@ -281,6 +283,17 @@
                   >
                     {{ downloadingRunId === run.id ? 'Downloading…' : 'Download' }}
                   </button>
+                  @if (canRegenerateCorrectedDocuments) {
+                    <button
+                      type="button"
+                      class="row-action-btn compact"
+                      title="Re-run the corrected-document generation for this run, at no AI cost"
+                      [disabled]="regeneratingRunId === run.id"
+                      (click)="regenerateCorrectedDocuments(run, $event)"
+                    >
+                      {{ regeneratingRunId === run.id ? 'Regenerating…' : 'Regenerate documents' }}
+                    </button>
+                  }
                 }
               </div>
             </td>

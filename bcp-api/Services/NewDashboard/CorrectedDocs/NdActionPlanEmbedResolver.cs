@@ -152,10 +152,16 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
                 var matchLists = new[] { "fusedMatches", "matches", "bm25Matches" };
+                // Only the strongest few ranked matches decide which document(s) a clause embeds
+                // into — these lists commonly carry 30-60 candidates apiece, and scanning all of
+                // them (as this used to) means every document attached to the run eventually shows
+                // up somewhere in every clause's list, so nearly everything "resolved" to every
+                // document instead of the one or two it actually came from.
+                const int topRankedMatches = 3;
                 foreach (var listName in matchLists)
                 {
                     if (!root.TryGetProperty(listName, out var arr) || arr.ValueKind != JsonValueKind.Array) continue;
-                    foreach (var m in arr.EnumerateArray())
+                    foreach (var m in arr.EnumerateArray().Take(topRankedMatches))
                     {
                         if (!m.TryGetProperty("sourceDocumentId", out var idEl)) continue;
                         if (!Guid.TryParse(idEl.GetString(), out var docId) || !attachedDocIds.Contains(docId)) continue;

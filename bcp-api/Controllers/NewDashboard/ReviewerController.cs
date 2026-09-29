@@ -100,6 +100,38 @@ public class ReviewerController(
         });
     }
 
+    /// <summary>
+    /// Re-runs just the corrected-document generation for a run that's already finalized —
+    /// for re-testing the embed step (e.g. after a fix to the embedder) without re-running the
+    /// AI analysis itself. Always adds a new version; never touches or deletes an existing one.
+    /// </summary>
+    [HttpPost("review/{runId:guid}/regenerate-corrected-documents")]
+    public async Task<IActionResult> RegenerateCorrectedDocuments(Guid runId, CancellationToken ct)
+    {
+        var (profile, error) = await RequireRoleAtLeastAsync(db, jwt, ct, "reviewer");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct);
+        if (run == null) return NotFound();
+        if (run.Status != "reviewer_approved")
+            return BadRequest(new { success = false, message = "Run is not finalized yet." });
+
+        var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile!.Id, ct, force: true);
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                correctedDocuments = corrected.Select(c => new
+                {
+                    documentId = c.DocumentId,
+                    title = c.Title,
+                    version = c.VersionNumber,
+                }),
+            },
+        });
+    }
+
     [HttpPost("review/{runId:guid}/pull-back")]
     public async Task<IActionResult> PullBack(Guid runId, [FromBody] ReviewRequest body, CancellationToken ct)
     {

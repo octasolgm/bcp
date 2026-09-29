@@ -33,7 +33,12 @@ public class NdCorrectedDocumentService(
     /// Idempotent per run: a document that already has a version generated from this
     /// run is left alone, so finalizing twice does not stack versions.
     /// </summary>
-    public async Task<List<CorrectedVersion>> GenerateForRunAsync(Guid runId, Guid? actorId, CancellationToken ct)
+    /// <param name="force">Skips the idempotency check and regenerates even when this run already
+    /// has a version — for re-testing the embed step on an already-finalized run without re-running
+    /// the (AI-metered) analysis itself. Always adds a new version; never touches or deletes an
+    /// existing one.</param>
+    public async Task<List<CorrectedVersion>> GenerateForRunAsync(
+        Guid runId, Guid? actorId, CancellationToken ct, bool force = false)
     {
         var created = new List<CorrectedVersion>();
 
@@ -50,6 +55,9 @@ public class NdCorrectedDocumentService(
         var embedJobs = await embedResolver.ResolveForRunAsync(runId, ct);
         var jobsByDocId = embedJobs.ToDictionary(j => j.StoredDocumentId);
 
+        // Decide which sources actually need a new version first — cheap DB reads only, done
+        // sequentially since they share this method's DbContext.
+        var toGenerate = new List<(StoredDocument Source, int NextVersion)>();
         foreach (var source in sources)
         {
             var siblings = await db.StoredDocuments
@@ -57,14 +65,33 @@ public class NdCorrectedDocumentService(
                 .ToListAsync(ct);
 
             var marker = RunMarker(runId);
-            if (siblings.Any(d => d.HistoryJson.Contains(marker, StringComparison.Ordinal)))
+            if (!force && siblings.Any(d => d.HistoryJson.Contains(marker, StringComparison.Ordinal)))
                 continue;
 
-            var nextVersion = siblings.Max(d => d.VersionNumber) + 1;
-            var embedded = jobsByDocId.TryGetValue(source.Id, out var job)
-                ? await TryEmbedActionPlansAsync(source, job, ct)
-                : null;
+            var nextVersion = siblings.Count == 0 ? 1 : siblings.Max(d => d.VersionNumber) + 1;
+            toGenerate.Add((source, nextVersion));
+        }
 
+        // The slow part — downloading and (for a malformed PDF) rendering every page — runs a
+        // few documents at a time instead of one after another, so a run with many internal
+        // documents doesn't take proportionally longer: wall time stays close to a handful of
+        // documents' worth, not the full count. None of this touches the shared DbContext, so
+        // it's safe to run concurrently; only the entity creation below is sequential.
+        var embedResults = new (StoredDocument Source, int NextVersion, EmbeddedFile? Embedded)[toGenerate.Count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, toGenerate.Count),
+            new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct },
+            async (i, itemCt) =>
+            {
+                var (source, nextVersion) = toGenerate[i];
+                var embedded = jobsByDocId.TryGetValue(source.Id, out var job)
+                    ? await TryEmbedActionPlansAsync(source, job, itemCt)
+                    : null;
+                embedResults[i] = (source, nextVersion, embedded);
+            });
+
+        foreach (var (source, nextVersion, embedded) in embedResults)
+        {
             var copy = new StoredDocument
             {
                 Title = source.Title,
@@ -175,7 +202,10 @@ public class NdCorrectedDocumentService(
         }
     }
 
-    private static string RunMarker(Guid runId) => $"\"generatedFromRunId\":\"{runId}\"";
+    // Postgres re-serializes jsonb on every read, always inserting a space after each colon —
+    // matching the raw "generatedFromRunId":"..." syntax (no space) never finds a real row.
+    // The run id alone is globally unique, so matching on just that substring is safe.
+    private static string RunMarker(Guid runId) => runId.ToString();
 
     private static string BuildHistory(StoredDocument source, Guid runId, int version, NdActionPlanEmbedJob? embeddedJob = null)
     {

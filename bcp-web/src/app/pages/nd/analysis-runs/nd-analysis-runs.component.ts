@@ -85,9 +85,11 @@ export class NdAnalysisRunsComponent implements OnInit {
   deletingId: string | null = null;
   submittingRunId: string | null = null;
   recallingRunId: string | null = null;
+  roleActingRunId: string | null = null;
   stoppingId: string | null = null;
   forceStatusRunId: string | null = null;
   downloadingRunId: string | null = null;
+  regeneratingRunId: string | null = null;
   historyOpen = false;
   historyRunId: string | null = null;
   historyRunName = '';
@@ -439,6 +441,44 @@ export class NdAnalysisRunsComponent implements OnInit {
     }
   }
 
+  /**
+   * A run sitting with the checker or reviewer shows a role dropdown + action button on this
+   * page too (not just the checker/reviewer queues), so this mirrors NdCheckerQueueComponent /
+   * NdReviewerQueueComponent's runRoleAction: which endpoint fires depends on the run's current
+   * status, not on which page it was clicked from.
+   */
+  async runRoleAction(payload: { run: AnalysisRunSummary; target: string }): Promise<void> {
+    const { run, target } = payload;
+    const status = run.status.toLowerCase();
+    this.roleActingRunId = run.id;
+    const res =
+      status === 'submitted_for_review'
+        ? target === 'maker'
+          ? await this.api.pullBackAnalysis(run.id, {})
+          : await this.api.approveAnalysis(run.id, {})
+        : target === 'checker'
+          ? await this.api.pullBackToChecker(run.id, {})
+          : target === 'maker'
+            ? await this.api.pullBackToMaker(run.id, {})
+            : await this.api.finalizeAnalysis(run.id, {});
+    this.roleActingRunId = null;
+    if (res.success) {
+      const message =
+        target === 'checker'
+          ? 'Sent back to checker'
+          : target === 'maker'
+            ? 'Sent back to maker'
+            : target === 'reviewer'
+              ? 'Submitted to reviewer'
+              : 'Analysis finalized';
+      this.toast.show(message, 'success');
+      await this.load();
+      this.workspaceNav.requestNavBadgeRefresh();
+    } else {
+      this.toast.show(res.message ?? 'Could not submit this run', 'error');
+    }
+  }
+
   async deleteRun(run: AnalysisRunSummary, event?: Event): Promise<void> {
     event?.stopPropagation();
     const permanentDemoDelete = isPermanentDemoAnalysisDelete(run, this.auth.isDemoViewer());
@@ -563,6 +603,31 @@ export class NdAnalysisRunsComponent implements OnInit {
       res.data.length === 1 ? 'Downloading finalized document' : `Downloading ${res.data.length} finalized documents`,
       'success',
     );
+  }
+
+  /** Download/Regenerate belong on any finalized row, on every tab — not just the Finalized tab. */
+  isRunFinalized(run: AnalysisRunSummary): boolean {
+    return run.status.toLowerCase() === 'reviewer_approved';
+  }
+
+  get canRegenerateCorrectedDocuments(): boolean {
+    const role = this.auth.getRole();
+    return role === 'reviewer' || role === 'super_admin';
+  }
+
+  /** Finalized tab only: re-runs the corrected-document generation without re-running the run
+   * itself — for retrying the embed step (e.g. after a fix) at no AI cost. */
+  async regenerateCorrectedDocuments(run: AnalysisRunSummary, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    event?.preventDefault();
+    this.regeneratingRunId = run.id;
+    const res = await this.api.regenerateCorrectedDocuments(run.id);
+    this.regeneratingRunId = null;
+    if (res.success) {
+      this.toast.show('Regenerated the corrected document(s) for this run', 'success');
+    } else {
+      this.toast.show(res.message ?? 'Could not regenerate corrected documents', 'error');
+    }
   }
 
   async forceRunStatus(payload: { run: AnalysisRunSummary; status: string }): Promise<void> {

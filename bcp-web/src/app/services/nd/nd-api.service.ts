@@ -27,6 +27,11 @@ const ANALYSIS_RUN_DETAIL_TIMEOUT_MS = 90_000;
 const AUTH_API_TIMEOUT_MS = 30_000;
 /** Rerun should return quickly after queueing; allow headroom if API is under load. */
 const RERUN_API_TIMEOUT_MS = 60_000;
+/** Finalize/regenerate rewrites the run's internal PDFs synchronously (up to 4 at a time — see
+ *  NdCorrectedDocumentService), and a malformed one falls back to rendering every page as an
+ *  image. Parallelizing keeps wall time close to a handful of documents' worth regardless of how
+ *  many the run has, but this stays generous as a ceiling, not the fix for scale. */
+const CORRECTED_DOCS_TIMEOUT_MS = 600_000;
 /** Library create/update can persist many regulation points in one request. */
 const LIBRARY_WRITE_TIMEOUT_MS = 120_000;
 /** Landing AI policy-clause extract (multi-chunk) — align with Bcp:HttpTimeoutMinutes (15). */
@@ -2164,7 +2169,20 @@ export class NdApiService {
   finalizeAnalysis(runId: string, body: NdRunReviewBody) {
     return this.request<{
       correctedDocuments: { documentId: string; title: string; version: number }[];
-    }>('POST', `/nd/reviewer/review/${runId}/finalize`, body);
+    }>('POST', `/nd/reviewer/review/${runId}/finalize`, body, true, CORRECTED_DOCS_TIMEOUT_MS);
+  }
+
+  /** Re-runs just the corrected-document generation for an already-finalized run — no AI, no credits. */
+  regenerateCorrectedDocuments(runId: string) {
+    return this.request<{
+      correctedDocuments: { documentId: string; title: string; version: number }[];
+    }>(
+      'POST',
+      `/nd/reviewer/review/${runId}/regenerate-corrected-documents`,
+      undefined,
+      true,
+      CORRECTED_DOCS_TIMEOUT_MS,
+    );
   }
 
   pullBackToChecker(runId: string, body: NdRunReviewBody) {

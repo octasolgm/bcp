@@ -719,8 +719,8 @@ public class AnalysisRunsController(
     /// <summary>
     /// The corrected/embedded internal-document copies NdCorrectedDocumentService generated when this
     /// run was finalized — for the "download the finalized document" action on the Finalized tab.
-    /// Matched via the exact "generatedFromRunId":"&lt;id&gt;" marker NdCorrectedDocumentService writes
-    /// into the copy's history_json (same marker it uses itself to stay idempotent per run).
+    /// Matched by this run's id appearing anywhere in the copy's history_json (the same id
+    /// NdCorrectedDocumentService's RunMarker uses to stay idempotent per run).
     /// </summary>
     [HttpGet("{id:guid}/generated-documents")]
     public async Task<IActionResult> GeneratedDocuments(Guid id, CancellationToken ct)
@@ -740,10 +740,18 @@ public class AnalysisRunsController(
 
         // history_json is stored as jsonb, and Postgres has no jsonb ~~ jsonb (LIKE) operator, so a
         // plain LINQ .Contains() here fails at the SQL level ("operator does not exist: jsonb ~~
-        // jsonb") — cast it to text explicitly via raw SQL instead.
-        var likePattern = $"%\"generatedFromRunId\":\"{id}\"%";
+        // jsonb") — cast it to text explicitly via raw SQL instead. Match on the run id alone
+        // (globally unique, so this is safe) rather than the surrounding "generatedFromRunId":"..."
+        // syntax — Postgres's jsonb-to-text cast always inserts a space after every colon, so a
+        // pattern built without one (as this used to be) never matches a real row.
+        // Regenerating (retrying the embed step without re-running the analysis) adds another new
+        // version each time rather than replacing the last one, so a run regenerated more than once
+        // can have several rows carrying its marker per document title — keep only the newest per
+        // title, or Download would hand back every past attempt alongside the current one.
+        var likePattern = $"%{id}%";
         var docs = await db.StoredDocuments
-            .FromSqlInterpolated($"SELECT * FROM stored_documents WHERE history_json::text LIKE {likePattern}")
+            .FromSqlInterpolated(
+                $"SELECT DISTINCT ON (title) * FROM stored_documents WHERE history_json::text LIKE {likePattern} ORDER BY title, version_number DESC")
             .AsNoTracking()
             .OrderBy(d => d.Title)
             .Select(d => new

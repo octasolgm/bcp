@@ -20,6 +20,7 @@ public static class NdCorrectedPdfEmbedder
     private static readonly double PageHeight = XUnit.FromInch(11.69).Point;
     private const double Margin = 48;
     private const double LineHeight = 16;
+    private const int RasterFallbackDpi = 150;
 
     /// <param name="targets">Each target's Page is 1-based and may be null (unresolved location — its
     /// note is appended after the last page instead of guessed at).</param>
@@ -27,14 +28,28 @@ public static class NdCorrectedPdfEmbedder
     {
         if (targets.Count == 0) return sourcePdf;
 
+        try
+        {
+            return EmbedByImportingPages(sourcePdf, targets);
+        }
+        catch (PdfReaderException)
+        {
+            // PdfSharpCore's parser rejects some real-world PDFs outright — a broken or
+            // non-standard cross-reference table from certain scan/export tools — that PDFium
+            // (already used elsewhere for OCR rendering) opens fine. Rebuild the document from
+            // rendered page images instead of giving up and falling back to the no-op placeholder
+            // copy: the note still lands after the correct cited page, just without the
+            // original's selectable text underneath it.
+            return EmbedByRasterizingPages(sourcePdf, targets);
+        }
+    }
+
+    private static byte[] EmbedByImportingPages(byte[] sourcePdf, IReadOnlyList<NdActionPlanEmbedTarget> targets)
+    {
         using var sourceStream = new MemoryStream(sourcePdf);
         using var source = PdfReader.Open(sourceStream, PdfDocumentOpenMode.Import);
         var pageCount = source.PageCount;
-
-        // Group notes onto the page they attach after; unresolved ones attach after the last page.
-        var byPage = targets
-            .GroupBy(t => t.Page is > 0 && t.Page <= pageCount ? t.Page!.Value : pageCount)
-            .ToDictionary(g => g.Key, g => g.ToList());
+        var byPage = GroupByPage(targets, pageCount);
 
         using var output = new PdfDocument();
         for (var i = 1; i <= pageCount; i++)
@@ -48,6 +63,44 @@ public static class NdCorrectedPdfEmbedder
         output.Save(resultStream, false);
         return resultStream.ToArray();
     }
+
+    private static byte[] EmbedByRasterizingPages(byte[] sourcePdf, IReadOnlyList<NdActionPlanEmbedTarget> targets)
+    {
+        var pageCount = PDFtoImage.Conversion.GetPageCount(sourcePdf, password: null);
+        var byPage = GroupByPage(targets, pageCount);
+        var renderOptions = new PDFtoImage.RenderOptions(Dpi: RasterFallbackDpi);
+
+        using var output = new PdfDocument();
+        for (var i = 1; i <= pageCount; i++)
+        {
+            using var pngStream = new MemoryStream();
+            PDFtoImage.Conversion.SavePng(pngStream, sourcePdf, (Index)(i - 1), password: null, renderOptions);
+            var pngBytes = pngStream.ToArray();
+            var ximg = XImage.FromStream(() => new MemoryStream(pngBytes));
+            var widthPoints = ximg.PixelWidth * 72.0 / RasterFallbackDpi;
+            var heightPoints = ximg.PixelHeight * 72.0 / RasterFallbackDpi;
+
+            var page = output.AddPage();
+            page.Width = XUnit.FromPoint(widthPoints);
+            page.Height = XUnit.FromPoint(heightPoints);
+            using (var gfx = XGraphics.FromPdfPage(page))
+                gfx.DrawImage(ximg, 0, 0, widthPoints, heightPoints);
+
+            if (byPage.TryGetValue(i, out var notesHere))
+                AppendNotePages(output, notesHere);
+        }
+
+        using var resultStream = new MemoryStream();
+        output.Save(resultStream, false);
+        return resultStream.ToArray();
+    }
+
+    /// <summary>Groups notes onto the page they attach after; unresolved ones attach after the last page.</summary>
+    private static Dictionary<int, List<NdActionPlanEmbedTarget>> GroupByPage(
+        IReadOnlyList<NdActionPlanEmbedTarget> targets, int pageCount) =>
+        targets
+            .GroupBy(t => t.Page is > 0 && t.Page <= pageCount ? t.Page!.Value : pageCount)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
     private static void AppendNotePages(PdfDocument output, IReadOnlyList<NdActionPlanEmbedTarget> targets)
     {
