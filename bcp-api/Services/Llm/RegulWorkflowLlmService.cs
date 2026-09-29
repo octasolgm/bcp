@@ -37,18 +37,26 @@ public class RegulWorkflowLlmService(
     public async Task<string> AnalyzeTextAsync(string prompt, CancellationToken ct = default)
     {
         var cfg = await settings.GetConfigAsync(ct);
+        return await AnalyzeTextWithConfigAsync(prompt, cfg, ct);
+    }
+
+    /// <summary>Same dispatch as AnalyzeTextAsync, but takes an already-resolved config instead of
+    /// fetching it — lets a caller resolve the config once (DB read) and reuse it across several
+    /// concurrent calls without each one touching the database.</summary>
+    private Task<string> AnalyzeTextWithConfigAsync(string prompt, DualVerifyLlmConfig cfg, CancellationToken ct)
+    {
         logger.LogInformation("Regul workflow LLM using {Provider}/{Model}", cfg.Provider, cfg.Model);
         return cfg.Provider.ToLowerInvariant() switch
         {
-            "google" => await gemini.AnalyzeTextAsync(prompt, cfg.Model, ct),
-            "openai" => await openAi.AnalyzeTextAsync(prompt, cfg.Model, ct),
-            "anthropic" => await anthropic.AnalyzeTextAsync(prompt, cfg.Model, ct),
-            "xai" => await xAi.AnalyzeTextAsync(prompt, cfg.Model, ct),
-            "moonshot" => await moonshot.AnalyzeTextAsync(prompt, cfg.Model, ct),
-            "deepseek" => await deepSeek.AnalyzeTextAsync(prompt, cfg.Model, ct),
-            "zhipu" => await zhipu.AnalyzeTextAsync(prompt, cfg.Model, ct),
-            "qwen" => await qwen.AnalyzeTextAsync(prompt, cfg.Model, ct),
-            "openrouter" => await openRouter.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "google" => gemini.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "openai" => openAi.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "anthropic" => anthropic.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "xai" => xAi.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "moonshot" => moonshot.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "deepseek" => deepSeek.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "zhipu" => zhipu.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "qwen" => qwen.AnalyzeTextAsync(prompt, cfg.Model, ct),
+            "openrouter" => openRouter.AnalyzeTextAsync(prompt, cfg.Model, ct),
             _ => throw new InvalidOperationException($"Unsupported LLM provider '{cfg.Provider}'."),
         };
     }
@@ -70,8 +78,25 @@ public class RegulWorkflowLlmService(
         // Hybrid engine only: each clause sends different retrieved chunks, so caching just adds the
         // cache-write surcharge with no reads. Admin-switchable (default off); full-markdown engines
         // keep caching unconditionally because their context repeats across clauses.
-        if (cacheContextBlock && AnalysisWorkflowEngine.IsRegulPipelineHybrid(workflowEngine))
+        if (cacheContextBlock && isHybrid)
             cacheContextBlock = await settings.IsRetrievalPromptCacheEnabledAsync(ct);
+        return await DispatchJudgmentAsync(cfg, systemPrompt, contextBlock, queryBlock, cacheContextBlock, isHybrid, ct);
+    }
+
+    /// <summary>Same dispatch as CallJudgmentAsync, but takes an already-resolved config/system-prompt/
+    /// cache-flag instead of fetching them. A caller running several clauses' judgment calls concurrently
+    /// (see NdRegulAnalysisProcessor's forward phase) resolves these once per clause up front — the only
+    /// DB reads in the whole judgment call — then fires the actual LLM calls in parallel through this
+    /// method, none of which touch the database, so nothing here can race on the shared DbContext.</summary>
+    public Task<string> DispatchJudgmentAsync(
+        DualVerifyLlmConfig cfg,
+        string systemPrompt,
+        string contextBlock,
+        string queryBlock,
+        bool cacheContextBlock,
+        bool isHybrid,
+        CancellationToken ct)
+    {
         logger.LogInformation(
             "Regul judgment LLM using {Provider}/{Model} (structured={Structured})",
             cfg.Provider,
@@ -80,7 +105,7 @@ public class RegulWorkflowLlmService(
 
         if (cfg.Provider.Equals("anthropic", StringComparison.OrdinalIgnoreCase))
         {
-            return await anthropic.StructuredToolCallAsync(
+            return anthropic.StructuredToolCallAsync(
                 systemPrompt,
                 contextBlock,
                 queryBlock,
@@ -98,7 +123,21 @@ public class RegulWorkflowLlmService(
             queryBlock,
             isHybrid ? HybridJudgmentJsonInstruction : JudgmentJsonInstruction,
         });
-        return await AnalyzeTextAsync(prompt, ct);
+        return AnalyzeTextWithConfigAsync(prompt, cfg, ct);
+    }
+
+    /// <summary>DB reads CallJudgmentAsync would otherwise do internally — resolved once per clause up
+    /// front so several clauses' judgment calls can then run through DispatchJudgmentAsync concurrently
+    /// with zero DB access. Mirrors exactly what CallJudgmentAsync itself resolves before dispatching.</summary>
+    public async Task<(DualVerifyLlmConfig Config, string SystemPrompt, bool CacheContextBlock, bool IsHybrid)>
+        ResolveJudgmentCallInputsAsync(bool cacheContextBlock, string? workflowEngine, CancellationToken ct = default)
+    {
+        var cfg = await settings.GetConfigAsync(ct);
+        var isHybrid = AnalysisWorkflowEngine.IsRegulPipelineHybrid(workflowEngine);
+        var systemPrompt = await promptVersions.GetJudgmentSystemPromptAsync(workflowEngine, ct);
+        if (cacheContextBlock && isHybrid)
+            cacheContextBlock = await settings.IsRetrievalPromptCacheEnabledAsync(ct);
+        return (cfg, systemPrompt, cacheContextBlock, isHybrid);
     }
 
     public async Task<string> AnalyzeWithPdfsAsync(

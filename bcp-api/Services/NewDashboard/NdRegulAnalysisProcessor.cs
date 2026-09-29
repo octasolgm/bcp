@@ -121,7 +121,7 @@ public class NdRegulAnalysisProcessor(
                 logger.LogInformation("Regul pipeline phase=retrieval for run {RunId}", runId);
                 await embeddingRetrieval.RunRetrievalAsync(run, ct);
                 // Falls through to the normal forward phase below — Step 8's actual LLM call is
-                // paused per-clause instead (see the PAUSED block in CallForwardJudgmentAsync),
+                // paused per-clause instead (see the PAUSED block in ExecuteForwardJudgmentAsync),
                 // so the rest of the pipeline (context building, per-clause looping, save) still
                 // runs for real and is fully testable while consuming zero LLM credit.
             }
@@ -332,6 +332,33 @@ public class NdRegulAnalysisProcessor(
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>How many clauses' judgment LLM calls run at once during the forward phase. Every DB
+    /// read a clause's judgment call needs (retrieval chunks, prompt templates, provider config) is
+    /// resolved up front in a cheap sequential prep pass (PrepareForwardJudgmentAsync) — the only
+    /// thing that runs concurrently is the actual outbound LLM call (ExecuteForwardJudgmentAsync),
+    /// which touches no shared state, so raising this is safe up to whatever the configured LLM
+    /// provider can actually take concurrently. Admin-tunable without a redeploy in case a given
+    /// provider/model needs a lower ceiling.</summary>
+    private static readonly int ForwardJudgmentConcurrency = Math.Max(
+        1,
+        int.TryParse(Environment.GetEnvironmentVariable("BCP_REGUL_FORWARD_JUDGMENT_CONCURRENCY"), out var configuredConcurrency)
+            ? configuredConcurrency
+            : 4);
+
+    private sealed record ForwardJudgmentPrep(
+        NdRegulForwardFinding Finding,
+        NdAnalysisPoint Point,
+        int Index,
+        NdRegulPolicyContextService.PolicyBundle ClauseBundle,
+        string ContextBlock,
+        string QueryBlock,
+        IReadOnlyList<NdRegulPolicyContextService.PolicyChunk> ContextChunks,
+        DualVerifyLlmConfig Config,
+        string SystemPrompt,
+        bool CacheContextBlock,
+        bool IsHybridEngine,
+        string? WorkflowEngine);
+
     private async Task RunForwardPhaseAsync(NdAnalysisRun run, CancellationToken ct)
     {
         var policyMode = NdRegulPolicyContextService.ResolveMode(run.WorkflowEngine);
@@ -357,14 +384,20 @@ public class NdRegulAnalysisProcessor(
                 promptVersionsInUse.Select(v => $"{v.PromptKey}=v{v.VersionNumber} ({v.Label})")));
 
         logger.LogInformation(
-            "Regul forward phase started for run {RunId}: {Total} clause(s), policyPages={Pages}, retrieval={Retrieval}, fullMarkdownFiles={FileCount}, fullMarkdownChars={Chars}",
+            "Regul forward phase started for run {RunId}: {Total} clause(s), policyPages={Pages}, retrieval={Retrieval}, fullMarkdownFiles={FileCount}, fullMarkdownChars={Chars}, concurrency={Concurrency}",
             run.Id,
             total,
             policyBundle.TotalPages,
             !policyBundle.UsesFullMarkdown,
             policyBundle.MarkdownByFile.Count,
-            policyBundle.SourceTextForQuotes.Length);
+            policyBundle.SourceTextForQuotes.Length,
+            ForwardJudgmentConcurrency);
 
+        // Phase 1 — sequential prep: every DB read a clause's judgment call needs (retrieval chunks,
+        // prompt templates, provider config) resolved up front. Cheap (no LLM calls here), so doing
+        // this one clause at a time costs nothing, and it means phase 2 below never touches the
+        // database, so nothing races on the shared DbContext when several clauses run at once.
+        var preps = new List<ForwardJudgmentPrep>(pending.Count);
         for (var i = 0; i < pending.Count; i++)
         {
             var finding = pending[i];
@@ -373,13 +406,6 @@ public class NdRegulAnalysisProcessor(
                 continue;
 
             var index = i + 1;
-            logger.LogInformation(
-                "Regul forward judgment started for run {RunId} clause {ClauseNo} ({Index}/{Total})",
-                run.Id,
-                finding.ClauseNo,
-                index,
-                total);
-
             point.LandingAiStatus = "running";
             point.LandingAiError = null;
             point.UpdatedAt = DateTimeOffset.UtcNow;
@@ -388,47 +414,55 @@ public class NdRegulAnalysisProcessor(
             run.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
 
+            // V5 hybrid engine: use this clause's own Step 1+3+4 retrieval output instead of
+            // the run-wide bundle every other engine shares — same LLM call, same prompt,
+            // different context, per finding.RetrievalJson (see BuildRetrievalPolicyBundleAsync).
+            var clauseBundle = AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine)
+                ? await BuildRetrievalPolicyBundleAsync(finding, ct)
+                : policyBundle;
+
+            preps.Add(await PrepareForwardJudgmentAsync(finding, point, index, clauseBundle, cacheContext, run.WorkflowEngine, ct));
+        }
+
+        // Phase 2 — bounded-concurrency execute: only the outbound LLM call, nothing DB-touching.
+        using var gate = new SemaphoreSlim(ForwardJudgmentConcurrency);
+        var executions = preps.Select(async prep =>
+        {
+            await gate.WaitAsync(ct);
             try
             {
-                // V5 hybrid engine: use this clause's own Step 1+3+4 retrieval output instead of
-                // the run-wide bundle every other engine shares — same LLM call, same prompt,
-                // different context, per finding.RetrievalJson (see BuildRetrievalPolicyBundleAsync).
-                var clauseBundle = AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine)
-                    ? await BuildRetrievalPolicyBundleAsync(finding, ct)
-                    : policyBundle;
-
-                var judgment = await CallForwardJudgmentAsync(
-                    finding.ClauseNo,
-                    finding.ClauseText,
-                    clauseBundle,
-                    cacheContext,
-                    run.WorkflowEngine,
-                    ct);
+                logger.LogInformation(
+                    "Regul forward judgment started for run {RunId} clause {ClauseNo} ({Index}/{Total})",
+                    run.Id, prep.Finding.ClauseNo, prep.Index, total);
+                var judgment = await ExecuteForwardJudgmentAsync(prep, ct);
                 if (runCancellation.IsStopRequested(run.Id) || ct.IsCancellationRequested)
                     throw new OperationCanceledException();
-
-                var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
-                    finding.ClauseNo, finding.ClauseText, judgment);
-
-                finding.Status = "completed";
-                finding.ResultJson = JsonSerializer.Serialize(judgment);
-                finding.ErrorMessage = null;
-                finding.UpdatedAt = DateTimeOffset.UtcNow;
-
-                NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, landingMessage);
-                completed++;
-                logger.LogInformation(
-                    "Regul forward judgment completed for run {RunId} clause {ClauseNo} ({Index}/{Total}) status={Status} confidence={Confidence} policyExtracts={ExtractCount}",
-                    run.Id,
-                    finding.ClauseNo,
-                    index,
-                    total,
-                    judgment.OverallStatus,
-                    judgment.Confidence,
-                    judgment.PolicyExtract.Count);
+                return (Prep: prep, Judgment: judgment, Error: (Exception?)null);
             }
-            catch (OperationCanceledException)
+            catch (Exception ex)
             {
+                return (Prep: prep, Judgment: (RegulJudgmentResult?)null, Error: ex);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }).ToList();
+
+        var results = await Task.WhenAll(executions);
+
+        // Phase 3 — sequential finalize: same per-clause status/error handling as before, just applied
+        // after the fact instead of inline, so DB writes never overlap.
+        var cancelled = false;
+        foreach (var result in results.OrderBy(r => r.Prep.Index))
+        {
+            var (prep, judgment, error) = result;
+            var finding = prep.Finding;
+            var point = prep.Point;
+
+            if (error is OperationCanceledException)
+            {
+                cancelled = true;
                 finding.Status = "cancelled";
                 finding.ErrorMessage = "Stopped by user";
                 finding.UpdatedAt = DateTimeOffset.UtcNow;
@@ -439,20 +473,39 @@ public class NdRegulAnalysisProcessor(
                     point.DualVerifyStatus = "skipped";
                     point.UpdatedAt = DateTimeOffset.UtcNow;
                 }
-
-                await db.SaveChangesAsync(ct);
-                throw;
             }
-            catch (Exception ex)
+            else if (error != null)
             {
-                logger.LogError(ex, "Regul forward judgment failed for run {RunId} clause {ClauseNo} ({Index}/{Total})",
-                    run.Id, finding.ClauseNo, index, total);
+                logger.LogError(error, "Regul forward judgment failed for run {RunId} clause {ClauseNo} ({Index}/{Total})",
+                    run.Id, finding.ClauseNo, prep.Index, total);
                 finding.Status = "failed";
-                finding.ErrorMessage = ex.Message;
+                finding.ErrorMessage = error.Message;
                 finding.UpdatedAt = DateTimeOffset.UtcNow;
                 point.LandingAiStatus = "failed";
-                point.LandingAiError = ex.Message;
+                point.LandingAiError = error.Message;
                 point.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+            else
+            {
+                var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
+                    finding.ClauseNo, finding.ClauseText, judgment!);
+
+                finding.Status = "completed";
+                finding.ResultJson = JsonSerializer.Serialize(judgment);
+                finding.ErrorMessage = null;
+                finding.UpdatedAt = DateTimeOffset.UtcNow;
+
+                NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment!, landingMessage);
+                completed++;
+                logger.LogInformation(
+                    "Regul forward judgment completed for run {RunId} clause {ClauseNo} ({Index}/{Total}) status={Status} confidence={Confidence} policyExtracts={ExtractCount}",
+                    run.Id,
+                    finding.ClauseNo,
+                    prep.Index,
+                    total,
+                    judgment!.OverallStatus,
+                    judgment.Confidence,
+                    judgment.PolicyExtract.Count);
             }
 
             run.ProcessedPointsCount = completed;
@@ -469,6 +522,8 @@ public class NdRegulAnalysisProcessor(
             pending.Count,
             policyBundle.TotalPages,
             !policyBundle.UsesFullMarkdown);
+
+        if (cancelled) throw new OperationCanceledException();
     }
 
     // camelCase — RetrievalJson was written with this same policy (see RegulEmbeddingRetrievalService).
@@ -558,14 +613,21 @@ public class NdRegulAnalysisProcessor(
         return NdRegulPolicyContextService.FromRetrievalChunks(chunks);
     }
 
-    private async Task<RegulJudgmentResult> CallForwardJudgmentAsync(
-        string clauseNo,
-        string clauseText,
+    /// <summary>Phase 1 of forward judgment: resolves every DB-backed input a clause's judgment call
+    /// needs (retrieval context, prompt templates, provider config) so phase 2 (ExecuteForwardJudgmentAsync)
+    /// can run several clauses concurrently touching only the network, never the database. Same context/
+    /// query construction CallForwardJudgmentAsync used to do inline — unchanged, just resolved up front.</summary>
+    private async Task<ForwardJudgmentPrep> PrepareForwardJudgmentAsync(
+        NdRegulForwardFinding finding,
+        NdAnalysisPoint point,
+        int index,
         NdRegulPolicyContextService.PolicyBundle policyBundle,
         bool cacheContextBlock,
         string? workflowEngine,
         CancellationToken ct)
     {
+        var clauseNo = finding.ClauseNo;
+        var clauseText = finding.ClauseText;
         var policyContext = policyBundle.BuildContextForClause(clauseText);
         var contextChunks = policyBundle.GetChunksForClause(clauseText);
         if (!policyBundle.UsesFullMarkdown)
@@ -584,24 +646,51 @@ public class NdRegulAnalysisProcessor(
             policyContext.Length / 4);
         var contextBlock = await promptVersions.BuildJudgmentContextAsync(policyContext, workflowEngine, ct);
         var queryBlock = await promptVersions.BuildJudgmentQueryAsync(clauseNo, clauseText, workflowEngine, ct);
+        var (cfg, systemPrompt, resolvedCacheContextBlock, isHybridEngine) =
+            await regulLlm.ResolveJudgmentCallInputsAsync(cacheContextBlock, workflowEngine, ct);
+
+        return new ForwardJudgmentPrep(
+            finding,
+            point,
+            index,
+            policyBundle,
+            contextBlock,
+            queryBlock,
+            contextChunks,
+            cfg,
+            systemPrompt,
+            resolvedCacheContextBlock,
+            isHybridEngine,
+            workflowEngine);
+    }
+
+    /// <summary>Phase 2 of forward judgment: the actual LLM call(s) for one clause, including the same
+    /// gap-description retry loop CallForwardJudgmentAsync used to run — everything here is either a pure
+    /// network call or in-memory post-processing, so it's safe to run for several clauses at once (see
+    /// RunForwardPhaseAsync's bounded-concurrency phase 2, which is the whole point of this split).</summary>
+    private async Task<RegulJudgmentResult> ExecuteForwardJudgmentAsync(ForwardJudgmentPrep prep, CancellationToken ct)
+    {
+        var policyBundle = prep.ClauseBundle;
+        var contextChunks = prep.ContextChunks;
+        var workflowEngine = prep.WorkflowEngine;
 
         // Step 8 is live for the hybrid engine: same admin-configured LLM (regulLlm) and same
         // admin prompt versions as every other Regul engine — the only difference is the context
         // block, which for V5 is the fused/trimmed retrieval chunks (Step 7) instead of full markdown.
         RegulJudgmentResult judgment = null!;
-        var isHybridEngine = AnalysisWorkflowEngine.IsRegulPipelineHybrid(workflowEngine);
         for (var attempt = 0; attempt <= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries; attempt++)
         {
             var query = attempt == 0
-                ? queryBlock
-                : queryBlock + "\n\n" + (isHybridEngine
+                ? prep.QueryBlock
+                : prep.QueryBlock + "\n\n" + (prep.IsHybridEngine
                     ? NdRegulPromptDefaults.BuildHybridJudgmentRetryNote(
                         judgment.OverallStatus,
                         string.IsNullOrWhiteSpace(judgment.GapDescription) || judgment.GapDescription.Trim() == "N/A",
                         string.IsNullOrWhiteSpace(judgment.SuggestedAction) || judgment.SuggestedAction.Trim() == "N/A")
                     : NdRegulPromptDefaults.BuildJudgmentRetryNote(judgment.OverallStatus));
 
-            var raw = await regulLlm.CallJudgmentAsync(contextBlock, query, cacheContextBlock, workflowEngine, ct);
+            var raw = await regulLlm.DispatchJudgmentAsync(
+                prep.Config, prep.SystemPrompt, prep.ContextBlock, query, prep.CacheContextBlock, prep.IsHybridEngine, ct);
             judgment = NdRegulLlmJsonHelper.ParseJudgmentResult(raw);
 
             judgment = NdRegulJudgmentPostProcessor.ApplyQuoteVerification(
@@ -620,7 +709,7 @@ public class NdRegulAnalysisProcessor(
                     policyBundle.SourceTextForQuotes);
             }
 
-            if (isHybridEngine)
+            if (prep.IsHybridEngine)
             {
                 // V5 only: compliant => no gap / no action; gap => must also have an action plan.
                 judgment = NdRegulJudgmentPostProcessor.ApplyStatusConsistency(judgment);
@@ -1342,13 +1431,8 @@ public class NdRegulAnalysisProcessor(
         var cacheContext = policyBundle.UsesFullMarkdown;
         try
         {
-            var judgment = await CallForwardJudgmentAsync(
-                finding.ClauseNo,
-                finding.ClauseText,
-                policyBundle,
-                cacheContext,
-                run.WorkflowEngine,
-                ct);
+            var prep = await PrepareForwardJudgmentAsync(finding, point, 1, policyBundle, cacheContext, run.WorkflowEngine, ct);
+            var judgment = await ExecuteForwardJudgmentAsync(prep, ct);
             var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
                 finding.ClauseNo, finding.ClauseText, judgment);
             finding.Status = "completed";

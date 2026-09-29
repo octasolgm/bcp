@@ -522,4 +522,13 @@ public class OpenRouterLlmClient(IHttpClientFactory httpFactory, IConfiguration 
         ["HTTP-Referer"] = "https://comply-solutions.app",
         ["X-Title"] = "Comply Solutions",
     };
+
+    // Same fix as MoonshotLlmClient below, for the same model reached through OpenRouter instead:
+    // Kimi K3 defaults to maximum reasoning effort, which inflates output tokens and latency far more
+    // than clause judgment needs. Unlike the direct Moonshot API (which takes reasoning_effort at the
+    // top level), OpenRouter's unified reasoning parameter is nested under "reasoning".
+    protected override IReadOnlyDictionary<string, object?> ExtraFields(string model) =>
+        model.Contains("kimi-k3", StringComparison.OrdinalIgnoreCase)
+            ? new Dictionary<string, object?> { ["reasoning"] = new { effort = "high" } }
+            : new Dictionary<string, object?>();
 }
