@@ -723,14 +723,16 @@ export class NdShellComponent implements OnInit, OnDestroy {
       { id: 'internal-documents', path: '/nd/internal-documents-azure-di', label: 'Internal Documents', icon: 'file' },
       { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation Documents', icon: 'library' },
       { id: 'libraries', path: '/nd/libraries', label: 'Regulation Points Library', icon: 'list' },
-      {
+    ];
+    if (this.auth.isPlatformAdmin()) {
+      children.push({
         id: 'text-documents',
         path: '/nd/text-documents',
         label: 'Text documents',
         icon: 'file',
         secondary: true,
-      },
-    ];
+      });
+    }
     return { id: 'documents', label: 'Documents', icon: 'file', children };
   }
 
@@ -981,7 +983,12 @@ export class NdShellComponent implements OnInit, OnDestroy {
     const platform = this.auth.isPlatformAdmin();
     const children: NavItem[] = [];
     if (this.auth.canManageWorkspaces()) {
-      children.push({ id: 'admin-workspaces', path: '/nd/admin/workspaces', label: 'Workspaces', icon: 'building' });
+      children.push({
+        id: 'admin-workspaces',
+        path: '/nd/admin/workspaces',
+        label: 'Business workspaces',
+        icon: 'building',
+      });
     }
     children.push(
       { id: 'admin-users', path: '/nd/admin/users', label: 'User management', icon: 'users' },

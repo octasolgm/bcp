@@ -14,7 +14,7 @@ import { NdAuthService } from '../../../services/nd/nd-auth.service';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './nd-admin-ai-credits.component.html',
-  styleUrls: ['./nd-admin-ai-credits.component.scss', '../nd-shared.scss'],
+  styleUrls: ['./nd-admin-ai-credits.component.scss', './nd-admin-modern.scss', '../nd-shared.scss'],
 })
 export class NdAdminAiCreditsComponent implements OnInit {
   private readonly api = inject(NdApiService);

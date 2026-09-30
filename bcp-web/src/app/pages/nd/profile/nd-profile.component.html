@@ -1,10 +1,25 @@
 <section class="nd-page profile-page">
-  <header class="profile-head">
-    <h1>My profile</h1>
-    <p class="profile-sub">Your account details and the actions currently assigned to you.</p>
-  </header>
+  <div class="profile-hero card-surface">
+    <div class="profile-hero-main">
+      <div class="profile-avatar" aria-hidden="true">{{ initials }}</div>
+      <div class="profile-hero-text">
+        <p class="profile-eyebrow">Signed in as</p>
+        <h1 class="profile-display-name">{{ displayName }}</h1>
+        <p class="profile-email-line">{{ profile?.email ?? '—' }}</p>
+        <div class="profile-badges">
+          <span class="profile-badge">{{ auth.roleLabel() }}</span>
+          @if (workspaceLabel) {
+            <span class="profile-badge profile-badge-muted">{{ workspaceLabel }}</span>
+          }
+        </div>
+      </div>
+    </div>
+    <p class="profile-hero-sub">
+      Update your name and password here. Role and department are managed in User management.
+    </p>
+  </div>
 
-  @if (message || error) {
+  @if (message || error || passwordMessage || passwordError) {
     <div class="nd-alert-dock">
       @if (message) {
         <app-nd-page-alert kind="success" [text]="message" />
@@ -12,61 +27,127 @@
       @if (error) {
         <app-nd-page-alert kind="error" [text]="error" />
       }
+      @if (passwordMessage) {
+        <app-nd-page-alert kind="success" [text]="passwordMessage" />
+      }
+      @if (passwordError) {
+        <app-nd-page-alert kind="error" [text]="passwordError" />
+      }
     </div>
   }
 
-  <div class="profile-grid">
-    <div class="profile-card">
-      <h2>Account</h2>
+  <div class="profile-layout">
+    <div class="profile-main">
+      <div class="profile-card card-surface">
+        <h2>Account</h2>
+        <p class="card-lead">Your display name appears across the app and on assigned actions.</p>
 
-      <label class="profile-field">
-        <span class="field-label">Full name</span>
-        <input type="text" class="nd-input" [(ngModel)]="fullName" />
-      </label>
+        <label class="profile-field">
+          <span class="field-label">Full name</span>
+          <input type="text" class="nd-input" [(ngModel)]="fullName" autocomplete="name" />
+        </label>
 
-      <div class="profile-field">
-        <span class="field-label">Email</span>
-        <p class="field-value">{{ profile?.email ?? '—' }}</p>
-      </div>
+        <div class="profile-meta-grid">
+          <div class="profile-meta-item">
+            <span class="field-label">Email</span>
+            <p class="field-value">{{ profile?.email ?? '—' }}</p>
+          </div>
+          <div class="profile-meta-item">
+            <span class="field-label">Role</span>
+            <p class="field-value">{{ roleLabel }}</p>
+          </div>
+          <div class="profile-meta-item">
+            <span class="field-label">Department</span>
+            <p class="field-value">{{ profile?.departmentName ?? 'Not assigned' }}</p>
+          </div>
+        </div>
 
-      <div class="profile-field">
-        <span class="field-label">Role</span>
-        <p class="field-value">{{ roleLabel }}</p>
-      </div>
-
-      <div class="profile-field">
-        <span class="field-label">Department</span>
-        <p class="field-value">
-          {{ profile?.departmentName ?? 'Not assigned' }}
-        </p>
         <p class="field-hint">
-          Role and department are set by an administrator in User management. Your department
-          decides which team-assigned actions reach your inbox.
+          Your department decides which team-assigned actions reach your inbox.
         </p>
+
+        <button type="button" class="nd-btn-primary" (click)="save()" [disabled]="saving">
+          {{ saving ? 'Saving…' : 'Save changes' }}
+        </button>
       </div>
 
-      <button type="button" class="nd-btn primary" (click)="save()" [disabled]="saving">
-        {{ saving ? 'Saving…' : 'Save changes' }}
-      </button>
+      <div class="profile-card card-surface profile-security">
+        <h2>Security</h2>
+        <p class="card-lead">Choose a strong password with at least 6 characters.</p>
+
+        <label class="profile-field">
+          <span class="field-label">New password</span>
+          <div class="password-row">
+            <input
+              [type]="showPassword ? 'text' : 'password'"
+              class="nd-input"
+              [(ngModel)]="newPassword"
+              autocomplete="new-password"
+              minlength="6"
+            />
+            <button type="button" class="nd-btn-secondary btn-compact" (click)="showPassword = !showPassword">
+              {{ showPassword ? 'Hide' : 'Show' }}
+            </button>
+          </div>
+        </label>
+
+        <label class="profile-field">
+          <span class="field-label">Confirm new password</span>
+          <input
+            [type]="showPassword ? 'text' : 'password'"
+            class="nd-input"
+            [(ngModel)]="confirmPassword"
+            autocomplete="new-password"
+            minlength="6"
+          />
+        </label>
+
+        <button
+          type="button"
+          class="nd-btn-secondary"
+          (click)="changePassword()"
+          [disabled]="changingPassword"
+        >
+          {{ changingPassword ? 'Updating…' : 'Change password' }}
+        </button>
+      </div>
     </div>
 
-    <div class="profile-card">
-      <h2>My actions</h2>
-      <div class="profile-stats">
-        <div class="stat">
-          <span class="stat-value">{{ inbox.pending }}</span>
-          <span class="stat-label">Pending</span>
+    <aside class="profile-aside">
+      <div class="profile-card card-surface">
+        <h2>My actions</h2>
+        <div class="profile-stats">
+          <div class="stat stat-pending">
+            <span class="stat-value">{{ inbox.pending }}</span>
+            <span class="stat-label">Pending</span>
+          </div>
+          <div class="stat stat-overdue">
+            <span class="stat-value">{{ inbox.overdue }}</span>
+            <span class="stat-label">Overdue</span>
+          </div>
+          <div class="stat stat-resolved">
+            <span class="stat-value">{{ inbox.resolved }}</span>
+            <span class="stat-label">Resolved</span>
+          </div>
         </div>
-        <div class="stat overdue">
-          <span class="stat-value">{{ inbox.overdue }}</span>
-          <span class="stat-label">Overdue</span>
-        </div>
-        <div class="stat resolved">
-          <span class="stat-value">{{ inbox.resolved }}</span>
-          <span class="stat-label">Resolved</span>
-        </div>
+        <a class="nd-btn-primary profile-inbox-link" routerLink="/nd/inbox">Open my actions</a>
       </div>
-      <a class="nd-btn ghost" routerLink="/nd/inbox">Open my actions</a>
-    </div>
+
+      @if (showBillingLinks) {
+        <div class="profile-card card-surface profile-links">
+          <h2>Billing &amp; businesses</h2>
+          <p class="card-lead">Quick links for administrators.</p>
+          <nav class="profile-link-list">
+            @if (auth.canManageWorkspaces()) {
+              <a routerLink="/nd/admin/workspaces">Business workspaces</a>
+              <a routerLink="/nd/admin/ai-usage">AI usage</a>
+            }
+            @if (showAiCreditsLink) {
+              <a routerLink="/nd/admin/ai-credits">AI credits</a>
+            }
+          </nav>
+        </div>
+      }
+    </aside>
   </div>
 </section>

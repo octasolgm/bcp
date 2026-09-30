@@ -66,3 +66,6 @@ Tasks
 - New Analysis (V2) layout: larger section headings and much more vertical space between Step 1, Step 2, summary/run strip, three-column workspace, and analysis report
 - New Analysis workspace: Result column no longer clipped when side panels are open (horizontal scroll on the column row); columns can collapse via header control, still draggable to reorder and resizable between dividers
 - Data tables app-wide: header rows use a consistent accent-tinted background and label color (All analysis, document catalogs, admin lists, dashboard tables)
+- My profile page: refreshed layout (hero, account and security cards), change-password while signed in, quick links to AI credits and (for platform admin) business workspaces and AI usage
+- AI usage, business workspaces, and AI credits admin pages: shared modern styling (section labels, metric strip, side-by-side create workspace and pricing forms)
+- Text documents library hidden from client business workspaces; only the platform super admin sees it in the menu and can open the page or API

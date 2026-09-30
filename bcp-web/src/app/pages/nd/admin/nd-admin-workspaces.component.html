@@ -1,9 +1,10 @@
-<div class="nd-catalog-page">
+<div class="nd-catalog-page nd-admin-modern">
   <div class="page-header page-header--catalog">
     <div class="page-header-title-block">
-      <h1>Workspaces</h1>
+      <p class="page-eyebrow">Platform admin</p>
+      <h1>Business workspaces</h1>
       <p class="subtitle">
-        One workspace per client. Each workspace has its own users, documents and analyses, and
+        One workspace per client business. Each has its own users, documents and analyses, and
         nobody inside a workspace can see another workspace's data.
       </p>
     </div>
@@ -13,6 +14,7 @@
     <p class="nd-error">Access denied</p>
   } @else {
     <div class="nd-catalog-toolbar">
+      <div class="nd-admin-setup-grid">
       <form class="card-surface invite-form" (ngSubmit)="handleCreate()" autocomplete="off">
         <h2>Create workspace</h2>
         <div class="form-grid">
@@ -100,6 +102,7 @@
           <li>If a provider raises its price, the same call costs more credits, so the margin stays the same. Nothing is charged at a fixed price.</li>
         </ul>
       </form>
+      </div>
 
       @if (message) {
         <app-nd-page-alert kind="success" [text]="message" (dismiss)="message = ''" />

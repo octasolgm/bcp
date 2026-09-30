@@ -17,7 +17,7 @@ type PeriodKey = '7d' | '30d' | 'month' | 'all' | 'custom';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './nd-admin-ai-usage.component.html',
-  styleUrls: ['./nd-admin-ai-usage.component.scss', '../nd-shared.scss'],
+  styleUrls: ['./nd-admin-ai-usage.component.scss', './nd-admin-modern.scss', '../nd-shared.scss'],
 })
 export class NdAdminAiUsageComponent implements OnInit {
   private readonly api = inject(NdApiService);

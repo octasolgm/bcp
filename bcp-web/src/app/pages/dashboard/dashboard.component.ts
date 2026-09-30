@@ -510,8 +510,8 @@ export class DashboardComponent implements OnInit {
     return '1';
   }
 
-  get lastAnalysisLabel(): string {
-    if (this.inNdShell && this.ndStatsLoading) return 'Loading…';
+  /** Formatted last-analysis date for ND dashboard subtitle, or null when none yet. */
+  get lastAnalysisDateText(): string | null {
     if (this.inNdShell && this.ndDashboardStats?.lastAnalysisAt) {
       return new Date(this.ndDashboardStats.lastAnalysisAt).toLocaleDateString(undefined, {
         year: 'numeric',
@@ -527,18 +527,32 @@ export class DashboardComponent implements OnInit {
         day: 'numeric',
       });
     }
+    return null;
+  }
+
+  get lastAnalysisLabel(): string {
+    if (this.inNdShell && this.ndStatsLoading) return 'Loading…';
+    const dated = this.lastAnalysisDateText;
+    if (dated) return dated;
     if (this.inNdShell) return '—';
     if (this.metricsLoading) return 'Loading…';
     return this.seed?.lastAnalysisDate || 'June 22, 2026';
   }
 
   get compliantPercent(): number {
-    const total = this.complianceDonutTotal || 1;
+    const total = this.complianceDonutTotal;
+    if (total <= 0) return 0;
     return Math.round((this.compliantCount / total) * 100);
   }
 
+  /** Scored regulation points (clauses) in scope — 0 on a fresh workspace with no analysis. */
   get complianceDonutTotal(): number {
-    return Math.max(this.compliantCount + this.partialCount + this.nonCompliantCount, 1);
+    return this.compliantCount + this.partialCount + this.nonCompliantCount;
+  }
+
+  /** Donut/bar math only — avoids divide-by-zero when total is 0. */
+  get complianceDonutChartDenom(): number {
+    return this.complianceDonutTotal > 0 ? this.complianceDonutTotal : 1;
   }
 
   get complianceDonutSegments(): { color: string; value: number; offset: number }[] {
@@ -547,7 +561,7 @@ export class DashboardComponent implements OnInit {
       { color: 'var(--medium)', value: this.partialCount },
       { color: 'var(--critical)', value: this.nonCompliantCount },
     ];
-    const total = items.reduce((s, i) => s + i.value, 0) || 1;
+    const total = this.complianceDonutChartDenom;
     let offset = 0;
     return items.map((item) => {
       const seg = { ...item, offset };

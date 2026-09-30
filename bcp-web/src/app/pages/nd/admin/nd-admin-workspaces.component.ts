@@ -24,7 +24,12 @@ import { ND_DATE_FORMAT_OPTIONS } from '../../../../lib/nd/date-format';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdPageAlertComponent],
   templateUrl: './nd-admin-workspaces.component.html',
-  styleUrls: ['./nd-admin-users.component.scss', './nd-admin-workspaces.component.scss', '../nd-shared.scss'],
+  styleUrls: [
+    './nd-admin-users.component.scss',
+    './nd-admin-workspaces.component.scss',
+    './nd-admin-modern.scss',
+    '../nd-shared.scss',
+  ],
 })
 export class NdAdminWorkspacesComponent implements OnInit {
   private readonly api = inject(NdApiService);

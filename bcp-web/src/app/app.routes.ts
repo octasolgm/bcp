@@ -378,9 +378,10 @@ export const routes: Routes = [
               ),
           },
           {
-            // Third, simple document library — no department, no analysis-run linkage. Local
-            // parse+extract, shown as a nested Point/Sub-point tree.
+            // Platform super admin only — experimental local library, not for client workspaces.
             path: 'text-documents',
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard],
+            data: { ndRoles: ['super_admin'] },
             loadComponent: () =>
               import('./pages/nd/text-documents/nd-text-documents.component').then(
                 (m) => m.NdTextDocumentsComponent,

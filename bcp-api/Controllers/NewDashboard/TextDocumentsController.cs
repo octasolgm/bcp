@@ -30,8 +30,7 @@ public class TextDocumentsController(
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
     {
-        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct,
-            "super_admin", "maker", "checker", "reviewer");
+        var (_, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var docs = await db.StoredDocuments.AsNoTracking()
@@ -58,7 +57,7 @@ public class TextDocumentsController(
     [RequestSizeLimit(52_428_800)]
     public async Task<IActionResult> Upload(IFormFile file, CancellationToken ct)
     {
-        var (profile, _, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         if (!storage.IsConfigured)
@@ -107,7 +106,7 @@ public class TextDocumentsController(
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Hide(Guid id, CancellationToken ct)
     {
-        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
+        var (_, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == id && d.DocKind == Kind, ct);
@@ -122,8 +121,7 @@ public class TextDocumentsController(
     [HttpGet("{id:guid}/file-url")]
     public async Task<IActionResult> FileUrl(Guid id, CancellationToken ct)
     {
-        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct,
-            "super_admin", "maker", "checker", "reviewer");
+        var (_, _, error) = await RequirePlatformAdminWithUserAsync(db, jwt, ct);
         if (error != null) return error;
 
         if (!storage.IsConfigured)

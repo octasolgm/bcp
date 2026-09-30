@@ -1,6 +1,7 @@
-<div class="nd-catalog-page">
+<div class="nd-catalog-page nd-admin-modern">
   <div class="page-header page-header--catalog">
     <div class="page-header-title-block">
+      <p class="page-eyebrow">Platform billing</p>
       <h1>AI usage</h1>
       <p class="subtitle">
         What each business spent on AI, and what it cost us. Add or remove credits from the
@@ -13,7 +14,7 @@
     <p class="nd-error">Access denied</p>
   } @else {
     <div class="nd-catalog-body">
-      <div class="filter-pills nd-list-toolbar nd-shrink usage-filters">
+      <div class="filter-pills nd-list-toolbar nd-shrink usage-filters nd-filter-bar">
         <select class="filter-select" [(ngModel)]="workspaceId" (ngModelChange)="onFilterChange()" aria-label="Filter by business">
           <option value="">All businesses</option>
           @for (w of report?.filters?.workspaces ?? []; track w.id) {
@@ -72,7 +73,7 @@
       } @else if (error) {
         <p class="nd-error">{{ error }}</p>
       } @else if (report) {
-        <div class="usage-totals">
+        <div class="usage-totals nd-metric-strip">
           <div class="card-surface total-card">
             <span class="total-label">Credits used</span>
             <strong>{{ report.totals.credits | number: '1.0-2' }}</strong>
@@ -85,7 +86,11 @@
             <span class="total-label">Billed to clients</span>
             <strong>${{ (report.totals.billedUsd ?? 0) | number: '1.2-2' }}</strong>
           </div>
-          <div class="card-surface total-card" [class.margin-low]="marginIsLow(report.totals.marginPct, report.totals.minMarginPct)">
+          <div
+            class="card-surface total-card"
+            [class.margin-low]="marginIsLow(report.totals.marginPct, report.totals.minMarginPct)"
+            [class.metric-accent-warn]="marginIsLow(report.totals.marginPct, report.totals.minMarginPct)"
+          >
             <span class="total-label">Our margin</span>
             <strong>${{ (report.totals.marginUsd ?? 0) | number: '1.2-2' }}
               <span class="margin-pct">{{ (report.totals.marginPct ?? 0) | number: '1.0-1' }}%</span></strong>

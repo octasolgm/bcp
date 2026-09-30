@@ -1,7 +1,17 @@
 <div class="page-header">
   <div>
     <h1>Compliance Dashboard</h1>
-    <p class="subtitle">Last analysis: {{ lastAnalysisLabel }}</p>
+    <p class="subtitle">
+      @if (inNdShell && ndStatsLoading) {
+        Loading dashboard…
+      } @else if (lastAnalysisDateText) {
+        Last analysis: {{ lastAnalysisDateText }}
+      } @else if (inNdShell) {
+        There is no analysis run yet.
+      } @else {
+        Last analysis: {{ lastAnalysisLabel }}
+      }
+    </p>
   </div>
 </div>
 
@@ -25,6 +35,8 @@
         <span class="chip resolved">{{ criticalGapResolved }} resolved</span>
         <span class="chip pending">{{ criticalGapPending }} pending</span>
       </span>
+    } @else if (inNdShell) {
+      <span class="stat-breakdown stat-breakdown--spacer" aria-hidden="true"></span>
     }
   </button>
   <button type="button" class="stat-card medium" (click)="openMetricBreakdown('medium')">
@@ -36,6 +48,8 @@
         <span class="chip resolved">{{ mediumGapResolved }} resolved</span>
         <span class="chip pending">{{ mediumGapPending }} pending</span>
       </span>
+    } @else if (inNdShell) {
+      <span class="stat-breakdown stat-breakdown--spacer" aria-hidden="true"></span>
     }
   </button>
   <button type="button" class="stat-card low" (click)="openMetricBreakdown('low')">
@@ -47,6 +61,8 @@
         <span class="chip resolved">{{ lowGapResolved }} resolved</span>
         <span class="chip pending">{{ lowGapPending }} pending</span>
       </span>
+    } @else if (inNdShell) {
+      <span class="stat-breakdown stat-breakdown--spacer" aria-hidden="true"></span>
     }
   </button>
   @if (inNdShell) {
@@ -59,6 +75,8 @@
           <span class="chip resolved">{{ totalActionsResolved }} resolved</span>
           <span class="chip pending">{{ totalActionsPending }} pending</span>
         </span>
+      } @else {
+        <span class="stat-breakdown stat-breakdown--spacer" aria-hidden="true"></span>
       }
     </button>
   }
@@ -66,22 +84,34 @@
     <span class="stat-label">Total Findings</span>
     <strong class="stat-value">{{ totalFindings }}</strong>
     <span class="stat-hint">Across {{ analysisCountLabel }} analysis</span>
+    @if (inNdShell) {
+      <span class="stat-breakdown stat-breakdown--spacer" aria-hidden="true"></span>
+    }
   </button>
   <button type="button" class="stat-card compliant" (click)="openMetricBreakdown('compliant')">
-          <span class="stat-label">{{ complianceLabels.compliant }} items</span>
-          <strong class="stat-value">{{ compliantCount }}</strong>
-          <span class="stat-hint">Fully addressed</span>
-        </button>
-        <button type="button" class="stat-card partial" (click)="openMetricBreakdown('partial')">
-          <span class="stat-label">{{ complianceLabels.partial_compliant }} items</span>
-          <strong class="stat-value">{{ partialCount }}</strong>
-          <span class="stat-hint">{{ complianceLabels.partial_compliant }}</span>
-        </button>
-        <button type="button" class="stat-card non-compliant" (click)="openMetricBreakdown('non_compliant')">
-          <span class="stat-label">{{ complianceLabels.non_compliant }} items</span>
-          <strong class="stat-value">{{ nonCompliantCount }}</strong>
-          <span class="stat-hint">{{ complianceLabels.non_compliant }}</span>
-        </button>
+    <span class="stat-label">{{ complianceLabels.compliant }} items</span>
+    <strong class="stat-value">{{ compliantCount }}</strong>
+    <span class="stat-hint">Fully addressed</span>
+    @if (inNdShell) {
+      <span class="stat-breakdown stat-breakdown--spacer" aria-hidden="true"></span>
+    }
+  </button>
+  <button type="button" class="stat-card partial" (click)="openMetricBreakdown('partial')">
+    <span class="stat-label">{{ complianceLabels.partial_compliant }} items</span>
+    <strong class="stat-value">{{ partialCount }}</strong>
+    <span class="stat-hint">{{ complianceLabels.partial_compliant }}</span>
+    @if (inNdShell) {
+      <span class="stat-breakdown stat-breakdown--spacer" aria-hidden="true"></span>
+    }
+  </button>
+  <button type="button" class="stat-card non-compliant" (click)="openMetricBreakdown('non_compliant')">
+    <span class="stat-label">{{ complianceLabels.non_compliant }} items</span>
+    <strong class="stat-value">{{ nonCompliantCount }}</strong>
+    <span class="stat-hint">{{ complianceLabels.non_compliant }}</span>
+    @if (inNdShell) {
+      <span class="stat-breakdown stat-breakdown--spacer" aria-hidden="true"></span>
+    }
+  </button>
 </div>
 <p class="risk-standard-note">{{ riskStandardLabel }}</p>
 @if (inNdShell && !ndRunsLoading && ndRuns.length && !ndRunsWithMetricsCount) {
@@ -103,7 +133,7 @@
               fill="none"
               [style.stroke]="seg.color"
               stroke-width="3.5"
-              [attr.stroke-dasharray]="(seg.value / complianceDonutTotal) * 100 + ' ' + (100 - (seg.value / complianceDonutTotal) * 100)"
+              [attr.stroke-dasharray]="(seg.value / complianceDonutChartDenom) * 100 + ' ' + (100 - (seg.value / complianceDonutChartDenom) * 100)"
               [attr.stroke-dashoffset]="25 - seg.offset"
             />
           }
@@ -135,9 +165,9 @@
       </ul>
     </div>
     <div class="compliance-bar" role="img" aria-label="Compliance breakdown">
-      <span class="bar-seg" style="background:var(--low)" [style.width.%]="(compliantCount / complianceDonutTotal) * 100"></span>
-      <span class="bar-seg" style="background:var(--medium)" [style.width.%]="(partialCount / complianceDonutTotal) * 100"></span>
-      <span class="bar-seg" style="background:var(--critical)" [style.width.%]="(nonCompliantCount / complianceDonutTotal) * 100"></span>
+      <span class="bar-seg" style="background:var(--low)" [style.width.%]="complianceDonutTotal ? (compliantCount / complianceDonutChartDenom) * 100 : 0"></span>
+      <span class="bar-seg" style="background:var(--medium)" [style.width.%]="complianceDonutTotal ? (partialCount / complianceDonutChartDenom) * 100 : 0"></span>
+      <span class="bar-seg" style="background:var(--critical)" [style.width.%]="complianceDonutTotal ? (nonCompliantCount / complianceDonutChartDenom) * 100 : 0"></span>
     </div>
   </section>
 

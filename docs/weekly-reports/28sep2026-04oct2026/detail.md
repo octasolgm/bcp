@@ -96,3 +96,11 @@ New Analysis page layout
 List and report tables across the app now share the same header styling: a light accent-tinted background with darker accent-toned column titles, so the header row is easy to spot on every screen (analysis runs, document catalogs, admin settings, and similar).
 
 The New Analysis screen is now broken into clearer stages with larger headings and more breathing room between them: regulation setup (Step 1 and Step 2), the summary and run controls, the three live columns (points, progress, and result), and the full analysis report below. The result column stays reachable when the step tracker or pipeline panel is open: you can scroll horizontally across the column row instead of the result pane disappearing off the edge. Each column can be collapsed to a narrow strip from its header, reordered by dragging the header, and resized using the dividers between columns, the same way as before.
+
+My profile and billing admin pages
+
+The My profile screen has a clearer layout: your name and workspace at a glance, editable display name, read-only role and department, and a Security section where you can set a new password without signing out. Administrators also get shortcut links from profile to AI credits, and platform owners additionally to business workspaces and the cross-tenant AI usage report.
+
+The AI usage, business workspaces, and AI credits pages share updated presentation: clearer page labels, a compact metric strip on usage totals, filters grouped in a light panel, and create-workspace plus credit-pricing forms shown side by side on wide screens.
+
+The Text documents library (the experimental local parse library under Documents) is no longer shown to client workspace users. Only the platform super admin sees it in navigation, and direct links or API calls from a business admin are blocked the same way as other platform-only tools.

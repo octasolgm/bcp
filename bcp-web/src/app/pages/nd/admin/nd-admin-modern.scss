@@ -1,0 +1,108 @@
+/* Shared polish for platform billing / workspace admin catalog pages. */
+
+.nd-admin-modern {
+  .page-header--catalog {
+    .page-eyebrow {
+      margin: 0 0 0.35rem;
+      font-size: 0.6875rem;
+      font-weight: 650;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--accent) 70%, var(--text-muted));
+    }
+
+    h1 {
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      line-height: 1.55;
+      max-width: 44rem;
+    }
+  }
+}
+
+.nd-admin-setup-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+
+  @media (max-width: 960px) {
+    grid-template-columns: 1fr;
+  }
+
+  .invite-form,
+  .pricing-card {
+    margin-top: 0;
+    height: 100%;
+  }
+}
+
+.nd-metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
+
+  .total-card,
+  .nd-metric-tile {
+    position: relative;
+    padding: 0.9rem 1rem 0.85rem;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: color-mix(in srgb, var(--accent) 85%, transparent);
+    }
+
+    &.metric-accent-warn::before {
+      background: var(--medium);
+    }
+
+    &.metric-accent-danger::before {
+      background: var(--critical);
+    }
+
+    strong {
+      font-size: 1.425rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+  }
+}
+
+.nd-admin-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 1.35rem 0 0.55rem;
+
+  h2 {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 650;
+  }
+
+  .section-hint {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    max-width: 36rem;
+  }
+}
+
+.nd-filter-bar {
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-card));
+  border: 1px solid var(--border);
+}

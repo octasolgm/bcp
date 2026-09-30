@@ -279,6 +279,16 @@ export class NdAuthService {
     window.history.replaceState({}, '', clean);
   }
 
+  /** Signed-in user updates their own password (profile page). Does not sign out. */
+  async changePassword(password: string): Promise<string | null> {
+    if (!(await this.getSession())) {
+      return 'You are not signed in.';
+    }
+    const { error } = await getNdSupabaseClient().auth.updateUser({ password });
+    if (error) return error.message;
+    return null;
+  }
+
   async resetPassword(password: string): Promise<string | null> {
     if (!(await this.getSession())) {
       const sessionErr = await this.establishRecoverySession();
