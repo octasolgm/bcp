@@ -21,6 +21,10 @@ import {
   mergeLiteLocalExtractionStatus,
 } from '../../../../lib/nd/local-extraction-cache';
 import {
+  formatStructuralCoveragePct,
+  structuralCoverageIsLow,
+} from '../../../../lib/nd/structural-coverage-display';
+import {
   docAnalysisReadyClass,
   docAnalysisReadyLabel,
   internalAnalysisReadyState,
@@ -760,6 +764,27 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   parsedTextFor(doc: InternalDocument | null): string | null {
     if (!doc) return null;
     return this.localResults.get(doc.id)?.markdownText ?? null;
+  }
+
+  structuralCoveragePct(doc: InternalDocument | null): string | null {
+    if (!doc) return null;
+    const local = this.localResults.get(doc.id);
+    if (!local || (local.extractStatus ?? '').toLowerCase() !== 'extracted') return null;
+    return formatStructuralCoveragePct(local.structuralCoverageRatio ?? null);
+  }
+
+  structuralCoverageLow(doc: InternalDocument | null): boolean {
+    if (!doc) return false;
+    const local = this.localResults.get(doc.id);
+    if (!local) return false;
+    if (local.structuralCoverageLow === true) return true;
+    return structuralCoverageIsLow(local.structuralCoverageRatio ?? null);
+  }
+
+  structuralCoverageOrphan(doc: InternalDocument | null): string | null {
+    if (!doc) return null;
+    const s = this.localResults.get(doc.id)?.structuralCoverageOrphanSnippet?.trim();
+    return s || null;
   }
 
   toggleParsedText(): void {

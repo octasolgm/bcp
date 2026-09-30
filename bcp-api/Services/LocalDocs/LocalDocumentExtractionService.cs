@@ -183,7 +183,18 @@ public sealed class LocalDocumentExtractionService(
         if (sections.Count == 0)
             warnings.Add("No numbered clauses/sections were detected — this document may not use a numbering convention this splitter recognizes.");
 
-        logger.LogInformation("Local extract for {File}: {Sections} section(s) detected", fileName, sections.Count);
+        var coverage = LocalStructuralCoverage.Compute(markdown, sections);
+        if (LocalStructuralCoverage.IsLowCoverage(coverage.CoverageRatio))
+        {
+            var pct = Math.Round(coverage.CoverageRatio * 100, 1);
+            warnings.Add(
+                $"Structural extract covers about {pct}% of parsed text (target {LocalStructuralCoverage.LowCoverageThreshold * 100:0}%). " +
+                "Some content may be in tables, skipped TOC pages, or under the wrong clause number — review parsed text vs sections.");
+        }
+
+        logger.LogInformation(
+            "Local extract for {File}: {Sections} section(s), coverage {Coverage:P1}",
+            fileName, sections.Count, coverage.CoverageRatio);
 
         return new LocalExtractionResult(fileName, totalPages, ocrPageCount, markdown, sections, warnings);
     }

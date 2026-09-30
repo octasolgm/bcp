@@ -391,6 +391,11 @@ public static class NdIncrementalSchemaBootstrap
           ADD COLUMN IF NOT EXISTS source_document_id UUID NULL,
           ADD COLUMN IF NOT EXISTS source_page INTEGER NULL;
         """,
+        """
+        ALTER TABLE nd_local_document_extractions
+          ADD COLUMN IF NOT EXISTS structural_coverage_ratio DOUBLE PRECISION NULL,
+          ADD COLUMN IF NOT EXISTS structural_coverage_orphan_snippet TEXT NULL;
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

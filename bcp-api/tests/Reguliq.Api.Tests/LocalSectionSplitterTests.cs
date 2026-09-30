@@ -204,6 +204,46 @@ public class LocalSectionSplitterTests
     }
 
     [Fact]
+    public void Nested_list_under_multi_level_clause_stays_with_parent_TFS_3_4_case()
+    {
+        var text = string.Join('\n',
+            "1. Introduction",
+            "1.1 Purpose", "Purpose text.",
+            "3.4 Name Screening",
+            "Institutions must screen names as follows:",
+            "1. Ownership/Control Rule: Individuals or legal entities that are directly or indirectly owned or controlled must be screened.",
+            "2. Beneficial Owner Rule: Beneficial owners must be identified and screened.",
+            "3.5 Next Clause", "Following clause text.");
+
+        var sections = Split(text);
+
+        Assert.Equal(["1", "1.1", "3.4", "3.5"], sections.Select(s => s.ClauseNo).ToArray());
+        var screening = sections.Single(s => s.ClauseNo == "3.4").ClauseText;
+        Assert.Contains("Ownership/Control Rule", screening);
+        Assert.Contains("Beneficial Owner Rule", screening);
+        Assert.DoesNotContain(sections, s => s.ClauseNo == "1" && s.ClauseText.Contains("Ownership/Control"));
+    }
+
+    [Fact]
+    public void Html_table_cells_are_flattened_into_extractable_lines()
+    {
+        var text = string.Join('\n',
+            "2.1 Reporting duties",
+            "The following schedule applies:",
+            "<table><tr><td>Monthly report</td><td>Due by the 5th</td></tr>",
+            "<tr><td>Annual review</td><td>Due by 31 December</td></tr></table>",
+            "2.2 Record keeping",
+            "Records must be kept for five years.");
+
+        var sections = Split(text);
+
+        var reporting = sections.Single(s => s.ClauseNo == "2.1").ClauseText;
+        Assert.Contains("Monthly report", reporting);
+        Assert.Contains("Due by the 5th", reporting);
+        Assert.Contains("Annual review", reporting);
+    }
+
+    [Fact]
     public void Numbered_list_inside_a_clause_stays_in_that_clause_once_chapter_numbers_are_used()
     {
         var text = string.Join('\n',

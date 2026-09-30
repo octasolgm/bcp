@@ -66,6 +66,12 @@ public static partial class LocalSectionSplitter
     private static readonly Regex MarkdownBoldPattern = new(@"\*\*(.+?)\*\*", RegexOptions.Compiled);
     private static readonly Regex MarkdownItalicPattern = new(@"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", RegexOptions.Compiled);
     private static readonly Regex MarkdownHeadingPrefixPattern = new(@"^#{1,6}\s*", RegexOptions.Compiled);
+    private static readonly Regex HtmlTableBlockPattern =
+        new(@"<table\b[^>]*>.*?</table>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex HtmlRowBreakPattern =
+        new(@"</tr\s*>|<tr\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex HtmlCellBreakPattern =
+        new(@"</t[dh]\s*>|<t[dh]\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static string CleanMarkdown(string line)
     {
@@ -91,6 +97,7 @@ public static partial class LocalSectionSplitter
         // off ClauseNo downstream (gap analysis grouping, point lookup) can't tell the two apart unless
         // the Annex's own numbering is namespaced under it.
         string? currentAnnexLabel = null;
+        var usedTopLevelNumbers = new HashSet<string>(StringComparer.Ordinal);
 
         void Flush()
         {
@@ -105,25 +112,30 @@ public static partial class LocalSectionSplitter
         {
             if (string.IsNullOrWhiteSpace(page.Text)) continue;
 
-            var pageLines = ContentLines(page.Text);
+            var pageLines = FilterContentsPointerLines(ContentLines(page.Text));
 
-            // A page that is a plain-text table of contents ("3.1 Title" / "13" / "3.2 Title" / "14" ...)
-            // holds no clause prose — every line on it is a pointer to a clause that appears later. Read as
-            // clauses, each entry duplicates a real clause number, and the last entry also swallows whatever
-            // follows it (the next contents line, the running page header, ...).
-            if (LooksLikeContentsPage(pageLines)) continue;
-
-            foreach (var line in pageLines)
+            for (var lineIndex = 0; lineIndex < pageLines.Count; lineIndex++)
             {
+                var line = pageLines[lineIndex];
+                var nextLine = lineIndex + 1 < pageLines.Count ? pageLines[lineIndex + 1] : null;
                 var matched = TryMatchHeading(line);
                 if (matched != null)
                 {
                     var (headingNo, isLabelled) = matched.Value;
+                    if (IsNestedNumberedListItem(matched.Value, currentNo, usedTopLevelNumbers, nextLine))
+                    {
+                        currentNo ??= "Introduction";
+                        currentPage ??= page.PageNumber;
+                        currentText.AppendLine(line);
+                        continue;
+                    }
+
                     Flush();
                     if (isLabelled && headingNo.StartsWith("Annex ", StringComparison.OrdinalIgnoreCase))
                         currentAnnexLabel = headingNo;
                     else if (currentAnnexLabel != null && !isLabelled)
                         headingNo = $"{currentAnnexLabel}.{headingNo}";
+                    TrackTopLevelNumber(headingNo, usedTopLevelNumbers);
                     currentNo = headingNo;
                     currentPage = page.PageNumber;
                     currentText.AppendLine(line);
@@ -142,24 +154,80 @@ public static partial class LocalSectionSplitter
         return MergeRepeatedTopLevelNumbers(DropTableOfContentsDuplicates(sections, pages));
     }
 
-    // Tables (e.g. this document's own table of contents) are structural data, not clause prose
-    // — skip them entirely rather than let stray <td>/<tr> fragments leak into whichever clause
-    // happens to be open when the table appears.
+    // Azure layout markdown often puts TOC rows and schedules in HTML tables — flatten to text lines
+    // attached to the current clause instead of dropping the content entirely.
     private static List<string> ContentLines(string pageText)
     {
+        var expanded = FlattenHtmlTables(pageText);
         var lines = new List<string>();
-        var inTable = false;
-        foreach (var rawLine in pageText.Split('\n'))
+        foreach (var rawLine in expanded.Split('\n'))
         {
-            if (rawLine.Contains("<table", StringComparison.OrdinalIgnoreCase)) { inTable = true; continue; }
-            if (rawLine.Contains("</table", StringComparison.OrdinalIgnoreCase)) { inTable = false; continue; }
-            if (inTable) continue;
-
             var line = CleanMarkdown(rawLine);
             if (line.Length > 0) lines.Add(line);
         }
 
         return lines;
+    }
+
+    private static string FlattenHtmlTables(string pageText)
+    {
+        return HtmlTableBlockPattern.Replace(pageText, static m => FlattenOneHtmlTable(m.Value));
+    }
+
+    private static string FlattenOneHtmlTable(string tableHtml)
+    {
+        var inner = HtmlTagPattern.Replace(tableHtml, " ");
+        inner = HtmlRowBreakPattern.Replace(inner, "\n");
+        inner = HtmlCellBreakPattern.Replace(inner, " | ");
+        inner = Regex.Replace(inner, @"\s*\|\s*", " | ");
+        inner = Regex.Replace(inner, @"[ \t]+", " ");
+        return Regex.Replace(inner, @"\n\s*\n+", "\n").Trim();
+    }
+
+    /// <summary>
+    /// "1. Report to the FIU" inside clause 3.4 (or 4) after chapter 1 already exists — same shape as a
+    /// real top-level clause, not a new one. See docs/pipeline/STRUCTURAL-EXTRACTION-NESTED-NUMBERING-BUG.md.
+    /// </summary>
+    private static bool IsNestedNumberedListItem(
+        (string No, bool IsLabelled) matched,
+        string? currentNo,
+        HashSet<string> usedTopLevelNumbers,
+        string? nextLine)
+    {
+        if (matched.IsLabelled || currentNo is null or "Introduction") return false;
+        if (matched.No.Contains('.', StringComparison.Ordinal)) return false;
+        if (!usedTopLevelNumbers.Contains(matched.No)) return false;
+
+        if (!string.IsNullOrWhiteSpace(nextLine))
+        {
+            var nextMatch = TryMatchHeading(nextLine);
+            if (nextMatch != null
+                && !nextMatch.Value.IsLabelled
+                && nextMatch.Value.No.StartsWith(matched.No + ".", StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static void TrackTopLevelNumber(string headingNo, HashSet<string> usedTopLevelNumbers)
+    {
+        var segment = TopLevelSegment(headingNo);
+        if (segment != null) usedTopLevelNumbers.Add(segment);
+    }
+
+    private static string? TopLevelSegment(string headingNo)
+    {
+        if (headingNo.StartsWith("Annex ", StringComparison.OrdinalIgnoreCase)
+            || headingNo.StartsWith("Article ", StringComparison.OrdinalIgnoreCase)
+            || headingNo.StartsWith("Section ", StringComparison.OrdinalIgnoreCase)
+            || headingNo.StartsWith("Rule ", StringComparison.OrdinalIgnoreCase)
+            || headingNo.StartsWith("Clause ", StringComparison.OrdinalIgnoreCase)
+            || headingNo.StartsWith("Chapter ", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var dot = headingNo.IndexOf('.');
+        return dot >= 0 ? headingNo[..dot] : headingNo;
     }
 
     // A footnote printed at the bottom of a page ("1 Social Media and Terrorism Financing: A joint project by
@@ -204,6 +272,29 @@ public static partial class LocalSectionSplitter
     }
 
     private const int MinContentsEntriesPerPage = 4;
+
+    /// <summary>Dense TOC pages: drop "heading + page number" pointer pairs only, not the whole page
+    /// (so any real prose on the same page is still extracted).</summary>
+    private static List<string> FilterContentsPointerLines(IReadOnlyList<string> lines)
+    {
+        if (!LooksLikeContentsPage(lines)) return lines.ToList();
+
+        var filtered = new List<string>(lines.Count);
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (i + 1 < lines.Count
+                && TryMatchHeading(lines[i]) != null
+                && PageNumberOnlyLine.IsMatch(lines[i + 1]))
+            {
+                i++;
+                continue;
+            }
+
+            filtered.Add(lines[i]);
+        }
+
+        return filtered;
+    }
 
     private static bool LooksLikeContentsPage(IReadOnlyList<string> lines)
     {

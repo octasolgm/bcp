@@ -64,6 +64,8 @@ Bug fixes
 - ND blue page header: "In progress" control (with count) on the right on every page, styled for the title bar; removed duplicate from the New Analysis page body
 
 Tasks
+- Structural extract coverage audit (Phase 1): after local/Azure extract, API stores parsed-vs-sections coverage ratio; internal and regulation side panels show percentage and warn below 98% with a missing-text sample
+- Structural extract Phase 2/3: HTML tables flattened into text; TOC pages drop pointer pairs only (not whole pages); nested "1. Sub-rule" lines stay inside parent clauses (e.g. 3.4 Name Screening)
 - New Analysis (V2) layout: larger section headings and much more vertical space between Step 1, Step 2, summary/run strip, three-column workspace, and analysis report
 - New Analysis workspace: Result column no longer clipped when side panels are open (horizontal scroll on the column row); columns can collapse via header control, still draggable to reorder and resizable between dividers
 - Data tables app-wide: header rows use a consistent accent-tinted background and label color (All analysis, document catalogs, admin lists, dashboard tables)

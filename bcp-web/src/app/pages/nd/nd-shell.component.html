@@ -65,7 +65,6 @@
 
     <aside class="sidebar" [style.width.px]="shellFocus.regulationPointsPanelOpen() ? null : sidebarWidth">
       <div class="sidebar-nav">
-        <p class="nav-label">Workspace</p>
         @for (entry of navEntries; track entry.kind === 'divider' ? entry.id : entry.kind === 'link' ? entry.item.id : entry.group.id) {
           @if (entry.kind === 'divider') {
             <hr class="nav-divider" />

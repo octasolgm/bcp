@@ -24,6 +24,10 @@ export function mergeLiteLocalExtractionStatus(
     indexStatus: lite.indexStatus,
     indexError: lite.indexError ?? previous.indexError,
     indexedAt: lite.indexedAt ?? previous.indexedAt,
+    structuralCoverageRatio: lite.structuralCoverageRatio ?? previous.structuralCoverageRatio,
+    structuralCoverageOrphanSnippet:
+      lite.structuralCoverageOrphanSnippet ?? previous.structuralCoverageOrphanSnippet,
+    structuralCoverageLow: lite.structuralCoverageLow ?? previous.structuralCoverageLow,
   };
 }
 

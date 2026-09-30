@@ -340,72 +340,85 @@
         (mousedown)="startSectionsPanelResize($event)"
       ></div>
       <aside class="library-sections-panel card-surface" aria-label="Policy sections">
-        <div class="panel-top">
+        <div class="panel-top panel-top-compact">
           <button type="button" class="btn-close" (click)="closeSections()" aria-label="Close sections panel">
             ×
           </button>
           <div class="panel-top-main">
-            <strong>{{ sectionsFor.title }}</strong>
-            <span class="muted panel-sub">
-              {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
-              @if (sectionsFor.sectionCount) {
-                · {{ sectionsFor.sectionCount }} section(s)
-              }
-            </span>
+            <div class="panel-title-line">
+              <strong class="panel-title-truncate">{{ sectionsFor.title }}</strong>
+              <span class="muted panel-sub">
+                {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
+                @if (sectionsFor.sectionCount) {
+                  · {{ sectionsFor.sectionCount }} sections
+                }
+              </span>
+            </div>
           </div>
-          <div class="panel-export-actions">
+          <div class="panel-top-toolbar">
+            @if (canParse) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                [disabled]="parsingId === sectionsFor.id"
+                (click)="handleParse(sectionsFor)"
+              >
+                {{ parseButtonLabel(sectionsFor) }}
+              </button>
+              @if (isDocParsed(sectionsFor)) {
+                <button
+                  type="button"
+                  class="btn-primary btn-sm"
+                  [disabled]="extractingId === sectionsFor.id"
+                  (click)="handleExtractSections(sectionsFor)"
+                >
+                  {{ extractingId === sectionsFor.id ? 'Extracting…' : extractButtonLabel(sectionsFor) }}
+                </button>
+                @if (showSemanticExtract) {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result above"
+                    [disabled]="extractingSemanticId === sectionsFor.id"
+                    (click)="handleExtractSemanticSections(sectionsFor)"
+                  >
+                    {{ extractingSemanticId === sectionsFor.id ? 'Extracting…' : 'Semantic' }}
+                  </button>
+                }
+              }
+            }
+            @if (parsedTextFor(sectionsFor)) {
+              <button type="button" class="btn-secondary btn-sm" (click)="toggleParsedText()">
+                {{ showParsedText ? 'Hide parsed' : 'Parsed text' }}
+              </button>
+            }
             <button
               type="button"
               class="btn-secondary btn-sm"
               [disabled]="exportingFileId === sectionsFor.id"
               (click)="downloadInternalFile(sectionsFor)"
+              title="Download source file"
             >
-              {{ exportingFileId === sectionsFor.id ? 'Downloading…' : 'Download source' }}
+              {{ exportingFileId === sectionsFor.id ? '…' : 'Source' }}
             </button>
           </div>
         </div>
-        @if (canParse) {
-          <div class="sections-panel-actions panel-extract">
-            <button
-              type="button"
-              class="btn-secondary btn-sm"
-              [disabled]="parsingId === sectionsFor.id"
-              (click)="handleParse(sectionsFor)"
-            >
-              {{ parseButtonLabel(sectionsFor) }}
-            </button>
-            @if (isDocParsed(sectionsFor)) {
-              <button
-                type="button"
-                class="btn-primary btn-sm"
-                [disabled]="extractingId === sectionsFor.id"
-                (click)="handleExtractSections(sectionsFor)"
-              >
-                {{ extractingId === sectionsFor.id ? 'Extracting…' : extractButtonLabel(sectionsFor) }}
-              </button>
-              @if (showSemanticExtract) {
-                <button
-                  type="button"
-                  class="btn-secondary btn-sm"
-                  title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result above"
-                  [disabled]="extractingSemanticId === sectionsFor.id"
-                  (click)="handleExtractSemanticSections(sectionsFor)"
-                >
-                  {{ extractingSemanticId === sectionsFor.id ? 'Extracting…' : 'Extract (semantic)' }}
-                </button>
-              }
+        @if (sectionsFor && structuralCoveragePct(sectionsFor); as covPct) {
+          <p
+            class="structural-coverage-note"
+            [class.structural-coverage-note-warn]="structuralCoverageLow(sectionsFor)"
+          >
+            Structural extract covers <strong>{{ covPct }}</strong> of parsed text
+            @if (structuralCoverageLow(sectionsFor)) {
+              (below 98% target). Some content may be in tables, skipped TOC pages, or under another clause — compare parsed text with sections.
             }
-          </div>
+            @if (structuralCoverageOrphan(sectionsFor); as orphan) {
+              <span class="structural-coverage-orphan">Missing sample: “{{ orphan }}”</span>
+            }
+          </p>
         }
-        @if (parsedTextFor(sectionsFor); as parsedText) {
-          <div class="card-surface parsed-text-block">
-            <button type="button" class="row-action-btn compact" (click)="toggleParsedText()">
-              {{ showParsedText ? 'Hide parsed text' : 'View parsed text' }}
-            </button>
-            @if (showParsedText) {
-              <pre class="parsed-text-content">{{ parsedText }}</pre>
-            }
-          </div>
+        @if (showParsedText && parsedTextFor(sectionsFor); as parsedText) {
+          <pre class="parsed-text-content-compact">{{ parsedText }}</pre>
         }
         <app-nd-internal-document-sections-panel
           [docTitle]="sectionsFor.title"

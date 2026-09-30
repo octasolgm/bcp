@@ -226,6 +226,7 @@ public class LocalDocumentsController(
         row.WarningsJson = JsonSerializer.Serialize(result.Warnings);
         row.ExtractError = null;
         row.ExtractedAt = DateTimeOffset.UtcNow;
+        ApplyStructuralCoverage(row, result.Sections);
         row.UpdatedAt = DateTimeOffset.UtcNow;
 
         // Only internal documents get indexed — gov clauses (regulation documents) are the query side
@@ -541,6 +542,8 @@ public class LocalDocumentsController(
         int? SectionCount,
         string? ExtractError,
         DateTimeOffset? ExtractedAt,
+        double? StructuralCoverageRatio,
+        string? StructuralCoverageOrphanSnippet,
         string SemanticExtractStatus,
         int? SemanticSectionCount,
         string? SemanticExtractError,
@@ -552,6 +555,7 @@ public class LocalDocumentsController(
         public static LiteStatusRow From(NdLocalDocumentExtraction x) => new(
             x.Id, x.StoredDocumentId, x.Engine, x.Status, x.TotalPages, x.OcrPageCount, x.Error, x.ParsedAt,
             x.ExtractStatus, x.SectionCount, x.ExtractError, x.ExtractedAt,
+            x.StructuralCoverageRatio, x.StructuralCoverageOrphanSnippet,
             x.SemanticExtractStatus, x.SemanticSectionCount, x.SemanticExtractError, x.SemanticExtractedAt,
             x.IndexStatus, x.IndexError, x.IndexedAt);
 
@@ -571,6 +575,7 @@ public class LocalDocumentsController(
             .Select(x => new LiteStatusRow(
                 x.Id, x.StoredDocumentId, x.Engine, x.Status, x.TotalPages, x.OcrPageCount, x.Error, x.ParsedAt,
                 x.ExtractStatus, x.SectionCount, x.ExtractError, x.ExtractedAt,
+                x.StructuralCoverageRatio, x.StructuralCoverageOrphanSnippet,
                 x.SemanticExtractStatus, x.SemanticSectionCount, x.SemanticExtractError, x.SemanticExtractedAt,
                 x.IndexStatus, x.IndexError, x.IndexedAt))
             .ToListAsync(ct);
@@ -618,36 +623,71 @@ public class LocalDocumentsController(
         indexStatus = r.IndexStatus,
         indexError = r.IndexError,
         indexedAt = r.IndexedAt,
+        structuralCoverageRatio = r.StructuralCoverageRatio,
+        structuralCoverageOrphanSnippet = r.StructuralCoverageOrphanSnippet,
+        structuralCoverageLow = LocalStructuralCoverage.IsLowCoverage(r.StructuralCoverageRatio),
         lite = true,
     };
 
-    private static object ToDto(Guid documentId, string? fileName, NdLocalDocumentExtraction row) => new
+    private static object ToDto(Guid documentId, string? fileName, NdLocalDocumentExtraction row)
     {
-        documentId,
-        fileName,
-        engine = row.Engine,
-        status = row.Status,
-        totalPages = row.TotalPages,
-        ocrPageCount = row.OcrPageCount,
-        error = row.Error,
-        parsedAt = row.ParsedAt,
-        markdownText = row.MarkdownText,
-        extractStatus = row.ExtractStatus,
-        sectionCount = row.SectionCount,
-        warnings = JsonSerializer.Deserialize<List<string>>(row.WarningsJson) ?? [],
-        sections = JsonSerializer.Deserialize<List<LocalSection>>(row.SectionsJson) ?? [],
-        extractError = row.ExtractError,
-        extractedAt = row.ExtractedAt,
-        semanticExtractStatus = row.SemanticExtractStatus,
-        semanticSectionCount = row.SemanticSectionCount,
-        semanticWarnings = JsonSerializer.Deserialize<List<string>>(row.SemanticWarningsJson) ?? [],
-        semanticSections = JsonSerializer.Deserialize<List<LocalSection>>(row.SemanticSectionsJson) ?? [],
-        semanticExtractError = row.SemanticExtractError,
-        semanticExtractedAt = row.SemanticExtractedAt,
-        indexStatus = row.IndexStatus,
-        indexError = row.IndexError,
-        indexedAt = row.IndexedAt,
-    };
+        var (coverageRatio, orphanSnippet) = ResolveStructuralCoverage(row);
+        return new
+        {
+            documentId,
+            fileName,
+            engine = row.Engine,
+            status = row.Status,
+            totalPages = row.TotalPages,
+            ocrPageCount = row.OcrPageCount,
+            error = row.Error,
+            parsedAt = row.ParsedAt,
+            markdownText = row.MarkdownText,
+            extractStatus = row.ExtractStatus,
+            sectionCount = row.SectionCount,
+            warnings = JsonSerializer.Deserialize<List<string>>(row.WarningsJson) ?? [],
+            sections = JsonSerializer.Deserialize<List<LocalSection>>(row.SectionsJson) ?? [],
+            extractError = row.ExtractError,
+            extractedAt = row.ExtractedAt,
+            structuralCoverageRatio = coverageRatio,
+            structuralCoverageOrphanSnippet = orphanSnippet,
+            structuralCoverageLow = LocalStructuralCoverage.IsLowCoverage(coverageRatio),
+            semanticExtractStatus = row.SemanticExtractStatus,
+            semanticSectionCount = row.SemanticSectionCount,
+            semanticWarnings = JsonSerializer.Deserialize<List<string>>(row.SemanticWarningsJson) ?? [],
+            semanticSections = JsonSerializer.Deserialize<List<LocalSection>>(row.SemanticSectionsJson) ?? [],
+            semanticExtractError = row.SemanticExtractError,
+            semanticExtractedAt = row.SemanticExtractedAt,
+            indexStatus = row.IndexStatus,
+            indexError = row.IndexError,
+            indexedAt = row.IndexedAt,
+        };
+    }
+
+    private static void ApplyStructuralCoverage(NdLocalDocumentExtraction row, IReadOnlyList<LocalSection> sections)
+    {
+        if (string.IsNullOrWhiteSpace(row.MarkdownText))
+        {
+            row.StructuralCoverageRatio = null;
+            row.StructuralCoverageOrphanSnippet = null;
+            return;
+        }
+
+        var report = LocalStructuralCoverage.Compute(row.MarkdownText, sections);
+        row.StructuralCoverageRatio = report.CoverageRatio;
+        row.StructuralCoverageOrphanSnippet = report.OrphanSnippet;
+    }
+
+    private static (double? Ratio, string? OrphanSnippet) ResolveStructuralCoverage(NdLocalDocumentExtraction row)
+    {
+        if (row.StructuralCoverageRatio.HasValue)
+            return (row.StructuralCoverageRatio, row.StructuralCoverageOrphanSnippet);
+        if (row.ExtractStatus != "extracted" || string.IsNullOrWhiteSpace(row.MarkdownText))
+            return (null, null);
+        var sections = JsonSerializer.Deserialize<List<LocalSection>>(row.SectionsJson) ?? [];
+        var report = LocalStructuralCoverage.Compute(row.MarkdownText, sections);
+        return (report.CoverageRatio, report.OrphanSnippet);
+    }
 
     /// <summary>Which extensions local extraction currently accepts — for the upload picker to filter on.
     /// Same for every engine, so {engine} is accepted but unused here.</summary>

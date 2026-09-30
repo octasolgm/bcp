@@ -51,18 +51,14 @@ just at more than one level, and the current logic can't tell the levels apart. 
 extraction wouldn't automatically prevent this either, since structural extraction runs
 first and would still make the same mistake before any fallback logic ever triggers.
 
-## Status: found, not yet fixed
+## Status: fixed (approach 1)
 
-Two real ways to fix it, not yet decided or built:
+`LocalSectionSplitter` now treats a repeated single-segment numbered line (`1. Title`) as
+body text when that top-level number was already used as a chapter and the next line is not
+a sub-clause (`1.1 …`). A real chapter restart is still detected when `1.1` follows `1.`.
 
-1. Teach the regex/splitter about nesting - e.g. don't start a new top-level clause from a
-   bare single-level number ("1.") while already inside a multi-level clause ("3.4") whose
-   sub-items would plausibly be numbered that way.
-2. Use meaning (the same embedding comparison semantic extraction would use) as a
-   secondary check - if a candidate new heading's content reads as a continuation of the
-   same topic as what came before it, don't treat it as a new clause even though the
-   number pattern matched.
+HTML tables are flattened to text lines instead of being dropped. Dense TOC pages filter
+out "heading + page number" pointer pairs only, rather than skipping the entire page.
 
-Neither is built yet. This file exists so the bug doesn't get lost - update this file's
-"Status" line once a fix ships, and say which of the two approaches (or another) was
-used.
+Regression tests: `Nested_list_under_multi_level_clause_stays_with_parent_TFS_3_4_case`,
+`Html_table_cells_are_flattened_into_extractable_lines` in `LocalSectionSplitterTests.cs`.

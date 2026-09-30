@@ -45,6 +45,13 @@ public class NdLocalDocumentExtraction : ITenantScoped
     public string? ExtractError { get; set; }
     public DateTimeOffset? ExtractedAt { get; set; }
 
+    /// <summary>Share of significant parsed-text tokens found in at least one structural section
+    /// after extract — see <see cref="LocalStructuralCoverage"/>.</summary>
+    public double? StructuralCoverageRatio { get; set; }
+
+    /// <summary>Sample of parsed text not represented in sections when coverage is low.</summary>
+    public string? StructuralCoverageOrphanSnippet { get; set; }
+
     /// <summary>Semantic extraction — a second, independent extract result alongside the regex-based
     /// one above, run from the same <see cref="MarkdownText"/> without touching it. Splits by embedding
     /// consecutive sentences and cutting where meaning shifts, instead of by numbering — see

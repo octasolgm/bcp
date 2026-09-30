@@ -107,6 +107,14 @@ The Text documents library (the experimental local parse library under Documents
 
 On New Analysis, the detailed hybrid engine panel on the right (document parse status, retrieval steps, and phase breakdown) is platform-owner only, matching Business workspaces and AI usage. Every user still gets the left Progress rail on New Analysis; client workspace admins just do not see the right-side engineering panel.
 
+Structural extract coverage
+
+Internal and regulation document pages (local/Azure parse and extract) now measure how much of the parsed document text appears in structural sections after extract. The side panel shows a coverage percentage; if it falls below 98%, a warning explains that tables, table-of-contents pages, or mis-split clauses may be the cause, with a short sample of text that did not land in any section. Re-run Extract on a document to refresh the metric after parser changes; older extracts compute the ratio on the fly when you open the panel.
+
+Structural extract quality (Phase 2 and 3)
+
+Re-extracting a parsed regulation or internal document now uses an improved structural splitter: table content from Azure markdown is kept as readable lines instead of being skipped; table-of-contents pages no longer discard an entire page of text, only classic "clause title + page number" pointer rows; and numbered sub-lists inside a clause (such as rules listed under 3.4) stay with that clause instead of appearing as a false clause "1". After deploying or restarting the API, use Extract again on a document to refresh points and the coverage percentage in the side panel.
+
 Regulation points list
 
 On local and Azure regulation document pages, the side panel could show the correct point count in the summary line but only thin empty rows in the list. That happened when a lightweight background status refresh replaced the full extraction payload in memory (counts stayed, clause text did not). Status updates now merge into the cache without dropping section text, and opening a document reloads full clause bodies or loads the saved points from the database when needed. Single-line clauses also show their text reliably when title and body are the same.

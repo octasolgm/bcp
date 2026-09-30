@@ -145,6 +145,10 @@ export type NdLocalExtractionResult = {
   sections: NdLocalExtractionSection[];
   extractError?: string | null;
   extractedAt?: string | null;
+  /** Fraction of parsed text tokens represented in structural sections (0–1). */
+  structuralCoverageRatio?: number | null;
+  structuralCoverageOrphanSnippet?: string | null;
+  structuralCoverageLow?: boolean;
   /** Semantic extraction — a second, independent extract result off the same parsed text, split by
    * embedding similarity instead of numbering. Never overwrites the fields above. */
   semanticExtractStatus?: string;

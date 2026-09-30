@@ -195,6 +195,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.ExtractStatus).HasColumnName("extract_status");
             e.Property(x => x.ExtractError).HasColumnName("extract_error");
             e.Property(x => x.ExtractedAt).HasColumnName("extracted_at");
+            e.Property(x => x.StructuralCoverageRatio).HasColumnName("structural_coverage_ratio");
+            e.Property(x => x.StructuralCoverageOrphanSnippet).HasColumnName("structural_coverage_orphan_snippet");
             e.Property(x => x.SemanticExtractStatus).HasColumnName("semantic_extract_status");
             e.Property(x => x.SemanticSectionCount).HasColumnName("semantic_section_count");
             e.Property(x => x.SemanticSectionsJson).HasColumnName("semantic_sections_json").HasColumnType("jsonb");

@@ -514,38 +514,100 @@
       (mousedown)="startPointsPanelResize($event)"
     ></div>
     <aside class="library-points-panel card-surface">
-      <div class="panel-top">
+      <div class="panel-top panel-top-compact">
         <button type="button" class="btn-close" (click)="closePointsPanel()" aria-label="Close points panel">
           ×
         </button>
         <div class="panel-top-main">
-          <strong>{{ selectedDoc?.name ?? 'Points' }}</strong>
-          @if (selectedDoc) {
-            <span class="muted panel-sub">
-              @if (isManualDoc(selectedDoc)) {
-                Manual entry · {{ docPointMeta(selectedDoc) }}
-              } @else if (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) {
-                {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
-              } @else {
-                {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
-              }
-            </span>
-            @if (selectedDoc && (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) && extractionProgressPct(selectedDoc); as pct) {
-              <span
-                class="extract-progress-track panel-progress"
-                role="progressbar"
-                [attr.aria-valuenow]="pct"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                [attr.aria-label]="workflowStatusLabel(selectedDoc)"
-              >
-                <span class="extract-progress-fill" [style.width.%]="pct"></span>
+          <div class="panel-title-line">
+            <strong class="panel-title-truncate">{{ selectedDoc?.name ?? 'Points' }}</strong>
+            @if (selectedDoc) {
+              <span class="muted panel-sub">
+                @if (isManualDoc(selectedDoc)) {
+                  Manual · {{ docPointMeta(selectedDoc) }}
+                } @else if (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) {
+                  {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
+                } @else {
+                  {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
+                }
               </span>
             }
+          </div>
+          @if (selectedDoc && (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) && extractionProgressPct(selectedDoc); as pct) {
+            <span
+              class="extract-progress-track panel-progress"
+              role="progressbar"
+              [attr.aria-valuenow]="pct"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-label]="workflowStatusLabel(selectedDoc)"
+            >
+              <span class="extract-progress-fill" [style.width.%]="pct"></span>
+            </span>
           }
         </div>
-        @if (selectedDoc && !auth.isDemoViewer()) {
-          <div class="panel-export-actions">
+        <div class="panel-top-toolbar">
+          @if (canExtract && selectedDoc && !isManualDoc(selectedDoc)) {
+            @if (needsParse(selectedDoc)) {
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                [disabled]="parsingId === selectedDoc.id || isParsingDoc(selectedDoc)"
+                (click)="handleParse(selectedDoc)"
+              >
+                {{ parsingId === selectedDoc.id || isParsingDoc(selectedDoc) ? 'Parsing…' : 'Parse' }}
+              </button>
+            }
+            @if (showRowRepairButton(selectedDoc)) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                [disabled]="repairingPointsId === selectedDoc.id"
+                (click)="handleRepairPoints(selectedDoc)"
+                title="Optional cleanup (duplicates/junk). Demo flow is Upload → Parse → Extract — repair is not required."
+              >
+                {{ repairingPointsId === selectedDoc.id ? 'Repairing…' : 'Repair' }}
+              </button>
+            }
+            @if ((hasExtractedPoints(selectedDoc) || (selectedDoc.pointCount ?? 0) > 0) && !auth.isDemoViewer()) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                [disabled]="refreshingPagesId === selectedDoc.id"
+                (click)="handleRefreshPageReferences(selectedDoc)"
+                title="Recompute PDF pages from cached parse — does not call Landing AI"
+              >
+                {{ refreshingPagesId === selectedDoc.id ? 'Refreshing…' : 'Refresh pages' }}
+              </button>
+            }
+            @if (showPanelExtractButton(selectedDoc)) {
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                [disabled]="extractingId === selectedDoc.id || isExtractingDoc(selectedDoc)"
+                (click)="handleExtract(selectedDoc)"
+              >
+                {{ extractingId === selectedDoc.id || isExtractingDoc(selectedDoc) ? 'Extracting…' : 'Extract' }}
+              </button>
+              @if (showSemanticExtract) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result above"
+                  [disabled]="extractingSemanticId === selectedDoc.id"
+                  (click)="handleExtractSemantic(selectedDoc)"
+                >
+                  {{ extractingSemanticId === selectedDoc.id ? 'Extracting…' : 'Semantic' }}
+                </button>
+              }
+            }
+          }
+          @if (selectedDoc && parsedTextFor(selectedDoc)) {
+            <button type="button" class="btn-secondary btn-sm" (click)="toggleParsedText()">
+              {{ showParsedText ? 'Hide parsed' : 'Parsed text' }}
+            </button>
+          }
+          @if (selectedDoc && !auth.isDemoViewer()) {
             @if (hasExtractedPoints(selectedDoc) || isManualDoc(selectedDoc)) {
               <button
                 type="button"
@@ -553,7 +615,7 @@
                 [disabled]="exportingPointsId === selectedDoc.id"
                 (click)="exportPointsJson(selectedDoc)"
               >
-                {{ exportingPointsId === selectedDoc.id ? 'Downloading…' : 'Download JSON' }}
+                {{ exportingPointsId === selectedDoc.id ? '…' : 'JSON' }}
               </button>
             }
             @if (!isManualDoc(selectedDoc)) {
@@ -562,79 +624,30 @@
                 class="btn-secondary btn-sm"
                 [disabled]="exportingFileId === selectedDoc.id"
                 (click)="downloadRegulationFile(selectedDoc)"
+                title="Download source file"
               >
-                {{ exportingFileId === selectedDoc.id ? 'Downloading…' : 'Download source' }}
+                {{ exportingFileId === selectedDoc.id ? '…' : 'Source' }}
               </button>
             }
-          </div>
-        }
+          }
+        </div>
       </div>
-      @if (canExtract && selectedDoc && !isManualDoc(selectedDoc)) {
-        <div class="panel-extract">
-          @if (needsParse(selectedDoc)) {
-            <button
-              type="button"
-              class="btn-primary btn-sm"
-              [disabled]="parsingId === selectedDoc.id || isParsingDoc(selectedDoc)"
-              (click)="handleParse(selectedDoc)"
-            >
-              {{ parsingId === selectedDoc.id || isParsingDoc(selectedDoc) ? 'Parsing…' : 'Parse document' }}
-            </button>
+      @if (selectedDoc && structuralCoveragePct(selectedDoc); as covPct) {
+        <p
+          class="structural-coverage-note"
+          [class.structural-coverage-note-warn]="structuralCoverageLow(selectedDoc)"
+        >
+          Structural extract covers <strong>{{ covPct }}</strong> of parsed text
+          @if (structuralCoverageLow(selectedDoc)) {
+            (below 98% target). Some content may be in tables, skipped TOC pages, or under another clause — compare parsed text with points.
           }
-          @if (showRowRepairButton(selectedDoc)) {
-            <button
-              type="button"
-              class="btn-secondary btn-sm"
-              [disabled]="repairingPointsId === selectedDoc.id"
-              (click)="handleRepairPoints(selectedDoc)"
-              title="Optional cleanup (duplicates/junk). Demo flow is Upload → Parse → Extract — repair is not required."
-            >
-              {{ repairingPointsId === selectedDoc.id ? 'Repairing…' : 'Repair points' }}
-            </button>
+          @if (structuralCoverageOrphan(selectedDoc); as orphan) {
+            <span class="structural-coverage-orphan">Missing sample: “{{ orphan }}”</span>
           }
-          @if ((hasExtractedPoints(selectedDoc) || (selectedDoc.pointCount ?? 0) > 0) && !auth.isDemoViewer()) {
-            <button
-              type="button"
-              class="btn-secondary btn-sm"
-              [disabled]="refreshingPagesId === selectedDoc.id"
-              (click)="handleRefreshPageReferences(selectedDoc)"
-              title="Recompute PDF pages from cached parse — does not call Landing AI"
-            >
-              {{ refreshingPagesId === selectedDoc.id ? 'Refreshing…' : 'Refresh PDF pages' }}
-            </button>
-          }
-          @if (showPanelExtractButton(selectedDoc)) {
-            <button
-              type="button"
-              class="btn-primary btn-sm"
-              [disabled]="extractingId === selectedDoc.id || isExtractingDoc(selectedDoc)"
-              (click)="handleExtract(selectedDoc)"
-            >
-              {{ extractingId === selectedDoc.id || isExtractingDoc(selectedDoc) ? 'Extracting…' : 'Run extraction' }}
-            </button>
-            @if (showSemanticExtract) {
-              <button
-                type="button"
-                class="btn-secondary btn-sm"
-                title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result above"
-                [disabled]="extractingSemanticId === selectedDoc.id"
-                (click)="handleExtractSemantic(selectedDoc)"
-              >
-                {{ extractingSemanticId === selectedDoc.id ? 'Extracting…' : 'Run extraction (semantic)' }}
-              </button>
-            }
-          }
-        </div>
+        </p>
       }
-      @if (selectedDoc && parsedTextFor(selectedDoc); as parsedText) {
-        <div class="card-surface parsed-text-block">
-          <button type="button" class="row-action-btn compact" (click)="toggleParsedText()">
-            {{ showParsedText ? 'Hide parsed text' : 'View parsed text' }}
-          </button>
-          @if (showParsedText) {
-            <pre class="parsed-text-content">{{ parsedText }}</pre>
-          }
-        </div>
+      @if (selectedDoc && showParsedText && parsedTextFor(selectedDoc); as parsedText) {
+        <pre class="parsed-text-content-compact">{{ parsedText }}</pre>
       }
       @if (selectedDoc && isManualDoc(selectedDoc)) {
         <app-nd-manual-regulation-points-panel
