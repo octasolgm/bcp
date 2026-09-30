@@ -882,6 +882,21 @@ export class NdApiService {
     );
   }
 
+  getFinalizeEmbedLlmSettings() {
+    return this.request<import('../../../lib/nd/types').DualVerifyLlmSettings>(
+      'GET',
+      '/nd/admin/settings/finalize-embed-llm',
+    );
+  }
+
+  updateFinalizeEmbedLlmSettings(body: { provider: string; model: string }) {
+    return this.request<import('../../../lib/nd/types').DualVerifyLlmSettings>(
+      'PUT',
+      '/nd/admin/settings/finalize-embed-llm',
+      body,
+    );
+  }
+
   getRegulRetrievalPromptCache() {
     return this.request<{ enabled: boolean }>('GET', '/nd/admin/settings/regul-retrieval-prompt-cache');
   }

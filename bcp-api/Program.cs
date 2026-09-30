@@ -140,6 +140,9 @@ builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisPromptVer
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdPromptAiGenerationService>();
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.RegulWorkflowLlmSettingsService>();
 builder.Services.AddScoped<Reguliq.Api.Services.Llm.RegulWorkflowLlmService>();
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.FinalizeEmbedLlmSettingsService>();
+builder.Services.AddScoped<Reguliq.Api.Services.Llm.FinalizeEmbedLlmService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.CorrectedDocs.NdFinalizeEmbedContentService>();
 builder.Services.AddScoped<DualVerifyLlmService>();
 builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.OpenAiCompatibleLlmClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));
 builder.Services.AddHttpClient<Reguliq.Api.Services.Llm.AnthropicLlmClient>(c => ConfigureAiHttpTimeout(c, httpTimeout));

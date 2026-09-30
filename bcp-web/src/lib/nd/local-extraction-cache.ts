@@ -31,7 +31,35 @@ export function mergeLiteLocalExtractionStatus(
   };
 }
 
+function localSectionsHaveClauseText(
+  sections: NdLocalExtractionResult['sections'] | undefined,
+): boolean {
+  return (sections ?? []).some((s) => (s.clauseText ?? '').trim().length > 0);
+}
+
 export function localExtractionHasSectionText(result: NdLocalExtractionResult | null | undefined): boolean {
   if (!result || result.lite === true) return false;
-  return (result.sections?.length ?? 0) > 0 || (result.semanticSections?.length ?? 0) > 0;
+  return localSectionsHaveClauseText(result.sections) || localSectionsHaveClauseText(result.semanticSections);
+}
+
+/** Keep parsed markdown / section JSON when a status poll returns empty heavy fields. */
+export function mergeFullLocalExtractionStatus(
+  previous: NdLocalExtractionResult | undefined,
+  incoming: NdLocalExtractionResult,
+): NdLocalExtractionResult {
+  if (!previous) return incoming;
+  if (incoming.lite === true) return mergeLiteLocalExtractionStatus(previous, incoming);
+
+  const incomingMarkdown = (incoming.markdownText ?? '').trim();
+  const incomingSections = localSectionsHaveClauseText(incoming.sections);
+  const incomingSemantic = localSectionsHaveClauseText(incoming.semanticSections);
+
+  return {
+    ...incoming,
+    markdownText: incomingMarkdown ? incoming.markdownText : previous.markdownText ?? incoming.markdownText,
+    sections: incomingSections ? incoming.sections : previous.sections ?? incoming.sections,
+    semanticSections: incomingSemantic
+      ? incoming.semanticSections
+      : previous.semanticSections ?? incoming.semanticSections,
+  };
 }

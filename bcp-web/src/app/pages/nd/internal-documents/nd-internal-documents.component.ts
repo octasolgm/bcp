@@ -25,6 +25,7 @@ import {
 } from '../../../../lib/nd/doc-analysis-ready';
 import {
   groupInternalDocumentsByAnalysisSource,
+  countInternalDocsForAnalysisRun,
   hideInternalDocGeneratedFromSubline,
   showInternalDocCatalogGroupHeader,
   compareInternalDocumentsForCatalog,
@@ -494,11 +495,19 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   }
 
   showRowParseButton(doc: InternalDocument): boolean {
-    return this.canParse && !doc.generatedByAnalysis;
+    return this.canParse;
   }
 
   showRowExtractButton(doc: InternalDocument): boolean {
-    return this.canParse && !doc.generatedByAnalysis;
+    return this.canParse;
+  }
+
+  analysisGroupDocCount(runId: string | null): number {
+    return countInternalDocsForAnalysisRun(this.visibleDocs, runId);
+  }
+
+  groupTrackKey(group: InternalDocCatalogGroup): string {
+    return `${group.key}-${group.docs[0]?.id ?? ''}`;
   }
 
   isDocParsed(doc: InternalDocument): boolean {
@@ -552,8 +561,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   /** True once parsed but still waiting on section extraction — shown as two chips. */
   showsParsedPendingExtractChips(doc: InternalDocument): boolean {
     return (
-      !doc.generatedByAnalysis
-      && this.analysisReadyState(doc) === 'not_ready'
+      this.analysisReadyState(doc) === 'not_ready'
       && this.isDocParsed(doc)
       && !this.isParsingDoc(doc)
     );

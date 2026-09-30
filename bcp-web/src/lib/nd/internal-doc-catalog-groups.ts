@@ -17,75 +17,88 @@ export function compareInternalDocumentsForCatalog(
   a: InternalDocument,
   b: InternalDocument,
   column: InternalDocCatalogSortColumn,
-  dir: SortDir,
+  sortDir: SortDir,
 ): number {
   switch (column) {
     case 'title':
-      return compareText(a.title, b.title, dir);
+      return compareText(a.title, b.title, sortDir);
     case 'size':
-      return compareNumber(a.sizeBytes ?? 0, b.sizeBytes ?? 0, dir);
+      return compareNumber(a.sizeBytes ?? 0, b.sizeBytes ?? 0, sortDir);
     case 'pages':
-      return compareNumber(a.pageCount ?? 0, b.pageCount ?? 0, dir);
+      return compareNumber(a.pageCount ?? 0, b.pageCount ?? 0, sortDir);
     case 'analyses':
-      return compareNumber(a.analysisRunCount ?? 0, b.analysisRunCount ?? 0, dir);
+      return compareNumber(a.analysisRunCount ?? 0, b.analysisRunCount ?? 0, sortDir);
     case 'source':
-      return compareText(a.source ?? 'nd', b.source ?? 'nd', dir);
+      return compareText(a.source ?? 'nd', b.source ?? 'nd', sortDir);
     case 'uploaded':
     default:
-      return compareDateIso(a.uploaded, b.uploaded, dir);
+      return compareDateIso(a.uploaded, b.uploaded, sortDir);
   }
 }
 
-/** Cluster filtered/sorted docs by originating analysis run; direct uploads stay in one block at the top. */
+function segmentKeyFor(doc: InternalDocument): string {
+  if (doc.generatedByAnalysis) {
+    const runId = doc.generatedFromRunId?.trim();
+    if (runId) return `run:${runId}`;
+  }
+  return 'standalone';
+}
+
+/** Insert group headers on a list already sorted by the catalog (e.g. uploaded date) — order is unchanged. */
 export function groupInternalDocumentsByAnalysisSource(
-  docs: InternalDocument[],
-  sortColumn: InternalDocCatalogSortColumn,
-  sortDir: SortDir,
+  sortedDocs: InternalDocument[],
+  _sortColumn: InternalDocCatalogSortColumn = 'uploaded',
+  _sortDir: SortDir = 'desc',
 ): InternalDocCatalogGroup[] {
-  const standalone: InternalDocument[] = [];
-  const byKey = new Map<string, { runId: string | null; runName: string; docs: InternalDocument[] }>();
+  if (sortedDocs.length === 0) return [];
 
-  for (const d of docs) {
-    if (d.generatedByAnalysis && (d.generatedFromRunId || d.generatedFromRunName)) {
-      const runId = d.generatedFromRunId?.trim() || null;
-      const runName = (d.generatedFromRunName ?? '').trim() || 'Analysis run';
-      const key = runId ?? `name:${runName.toLowerCase()}`;
-      let bucket = byKey.get(key);
-      if (!bucket) {
-        bucket = { runId, runName, docs: [] };
-        byKey.set(key, bucket);
-      }
-      bucket.docs.push(d);
-    } else {
-      standalone.push(d);
+  const groups: InternalDocCatalogGroup[] = [];
+  let segmentKey = segmentKeyFor(sortedDocs[0]!);
+  let segmentDocs: InternalDocument[] = [];
+
+  const flush = () => {
+    if (!segmentDocs.length) return;
+    groups.push(buildGroup(segmentKey, segmentDocs));
+    segmentDocs = [];
+  };
+
+  for (const doc of sortedDocs) {
+    const key = segmentKeyFor(doc);
+    if (segmentDocs.length > 0 && key !== segmentKey) {
+      flush();
     }
+    segmentKey = key;
+    segmentDocs.push(doc);
   }
+  flush();
+  return groups;
+}
 
-  const cmp = (a: InternalDocument, b: InternalDocument) =>
-    compareInternalDocumentsForCatalog(a, b, sortColumn, sortDir);
-
-  const analysisGroups: InternalDocCatalogGroup[] = [...byKey.values()].map((b) => ({
-    kind: 'analysis',
-    key: b.runId ?? `name:${b.runName.toLowerCase()}`,
-    runId: b.runId,
-    runName: b.runName,
-    docs: [...b.docs].sort(cmp),
-  }));
-
-  analysisGroups.sort((ga, gb) => cmp(ga.docs[0]!, gb.docs[0]!));
-
-  const result: InternalDocCatalogGroup[] = [];
-  if (standalone.length) {
-    result.push({
-      kind: 'standalone',
-      key: 'standalone',
-      runId: null,
-      runName: '',
-      docs: [...standalone].sort(cmp),
-    });
+function buildGroup(segmentKey: string, docs: InternalDocument[]): InternalDocCatalogGroup {
+  if (segmentKey.startsWith('run:')) {
+    const runId = segmentKey.slice('run:'.length);
+    const runName = (docs[0]?.generatedFromRunName ?? '').trim() || 'Analysis run';
+    return {
+      kind: 'analysis',
+      key: runId,
+      runId,
+      runName,
+      docs: [...docs],
+    };
   }
-  result.push(...analysisGroups);
-  return result;
+  return {
+    kind: 'standalone',
+    key: 'standalone',
+    runId: null,
+    runName: '',
+    docs: [...docs],
+  };
+}
+
+export function countInternalDocsForAnalysisRun(docs: InternalDocument[], runId: string | null): number {
+  if (!runId?.trim()) return 0;
+  const id = runId.trim();
+  return docs.filter((d) => d.generatedByAnalysis && d.generatedFromRunId?.trim() === id).length;
 }
 
 export function catalogHasAnalysisGeneratedGroups(groups: InternalDocCatalogGroup[]): boolean {
@@ -97,7 +110,7 @@ export function showInternalDocCatalogGroupHeader(
   groups: InternalDocCatalogGroup[],
 ): boolean {
   if (!group.docs.length) return false;
-  if (group.kind === 'analysis') return true;
+  if (group.kind === 'analysis') return !!group.runId;
   return catalogHasAnalysisGeneratedGroups(groups);
 }
 

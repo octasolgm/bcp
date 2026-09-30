@@ -31,6 +31,13 @@ export class NdAdminSettingsComponent implements OnInit {
   regulError = '';
   regulMessage = '';
 
+  finalizeEmbedSettings: DualVerifyLlmSettings | null = null;
+  finalizeEmbedProvider = 'google';
+  finalizeEmbedModel = '';
+  finalizeEmbedSaving = false;
+  finalizeEmbedError = '';
+  finalizeEmbedMessage = '';
+
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
     await this.load();
@@ -72,6 +79,22 @@ export class NdAdminSettingsComponent implements OnInit {
     return this.regulSelectedProviderMeta?.apiKeyConfigured ?? false;
   }
 
+  get finalizeEmbedProviderOptions(): DualVerifyLlmProviderOption[] {
+    return this.finalizeEmbedSettings?.providers ?? [];
+  }
+
+  get finalizeEmbedProviderMeta(): DualVerifyLlmProviderOption | undefined {
+    return this.finalizeEmbedProviderOptions.find((p) => p.id === this.finalizeEmbedProvider);
+  }
+
+  get finalizeEmbedModelOptions(): string[] {
+    return this.finalizeEmbedProviderMeta?.models ?? [];
+  }
+
+  get finalizeEmbedProviderConfigured(): boolean {
+    return this.finalizeEmbedProviderMeta?.apiKeyConfigured ?? false;
+  }
+
   onProviderChange(): void {
     const meta = this.selectedProviderMeta;
     if (!meta) return;
@@ -88,12 +111,21 @@ export class NdAdminSettingsComponent implements OnInit {
     }
   }
 
+  onFinalizeEmbedProviderChange(): void {
+    const meta = this.finalizeEmbedProviderMeta;
+    if (!meta) return;
+    if (!meta.models.includes(this.finalizeEmbedModel)) {
+      this.finalizeEmbedModel = meta.defaultModel;
+    }
+  }
+
   async load(): Promise<void> {
     this.loading = true;
     this.error = '';
-    const [res, regulRes] = await Promise.all([
+    const [res, regulRes, finalizeEmbedRes] = await Promise.all([
       this.api.getDualVerifyLlmSettings(),
       this.api.getRegulWorkflowLlmSettings(),
+      this.api.getFinalizeEmbedLlmSettings(),
     ]);
     this.loading = false;
     if (!res.success || !res.data) {
@@ -108,6 +140,12 @@ export class NdAdminSettingsComponent implements OnInit {
       this.regulSettings = regulRes.data;
       this.regulSelectedProvider = regulRes.data.provider;
       this.regulSelectedModel = regulRes.data.model;
+    }
+
+    if (finalizeEmbedRes.success && finalizeEmbedRes.data) {
+      this.finalizeEmbedSettings = finalizeEmbedRes.data;
+      this.finalizeEmbedProvider = finalizeEmbedRes.data.provider;
+      this.finalizeEmbedModel = finalizeEmbedRes.data.model;
     }
   }
 
@@ -149,6 +187,27 @@ export class NdAdminSettingsComponent implements OnInit {
     this.regulSelectedProvider = res.data.provider;
     this.regulSelectedModel = res.data.model;
     this.regulMessage = 'Saved. New Regul workflow analyses will use this model.';
+  }
+
+  async saveFinalizeEmbed(): Promise<void> {
+    if (!this.finalizeEmbedProvider || !this.finalizeEmbedModel) return;
+    this.finalizeEmbedSaving = true;
+    this.finalizeEmbedError = '';
+    this.finalizeEmbedMessage = '';
+    const res = await this.api.updateFinalizeEmbedLlmSettings({
+      provider: this.finalizeEmbedProvider,
+      model: this.finalizeEmbedModel,
+    });
+    this.finalizeEmbedSaving = false;
+    if (!res.success || !res.data) {
+      this.finalizeEmbedError = this.friendlyError(res.message ?? 'Failed to save settings');
+      return;
+    }
+    this.finalizeEmbedSettings = res.data;
+    this.finalizeEmbedProvider = res.data.provider;
+    this.finalizeEmbedModel = res.data.model;
+    this.finalizeEmbedMessage =
+      'Saved. When a reviewer finalizes a run, this model will draft policy text for corrected documents.';
   }
 
   private friendlyError(raw: string): string {

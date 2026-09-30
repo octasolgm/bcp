@@ -1287,14 +1287,15 @@
   align-self: flex-start;
 }
 
-.panel-top-compact {
+.panel-top-compact,
+.panel-top.panel-top-inline {
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 0.35rem;
   row-gap: 0.35rem;
 
   .panel-top-main {
-    flex: 1 1 8rem;
+    flex: 1 1 0;
     min-width: 0;
 
     strong {
@@ -1304,18 +1305,27 @@
     }
   }
 
+  .panel-top-primary-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    width: 100%;
+    min-width: 0;
+  }
+
   .panel-title-line {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 0.2rem 0.45rem;
     min-width: 0;
+    flex: 1 1 auto;
 
     .panel-title-truncate {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      max-width: min(100%, 28rem);
+      max-width: min(100%, 22rem);
     }
 
     .panel-sub {
@@ -1327,17 +1337,22 @@
     }
   }
 
-  .panel-top-toolbar {
-    flex: 1 1 100%;
+  .panel-top-toolbar,
+  .panel-export-actions.panel-top-toolbar {
+    flex: 0 0 auto;
+    margin-left: auto;
     display: flex;
     flex-wrap: wrap;
     gap: 0.28rem;
     align-items: center;
+    justify-content: flex-end;
+    max-width: 100%;
   }
 
   .extract-progress-track.panel-progress {
     margin-top: 0.3rem;
     height: 4px;
+    width: 100%;
   }
 }
 
@@ -1669,36 +1684,78 @@
   }
 }
 
-.internal-doc-group-header-row td {
-  padding: 0.55rem 0.75rem 0.45rem;
-  background-color: var(--bg-card, var(--bg-surface, #fff));
-  background-image: linear-gradient(
-    color-mix(in srgb, var(--accent) 7%, var(--bg-card, #fff)),
-    color-mix(in srgb, var(--accent) 7%, var(--bg-card, #fff))
-  );
-  border-top: 2px solid color-mix(in srgb, var(--accent) 38%, var(--border));
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
+.internal-docs-table tbody.internal-doc-catalog-group-gap td {
+  padding: 0;
+  height: 0.65rem;
+  line-height: 0;
+  border: none;
+  background: transparent;
+}
+
+.internal-docs-table tbody.internal-doc-catalog-group-boxed {
+  tr:first-child td {
+    box-shadow:
+      inset 1px 0 0 var(--border),
+      inset -1px 0 0 var(--border),
+      inset 0 1px 0 var(--border);
+  }
+
+  tr:last-child td {
+    box-shadow:
+      inset 1px 0 0 var(--border),
+      inset -1px 0 0 var(--border),
+      inset 0 -1px 0 var(--border);
+  }
+
+  tr:not(:first-child):not(:last-child) td {
+    box-shadow:
+      inset 1px 0 0 var(--border),
+      inset -1px 0 0 var(--border);
+  }
+
+  tr:first-child:last-child td {
+    box-shadow:
+      inset 1px 0 0 var(--border),
+      inset -1px 0 0 var(--border),
+      inset 0 1px 0 var(--border),
+      inset 0 -1px 0 var(--border);
+  }
+}
+
+tr.internal-doc-group-label-row {
+  cursor: default;
+
+  td {
+    background: var(--bg-card, var(--bg-surface, #fff));
+  }
+
+  a {
+    pointer-events: auto;
+  }
 }
 
 .internal-doc-group-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.65rem;
   min-width: 0;
 }
 
 .internal-doc-group-kicker {
+  display: block;
   font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 600;
   color: var(--text-muted);
+  margin-bottom: 0.12rem;
+}
+
+.internal-doc-group-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.5rem;
+  min-width: 0;
 }
 
 .internal-doc-group-title {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -1716,24 +1773,6 @@
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
-  padding: 0.12rem 0.45rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
-  background: var(--bg-card, #fff);
-}
-
-tr.internal-doc-group-member td {
-  background-image: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--accent) 22%, var(--border)) 0,
-    color-mix(in srgb, var(--accent) 22%, var(--border)) 3px,
-    transparent 3px
-  );
-}
-
-tr.internal-doc-group-member-last td {
-  border-bottom: 2px solid color-mix(in srgb, var(--accent) 22%, var(--border));
-  box-shadow: 0 3px 0 -1px color-mix(in srgb, var(--bg-card, #fff) 100%, transparent);
 }
 
 .clause-nav {

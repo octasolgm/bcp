@@ -18,6 +18,7 @@ import { formatBytes, formatDate, formatTableDate } from '../../../../lib/nd/uti
 import { catalogPdfPageLabel } from '../../../../lib/nd/doc-page-count';
 import {
   localExtractionHasSectionText,
+  mergeFullLocalExtractionStatus,
   mergeLiteLocalExtractionStatus,
 } from '../../../../lib/nd/local-extraction-cache';
 import {
@@ -33,6 +34,7 @@ import {
 } from '../../../../lib/nd/doc-analysis-ready';
 import {
   groupInternalDocumentsByAnalysisSource,
+  countInternalDocsForAnalysisRun,
   hideInternalDocGeneratedFromSubline,
   showInternalDocCatalogGroupHeader,
   compareInternalDocumentsForCatalog,
@@ -280,11 +282,18 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   /** True once parsed but sections somehow didn't land — local pipeline always does both together. */
   showsParsedPendingExtractChips(doc: InternalDocument): boolean {
     return (
-      !doc.generatedByAnalysis &&
       this.isDocParsed(doc) &&
       !this.hasExtractedSections(doc) &&
       !this.isParsingDoc(doc)
     );
+  }
+
+  analysisGroupDocCount(runId: string | null): number {
+    return countInternalDocsForAnalysisRun(this.visibleDocs, runId);
+  }
+
+  groupTrackKey(group: InternalDocCatalogGroup): string {
+    return `${group.key}-${group.docs[0]?.id ?? ''}`;
   }
 
   usedInAnalysesLabel = usedInAnalysesLabel;
@@ -672,9 +681,12 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     if (cached && cached.lite !== true && localExtractionHasSectionText(cached)) return cached;
     const res = await this.api.localExtractStatusBatch([docId], this.engine);
     const full = res.success ? res.data?.[docId] ?? null : null;
-    if (full) this.localResults.set(docId, full);
-    if (full && localExtractionHasSectionText(full)) return full;
-    return cached && localExtractionHasSectionText(cached) ? cached : full ?? null;
+    if (full) {
+      this.localResults.set(docId, mergeFullLocalExtractionStatus(this.localResults.get(docId), full));
+    }
+    const merged = this.localResults.get(docId);
+    if (merged && localExtractionHasSectionText(merged)) return merged;
+    return cached && localExtractionHasSectionText(cached) ? cached : merged ?? full ?? null;
   }
 
   async openSections(doc: InternalDocument, event?: Event): Promise<void> {

@@ -56,4 +56,21 @@ public class NdActionPlanEmbedNoteTests
         var note = NdActionPlanEmbedNote.Build(Target());
         Assert.StartsWith("COMPLIANCE ACTION — Clause 3.1", note);
     }
+
+    [Fact]
+    public void Generated_body_uses_policy_update_header_not_raw_action_plan()
+    {
+        var t = Target() with
+        {
+            GeneratedEmbedBody =
+                "The Bank defines money laundering as an independent crime from the predicate offence, "
+                + "whether committed inside or outside the UAE, consistent with AML-CFT Law Articles 2.1–3.",
+        };
+        var note = NdActionPlanEmbedNote.Build(t);
+        Assert.StartsWith("POLICY UPDATE — Regulatory Clause 3.1", note);
+        Assert.Contains("independent crime from the predicate offence", note);
+        Assert.DoesNotContain("Gap identified:", note);
+        Assert.DoesNotContain("Action taken:", note);
+        Assert.Contains("This update addresses Regulatory Clause 3.1", note);
+    }
 }

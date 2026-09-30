@@ -22,6 +22,7 @@ namespace Reguliq.Api.Services.NewDashboard;
 public class NdCorrectedDocumentService(
     AppDbContext db,
     NdActionPlanEmbedResolver embedResolver,
+    NdFinalizeEmbedContentService finalizeEmbedContent,
     SupabaseStorageService storage,
     NdStoredDocumentUploadService uploadPrep,
     ILogger<NdCorrectedDocumentService> logger)
@@ -52,7 +53,7 @@ public class NdCorrectedDocumentService(
             .Where(d => docIds.Contains(d.Id))
             .ToListAsync(ct);
 
-        var embedJobs = await embedResolver.ResolveForRunAsync(runId, ct);
+        var embedJobs = await EnrichEmbedJobsAsync(await embedResolver.ResolveForRunAsync(runId, ct), ct);
         var jobsByDocId = embedJobs.ToDictionary(j => j.StoredDocumentId);
 
         // Decide which sources actually need a new version first — cheap DB reads only, done
@@ -145,6 +146,25 @@ public class NdCorrectedDocumentService(
         var ext = Path.GetExtension(originalFileName);
         var stem = Path.GetFileNameWithoutExtension(originalFileName);
         return $"{stem} (v{version}){ext}";
+    }
+
+    private async Task<IReadOnlyList<NdActionPlanEmbedJob>> EnrichEmbedJobsAsync(
+        IReadOnlyList<NdActionPlanEmbedJob> jobs,
+        CancellationToken ct)
+    {
+        if (jobs.Count == 0) return jobs;
+        var enriched = new List<NdActionPlanEmbedJob>(jobs.Count);
+        foreach (var job in jobs)
+        {
+            var targets = new List<NdActionPlanEmbedTarget>(job.Targets.Count);
+            foreach (var target in job.Targets)
+            {
+                var body = await finalizeEmbedContent.GenerateEmbedBodyAsync(target, ct);
+                targets.Add(target with { GeneratedEmbedBody = body });
+            }
+            enriched.Add(new NdActionPlanEmbedJob(job.StoredDocumentId, targets));
+        }
+        return enriched;
     }
 
     private sealed record EmbeddedFile(

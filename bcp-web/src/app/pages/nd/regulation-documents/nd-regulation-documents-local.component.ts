@@ -18,8 +18,10 @@ import { formatDate, formatTableDate } from '../../../../lib/nd/utils';
 import { catalogPdfPageLabel } from '../../../../lib/nd/doc-page-count';
 import {
   localExtractionHasSectionText,
+  mergeFullLocalExtractionStatus,
   mergeLiteLocalExtractionStatus,
 } from '../../../../lib/nd/local-extraction-cache';
+import { splitGovPointDisplayText } from '../../../../lib/nd/clause-section-display';
 import {
   formatStructuralCoveragePct,
   structuralCoverageIsLow,
@@ -712,16 +714,24 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
 
   private mapLocalPoints(result: NdLocalExtractionResult, useSemantic = false): RegulationPoint[] {
     const source = useSemantic ? result.semanticSections : result.sections;
-    return (source ?? []).map((s, i) => {
-      const { title, body } = this.splitClauseHeading(s.clauseText);
-      return {
-        id: `${s.clauseNo}-${i}`,
-        pointNumber: s.clauseNo,
-        pointTitle: title,
-        pointContent: body,
-        pageReference: s.sourcePage ? `p. ${s.sourcePage}` : null,
-        pdfPage: s.sourcePage ?? null,
-      };
+    return (source ?? []).map((s, i) => ({
+      id: `${s.clauseNo}-${i}`,
+      pointNumber: s.clauseNo,
+      pointTitle: null,
+      pointContent: (s.clauseText ?? '').trim(),
+      pageReference: s.sourcePage ? `p. ${s.sourcePage}` : null,
+      pdfPage: s.sourcePage ?? null,
+    }));
+  }
+
+  /** Local section rows can exist with empty clauseText (lite poll shape) — do not treat that as loaded points. */
+  private localMappedPointsNeedDbFallback(points: RegulationPoint[]): boolean {
+    if (points.length === 0) return true;
+    return !points.some((p) => {
+      const raw = (p.pointContent ?? '').trim();
+      if (raw.length < 2) return false;
+      const { body } = splitGovPointDisplayText(p.pointNumber, raw, p.pointTitle);
+      return body.trim().length > 0;
     });
   }
 
@@ -1180,23 +1190,31 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     this.viewMode = 'structural';
     this.highlightPointNumber = highlightPoint?.trim() ?? '';
     this.shellFocus.setRegulationPointsPanelOpen(true);
-    const local = await this.ensureFullLocalResult(doc);
-    if (local) {
-      let mapped = this.mapLocalPoints(local);
-      const expected = local.sectionCount ?? doc.pointCount ?? 0;
-      if (mapped.length === 0 && expected > 0) {
-        await this.loadPointsForDoc(doc.id);
+    this.pointsLoading = true;
+    this.selectedPoints = [];
+    const cached = this.localResults.get(doc.id);
+    if (cached && localExtractionHasSectionText(cached)) {
+      this.selectedPoints = this.mapLocalPoints(cached);
+    }
+    try {
+      const local = await this.ensureFullLocalResult(doc);
+      if (this.selectedDoc?.id !== doc.id) return;
+      if (local) {
+        const mapped = this.mapLocalPoints(local);
+        const expected = local.sectionCount ?? doc.pointCount ?? 0;
+        if (expected > 0 && this.localMappedPointsNeedDbFallback(mapped)) {
+          await this.loadPointsForDoc(doc.id);
+          return;
+        }
+        this.selectedPoints = mapped;
+        this.pointsSource = 'local';
+        this.showParsedText = this.selectedPoints.length === 0 && !!local.markdownText;
         return;
       }
-      this.selectedPoints = mapped;
-      this.pointsSource = 'local';
-      this.pointsLoading = false;
-      // Nothing extracted yet but the doc has been parsed — show the parsed text right away instead
-      // of an empty points list the user has to click past.
-      this.showParsedText = this.selectedPoints.length === 0 && !!local.markdownText;
-      return;
+      await this.loadPointsForDoc(doc.id);
+    } finally {
+      if (this.selectedDoc?.id === doc.id) this.pointsLoading = false;
     }
-    await this.loadPointsForDoc(doc.id);
   }
 
   /** Third view mode — shows the semantic (embedding-based) extraction result instead of structural.
@@ -1211,8 +1229,11 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     const key = doc.storedDocumentId ?? doc.id;
     const res = await this.api.localExtractStatusBatch([key], this.engine);
     const full = res.success ? res.data?.[key] ?? null : null;
-    if (full) this.localResults.set(doc.id, full);
-    if (full && localExtractionHasSectionText(full)) return full;
+    if (full) {
+      this.localResults.set(doc.id, mergeFullLocalExtractionStatus(this.localResults.get(doc.id), full));
+    }
+    const merged = this.localResults.get(doc.id);
+    if (merged && localExtractionHasSectionText(merged)) return merged;
     return cached && localExtractionHasSectionText(cached) ? cached : full ?? null;
   }
 

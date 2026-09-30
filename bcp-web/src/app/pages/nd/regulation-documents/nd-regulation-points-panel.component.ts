@@ -358,7 +358,7 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   }
 
   showDetail(p: GovPoint): boolean {
-    return this.pointDetail(p).length > 0;
+    return this.pointBodyText(p).trim().length > 0;
   }
 
   isDetailLong(p: GovPoint): boolean {

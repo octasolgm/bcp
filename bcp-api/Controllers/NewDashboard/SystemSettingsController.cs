@@ -11,7 +11,8 @@ public class SystemSettingsController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
     DualVerifyLlmSettingsService llmSettings,
-    RegulWorkflowLlmSettingsService regulLlmSettings) : NdControllerBase
+    RegulWorkflowLlmSettingsService regulLlmSettings,
+    FinalizeEmbedLlmSettingsService finalizeEmbedLlmSettings) : NdControllerBase
 {
     public record DualVerifyLlmUpdateRequest(string Provider, string Model);
 
@@ -102,6 +103,42 @@ public class SystemSettingsController(
                 profile.Id,
                 ct);
             return Ok(new { success = true, data = view, message = "Regul workflow LLM settings saved." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return BadRequest(new { success = false, message = "Could not save settings. Please try again." });
+        }
+    }
+
+    [HttpGet("finalize-embed-llm")]
+    public async Task<IActionResult> GetFinalizeEmbedLlm(CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        var view = await finalizeEmbedLlmSettings.GetAdminViewAsync(ct);
+        return Ok(new { success = true, data = view });
+    }
+
+    [HttpPut("finalize-embed-llm")]
+    public async Task<IActionResult> UpdateFinalizeEmbedLlm(
+        [FromBody] DualVerifyLlmUpdateRequest body,
+        CancellationToken ct)
+    {
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        try
+        {
+            var view = await finalizeEmbedLlmSettings.SaveAsync(
+                new DualVerifyLlmConfig(body.Provider, body.Model),
+                profile.Id,
+                ct);
+            return Ok(new { success = true, data = view, message = "Finalize embed LLM settings saved." });
         }
         catch (InvalidOperationException ex)
         {

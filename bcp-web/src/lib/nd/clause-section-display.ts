@@ -43,6 +43,8 @@ export function splitGovPointDisplayText(
     return { header, body: bodyText };
   }
 
+  if (!bodyText) return { header: id, body: '' };
+
   return { header: id, body: bodyText };
 }
 

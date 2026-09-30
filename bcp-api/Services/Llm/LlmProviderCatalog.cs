@@ -4,6 +4,8 @@ public static class LlmProviderCatalog
 {
     public const string DualVerifySettingKey = "dual_verify_llm";
     public const string RegulWorkflowSettingKey = "regul_workflow_llm";
+    /// <summary>LLM used when a reviewer finalizes a run to turn resolved gaps into policy text embedded in corrected internal documents.</summary>
+    public const string FinalizeEmbedSettingKey = "finalize_embed_llm";
 
     public static readonly IReadOnlyDictionary<string, LlmProviderDefinition> Providers =
         new Dictionary<string, LlmProviderDefinition>(StringComparer.OrdinalIgnoreCase)

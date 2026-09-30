@@ -482,107 +482,109 @@
       (mousedown)="startPointsPanelResize($event)"
     ></div>
     <aside class="library-points-panel card-surface">
-      <div class="panel-top">
+      <div class="panel-top panel-top-compact">
         <button type="button" class="btn-close" (click)="closePointsPanel()" aria-label="Close points panel">
           ×
         </button>
         <div class="panel-top-main">
-          <strong>{{ selectedDoc?.name ?? 'Points' }}</strong>
-          @if (selectedDoc) {
-            <span class="muted panel-sub">
-              @if (isManualDoc(selectedDoc)) {
-                Manual entry · {{ docPointMeta(selectedDoc) }}
-              } @else if (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) {
-                {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
-              } @else {
-                {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
+          <div class="panel-top-primary-row">
+            <div class="panel-title-line">
+              <strong class="panel-title-truncate">{{ selectedDoc?.name ?? 'Points' }}</strong>
+              @if (selectedDoc) {
+                <span class="muted panel-sub">
+                  @if (isManualDoc(selectedDoc)) {
+                    Manual entry · {{ docPointMeta(selectedDoc) }}
+                  } @else if (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) {
+                    {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
+                  } @else {
+                    {{ workflowStatusLabel(selectedDoc) }}@if (hasExtractedPoints(selectedDoc)) { · {{ docPointMeta(selectedDoc) }} }
+                  }
+                </span>
               }
-            </span>
-            @if (selectedDoc && (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) && extractionProgressPct(selectedDoc); as pct) {
-              <span
-                class="extract-progress-track panel-progress"
-                role="progressbar"
-                [attr.aria-valuenow]="pct"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                [attr.aria-label]="workflowStatusLabel(selectedDoc)"
-              >
-                <span class="extract-progress-fill" [style.width.%]="pct"></span>
-              </span>
-            }
-          }
-        </div>
-        @if (selectedDoc && !auth.isDemoViewer()) {
-          <div class="panel-export-actions">
-            @if (hasExtractedPoints(selectedDoc) || isManualDoc(selectedDoc)) {
-              <button
-                type="button"
-                class="btn-secondary btn-sm"
-                [disabled]="exportingPointsId === selectedDoc.id"
-                (click)="exportPointsJson(selectedDoc)"
-              >
-                {{ exportingPointsId === selectedDoc.id ? 'Downloading…' : 'Download JSON' }}
-              </button>
-            }
-            @if (!isManualDoc(selectedDoc)) {
-              <button
-                type="button"
-                class="btn-secondary btn-sm"
-                [disabled]="exportingFileId === selectedDoc.id"
-                (click)="downloadRegulationFile(selectedDoc)"
-              >
-                {{ exportingFileId === selectedDoc.id ? 'Downloading…' : 'Download source' }}
-              </button>
-            }
+            </div>
+            <div class="panel-top-toolbar">
+              @if (canExtract && selectedDoc && !isManualDoc(selectedDoc)) {
+                @if (needsParse(selectedDoc)) {
+                  <button
+                    type="button"
+                    class="btn-primary btn-sm"
+                    [disabled]="parsingId === selectedDoc.id || isParsingDoc(selectedDoc)"
+                    (click)="handleParse(selectedDoc)"
+                  >
+                    {{ parsingId === selectedDoc.id || isParsingDoc(selectedDoc) ? 'Parsing…' : 'Parse document' }}
+                  </button>
+                }
+                @if (showRowRepairButton(selectedDoc)) {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [disabled]="repairingPointsId === selectedDoc.id"
+                    (click)="handleRepairPoints(selectedDoc)"
+                    title="Optional cleanup (duplicates/junk). Demo flow is Upload → Parse → Extract — repair is not required."
+                  >
+                    {{ repairingPointsId === selectedDoc.id ? 'Repairing…' : 'Repair points' }}
+                  </button>
+                }
+                @if ((hasExtractedPoints(selectedDoc) || (selectedDoc.pointCount ?? 0) > 0) && !auth.isDemoViewer()) {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [disabled]="refreshingPagesId === selectedDoc.id"
+                    (click)="handleRefreshPageReferences(selectedDoc)"
+                    title="Recompute PDF pages from cached parse — does not call Landing AI"
+                  >
+                    {{ refreshingPagesId === selectedDoc.id ? 'Refreshing…' : 'Refresh PDF pages' }}
+                  </button>
+                }
+                @if (showPanelExtractButton(selectedDoc)) {
+                  <button
+                    type="button"
+                    class="btn-primary btn-sm"
+                    [disabled]="extractingId === selectedDoc.id || isExtractingDoc(selectedDoc)"
+                    (click)="handleExtract(selectedDoc)"
+                  >
+                    {{ extractingId === selectedDoc.id || isExtractingDoc(selectedDoc) ? 'Extracting…' : 'Run extraction' }}
+                  </button>
+                }
+              }
+              @if (selectedDoc && !auth.isDemoViewer()) {
+                @if (hasExtractedPoints(selectedDoc) || isManualDoc(selectedDoc)) {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [disabled]="exportingPointsId === selectedDoc.id"
+                    (click)="exportPointsJson(selectedDoc)"
+                  >
+                    {{ exportingPointsId === selectedDoc.id ? 'Downloading…' : 'Download JSON' }}
+                  </button>
+                }
+                @if (!isManualDoc(selectedDoc)) {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [disabled]="exportingFileId === selectedDoc.id"
+                    (click)="downloadRegulationFile(selectedDoc)"
+                  >
+                    {{ exportingFileId === selectedDoc.id ? 'Downloading…' : 'Source' }}
+                  </button>
+                }
+              }
+            </div>
           </div>
-        }
-      </div>
-      @if (canExtract && selectedDoc && !isManualDoc(selectedDoc)) {
-        <div class="panel-extract">
-          @if (needsParse(selectedDoc)) {
-            <button
-              type="button"
-              class="btn-primary btn-sm"
-              [disabled]="parsingId === selectedDoc.id || isParsingDoc(selectedDoc)"
-              (click)="handleParse(selectedDoc)"
+          @if (selectedDoc && (isParsingDoc(selectedDoc) || isExtractingDoc(selectedDoc)) && extractionProgressPct(selectedDoc); as pct) {
+            <span
+              class="extract-progress-track panel-progress"
+              role="progressbar"
+              [attr.aria-valuenow]="pct"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-label]="workflowStatusLabel(selectedDoc)"
             >
-              {{ parsingId === selectedDoc.id || isParsingDoc(selectedDoc) ? 'Parsing…' : 'Parse document' }}
-            </button>
-          }
-          @if (showRowRepairButton(selectedDoc)) {
-            <button
-              type="button"
-              class="btn-secondary btn-sm"
-              [disabled]="repairingPointsId === selectedDoc.id"
-              (click)="handleRepairPoints(selectedDoc)"
-              title="Optional cleanup (duplicates/junk). Demo flow is Upload → Parse → Extract — repair is not required."
-            >
-              {{ repairingPointsId === selectedDoc.id ? 'Repairing…' : 'Repair points' }}
-            </button>
-          }
-          @if ((hasExtractedPoints(selectedDoc) || (selectedDoc.pointCount ?? 0) > 0) && !auth.isDemoViewer()) {
-            <button
-              type="button"
-              class="btn-secondary btn-sm"
-              [disabled]="refreshingPagesId === selectedDoc.id"
-              (click)="handleRefreshPageReferences(selectedDoc)"
-              title="Recompute PDF pages from cached parse — does not call Landing AI"
-            >
-              {{ refreshingPagesId === selectedDoc.id ? 'Refreshing…' : 'Refresh PDF pages' }}
-            </button>
-          }
-          @if (showPanelExtractButton(selectedDoc)) {
-            <button
-              type="button"
-              class="btn-primary btn-sm"
-              [disabled]="extractingId === selectedDoc.id || isExtractingDoc(selectedDoc)"
-              (click)="handleExtract(selectedDoc)"
-            >
-              {{ extractingId === selectedDoc.id || isExtractingDoc(selectedDoc) ? 'Extracting…' : 'Run extraction' }}
-            </button>
+              <span class="extract-progress-fill" [style.width.%]="pct"></span>
+            </span>
           }
         </div>
-      }
+      </div>
       @if (selectedDoc && isManualDoc(selectedDoc)) {
         <app-nd-manual-regulation-points-panel
           [docId]="selectedDoc.id"

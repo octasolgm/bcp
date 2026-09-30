@@ -65,6 +65,11 @@ Bug fixes
 - Internal documents (local/Azure): opening an extracted document no longer flashes "No sections extracted yet" while section text loads from the API
 
 Tasks
+- Platform settings: separate "Finalize embed model" for reviewer finalize; LLM drafts policy definitions/requirements for corrected internal docs instead of embedding raw action-plan checklists
+
+Bug fixes
+- Regulation documents (local/Azure): points panel loads full clause text again (no empty rows); shows loading while fetching; clause titles use same header/sticky pattern as internal sections
+- Internal documents: analysis groups keyed by run id with date sort preserved; analysis-generated copies can use Parse and Extract like uploads
 - Structural extract coverage audit (Phase 1): after local/Azure extract, API stores parsed-vs-sections coverage ratio; internal and regulation side panels show percentage and warn below 98% with a missing-text sample
 - Structural extract Phase 2/3: HTML tables flattened into text; TOC pages drop pointer pairs only (not whole pages); nested "1. Sub-rule" lines stay inside parent clauses (e.g. 3.4 Name Screening)
 - New Analysis (V2) layout: larger section headings and much more vertical space between Step 1, Step 2, summary/run strip, three-column workspace, and analysis report
@@ -77,3 +82,14 @@ Tasks
 - Internal and regulation section/point cards: clause title (e.g. "1. Introduction") moved into the card header; body no longer repeats the heading; headers stick while scrolling the side panel list
 - Section and regulation point headers: previous/next controls scroll to the adjacent clause and expand collapsed chapters/sections when needed
 - Internal documents catalog: rows grouped by originating analysis run with a header showing run name and document count; direct uploads in a separate block; borders separate each group
+
+30 Sep 2026
+
+Tasks
+- Internal and regulation side panels: Re-parse, Re-extract, Parsed text, Source, and related actions sit on the same row as the document name, right-aligned (local and Azure document pages)
+
+Bug fixes
+- Regulation documents (Azure DI): opening a document no longer shows empty clause rows when local status cache had section counts but no clause text — panel loads stored points from the library API instead
+
+Tasks
+- Internal documents catalog: analysis group labels use the same column layout as data rows; groups separated by a light box instead of a full-width banner and accent bars

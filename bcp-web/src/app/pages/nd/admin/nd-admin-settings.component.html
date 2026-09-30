@@ -2,8 +2,9 @@
   <div>
     <h1>Platform settings</h1>
     <p class="subtitle">
-      Choose the AI models used for analysis. The main model runs all analysis pages; the dual verify model is a
-      separate second pass used only where dual verification is supported.
+      Choose the AI models used for analysis and for finalize-time policy embeds. The main model runs all analysis
+      pages; the dual verify model is a separate second pass; the finalize embed model drafts policy language when a
+      reviewer finalizes resolved gaps into corrected internal documents.
     </p>
   </div>
 </div>
@@ -165,6 +166,80 @@
           @if (!selectedProviderConfigured) {
             <span class="nd-muted">Select a provider that is ready, or ask your administrator to enable this one.</span>
           }
+        </div>
+      </section>
+
+      <section class="nd-card settings-card">
+        <header class="settings-card-header">
+          <div>
+            <h2>Finalize embed model</h2>
+            <p class="nd-muted">
+              When a reviewer finalizes an analysis, resolved gaps are written into corrected internal documents.
+              This model turns each gap and action into professional policy text (definitions and requirements), not
+              the raw action-plan checklist. Until you save a choice here, the main analysis model is used.
+            </p>
+          </div>
+          @if (finalizeEmbedSettings?.updatedAt) {
+            <span class="settings-updated nd-muted">Updated {{ finalizeEmbedSettings!.updatedAt | date: 'medium' }}</span>
+          }
+        </header>
+
+        <div class="settings-grid">
+          <label class="nd-label">
+            Provider
+            <select
+              class="nd-input"
+              [(ngModel)]="finalizeEmbedProvider"
+              (ngModelChange)="onFinalizeEmbedProviderChange()"
+              aria-label="Finalize embed LLM provider"
+            >
+              @for (p of finalizeEmbedProviderOptions; track p.id) {
+                <option [value]="p.id">{{ p.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="nd-label">
+            Model
+            <select class="nd-input" [(ngModel)]="finalizeEmbedModel" aria-label="Finalize embed LLM model">
+              @for (m of finalizeEmbedModelOptions; track m) {
+                <option [value]="m">{{ m }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        @if (finalizeEmbedProviderMeta; as provider) {
+          <div
+            class="provider-status"
+            [class.provider-status-ready]="provider.apiKeyConfigured"
+            [class.provider-status-missing]="!provider.apiKeyConfigured"
+          >
+            <strong>{{ provider.label }}</strong>
+            @if (provider.apiKeyConfigured) {
+              <span class="provider-status-label">Ready for finalize embed generation.</span>
+            } @else {
+              <span class="provider-status-label">Not available yet for this environment.</span>
+            }
+          </div>
+        }
+
+        @if (finalizeEmbedError) {
+          <p class="nd-error">{{ finalizeEmbedError }}</p>
+        }
+        @if (finalizeEmbedMessage) {
+          <p class="nd-success">{{ finalizeEmbedMessage }}</p>
+        }
+
+        <div class="settings-actions">
+          <button
+            type="button"
+            class="nd-btn-primary"
+            [disabled]="finalizeEmbedSaving || !finalizeEmbedProviderConfigured || !finalizeEmbedModel"
+            (click)="saveFinalizeEmbed()"
+          >
+            {{ finalizeEmbedSaving ? 'Saving…' : 'Save finalize embed model' }}
+          </button>
         </div>
       </section>
     }

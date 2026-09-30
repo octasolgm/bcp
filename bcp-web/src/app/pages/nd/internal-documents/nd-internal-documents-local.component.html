@@ -115,38 +115,52 @@
           <th class="col-actions internal-doc-actions-cell">Actions</th>
         </tr>
       </thead>
-      <tbody>
-        @for (group of visibleDocGroups; track group.key) {
+      @for (group of visibleDocGroups; track groupTrackKey(group); let lastGroup = $last) {
+        <tbody
+          class="internal-doc-catalog-group"
+          [class.internal-doc-catalog-group-boxed]="showDocGroupMemberChrome(group)"
+        >
           @if (showDocGroupHeader(group)) {
-            <tr class="internal-doc-group-header-row">
-              <td [attr.colspan]="internalDocsTableColSpan">
+            <tr class="internal-doc-group-label-row">
+              <td class="doc-cell col-doc">
                 <div class="internal-doc-group-heading">
                   @if (group.kind === 'analysis') {
                     <span class="internal-doc-group-kicker">Generated from analysis</span>
-                    @if (group.runId) {
-                      <a
-                        class="internal-doc-group-title internal-doc-group-title-link"
-                        [routerLink]="['/nd/gap-analysis']"
-                        [queryParams]="{ run: group.runId }"
-                        (click)="$event.stopPropagation()"
-                      >{{ group.runName }}</a>
-                    } @else {
-                      <span class="internal-doc-group-title">{{ group.runName }}</span>
-                    }
-                    <span class="internal-doc-group-count">{{ group.docs.length }} document{{ group.docs.length === 1 ? '' : 's' }}</span>
+                    <div class="internal-doc-group-title-line">
+                      @if (group.runId) {
+                        <a
+                          class="internal-doc-group-title internal-doc-group-title-link"
+                          [routerLink]="['/nd/gap-analysis']"
+                          [queryParams]="{ run: group.runId }"
+                          (click)="$event.stopPropagation()"
+                        >{{ group.runName }}</a>
+                      } @else {
+                        <span class="internal-doc-group-title">{{ group.runName }}</span>
+                      }
+                      <span class="internal-doc-group-count">{{ analysisGroupDocCount(group.runId) }} document{{ analysisGroupDocCount(group.runId) === 1 ? '' : 's' }}</span>
+                    </div>
                   } @else {
                     <span class="internal-doc-group-kicker">Direct uploads</span>
-                    <span class="internal-doc-group-count">{{ group.docs.length }} document{{ group.docs.length === 1 ? '' : 's' }}</span>
+                    <div class="internal-doc-group-title-line">
+                      <span class="internal-doc-group-count">{{ group.docs.length }} document{{ group.docs.length === 1 ? '' : 's' }}</span>
+                    </div>
                   }
                 </div>
               </td>
+              <td class="col-date"></td>
+              <td class="col-actor"></td>
+              <td class="col-actor"></td>
+              <td class="col-size"></td>
+              <td class="col-pts"></td>
+              <td class="col-pts"></td>
+              <td class="col-status"></td>
+              <td class="col-status"></td>
+              <td class="col-actions internal-doc-actions-cell"></td>
             </tr>
           }
-          @for (d of group.docs; track d.id; let lastInGroup = $last) {
+          @for (d of group.docs; track d.id) {
           <tr
             class="clickable-row"
-            [class.internal-doc-group-member]="showDocGroupMemberChrome(group)"
-            [class.internal-doc-group-member-last]="showDocGroupMemberChrome(group) && lastInGroup"
             [class.selected-row]="isSelected(d)"
             [class.doc-ready-red]="analysisReadyState(d) === 'not_ready'"
             [class.doc-ready-green]="analysisReadyState(d) === 'analysed'"
@@ -197,16 +211,12 @@
               }
             </td>
             <td class="col-status">
-              @if (d.generatedByAnalysis) {
-                <span class="severity-badge completed">Not applicable</span>
-              } @else {
                 <span class="severity-badge extract-status-cell" [ngClass]="sectionExtractClass(d.sectionExtractStatus)">
                   {{ sectionExtractLabel(d.sectionExtractStatus) }}
                   @if (d.sectionCount) {
                     <span class="section-count-meta">({{ d.sectionCount }})</span>
                   }
                 </span>
-              }
             </td>
             <td class="col-actions nd-catalog-actions-cell" (click)="$event.stopPropagation()">
               <div class="nd-catalog-row-actions">
@@ -238,7 +248,7 @@
                     View semantic
                   </button>
                 }
-                @if (canParse && !d.generatedByAnalysis) {
+                @if (canParse) {
                   <button
                     type="button"
                     class="row-action-btn compact"
@@ -354,8 +364,15 @@
             </td>
           </tr>
           }
+        </tbody>
+        @if (!lastGroup) {
+          <tbody class="internal-doc-catalog-group-gap" aria-hidden="true">
+            <tr>
+              <td [attr.colspan]="internalDocsTableColSpan"></td>
+            </tr>
+          </tbody>
         }
-      </tbody>
+      }
     </table>
   </div>
     </div>
@@ -374,17 +391,17 @@
             ×
           </button>
           <div class="panel-top-main">
-            <div class="panel-title-line">
-              <strong class="panel-title-truncate">{{ sectionsFor.title }}</strong>
-              <span class="muted panel-sub">
-                {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
-                @if (sectionsFor.sectionCount) {
-                  · {{ sectionsFor.sectionCount }} sections
-                }
-              </span>
-            </div>
-          </div>
-          <div class="panel-top-toolbar">
+            <div class="panel-top-primary-row">
+              <div class="panel-title-line">
+                <strong class="panel-title-truncate">{{ sectionsFor.title }}</strong>
+                <span class="muted panel-sub">
+                  {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
+                  @if (sectionsFor.sectionCount) {
+                    · {{ sectionsFor.sectionCount }} sections
+                  }
+                </span>
+              </div>
+              <div class="panel-top-toolbar">
             @if (canParse) {
               <button
                 type="button"
@@ -430,6 +447,8 @@
             >
               {{ exportingFileId === sectionsFor.id ? '…' : 'Source' }}
             </button>
+              </div>
+            </div>
           </div>
         </div>
         @if (sectionsFor && structuralCoveragePct(sectionsFor); as covPct) {

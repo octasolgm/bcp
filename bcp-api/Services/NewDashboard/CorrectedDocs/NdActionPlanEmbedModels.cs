@@ -20,7 +20,12 @@ public sealed record NdActionPlanEmbedTarget(
     string ActionText,
     string? ResponsibilityLabel,
     DateTimeOffset ResolvedAt,
-    string? ResolvedByName);
+    string? ResolvedByName,
+    /// <summary>Forward-judgment gap description when available — often clearer than the CAP slice.</summary>
+    string? JudgmentGapDescription = null,
+    IReadOnlyList<string>? PolicyExtracts = null,
+    /// <summary>LLM-generated policy prose; when set, <see cref="NdActionPlanEmbedNote.Build"/> embeds this instead of the raw action plan.</summary>
+    string? GeneratedEmbedBody = null);
 
 /// <summary>One target document's embed job: every resolved action that traced back to it, grouped so
 /// the embedders can batch everything landing on the same page/anchor into one inserted block.</summary>
@@ -35,14 +40,44 @@ public static class NdActionPlanEmbedNote
     /// </summary>
     public static string Build(NdActionPlanEmbedTarget t)
     {
-        var clauseLabel = string.IsNullOrWhiteSpace(t.ClauseTitle) ? t.ClauseNo : $"{t.ClauseNo} — {t.ClauseTitle}";
+        if (!string.IsNullOrWhiteSpace(t.GeneratedEmbedBody))
+            return BuildFromGeneratedPolicy(t, t.GeneratedEmbedBody.Trim());
+
+        return BuildLegacyActionPlanNote(t);
+    }
+
+    /// <summary>Short policy fallback when the finalize LLM is unavailable.</summary>
+    public static string BuildLegacyPolicyFallback(NdActionPlanEmbedTarget t)
+    {
+        var action = CleanOneLine(t.ActionText);
+        if (action.Length > 480) action = action[..477] + "…";
+        return action;
+    }
+
+    private static string BuildFromGeneratedPolicy(NdActionPlanEmbedTarget t, string body)
+    {
+        var clauseLabel = ClauseLabel(t);
+        var lines = new List<string>
+        {
+            $"POLICY UPDATE — Regulatory Clause {clauseLabel}",
+            "",
+            body,
+            "",
+            FulfillmentFooter(t),
+        };
+        return string.Join('\n', lines);
+    }
+
+    private static string BuildLegacyActionPlanNote(NdActionPlanEmbedTarget t)
+    {
+        var clauseLabel = ClauseLabel(t);
         var lines = new List<string>
         {
             $"COMPLIANCE ACTION — Clause {clauseLabel}",
             "",
-            $"Gap identified: {Clean(t.GapText)}",
+            $"Gap identified: {CleanOneLine(t.GapText)}",
             "",
-            $"Action taken: {Clean(t.ActionText)}",
+            $"Action taken: {CleanOneLine(t.ActionText)}",
         };
         var meta = new List<string>();
         if (!string.IsNullOrWhiteSpace(t.ResponsibilityLabel)) meta.Add($"Responsible: {t.ResponsibilityLabel}");
@@ -50,13 +85,18 @@ public static class NdActionPlanEmbedNote
         lines.Add("");
         lines.Add(string.Join("   ", meta));
         lines.Add("");
-        lines.Add(
-            t.Page is > 0
-                ? $"Note: This action plan fulfills Regulatory Clause {t.ClauseNo}, referenced at p.{t.Page} of this document."
-                : $"Note: This action plan fulfills Regulatory Clause {t.ClauseNo}.");
+        lines.Add(FulfillmentFooter(t));
         return string.Join('\n', lines);
     }
 
-    private static string Clean(string? s) =>
+    private static string ClauseLabel(NdActionPlanEmbedTarget t) =>
+        string.IsNullOrWhiteSpace(t.ClauseTitle) ? t.ClauseNo : $"{t.ClauseNo} — {t.ClauseTitle}";
+
+    private static string FulfillmentFooter(NdActionPlanEmbedTarget t) =>
+        t.Page is > 0
+            ? $"Note: This update addresses Regulatory Clause {t.ClauseNo}, referenced at p.{t.Page} of this document."
+            : $"Note: This update addresses Regulatory Clause {t.ClauseNo}.";
+
+    private static string CleanOneLine(string? s) =>
         string.IsNullOrWhiteSpace(s) ? "—" : s.Trim().Replace('\r', ' ').Replace('\n', ' ');
 }

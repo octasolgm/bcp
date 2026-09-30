@@ -119,10 +119,20 @@ Regulation points list
 
 Section and point cards
 
+Finalize embed into corrected documents
+
+When a reviewer finalizes an analysis, resolved gaps still produce new versions of your internal documents with the fixes written in. Instead of pasting the full action-plan text (including project steps like re-run the assessment or present ratings for approval), the platform now uses a dedicated AI model you choose under Platform settings as Finalize embed model. That model receives the regulatory clause, what was missing, what the bank decided to do, and relevant policy excerpts, and returns polished policy language (definitions and requirements) suitable for the next compliance review. If the model call fails, a short fallback is used so finalize never blocks.
+
 Internal documents list
 
 When several internal documents were produced from the same finalized analysis, the catalog now groups them under one heading: the analysis name (linked to open that run), plus how many documents came from it. Documents you uploaded directly appear under a separate "Direct uploads" block at the top. A colored top border and left accent on each group make the batches easy to scan.
 
 On internal and regulation document side panels, each extracted section or point now shows its full heading in the card header row (for example "1. Introduction" or "2. Purpose") instead of only a bare number with the title repeated below. The body starts with the prose only. While you scroll the panel, the header for the section you are reading stays pinned at the top until the next section pushes it away. Each header also has previous and next controls to jump to the neighboring clause in document order; on regulations, collapsed chapters and section groups open automatically when you land on a point inside them.
+
+Document side panel headers
+
+On internal and regulation document pages (local pipeline and Azure), the action buttons for parse, extract, parsed text, downloads, and similar tools now share one row with the document title. The name and status stay on the left; controls align to the right so the panel uses less vertical space before the section or point list.
+
+On Azure regulation document pages, the side panel could show the correct point count (for example 94 stored) but only empty gray clause rows with no readable text. The page was reusing lightweight local pipeline status data that listed how many sections existed without loading the actual clause bodies. Opening a document now loads full text from the saved regulation points when local cache rows are empty, so clause content appears as expected.
 
 On local and Azure regulation document pages, the side panel could show the correct point count in the summary line but only thin empty rows in the list. That happened when a lightweight background status refresh replaced the full extraction payload in memory (counts stayed, clause text did not). Status updates now merge into the cache without dropping section text, and opening a document reloads full clause bodies or loads the saved points from the database when needed. Single-line clauses also show their text reliably when title and body are the same.

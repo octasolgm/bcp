@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Services.LandingAi;
+using Reguliq.Api.Services.NewDashboard;
 
 namespace Reguliq.Api.Services.NewDashboard.CorrectedDocs;
 
@@ -105,6 +106,8 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
             if (pointDocs.Count == 0) continue;
 
             var gapText = ExtractGapText(point, gap.GapIndex);
+            findingByPointId.TryGetValue(point.Id, out var finding);
+            var judgmentContext = ParseJudgmentContext(finding);
             var resolvedByName = plan.ResolvedBy.HasValue && namesById.TryGetValue(plan.ResolvedBy.Value, out var n)
                 ? n
                 : gap.ResolvedBy.HasValue && namesById.TryGetValue(gap.ResolvedBy.Value, out var gn) ? gn : null;
@@ -122,7 +125,9 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
                     plan.ActionPlan,
                     plan.ResponsibilityLabel,
                     resolvedAt,
-                    resolvedByName));
+                    resolvedByName,
+                    judgmentContext.GapDescription,
+                    judgmentContext.PolicyExtracts));
             }
         }
 
@@ -231,6 +236,32 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
 
     private static string Normalize(string s) =>
         new string(s.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+
+    private static (string? GapDescription, IReadOnlyList<string> PolicyExtracts) ParseJudgmentContext(
+        NdRegulForwardFinding? finding)
+    {
+        if (finding?.ResultJson is not { Length: > 0 } json)
+            return (null, []);
+
+        try
+        {
+            var judgment = NdRegulLlmJsonHelper.ParseJsonObject<RegulJudgmentResult>(json);
+            var extracts = judgment.PolicyExtract
+                .Where(q => !string.IsNullOrWhiteSpace(q))
+                .Select(q => q.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .Take(8)
+                .ToList();
+            var gap = string.IsNullOrWhiteSpace(judgment.GapDescription) || judgment.GapDescription.Trim() == "N/A"
+                ? null
+                : judgment.GapDescription.Trim();
+            return (gap, extracts);
+        }
+        catch
+        {
+            return (null, []);
+        }
+    }
 
     private static string? TrimForAnchor(string? gapText)
     {
