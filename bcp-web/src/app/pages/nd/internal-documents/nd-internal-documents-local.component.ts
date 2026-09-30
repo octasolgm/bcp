@@ -32,9 +32,13 @@ import {
   type DocAnalysisReadyState,
 } from '../../../../lib/nd/doc-analysis-ready';
 import {
-  compareDateIso,
-  compareNumber,
-  compareText,
+  groupInternalDocumentsByAnalysisSource,
+  hideInternalDocGeneratedFromSubline,
+  showInternalDocCatalogGroupHeader,
+  compareInternalDocumentsForCatalog,
+  type InternalDocCatalogGroup,
+} from '../../../../lib/nd/internal-doc-catalog-groups';
+import {
   hasListFilters,
   isDistinctOriginalFileName,
   matchesSearch,
@@ -141,6 +145,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   sectionsFor: InternalDocument | null = null;
   showParsedText = false;
   sectionRows: InternalDocumentSection[] = [];
+  loadingSections = false;
   /** Which extraction result sectionRows currently reflects — for the two View buttons. */
   viewMode: 'structural' | 'semantic' = 'structural';
   extractingSemanticId: string | null = null;
@@ -537,23 +542,25 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
       return true;
     });
 
-    return [...list].sort((a, b) => {
-      switch (this.sortColumn) {
-        case 'title':
-          return compareText(a.title, b.title, this.sortDir);
-        case 'size':
-          return compareNumber(a.sizeBytes ?? 0, b.sizeBytes ?? 0, this.sortDir);
-        case 'pages':
-          return compareNumber(a.pageCount ?? 0, b.pageCount ?? 0, this.sortDir);
-        case 'analyses':
-          return compareNumber(a.analysisRunCount ?? 0, b.analysisRunCount ?? 0, this.sortDir);
-        case 'source':
-          return compareText(a.source ?? 'nd', b.source ?? 'nd', this.sortDir);
-        case 'uploaded':
-        default:
-          return compareDateIso(a.uploaded, b.uploaded, this.sortDir);
-      }
-    });
+    return [...list].sort((a, b) => compareInternalDocumentsForCatalog(a, b, this.sortColumn, this.sortDir));
+  }
+
+  get visibleDocGroups(): InternalDocCatalogGroup[] {
+    return groupInternalDocumentsByAnalysisSource(this.visibleDocs, this.sortColumn, this.sortDir);
+  }
+
+  readonly internalDocsTableColSpan = 10;
+
+  showDocGroupHeader(group: InternalDocCatalogGroup): boolean {
+    return showInternalDocCatalogGroupHeader(group, this.visibleDocGroups);
+  }
+
+  showDocGroupMemberChrome(group: InternalDocCatalogGroup): boolean {
+    return showInternalDocCatalogGroupHeader(group, this.visibleDocGroups);
+  }
+
+  hideGeneratedFromSubline(doc: InternalDocument): boolean {
+    return hideInternalDocGeneratedFromSubline(doc, this.visibleDocGroups);
   }
 
   get hasActiveFilters(): boolean {
@@ -675,12 +682,24 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     this.selectedDocId = doc.id;
     this.sectionsFor = doc;
     this.viewMode = 'structural';
-    const local = await this.ensureFullLocalResult(doc.id);
-    this.sectionRows = local ? this.mapLocalSections(local) : [];
-    // Nothing extracted yet but the doc has been parsed — show the parsed text right away instead
-    // of an empty sections list the user has to click past.
-    this.showParsedText = this.sectionRows.length === 0 && !!local?.markdownText;
+    this.showParsedText = false;
     this.shellFocus.setRegulationPointsPanelOpen(true);
+    const cached = this.localResults.get(doc.id);
+    const hasCachedSections = !!(cached && localExtractionHasSectionText(cached));
+    if (hasCachedSections) {
+      this.sectionRows = this.mapLocalSections(cached!);
+    } else {
+      this.sectionRows = [];
+    }
+    this.loadingSections = !hasCachedSections;
+    try {
+      const local = await this.ensureFullLocalResult(doc.id);
+      if (this.sectionsFor?.id !== doc.id) return;
+      this.sectionRows = local ? this.mapLocalSections(local) : [];
+      this.showParsedText = this.sectionRows.length === 0 && !!local?.markdownText;
+    } finally {
+      if (this.sectionsFor?.id === doc.id) this.loadingSections = false;
+    }
   }
 
   /** Third view mode — semantic (embedding-based) extraction result. Independent of openSections. */
@@ -690,18 +709,31 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     this.sectionsFor = doc;
     this.viewMode = 'semantic';
     this.showParsedText = false;
-    const local = await this.ensureFullLocalResult(doc.id);
-    this.sectionRows = local ? this.mapLocalSections(local, true) : [];
-    if (!local || (local.semanticSectionCount ?? 0) === 0) {
-      const status = (local?.semanticExtractStatus ?? '').toLowerCase();
-      this.message =
-        status === 'processing'
-          ? 'Semantic extraction is still running (one embedding call per sentence — can take a while on a long document). Wait, then reopen this view.'
-          : local?.semanticExtractError
-            ? `Semantic extraction failed: ${local.semanticExtractError}`
-            : 'No semantic extraction result yet — click "Extract (semantic)" first.';
-    }
     this.shellFocus.setRegulationPointsPanelOpen(true);
+    const cached = this.localResults.get(doc.id);
+    const hasCachedSemantic = (cached?.semanticSections?.length ?? 0) > 0;
+    if (hasCachedSemantic) {
+      this.sectionRows = this.mapLocalSections(cached!, true);
+    } else {
+      this.sectionRows = [];
+    }
+    this.loadingSections = !hasCachedSemantic;
+    try {
+      const local = await this.ensureFullLocalResult(doc.id);
+      if (this.sectionsFor?.id !== doc.id) return;
+      this.sectionRows = local ? this.mapLocalSections(local, true) : [];
+      if (!local || (local.semanticSectionCount ?? 0) === 0) {
+        const status = (local?.semanticExtractStatus ?? '').toLowerCase();
+        this.message =
+          status === 'processing'
+            ? 'Semantic extraction is still running (one embedding call per sentence — can take a while on a long document). Wait, then reopen this view.'
+            : local?.semanticExtractError
+              ? `Semantic extraction failed: ${local.semanticExtractError}`
+              : 'No semantic extraction result yet — click "Extract (semantic)" first.';
+      }
+    } finally {
+      if (this.sectionsFor?.id === doc.id) this.loadingSections = false;
+    }
   }
 
   /** First view mode — the raw parsed markdown, independent of either extraction method. */
@@ -757,6 +789,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     this.sectionsFor = null;
     this.showParsedText = false;
     this.sectionRows = [];
+    this.loadingSections = false;
     this.shellFocus.setRegulationPointsPanelOpen(false);
   }
 

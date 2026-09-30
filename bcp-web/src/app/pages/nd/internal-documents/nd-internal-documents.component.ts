@@ -24,9 +24,13 @@ import {
   type DocAnalysisReadyState,
 } from '../../../../lib/nd/doc-analysis-ready';
 import {
-  compareDateIso,
-  compareNumber,
-  compareText,
+  groupInternalDocumentsByAnalysisSource,
+  hideInternalDocGeneratedFromSubline,
+  showInternalDocCatalogGroupHeader,
+  compareInternalDocumentsForCatalog,
+  type InternalDocCatalogGroup,
+} from '../../../../lib/nd/internal-doc-catalog-groups';
+import {
   hasListFilters,
   isDistinctOriginalFileName,
   matchesSearch,
@@ -797,23 +801,27 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       return true;
     });
 
-    return [...list].sort((a, b) => {
-      switch (this.sortColumn) {
-        case 'title':
-          return compareText(a.title, b.title, this.sortDir);
-        case 'size':
-          return compareNumber(a.sizeBytes ?? 0, b.sizeBytes ?? 0, this.sortDir);
-        case 'pages':
-          return compareNumber(a.pageCount ?? 0, b.pageCount ?? 0, this.sortDir);
-        case 'analyses':
-          return compareNumber(a.analysisRunCount ?? 0, b.analysisRunCount ?? 0, this.sortDir);
-        case 'source':
-          return compareText(a.source ?? 'nd', b.source ?? 'nd', this.sortDir);
-        case 'uploaded':
-        default:
-          return compareDateIso(a.uploaded, b.uploaded, this.sortDir);
-      }
-    });
+    return [...list].sort((a, b) => compareInternalDocumentsForCatalog(a, b, this.sortColumn, this.sortDir));
+  }
+
+  get visibleDocGroups(): InternalDocCatalogGroup[] {
+    return groupInternalDocumentsByAnalysisSource(this.visibleDocs, this.sortColumn, this.sortDir);
+  }
+
+  get internalDocsTableColSpan(): number {
+    return this.showDeleted ? 11 : 10;
+  }
+
+  showDocGroupHeader(group: InternalDocCatalogGroup): boolean {
+    return showInternalDocCatalogGroupHeader(group, this.visibleDocGroups);
+  }
+
+  showDocGroupMemberChrome(group: InternalDocCatalogGroup): boolean {
+    return showInternalDocCatalogGroupHeader(group, this.visibleDocGroups);
+  }
+
+  hideGeneratedFromSubline(doc: InternalDocument): boolean {
+    return hideInternalDocGeneratedFromSubline(doc, this.visibleDocGroups);
   }
 
   get hasActiveFilters(): boolean {
@@ -960,6 +968,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.selectedDocId = doc.id;
     this.sectionsFor = doc;
     this.sectionRows = [];
+    this.loadingSections = true;
     this.shellFocus.setRegulationPointsPanelOpen(true);
     await this.loadSections(doc.id);
   }
@@ -979,8 +988,8 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   }
 
   private async loadSections(docId: string): Promise<void> {
-    this.loadingSections = true;
     const res = await this.api.getInternalDocumentSections(docId);
+    if (this.sectionsFor?.id !== docId) return;
     this.loadingSections = false;
     if (!res.success || !res.data) {
       this.toast.show(res.message ?? 'Could not load sections', 'error');

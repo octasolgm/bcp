@@ -1669,6 +1669,109 @@
   }
 }
 
+.internal-doc-group-header-row td {
+  padding: 0.55rem 0.75rem 0.45rem;
+  background-color: var(--bg-card, var(--bg-surface, #fff));
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--accent) 7%, var(--bg-card, #fff)),
+    color-mix(in srgb, var(--accent) 7%, var(--bg-card, #fff))
+  );
+  border-top: 2px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.internal-doc-group-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.65rem;
+  min-width: 0;
+}
+
+.internal-doc-group-kicker {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.internal-doc-group-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.internal-doc-group-title-link {
+  color: var(--accent);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.internal-doc-group-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  background: var(--bg-card, #fff);
+}
+
+tr.internal-doc-group-member td {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent) 22%, var(--border)) 0,
+    color-mix(in srgb, var(--accent) 22%, var(--border)) 3px,
+    transparent 3px
+  );
+}
+
+tr.internal-doc-group-member-last td {
+  border-bottom: 2px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  box-shadow: 0 3px 0 -1px color-mix(in srgb, var(--bg-card, #fff) 100%, transparent);
+}
+
+.clause-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.clause-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: var(--radius-sm, 4px);
+  background-color: var(--bg-card, var(--bg-surface, #fff));
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    background-color: color-mix(in srgb, var(--accent) 8%, var(--bg-card, #fff));
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
 .panel-busy-wrap {
   position: relative;
   flex: 1;

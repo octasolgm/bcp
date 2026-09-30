@@ -25,7 +25,7 @@
     }
   </div>
 
-  <div class="panel-body panel-busy-wrap">
+  <div class="panel-body panel-busy-wrap" #panelScroll>
     @if (isBusy) {
       <div class="panel-busy-overlay" role="status" aria-live="polite">
         <div class="panel-busy-spinner" aria-hidden="true"></div>
@@ -74,7 +74,11 @@
       <ul class="section-list">
         @for (section of visibleSections; track rowKey(section, $index); let i = $index) {
           <li>
-            <article class="section-card" [class.section-card-expanded]="isRowExpanded(rowKey(section, i))">
+            <article
+              #sectionCard
+              class="section-card"
+              [class.section-card-expanded]="isRowExpanded(rowKey(section, i))"
+            >
               <header class="section-meta">
                 <button
                   type="button"
@@ -98,6 +102,30 @@
                   } @else {
                     <span class="section-page">p. {{ page }}</span>
                   }
+                }
+                @if (showSectionNav()) {
+                  <div class="clause-nav" role="group" aria-label="Section navigation">
+                    <button
+                      type="button"
+                      class="clause-nav-btn"
+                      [disabled]="i === 0"
+                      (click)="goToSectionNav(i - 1, $event)"
+                      aria-label="Previous section"
+                      title="Previous section"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      class="clause-nav-btn"
+                      [disabled]="i === visibleSections.length - 1"
+                      (click)="goToSectionNav(i + 1, $event)"
+                      aria-label="Next section"
+                      title="Next section"
+                    >
+                      ›
+                    </button>
+                  </div>
                 }
               </header>
               @if (isRowExpanded(rowKey(section, i))) {

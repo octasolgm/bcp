@@ -1,4 +1,15 @@
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  OnChanges,
+  Output,
+  QueryList,
+  SimpleChanges,
+  ViewChild,
+  ViewChildren,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { InternalDocumentSection } from '../../../../lib/nd/types';
@@ -14,6 +25,9 @@ import { sanitizePolicySectionText } from '../../../../lib/nd/policy-section-tex
   styleUrl: './nd-internal-document-sections-panel.component.scss',
 })
 export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
+  @ViewChild('panelScroll') private panelScroll?: ElementRef<HTMLElement>;
+  @ViewChildren('sectionCard') private sectionCards?: QueryList<ElementRef<HTMLElement>>;
+
   @Input() docTitle = '';
   @Input() sections: InternalDocumentSection[] = [];
   @Input() loading = false;
@@ -146,6 +160,24 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
     event.stopPropagation();
     if (!this.canOpenSource || page == null || page < 1) return;
     this.openSourcePage.emit(page);
+  }
+
+  showSectionNav(): boolean {
+    return this.visibleSections.length > 1;
+  }
+
+  goToSectionNav(visibleIndex: number, event: Event): void {
+    event.stopPropagation();
+    if (visibleIndex < 0 || visibleIndex >= this.visibleSections.length) return;
+    const section = this.visibleSections[visibleIndex];
+    const sortedIdx = this.sortedSections.indexOf(section);
+    const key = this.rowKey(section, sortedIdx >= 0 ? sortedIdx : visibleIndex);
+    this.expandedRows.add(key);
+    queueMicrotask(() => {
+      const cards = this.sectionCards?.toArray() ?? [];
+      const el = cards[visibleIndex]?.nativeElement;
+      el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
   }
 
   private matchesSearch(section: InternalDocumentSection, q: string): boolean {

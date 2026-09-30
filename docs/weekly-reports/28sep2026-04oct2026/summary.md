@@ -62,6 +62,7 @@ Bug fixes
 - Document catalog pages: Refresh (icon only) and Upload moved into the blue page title bar on the right; department picker stays in the page toolbar for regulations
 - New Analysis page: live progress (including "Run analysis to see live progress here") now scrolls in a center marquee on the blue page header while a run is idle or in flight
 - ND blue page header: "In progress" control (with count) on the right on every page, styled for the title bar; removed duplicate from the New Analysis page body
+- Internal documents (local/Azure): opening an extracted document no longer flashes "No sections extracted yet" while section text loads from the API
 
 Tasks
 - Structural extract coverage audit (Phase 1): after local/Azure extract, API stores parsed-vs-sections coverage ratio; internal and regulation side panels show percentage and warn below 98% with a missing-text sample
@@ -74,3 +75,5 @@ Tasks
 - Text documents library hidden from client business workspaces; only the platform super admin sees it in the menu and can open the page or API
 - New Analysis: right-side hybrid pipeline panel (engine steps, retrieval debug) visible only to platform super admin; client workspaces keep the main page and progress rail
 - Internal and regulation section/point cards: clause title (e.g. "1. Introduction") moved into the card header; body no longer repeats the heading; headers stick while scrolling the side panel list
+- Section and regulation point headers: previous/next controls scroll to the adjacent clause and expand collapsed chapters/sections when needed
+- Internal documents catalog: rows grouped by originating analysis run with a header showing run name and document count; direct uploads in a separate block; borders separate each group

@@ -2,11 +2,13 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   OnChanges,
   Output,
   SimpleChanges,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -35,6 +37,13 @@ import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd
 /** Above this many points, auto-expanding every full text makes the panel unresponsive. */
 const MaxAutoExpandPoints = 250;
 
+type PointNavRef = {
+  pointId: string;
+  chapter: string;
+  sectionKey: string;
+  needsSectionExpand: boolean;
+};
+
 @Component({
   selector: 'app-nd-regulation-points-panel',
   standalone: true,
@@ -45,6 +54,8 @@ const MaxAutoExpandPoints = 250;
 })
 export class NdRegulationPointsPanelComponent implements OnChanges {
   private readonly cdr = inject(ChangeDetectorRef);
+
+  @ViewChild('pointsPanelScroll') private panelScroll?: ElementRef<HTMLElement>;
 
   @Input() docName = '';
   @Input() points: RegulationPoint[] = [];
@@ -275,6 +286,53 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
 
   pointTitle(p: GovPoint): string {
     return (p.title ?? '').trim();
+  }
+
+  get visiblePointNavList(): PointNavRef[] {
+    const out: PointNavRef[] = [];
+    for (const ch of this.visibleChapterGroups) {
+      for (const sec of ch.sections) {
+        const needsSectionExpand = this.showSectionBar(ch.sections, sec.key, ch.chapter);
+        for (const p of sec.points) {
+          out.push({
+            pointId: p.point_id,
+            chapter: ch.chapter,
+            sectionKey: sec.key,
+            needsSectionExpand,
+          });
+        }
+      }
+    }
+    return out;
+  }
+
+  showPointNav(): boolean {
+    return this.visiblePointNavList.length > 1;
+  }
+
+  pointNavContext(pointId: string): { index: number; total: number } | null {
+    const list = this.visiblePointNavList;
+    const index = list.findIndex((r) => r.pointId === pointId);
+    if (index < 0) return null;
+    return { index, total: list.length };
+  }
+
+  goToPointNav(targetIndex: number, event: Event): void {
+    event.stopPropagation();
+    const list = this.visiblePointNavList;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+    const ref = list[targetIndex];
+    this.expandedChapters.add(ref.chapter);
+    if (ref.needsSectionExpand) {
+      this.expandedSections.add(this.sectionId(ref.chapter, ref.sectionKey));
+    }
+    this.cdr.markForCheck();
+    setTimeout(() => {
+      const root = this.panelScroll?.nativeElement;
+      const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(ref.pointId) : ref.pointId;
+      const el = root?.querySelector(`[data-point-nav-id="${escaped}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, 0);
   }
 
   pointHeadline(p: GovPoint): string {

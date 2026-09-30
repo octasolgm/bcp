@@ -129,13 +129,16 @@
   gap: 0.4rem;
   min-width: 0;
   max-width: 100%;
+  width: 100%;
   padding: 0.55rem 0.75rem;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  background: color-mix(in srgb, var(--bg-muted) 55%, var(--surface));
+  /* Opaque base so sticky headers mask scrolling body text (--bg-muted is rgba). */
+  background-color: var(--bg-card, var(--bg-surface, #fff));
+  background-image: linear-gradient(var(--bg-muted), var(--bg-muted));
   position: sticky;
   top: 0;
   z-index: 2;
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 65%, transparent);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .section-toggle {
@@ -143,7 +146,7 @@
   align-items: center;
   gap: 0.35rem;
   border: none;
-  background: transparent;
+  background: inherit;
   padding: 0;
   cursor: pointer;
   font: inherit;

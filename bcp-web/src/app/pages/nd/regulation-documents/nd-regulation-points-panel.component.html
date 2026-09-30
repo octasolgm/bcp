@@ -29,7 +29,7 @@
     }
   </div>
 
-  <div class="panel-body">
+  <div class="panel-body" #pointsPanelScroll>
     @if (loading || building) {
       <p class="empty">Loading…</p>
     } @else if (visibleChapterGroups.length === 0) {
@@ -67,6 +67,7 @@
                     @for (p of sec.points; track p.point_id) {
                       <article
                         class="point-card"
+                        [attr.data-point-nav-id]="p.point_id"
                         [class.point-intro]="pointMeta(p.point_id)?.isIntroductionPoint || !isComparablePoint(p.point_id)"
                         [class.point-highlight]="isHighlighted(p.point_id)"
                       >
@@ -95,6 +96,32 @@
                           }
                           @if (!isComparablePoint(p.point_id)) {
                             <span class="point-tag point-tag-skip" [title]="skipReason(p.point_id) ?? ''">{{ skipReasonShort(p.point_id) }}</span>
+                          }
+                          @if (showPointNav()) {
+                            @if (pointNavContext(p.point_id); as nav) {
+                              <div class="clause-nav" role="group" aria-label="Point navigation">
+                                <button
+                                  type="button"
+                                  class="clause-nav-btn"
+                                  [disabled]="nav.index === 0"
+                                  (click)="goToPointNav(nav.index - 1, $event)"
+                                  aria-label="Previous point"
+                                  title="Previous point"
+                                >
+                                  ‹
+                                </button>
+                                <button
+                                  type="button"
+                                  class="clause-nav-btn"
+                                  [disabled]="nav.index >= nav.total - 1"
+                                  (click)="goToPointNav(nav.index + 1, $event)"
+                                  aria-label="Next point"
+                                  title="Next point"
+                                >
+                                  ›
+                                </button>
+                              </div>
+                            }
                           }
                         </header>
                         <div class="point-text-wrap">
