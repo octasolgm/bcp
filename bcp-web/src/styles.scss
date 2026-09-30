@@ -88,11 +88,12 @@
 }
 
 [data-theme='light'] {
-  --bg-base: #f1f5f9;
+  /* Light blue, matching the accent below, instead of the previous cool gray. */
+  --bg-base: #eaf3fc;
   --bg-elevated: #ffffff;
   --bg-sidebar: #ffffff;
   --bg-card: #ffffff;
-  --bg-card-hover: #f8fafc;
+  --bg-card-hover: #f5f9ff;
   --bg-input: #ffffff;
   --bg-muted: rgba(15, 23, 42, 0.05);
   --bg-surface: #ffffff;
@@ -101,22 +102,26 @@
   --border-strong: rgba(15, 23, 42, 0.28);
   --border-subtle: rgba(15, 23, 42, 0.07);
 
-  /* Near-black body text — never mint/teal for copy */
+  /* Near-black body text — never accent-colored for copy */
   --text-primary: #0f172a;
   --text-secondary: #334155;
   --text-muted: #64748b;
 
-  --nav-active-bg: rgba(13, 148, 136, 0.12);
-  --topnav-active-bg: #cbd5e1;
-  --filter-active-bg: #0f766e;
+  --nav-active-bg: rgba(29, 126, 230, 0.12);
+  --topnav-active-bg: #dbeafe;
+  --filter-active-bg: #1d7ee6;
   --filter-active-text: #ffffff;
 
-  /* Deep teal — readable on white; no pastel mint accents */
-  --accent: #0f766e;
-  --accent-hover: #115e59;
+  /* Logo blue (BRAND.themeColor, src/app/config/brand.ts), darkened a step for text/link
+     contrast — the literal logo hex read too light for body-sized text on a light background. */
+  --accent: #1565c0;
+  --accent-hover: #0d47a1;
   --accent-text: #ffffff;
-  --accent-tint: rgba(15, 118, 110, 0.12);
-  --accent-soft: #0f766e;
+  --accent-tint: rgba(21, 101, 192, 0.12);
+  --accent-soft: #1d7ee6;
+  --nd-table-head-bg: color-mix(in srgb, var(--accent) 14%, var(--bg-muted));
+  --nd-table-head-color: color-mix(in srgb, var(--accent) 78%, var(--text-primary));
+  --nd-table-head-border: color-mix(in srgb, var(--accent) 28%, var(--border));
 
   /* Status colors: darker text on soft tinted backgrounds */
   --critical: #dc2626;
@@ -184,23 +189,31 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
   flex-wrap: wrap;
 
+  // The fixed shell-level header bar (app-nd-page-header, see nd-shell.component.html) now shows
+  // the page title everywhere — this h1 duplicated it directly underneath. Every other element in
+  // a .page-header (action buttons, filters, subtitle) stays; only the redundant title text goes.
   h1 {
-    margin: 0;
-    font-size: 1.625rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    display: none;
   }
 
   .subtitle {
-    margin: 0.35rem 0 0;
+    margin: 0.2rem 0 0;
     font-size: 0.9375rem;
     color: var(--text-secondary);
     font-weight: 550;
   }
+}
+
+// After the shell title bar took over the h1, some pages still render an empty .page-header
+// wrapper (only the hidden h1 inside). Collapse those so they do not leave a blank strip
+// under the navy bar. Headers that still have a subtitle, actions, or other controls stay.
+.page-header:not(:has(.subtitle, .header-actions, button, a, input, select, .severity-badge, .status-pending, .status-ok, .filter-pills, app-nd-workspace-tabs)) {
+  display: none;
+  margin: 0;
 }
 
 // Baseline heading scale — a default every h2/h3 falls back to; page-specific rules with higher
@@ -217,7 +230,6 @@ h3 {
   margin: 0;
 }
 
-/* ND document catalog pages — global so layout updates always apply */
 .page-header.page-header--catalog {
   margin-bottom: 0;
   align-items: stretch;
@@ -231,7 +243,7 @@ h3 {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.75rem;
     flex-wrap: wrap;
 
     h1 {
@@ -249,12 +261,20 @@ h3 {
     flex-shrink: 0;
     flex-wrap: wrap;
   }
+
+  .subtitle {
+    margin-top: 0.2rem;
+  }
 }
 
-/* ND routed pages grow with content; main column scrolls in app-nd-shell .content */
-app-nd-shell .content > :not(router-outlet) {
+/* ND main column: only the scroll region grows — not the title bar above it. */
+app-nd-shell .content > app-nd-page-header {
+  flex: 0 0 auto;
+}
+
+app-nd-shell .content > .content-scroll {
   flex: 1 1 auto;
-  min-height: min-content;
+  min-height: 0;
 }
 
 .nd-catalog-page {
@@ -262,7 +282,7 @@ app-nd-shell .content > :not(router-outlet) {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: min-content;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .nd-catalog-toolbar {
@@ -496,6 +516,20 @@ app-nd-shell .content > :not(router-outlet) {
   text-transform: uppercase;
   background: var(--updated-bg);
   color: var(--updated);
+}
+
+/* Data table header row — accent tint (tokens on .nd-theme in styles above) */
+.table-wrap thead th,
+.nd-table-wrap thead th,
+.nd-table thead th,
+table.data-table thead th {
+  background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+  color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
+  border-bottom: 1px solid var(--nd-table-head-border, var(--border));
+  font-weight: 700;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 @import 'app/pages/nd/nd-shared.scss';

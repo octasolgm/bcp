@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -6,6 +6,10 @@ import { NdApiService, NdLocalExtractionResult, NdOcrEngine } from '../../../ser
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
+import {
+  NdPageHeaderActionsService,
+  syncCatalogPageHeaderActions,
+} from '../../../services/nd/nd-page-header-actions.service';
 import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.service';
 import { ToastService } from '../../../services/toast.service';
@@ -24,6 +28,7 @@ import {
   compareNumber,
   compareText,
   hasListFilters,
+  isDistinctOriginalFileName,
   matchesSearch,
   nextSortState,
   sortIndicator,
@@ -78,7 +83,7 @@ const RecentUploadKeepMs = 90_000;
     './nd-internal-documents-local.component.scss',
   ],
 })
-export class NdInternalDocumentsLocalComponent implements OnInit {
+export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   private readonly api = inject(NdApiService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -86,6 +91,9 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
   readonly auth = inject(NdAuthService);
   private readonly shellFocus = inject(NdShellFocusService);
   private readonly workspaceNav = inject(NdWorkspaceNavService);
+  private readonly pageHeaderActions = inject(NdPageHeaderActionsService);
+
+  @ViewChild('fileInput') private fileInput?: ElementRef<HTMLInputElement>;
 
   /** Which local OCR engine this route uses — set via route data ({engine: 'tesseract' | 'rapidocr'}),
    * so the exact same page/component serves both /internal-documents-new and
@@ -95,21 +103,6 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
   /** Semantic extract is parked: structural extract is the finalized method. Flip to true to show the
    * "Extract (semantic)" / "View semantic" buttons again - the handlers below are untouched. */
   readonly showSemanticExtract = false;
-
-  get engineLabel(): string {
-    switch (this.engine) {
-      case 'rapidocr':
-        return 'RapidOCR';
-      case 'docling-light':
-        return 'Docling (Light)';
-      case 'docling-glm':
-        return 'Docling (GLM-OCR)';
-      case 'azure-di':
-        return 'Azure';
-      default:
-        return 'Tesseract';
-    }
-  }
 
   /** Azure Document Intelligence parses in Microsoft's cloud; every other engine runs on this server.
    * (Extract is always our own local section splitter, whichever engine parsed the text.) */
@@ -160,6 +153,23 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
     this.restorePanelSplit();
     await this.auth.refreshProfile();
     await this.load();
+    this.syncPageHeaderToolbar();
+  }
+
+  ngOnDestroy(): void {
+    this.pageHeaderActions.clear();
+  }
+
+  private syncPageHeaderToolbar(): void {
+    syncCatalogPageHeaderActions(this.pageHeaderActions, {
+      showRefresh: this.canUpload,
+      loading: this.loading,
+      onRefresh: () => void this.load(),
+      showUpload: this.canUpload,
+      uploading: this.uploading,
+      uploadLabel: '+ Upload',
+      onUpload: () => this.fileInput?.nativeElement.click(),
+    });
   }
 
   get showSectionsPanel(): boolean {
@@ -414,6 +424,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
 
   async load(silent = false): Promise<void> {
     if (!silent) this.loading = true;
+    this.syncPageHeaderToolbar();
     this.error = '';
     const res = await this.api.getInternalDocuments();
     if (res.success && res.data) {
@@ -423,6 +434,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
       this.error = res.message ?? 'Failed to load documents';
     }
     this.loading = false;
+    this.syncPageHeaderToolbar();
   }
 
   private async mergeLocalStatuses(): Promise<void> {
@@ -503,6 +515,10 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
     return trimmed || '—';
   }
 
+  showOriginalFileName(d: InternalDocument): boolean {
+    return isDistinctOriginalFileName(d.title, d.originalFileName);
+  }
+
   get visibleDocs(): InternalDocument[] {
     let list = this.docs.filter((doc) => {
       if (!matchesSearch(this.searchQuery, [doc.title, doc.originalFileName, doc.department])) {
@@ -560,6 +576,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
   async handleUpload(): Promise<void> {
     if (!this.file) return;
     this.uploading = true;
+    this.syncPageHeaderToolbar();
     this.error = '';
     const file = this.file;
     const res = await this.api.uploadInternalDocument(file);
@@ -581,6 +598,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit {
       this.error = res.message ?? 'Upload failed';
     }
     this.uploading = false;
+    this.syncPageHeaderToolbar();
   }
 
   /** Show the new row straight away instead of waiting for the next list refresh. */

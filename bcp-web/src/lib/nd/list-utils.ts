@@ -48,6 +48,34 @@ export function hasListFilters(...filters: (string | boolean | undefined | null)
   return filters.some((f) => (typeof f === 'string' ? f.trim().length > 0 : Boolean(f)));
 }
 
+/** Strips every trailing file extension, not just one — some stored names carry a doubled
+ * extension (e.g. "CandNM-.pdf.pdf") from a re-upload/versioning step tacking .pdf onto a name
+ * that already had one. */
+function stripAllExtensions(name: string): string {
+  let s = name;
+  let next = s.replace(/\.[a-z0-9]{1,5}$/, '');
+  while (next !== s) {
+    s = next;
+    next = s.replace(/\.[a-z0-9]{1,5}$/, '');
+  }
+  return s;
+}
+
+/** True when a document's original filename is worth showing next to its title — false when it's
+ * just the same name with a " (vN)" version suffix and/or a doubled extension tacked on (or the
+ * exact same string), which reads as the name printed twice rather than as extra information. */
+export function isDistinctOriginalFileName(title: string | null | undefined, originalFileName: string | null | undefined): boolean {
+  if (!originalFileName) return false;
+  const t = (title ?? '').trim().toLowerCase();
+  const o = originalFileName.trim().toLowerCase();
+  if (!t || !o) return !!o;
+  if (t === o) return false;
+  const oWithoutVersion = o.replace(/\s*\(v\d+\)(?=\.[a-z0-9]+$|$)/, '').trim();
+  const tWithoutExt = stripAllExtensions(t);
+  const oWithoutExt = stripAllExtensions(oWithoutVersion);
+  return tWithoutExt !== oWithoutExt;
+}
+
 /** Numeric-friendly compare for regulation point ids (e.g. §2.7, 2.10, 6.18-a). */
 export function comparePointNumber(a: string, b: string, dir: SortDir): number {
   const partsA = parsePointRefTokens(a);

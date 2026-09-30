@@ -305,9 +305,10 @@
     border-bottom: 1px solid var(--border);
   }
 
-  th {
-    color: var(--text-muted);
-    font-weight: 600;
+  thead th {
+    color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
+    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    font-weight: 700;
     font-size: 0.6875rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -540,8 +541,14 @@
 
   .table-wrap,
   .empty-state,
-  .muted-loading {
+  .muted-loading,
+  .nd-catalog-loading {
     flex-shrink: 0;
+  }
+
+  .nd-catalog-loading {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .table-wrap.table-scroll-body,

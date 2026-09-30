@@ -16,8 +16,12 @@
   background: var(--bg-elevated);
 
   &.collapsed {
-    width: 40px;
-    min-width: 40px;
+    width: 44px;
+    min-width: 44px;
+    // Flush against the browser's own edge, right next to the content column's scrollbar, the
+    // collapsed rail used to read as empty space rather than a control — a shadow and solid
+    // background give it enough presence to be found and clicked.
+    box-shadow: -2px 0 6px color-mix(in srgb, var(--text-primary) 10%, transparent);
   }
 }
 
@@ -26,7 +30,7 @@
   align-items: center;
   gap: 0.4rem;
   border: none;
-  background: transparent;
+  background: var(--bg-elevated);
   color: var(--text-secondary);
   cursor: pointer;
   padding: 0.75rem 0.6rem;
@@ -34,8 +38,22 @@
   border-bottom: 1px solid var(--border);
   writing-mode: horizontal-tb;
 
+  .collapsed & {
+    width: 100%;
+    justify-content: center;
+    padding: 0.9rem 0.4rem;
+    background: var(--accent, #0f766e);
+    color: #fff;
+    border-bottom: none;
+  }
+
   &:hover {
     color: var(--text-primary);
+  }
+
+  .collapsed &:hover {
+    color: #fff;
+    filter: brightness(1.1);
   }
 }
 
@@ -187,6 +205,10 @@
 
   &.status-not_built {
     opacity: 0.65;
+  }
+
+  &.status-not_started {
+    opacity: 0.55;
   }
 }
 

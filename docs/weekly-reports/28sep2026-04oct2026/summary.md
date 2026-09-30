@@ -52,3 +52,17 @@ Bug fixes
 - Fixed corrective actions being embedded into every attached internal document instead of just the one each finding's evidence actually came from, when a report had more than a couple of internal documents attached
 - Fixed re-finalizing a report creating a needless duplicate document version instead of recognizing it already had one, and fixed the Download button sometimes reporting "no documents found" even when finalized documents existed - both traced to a text-matching mismatch with how the database stores the document-to-report link
 - Fixed the Download button returning every past version of a document from repeated regeneration, instead of only the current one
+
+30 Sep 2026
+
+Bug fixes
+- Fixed a large empty gap under the blue page title bar on every page - a layout rule was stretching the title bar's container to half the column height; content now sits directly under the bar
+- Removed the engine name badge (e.g. Azure) from local document catalog headers; initial load now shows a centered accent spinner instead of plain left-aligned text
+- Document catalog pages: Refresh (icon only) and Upload moved into the blue page title bar on the right; department picker stays in the page toolbar for regulations
+- New Analysis page: live progress (including "Run analysis to see live progress here") now scrolls in a center marquee on the blue page header while a run is idle or in flight
+- ND blue page header: "In progress" control (with count) on the right on every page, styled for the title bar; removed duplicate from the New Analysis page body
+
+Tasks
+- New Analysis (V2) layout: larger section headings and much more vertical space between Step 1, Step 2, summary/run strip, three-column workspace, and analysis report
+- New Analysis workspace: Result column no longer clipped when side panels are open (horizontal scroll on the column row); columns can collapse via header control, still draggable to reorder and resizable between dividers
+- Data tables app-wide: header rows use a consistent accent-tinted background and label color (All analysis, document catalogs, admin lists, dashboard tables)

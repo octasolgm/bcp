@@ -40,9 +40,10 @@
     border-bottom: 1px solid var(--border);
   }
 
-  th {
-    color: var(--text-muted);
-    font-weight: 600;
+  thead th {
+    color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
+    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    font-weight: 700;
     font-size: 0.6875rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -237,8 +238,7 @@
 
   // Status pins to the left edge and Actions pins to the right edge while the columns in
   // between scroll horizontally underneath them.
-  th.col-status,
-  td.col-status {
+  tbody td.col-status {
     position: sticky;
     left: 0;
     z-index: 1;
@@ -246,8 +246,7 @@
     box-shadow: 1px 0 0 var(--border);
   }
 
-  th.col-actions,
-  td.col-actions {
+  tbody td.col-actions {
     position: sticky;
     right: 0;
     z-index: 1;
@@ -265,6 +264,20 @@
   thead th.col-status,
   thead th.col-actions {
     z-index: 3;
+    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
+  }
+
+  thead th.col-status {
+    position: sticky;
+    left: 0;
+    box-shadow: 1px 0 0 var(--nd-table-head-border, var(--border));
+  }
+
+  thead th.col-actions {
+    position: sticky;
+    right: 0;
+    box-shadow: -1px 0 0 var(--nd-table-head-border, var(--border));
   }
 
   // Sticky cells must stay fully opaque — var(--bg-muted) alone is semi-transparent, so on hover

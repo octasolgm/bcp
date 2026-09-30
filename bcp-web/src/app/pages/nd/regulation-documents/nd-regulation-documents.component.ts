@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -28,6 +28,7 @@ import {
   compareNumber,
   compareText,
   hasListFilters,
+  isDistinctOriginalFileName,
   matchesSearch,
   nextSortState,
   sortIndicator,
@@ -38,6 +39,10 @@ import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.c
 import { NdManualRegulationPointsPanelComponent } from './nd-manual-regulation-points-panel.component';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
+import {
+  NdPageHeaderActionsService,
+  syncCatalogPageHeaderActions,
+} from '../../../services/nd/nd-page-header-actions.service';
 import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { ToastService } from '../../../services/toast.service';
 import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.service';
@@ -103,6 +108,9 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly workspaceNav = inject(NdWorkspaceNavService);
   readonly auth = inject(NdAuthService);
+  private readonly pageHeaderActions = inject(NdPageHeaderActionsService);
+
+  @ViewChild('uploadInput') private uploadInput?: ElementRef<HTMLInputElement>;
 
   searchHitPageLabel(group: RegulationPointSearchGroup, hit: RegulationPointSearchHit): string | null {
     return formatPointPageRef(hit.pageReference, null, {
@@ -190,6 +198,19 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       );
     }
     await Promise.all(tasks);
+    this.syncPageHeaderToolbar();
+  }
+
+  private syncPageHeaderToolbar(): void {
+    syncCatalogPageHeaderActions(this.pageHeaderActions, {
+      showRefresh: this.canUpload || this.canViewDeleted,
+      loading: this.loading,
+      onRefresh: () => void this.loadDocs(),
+      showUpload: this.canUpload && !this.showDeleted,
+      uploading: this.uploading,
+      uploadLabel: '+ Upload regulation',
+      onUpload: () => this.uploadInput?.nativeElement.click(),
+    });
   }
 
   get panelGridColumns(): string | null {
@@ -240,6 +261,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.pageHeaderActions.clear();
     this.stopExtractPolling();
     this.shellFocus.setRegulationPointsPanelOpen(false);
     if (this.pointSearchTimer) clearTimeout(this.pointSearchTimer);
@@ -577,6 +599,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
 
   async loadDocs(silent = false, replace = false): Promise<void> {
     if (!silent) this.loading = true;
+    this.syncPageHeaderToolbar();
     const res = await this.api.getRegulationDocuments({
       departmentId: this.deptFilter || undefined,
       status: this.statusFilter || undefined,
@@ -593,6 +616,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       this.error = res.message ?? 'Failed to load regulation documents';
     }
     this.loading = false;
+    this.syncPageHeaderToolbar();
   }
 
   onFiltersChange(): void {
@@ -700,6 +724,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   async handleUpload(): Promise<void> {
     if (!this.file) return;
     this.uploading = true;
+    this.syncPageHeaderToolbar();
     this.error = '';
     const file = this.file;
     const res = await this.api.uploadRegulationDocument(file, this.uploadDept || undefined);
@@ -747,6 +772,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       this.error = res.message ?? 'Upload failed';
     }
     this.uploading = false;
+    this.syncPageHeaderToolbar();
   }
 
   async handleDeptChange(doc: RegulationDocument, departmentId: string): Promise<void> {
@@ -1881,5 +1907,9 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
 
   isManualDoc(doc: RegulationDocument): boolean {
     return doc.isManual === true || doc.source === 'manual';
+  }
+
+  showOriginalFileName(d: RegulationDocument): boolean {
+    return isDistinctOriginalFileName(d.name, d.originalFileName);
   }
 }

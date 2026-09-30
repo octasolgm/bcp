@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -6,6 +6,10 @@ import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
+import {
+  NdPageHeaderActionsService,
+  syncCatalogPageHeaderActions,
+} from '../../../services/nd/nd-page-header-actions.service';
 import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.service';
 import { ToastService } from '../../../services/toast.service';
@@ -24,6 +28,7 @@ import {
   compareNumber,
   compareText,
   hasListFilters,
+  isDistinctOriginalFileName,
   matchesSearch,
   nextSortState,
   sortIndicator,
@@ -72,6 +77,9 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   readonly auth = inject(NdAuthService);
   private readonly shellFocus = inject(NdShellFocusService);
   private readonly workspaceNav = inject(NdWorkspaceNavService);
+  private readonly pageHeaderActions = inject(NdPageHeaderActionsService);
+
+  @ViewChild('fileInput') private fileInput?: ElementRef<HTMLInputElement>;
 
   private static readonly PANEL_SPLIT_KEY = 'nd-internal-docs-sections-panel-split';
 
@@ -130,10 +138,23 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.pageHeaderActions.clear();
     this.shellFocus.setRegulationPointsPanelOpen(false);
     this.stopSectionExtractPolling();
     this.stopSectionPageRepairPolling();
     this.stopParsePolling();
+  }
+
+  private syncPageHeaderToolbar(): void {
+    syncCatalogPageHeaderActions(this.pageHeaderActions, {
+      showRefresh: this.canUpload || this.canViewDeleted,
+      loading: this.loading,
+      onRefresh: () => void this.load(),
+      showUpload: this.canUpload && !this.showDeleted,
+      uploading: this.uploading,
+      uploadLabel: '+ Upload',
+      onUpload: () => this.fileInput?.nativeElement.click(),
+    });
   }
 
   get showSectionsPanel(): boolean {
@@ -448,7 +469,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
 
   private syncDeletedFromRoute(): void {
     this.showDeleted = !!this.route.snapshot.data['deletedOnly'];
-    void this.load();
+    void this.load().then(() => this.syncPageHeaderToolbar());
   }
 
   get canUpload(): boolean {
@@ -657,6 +678,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
 
   async load(silent = false): Promise<void> {
     if (!silent) this.loading = true;
+    this.syncPageHeaderToolbar();
     this.error = '';
     const res = await this.api.getInternalDocuments(this.showDeleted);
     if (res.success && res.data) {
@@ -667,6 +689,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       this.error = res.message ?? 'Failed to load documents';
     }
     this.loading = false;
+    this.syncPageHeaderToolbar();
   }
 
   async openDocument(doc: InternalDocument, event?: Event): Promise<void> {
@@ -760,6 +783,10 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     return trimmed || '—';
   }
 
+  showOriginalFileName(d: InternalDocument): boolean {
+    return isDistinctOriginalFileName(d.title, d.originalFileName);
+  }
+
   get visibleDocs(): InternalDocument[] {
     let list = this.docs.filter((doc) => {
       if (!matchesSearch(this.searchQuery, [doc.title, doc.originalFileName, doc.department])) {
@@ -849,6 +876,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   async handleUpload(): Promise<void> {
     if (!this.file) return;
     this.uploading = true;
+    this.syncPageHeaderToolbar();
     this.error = '';
     const file = this.file;
     const res = await this.api.uploadInternalDocument(file);
@@ -872,6 +900,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       this.error = res.message ?? 'Upload failed';
     }
     this.uploading = false;
+    this.syncPageHeaderToolbar();
   }
 
   /** Show the new row straight away instead of waiting for the next list refresh. */

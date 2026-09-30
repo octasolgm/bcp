@@ -12,7 +12,7 @@ import { sortByPointRef } from '../../../lib/nd/list-utils';
 type ExpansionMatchKind = 'acronym' | 'synonym';
 
 type StepKind = 'live' | 'placeholder';
-type StepStatus = 'done' | 'running' | 'pending' | 'not_built';
+type StepStatus = 'done' | 'running' | 'pending' | 'not_built' | 'not_started';
 
 type StepRow = {
   key: string;
@@ -102,15 +102,37 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
   private readonly forceRenderOnDataChange = effect(() => {
     this.panel.clauses();
     this.panel.phase();
+    this.panel.runActive();
     this.cdr.markForCheck();
     this.cdr.detectChanges();
   });
 
+  /** Steps 1-7 — the retrieval pipeline (query expansion through build-context) — all finish
+   * together, at the same point the backend hands off from retrieval to judgment. */
   readonly retrievalStatus = computed<StepStatus>(() => {
+    if (!this.panel.runActive()) return 'not_started';
     const phase = (this.panel.phase() ?? '').toLowerCase();
     if (phase === 'retrieval') return 'running';
     if (this.panel.clauses().length > 0) return 'done';
     if (PHASES_PAST_RETRIEVAL.has(phase)) return 'done';
+    return 'pending';
+  });
+
+  /** Step 8 — LLM judgment — only starts once retrieval has actually finished. */
+  readonly judgmentStatus = computed<StepStatus>(() => {
+    if (!this.panel.runActive()) return 'not_started';
+    const phase = (this.panel.phase() ?? '').toLowerCase();
+    if (phase === 'done') return 'done';
+    if (PHASES_PAST_RETRIEVAL.has(phase)) return 'running';
+    return 'pending';
+  });
+
+  /** Step 9 — Save — only done once the whole run reaches its final phase. */
+  readonly saveStatus = computed<StepStatus>(() => {
+    if (!this.panel.runActive()) return 'not_started';
+    const phase = (this.panel.phase() ?? '').toLowerCase();
+    if (phase === 'done') return 'done';
+    if (PHASES_PAST_RETRIEVAL.has(phase)) return 'pending';
     return 'pending';
   });
 
@@ -127,6 +149,8 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
 
   statusFor(step: StepRow): StepStatus {
     if (step.kind === 'placeholder') return 'not_built';
+    if (step.key === 'step8') return this.judgmentStatus();
+    if (step.key === 'step9') return this.saveStatus();
     return this.retrievalStatus();
   }
 
@@ -135,27 +159,21 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
       case 'done':
         return 'Done';
       case 'running':
-        return 'Running…';
+        return 'Processing…';
       case 'pending':
-        return 'Pending';
+        return 'Queued';
+      case 'not_started':
+        return '';
       default:
         return 'Not built yet';
     }
   }
 
-  readonly panelWidth = signal(NdPipelineProgressPanelComponent.loadPanelWidth());
+  // Session-only — not persisted, so a refresh always starts at the default width.
+  readonly panelWidth = signal(380);
   private static readonly MIN_WIDTH = 300;
   private static readonly MAX_WIDTH = 900;
   private panelResizeCleanup: (() => void) | null = null;
-
-  private static loadPanelWidth(): number {
-    try {
-      const v = Number(localStorage.getItem('nd-pipeline-panel-width'));
-      return v >= 300 && v <= 900 ? v : 380;
-    } catch {
-      return 380;
-    }
-  }
 
   /** Panel sits at the right edge, so dragging its left edge leftwards widens it. */
   startPanelResize(event: PointerEvent): void {
@@ -171,11 +189,6 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
     };
     const up = () => {
       this.panelResizeCleanup?.();
-      try {
-        localStorage.setItem('nd-pipeline-panel-width', String(this.panelWidth()));
-      } catch {
-        /* ignore */
-      }
     };
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);

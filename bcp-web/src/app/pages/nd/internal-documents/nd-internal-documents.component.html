@@ -1,37 +1,19 @@
 <div class="nd-catalog-page">
 <div class="page-header page-header--catalog nd-catalog-toolbar">
   <div class="page-header-title-block">
-    <div class="page-header-row">
-      <h1>{{ showDeleted ? 'Deleted documents' : 'Document Library' }}</h1>
-      @if (canUpload || canViewDeleted) {
-        <div class="header-actions">
-          <button type="button" class="btn-secondary btn-refresh" (click)="load()" [disabled]="loading">
-            <span>Refresh</span>
-            <svg class="btn-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
-              <path d="M21 3v6h-6"/>
-            </svg>
-          </button>
-          @if (canUpload && !showDeleted) {
-            <button type="button" class="btn-primary" [disabled]="uploading" (click)="fileInput.click()">
-              {{ uploading ? 'Uploading…' : '+ Upload' }}
-            </button>
-            <input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
-          }
-        </div>
-      }
-    </div>
     <p class="subtitle">
       @if (showDeleted) {
         Soft-deleted documents are hidden from the library but kept in the database — parse credits and file data are preserved. Restore to make them visible again.
       } @else {
-        Upload PDF or Word (.doc, .docx). <strong>Run parse</strong> then <strong>Extract sections</strong> before Regul analysis.
+        Upload PDF or Word (.doc, .docx). <strong>Parse</strong> converts the document to text, then
+        <strong>Extract</strong> splits it into sections before analysis.
       }
     </p>
   </div>
 </div>
 
 <div class="nd-catalog-toolbar nd-fill-panel internal-docs-fill">
+<input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
 @if (message || error) {
   <div class="nd-alert-dock" aria-live="polite">
     @if (message) {
@@ -44,7 +26,10 @@
 }
 
 @if (loading && docs.length === 0) {
-  <p class="muted-loading">Loading documents…</p>
+  <div class="nd-catalog-loading" role="status" aria-live="polite">
+    <span class="panel-busy-spinner" aria-hidden="true"></span>
+    <p>Loading documents…</p>
+  </div>
 } @else if (docs.length === 0) {
   <div class="card-surface empty-state">
     @if (showDeleted) {
@@ -155,7 +140,7 @@
                 <span class="doc-meta muted cell-subline" [title]="d.landingAiFileName ?? ''">
                   PDF: {{ d.landingAiFileName ?? 'converted.pdf' }}
                 </span>
-              } @else {
+              } @else if (showOriginalFileName(d)) {
                 <span class="doc-meta cell-subline" [title]="d.originalFileName">{{ d.originalFileName }}</span>
               }
               @if (d.generatedByAnalysis) {

@@ -42,6 +42,46 @@
       color: var(--accent-text);
     }
   }
+
+  &.in-progress-nav-btn--header {
+    height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    box-shadow: none;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.22);
+      color: #fff;
+    }
+
+    .count-badge {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
+    .pulse-dot {
+      background: rgba(255, 255, 255, 0.55);
+
+      &.on {
+        background: #fff;
+      }
+    }
+
+    &.has-active {
+      border-color: rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+
+      .count-badge {
+        background: #fff;
+        color: var(--accent, #1565c0);
+        border-color: transparent;
+      }
+    }
+  }
 }
 
 .pulse-dot {

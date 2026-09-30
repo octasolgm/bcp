@@ -177,8 +177,19 @@
       }
     </aside>
 
-    <main class="content">
-      <router-outlet />
+    @if (stepTracker.active()) {
+      <app-nd-step-tracker />
+    }
+
+    <main class="content" [class.content-tight-left]="stepTracker.active() && !stepTracker.collapsed()">
+      <app-nd-page-header
+        [title]="pageTitle()"
+        [showBack]="showPageHeaderBack()"
+        (back)="goBackFromPageHeader()"
+      />
+      <div class="content-scroll">
+        <router-outlet />
+      </div>
     </main>
 
     @if (pipelinePanel.active()) {

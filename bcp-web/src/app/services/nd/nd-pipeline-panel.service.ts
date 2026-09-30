@@ -80,17 +80,21 @@ export type PipelineDocRef = {
  */
 @Injectable({ providedIn: 'root' })
 export class NdPipelinePanelService {
-  private static readonly COLLAPSED_KEY = 'nd-pipeline-panel-collapsed';
-
   private readonly _active = signal(false);
-  private readonly _collapsed = signal(this.loadCollapsed());
+  // Not persisted — a refresh always starts collapsed/open at the default state.
+  private readonly _collapsed = signal(false);
   private readonly _phase = signal<string | null>(null);
+  private readonly _runActive = signal(false);
   private readonly _clauses = signal<PipelineClauseRetrieval[]>([]);
   private readonly _docs = signal<PipelineDocRef[]>([]);
 
   readonly active = this._active.asReadonly();
   readonly collapsed = this._collapsed.asReadonly();
   readonly phase = this._phase.asReadonly();
+  /** Whether an analysis run actually exists yet — distinct from `phase`, which stays null for a
+   * moment right after the run is created but before the first phase update lands. Lets the panel
+   * tell "nothing has started" apart from "started, first phase not reported yet". */
+  readonly runActive = this._runActive.asReadonly();
   readonly clauses = this._clauses.asReadonly();
   readonly docs = this._docs.asReadonly();
 
@@ -103,12 +107,17 @@ export class NdPipelinePanelService {
   deactivate(): void {
     this._active.set(false);
     this._phase.set(null);
+    this._runActive.set(false);
     this._clauses.set([]);
     this._docs.set([]);
   }
 
   setPhase(phase: string | null): void {
     this._phase.set(phase);
+  }
+
+  setRunActive(active: boolean): void {
+    this._runActive.set(active);
   }
 
   /** Selected internal documents for the current run/setup — id+name only; the panel fetches
@@ -165,18 +174,5 @@ export class NdPipelinePanelService {
 
   toggleCollapsed(): void {
     this._collapsed.update((v) => !v);
-    try {
-      localStorage.setItem(NdPipelinePanelService.COLLAPSED_KEY, String(this._collapsed()));
-    } catch {
-      /* ignore */
-    }
-  }
-
-  private loadCollapsed(): boolean {
-    try {
-      return localStorage.getItem(NdPipelinePanelService.COLLAPSED_KEY) === 'true';
-    } catch {
-      return false;
-    }
   }
 }

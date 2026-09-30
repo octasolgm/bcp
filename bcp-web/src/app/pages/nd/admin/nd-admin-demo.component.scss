@@ -77,7 +77,7 @@
   width: 1.1rem;
   height: 1.1rem;
   border: 2px solid #cbd5e1;
-  border-top-color: #0f766e;
+  border-top-color: var(--accent, #0f766e);
   border-radius: 50%;
   animation: demo-spin 0.7s linear infinite;
 }
@@ -159,7 +159,7 @@
   }
 
   &:focus-within {
-    outline: 2px solid color-mix(in srgb, #0f766e 35%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--accent, #0f766e) 35%, transparent);
     outline-offset: 1px;
   }
 
@@ -169,7 +169,7 @@
 
   input {
     margin-top: 0.15rem;
-    accent-color: #0f766e;
+    accent-color: var(--accent, #0f766e);
   }
 
   small {
@@ -225,7 +225,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid #0f766e;
+    outline: 2px solid var(--accent, #0f766e);
     outline-offset: 2px;
   }
 
@@ -241,7 +241,7 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #0f766e;
+  color: var(--accent, #0f766e);
 }
 
 .template-body {
@@ -376,7 +376,7 @@
   cursor: pointer;
 
   input {
-    accent-color: #0f766e;
+    accent-color: var(--accent, #0f766e);
   }
 }
 
@@ -517,7 +517,7 @@
 
   &:hover {
     border-color: #99f6e4;
-    color: #0f766e;
+    color: var(--accent, #0f766e);
     background: #f0fdfa;
   }
 }
@@ -586,13 +586,13 @@
     border-bottom: 1px solid #f1f5f9;
   }
 
-  th {
+  thead th {
     font-size: 0.72rem;
-    font-weight: 650;
+    font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: #64748b;
-    background: #f8fafc;
+    color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
+    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
   }
 
   tbody tr {

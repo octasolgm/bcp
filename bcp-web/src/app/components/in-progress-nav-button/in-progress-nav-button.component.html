@@ -1,6 +1,7 @@
 <button
   type="button"
   class="in-progress-nav-btn"
+  [class.in-progress-nav-btn--header]="variant === 'header'"
   [class.has-active]="sessions().length > 0"
   [attr.aria-label]="sessions().length ? sessions().length + ' analyses in progress' : 'View analyses in progress'"
   (click)="openInProgressPage()"

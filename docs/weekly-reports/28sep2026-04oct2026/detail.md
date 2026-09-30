@@ -86,3 +86,13 @@ When a report's evidence came from more than one internal document, only one of 
 A related issue meant a report's corrective actions could end up embedded into every attached internal document instead of just the one each finding's evidence actually came from. This is now fixed so each document only carries the actions genuinely relevant to it.
 
 Several smaller issues around the same feature were also fixed: the Finalize button on the main reports list was not working for reports awaiting final reviewer sign-off; re-finalizing a report was creating an unnecessary duplicate document version instead of recognizing it already had one; the Download button could report "no documents found" even when finalized documents existed, or hand back old superseded versions alongside the current one; and Finalize, Regenerate, and Download now all work directly from the main reports list, on any tab, rather than only from the dedicated Finalized tab. A new "Regenerate documents" action also lets the corrected-document step be re-run on an already-finalized report for testing, without re-running the underlying AI analysis. Finally, the document-generation step itself now processes several internal documents at the same time instead of one after another, so it does not get proportionally slower on reports with many attached documents.
+
+Tighter page layouts under the title bar
+
+Every page had a large empty strip between the blue page title bar and the content below it. That spacing has been tightened across the whole app, so lists, forms and analysis screens all start closer to the header instead of sitting under a blank band.
+
+New Analysis page layout
+
+List and report tables across the app now share the same header styling: a light accent-tinted background with darker accent-toned column titles, so the header row is easy to spot on every screen (analysis runs, document catalogs, admin settings, and similar).
+
+The New Analysis screen is now broken into clearer stages with larger headings and more breathing room between them: regulation setup (Step 1 and Step 2), the summary and run controls, the three live columns (points, progress, and result), and the full analysis report below. The result column stays reachable when the step tracker or pipeline panel is open: you can scroll horizontally across the column row instead of the result pane disappearing off the edge. Each column can be collapsed to a narrow strip from its header, reordered by dragging the header, and resized using the dividers between columns, the same way as before.

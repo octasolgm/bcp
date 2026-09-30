@@ -1,5 +1,5 @@
-import { Component, OnDestroy, OnInit, inject, ChangeDetectorRef, effect } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectorRef, effect, signal } from '@angular/core';
+import { Location, NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
@@ -11,11 +11,14 @@ import {
 import { ToastService } from '../../services/toast.service';
 import { NdShellFocusService } from '../../services/nd/nd-shell-focus.service';
 import { NdPipelinePanelService } from '../../services/nd/nd-pipeline-panel.service';
+import { NdStepTrackerService } from '../../services/nd/nd-step-tracker.service';
 import { NdWorkspaceNavService } from '../../services/nd/nd-workspace-nav.service';
 import type { NdNavBadgeBumps } from '../../../lib/nd/nav-badge-bumps';
 import { DeployVersionService } from '../../services/deploy-version.service';
 import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.component';
 import { NdPipelineProgressPanelComponent } from '../../components/nd/nd-pipeline-progress-panel.component';
+import { NdStepTrackerComponent } from '../../components/nd/nd-step-tracker.component';
+import { NdPageHeaderComponent } from '../../components/nd/nd-page-header.component';
 import { startPanelResize } from '../shared/panel-resize';
 
 type NavIcon =
@@ -67,6 +70,8 @@ type NavEntry =
     BrandLogoComponent,
     NgTemplateOutlet,
     NdPipelineProgressPanelComponent,
+    NdStepTrackerComponent,
+    NdPageHeaderComponent,
   ],
   templateUrl: './nd-shell.component.html',
   styleUrl: './nd-shell.component.scss',
@@ -84,9 +89,17 @@ export class NdShellComponent implements OnInit, OnDestroy {
   readonly activeSessions = inject(ActiveAnalysisSessionsService);
   readonly shellFocus = inject(NdShellFocusService);
   readonly pipelinePanel = inject(NdPipelinePanelService);
+  readonly stepTracker = inject(NdStepTrackerService);
   private readonly workspaceNav = inject(NdWorkspaceNavService);
   readonly deployVersion = inject(DeployVersionService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly location = inject(Location);
+
+  /** Page header title — reuses each route's own `title:` (already set for the browser tab by
+   * Angular's TitleStrategy), stripped of the trailing " · Comply Solutions" brand suffix, so
+   * every ND page gets a header without having to set anything itself. */
+  readonly pageTitle = signal(this.computePageTitle());
+  readonly showPageHeaderBack = signal(this.computeShowBack());
 
   readonly profile = this.auth.profile;
   navEntries: NavEntry[] = [];
@@ -262,7 +275,69 @@ export class NdShellComponent implements OnInit, OnDestroy {
         this.syncExpandedGroupsToRoute();
         this.scheduleNavBadgeRefresh();
         this.syncActiveSessionPolling();
+        this.pageTitle.set(this.computePageTitle());
+        this.showPageHeaderBack.set(this.computeShowBack());
       });
+    // ngOnInit awaits refreshProfile() above, so the very first NavigationEnd (initial page
+    // load) has already fired and been missed by the time the subscription above is wired up —
+    // sync once here from whatever the router/title already settled on in the meantime.
+    this.pageTitle.set(this.computePageTitle());
+    this.showPageHeaderBack.set(this.computeShowBack());
+  }
+
+  /** Page header title, in priority order:
+   *  1. The nav item/group whose path matches the current URL — already a curated, human label
+   *     ("Internal Documents", not a route's browser-tab title, which for several routes is
+   *     stale, missing entirely, or names an internal variant like "Regul Full Markdown V2").
+   *  2. The active route's own `title:` (set directly on the route config — read from there, not
+   *     from the Title service's `document.title`, which only gets written when a route defines
+   *     `title` at all; a route without one leaves whatever the PREVIOUS page set, which is how a
+   *     page with no title ended up showing the last page's title, or the app default).
+   *  3. 'Comply Solutions' if neither resolves anything (route not in the nav, e.g. a detail page
+   *     reached by drilling in rather than from the sidebar). */
+  private computePageTitle(): string {
+    const navLabel = this.findNavLabelForUrl(this.router.url.split('?')[0]);
+    if (navLabel) return navLabel;
+
+    let route = this.router.routerState.snapshot.root;
+    let title: string | undefined;
+    while (route) {
+      if (typeof route.routeConfig?.title === 'string') title = route.routeConfig.title;
+      if (!route.firstChild) break;
+      route = route.firstChild;
+    }
+    if (title) return title.split(' · ')[0]?.trim() || title;
+    return 'Comply Solutions';
+  }
+
+  private findNavLabelForUrl(url: string): string | undefined {
+    // Guard: this can run from the `pageTitle` field initializer, which fires before
+    // `navEntries`'s own field initializer has run (field init order follows declaration order,
+    // and this one is declared earlier in the class) — navEntries is `undefined` at that point,
+    // not yet its declared `[]` default.
+    if (!this.navEntries) return undefined;
+    let best: { label: string; path: string } | undefined;
+    const consider = (item: { path: string; label: string }) => {
+      if (!item.path || (url !== item.path && !url.startsWith(item.path + '/'))) return;
+      if (!best || item.path.length > best.path.length) best = item;
+    };
+    for (const entry of this.navEntries) {
+      if (entry.kind === 'link') consider(entry.item);
+      else if (entry.kind === 'group') {
+        for (const child of entry.group.children) consider(child);
+      }
+    }
+    return best?.label;
+  }
+
+  /** No back button on the workspace home — everywhere else, one page back makes sense. */
+  private computeShowBack(): boolean {
+    const url = this.router.url.split('?')[0];
+    return url !== '/nd/overview' && url !== '/nd';
+  }
+
+  goBackFromPageHeader(): void {
+    this.location.back();
   }
 
   ngOnDestroy(): void {
@@ -907,16 +982,11 @@ export class NdShellComponent implements OnInit, OnDestroy {
     const children: NavItem[] = [];
     if (this.auth.canManageWorkspaces()) {
       children.push({ id: 'admin-workspaces', path: '/nd/admin/workspaces', label: 'Workspaces', icon: 'building' });
-      children.push({ id: 'admin-ai-usage', path: '/nd/admin/ai-usage', label: 'AI usage', icon: 'list' });
     }
     children.push(
       { id: 'admin-users', path: '/nd/admin/users', label: 'User management', icon: 'users' },
       { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
     );
-    // Every workspace admin sees their own AI credit balance; demo accounts have no credit account.
-    if (!this.auth.isDemoViewer()) {
-      children.push({ id: 'admin-ai-credits', path: '/nd/admin/ai-credits', label: 'AI credits', icon: 'list' });
-    }
     if (platform) {
       children.push({ id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' });
     }
@@ -941,8 +1011,28 @@ export class NdShellComponent implements OnInit, OnDestroy {
     );
     return {
       id: 'admin',
-      label: 'Administration',
+      label: 'Admin settings',
       icon: 'settings',
+      children,
+    };
+  }
+
+  /** AI usage/cost pages, split out of Admin settings into their own sidebar group. Null when a
+   *  demo super admin viewer has neither page available (nothing to show). */
+  private billingGroup(): NavGroup | null {
+    const children: NavItem[] = [];
+    if (this.auth.canManageWorkspaces()) {
+      children.push({ id: 'admin-ai-usage', path: '/nd/admin/ai-usage', label: 'AI usage', icon: 'list' });
+    }
+    // Every workspace admin sees their own AI credit balance; demo accounts have no credit account.
+    if (!this.auth.isDemoViewer()) {
+      children.push({ id: 'admin-ai-credits', path: '/nd/admin/ai-credits', label: 'AI credits', icon: 'list' });
+    }
+    if (!children.length) return null;
+    return {
+      id: 'billing',
+      label: 'Billing',
+      icon: 'list',
       children,
     };
   }
@@ -957,6 +1047,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     switch (role) {
       case 'super_admin': {
         const pending = this.pendingReviewsGroup(role);
+        const billing = this.billingGroup();
         return [
           overview,
           this.group(this.analysisGroup(role)),
@@ -964,6 +1055,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
           this.divider('after-pending-reviews'),
           this.group(this.documentsGroup(role)),
           this.group(this.adminGroup()),
+          ...(billing ? [this.group(billing)] : []),
         ];
       }
       case 'maker': {

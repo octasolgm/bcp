@@ -1,41 +1,21 @@
 <div class="nd-catalog-page">
 <div class="page-header page-header--catalog nd-catalog-toolbar">
   <div class="page-header-title-block">
-    <div class="page-header-row">
-      <h1>Internal Documents</h1>
-      <span class="severity-badge status-pending" [title]="'Parse/OCR engine for this page: ' + engine">
-        {{ engineLabel }}
-      </span>
-      @if (canUpload) {
-        <div class="header-actions">
-          <button type="button" class="btn-secondary btn-refresh" (click)="load()" [disabled]="loading">
-            <span>Refresh</span>
-            <svg class="btn-refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
-              <path d="M21 3v6h-6"/>
-            </svg>
-          </button>
-          <button type="button" class="btn-primary" [disabled]="uploading" (click)="fileInput.click()">
-            {{ uploading ? 'Uploading…' : '+ Upload' }}
-          </button>
-          <input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
-        </div>
-      }
-    </div>
     @if (isCloudEngine) {
       <p class="subtitle">
-        <strong>Parse</strong> runs on Azure, then <strong>Extract</strong> splits it into sections.
+        <strong>Parse</strong> converts the document to text, then <strong>Extract</strong> splits it into sections.
       </p>
     } @else {
       <p class="subtitle">
-        Same document library as the main Internal Documents page — <strong>Parse &amp; Extract</strong> here runs
-        locally (PdfPig + Tesseract), with no Landing AI calls, no per-page cost, and nothing leaving this server.
+        <strong>Parse</strong> converts the document to text locally (PdfPig + Tesseract), then
+        <strong>Extract</strong> splits it into sections — no cloud OCR and nothing leaves this server.
       </p>
     }
   </div>
 </div>
 
 <div class="nd-catalog-toolbar nd-fill-panel internal-docs-fill">
+<input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
 @if (message || error) {
   <div class="nd-alert-dock" aria-live="polite">
     @if (message) {
@@ -48,7 +28,10 @@
 }
 
 @if (loading && docs.length === 0) {
-  <p class="muted-loading">Loading documents…</p>
+  <div class="nd-catalog-loading" role="status" aria-live="polite">
+    <span class="panel-busy-spinner" aria-hidden="true"></span>
+    <p>Loading documents…</p>
+  </div>
 } @else if (docs.length === 0) {
   <div class="card-surface empty-state">
     <strong>No documents yet</strong>
@@ -145,7 +128,7 @@
               <strong [title]="d.title">{{ d.title }}</strong>
               @if (d.convertedFromWord && d.sourceOriginalFileName) {
                 <span class="doc-meta original-source-label cell-subline">Original: {{ d.sourceOriginalFileName }}</span>
-              } @else {
+              } @else if (showOriginalFileName(d)) {
                 <span class="doc-meta cell-subline" [title]="d.originalFileName">{{ d.originalFileName }}</span>
               }
               @if (d.generatedByAnalysis) {

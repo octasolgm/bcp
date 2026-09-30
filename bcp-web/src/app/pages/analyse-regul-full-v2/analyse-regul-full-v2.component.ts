@@ -2,7 +2,6 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { InProgressNavButtonComponent } from '../../components/in-progress-nav-button/in-progress-nav-button.component';
 import { NdGapPointDetailComponent } from '../../components/nd/nd-gap-point-detail.component';
 import { NdPointSortControlsComponent } from '../../components/nd/nd-point-sort-controls.component';
 import { NdPointNumberTreeComponent } from '../nd/shared/nd-point-number-tree.component';
@@ -16,6 +15,8 @@ import { AnalyseRegulComponent } from '../analyse-regul/analyse-regul.component'
 import { AnalyseBase } from '../shared/analyse-base';
 import type { AnalysisPoint } from '../../../lib/nd/types';
 import { NdPipelinePanelService } from '../../services/nd/nd-pipeline-panel.service';
+import { NdStepTrackerService, type NdStep } from '../../services/nd/nd-step-tracker.service';
+import { NdPageHeaderActionsService } from '../../services/nd/nd-page-header-actions.service';
 import type { NdLocalExtractionSection } from '../../services/nd/nd-api.service';
 import { startPanelResize } from '../shared/panel-resize';
 import { capGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
@@ -44,7 +45,6 @@ import { buildSeededActionPlansForGap, type SeededActionPlan } from '../../../li
     CommonModule,
     FormsModule,
     RouterLink,
-    InProgressNavButtonComponent,
     NdGapPointDetailComponent,
     NdPointSortControlsComponent,
     NdPointNumberTreeComponent,
@@ -66,8 +66,105 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   protected override showReversePipelineUi = false;
 
   private readonly pipelinePanel = inject(NdPipelinePanelService);
+  private readonly stepTracker = inject(NdStepTrackerService);
+  private readonly pageHeaderActions = inject(NdPageHeaderActionsService);
+  /** User-draggable order of the 3-column workspace (Points/Progress/Result) — each column keeps
+   * its own resize handle attached (see the CSS `order` bindings in the template), so dragging a
+   * column just moves it and its own handle together as a pair. Session-only — not persisted, so
+   * a refresh always starts back at the default Points/Progress/Result order. */
+  columnOrder: Array<'status' | 'progress' | 'result'> = ['status', 'progress', 'result'];
+  /** Collapsed workspace columns — narrow rail with title only; expand via the head control. */
+  columnCollapsed: Record<'status' | 'progress' | 'result', boolean> = {
+    status: false,
+    progress: false,
+    result: false,
+  };
+  private draggingColumn: 'status' | 'progress' | 'result' | null = null;
+
+  toggleColumnCollapsed(key: 'status' | 'progress' | 'result', event: Event): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.columnCollapsed[key] = !this.columnCollapsed[key];
+  }
+
+  /** Pixel width for fixed columns; collapsed rails use a narrow strip. */
+  columnWidthPx(key: 'status' | 'progress'): number {
+    if (this.columnCollapsed[key]) return 52;
+    return key === 'status' ? this.colLeftWidth : this.colMidWidth;
+  }
+
+  /** CSS `order` for a column — spaced by 10 (0/10/20) so the two boundary resize handles, fixed
+   * at order 5 and 15, always land visually between whichever columns occupy those two slots. */
+  columnOrderValue(key: 'status' | 'progress' | 'result'): number {
+    return this.columnOrder.indexOf(key) * 10;
+  }
+
+  /** Drag a resize handle at the boundary between two columns. `status`/`progress` carry an
+   * explicit pixel width (colLeftWidth/colMidWidth); `result` is a flex column with no width of
+   * its own. Whichever of the two sides IS one of those two columns gets resized — growing when
+   * dragged toward the other side. When `result` sits on the left, there's nothing to grow there,
+   * so the right column is shrunk on the same drag instead (equivalent visual effect: dragging
+   * right still hands result more space). Reordering the columns (see onColumnDrop) never breaks
+   * this, since it's computed from the live left/right pair at drag time, not a fixed column. */
+  startBoundaryResize(leftKey: 'status' | 'progress' | 'result', rightKey: 'status' | 'progress' | 'result', event: MouseEvent): void {
+    event.preventDefault();
+    const sizable: 'status' | 'progress' = leftKey !== 'result' ? leftKey : (rightKey as 'status' | 'progress');
+    const invert = leftKey === 'result';
+    const startX = event.clientX;
+    const startVal = sizable === 'status' ? this.colLeftWidth : this.colMidWidth;
+    const min = 200;
+    const max = 560;
+    const body = document.body;
+    body.classList.add('panel-resizing');
+    body.style.userSelect = 'none';
+    body.style.cursor = 'col-resize';
+    const onMove = (e: MouseEvent) => {
+      const delta = (e.clientX - startX) * (invert ? -1 : 1);
+      const next = Math.min(max, Math.max(min, startVal + delta));
+      if (sizable === 'status') this.colLeftWidth = next;
+      else this.colMidWidth = next;
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      body.classList.remove('panel-resizing');
+      body.style.userSelect = '';
+      body.style.cursor = '';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
+  onColumnDragStart(key: 'status' | 'progress' | 'result', event: DragEvent): void {
+    this.draggingColumn = key;
+    event.dataTransfer?.setData('text/plain', key);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  }
+
+  onColumnDragOver(event: DragEvent): void {
+    event.preventDefault();
+  }
+
+  onColumnDrop(targetKey: 'status' | 'progress' | 'result', event: DragEvent): void {
+    event.preventDefault();
+    const from = this.draggingColumn;
+    this.draggingColumn = null;
+    if (!from || from === targetKey) return;
+    const order = [...this.columnOrder];
+    const fromIdx = order.indexOf(from);
+    const toIdx = order.indexOf(targetKey);
+    order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, from);
+    this.columnOrder = order;
+  }
+
   private pipelineDocsTimer: ReturnType<typeof setTimeout> | null = null;
   private pipelineDocsDestroyed = false;
+  /** Doc selection (selectedRegIds/selectedComplianceIds) is mutated directly from many call
+   * sites across the shared base class, not routed through one setter — a signal-based tracker
+   * refresh can't hook every mutation. Cheap enough to just recompute on a short interval instead
+   * of chasing every call site. */
+  private stepTrackerRefreshTimer: ReturnType<typeof setInterval> | null = null;
   /** True once a poll tick has found at least one doc AND finished a readiness fetch for it —
    * the slow-poll interval only kicks in after this, so no fixed delay is ever "too short" for
    * how long the doc lists actually took to load. */
@@ -132,6 +229,15 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   override ngOnInit(): void {
     this.restoreStep1Height();
     this.pipelinePanel.activate();
+    this.stepTracker.activate();
+    this.stepTracker.setSteps(this.computeTrackerSteps());
+    this.stepTrackerRefreshTimer = setInterval(() => {
+      this.stepTracker.setSteps(this.computeTrackerSteps());
+      this.pipelinePanel.setRunActive(!!this.ndRunId);
+      this.syncPageHeaderMarquee();
+    }, 400);
+    this.syncPageHeaderMarquee();
+    this.pageHeaderActions.setShowInProgressNav(true);
     super.ngOnInit();
     // Doc lists themselves load asynchronously (super.ngOnInit kicks that off), and how long
     // that takes varies with network/DB latency — no fixed delay is ever safely "long enough".
@@ -146,7 +252,28 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     this.pipelineDocsDestroyed = true;
     if (this.pipelineDocsTimer) clearTimeout(this.pipelineDocsTimer);
     this.pipelinePanel.deactivate();
+    this.stepTracker.deactivate();
+    this.pageHeaderActions.clearMarquee();
+    this.pageHeaderActions.setShowInProgressNav(false);
+    if (this.stepTrackerRefreshTimer) clearInterval(this.stepTrackerRefreshTimer);
     super.ngOnDestroy();
+  }
+
+  /** Mirrors the Progress column empty/live/complete states in the blue shell header ticker. */
+  private syncPageHeaderMarquee(): void {
+    let text: string;
+    if (this.showLiveProgressColumn) {
+      const summary = this.forwardClauseProgressSummary;
+      const count = this.sessionProgressLabel;
+      text = `${summary} · Clauses ${count}`;
+    } else if (this.showPostAnalysisWorkflow) {
+      text = `Analysis complete · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
+    } else if (this.isNdRunStuck) {
+      text = 'Analysis did not start — use Rerun all or rerun each point below';
+    } else {
+      text = 'Run analysis to see live progress here';
+    }
+    this.pageHeaderActions.setMarquee(text);
   }
 
   /** Recursive self-pacing poll: fires every ~200ms until the doc lists have actually populated
@@ -200,6 +327,8 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       return { id, name: found?.originalFileName || found?.title || 'Internal document' };
     });
     this.pipelinePanel.setDocs(docs);
+    this.pipelinePanel.setRunActive(!!this.ndRunId);
+    this.stepTracker.setSteps(this.computeTrackerSteps());
 
     const hadDocs = this.complianceDocs.length > 0 || this.regulationDocs.length > 0;
     await this.syncLocalPipelineReadiness();
@@ -630,6 +759,72 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       default:
         return 'Starting analysis';
     }
+  }
+
+  /** Heading shown next to the clause number in the Result panel. selectedPointSnapshot's own
+   * pointTitle is often empty for points saved before the snapshot carried a title — when that
+   * happens the heading used to go missing entirely, leaving the clause number as the only thing
+   * in the header and the quoted regulatory text (which already opens with "<number> <title>" as
+   * printed in the source document) as the only place the title showed up at all. Falls back to
+   * the same title already resolved for this point's rail card. */
+  get resultHeadingTitle(): string {
+    const fromSnapshot = this.selectedPointSnapshot?.pointTitle?.trim();
+    if (fromSnapshot) return fromSnapshot;
+    const id = this.selectedDetailPointId;
+    if (!id) return '';
+    const row = this.analysingListRows.find((r) => r.pointId === id || r.displayId === id);
+    return row?.title?.trim() || '';
+  }
+
+  /** Left-rail progress: setup (pick regulation, pick internal docs) through the same real
+   * phases regulPipelinePhaseLabel reports (parsing/retrieval/forward/done), so the rail always
+   * agrees with what the page itself says is happening. */
+  private computeTrackerSteps(): NdStep[] {
+    const defs = [
+      'Regulation documents & points',
+      'Internal documents',
+      'Preparing documents',
+      'Retrieving policy sections',
+      'Judging clauses',
+      'Complete',
+    ];
+
+    const hasReg = this.selectedRegIds.size > 0;
+    const hasInt = this.selectedComplianceIds.size > 0;
+    const started = !!this.ndRunId;
+    const phase = (this.ndRegulPipelinePhase || '').toLowerCase();
+    const status = (this.ndRunStatus || '').toLowerCase();
+    const finished =
+      phase === 'done' ||
+      [
+        'completed',
+        'dual_verify_failed',
+        'landing_ai_complete',
+        'submitted_for_review',
+        'pulled_back',
+        'checker_approved',
+        'reviewer_approved',
+      ].includes(status);
+
+    let current: number;
+    if (!started) {
+      current = !hasReg ? 0 : !hasInt ? 1 : 2;
+    } else if (finished) {
+      // One past the last index — every step (including "Complete" itself) renders as done
+      // rather than leaving "Complete" stuck on its unfilled "active" ring forever.
+      current = defs.length;
+    } else if (phase === 'retrieval') {
+      current = 3;
+    } else if (phase === 'forward') {
+      current = 4;
+    } else {
+      current = 2; // parsing, or no phase reported yet right after the run is created
+    }
+
+    return defs.map((label, i) => ({
+      label,
+      state: i < current ? 'done' : i === current ? 'active' : 'pending',
+    }));
   }
 
   // --------------------------------------------------------------------------------

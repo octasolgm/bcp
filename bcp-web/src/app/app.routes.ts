@@ -42,7 +42,7 @@ const ndAnalyseRegulFullRoute = {
 const ndAnalyseRegulFullV2Route = {
   canActivate: [ndRoleGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
-  title: 'Regul Full Markdown V2 · Comply Solutions',
+  title: 'New Analysis · Comply Solutions',
   loadComponent: () =>
     import('./pages/analyse-regul-full-v2/analyse-regul-full-v2.component').then(
       (m) => m.AnalyseRegulFullV2Component,

@@ -1,11 +1,4 @@
 <div class="analyse-v-page analyse-regul-page">
-<header class="page-header-v with-actions">
-  <div>
-    <h1>Gap Analysis@if (versionLabel) { <span class="ver-tag">{{ versionLabel }}</span> }</h1>
-  </div>
-  <app-in-progress-nav-button />
-</header>
-
 @if (pendingRegBump) {
   <div class="bump-banner">
     <div>
@@ -700,7 +693,10 @@
       </div>
     </div>
   </section>
+</div>
 
+<section class="v8-summary-section" aria-label="Summary and run analysis">
+  <h2 class="v8-section-label v8-page-section-title">Summary &amp; run analysis</h2>
   <section class="action-strip" aria-label="Analysis summary and run">
     @if (showDualVerifyFailedBanner && showReversePipelineUi && !isDemoViewer) {
       <div class="dv-failed-banner" role="status">
@@ -721,7 +717,7 @@
         }
       </div>
     }
-    <div class="metrics-row metrics-row-4">
+    <div class="metrics-row metrics-row-2">
       <div class="stat-box">
         <strong>{{ selectedCount }}</strong>
         <em>Regulation points</em>
@@ -729,14 +725,6 @@
       <div class="stat-box">
         <strong>{{ selectedComplianceIds.size }}</strong>
         <em>Internal docs</em>
-      </div>
-      <div class="stat-box">
-        <strong>{{ coverageCounts.completed }}</strong>
-        <em>Done</em>
-      </div>
-      <div class="stat-box warn">
-        <strong>{{ coverageCounts.failed }}</strong>
-        <em>Failed</em>
       </div>
     </div>
     <div class="run-row">
@@ -800,12 +788,54 @@
       }
     </div>
   }
-</div>
+</section>
 
-<!-- 3-column workspace: analysing | progress | result -->
-<div #workspaceEl class="workspace-3col workspace-resizable v8-workspace">
-  <div class="col-panel col-status" [style.width.px]="colLeftWidth">
-    <div class="col-head">
+<section class="v8-workspace-section" aria-label="Points, progress and results">
+  <h2 class="v8-section-label v8-page-section-title">Points, progress &amp; results</h2>
+  <div class="v8-workspace-metrics metrics-row metrics-row-3" aria-label="Points analysis summary">
+    <div class="stat-box">
+      <strong>{{ selectedCount }}</strong>
+      <em>Points selected</em>
+      @if (analysingListTotal > 0) {
+        <span class="stat-box-sub">{{ analysingListDone }}/{{ analysingListTotal }} in run</span>
+      }
+    </div>
+    <div class="stat-box">
+      <strong>{{ coverageCounts.completed }}</strong>
+      <em>Done</em>
+    </div>
+    <div class="stat-box warn">
+      <strong>{{ coverageCounts.failed }}</strong>
+      <em>Failed</em>
+    </div>
+  </div>
+  <p class="v8-workspace-lede">
+    Drag a column header to reorder · drag dividers to resize · use the arrow on a header to collapse or expand.
+  </p>
+  <div #workspaceEl class="workspace-3col workspace-resizable v8-workspace">
+  <div
+    class="col-panel col-status"
+    [class.is-collapsed]="columnCollapsed.status"
+    [style.width.px]="columnWidthPx('status')"
+    [style.order]="columnOrderValue('status')"
+  >
+    <div
+      class="col-head"
+      draggable="true"
+      title="Drag to reorder"
+      (dragstart)="onColumnDragStart('status', $event)"
+      (dragover)="onColumnDragOver($event)"
+      (drop)="onColumnDrop('status', $event)"
+    >
+      <button
+        type="button"
+        class="col-collapse-btn"
+        [attr.aria-expanded]="!columnCollapsed.status"
+        [attr.aria-label]="columnCollapsed.status ? 'Expand points column' : 'Collapse points column'"
+        (click)="toggleColumnCollapsed('status', $event)"
+      >
+        {{ columnCollapsed.status ? '›' : '‹' }}
+      </button>
       @if (usesForwardOnlyRunUi()) {
         <h3>Points <span class="rail-count">({{ sortedAnalysingRows.length }})</span></h3>
         <span class="count">{{ analysingListDone }}/{{ analysingListTotal }}</span>
@@ -815,7 +845,7 @@
       }
     </div>
 
-    @if (selectedCoverageRows.length) {
+    @if (!columnCollapsed.status && selectedCoverageRows.length) {
       <app-nd-point-sort-controls
         class="analysing-point-sort"
         [sort]="analysingPointSort"
@@ -824,7 +854,7 @@
       />
     }
 
-    @if (hasResumableRun || analysisState !== 'idle') {
+    @if (!columnCollapsed.status && (hasResumableRun || analysisState !== 'idle')) {
       <div class="analysing-status-tabs" role="tablist" aria-label="Filter analysing list by status">
         <button
           type="button"
@@ -962,8 +992,8 @@
                 }
               </span>
               <span class="rail-point-title" [title]="row.title">{{ row.title }}</span>
-              @if (analysingPointRailGapCount(row.pointId) > 0) {
-                <span class="gap-count-badge rail-gap-inline">
+              @if (analysingPointRailSeverity(row.pointId)) {
+                <span class="gap-count-badge rail-gap-inline" [class.zero]="analysingPointRailGapCount(row.pointId) === 0">
                   {{ analysingPointRailGapCount(row.pointId) }} gap{{ analysingPointRailGapCount(row.pointId) === 1 ? '' : 's' }}
                 </span>
               }
@@ -1180,12 +1210,34 @@
     class="resize-handle resize-handle-v"
     role="separator"
     aria-orientation="vertical"
-    aria-label="Resize analysing list column"
-    (mousedown)="startColResize('left', $event)"
+    aria-label="Resize column"
+    [style.order]="5"
+    (mousedown)="startBoundaryResize(columnOrder[0], columnOrder[1], $event)"
   ></div>
 
-  <div class="col-panel col-progress" [style.width.px]="colMidWidth">
-    <div class="col-head">
+  <div
+    class="col-panel col-progress"
+    [class.is-collapsed]="columnCollapsed.progress"
+    [style.width.px]="columnWidthPx('progress')"
+    [style.order]="columnOrderValue('progress')"
+  >
+    <div
+      class="col-head"
+      draggable="true"
+      title="Drag to reorder"
+      (dragstart)="onColumnDragStart('progress', $event)"
+      (dragover)="onColumnDragOver($event)"
+      (drop)="onColumnDrop('progress', $event)"
+    >
+      <button
+        type="button"
+        class="col-collapse-btn"
+        [attr.aria-expanded]="!columnCollapsed.progress"
+        [attr.aria-label]="columnCollapsed.progress ? 'Expand progress column' : 'Collapse progress column'"
+        (click)="toggleColumnCollapsed('progress', $event)"
+      >
+        {{ columnCollapsed.progress ? '›' : '‹' }}
+      </button>
       <h3>Progress</h3>
       <span class="count">{{ analysingListDone }}/{{ analysingListTotal }}</span>
     </div>
@@ -1284,12 +1336,35 @@
     class="resize-handle resize-handle-v"
     role="separator"
     aria-orientation="vertical"
-    aria-label="Resize progress column"
-    (mousedown)="startColResize('right', $event)"
+    aria-label="Resize column"
+    [style.order]="15"
+    (mousedown)="startBoundaryResize(columnOrder[1], columnOrder[2], $event)"
   ></div>
 
-  <div class="col-panel col-result col-panel-flex">
-    <div class="col-head">
+  <div
+    class="col-panel col-result"
+    [class.col-panel-flex]="!columnCollapsed.result"
+    [class.is-collapsed]="columnCollapsed.result"
+    [style.width.px]="columnCollapsed.result ? 52 : null"
+    [style.order]="columnOrderValue('result')"
+  >
+    <div
+      class="col-head"
+      draggable="true"
+      title="Drag to reorder"
+      (dragstart)="onColumnDragStart('result', $event)"
+      (dragover)="onColumnDragOver($event)"
+      (drop)="onColumnDrop('result', $event)"
+    >
+      <button
+        type="button"
+        class="col-collapse-btn"
+        [attr.aria-expanded]="!columnCollapsed.result"
+        [attr.aria-label]="columnCollapsed.result ? 'Expand result column' : 'Collapse result column'"
+        (click)="toggleColumnCollapsed('result', $event)"
+      >
+        {{ columnCollapsed.result ? '›' : '‹' }}
+      </button>
       <h3>Result</h3>
       <span class="count">{{ resultClauseLabel }}</span>
     </div>
@@ -1308,8 +1383,8 @@
                 @if (resultClauseLabel !== '—') {
                   <span class="result-clause-num" [attr.aria-label]="'Section ' + resultClauseLabel">{{ resultClauseLabel }}</span>
                 }
-                @if (selectedPointSnapshot?.pointTitle) {
-                  <span class="result-clause-title">{{ selectedPointSnapshot?.pointTitle }}</span>
+                @if (resultHeadingTitle) {
+                  <span class="result-clause-title">{{ resultHeadingTitle }}</span>
                 }
               </h3>
               @if (pointComplianceSeverity(ndPoint); as severity) {
@@ -1439,7 +1514,8 @@
       }
     </div>
   </div>
-</div>
+  </div>
+</section>
 
 @if (showGapReportSection) {
   @if (showRegulQualitativeCard) {
@@ -1478,7 +1554,8 @@
       </p>
     </section>
   }
-  <section #gapReportEl class="v8-embedded-results">
+  <section #gapReportEl class="v8-embedded-results v8-gap-report-section">
+    <h2 class="v8-section-label v8-page-section-title">Analysis report</h2>
     <app-nd-gap-analysis
       [embedMode]="true"
       [embedRunId]="activeNdRunId"

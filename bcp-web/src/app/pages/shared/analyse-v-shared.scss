@@ -27,6 +27,19 @@
     }
   }
 
+  // New analysis pages keep an empty title slot (shell bar owns the title) plus the
+  // in-progress control — collapse that into a slim right-aligned strip so it does not
+  // read as a large gap under the navy page header.
+  &.with-actions:not(:has(h1)):not(:has(.subtitle)) {
+    justify-content: flex-end;
+    margin-bottom: 0.35rem;
+    min-height: 0;
+
+    > div:empty {
+      display: none;
+    }
+  }
+
   h1 {
     margin: 0 0 0.15rem;
     font-size: 1.125rem;
@@ -650,6 +663,16 @@
     display: flex;
     gap: 0;
     min-height: 360px;
+    // Fixed-width columns (resized by the user) plus the flex result column can add up to more
+    // than the available width once side panels (step tracker / pipeline panel) are open — the
+    // parent `.content` hides overflow-x, so without this the result column was clipped off-
+    // screen with no way to reach it. Scroll the row itself instead.
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
 
     .col-panel:not(.col-panel-flex) {
       flex-shrink: 0;
@@ -657,8 +680,15 @@
     }
 
     .col-panel-flex {
-      flex: 1;
-      min-width: 220px;
+      flex: 1 0 320px;
+      min-width: 320px;
+    }
+
+    .col-panel.is-collapsed {
+      flex: 0 0 52px !important;
+      min-width: 52px !important;
+      max-width: 52px !important;
+      width: 52px !important;
     }
 
     @media (max-width: 1100px) {
@@ -692,23 +722,28 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.4rem;
-  padding: 0.45rem 0.55rem;
+  padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--v-border);
   background: color-mix(in srgb, var(--bg-muted) 55%, transparent);
   flex-shrink: 0;
   min-height: var(--v-row-h);
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
 
   h3 {
     margin: 0;
-    font-size: 0.6875rem;
+    font-size: 0.9rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-secondary);
+    color: var(--text-primary);
   }
 
   .count {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     font-weight: 650;
     font-variant-numeric: tabular-nums;
@@ -1237,6 +1272,23 @@
   &.medium {
     background: var(--medium-bg);
     color: var(--medium);
+  }
+
+  // Clause-level compliance severity (analysingPointRailSeverity) uses this vocabulary, not
+  // critical/high/medium — was falling through with no background/color at all.
+  &.compliant {
+    background: var(--compliant-bg);
+    color: var(--compliant);
+  }
+
+  &.partial_compliant {
+    background: var(--medium-bg);
+    color: var(--medium);
+  }
+
+  &.non_compliant {
+    background: var(--critical-bg);
+    color: var(--critical);
   }
 }
 

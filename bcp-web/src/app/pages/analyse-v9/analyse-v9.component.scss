@@ -517,9 +517,9 @@
   }
 
   &.active {
-    background: color-mix(in srgb, #0f766e 14%, white);
-    border-color: color-mix(in srgb, #0f766e 35%, white);
-    color: #0f766e;
+    background: color-mix(in srgb, var(--accent, #0f766e) 14%, white);
+    border-color: color-mix(in srgb, var(--accent, #0f766e) 35%, white);
+    color: var(--accent, #0f766e);
   }
 }
 

@@ -429,6 +429,10 @@
 
   .nav-label-text {
     min-width: 0;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .nav-pass2-llm {
@@ -449,6 +453,7 @@
   // reads calmer as a muted pill; the item still gets the accent tint background when active.
   .nav-badge {
     margin-left: auto;
+    flex-shrink: 0;
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
@@ -610,16 +615,35 @@
 .content {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  // The fixed page-header bar lives here as a sibling of .content-scroll — .content itself must
+  // not scroll (that would carry the header away with the rest of the page) or add padding
+  // (the header needs to sit flush at the very top/sides, no gap before it starts).
+  overflow: hidden;
+}
+
+.content-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 2rem;
-  min-width: 0;
+  // Tight top padding: the navy app-nd-page-header already sits flush above this scroller,
+  // so a full 2rem top pad read as a large empty gap under every page title.
+  padding: 0.65rem 1.25rem 1.25rem;
   display: flex;
   flex-direction: column;
   -webkit-overflow-scrolling: touch;
 
+  // The step tracker already has its own border + padding on that side, so the content's own
+  // full padding stacked right after it read as a big empty gap between the rail and the page.
+  .content-tight-left & {
+    padding-left: 1rem;
+  }
+
   @media (max-width: 900px) {
-    padding: 1.25rem 1.5rem;
+    padding: 0.65rem 1.15rem 1.15rem;
   }
 
   > router-outlet {
@@ -634,7 +658,7 @@
   }
 
   .page-header {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
   }
 }
 
