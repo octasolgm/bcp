@@ -235,7 +235,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * points doesn't need a second network round trip. */
   private readonly localSectionsByDoc = new Map<string, NdLocalExtractionSection[]>();
 
-  /** Hybrid pipeline panel + step rail — same audience as Workspaces / AI usage (platform owner, not client admins). */
+  /** Right-side hybrid engine panel — platform owner only (not client workspace admins). */
   private get showEnginePipelinePanel(): boolean {
     return this.ndAuth.canManageWorkspaces();
   }
@@ -244,12 +244,12 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     this.restoreStep1Height();
     if (this.showEnginePipelinePanel) {
       this.pipelinePanel.activate();
-      this.stepTracker.activate();
-      this.stepTracker.setSteps(this.computeTrackerSteps());
     }
+    this.stepTracker.activate();
+    this.stepTracker.setSteps(this.computeTrackerSteps());
     this.stepTrackerRefreshTimer = setInterval(() => {
+      this.stepTracker.setSteps(this.computeTrackerSteps());
       if (this.showEnginePipelinePanel) {
-        this.stepTracker.setSteps(this.computeTrackerSteps());
         this.pipelinePanel.setRunActive(!!this.ndRunId);
       }
       this.syncPageHeaderMarquee();
@@ -271,8 +271,8 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     if (this.pipelineDocsTimer) clearTimeout(this.pipelineDocsTimer);
     if (this.showEnginePipelinePanel) {
       this.pipelinePanel.deactivate();
-      this.stepTracker.deactivate();
     }
+    this.stepTracker.deactivate();
     this.pageHeaderActions.clearMarquee();
     this.pageHeaderActions.setShowInProgressNav(false);
     if (this.stepTrackerRefreshTimer) clearInterval(this.stepTrackerRefreshTimer);
@@ -349,8 +349,8 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     if (this.showEnginePipelinePanel) {
       this.pipelinePanel.setDocs(docs);
       this.pipelinePanel.setRunActive(!!this.ndRunId);
-      this.stepTracker.setSteps(this.computeTrackerSteps());
     }
+    this.stepTracker.setSteps(this.computeTrackerSteps());
 
     const hadDocs = this.complianceDocs.length > 0 || this.regulationDocs.length > 0;
     await this.syncLocalPipelineReadiness();
