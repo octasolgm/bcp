@@ -73,6 +73,8 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * column just moves it and its own handle together as a pair. Session-only — not persisted, so
    * a refresh always starts back at the default Points/Progress/Result order. */
   columnOrder: Array<'status' | 'progress' | 'result'> = ['status', 'progress', 'result'];
+  /** Explicit width for the Result column — same resize model as Points/Progress (V2 only). */
+  colResultWidth = 360;
   /** Collapsed workspace columns — narrow rail with title only; expand via the head control. */
   columnCollapsed: Record<'status' | 'progress' | 'result', boolean> = {
     status: false,
@@ -87,10 +89,24 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     this.columnCollapsed[key] = !this.columnCollapsed[key];
   }
 
-  /** Pixel width for fixed columns; collapsed rails use a narrow strip. */
-  columnWidthPx(key: 'status' | 'progress'): number {
+  /** Pixel width for workspace columns; collapsed rails use a narrow strip. */
+  columnWidthPx(key: 'status' | 'progress' | 'result'): number {
     if (this.columnCollapsed[key]) return 52;
-    return key === 'status' ? this.colLeftWidth : this.colMidWidth;
+    if (key === 'status') return this.colLeftWidth;
+    if (key === 'progress') return this.colMidWidth;
+    return this.colResultWidth;
+  }
+
+  private columnWidthValue(key: 'status' | 'progress' | 'result'): number {
+    if (key === 'status') return this.colLeftWidth;
+    if (key === 'progress') return this.colMidWidth;
+    return this.colResultWidth;
+  }
+
+  private setColumnWidthValue(key: 'status' | 'progress' | 'result', px: number): void {
+    if (key === 'status') this.colLeftWidth = px;
+    else if (key === 'progress') this.colMidWidth = px;
+    else this.colResultWidth = px;
   }
 
   /** CSS `order` for a column — spaced by 10 (0/10/20) so the two boundary resize handles, fixed
@@ -99,30 +115,23 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     return this.columnOrder.indexOf(key) * 10;
   }
 
-  /** Drag a resize handle at the boundary between two columns. `status`/`progress` carry an
-   * explicit pixel width (colLeftWidth/colMidWidth); `result` is a flex column with no width of
-   * its own. Whichever of the two sides IS one of those two columns gets resized — growing when
-   * dragged toward the other side. When `result` sits on the left, there's nothing to grow there,
-   * so the right column is shrunk on the same drag instead (equivalent visual effect: dragging
-   * right still hands result more space). Reordering the columns (see onColumnDrop) never breaks
-   * this, since it's computed from the live left/right pair at drag time, not a fixed column. */
-  startBoundaryResize(leftKey: 'status' | 'progress' | 'result', rightKey: 'status' | 'progress' | 'result', event: MouseEvent): void {
+  /** Drag a vertical handle — always resizes the column on the left of the handle (all three
+   * columns have pixel widths, so Result resizes correctly no matter the column order). */
+  startBoundaryResize(leftKey: 'status' | 'progress' | 'result', _rightKey: 'status' | 'progress' | 'result', event: MouseEvent): void {
     event.preventDefault();
-    const sizable: 'status' | 'progress' = leftKey !== 'result' ? leftKey : (rightKey as 'status' | 'progress');
-    const invert = leftKey === 'result';
+    if (this.columnCollapsed[leftKey]) return;
     const startX = event.clientX;
-    const startVal = sizable === 'status' ? this.colLeftWidth : this.colMidWidth;
+    const startVal = this.columnWidthValue(leftKey);
     const min = 200;
-    const max = 560;
+    const max = 640;
     const body = document.body;
     body.classList.add('panel-resizing');
     body.style.userSelect = 'none';
     body.style.cursor = 'col-resize';
     const onMove = (e: MouseEvent) => {
-      const delta = (e.clientX - startX) * (invert ? -1 : 1);
+      const delta = e.clientX - startX;
       const next = Math.min(max, Math.max(min, startVal + delta));
-      if (sizable === 'status') this.colLeftWidth = next;
-      else this.colMidWidth = next;
+      this.setColumnWidthValue(leftKey, next);
     };
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);

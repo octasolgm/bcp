@@ -317,7 +317,7 @@
     position: sticky;
     top: 0;
     z-index: 2;
-    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    background-color: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 12%, var(--bg-card)));
     color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
     font-weight: 700;
     font-size: 0.6875rem;
@@ -337,7 +337,7 @@
 
   thead th.reg-doc-actions-cell,
   thead th.internal-doc-actions-cell {
-    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    background-color: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 12%, var(--bg-card)));
   }
 
   td.reg-doc-actions-cell,
@@ -557,7 +557,7 @@
   white-space: nowrap;
 
   &:hover {
-    background: color-mix(in srgb, var(--accent) 22%, var(--bg-muted));
+    background-color: color-mix(in srgb, var(--accent) 18%, var(--bg-card));
     color: var(--text-primary);
   }
 }
@@ -581,7 +581,7 @@
       position: sticky;
       top: 0;
       z-index: 1;
-      background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+      background-color: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 12%, var(--bg-card)));
       color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
       box-shadow: 0 1px 0 var(--nd-table-head-border, var(--border));
     }
@@ -655,7 +655,7 @@
     thead th.col-actions {
       position: sticky;
       z-index: 3;
-      background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+      background-color: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 12%, var(--bg-card)));
       color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
     }
 
@@ -868,7 +868,7 @@
 
   thead th {
     color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
-    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    background-color: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 12%, var(--bg-card)));
     font-weight: 700;
     font-size: 0.6875rem;
     text-transform: uppercase;
@@ -1540,7 +1540,7 @@
   th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
   thead th {
     color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
-    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    background-color: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 12%, var(--bg-card)));
     font-weight: 700;
     font-size: 0.6875rem;
     text-transform: uppercase;

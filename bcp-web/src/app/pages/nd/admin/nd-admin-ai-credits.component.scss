@@ -114,7 +114,7 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
-    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    background-color: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 12%, var(--bg-card)));
   }
 
   th.num,

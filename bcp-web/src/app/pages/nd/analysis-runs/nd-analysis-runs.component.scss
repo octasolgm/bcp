@@ -42,7 +42,7 @@
 
   thead th {
     color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
-    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    background-color: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 12%, var(--bg-card)));
     font-weight: 700;
     font-size: 0.6875rem;
     text-transform: uppercase;
@@ -264,7 +264,7 @@
   thead th.col-status,
   thead th.col-actions {
     z-index: 3;
-    background: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 14%, var(--bg-muted)));
+    background-color: var(--nd-table-head-bg, color-mix(in srgb, var(--accent) 12%, var(--bg-card)));
     color: var(--nd-table-head-color, color-mix(in srgb, var(--accent) 78%, var(--text-primary)));
   }
 

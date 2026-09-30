@@ -34,11 +34,11 @@
     <div class="setup-row-inner">
       <!-- Section 1: Regulation + Reg. points -->
       <div class="v8-reg-sources-block" [style.width.%]="setupRegSourcesPct" [style.height.px]="step1HeightPx">
-        @if (showNdPointSources) {
-          <div class="v8-section-header">
-            <div class="v8-section-header-top">
-              <span class="v8-section-label">Step 1 · Regulation Sources</span>
-            </div>
+        <div class="v8-section-header v8-sticky-section-head v8-sticky-section-head--step1">
+          <div class="v8-section-header-top">
+            <span class="v8-section-label">Step 1 · Regulation Sources</span>
+          </div>
+          @if (showNdPointSources) {
             <div class="points-source-tabs">
               <button
                 type="button"
@@ -57,8 +57,8 @@
                 From Regulation Points Library
               </button>
             </div>
-          </div>
-        }
+          }
+        </div>
 
         <div class="v8-reg-sources-columns">
           @if (!showNdPointSources || pointsSource === 'regulation') {
@@ -586,8 +586,8 @@
 
       <!-- Section 2: Compliance -->
       <div class="v8-compliance-block">
-        <div class="v8-section-header v8-section-header-standalone">
-          <span class="v8-section-label">Step 2 · Internal Documents</span>
+        <div class="v8-section-header v8-section-header-standalone v8-sticky-section-head v8-sticky-section-head--step2">
+          <span class="v8-section-label">Step 2 Internal Documents</span>
         </div>
         <div class="doc-panel doc-panel-stretch v8-compliance-panel">
           <div class="panel-header panel-header-v8">
@@ -696,7 +696,7 @@
 </div>
 
 <section class="v8-summary-section" aria-label="Summary and run analysis">
-  <h2 class="v8-section-label v8-page-section-title">Summary &amp; run analysis</h2>
+  <h2 class="v8-section-label v8-page-section-title v8-sticky-section-head v8-sticky-section-head--summary">Summary &amp; run analysis</h2>
   <section class="action-strip" aria-label="Analysis summary and run">
     @if (showDualVerifyFailedBanner && showReversePipelineUi && !isDemoViewer) {
       <div class="dv-failed-banner" role="status">
@@ -791,7 +791,7 @@
 </section>
 
 <section class="v8-workspace-section" aria-label="Points, progress and results">
-  <h2 class="v8-section-label v8-page-section-title">Points, progress &amp; results</h2>
+  <h2 class="v8-section-label v8-page-section-title v8-sticky-section-head v8-sticky-section-head--workspace">Points, progress &amp; results</h2>
   <div class="v8-workspace-metrics metrics-row metrics-row-3" aria-label="Points analysis summary">
     <div class="stat-box">
       <strong>{{ selectedCount }}</strong>
@@ -1343,9 +1343,8 @@
 
   <div
     class="col-panel col-result"
-    [class.col-panel-flex]="!columnCollapsed.result"
     [class.is-collapsed]="columnCollapsed.result"
-    [style.width.px]="columnCollapsed.result ? 52 : null"
+    [style.width.px]="columnWidthPx('result')"
     [style.order]="columnOrderValue('result')"
   >
     <div
@@ -1555,7 +1554,7 @@
     </section>
   }
   <section #gapReportEl class="v8-embedded-results v8-gap-report-section">
-    <h2 class="v8-section-label v8-page-section-title">Analysis report</h2>
+    <h2 class="v8-section-label v8-page-section-title v8-sticky-section-head v8-sticky-section-head--report">Analysis report</h2>
     <app-nd-gap-analysis
       [embedMode]="true"
       [embedRunId]="activeNdRunId"
