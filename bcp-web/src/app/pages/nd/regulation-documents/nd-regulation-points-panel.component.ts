@@ -29,6 +29,7 @@ import {
 } from '../../../../lib/regulation-catalog-utils';
 import type { RegulationPoint } from '../../../../lib/nd/types';
 import { sortByPointRef } from '../../../../lib/nd/list-utils';
+import { splitGovPointDisplayText } from '../../../../lib/nd/clause-section-display';
 import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd/regulation-pdf-page';
 
 /** Above this many points, auto-expanding every full text makes the panel unresponsive. */
@@ -276,16 +277,20 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
     return (p.title ?? '').trim();
   }
 
+  pointHeadline(p: GovPoint): string {
+    return splitGovPointDisplayText(p.point_id, p.text ?? '', p.title).header;
+  }
+
+  pointBodyText(p: GovPoint): string {
+    return splitGovPointDisplayText(p.point_id, p.text ?? '', p.title).body;
+  }
+
   pointDetail(p: GovPoint): string {
-    const title = (p.title ?? '').trim();
-    const text = (p.text ?? '').trim();
-    if (text) return text;
-    if (title) return title;
-    return '';
+    return this.pointBodyText(p).trim();
   }
 
   pointDetailParagraphs(p: GovPoint): string[] {
-    const text = this.pointDetail(p).trim();
+    const text = this.pointBodyText(p).trim();
     if (!text) return [];
     const byBlank = text.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean);
     if (byBlank.length > 1) return byBlank;

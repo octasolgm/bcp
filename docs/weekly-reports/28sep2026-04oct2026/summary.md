@@ -73,3 +73,4 @@ Tasks
 - AI usage, business workspaces, and AI credits admin pages: shared modern styling (section labels, metric strip, side-by-side create workspace and pricing forms)
 - Text documents library hidden from client business workspaces; only the platform super admin sees it in the menu and can open the page or API
 - New Analysis: right-side hybrid pipeline panel (engine steps, retrieval debug) visible only to platform super admin; client workspaces keep the main page and progress rail
+- Internal and regulation section/point cards: clause title (e.g. "1. Introduction") moved into the card header; body no longer repeats the heading; headers stick while scrolling the side panel list

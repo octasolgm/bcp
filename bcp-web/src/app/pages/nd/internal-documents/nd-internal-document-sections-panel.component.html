@@ -83,7 +83,7 @@
                   [attr.aria-expanded]="isRowExpanded(rowKey(section, i))"
                 >
                   <span class="chevron" [class.open]="isRowExpanded(rowKey(section, i))">›</span>
-                  <span class="section-ref">{{ formatSectionRef(section.sectionRef) }}</span>
+                  <span class="section-headline">{{ sectionHeader(section) }}</span>
                 </button>
                 @if (sectionPage(section); as page) {
                   @if (canOpenSource) {
@@ -102,12 +102,12 @@
               </header>
               @if (isRowExpanded(rowKey(section, i))) {
                 <div class="section-body">
-                  @for (para of sectionParagraphs(section.sectionText); track $index) {
+                  @for (para of sectionParagraphs(section); track $index) {
                     <p class="section-para">{{ para }}</p>
                   }
                 </div>
               } @else {
-                <p class="section-preview">{{ preview(section.sectionText) }}</p>
+                <p class="section-preview">{{ preview(section) }}</p>
               }
             </article>
           </li>

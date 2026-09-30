@@ -215,7 +215,7 @@
   background: var(--surface);
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 
   &.point-intro {
     border-style: dashed;
@@ -238,7 +238,23 @@
   max-width: 100%;
   padding: 0.55rem 0.75rem;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  background: color-mix(in srgb, var(--bg-muted) 40%, var(--surface));
+  background: color-mix(in srgb, var(--bg-muted) 55%, var(--surface));
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+.point-headline {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .point-check {

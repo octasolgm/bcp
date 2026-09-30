@@ -117,4 +117,8 @@ Re-extracting a parsed regulation or internal document now uses an improved stru
 
 Regulation points list
 
+Section and point cards
+
+On internal and regulation document side panels, each extracted section or point now shows its full heading in the card header row (for example "1. Introduction" or "2. Purpose") instead of only a bare number with the title repeated below. The body starts with the prose only. While you scroll the panel, the header for the section you are reading stays pinned at the top until the next section pushes it away.
+
 On local and Azure regulation document pages, the side panel could show the correct point count in the summary line but only thin empty rows in the list. That happened when a lightweight background status refresh replaced the full extraction payload in memory (counts stayed, clause text did not). Status updates now merge into the cache without dropping section text, and opening a document reloads full clause bodies or loads the saved points from the database when needed. Single-line clauses also show their text reliably when title and body are the same.

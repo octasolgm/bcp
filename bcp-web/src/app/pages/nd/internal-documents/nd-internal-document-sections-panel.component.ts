@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import type { InternalDocumentSection } from '../../../../lib/nd/types';
 import { sortInternalSectionsByPointRef, normalizeInternalSectionRef } from '../../../../lib/nd/internal-section-group';
+import { splitSectionDisplayText } from '../../../../lib/nd/clause-section-display';
 import { sanitizePolicySectionText } from '../../../../lib/nd/policy-section-text';
 
 @Component({
@@ -116,14 +117,18 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
     return text.length > this.previewLen;
   }
 
-  preview(text: string): string {
-    const clean = sanitizePolicySectionText(text);
-    if (clean.length <= this.previewLen) return clean;
-    return clean.slice(0, this.previewLen).trimEnd() + '…';
+  sectionHeader(section: InternalDocumentSection): string {
+    return splitSectionDisplayText(section.sectionText, section.sectionRef).header;
   }
 
-  sectionParagraphs(text: string): string[] {
-    const t = sanitizePolicySectionText(text);
+  preview(section: InternalDocumentSection): string {
+    const body = splitSectionDisplayText(section.sectionText, section.sectionRef).body;
+    if (body.length <= this.previewLen) return body;
+    return body.slice(0, this.previewLen).trimEnd() + '…';
+  }
+
+  sectionParagraphs(section: InternalDocumentSection): string[] {
+    const t = splitSectionDisplayText(section.sectionText, section.sectionRef).body;
     if (!t) return [];
     const byBlank = t.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean);
     if (byBlank.length > 1) return byBlank;

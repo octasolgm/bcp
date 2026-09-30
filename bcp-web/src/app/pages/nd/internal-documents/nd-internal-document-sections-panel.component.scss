@@ -112,7 +112,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: var(--radius-sm);
   background: var(--surface);
-  overflow: hidden;
+  overflow: visible;
   max-width: 100%;
   min-width: 0;
 
@@ -131,7 +131,11 @@
   max-width: 100%;
   padding: 0.55rem 0.75rem;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  background: color-mix(in srgb, var(--bg-muted) 40%, var(--surface));
+  background: color-mix(in srgb, var(--bg-muted) 55%, var(--surface));
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--border) 65%, transparent);
 }
 
 .section-toggle {
@@ -146,9 +150,9 @@
   color: inherit;
   text-align: left;
   min-width: 0;
-  flex-shrink: 0;
+  flex: 1;
 
-  &:hover .section-ref {
+  &:hover .section-headline {
     text-decoration: underline;
   }
 }
@@ -165,15 +169,16 @@
   }
 }
 
-.section-ref {
-  flex-shrink: 0;
+.section-headline {
+  flex: 1;
+  min-width: 0;
   font-weight: 700;
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
-  color: var(--accent);
-  min-width: 2.25rem;
+  color: var(--text-primary);
   overflow-wrap: anywhere;
   word-break: break-word;
+  line-height: 1.35;
 }
 
 .section-page {

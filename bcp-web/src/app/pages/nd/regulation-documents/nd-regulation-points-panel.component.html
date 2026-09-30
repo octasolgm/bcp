@@ -72,7 +72,7 @@
                       >
                         <header class="point-meta">
                           <span class="point-check" [class.point-check-skip]="!isComparablePoint(p.point_id)" aria-hidden="true">{{ isComparablePoint(p.point_id) ? '✓' : '○' }}</span>
-                          <span class="pid">{{ formatGovPointDisplayId(p) }}</span>
+                          <span class="point-headline">{{ pointHeadline(p) }}</span>
                           @if (pointPageLabel(p.point_id); as pref) {
                             @if (canOpenSource) {
                               <button
@@ -98,9 +98,6 @@
                           }
                         </header>
                         <div class="point-text-wrap">
-                          @if (hasSeparateTitle(p)) {
-                            <h4 class="ptitle">{{ pointTitle(p) }}</h4>
-                          }
                           @if (showDetail(p)) {
                             @if (isPointExpanded(p.point_id) || !isDetailLong(p)) {
                               <div class="point-body">
@@ -120,8 +117,6 @@
                                 {{ isPointExpanded(p.point_id) ? 'Show less' : 'Show more' }}
                               </button>
                             }
-                          } @else if (pointTitle(p)) {
-                            <h4 class="ptitle">{{ pointTitle(p) }}</h4>
                           }
                         </div>
                       </article>
