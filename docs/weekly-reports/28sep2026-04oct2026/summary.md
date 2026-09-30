@@ -56,6 +56,7 @@ Bug fixes
 30 Sep 2026
 
 Bug fixes
+- Regulation documents (local/Azure): points list no longer shows empty gray rows while the header still says dozens of points - background status refresh was wiping clause text from memory; opening a doc now reloads full text or falls back to stored points
 - Fixed a large empty gap under the blue page title bar on every page - a layout rule was stretching the title bar's container to half the column height; content now sits directly under the bar
 - Removed the engine name badge (e.g. Azure) from local document catalog headers; initial load now shows a centered accent spinner instead of plain left-aligned text
 - Document catalog pages: Refresh (icon only) and Upload moved into the blue page title bar on the right; department picker stays in the page toolbar for regulations

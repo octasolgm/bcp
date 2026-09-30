@@ -78,6 +78,8 @@ type NavEntry =
 })
 export class NdShellComponent implements OnInit, OnDestroy {
   private static readonly SIDEBAR_WIDTH_KEY = 'nd-sidebar-width';
+  /** Wide enough for longest nav labels (e.g. Regulation Points Library) without ellipsis. */
+  private static readonly SIDEBAR_DEFAULT_WIDTH = 300;
   private static readonly BADGE_CACHE_KEY = 'nd-sidebar-badges';
   private static readonly SIDEBAR_COLLAPSED_KEY = 'nd-sidebar-manually-collapsed';
 
@@ -109,7 +111,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   navBadges: Partial<Record<string, number>> = {};
   ndActiveRunCount = 0;
   pass2LlmSummary = '';
-  sidebarWidth = 240;
+  sidebarWidth = NdShellComponent.SIDEBAR_DEFAULT_WIDTH;
   sidebarManuallyCollapsed = false;
   private navSub: Subscription | null = null;
   private navRefreshSub: Subscription | null = null;
@@ -378,11 +380,16 @@ export class NdShellComponent implements OnInit, OnDestroy {
     try {
       const raw = localStorage.getItem(NdShellComponent.SIDEBAR_WIDTH_KEY);
       const n = raw ? Number(raw) : NaN;
-      if (Number.isFinite(n)) return Math.min(380, Math.max(180, n));
+      if (Number.isFinite(n)) {
+        const w = Math.min(380, Math.max(180, n));
+        // One-time bump from the old 240px default so labels are not truncated.
+        if (w === 240) return NdShellComponent.SIDEBAR_DEFAULT_WIDTH;
+        return w;
+      }
     } catch {
       /* ignore */
     }
-    return 240;
+    return NdShellComponent.SIDEBAR_DEFAULT_WIDTH;
   }
 
   private saveSidebarWidth(): void {

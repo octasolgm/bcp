@@ -17,6 +17,10 @@ import { startPanelResize } from '../../shared/panel-resize';
 import { formatBytes, formatDate, formatTableDate } from '../../../../lib/nd/utils';
 import { catalogPdfPageLabel } from '../../../../lib/nd/doc-page-count';
 import {
+  localExtractionHasSectionText,
+  mergeLiteLocalExtractionStatus,
+} from '../../../../lib/nd/local-extraction-cache';
+import {
   docAnalysisReadyClass,
   docAnalysisReadyLabel,
   internalAnalysisReadyState,
@@ -448,7 +452,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
       for (const doc of this.docs) {
         const local = res.data[doc.id];
         if (!local) continue;
-        this.localResults.set(doc.id, local);
+        this.localResults.set(doc.id, mergeLiteLocalExtractionStatus(this.localResults.get(doc.id), local));
         doc.parseStatus = (local.status ?? 'pending').toLowerCase();
         doc.parseError = local.error ?? null;
         doc.sectionExtractStatus = (local.extractStatus ?? 'pending').toLowerCase();
@@ -654,11 +658,12 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
    */
   private async ensureFullLocalResult(docId: string): Promise<NdLocalExtractionResult | null> {
     const cached = this.localResults.get(docId);
-    if (cached && cached.lite !== true) return cached;
+    if (cached && cached.lite !== true && localExtractionHasSectionText(cached)) return cached;
     const res = await this.api.localExtractStatusBatch([docId], this.engine);
     const full = res.success ? res.data?.[docId] ?? null : null;
     if (full) this.localResults.set(docId, full);
-    return full ?? cached ?? null;
+    if (full && localExtractionHasSectionText(full)) return full;
+    return cached && localExtractionHasSectionText(cached) ? cached : full ?? null;
   }
 
   async openSections(doc: InternalDocument, event?: Event): Promise<void> {

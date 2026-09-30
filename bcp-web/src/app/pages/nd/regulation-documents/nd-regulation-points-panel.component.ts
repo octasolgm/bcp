@@ -279,8 +279,8 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   pointDetail(p: GovPoint): string {
     const title = (p.title ?? '').trim();
     const text = (p.text ?? '').trim();
-    if (title && text && title !== text) return text;
-    if (!title && text) return text;
+    if (text) return text;
+    if (title) return title;
     return '';
   }
 

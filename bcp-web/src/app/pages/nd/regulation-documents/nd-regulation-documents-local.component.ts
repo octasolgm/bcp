@@ -17,6 +17,10 @@ import {
 import { formatDate, formatTableDate } from '../../../../lib/nd/utils';
 import { catalogPdfPageLabel } from '../../../../lib/nd/doc-page-count';
 import {
+  localExtractionHasSectionText,
+  mergeLiteLocalExtractionStatus,
+} from '../../../../lib/nd/local-extraction-cache';
+import {
   docAnalysisReadyClass,
   docAnalysisReadyLabel,
   regulationAnalysisReadyState,
@@ -663,7 +667,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
         const key = doc.storedDocumentId ?? doc.id;
         const local = res.data[key];
         if (!local) continue;
-        this.localResults.set(doc.id, local);
+        this.localResults.set(doc.id, mergeLiteLocalExtractionStatus(this.localResults.get(doc.id), local));
         // extractionStatus tracks BOTH steps over time, same as the Landing AI flow: pending -> parsed
         // (step 1 done) -> extracted (step 2 done). Only report 'extracted' once Extract has actually run.
         const extractStatus = (local.extractStatus ?? 'pending').toLowerCase();
@@ -1174,7 +1178,13 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     this.shellFocus.setRegulationPointsPanelOpen(true);
     const local = await this.ensureFullLocalResult(doc);
     if (local) {
-      this.selectedPoints = this.mapLocalPoints(local);
+      let mapped = this.mapLocalPoints(local);
+      const expected = local.sectionCount ?? doc.pointCount ?? 0;
+      if (mapped.length === 0 && expected > 0) {
+        await this.loadPointsForDoc(doc.id);
+        return;
+      }
+      this.selectedPoints = mapped;
       this.pointsSource = 'local';
       this.pointsLoading = false;
       // Nothing extracted yet but the doc has been parsed — show the parsed text right away instead
@@ -1193,12 +1203,13 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
    */
   private async ensureFullLocalResult(doc: RegulationDocument): Promise<NdLocalExtractionResult | null> {
     const cached = this.localResults.get(doc.id);
-    if (cached && cached.lite !== true) return cached;
+    if (cached && cached.lite !== true && localExtractionHasSectionText(cached)) return cached;
     const key = doc.storedDocumentId ?? doc.id;
     const res = await this.api.localExtractStatusBatch([key], this.engine);
     const full = res.success ? res.data?.[key] ?? null : null;
     if (full) this.localResults.set(doc.id, full);
-    return full ?? cached ?? null;
+    if (full && localExtractionHasSectionText(full)) return full;
+    return cached && localExtractionHasSectionText(cached) ? cached : full ?? null;
   }
 
   async viewSemanticPoints(doc: RegulationDocument, event?: Event): Promise<void> {
