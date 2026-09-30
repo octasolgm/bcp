@@ -724,7 +724,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
       { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation Documents', icon: 'library' },
       { id: 'libraries', path: '/nd/libraries', label: 'Regulation Points Library', icon: 'list' },
     ];
-    if (this.auth.isPlatformAdmin()) {
+    if (this.auth.canManageWorkspaces()) {
       children.push({
         id: 'text-documents',
         path: '/nd/text-documents',

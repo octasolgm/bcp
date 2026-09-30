@@ -177,7 +177,7 @@
       }
     </aside>
 
-    @if (stepTracker.active()) {
+    @if (stepTracker.active() && auth.canManageWorkspaces()) {
       <app-nd-step-tracker />
     }
 
@@ -192,7 +192,7 @@
       </div>
     </main>
 
-    @if (pipelinePanel.active()) {
+    @if (pipelinePanel.active() && auth.canManageWorkspaces()) {
       <app-nd-pipeline-progress-panel />
     }
   </div>

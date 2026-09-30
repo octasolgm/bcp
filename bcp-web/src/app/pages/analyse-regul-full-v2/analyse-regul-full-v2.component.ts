@@ -235,14 +235,23 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * points doesn't need a second network round trip. */
   private readonly localSectionsByDoc = new Map<string, NdLocalExtractionSection[]>();
 
+  /** Hybrid pipeline panel + step rail — same audience as Workspaces / AI usage (platform owner, not client admins). */
+  private get showEnginePipelinePanel(): boolean {
+    return this.ndAuth.canManageWorkspaces();
+  }
+
   override ngOnInit(): void {
     this.restoreStep1Height();
-    this.pipelinePanel.activate();
-    this.stepTracker.activate();
-    this.stepTracker.setSteps(this.computeTrackerSteps());
-    this.stepTrackerRefreshTimer = setInterval(() => {
+    if (this.showEnginePipelinePanel) {
+      this.pipelinePanel.activate();
+      this.stepTracker.activate();
       this.stepTracker.setSteps(this.computeTrackerSteps());
-      this.pipelinePanel.setRunActive(!!this.ndRunId);
+    }
+    this.stepTrackerRefreshTimer = setInterval(() => {
+      if (this.showEnginePipelinePanel) {
+        this.stepTracker.setSteps(this.computeTrackerSteps());
+        this.pipelinePanel.setRunActive(!!this.ndRunId);
+      }
       this.syncPageHeaderMarquee();
     }, 400);
     this.syncPageHeaderMarquee();
@@ -260,8 +269,10 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   override ngOnDestroy(): void {
     this.pipelineDocsDestroyed = true;
     if (this.pipelineDocsTimer) clearTimeout(this.pipelineDocsTimer);
-    this.pipelinePanel.deactivate();
-    this.stepTracker.deactivate();
+    if (this.showEnginePipelinePanel) {
+      this.pipelinePanel.deactivate();
+      this.stepTracker.deactivate();
+    }
     this.pageHeaderActions.clearMarquee();
     this.pageHeaderActions.setShowInProgressNav(false);
     if (this.stepTrackerRefreshTimer) clearInterval(this.stepTrackerRefreshTimer);
@@ -335,9 +346,11 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
         (this.complianceDoc?.id === id ? this.complianceDoc : null);
       return { id, name: found?.originalFileName || found?.title || 'Internal document' };
     });
-    this.pipelinePanel.setDocs(docs);
-    this.pipelinePanel.setRunActive(!!this.ndRunId);
-    this.stepTracker.setSteps(this.computeTrackerSteps());
+    if (this.showEnginePipelinePanel) {
+      this.pipelinePanel.setDocs(docs);
+      this.pipelinePanel.setRunActive(!!this.ndRunId);
+      this.stepTracker.setSteps(this.computeTrackerSteps());
+    }
 
     const hadDocs = this.complianceDocs.length > 0 || this.regulationDocs.length > 0;
     await this.syncLocalPipelineReadiness();
@@ -507,6 +520,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   protected override onNdRetrievalPreviewUpdate(
     preview: Array<{ clauseNo: string; retrieval: unknown }>,
   ): void {
+    if (!this.showEnginePipelinePanel) return;
     this.pipelinePanel.setPhase(this.ndRegulPipelinePhase);
     this.pipelinePanel.setRetrievalPreview(preview);
   }

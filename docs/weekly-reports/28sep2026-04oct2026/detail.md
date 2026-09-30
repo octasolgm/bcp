@@ -104,3 +104,5 @@ The My profile screen has a clearer layout: your name and workspace at a glance,
 The AI usage, business workspaces, and AI credits pages share updated presentation: clearer page labels, a compact metric strip on usage totals, filters grouped in a light panel, and create-workspace plus credit-pricing forms shown side by side on wide screens.
 
 The Text documents library (the experimental local parse library under Documents) is no longer shown to client workspace users. Only the platform super admin sees it in navigation, and direct links or API calls from a business admin are blocked the same way as other platform-only tools.
+
+On New Analysis, the hybrid pipeline tooling (right-side engine panel and left progress rail with retrieval/judging phases) uses the same access rule as Business workspaces and AI usage: only the platform owner, not a client workspace's admin. Client users still get the main New Analysis screen, upload progress, workspace columns, and report without those panels.
