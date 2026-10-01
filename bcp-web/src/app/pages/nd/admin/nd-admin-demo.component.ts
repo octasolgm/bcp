@@ -5,6 +5,7 @@ import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { NdGapPointDetailComponent } from '../../../components/nd/nd-gap-point-detail.component';
+import { NdClauseRailCardComponent } from '../../../components/nd/nd-clause-rail-card.component';
 import {
   demoTemplatePointToPreview,
   findRegulationPointForClause,
@@ -16,6 +17,7 @@ import {
   type ComplianceSeverity,
 } from '../../../../lib/nd/point-compliance-status';
 import type { AnalysisPoint, PointSnapshot, RegulationPoint } from '../../../../lib/nd/types';
+import { buildClauseRailCardFields } from '../../../../lib/nd/clause-rail-card-display';
 
 export type DemoTemplateSummary = {
   id: string;
@@ -55,7 +57,7 @@ export type DemoTemplateDetail = DemoTemplateSummary & {
 @Component({
   selector: 'app-nd-admin-demo',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdGapPointDetailComponent],
+  imports: [CommonModule, FormsModule, NdGapPointDetailComponent, NdClauseRailCardComponent],
   templateUrl: './nd-admin-demo.component.html',
   styleUrls: ['./nd-admin-demo.component.scss', '../nd-shared.scss'],
 })
@@ -442,6 +444,14 @@ export class NdAdminDemoComponent implements OnInit {
     const sev = this.templatePointSeverity(point);
     if (!sev || sev === 'compliant') return 0;
     return 1;
+  }
+
+  demoClauseRailCard(point: DemoTemplatePoint) {
+    return buildClauseRailCardFields({
+      clauseNum: point.clauseNo,
+      title: point.clauseTitle,
+      clauseText: point.interpretation || point.gapDescription || '',
+    });
   }
 
   templatePointPolicySnippet(point: DemoTemplatePoint): string {

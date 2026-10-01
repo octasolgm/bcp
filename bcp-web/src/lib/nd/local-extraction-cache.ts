@@ -42,6 +42,11 @@ export function localExtractionHasSectionText(result: NdLocalExtractionResult | 
   return localSectionsHaveClauseText(result.sections) || localSectionsHaveClauseText(result.semanticSections);
 }
 
+export function localExtractionHasParsedMarkdown(result: NdLocalExtractionResult | null | undefined): boolean {
+  if (!result || result.lite === true) return false;
+  return !!(result.markdownText ?? '').trim();
+}
+
 /** Keep parsed markdown / section JSON when a status poll returns empty heavy fields. */
 export function mergeFullLocalExtractionStatus(
   previous: NdLocalExtractionResult | undefined,

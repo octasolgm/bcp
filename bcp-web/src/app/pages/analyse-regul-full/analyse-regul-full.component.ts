@@ -8,6 +8,8 @@ import { NdPointSortControlsComponent } from '../../components/nd/nd-point-sort-
 import { NdPointNumberTreeComponent } from '../nd/shared/nd-point-number-tree.component';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
+import { NdClauseRailCardComponent } from '../../components/nd/nd-clause-rail-card.component';
+import { NdReportSummaryStackComponent } from '../../components/nd/nd-report-summary-stack.component';
 import { REGUL_PIPELINE_FULL } from '../../../lib/nd/regul-fields';
 import { AnalyseRegulComponent } from '../analyse-regul/analyse-regul.component';
 
@@ -28,6 +30,8 @@ import { AnalyseRegulComponent } from '../analyse-regul/analyse-regul.component'
     NdPointNumberTreeComponent,
     NdStatusBadgeComponent,
     NdGapAnalysisComponent,
+    NdClauseRailCardComponent,
+    NdReportSummaryStackComponent,
   ],
   templateUrl: '../analyse-regul/analyse-regul.component.html',
   styleUrl: '../analyse-regul/analyse-regul.component.scss',

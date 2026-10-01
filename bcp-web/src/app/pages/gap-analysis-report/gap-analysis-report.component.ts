@@ -35,7 +35,14 @@ import { NdApiService } from '../../services/nd/nd-api.service';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { ToastService } from '../../services/toast.service';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
+import {
+  NdReportSummaryStackComponent,
+  type ReportSummaryFilterId,
+} from '../../components/nd/nd-report-summary-stack.component';
 import type { ResultsData } from '../../../lib/nd/types';
+import { rollupFromInlineGapItems } from '../../../lib/nd/inline-gap-rollup';
+import type { ClauseRollup } from '../../../lib/nd/gap-state';
+import type { ComplianceSeverity } from '../../../lib/nd/point-compliance-status';
 
 /** Seeded TFS × IMPTFS combined compliance session (32 points). */
 const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
@@ -43,7 +50,7 @@ const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
 @Component({
   selector: 'app-gap-analysis-report',
   standalone: true,
-  imports: [FormsModule, RouterLink, NdStatusBadgeComponent],
+  imports: [FormsModule, RouterLink, NdStatusBadgeComponent, NdReportSummaryStackComponent],
   templateUrl: './gap-analysis-report.component.html',
   styleUrl: './gap-analysis-report.component.scss',
 })
@@ -68,7 +75,7 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
   pointIds: string[] = [];
   pdfPreview: { title: string; page: string; body: string } | null = null;
 
-  activeFilter = 'all';
+  activeFilter: 'all' | ComplianceSeverity = 'all';
   ndRunId: string | null = null;
   ndRunStatus = '';
   ndRunData: ResultsData | null = null;
@@ -120,6 +127,20 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
       partialCompliant: this.items.filter((i) => i.severity === 'partial_compliant').length,
       nonCompliant: this.items.filter((i) => i.severity === 'non_compliant').length,
     };
+  }
+
+  get reportRollup(): ClauseRollup {
+    return rollupFromInlineGapItems(this.items);
+  }
+
+  get reportSummaryActiveFilter(): ReportSummaryFilterId {
+    return this.activeFilter === 'all' ? 'all' : this.activeFilter;
+  }
+
+  filterFromSummaryCard(filter: ReportSummaryFilterId): void {
+    if (filter === 'all') return;
+    const next: 'all' | ComplianceSeverity = this.activeFilter === filter ? 'all' : filter;
+    this.setFilter(next);
   }
 
   get filteredItems(): GapItemData[] {
@@ -220,7 +241,7 @@ export class GapAnalysisReportComponent implements OnInit, OnDestroy {
     void this.router.navigate(['/nd/reviewer']);
   }
 
-  setFilter(id: string): void {
+  setFilter(id: 'all' | ComplianceSeverity): void {
     this.activeFilter = id;
   }
 

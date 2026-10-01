@@ -1,3 +1,4 @@
+import type { ActionPlanEntry } from './action-plan';
 import type { AnalysisPoint } from './types';
 import { countDisplayGapsForAnalysisPoint } from './cap-gap-count';
 import { riskScoreFromRaw } from './risk-priority-score';
@@ -144,9 +145,49 @@ export function actionReviewStatusLabel(status: ActionItemReviewStatus | ''): st
 
 export type ActionReviewProgress = { total: number; reviewed: number };
 
-export function countActionReviewProgress(
-  points: AnalysisPoint[],
+/** Gap index used when matching saved action-item reviews to corrective action plans. */
+export function actionPlanGapIndexForReview(plan: ActionPlanEntry): number {
+  const idx = plan.gapIndex ?? 0;
+  return idx >= 1 ? idx : 1;
+}
+
+function reviewedGapKeysFromEntries(entries: ActionItemReviewEntry[] | undefined): Set<string> {
+  const keys = new Set<string>();
+  for (const e of entries ?? []) {
+    if (e.status && e.actionIndex >= 1) keys.add(`${e.analysisPointId}:${e.actionIndex}`);
+  }
+  return keys;
+}
+
+function reviewedGapKeysFromDrafts(
   byPoint: Record<string, Record<number, ActionItemReviewDraft>>,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const [pointId, byIndex] of Object.entries(byPoint)) {
+    for (const [indexRaw, draft] of Object.entries(byIndex)) {
+      const index = Number(indexRaw);
+      if (index >= 1 && draft.status) keys.add(`${pointId}:${index}`);
+    }
+  }
+  return keys;
+}
+
+/** One review slot per corrective action plan; saved reviews still attach to a gap index. */
+export function countActionPlanReviewProgress(
+  plans: ActionPlanEntry[],
+  reviewedGapKeys: Set<string>,
+): ActionReviewProgress {
+  let reviewed = 0;
+  for (const plan of plans) {
+    const key = `${plan.analysisPointId}:${actionPlanGapIndexForReview(plan)}`;
+    if (reviewedGapKeys.has(key)) reviewed++;
+  }
+  return { total: plans.length, reviewed };
+}
+
+function countGapSlotReviewProgress(
+  points: AnalysisPoint[],
+  reviewedGapKeys: Set<string>,
   attachmentCounts?: Record<string, number>,
 ): ActionReviewProgress {
   let total = 0;
@@ -155,12 +196,24 @@ export function countActionReviewProgress(
     const manualCount = attachmentCounts?.[point.id] ?? 0;
     const gapCount = countDisplayGapsForAnalysisPoint(point, manualCount);
     total += gapCount;
-    const byIndex = byPoint[point.id] ?? {};
     for (let i = 1; i <= gapCount; i++) {
-      if (byIndex[i]?.status) reviewed++;
+      if (reviewedGapKeys.has(`${point.id}:${i}`)) reviewed++;
     }
   }
   return { total, reviewed };
+}
+
+export function countActionReviewProgress(
+  points: AnalysisPoint[],
+  byPoint: Record<string, Record<number, ActionItemReviewDraft>>,
+  attachmentCounts?: Record<string, number>,
+  actionPlans?: ActionPlanEntry[],
+): ActionReviewProgress {
+  const reviewedGapKeys = reviewedGapKeysFromDrafts(byPoint);
+  if (actionPlans?.length) {
+    return countActionPlanReviewProgress(actionPlans, reviewedGapKeys);
+  }
+  return countGapSlotReviewProgress(points, reviewedGapKeys, attachmentCounts);
 }
 
 export function reviewsForAction(
@@ -190,21 +243,14 @@ export function validateSavedActionReviewsComplete(
   points: AnalysisPoint[],
   entries: ActionItemReviewEntry[] | undefined,
   attachmentCounts?: Record<string, number>,
+  actionPlans?: ActionPlanEntry[],
 ): { ok: boolean; message?: string } {
-  let total = 0;
-  let reviewed = 0;
-  const reviewedKeys = new Set<string>();
-  for (const e of entries ?? []) {
-    if (e.status && e.actionIndex >= 1) reviewedKeys.add(`${e.analysisPointId}:${e.actionIndex}`);
-  }
-  for (const point of points) {
-    const manualCount = attachmentCounts?.[point.id] ?? 0;
-    const gapCount = countDisplayGapsForAnalysisPoint(point, manualCount);
-    total += gapCount;
-    for (let i = 1; i <= gapCount; i++) {
-      if (reviewedKeys.has(`${point.id}:${i}`)) reviewed++;
-    }
-  }
+  const { total, reviewed } = countSavedReviewProgress(
+    points,
+    entries,
+    attachmentCounts,
+    actionPlans,
+  );
   if (total === 0) return { ok: true };
   if (reviewed >= total) return { ok: true };
   return {
@@ -217,22 +263,13 @@ export function countSavedReviewProgress(
   points: AnalysisPoint[],
   entries: ActionItemReviewEntry[] | undefined,
   attachmentCounts?: Record<string, number>,
+  actionPlans?: ActionPlanEntry[],
 ): ActionReviewProgress {
-  const reviewedKeys = new Set<string>();
-  for (const e of entries ?? []) {
-    if (e.status && e.actionIndex >= 1) reviewedKeys.add(`${e.analysisPointId}:${e.actionIndex}`);
+  const reviewedGapKeys = reviewedGapKeysFromEntries(entries);
+  if (actionPlans?.length) {
+    return countActionPlanReviewProgress(actionPlans, reviewedGapKeys);
   }
-  let total = 0;
-  let reviewed = 0;
-  for (const point of points) {
-    const manualCount = attachmentCounts?.[point.id] ?? 0;
-    const gapCount = countDisplayGapsForAnalysisPoint(point, manualCount);
-    total += gapCount;
-    for (let i = 1; i <= gapCount; i++) {
-      if (reviewedKeys.has(`${point.id}:${i}`)) reviewed++;
-    }
-  }
-  return { total, reviewed };
+  return countGapSlotReviewProgress(points, reviewedGapKeys, attachmentCounts);
 }
 
 export function pointHasSavedReviews(pointId: string, entries: ActionItemReviewEntry[] | undefined): boolean {
@@ -253,8 +290,14 @@ export function validateActionReviewsComplete(
   points: AnalysisPoint[],
   byPoint: Record<string, Record<number, ActionItemReviewDraft>>,
   attachmentCounts?: Record<string, number>,
+  actionPlans?: ActionPlanEntry[],
 ): { ok: boolean; message?: string } {
-  const { total, reviewed } = countActionReviewProgress(points, byPoint, attachmentCounts);
+  const { total, reviewed } = countActionReviewProgress(
+    points,
+    byPoint,
+    attachmentCounts,
+    actionPlans,
+  );
   if (total === 0) return { ok: true };
   if (reviewed >= total) return { ok: true };
   const remaining = total - reviewed;

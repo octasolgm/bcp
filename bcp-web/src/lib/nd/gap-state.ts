@@ -11,11 +11,13 @@
 import {
   actionPlanPriorityFromScore,
   actionPlanScoreFromPriority,
+  actionPlansForGap,
   clampActionPlanScore,
   normalizeActionPlanStatus,
   type ActionPlanEntry,
   type ActionPlanPriority,
 } from './action-plan';
+import type { AnalysisPoint } from './types';
 
 export type GapStatus = 'pending' | 'resolved';
 
@@ -154,4 +156,62 @@ export function rollupClause(
   }
 
   return rollup;
+}
+
+/**
+ * Client-side mirror of NdGapStatusResolver clause auto rule — updates finalStatus when
+ * every gap on the point is resolved from its action plans (manual overrides untouched).
+ */
+export function recomputeAutoClauseStatus(
+  point: AnalysisPoint,
+  gapIndexes: number[],
+  plans: ActionPlanEntry[],
+  states: Map<string, GapState>,
+): AnalysisPoint {
+  if (!point.id) return point;
+  if ((point.finalStatusSource ?? '').toLowerCase() === 'manual') return point;
+  if (gapIndexes.length === 0) return point;
+
+  const pointPlans = plans.filter((p) => p.analysisPointId === point.id);
+  const allResolved = gapIndexes.every((index) => {
+    const forGap = actionPlansForGap(pointPlans, index);
+    return deriveGapStatus(forGap, states.get(gapStateKey(point.id!, index))) === 'resolved';
+  });
+
+  if (allResolved) {
+    return {
+      ...point,
+      aiFinalStatus: point.aiFinalStatus ?? point.finalStatus ?? null,
+      finalStatus: 'compliant',
+      finalStatusSource: 'auto',
+    };
+  }
+  if ((point.finalStatusSource ?? '').toLowerCase() === 'auto') {
+    return {
+      ...point,
+      finalStatus: point.aiFinalStatus ?? point.finalStatus ?? null,
+      finalStatusSource: null,
+    };
+  }
+  return point;
+}
+
+/** Derive pending/resolved from action plans so gap chips move before the server round-trip. */
+export function patchDerivedGapStatusesForPoint(
+  pointId: string,
+  gapIndexes: number[],
+  plans: ActionPlanEntry[],
+  states: Map<string, GapState>,
+): Map<string, GapState> {
+  const next = new Map(states);
+  const pointPlans = plans.filter((p) => p.analysisPointId === pointId);
+  for (const index of gapIndexes) {
+    const key = gapStateKey(pointId, index);
+    const forGap = actionPlansForGap(pointPlans, index);
+    if (!forGap.length) continue;
+    const status = deriveGapStatus(forGap, next.get(key));
+    const existing = next.get(key);
+    if (existing) next.set(key, { ...existing, status });
+  }
+  return next;
 }

@@ -329,3 +329,69 @@ export function actionPlansForGap(
 export function countActionPlanReviews(plans: ActionPlanEntry[]): number {
   return plans.reduce((sum, p) => sum + (p.reviewCount ?? p.reviews?.length ?? 0), 0);
 }
+
+/** Gap-evidence re-run notes persisted on the action plan comment field by the API. */
+export type ActionPlanEvidenceNoteKind = 'fulfilled_full' | 'fulfilled_partial' | 'split_follow_up';
+
+export type ActionPlanEvidenceNote = {
+  kind: ActionPlanEvidenceNoteKind;
+  title: string;
+  detail: string;
+  shortLabel: string;
+};
+
+const EVIDENCE_SPLIT = /split from resolved action after evidence review/i;
+const EVIDENCE_PARTIAL = /partially fulfilled by/i;
+const EVIDENCE_FULL = /fulfilled by .+ \(full gap closure\)/i;
+
+export function actionPlanEvidenceNote(comment?: string | null): ActionPlanEvidenceNote | null {
+  const raw = (comment ?? '').trim();
+  if (!raw) return null;
+
+  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const evidenceLines = lines.filter(
+    (l) => EVIDENCE_SPLIT.test(l) || EVIDENCE_PARTIAL.test(l) || EVIDENCE_FULL.test(l),
+  );
+  if (!evidenceLines.length) return null;
+
+  const joined = evidenceLines.join(' ');
+  if (EVIDENCE_SPLIT.test(joined)) {
+    return {
+      kind: 'split_follow_up',
+      title: 'Follow-up after evidence review',
+      shortLabel: 'Evidence split',
+      detail: evidenceLines.find((l) => EVIDENCE_SPLIT.test(l)) ?? joined,
+    };
+  }
+  if (EVIDENCE_PARTIAL.test(joined)) {
+    return {
+      kind: 'fulfilled_partial',
+      title: 'Partly fulfilled by uploaded evidence',
+      shortLabel: 'Partly covered',
+      detail: evidenceLines.find((l) => EVIDENCE_PARTIAL.test(l)) ?? joined,
+    };
+  }
+  return {
+    kind: 'fulfilled_full',
+    title: 'Fulfilled by uploaded evidence',
+    shortLabel: 'Evidence closed',
+    detail: evidenceLines.find((l) => EVIDENCE_FULL.test(l)) ?? joined,
+  };
+}
+
+/** Comment text excluding auto-generated evidence lines (maker notes only). */
+export function actionPlanCommentWithoutEvidence(comment?: string | null): string {
+  const raw = (comment ?? '').trim();
+  if (!raw) return '';
+  const kept = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(
+      (l) =>
+        l.length > 0
+        && !EVIDENCE_SPLIT.test(l)
+        && !EVIDENCE_PARTIAL.test(l)
+        && !EVIDENCE_FULL.test(l),
+    );
+  return kept.join('\n').trim();
+}

@@ -1,4 +1,5 @@
 import { countSavedReviewProgress, type ActionItemReviewEntry } from './action-item-review';
+import type { ActionPlanEntry } from './action-plan';
 import type { AnalysisPoint } from './types';
 
 export type RunGapStatsSummary = {
@@ -11,8 +12,14 @@ export function computeRunGapStats(
   points: AnalysisPoint[],
   actionItemReviews: ActionItemReviewEntry[] | undefined,
   attachmentCounts?: Record<string, number>,
+  actionPlans?: ActionPlanEntry[],
 ): RunGapStatsSummary {
-  const { total, reviewed } = countSavedReviewProgress(points, actionItemReviews, attachmentCounts);
+  const { total, reviewed } = countSavedReviewProgress(
+    points,
+    actionItemReviews,
+    attachmentCounts,
+    actionPlans,
+  );
   return {
     totalGaps: total,
     reviewedActions: reviewed,

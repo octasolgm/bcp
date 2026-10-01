@@ -208,7 +208,7 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   @Output() rerunWithEvidence = new EventEmitter<'full' | 'dual'>();
   @Output() rerunGapEvidence = new EventEmitter<{ actionIndex: number; mode: 'full' | 'dual' }>();
   @Output() tempReviewCommentsChanged = new EventEmitter<TempReviewCommentsChangeEvent>();
-  @Output() actionPlansChanged = new EventEmitter<void>();
+  @Output() actionPlansChanged = new EventEmitter<ActionPlanEntry | undefined>();
   @Output() viewActionPlanReviews = new EventEmitter<ActionPlanEntry>();
 
   readonly actionReviewStatusLabel = actionReviewStatusLabel;
@@ -401,11 +401,11 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
     }
   }
 
-  async onActionPlansChanged(): Promise<void> {
+  async onActionPlansChanged(updated?: ActionPlanEntry): Promise<void> {
     if (this.actionPlans.length === 0) {
       await this.loadActionPlans();
     }
-    this.actionPlansChanged.emit();
+    this.actionPlansChanged.emit(updated);
   }
 
   private rebuildContent(): void {
@@ -1168,6 +1168,7 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
     if (type === 'ai_original') return 'Original AI draft';
     if (type === 'maker_edit') return 'Maker edit';
     if (type === 'maker_reverted_to_version') return 'Restored version';
+    if (type === 'evidence_rerun') return 'Gap evidence re-run';
     return type.replace(/_/g, ' ');
   }
 

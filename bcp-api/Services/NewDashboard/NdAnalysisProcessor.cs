@@ -20,6 +20,7 @@ public class NdAnalysisProcessor(
     IConfiguration configuration,
     NdAnalysisRunCancellationTracker runCancellation,
     NdDemoUserDirectory demoDirectory,
+    NdLocalDocumentPayloadLoader localPayloadLoader,
     ILogger<NdAnalysisProcessor> logger)
 {
     private readonly ComparePromptVersion _defaultComparePromptVersion =
@@ -680,6 +681,13 @@ public class NdAnalysisProcessor(
 
             if (!storage.IsConfigured)
                 throw new InvalidOperationException("Supabase Storage not configured.");
+
+            var localPayload = await localPayloadLoader.TryFromAzureDiExtractionAsync(doc, ct);
+            if (localPayload != null)
+            {
+                result.Add(localPayload);
+                continue;
+            }
 
             var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
             var payload = await internalParse.EnsureParsedAsync(doc, bytes, ct);

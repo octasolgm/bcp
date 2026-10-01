@@ -74,38 +74,31 @@
       </div>
     </div>
 
+    @if (embedMode) {
+      <app-nd-report-summary-stack
+        [compliant]="compliantCount"
+        [partialCompliant]="partialCount"
+        [nonCompliant]="nonCompliantCount"
+        [labels]="complianceLabels"
+        [rollup]="runRollup"
+        [showHints]="false"
+      />
+    }
+
     <app-nd-run-review-panel
       mode="none"
       [evidenceOnly]="true"
       [reportAttachments]="reportGapAttachments"
       [canUploadEvidence]="canUploadGapEvidence"
+      [evidenceUploadDisabledHint]="gapEvidenceUploadDisabledHint"
       [evidenceUploading]="reportEvidenceBusy"
       [evidenceRerunning]="reportEvidenceRerunning"
       [evidenceDeletingId]="reportEvidenceDeletingId"
-      [canExport]="true"
       (uploadEvidence)="onReportEvidenceSelected($event)"
       (deleteEvidence)="onDeleteReportEvidence($event)"
       (viewEvidence)="onOpenPdf({ docId: $event })"
       (rerunAllGaps)="onRerunAllGaps()"
-      (exportExcel)="exportExcel()"
     />
-
-    @if (embedMode) {
-      <div class="summary-row embedded-summary">
-        <div class="summary-card compliant">
-          <span class="label">{{ complianceLabels.compliant }}</span>
-          <strong>{{ compliantCount }}</strong>
-        </div>
-        <div class="summary-card partial_compliant">
-          <span class="label">{{ complianceLabels.partial_compliant }}</span>
-          <strong>{{ partialCount }}</strong>
-        </div>
-        <div class="summary-card non_compliant">
-          <span class="label">{{ complianceLabels.non_compliant }}</span>
-          <strong>{{ nonCompliantCount }}</strong>
-        </div>
-      </div>
-    }
 
     <div class="nd-list-toolbar nd-shrink">
       <div class="view-toggle" role="tablist" aria-label="View mode">
@@ -348,6 +341,6 @@
     [hasActionPlans]="exportDialogHasActionPlans"
     [hasReviews]="exportDialogHasReviews"
     (cancelled)="closeExportDialog()"
-    (confirmed)="runXlsxExport($event)"
+    (confirmed)="runExportConfirm($event)"
   />
 }

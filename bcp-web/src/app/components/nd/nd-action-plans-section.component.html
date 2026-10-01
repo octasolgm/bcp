@@ -36,6 +36,8 @@
         [attr.data-action-plan-id]="plan.id"
         [class.is-resolved]="plan.status === 'resolved'"
         [class.is-overdue]="isOverdue(plan)"
+        [class.is-evidence-split]="evidenceNote(plan)?.kind === 'split_follow_up'"
+        [class.is-evidence-fulfilled]="evidenceNote(plan)?.kind === 'fulfilled_full' || evidenceNote(plan)?.kind === 'fulfilled_partial'"
       >
         <button
           type="button"
@@ -45,6 +47,14 @@
         >
           <span class="ap-index">Action {{ i + 1 }}</span>
           <span class="ap-status-pill" [class.resolved]="plan.status === 'resolved'">{{ statusLabel(plan.status) }}</span>
+          @if (evidenceNote(plan); as ev) {
+            <span
+              class="ap-evidence-chip"
+              [class.is-split]="ev.kind === 'split_follow_up'"
+              [class.is-partial]="ev.kind === 'fulfilled_partial'"
+              [title]="ev.detail"
+            >{{ ev.shortLabel }}</span>
+          }
           <span class="ap-priority-pill" [ngClass]="priorityClass(inheritedPriority)">{{ inheritedPriorityLabel }}</span>
           <span class="ap-summary truncate" [title]="plan.actionPlan">{{ plan.actionPlan }}</span>
           <span class="ap-meta truncate">{{ responsibilityLabel(plan) }}</span>
@@ -139,6 +149,16 @@
             @if (editingId === plan.id) {
               <ng-container [ngTemplateOutlet]="editor" />
             } @else {
+              @if (evidenceNote(plan); as ev) {
+                <div
+                  class="ap-evidence-callout"
+                  [class.is-split]="ev.kind === 'split_follow_up'"
+                  [class.is-partial]="ev.kind === 'fulfilled_partial'"
+                >
+                  <p class="ap-evidence-callout-title">{{ ev.title }}</p>
+                  <p class="ap-evidence-callout-body">{{ ev.detail }}</p>
+                </div>
+              }
               <p class="ap-plan-text">{{ plan.actionPlan }}</p>
               <dl class="ap-detail-grid">
                 <div>
@@ -167,10 +187,10 @@
                     }
                   </dd>
                 </div>
-                @if (plan.comment) {
+                @if (makerComment(plan)) {
                   <div class="wide">
                     <dt>Comment</dt>
-                    <dd>{{ plan.comment }}</dd>
+                    <dd>{{ makerComment(plan) }}</dd>
                   </div>
                 }
                 <div class="wide">

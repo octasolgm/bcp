@@ -23,15 +23,23 @@ import {
   isRegulWorkflow,
   v5CompliantScopeNote,
 } from '../../../../lib/nd/regul-fields';
+import { NdStepTrackerService, type NdStep } from '../../../services/nd/nd-step-tracker.service';
+import { NdPipelinePanelService } from '../../../services/nd/nd-pipeline-panel.service';
 import {
   exportGapAnalysisExcelFromPoints,
   exportGapAnalysisPdfFromPoints,
   exportRegulGapAnalysisExcelFromPoints,
   gapAnalysisExportColumns,
+  type GapAnalysisExportConfirm,
   type GapAnalysisExportSelection,
 } from '../../../../lib/nd/export/gap-analysis-export';
 import { NdExportOptionsDialogComponent } from '../../../components/nd/nd-export-options-dialog.component';
 import { NdReviewSummaryPanelComponent } from '../../../components/nd/nd-review-summary-panel.component';
+import {
+  NdReportSummaryStackComponent,
+  type ReportSummaryFilterId,
+} from '../../../components/nd/nd-report-summary-stack.component';
+import { NdClauseRailCardComponent } from '../../../components/nd/nd-clause-rail-card.component';
 import {
   buildSeededActionPlansForGap,
   type SeededActionPlan,
@@ -39,7 +47,35 @@ import {
 import { capGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
 import { isAnalysisRunResultsReady } from '../../../../lib/nd/analysis-run-status';
 import { normalizeGapRisk } from '../../../../lib/nd/doc-analysis-ready';
-import { gapStateKey, indexGapStates, rollupClause, type ClauseRollup, type GapState } from '../../../../lib/nd/gap-state';
+import {
+  buildGapEvidencePrepMarquee,
+  buildGapEvidenceRerunMarquee,
+  gapEvidencePrepStepLabel,
+  gapEvidenceRerunProgressRows,
+  gapEvidenceRerunUiStatusLabel,
+  isGapEvidenceRerunInFlight,
+  mergeActivityMarquee,
+  summarizeGapEvidenceRerunProgress,
+  type GapEvidencePrepStep,
+  type GapEvidenceRerunUiStatus,
+} from '../../../../lib/nd/gap-evidence-activity';
+import {
+  GAP_EVIDENCE_LOCAL_ENGINE,
+  gapEvidencePrepDetailFromLocalRow,
+  gapEvidencePrepInProgress,
+  gapEvidenceNotStartedDetail,
+  gapEvidencePrepStepFromLocalRow,
+  runGapEvidenceLocalPipeline,
+} from '../../../../lib/nd/gap-evidence-local-pipeline';
+import {
+  gapStateKey,
+  indexGapStates,
+  patchDerivedGapStatusesForPoint,
+  recomputeAutoClauseStatus,
+  rollupClause,
+  type ClauseRollup,
+  type GapState,
+} from '../../../../lib/nd/gap-state';
 import {
   progressPointToReportItem,
   savedResultToReportItem,
@@ -69,7 +105,6 @@ import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.ser
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
-import { NdWorkspaceTabsComponent, type NdWorkspaceTab } from '../../../components/nd/nd-workspace-tabs.component';
 import { NdGapPointDetailComponent } from '../../../components/nd/nd-gap-point-detail.component';
 import { NdPointSortControlsComponent } from '../../../components/nd/nd-point-sort-controls.component';
 import {
@@ -88,10 +123,10 @@ import { complianceSeverityLabel,
   COMPLIANCE_SEVERITY_LABELS,
   resolveAnalysisPointSeverity,
   resolveDisplayConfidence,
+  type ComplianceSeverity,
 } from '../../../../lib/nd/point-compliance-status';
-import {
-  policySnippetFromAnalysisPoint,
-} from '../../../../lib/nd/analysis-point-rail-meta';
+import { policySnippetFromAnalysisPoint } from '../../../../lib/nd/analysis-point-rail-meta';
+import { buildClauseRailCardFields } from '../../../../lib/nd/clause-rail-card-display';
 import { parseReferenceComplianceBlock } from '../../../../lib/ai-lab/parse-reference-response';
 import { internalDocCatalogFromRunDetail } from '../../../../lib/nd/run-internal-docs';
 import type { PolicyDocCatalogEntry } from '../../../../lib/nd/policy-doc-resolve';
@@ -110,10 +145,24 @@ import {
   type ActionPlanReviewEntry,
   type ActionPlanStatus,
 } from '../../../../lib/nd/action-plan';
-import { canAddActionItemReviews, isReviewRole, reviewDisabledHint, reviewWorkspaceLink, attachmentCountsByPoint } from '../../../../lib/nd/nd-review-run-helpers';
+import {
+  canAddActionItemReviews,
+  canUploadGapEvidence as canUploadGapEvidenceForRun,
+  gapEvidenceUploadDisabledHint,
+  isReviewRole,
+  reviewDisabledHint,
+  reviewWorkspaceLink,
+  runReviewPhaseFromStatus,
+  runReviewSubmitModeForViewer,
+  workflowSubmitTargetsForViewer,
+  canFinalizeWorkflowRun,
+  attachmentCountsByPoint,
+  type WorkflowSubmitTarget,
+} from '../../../../lib/nd/nd-review-run-helpers';
 import { computeRunGapStats, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 import { buildNdGapListItems, ndComplianceSummaryFromPoints } from '../../../../lib/nd/nd-run-display';
 import type { NdRunReviewBody } from '../../../services/nd/nd-api.service';
+import { NdPageHeaderActionsService } from '../../../services/nd/nd-page-header-actions.service';
 import type { RunReviewDraft } from '../../../../lib/nd/run-review';
 
 /** Seeded TFS × IMPTFS combined compliance session (32 points). */
@@ -126,7 +175,7 @@ const EMPTY_TEMP_COMMENTS: TempPointReviewComment[] = [];
 @Component({
   selector: 'app-nd-gap-analysis',
   standalone: true,
-  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, NdWorkspaceTabsComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent],
+  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent],
   templateUrl: './nd-gap-analysis.component.html',
   styleUrl: './nd-gap-analysis.component.scss',
 })
@@ -139,7 +188,16 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   private readonly workspaceNav = inject(NdWorkspaceNavService);
   private readonly cdr = inject(ChangeDetectorRef);
   readonly auth = inject(NdAuthService);
+  private readonly pageHeaderActions = inject(NdPageHeaderActionsService);
+  private readonly stepTracker = inject(NdStepTrackerService);
+  private readonly pipelinePanel = inject(NdPipelinePanelService);
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Open-gap point ids queued for report-level evidence re-run — drives poll completion. */
+  private evidenceRerunWatchPointIds: Set<string> | null = null;
+  /** Fixed at rerun start — stable "Points selected" total. */
+  evidenceRerunWatchTotal = 0;
+  evidenceRerunStatusFilter: 'all' | GapEvidenceRerunUiStatus = 'all';
+  private pipelinePanelActivatedHere = false;
 
   /** Embedded below the analyse-v8 columns: no page header, run supplied via input. */
   @Input() embedMode = false;
@@ -155,16 +213,6 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   exporting = false;
   loading = true;
-  /** Collapses everything below the title bar (status pills, summary cards, gap list) down to
-   * just the header — useful when this panel is embedded inside a longer page (e.g. the New
-   * Analysis screen) and the working document's full body isn't needed at a glance. Dialogs/
-   * side panels (PDF preview, run history, review panel, export dialog) stay outside this and
-   * are never affected by it. */
-  collapsed = false;
-
-  toggleCollapsed(): void {
-    this.collapsed = !this.collapsed;
-  }
   deletingSession = false;
   loadError: string | null = null;
   sourceLabel = 'I M P T F S.pdf vs. TFS Guidelines';
@@ -207,6 +255,43 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return isRegulWorkflow(this.ndRunWorkflowEngine);
   }
 
+  get showEvidenceRerunProgressPanel(): boolean {
+    return this.reportEvidenceRerunning && !!this.evidenceRerunWatchPointIds?.size;
+  }
+
+  get evidenceRerunProgressCounts() {
+    if (!this.ndRunData || !this.evidenceRerunWatchPointIds?.size) return null;
+    return summarizeGapEvidenceRerunProgress(this.ndRunData.points ?? [], this.evidenceRerunWatchPointIds);
+  }
+
+  get evidenceRerunProgressRowsFiltered() {
+    if (!this.ndRunData || !this.evidenceRerunWatchPointIds?.size) return [];
+    const rows = gapEvidenceRerunProgressRows(this.ndRunData.points ?? [], this.evidenceRerunWatchPointIds);
+    if (this.evidenceRerunStatusFilter === 'all') return rows;
+    return rows.filter((r) => r.status === this.evidenceRerunStatusFilter);
+  }
+
+  get evidenceRerunPhaseHint(): string {
+    const phase = (this.ndRunData?.run.regulPipelinePhase ?? '').toLowerCase();
+    switch (phase) {
+      case 'retrieval':
+        return 'Retrieving relevant policy sections from gap evidence…';
+      case 'forward':
+        return 'Judging each open clause against uploaded evidence…';
+      case 'parsing':
+        return 'Preparing gap evidence documents…';
+      default:
+        return 'Workers update each open clause — counts refresh every few seconds.';
+    }
+  }
+
+  readonly gapEvidenceRerunUiStatusLabel = gapEvidenceRerunUiStatusLabel;
+
+  setEvidenceRerunStatusFilter(filter: 'all' | GapEvidenceRerunUiStatus): void {
+    this.evidenceRerunStatusFilter = filter;
+    this.cdr.markForCheck();
+  }
+
   ndRunData: ResultsData | null = null;
   ndPolicyDocId: string | null = null;
   ndPolicyDocCatalog: PolicyDocCatalogEntry[] = [];
@@ -214,6 +299,14 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   ndRegulationDocName = '';
   reportEvidenceBusy = false;
   reportEvidenceRerunning = false;
+  /** Header marquee: document prepare and/or gap re-analysis progress. */
+  gapActivityMarquee = '';
+  evidencePrepLabels: Record<string, string> = {};
+  evidencePrepSteps: Record<string, GapEvidencePrepStep> = {};
+  /** Per-document parse/extract pipeline when user clicks Prepare. */
+  reportEvidencePreparingIds = new Set<string>();
+  private evidenceRerunPollTimer: ReturnType<typeof setInterval> | null = null;
+  private evidencePrepPollTimer: ReturnType<typeof setInterval> | null = null;
   ndSearchQuery = '';
   workflowLoading = false;
   editingPointId: string | null = null;
@@ -272,6 +365,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   /** Shown while finalize builds the corrected copy of the internal document. */
   finalizeProgressMessage = '';
   showExportDialog = false;
+  /** Shell header export format — Excel opens the column picker; PDF exports immediately. */
+  headerExportFormat: 'xlsx' | 'pdf' = 'xlsx';
   exportDialogColumns: string[] = [];
   exportDialogHasActionPlans = false;
   exportDialogHasReviews = false;
@@ -617,10 +712,100 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  /** After any gap/action edit: apply local rollups immediately, then confirm with the server. */
+  onWorkStateChanged(updatedPlan?: ActionPlanEntry): void {
+    if (updatedPlan) {
+      this.mergeActionPlanEntry(updatedPlan);
+      this.applyLocalPointWorkState(updatedPlan.analysisPointId);
+      this.syncListItemsFromPoints();
+      this.cdr.markForCheck();
+    }
+    void this.refreshWorkStateFromServer();
+  }
+
   async onGapStateChanged(): Promise<void> {
-    await this.reloadGapStates();
-    await this.reloadActionPlans();
-    await this.reloadPointStatuses();
+    this.syncListItemsFromPoints();
+    this.cdr.markForCheck();
+    await this.refreshWorkStateFromServer();
+  }
+
+  private async refreshWorkStateFromServer(): Promise<void> {
+    await Promise.all([this.reloadGapStates(), this.reloadActionPlans(), this.reloadPointStatuses()]);
+    this.syncListItemsFromPoints();
+    this.cdr.markForCheck();
+  }
+
+  private mergeActionPlanEntry(updated: ActionPlanEntry): void {
+    if (!this.ndRunData) return;
+    const plans = [...(this.ndRunData.actionPlans ?? [])];
+    const idx = plans.findIndex((p) => p.id === updated.id);
+    if (idx >= 0) {
+      const prev = plans[idx];
+      plans[idx] = {
+        ...prev,
+        ...updated,
+        reviews: updated.reviews ?? prev.reviews,
+        reviewCount: updated.reviewCount ?? prev.reviewCount,
+      };
+    } else {
+      plans.push(updated);
+    }
+    this.ndRunData = { ...this.ndRunData, actionPlans: plans };
+    this.actionPlansByPointId.set(
+      updated.analysisPointId,
+      actionPlansForPoint(plans, updated.analysisPointId),
+    );
+  }
+
+  private applyLocalPointWorkState(pointId: string): void {
+    if (!this.ndRunData) return;
+    const point = this.ndRunData.points.find((p) => p.id === pointId);
+    if (!point) return;
+
+    const gapIndexes = this.gapIndexesForPoint(point);
+    const plans = this.ndRunData.actionPlans ?? [];
+    this.gapStates = patchDerivedGapStatusesForPoint(pointId, gapIndexes, plans, this.gapStates);
+
+    const refreshed = recomputeAutoClauseStatus(point, gapIndexes, plans, this.gapStates);
+    if (refreshed !== point) {
+      const points = this.ndRunData.points.map((p) => (p.id === pointId ? refreshed : p));
+      this.ndRunData = { ...this.ndRunData, points };
+      this.repointAnalysisPointInIndexes(refreshed);
+    }
+  }
+
+  private repointAnalysisPointInIndexes(point: AnalysisPoint): void {
+    if (!point.id) return;
+    this.analysisPointByKey.set(point.id, point);
+    const snap = this.snapshotByPointId.get(point.id) ?? parsePointSnapshot(point.pointSnapshot);
+    const pid = (snap.pointNumber || point.regulationPointId || point.id || '').trim();
+    if (pid) {
+      this.analysisPointByKey.set(pid, point);
+      const bare = pid.replace(/^§/, '');
+      if (bare) this.analysisPointByKey.set(bare, point);
+      if (bare && bare !== pid) this.analysisPointByKey.set(`§${bare}`, point);
+    }
+    const title = (snap.pointTitle ?? '').trim().toLowerCase();
+    if (title) this.analysisPointByKey.set(`title:${title}`, point);
+  }
+
+  /** Keep clause rail badges in sync when finalStatus or rollups change without a full reload. */
+  private syncListItemsFromPoints(): void {
+    if (!this.ndRunData) return;
+    let changed = false;
+    for (const item of this.items) {
+      const ndPoint = this.analysisPointForGap(item);
+      if (!ndPoint) continue;
+      const severity = resolveAnalysisPointSeverity(ndPoint);
+      if (severity) {
+        const next = normalizeGapSeverity(severity);
+        if (item.severity !== next) {
+          item.severity = next;
+          changed = true;
+        }
+      }
+    }
+    if (changed) this.refreshFilteredItems();
   }
 
   /**
@@ -648,16 +833,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     });
     this.ndRunData = { ...this.ndRunData, points };
 
-    // analysisPointByKey holds the point objects other views look them up by — repoint its
-    // entries at the refreshed objects without re-running the rest of rebuildNdRunIndexes
-    // (which also seeds default actions and syncs the gap roster; neither belongs here).
-    for (const [key, value] of this.analysisPointByKey) {
-      const fresh = value.id ? byId.get(value.id) : undefined;
-      if (!fresh) continue;
-      const updated = points.find((p) => p.id === value.id);
-      if (updated) this.analysisPointByKey.set(key, updated);
+    for (const p of points) {
+      if (p.id && byId.has(p.id)) this.repointAnalysisPointInIndexes(p);
     }
 
+    this.syncListItemsFromPoints();
     this.cdr.markForCheck();
   }
 
@@ -1046,6 +1226,36 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return item.section.replace(/^§/, '').trim();
   }
 
+  /** Standard clause card fields for list rail and card view (shared layout with analyse-regul). */
+  gapClauseCardModel(item: GapItemData): {
+    clauseNum: string;
+    heading: string;
+    titleLine: string;
+    clauseText: string;
+    confidence: string;
+  } {
+    const meta = this.gapPointRailMeta(item);
+    const ndPoint = this.analysisPointForGap(item);
+    const snap = ndPoint ? this.snapshotForPoint(ndPoint) : null;
+    const titleCandidate = (item.title ?? '').trim() || (snap?.pointTitle ?? '').trim();
+    let rawText = (item.regulatoryText ?? '').trim();
+    if (!rawText && snap) {
+      rawText = (snap.pointContent ?? snap.pointTitle ?? '').trim();
+    }
+    const fields = buildClauseRailCardFields({
+      clauseNum: this.gapPointDisplayNum(item),
+      title: titleCandidate,
+      clauseText: rawText,
+    });
+    return {
+      clauseNum: fields.clauseNum,
+      heading: fields.heading,
+      titleLine: fields.titleLine,
+      clauseText: fields.clauseText,
+      confidence: meta.confidence,
+    };
+  }
+
   gapPointRailMeta(item: GapItemData): { policySnippet: string; confidence: string } {
     const ndPoint = this.analysisPointForGap(item);
     if (ndPoint) {
@@ -1126,35 +1336,76 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   get canReviewActionGaps(): boolean {
-    if (this.effectiveReviewMode === 'checker' || this.effectiveReviewMode === 'reviewer') return true;
+    const submit = this.runReviewSubmitMode;
+    if (submit === 'checker' || submit === 'reviewer') return true;
     return canAddActionItemReviews(this.auth.getRole(), this.ndRunData?.run.status);
   }
 
-  /**
-   * Which phase the report sits in: with the maker, with the checker, or with the
-   * reviewer. This follows the run's own status, not who is looking at it, so the
-   * report reads the same for everybody. Role-based restrictions come later.
-   */
-  get effectiveReviewMode(): RunReviewPanelMode {
-    if (this.reviewWorkspaceMode === 'maker') return 'maker';
-    if (this.reviewWorkspaceMode === 'checker') return 'checker';
-    if (this.reviewWorkspaceMode === 'reviewer') return 'reviewer';
+  /** Run workflow phase — identical on every URL and for every role. */
+  get runReviewPhase(): RunReviewPanelMode {
+    return runReviewPhaseFromStatus(this.ndRunData?.run.status);
+  }
 
-    const status = this.ndRunData?.run.status ?? '';
-    if (status === 'submitted_for_review') return 'checker';
-    if (status === 'checker_approved') return 'reviewer';
-    if (
-      status === 'pulled_back' ||
-      ['completed', 'dual_verify_failed', 'landing_ai_complete', 'reviewer_approved'].includes(status)
-    ) {
-      return 'maker';
-    }
+  /** @deprecated Use runReviewPhase — same value, status-only (ignores review workspace route). */
+  get effectiveReviewMode(): RunReviewPanelMode {
+    return this.runReviewPhase;
+  }
+
+  /** Report submit panel mode for the signed-in viewer (super_admin uses the current phase). */
+  get runReviewSubmitMode(): RunReviewPanelMode {
+    return runReviewSubmitModeForViewer(this.runReviewPhase, this.auth.getRole());
+  }
+
+  /**
+   * Page chrome for ND runs opened from All analysis (`?run=`) — matches checker/reviewer/correction
+   * review routes without requiring a different URL.
+   */
+  get reportPageTitleMode(): RunReviewPanelMode {
+    if (this.reviewWorkspaceMode !== 'none') return this.reviewWorkspaceMode;
+    if (!this.ndRunId || !this.ndRunData) return 'none';
+    const phase = this.runReviewPhase;
+    if (phase === 'checker' || phase === 'reviewer') return phase;
+    if (phase === 'maker' && this.ndRunData.run.status === 'pulled_back') return 'maker';
     return 'none';
+  }
+
+  /** Saved ND run opened as a full report (All analysis row, review routes, etc.). */
+  get unifiedNdRunReport(): boolean {
+    return Boolean(this.ndRunId && !this.embedMode);
+  }
+
+  /** Shell blue bar title — same labels as Pending review / Pending final review routes. */
+  get shellReportTitle(): string | null {
+    if (this.embedMode || !this.ndRunId) return null;
+    switch (this.reportPageTitleMode) {
+      case 'checker':
+        return 'Pending review';
+      case 'reviewer':
+        return 'Pending final review';
+      case 'maker':
+        return 'Pending correction';
+      default:
+        break;
+    }
+    if (!this.unifiedNdRunReport) return null;
+    const status = this.ndRunData?.run.status ?? '';
+    if (status === 'reviewer_approved') return 'Finalized';
+    return 'Analysis report';
+  }
+
+  /** Hide in-content h1 when the shell shows the report title (reviewer-style layout). */
+  get hideDuplicateReportTitle(): boolean {
+    if (this.embedMode) return false;
+    return this.unifiedNdRunReport || this.reviewWorkspaceMode !== 'none';
+  }
+
+  get showWorkflowBar(): boolean {
+    return false;
   }
 
   /** Label for the phase badge on the report header. */
   get reportPhaseLabel(): string {
-    switch (this.effectiveReviewMode) {
+    switch (this.runReviewPhase) {
       case 'checker':
         return 'In review — with checker';
       case 'reviewer':
@@ -1168,25 +1419,59 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
-  get showReviewWorkspaceTabs(): boolean {
-    return this.reviewWorkspaceMode !== 'none';
+  /** Upload, list, and rerun-all on every ND analysis run (same block as review workspaces). */
+  get showGapAnalysisDocumentsPanel(): boolean {
+    return Boolean(this.ndRunId);
   }
 
-  get reviewWorkspaceTabActive(): NdWorkspaceTab {
-    if (this.reviewWorkspaceMode === 'maker') return 'pending_correction';
-    if (this.reviewWorkspaceMode === 'checker') return 'pending_review';
-    if (this.reviewWorkspaceMode === 'reviewer') return 'pending_final_review';
-    return 'all_analysis';
+  /** Super admin: merged send/pullback targets for the current run status. */
+  get superAdminWorkflowTargets(): WorkflowSubmitTarget[] {
+    return workflowSubmitTargetsForViewer(
+      this.runReviewPhase,
+      this.auth.getRole(),
+      this.ndRunData?.run.status,
+    );
   }
 
+  get canFinalizeWorkflowRunFlag(): boolean {
+    return canFinalizeWorkflowRun(this.auth.getRole(), this.ndRunData?.run.status);
+  }
+
+  /** Panel mode — super admin uses the run's workflow phase when the form is shown. */
+  get runReviewPanelMode(): RunReviewPanelMode {
+    if (!this.showRunReviewForm) return 'maker';
+    if (this.auth.getRole() === 'super_admin') {
+      const phase = this.runReviewPhase;
+      return phase !== 'none' ? phase : this.runReviewSubmitMode;
+    }
+    return this.runReviewSubmitMode;
+  }
+
+  /** Report-level review form when this viewer may submit at the current phase. */
+  get showRunReviewForm(): boolean {
+    if (this.auth.getRole() === 'super_admin' && this.ndRunId) {
+      return this.superAdminWorkflowTargets.length > 0 || this.canFinalizeWorkflowRunFlag;
+    }
+    return this.runReviewSubmitMode !== 'none';
+  }
+
+  /** @deprecated Use showGapAnalysisDocumentsPanel / showRunReviewForm. */
   get showRunReviewPanel(): boolean {
-    return this.effectiveReviewMode !== 'none' && !!this.ndRunId && !!this.ndRunData;
+    return this.showGapAnalysisDocumentsPanel && this.showRunReviewForm;
   }
 
-  /** Checker and reviewer get the workload summary; the maker already sees the detail. */
+  /**
+   * Review summary block (gap/action stats + open actions) — same sequence as Pending final review
+   * for every run opened from All analysis (`?run=`), not only checker/reviewer phases.
+   */
   get showReviewSummary(): boolean {
-    const mode = this.effectiveReviewMode;
-    return (mode === 'checker' || mode === 'reviewer') && !!this.ndRunData;
+    if (!this.ndRunData) return false;
+    if (this.embedMode) return false;
+    if (this.reviewWorkspaceMode !== 'none') {
+      const phase = this.runReviewPhase;
+      return phase === 'checker' || phase === 'reviewer';
+    }
+    return this.unifiedNdRunReport;
   }
 
   get allActionPlans(): ActionPlanEntry[] {
@@ -1206,7 +1491,12 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   get reviewProgress(): { total: number; reviewed: number } | null {
     if (!this.ndRunData?.points.length) return null;
     const counts = attachmentCountsByPoint(this.ndRunData);
-    return countSavedReviewProgress(this.ndRunData.points, this.ndRunData.actionItemReviews, counts);
+    return countSavedReviewProgress(
+      this.ndRunData.points,
+      this.ndRunData.actionItemReviews,
+      counts,
+      this.ndRunData.actionPlans,
+    );
   }
 
   get reviewWorkspaceBackLink(): string[] | null {
@@ -1222,7 +1512,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   get hideHeaderSubmitForReview(): boolean {
-    return this.showRunReviewPanel && this.effectiveReviewMode === 'maker';
+    return this.showRunReviewForm && this.runReviewPanelMode === 'maker';
   }
 
   get canShowReviewPanel(): boolean {
@@ -1272,7 +1562,12 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.savingReviewId = null;
     if (res.success) {
       this.toast.show(event.reviewId ? 'Review updated' : 'Review saved', 'success');
-      await this.loadNdRun(this.ndRunId, null, null);
+      const row = res.data as ActionItemReviewEntry | undefined;
+      if (row?.id) {
+        this.upsertActionItemReview(row);
+      } else {
+        await this.reloadActionItemReviews();
+      }
     } else {
       this.ndDetailError = res.message ?? 'Could not save review';
       this.toast.show(this.ndDetailError, 'error');
@@ -1291,7 +1586,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.savingReviewId = null;
     this.savingActionReviewIndex = null;
     if (res.success) {
-      await this.loadNdRun(this.ndRunId, null, null);
+      await this.reloadActionItemReviews();
     } else {
       this.ndDetailError = res.message ?? 'Could not reorder review';
       this.toast.show(this.ndDetailError, 'error');
@@ -1300,7 +1595,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   get canUploadGapEvidence(): boolean {
-    return this.canEditNdCap;
+    return canUploadGapEvidenceForRun(this.auth.getRole(), this.ndRunData?.run.status);
+  }
+
+  get gapEvidenceUploadDisabledHint(): string {
+    return gapEvidenceUploadDisabledHint(this.auth.getRole(), this.ndRunData?.run.status);
   }
 
   async onUploadGapEvidence(pointId: string, fileList: FileList, actionIndex?: number): Promise<void> {
@@ -1319,35 +1618,387 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.evidenceUploadingActionIndex = null;
     if (res.success) {
       this.mergePointAttachments(pointId, res.data ?? [], actionIndex);
-      this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
+      this.toast.show(`Uploaded ${files.length} file(s) — parsing…`, 'success');
+      const docIds = [...new Set((res.data ?? []).map((a) => a.storedDocumentId).filter(Boolean))];
+      void this.prepareGapEvidenceDocs(docIds);
     } else {
       this.ndDetailError = res.message ?? 'Upload failed';
       this.toast.show(this.ndDetailError, 'error');
     }
   }
 
+  private fileNameForStoredDoc(storedDocumentId: string): string | undefined {
+    for (const list of this.attachmentsByPointId.values()) {
+      const hit = list.find((a) => a.storedDocumentId === storedDocumentId);
+      if (hit?.fileName) return hit.fileName;
+    }
+    return this.reportGapAttachments.find((a) => a.storedDocumentId === storedDocumentId)?.fileName;
+  }
+
+  private stopEvidencePrepPolling(): void {
+    if (this.evidencePrepPollTimer) {
+      clearInterval(this.evidencePrepPollTimer);
+      this.evidencePrepPollTimer = null;
+    }
+  }
+
+  private startEvidencePrepPolling(): void {
+    if (this.evidencePrepPollTimer) return;
+    this.evidencePrepPollTimer = setInterval(
+      () => void this.refreshEvidencePrepLabelsForReportDocs(),
+      2500,
+    );
+  }
+
+  /** Load Azure parse / extract / index labels for attachments already on the report. */
+  private async refreshEvidencePrepLabelsForReportDocs(): Promise<void> {
+    const ids = [
+      ...new Set(this.reportGapAttachments.map((a) => a.storedDocumentId).filter(Boolean)),
+    ];
+    if (!ids.length) {
+      this.stopEvidencePrepPolling();
+      return;
+    }
+
+    const res = await this.ndApi.localExtractStatusBatch(ids, GAP_EVIDENCE_LOCAL_ENGINE, {
+      lite: true,
+    });
+
+    const nextLabels: Record<string, string> = { ...this.evidencePrepLabels };
+    const nextSteps: Record<string, GapEvidencePrepStep> = { ...this.evidencePrepSteps };
+    let anyInProgress = false;
+
+    for (const id of ids) {
+      if (this.reportEvidencePreparingIds.has(id)) {
+        anyInProgress = true;
+        continue;
+      }
+      const fileName = this.fileNameForStoredDoc(id);
+      const row = res.success ? res.data?.[id] : undefined;
+      let step: GapEvidencePrepStep;
+      let detail: string | undefined;
+      if (row) {
+        step = gapEvidencePrepStepFromLocalRow(row);
+        detail =
+          step === 'not_started'
+            ? gapEvidenceNotStartedDetail(row)
+            : gapEvidencePrepDetailFromLocalRow(row, step);
+      } else {
+        const att = this.reportGapAttachments.find((a) => a.storedDocumentId === id);
+        const ps = (att?.parseStatus ?? '').trim().toLowerCase();
+        if (ps === 'failed') {
+          step = 'failed';
+        } else if (ps === 'parsed' || ps === 'completed') {
+          const ex = (att?.sectionExtractStatus ?? '').trim().toLowerCase();
+          if (ex === 'extracted' || ex === 'completed') step = 'ready';
+          else if (ex === 'failed') step = 'failed';
+          else step = 'extracting';
+        } else if (ps === 'processing' || ps === 'pending') {
+          step = 'parsing';
+          detail = ps;
+        } else {
+          step = 'not_started';
+          detail = gapEvidenceNotStartedDetail(undefined);
+        }
+      }
+      if (gapEvidencePrepInProgress(step)) anyInProgress = true;
+      nextSteps[id] = step;
+      nextLabels[id] = gapEvidencePrepStepLabel(step, fileName, detail);
+    }
+
+    this.evidencePrepLabels = nextLabels;
+    this.evidencePrepSteps = nextSteps;
+    this.syncGapActivityMarquee();
+    if (anyInProgress) this.startEvidencePrepPolling();
+    else this.stopEvidencePrepPolling();
+    this.cdr.markForCheck();
+  }
+
+  private setEvidencePrepStep(
+    storedDocumentId: string,
+    step: GapEvidencePrepStep,
+    detail?: string,
+  ): void {
+    const fileName = this.fileNameForStoredDoc(storedDocumentId);
+    this.evidencePrepSteps = { ...this.evidencePrepSteps, [storedDocumentId]: step };
+    this.evidencePrepLabels = {
+      ...this.evidencePrepLabels,
+      [storedDocumentId]: gapEvidencePrepStepLabel(step, fileName, detail),
+    };
+    this.syncGapActivityMarquee();
+    this.cdr.markForCheck();
+  }
+
+  onPrepareReportEvidence(storedDocumentId: string): void {
+    if (!storedDocumentId || this.reportEvidencePreparingIds.has(storedDocumentId)) return;
+    void this.prepareGapEvidenceDocs([storedDocumentId]);
+  }
+
+  isReportEvidencePreparing(storedDocumentId: string): boolean {
+    return this.reportEvidencePreparingIds.has(storedDocumentId);
+  }
+
+  private syncGapActivityMarquee(): void {
+    const prep = buildGapEvidencePrepMarquee(this.evidencePrepLabels);
+    const rerun =
+      this.reportEvidenceRerunning && this.ndRunData
+        ? buildGapEvidenceRerunMarquee(
+            this.ndRunData.run,
+            this.ndRunData.points ?? [],
+            this.evidenceRerunWatchPointIds,
+          )
+        : this.reportEvidenceRerunning
+          ? 'Gap evidence re-analysis starting…'
+          : null;
+    this.gapActivityMarquee = mergeActivityMarquee(prep, rerun);
+    this.syncEvidenceWorkflowChrome();
+    this.syncShellPageHeader();
+  }
+
+  private evidenceWorkflowActive(): boolean {
+    const prepBusy = Object.values(this.evidencePrepLabels).some(
+      (l) => l && !/ready for gap re-analysis/i.test(l),
+    );
+    return this.reportEvidenceBusy || this.reportEvidenceRerunning || prepBusy;
+  }
+
+  private computeEvidenceTrackerSteps(): NdStep[] {
+    const defs = [
+      'Upload gap documents',
+      'Azure parse & structural extract',
+      'Index for retrieval',
+      'Retrieve policy sections',
+      'Re-judge open gaps',
+      'Complete',
+    ];
+    const prepBusy = Object.values(this.evidencePrepLabels).some(
+      (l) => l && !/ready for gap re-analysis/i.test(l),
+    );
+    const phase = (this.ndRunData?.run.regulPipelinePhase ?? '').toLowerCase();
+    const runSt = (this.ndRunData?.run.status ?? '').toLowerCase();
+
+    let current = 0;
+    if (this.reportEvidenceRerunning) {
+      if (phase === 'retrieval') current = 3;
+      else if (phase === 'forward' || runSt === 'running') current = 4;
+      else if (this.isEvidenceRerunInFlight()) current = 4;
+      else current = 5;
+    } else if (prepBusy || this.reportEvidenceBusy) {
+      const labels = Object.values(this.evidencePrepLabels).join(' ').toLowerCase();
+      if (/index|search index/.test(labels)) current = 2;
+      else if (/structural|extract/.test(labels)) current = 1;
+      else if (/azure|pars/.test(labels)) current = 1;
+      else current = 0;
+    } else {
+      current = defs.length;
+    }
+
+    return defs.map((label, i) => ({
+      label,
+      state: i < current ? 'done' : i === current ? 'active' : 'pending',
+    }));
+  }
+
+  private syncEvidenceWorkflowChrome(): void {
+    if (this.embedMode) return;
+
+    const active = this.evidenceWorkflowActive();
+    if (active) {
+      this.stepTracker.activate();
+      this.stepTracker.setSteps(this.computeEvidenceTrackerSteps());
+    } else {
+      this.stepTracker.deactivate();
+    }
+
+    const showPanel =
+      this.auth.canManageWorkspaces() && isRegulPipelineHybridWorkflow(this.ndRunWorkflowEngine);
+    if (!showPanel) return;
+
+    if (!active) {
+      if (this.pipelinePanelActivatedHere) {
+        this.pipelinePanel.deactivate();
+        this.pipelinePanelActivatedHere = false;
+      }
+      return;
+    }
+
+    if (!this.pipelinePanelActivatedHere) {
+      this.pipelinePanel.activate();
+      this.pipelinePanelActivatedHere = true;
+    }
+    const docs = this.reportGapAttachments.map((a) => ({
+      id: a.storedDocumentId,
+      name: a.fileName,
+    }));
+    this.pipelinePanel.setDocs(docs);
+    this.pipelinePanel.setRunActive(this.reportEvidenceRerunning);
+    const prepBusy = Object.values(this.evidencePrepLabels).some(
+      (l) => l && !/ready for gap re-analysis/i.test(l),
+    );
+    this.pipelinePanel.setPhase(
+      this.ndRunData?.run.regulPipelinePhase ??
+        (this.reportEvidenceRerunning ? 'forward' : prepBusy ? 'parsing' : null),
+    );
+  }
+
+  private openGapPointIds(): string[] {
+    return (this.ndRunData?.points ?? [])
+      .filter((p) => {
+        if (!p.id) return false;
+        const fs = (p.finalStatus ?? '').toLowerCase();
+        return fs === 'non_compliant' || fs === 'partial_compliant';
+      })
+      .map((p) => p.id!);
+  }
+
+  private isEvidenceRerunInFlight(): boolean {
+    if (!this.ndRunData) return this.reportEvidenceRerunning;
+    return isGapEvidenceRerunInFlight(
+      this.ndRunData.run,
+      this.ndRunData.points ?? [],
+      this.evidenceRerunWatchPointIds,
+    );
+  }
+
+  /** Export + history on the shell title bar; activity ticker in the header marquee. */
+  private syncShellPageHeader(): void {
+    this.pageHeaderActions.setMarquee(this.gapActivityMarquee?.trim() || null);
+    if (this.embedMode || !this.ndRunId) {
+      this.pageHeaderActions.clearActions();
+      this.pageHeaderActions.setTitleOverride(null);
+      return;
+    }
+    this.pageHeaderActions.setTitleOverride(this.shellReportTitle);
+    this.pageHeaderActions.set({
+      export: {
+        label: this.exporting ? 'Exporting…' : 'Export',
+        disabled: this.exporting || !this.items.length,
+        run: () => this.openExportDialog(),
+      },
+      history: {
+        run: () => this.openRunHistory(),
+      },
+    });
+  }
+
+  private openExportDialog(): void {
+    this.exportXlsx();
+  }
+
+  private stopEvidenceRerunPolling(): void {
+    if (this.evidenceRerunPollTimer) {
+      clearInterval(this.evidenceRerunPollTimer);
+      this.evidenceRerunPollTimer = null;
+    }
+  }
+
+  private startEvidenceRerunPolling(watchPointIds?: string[]): void {
+    this.stopEvidenceRerunPolling();
+    if (watchPointIds?.length) {
+      this.evidenceRerunWatchPointIds = new Set(watchPointIds);
+    } else if (!this.evidenceRerunWatchPointIds?.size) {
+      this.evidenceRerunWatchPointIds = new Set(this.openGapPointIds());
+    }
+    this.evidenceRerunWatchTotal = this.evidenceRerunWatchPointIds?.size ?? 0;
+    this.evidenceRerunStatusFilter = 'all';
+    this.reportEvidenceRerunning = true;
+    this.syncGapActivityMarquee();
+    this.evidenceRerunPollTimer = setInterval(() => void this.tickEvidenceRerunPoll(), 2000);
+    void this.tickEvidenceRerunPoll();
+  }
+
+  private async tickEvidenceRerunPoll(): Promise<void> {
+    if (!this.ndRunId) return;
+    await this.loadNdRun(this.ndRunId, null, null);
+    this.syncGapActivityMarquee();
+    if (this.isEvidenceRerunInFlight()) {
+      this.cdr.markForCheck();
+      return;
+    }
+    this.reportEvidenceRerunning = false;
+    this.evidenceRerunWatchPointIds = null;
+    this.evidenceRerunWatchTotal = 0;
+    this.stopEvidenceRerunPolling();
+    this.syncGapActivityMarquee();
+    this.toast.show('Gap evidence re-analysis complete', 'success');
+    this.cdr.markForCheck();
+  }
+
+  private async prepareGapEvidenceDocs(storedDocumentIds: string[]): Promise<void> {
+    if (!storedDocumentIds.length) return;
+    const onlyReport = storedDocumentIds.every((id) =>
+      this.reportGapAttachments.some((a) => a.storedDocumentId === id),
+    );
+    if (onlyReport && storedDocumentIds.length === this.reportGapAttachments.length) {
+      this.reportEvidenceBusy = true;
+    }
+    for (const id of storedDocumentIds) {
+      this.reportEvidencePreparingIds.add(id);
+    }
+    this.cdr.markForCheck();
+    try {
+      for (const id of storedDocumentIds) {
+        this.setEvidencePrepStep(id, 'parsing');
+        this.startEvidencePrepPolling();
+        const result = await runGapEvidenceLocalPipeline(this.ndApi, id, (step, detail) => {
+          this.setEvidencePrepStep(id, step, detail);
+        });
+        if (!result.ok) {
+          this.setEvidencePrepStep(id, 'failed');
+          this.toast.show(result.message, 'error');
+        }
+      }
+      if (this.ndRunId) {
+        await this.loadNdRun(this.ndRunId, null, null);
+      } else {
+        await this.refreshEvidencePrepLabelsForReportDocs();
+      }
+    } finally {
+      for (const id of storedDocumentIds) {
+        this.reportEvidencePreparingIds.delete(id);
+      }
+      this.reportEvidenceBusy = false;
+      this.syncGapActivityMarquee();
+      this.cdr.markForCheck();
+    }
+  }
+
   get canRerunReportWithEvidence(): boolean {
-    if (!this.ndRunId || !this.ndRunData) return false;
-    const role = this.auth.getRole();
-    return role === 'super_admin' || role === 'maker';
+    return this.canUploadGapEvidence;
   }
 
   async onRerunAllGaps(): Promise<void> {
     if (!this.ndRunId || this.reportEvidenceRerunning) return;
-    this.reportEvidenceRerunning = true;
     this.ndDetailError = '';
+    const watchIds = this.openGapPointIds();
+    if (!watchIds.length) {
+      this.toast.show('No open gaps to re-run on this report.', 'error');
+      return;
+    }
+    this.evidenceRerunWatchPointIds = new Set(watchIds);
+    this.gapActivityMarquee = 'Gap evidence re-analysis starting…';
     this.cdr.markForCheck();
     try {
       const res = await this.ndApi.rerunRunWithEvidence(this.ndRunId);
       if (res.success) {
+        const queued = res.data?.queued ?? watchIds.length;
+        if (queued === 0) {
+          this.evidenceRerunWatchPointIds = null;
+          this.gapActivityMarquee = '';
+          this.toast.show(res.message ?? 'No open gaps to re-run', 'error');
+          return;
+        }
         this.toast.show(res.message ?? 'Rerunning analysis for all gaps…', 'success');
-        await this.loadNdRun(this.ndRunId, null, null);
+        this.startEvidenceRerunPolling(watchIds);
       } else {
         this.ndDetailError = res.message ?? 'Rerun failed';
         this.toast.show(this.ndDetailError, 'error');
+        this.gapActivityMarquee = '';
       }
-    } finally {
+    } catch {
+      this.gapActivityMarquee = '';
       this.reportEvidenceRerunning = false;
+    } finally {
       this.cdr.markForCheck();
     }
   }
@@ -1364,16 +2015,34 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       const upload = await this.ndApi.uploadRunGapEvidence(this.ndRunId, files);
       if (!upload.success) {
         this.toast.show(upload.message ?? 'Upload failed', 'error');
+        this.reportEvidenceBusy = false;
         return;
       }
       for (const item of upload.data ?? []) {
         for (const att of item.attachments ?? []) {
-          this.mergePointAttachments(att.analysisPointId, [att]);
+          this.mergePointAttachments(att.analysisPointId, [
+            {
+              ...att,
+              parseStatus: att.parseStatus ?? item.parseStatus,
+              sizeBytes: att.sizeBytes ?? item.sizeBytes,
+            },
+          ]);
         }
       }
-      this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
-    } finally {
+      const docIds = [...new Set((upload.data ?? []).map((item) => item.storedDocumentId).filter(Boolean))];
+      for (const id of docIds) {
+        const name = files.find((_, i) => upload.data?.[i]?.storedDocumentId === id)?.name;
+        this.evidencePrepLabels = {
+          ...this.evidencePrepLabels,
+          [id]: gapEvidencePrepStepLabel('uploading', name ?? this.fileNameForStoredDoc(id)),
+        };
+      }
+      this.syncGapActivityMarquee();
+      this.toast.show(`Uploaded ${files.length} file(s) — preparing documents…`, 'success');
+      void this.prepareGapEvidenceDocs(docIds);
+    } catch {
       this.reportEvidenceBusy = false;
+    } finally {
       this.cdr.markForCheck();
     }
   }
@@ -1500,7 +2169,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
           : await this.ndApi.rerunPoint(this.ndRunId, pointId, opts);
       if (res.success) {
         this.toast.show('Rerunning analysis for this gap…', 'success');
-        await this.loadNdRun(this.ndRunId, null, null);
+        if (hasEvidence) {
+          this.startEvidenceRerunPolling([pointId]);
+        } else {
+          await this.loadNdRun(this.ndRunId, null, null);
+        }
       } else {
         this.ndDetailError = res.message ?? 'Rerun failed';
         this.toast.show(this.ndDetailError, 'error');
@@ -1819,7 +2492,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       // block the maker from submitting — for a run with dozens of gaps, requiring every one
       // filled in before the checker even sees the report was impractical. Surface it as a
       // heads-up only.
-      if (this.effectiveReviewMode === 'maker') {
+      if (this.runReviewPanelMode === 'maker') {
         const missing = this.incompleteGapActionPlans();
         if (missing.length) {
           const shown = missing.slice(0, 15);
@@ -1881,9 +2554,14 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.runReviewSubmitting = false;
     if (res.success) {
       this.workspaceNav.requestNavBadgeRefresh();
-      if (this.reviewWorkspaceMode === 'checker') {
+      const role = this.auth.getRole();
+      const leaveToQueue =
+        role !== 'super_admin' &&
+        ((this.reviewWorkspaceMode === 'checker' && role === 'checker') ||
+          (this.reviewWorkspaceMode === 'reviewer' && role === 'reviewer'));
+      if (leaveToQueue && this.reviewWorkspaceMode === 'checker') {
         void this.router.navigate(['/nd/checker']);
-      } else if (this.reviewWorkspaceMode === 'reviewer') {
+      } else if (leaveToQueue && this.reviewWorkspaceMode === 'reviewer') {
         void this.router.navigate(['/nd/reviewer']);
       } else {
         await this.loadNdRun(this.ndRunId, null, null);
@@ -1910,12 +2588,47 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.savingReviewId = null;
     if (res.success) {
       this.toast.show('Review deleted', 'success');
-      await this.loadNdRun(this.ndRunId, null, null);
+      this.removeActionItemReview(reviewId, pointId);
     } else {
       this.ndDetailError = res.message ?? 'Could not delete review';
       this.toast.show(this.ndDetailError, 'error');
     }
-    void pointId;
+  }
+
+  private upsertActionItemReview(entry: ActionItemReviewEntry): void {
+    if (!this.ndRunData) return;
+    const list = [...(this.ndRunData.actionItemReviews ?? [])];
+    const idx = list.findIndex((r) => r.id === entry.id);
+    if (idx >= 0) list[idx] = entry;
+    else list.unshift(entry);
+    this.ndRunData = { ...this.ndRunData, actionItemReviews: list };
+    this.reviewsByPointId.set(entry.analysisPointId, reviewsForPoint(list, entry.analysisPointId));
+    this.cdr.markForCheck();
+  }
+
+  private removeActionItemReview(reviewId: string, pointId: string): void {
+    if (!this.ndRunData) return;
+    const list = (this.ndRunData.actionItemReviews ?? []).filter((r) => r.id !== reviewId);
+    this.ndRunData = { ...this.ndRunData, actionItemReviews: list };
+    this.reviewsByPointId.set(pointId, reviewsForPoint(list, pointId));
+    this.cdr.markForCheck();
+  }
+
+  private async reloadActionItemReviews(): Promise<void> {
+    if (!this.ndRunId || !this.ndRunData) return;
+    const res = await this.ndApi.getResults(this.ndRunId);
+    if (!res.success || !res.data) return;
+    const data = res.data as ResultsData;
+    this.ndRunData = { ...this.ndRunData, actionItemReviews: data.actionItemReviews ?? [] };
+    this.reviewsByPointId.clear();
+    for (const point of this.ndRunData.points) {
+      if (!point.id) continue;
+      this.reviewsByPointId.set(
+        point.id,
+        reviewsForPoint(this.ndRunData.actionItemReviews, point.id),
+      );
+    }
+    this.cdr.markForCheck();
   }
 
   openNdResultsEditor(): void {
@@ -1941,6 +2654,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       this.ndRunData.points,
       this.ndRunData.actionItemReviews,
       attachmentCountsByPoint(this.ndRunData),
+      this.ndRunData.actionPlans,
     );
   }
 
@@ -1959,8 +2673,15 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  filterFromSummaryCard(severity: GapSeverity): void {
-    const next: 'all' | GapSeverity = this.activeFilter === severity ? 'all' : severity;
+  get reportSummaryActiveFilter(): ReportSummaryFilterId {
+    if (this.activeFilter === 'all' || this.activeFilter === 'with_gaps') return 'all';
+    return this.activeFilter;
+  }
+
+  filterFromSummaryCard(filter: ReportSummaryFilterId): void {
+    if (filter === 'all') return;
+    const next: 'all' | GapSeverity | 'with_gaps' =
+      this.activeFilter === filter ? 'all' : filter;
     this.setFilter(next);
     if (!this.embedMode) {
       void this.router.navigate([], {
@@ -2093,8 +2814,18 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  async runXlsxExport(selection: GapAnalysisExportSelection): Promise<void> {
+  async runExportConfirm(confirm: GapAnalysisExportConfirm): Promise<void> {
     this.showExportDialog = false;
+    this.headerExportFormat = confirm.format === 'pdf' ? 'pdf' : 'xlsx';
+    if (confirm.format === 'pdf') {
+      await this.exportPdf();
+      return;
+    }
+    const { format: _format, ...selection } = confirm;
+    await this.runXlsxExport(selection);
+  }
+
+  async runXlsxExport(selection: GapAnalysisExportSelection): Promise<void> {
     if (this.exporting) return;
     const points = this.analysisPointsForExport();
     if (!points.length) return;
@@ -2118,6 +2849,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       this.toast.show('Export failed — try again', 'error');
     } finally {
       this.exporting = false;
+      this.syncShellPageHeader();
       this.cdr.markForCheck();
     }
   }
@@ -2142,6 +2874,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       this.toast.show('Export failed — try again', 'error');
     } finally {
       this.exporting = false;
+      this.syncShellPageHeader();
       this.cdr.markForCheck();
     }
   }
@@ -2179,6 +2912,14 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.stopEvidenceRerunPolling();
+    this.stopEvidencePrepPolling();
+    this.stepTracker.deactivate();
+    if (this.pipelinePanelActivatedHere) {
+      this.pipelinePanel.deactivate();
+      this.pipelinePanelActivatedHere = false;
+    }
+    this.pageHeaderActions.clear();
     this.persistDrafts();
   }
 
@@ -2459,41 +3200,18 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       this.rebuildNdRunIndexes(data);
       this.ndRunStatus = data.run.status;
 
-      if (!this.embedMode && this.reviewWorkspaceMode === 'none') {
-        const status = data.run.status;
-        const role = this.auth.getRole();
-        if (status?.toLowerCase() === 'pulled_back' && role === 'maker') {
-          void this.router.navigate(['/nd/correction/review', runId], {
-            queryParams: {
-              apPriority: this.actionPlanFocusPriority,
-              apStatus: this.actionPlanFocusStatus,
-              point: this.focusPointId,
-              plan: this.focusPlanId,
-              gap: this.focusGapIndex,
-            },
-          });
-          return;
-        }
-        const reviewRoute = reviewWorkspaceLink(role, runId, status);
-        if (reviewRoute && (role === 'checker' || role === 'reviewer')) {
-          void this.router.navigate(reviewRoute, {
-            queryParams: {
-              apPriority: this.actionPlanFocusPriority,
-              apStatus: this.actionPlanFocusStatus,
-              point: this.focusPointId,
-              plan: this.focusPlanId,
-              gap: this.focusGapIndex,
-            },
-          });
-          return;
-        }
-      }
-
       this.runStatusChange.emit(data.run.status);
       this.sourceLabel = data.run.name || 'Analysis run';
 
       if (generation !== this.loadGeneration) return;
       this.applyNdRunData(data, section, focus);
+
+      if (this.reportEvidenceRerunning && !this.isEvidenceRerunInFlight()) {
+        this.reportEvidenceRerunning = false;
+        this.evidenceRerunWatchPointIds = null;
+        this.stopEvidenceRerunPolling();
+        this.syncGapActivityMarquee();
+      }
 
       void this.loadRunMetadata(runId, generation, liteRunPromise);
     } catch {
@@ -2598,8 +3316,10 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.loadError = items.length
       ? null
       : 'No saved findings in this session — the run may have been cancelled, failed, or never finished.';
+    this.syncShellPageHeader();
     this.cdr.markForCheck();
 
+    void this.refreshEvidencePrepLabelsForReportDocs();
     requestAnimationFrame(() => this.enrichGapCountsFrom(0));
   }
 

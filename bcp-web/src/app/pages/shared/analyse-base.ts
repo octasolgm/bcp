@@ -1,4 +1,5 @@
 import { ChangeDetectorRef, Directive, HostListener, inject, OnDestroy, OnInit } from '@angular/core';
+import type { ReportSummaryFilterId } from '../../components/nd/nd-report-summary-stack.component';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { forkJoin, from, of, Subscription } from 'rxjs';
@@ -115,6 +116,8 @@ import {
   type GapItemData,
   type GapSeverity,
 } from '../../services/reguliq-store';
+import { rollupFromInlineGapItems } from '../../../lib/nd/inline-gap-rollup';
+import type { ClauseRollup } from '../../../lib/nd/gap-state';
 
 /** Seeded TFS × IMPTFS compliance session (32 points in DB). */
 export const SEEDED_DEMO_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
@@ -1064,6 +1067,16 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     };
   }
 
+  get inlineGapRollup(): ClauseRollup {
+    return rollupFromInlineGapItems(this.inlineGapItems);
+  }
+
+  filterInlineFromSummaryCard(filter: ReportSummaryFilterId): void {
+    if (filter === 'all') return;
+    const next: 'all' | GapSeverity = this.inlineGapFilter === filter ? 'all' : filter;
+    this.setInlineGapFilter(next);
+  }
+
   buildInlineGapItems(): void {
     const reports: DualVerifyReportItem[] = [];
     for (const [pointId, p] of this.sessionPointResults) {
@@ -1747,8 +1760,11 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   get filteredComplianceDocs(): StoredDocumentDto[] {
-    // Generated-by-analysis copies are run outputs, not inputs to attach to a new run.
-    const selectable = this.complianceDocs.filter((d) => !d.generatedByAnalysis);
+    // Finalized/corrected run outputs are not inputs — but gap-evidence uploads on a report are
+    // normal policy files and may be reused for a new analysis.
+    const selectable = this.complianceDocs.filter(
+      (d) => d.docKind === 'gap_evidence' || !d.generatedByAnalysis,
+    );
     const q = this.complianceSearch.trim().toLowerCase();
     if (!q) return selectable;
     return selectable.filter((d) => {

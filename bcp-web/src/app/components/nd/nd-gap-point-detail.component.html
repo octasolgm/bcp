@@ -384,7 +384,7 @@
                       [canReview]="effectiveCanReviewActionPlans"
                       [lightSurface]="true"
                       [disabledHint]="reviewDisabledHint"
-                      (plansChanged)="onActionPlansChanged()"
+                      (plansChanged)="onActionPlansChanged($event)"
                       (viewReviews)="viewActionPlanReviews.emit($event)"
                     />
                   }

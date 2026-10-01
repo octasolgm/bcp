@@ -19,6 +19,7 @@ public sealed class NdDemoInterceptionService(
     DemoAnalysisSeedService demoSeed,
     NdDemoWorkspaceService demoWorkspace,
     NdDashboardCacheService dashboardCache,
+    NdGapEvidenceOutcomeService gapEvidenceOutcome,
     IServiceScopeFactory scopeFactory,
     IOptions<LandingAiOptions> landingAiOptions,
     IOptions<NdDemoIsolationOptions> demoOptions,
@@ -1301,18 +1302,21 @@ public sealed class NdDemoInterceptionService(
         {
             ct.ThrowIfCancellationRequested();
             var (clauseNo, clauseText) = DemoAnalysisSeedService.ResolveClauseFromAnalysisPoint(point, regPointsById);
+            var prior = gapEvidenceOutcome.CapturePriorState(point, null);
             var judgment = BuildEvidenceRerunJudgment(point, clauseNo, label);
-            var message = NdRegulJudgmentFormatter.FormatLandingMessage(clauseNo, clauseText, judgment);
-            NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, message);
+            await gapEvidenceOutcome.ApplyRegulEvidenceOutcomeAsync(
+                run,
+                point,
+                new NdRegulForwardFinding { ClauseNo = clauseNo, ClauseText = clauseText },
+                judgment,
+                prior,
+                [label],
+                resolvedBy,
+                actionIndexFilter: null,
+                ct);
             point.LandingAiRerunCount += 1;
             point.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
-
-            // The clause only reads as compliant once every gap raised against it is
-            // resolved, so a full upgrade here must close out its open corrective actions
-            // too — otherwise the report would show "compliant" with gaps still pending.
-            if (judgment.OverallStatus == "compliant")
-                await ResolveOpenActionPlansForPointAsync(point.Id, resolvedBy, ct);
 
             // A single-gap rerun should feel immediate; a whole-report rerun over many
             // open gaps must not turn into a multi-second wait, so the per-item pause

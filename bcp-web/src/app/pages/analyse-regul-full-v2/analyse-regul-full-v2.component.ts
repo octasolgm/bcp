@@ -7,6 +7,8 @@ import { NdPointSortControlsComponent } from '../../components/nd/nd-point-sort-
 import { NdPointNumberTreeComponent } from '../nd/shared/nd-point-number-tree.component';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
+import { NdReportSummaryStackComponent } from '../../components/nd/nd-report-summary-stack.component';
+import { NdClauseRailCardComponent } from '../../components/nd/nd-clause-rail-card.component';
 import { REGUL_PIPELINE_FULL, REGUL_PIPELINE_HYBRID_V5 } from '../../../lib/nd/regul-fields';
 import type { DocAnalysisReadyState } from '../../../lib/nd/doc-analysis-ready';
 import type { GovPoint, StoredDocumentDto } from '../../services/api.service';
@@ -50,6 +52,8 @@ import { buildSeededActionPlansForGap, type SeededActionPlan } from '../../../li
     NdPointNumberTreeComponent,
     NdStatusBadgeComponent,
     NdGapAnalysisComponent,
+    NdClauseRailCardComponent,
+    NdReportSummaryStackComponent,
   ],
   // V2 forked its own copy of the shared V3/V4 template+styles on 2026-09-28 (28 Sep meeting UI
   // changes) specifically so this page's redesign never touches analyse-regul.component.html/.scss,

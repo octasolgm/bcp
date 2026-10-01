@@ -283,4 +283,30 @@ Mark non_compliant only when no substantive procedural equivalent appears in the
 
     public static string BuildQualitativeAssessmentPrompt(string regulatoryText, string policyText) =>
         $"--- REGULATORY DOCUMENT ---\n{regulatoryText}\n--- END REGULATORY DOCUMENT ---\n\n--- INTERNAL POLICY DOCUMENT ---\n{policyText}\n--- END INTERNAL POLICY DOCUMENT ---\n\nAssess the internal policy document per the rubric. Cover all of: clarity_and_tone, structure_and_navigation, depth_of_implementation_detail, alignment_with_regulatory_language, actionability_for_staff.";
+
+    /// <summary>Extra instructions when re-judging a clause against newly uploaded gap-evidence documents.</summary>
+    public static string BuildEvidenceRerunQueryAppendix(string? originalGapSummary, string evidenceDocNames)
+    {
+        var gap = string.IsNullOrWhiteSpace(originalGapSummary)
+            ? "(See the clause's prior gap on record.)"
+            : originalGapSummary.Trim();
+        if (gap.Length > 1200) gap = gap[..1200] + "…";
+
+        return $"""
+
+--- GAP EVIDENCE RE-RUN ---
+The bank uploaded new internal policy evidence: {evidenceDocNames}.
+Re-judge ONLY against whether this new material (plus any attached context) addresses the EXISTING gap below.
+Do NOT discard the original gap — your gap_description will be merged with the original for audit history.
+
+Original gap on record:
+{gap}
+
+Requirements for this response:
+- policy_extract: quote verbatim text from the NEW evidence document(s) that supports closure or partial closure; include document name in document_reference.
+- gap_description: numbered list of what is now Covered / Partially covered / Missing in the NEW upload vs what remains pending overall.
+- suggested_action: only the remaining corrective work (use N/A if fully compliant).
+- overall_status: compliant only if every element of the original gap is fully addressed by the new evidence.
+""";
+    }
 }

@@ -963,6 +963,9 @@
         <div class="analysing-points-rail nd-analysis-point-rail" aria-label="Run points">
           @for (row of sortedAnalysingRows; track row.pointId) {
             @let meta = analysingPointRailMeta(row.pointId);
+            @let card = analysingPointRailCard(row);
+            @let railSev = analysingPointRailSeverity(row.pointId);
+            @let showForwardChip = !railSev && analysingPointRailShowsForwardChip(row.pointId);
             <div
               class="rail-point"
               [class.active]="selectedDetailPointId === row.pointId"
@@ -972,37 +975,20 @@
               (keydown.enter)="selectPointForDetail(row.pointId)"
               (keydown.space)="$event.preventDefault(); selectPointForDetail(row.pointId)"
             >
-              <span class="rail-point-head">
-                <button
-                  type="button"
-                  class="point-info-btn"
-                  title="View full clause"
-                  aria-label="View full clause"
-                  (click)="openPointDetailModal(row.pointId, $event)"
-                >
-                  ⓘ
-                </button>
-                <span class="rail-point-num">{{ row.displayId || displayLabelForPoint(row.pointId) }}</span>
-                @if (analysingPointRailSeverity(row.pointId); as sev) {
-                  <span class="severity-badge sm" [class]="sev">{{ gapComplianceLabel(sev) }}</span>
-                } @else if (analysingPointRailShowsForwardChip(row.pointId)) {
-                  <span class="forward-status-chip" [class]="forwardPointStatusClass(row.pointId)">
-                    {{ forwardPointStatusLabel(row.pointId) }}
-                  </span>
-                }
-              </span>
-              <span class="rail-point-title" [title]="row.title">{{ row.title }}</span>
-              @if (analysingPointRailSeverity(row.pointId)) {
-                <span class="gap-count-badge rail-gap-inline" [class.zero]="analysingPointRailGapCount(row.pointId) === 0">
-                  {{ analysingPointRailGapCount(row.pointId) }} gap{{ analysingPointRailGapCount(row.pointId) === 1 ? '' : 's' }}
-                </span>
-              }
-              <div class="rail-meta-slim">
-                @if (meta.policySnippet && meta.policySnippet !== '—') {
-                  <span class="rail-policy-line"><em>Policy</em> {{ meta.policySnippet }}</span>
-                }
-                <span class="rail-confidence-line"><em>Conf.</em> {{ meta.confidence }}</span>
-              </div>
+              <app-nd-clause-rail-card
+                [clauseNum]="card.clauseNum"
+                [heading]="card.titleLine"
+                [severity]="railSev"
+                [severityLabelText]="railSev ? gapComplianceLabel(railSev) : ''"
+                [forwardStatusLabel]="showForwardChip ? forwardPointStatusLabel(row.pointId) : ''"
+                [forwardStatusClass]="showForwardChip ? forwardPointStatusClass(row.pointId) : ''"
+                [clauseText]="card.clauseText"
+                [confidence]="meta.confidence"
+                [gapCount]="railSev ? analysingPointRailGapCount(row.pointId) : 0"
+                [rollup]="analysingPointRailRollup(row.pointId)"
+                [showInfoButton]="true"
+                (infoClick)="openPointDetailModal(row.pointId, $event)"
+              />
             </div>
           }
         </div>
@@ -1587,20 +1573,16 @@
       </div>
     </div>
 
-    <div class="summary-row">
-      <div class="summary-card compliant">
-        <span class="label">{{ complianceSeverityLabels.compliant }}</span>
-        <strong>{{ inlineGapSummary.compliant }}</strong>
-      </div>
-      <div class="summary-card partial_compliant">
-        <span class="label">{{ complianceSeverityLabels.partial_compliant }}</span>
-        <strong>{{ inlineGapSummary.partialCompliant }}</strong>
-      </div>
-      <div class="summary-card non_compliant">
-        <span class="label">{{ complianceSeverityLabels.non_compliant }}</span>
-        <strong>{{ inlineGapSummary.nonCompliant }}</strong>
-      </div>
-    </div>
+    <app-nd-report-summary-stack
+      [compliant]="inlineGapSummary.compliant"
+      [partialCompliant]="inlineGapSummary.partialCompliant"
+      [nonCompliant]="inlineGapSummary.nonCompliant"
+      [labels]="complianceSeverityLabels"
+      [rollup]="inlineGapRollup"
+      [filterable]="true"
+      [activeFilter]="inlineGapFilter === 'all' ? 'all' : inlineGapFilter"
+      (filterSelect)="filterInlineFromSummaryCard($any($event))"
+    />
 
     @if (activeNdRunId && nonComplianceGapPoints.length) {
       <div class="gap-verify-panel card-surface">

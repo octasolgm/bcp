@@ -1,72 +1,107 @@
-<section class="rs-card">
-  <header class="rs-head">
-    <button type="button" class="rs-toggle" (click)="collapsed = !collapsed">
-      <span class="rs-caret" [class.is-open]="!collapsed">▸</span>
-      <h3>Review summary</h3>
-    </button>
-    <div class="rs-boxes">
-      @if (rollup) {
-        <span class="rs-box">
-          <strong>{{ rollup.gaps }}</strong>
-          <em>gaps</em>
-        </span>
-        <span class="rs-box" [class.warn]="rollup.pendingGaps > 0">
-          <strong>{{ rollup.pendingGaps }}</strong>
-          <em>pending gaps</em>
-        </span>
-        <span class="rs-box ok">
-          <strong>{{ rollup.resolvedGaps }}</strong>
-          <em>resolved gaps</em>
-        </span>
-      }
-      <span class="rs-box">
-        <strong>{{ pendingPointCount }}</strong>
-        <em>pending action points</em>
-      </span>
-      <span class="rs-box ok">
-        <strong>{{ resolvedCount }}</strong>
-        <em>resolved action plans</em>
-      </span>
-      <span class="rs-box" [class.warn]="overdueCount > 0">
-        <strong>{{ overdueCount }}</strong>
-        <em>overdue</em>
-      </span>
-    </div>
-  </header>
+<div class="rs-trigger-wrap">
+  @if (rollup) {
+    <app-nd-rollup-stat-cards
+      class="rs-stat-cards"
+      [rollup]="rollup"
+      variant="review"
+      [overdueActionPlans]="overdueCount"
+    />
+  }
+  <button
+    type="button"
+    class="rs-open-btn"
+    (click)="openDrawer()"
+    [attr.aria-expanded]="drawerOpen"
+    aria-controls="review-summary-drawer"
+  >
+    <svg class="rs-open-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+      <path d="M4 6h12M4 10h12M4 14h8" stroke-linecap="round" />
+    </svg>
+    Review summary
+    @if (pendingPlans.length) {
+      <span class="rs-open-badge">{{ pendingPlans.length }} open</span>
+    }
+    @if (overdueCount) {
+      <span class="rs-open-badge rs-open-badge--warn">{{ overdueCount }} overdue</span>
+    }
+  </button>
+</div>
 
-  @if (!collapsed) {
-    <div class="rs-body">
-      <div class="rs-block">
-        <h4>Open actions</h4>
-        @if (!pendingPlans.length) {
+@if (drawerOpen) {
+  <div class="rs-backdrop" (click)="closeDrawer()" aria-hidden="true"></div>
+  <aside
+    id="review-summary-drawer"
+    class="rs-drawer"
+    role="dialog"
+    aria-labelledby="review-summary-title"
+    aria-modal="true"
+  >
+    <header class="rs-drawer-head">
+      <div class="rs-drawer-head-copy">
+        <p class="rs-eyebrow">Sign-off checklist</p>
+        <h2 id="review-summary-title">Review summary</h2>
+        <p class="rs-drawer-sub">
+          @if (pendingPlans.length) {
+            {{ pendingPlans.length }} open action{{ pendingPlans.length === 1 ? '' : 's' }}
+            @if (resolvedCount) {
+              · {{ resolvedCount }} resolved
+            }
+          } @else {
+            All actions are resolved.
+          }
+        </p>
+      </div>
+      <button type="button" class="rs-close" (click)="closeDrawer()" aria-label="Close review summary">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+          <path d="M5 5l10 10M15 5L5 15" />
+        </svg>
+      </button>
+    </header>
+
+    <div class="rs-drawer-body">
+      @if (rollup) {
+        <app-nd-rollup-stat-cards
+          class="rs-drawer-stats"
+          [rollup]="rollup"
+          variant="review"
+          [overdueActionPlans]="overdueCount"
+        />
+      }
+
+      <section class="rs-section" aria-labelledby="rs-open-actions-heading">
+        <h3 id="rs-open-actions-heading">Open actions</h3>
+        @if (!sortedPendingPlans.length) {
           <p class="rs-empty">Nothing outstanding — every action is resolved.</p>
         } @else {
-          <table class="rs-table">
-            <thead>
-              <tr>
-                <th>Clause</th>
-                <th>Action</th>
-                <th>Target date</th>
-                <th>Responsible</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (plan of pendingPlans; track plan.id) {
-                <tr>
-                  <td class="rs-clause">{{ clauseFor(plan) || '—' }}</td>
-                  <td class="rs-text">{{ plan.actionPlan }}</td>
-                  <td [class.overdue]="isOverdue(plan)">{{ formatDate(plan.targetDate) || '—' }}</td>
-                  <td>{{ responsibleFor(plan) }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          <ul class="rs-action-list">
+            @for (plan of sortedPendingPlans; track plan.id) {
+              <li class="rs-action-card">
+                <div class="rs-action-top">
+                  <span class="rs-clause-pill">{{ clauseFor(plan) || '—' }}</span>
+                  @if (isOverdue(plan)) {
+                    <span class="rs-overdue-tag">Overdue</span>
+                  }
+                </div>
+                <p class="rs-action-text">{{ plan.actionPlan }}</p>
+                <div class="rs-action-meta">
+                  <span>
+                    <span class="rs-meta-label">Target</span>
+                    <strong [class.overdue]="isOverdue(plan)">{{ formatDate(plan.targetDate) || '—' }}</strong>
+                  </span>
+                  <span>
+                    <span class="rs-meta-label">Responsible</span>
+                    <strong>{{ responsibleFor(plan) }}</strong>
+                  </span>
+                </div>
+              </li>
+            }
+          </ul>
         }
-      </div>
+      </section>
 
-      <div class="rs-block">
-        <div class="rs-block-head">
-          <h4>Review records</h4>
+      <section class="rs-section" aria-labelledby="rs-reviews-heading">
+        <div class="rs-section-head">
+          <h3 id="rs-reviews-heading">Review records</h3>
           <div class="rs-range">
             <label>
               From
@@ -91,19 +126,22 @@
             @for (review of reviews; track review.id) {
               <li class="rs-review">
                 <div class="rs-review-head">
-                  <span class="rs-clause">{{ review.clause || '—' }}</span>
+                  <span class="rs-clause-pill rs-clause-pill--sm">{{ review.clause || '—' }}</span>
                   <span class="rs-reviewer">{{ review.reviewerName || 'Reviewer' }}</span>
                   @if (review.reviewerRole) {
                     <span class="rs-role">{{ review.reviewerRole }}</span>
                   }
                   <span class="rs-date">{{ formatDate(review.createdAt) }}</span>
                 </div>
+                @if (review.planText) {
+                  <p class="rs-review-plan">{{ review.planText }}</p>
+                }
                 <p class="rs-review-text">{{ review.comment }}</p>
               </li>
             }
           </ul>
         }
-      </div>
+      </section>
     </div>
-  }
-</section>
+  </aside>
+}

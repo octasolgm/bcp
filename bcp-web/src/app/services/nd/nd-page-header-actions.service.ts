@@ -11,9 +11,33 @@ export type NdPageHeaderUploadAction = {
   run: () => void;
 };
 
+export type NdPageHeaderExportFormatOption = {
+  value: string;
+  label: string;
+};
+
+export type NdPageHeaderExportAction = {
+  label: string;
+  disabled: boolean;
+  run: () => void;
+  /** Optional format picker shown beside Export (e.g. Excel vs PDF). */
+  format?: {
+    value: string;
+    options: NdPageHeaderExportFormatOption[];
+    onChange: (value: string) => void;
+  };
+};
+
+export type NdPageHeaderHistoryAction = {
+  disabled?: boolean;
+  run: () => void;
+};
+
 export type NdPageHeaderActionsState = {
   refresh?: NdPageHeaderRefreshAction;
   upload?: NdPageHeaderUploadAction;
+  export?: NdPageHeaderExportAction;
+  history?: NdPageHeaderHistoryAction;
 };
 
 /** Routed ND pages register refresh/upload controls for the shell title bar. */
@@ -24,6 +48,8 @@ export class NdPageHeaderActionsService {
   readonly marquee = signal<string | null>(null);
   /** Shell header "In progress" nav — only New Analysis opts in. */
   readonly showInProgressNav = signal(false);
+  /** When set, replaces the shell blue bar title (e.g. unified gap report matching review workspace). */
+  readonly titleOverride = signal<string | null>(null);
 
   set(state: NdPageHeaderActionsState | null): void {
     this.actions.set(state);
@@ -46,10 +72,16 @@ export class NdPageHeaderActionsService {
     this.showInProgressNav.set(show);
   }
 
+  setTitleOverride(title: string | null): void {
+    const trimmed = title?.trim() ?? '';
+    this.titleOverride.set(trimmed ? trimmed : null);
+  }
+
   clear(): void {
     this.clearActions();
     this.clearMarquee();
     this.showInProgressNav.set(false);
+    this.titleOverride.set(null);
   }
 }
 

@@ -21,7 +21,7 @@ import { InProgressNavButtonComponent } from '../in-progress-nav-button/in-progr
             </svg>
           </button>
         }
-        <h1 class="nd-page-header-title">{{ title }}</h1>
+        <h1 class="nd-page-header-title">{{ titleOverride() || title }}</h1>
       </div>
       @if (marqueeText(); as ticker) {
         <div class="nd-page-header-marquee" aria-live="polite">
@@ -41,6 +41,49 @@ import { InProgressNavButtonComponent } from '../in-progress-nav-button/in-progr
               [disabled]="toolbar.upload.disabled"
             >
               {{ toolbar.upload.label }}
+            </button>
+          }
+          @if (toolbar.export) {
+            <div class="nd-page-header-export-group">
+              @if (toolbar.export.format) {
+                <label class="nd-page-header-export-format-wrap">
+                  <span class="visually-hidden">Export format</span>
+                  <select
+                    class="nd-page-header-export-format"
+                    [value]="toolbar.export.format.value"
+                    [disabled]="toolbar.export.disabled"
+                    (change)="toolbar.export.format.onChange($any($event.target).value)"
+                  >
+                    @for (opt of toolbar.export.format.options; track opt.value) {
+                      <option [value]="opt.value">{{ opt.label }}</option>
+                    }
+                  </select>
+                </label>
+              }
+              <button
+                type="button"
+                class="nd-page-header-upload-btn"
+                (click)="toolbar.export.run()"
+                [disabled]="toolbar.export.disabled"
+              >
+                {{ toolbar.export.label }}
+              </button>
+            </div>
+          }
+          @if (toolbar.history) {
+            <button
+              type="button"
+              class="nd-page-header-icon-btn"
+              (click)="toolbar.history.run()"
+              [disabled]="toolbar.history.disabled"
+              aria-label="Run history"
+              title="Run history"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.36 2.64" />
+                <path d="M3 3v6h6" />
+                <path d="M12 7v5l3 2" />
+              </svg>
             </button>
           }
           @if (toolbar.refresh) {
@@ -77,4 +120,5 @@ export class NdPageHeaderComponent {
   readonly headerActions = this.actionsService.actions;
   readonly marqueeText = this.actionsService.marquee;
   readonly showInProgressNav = this.actionsService.showInProgressNav;
+  readonly titleOverride = this.actionsService.titleOverride;
 }

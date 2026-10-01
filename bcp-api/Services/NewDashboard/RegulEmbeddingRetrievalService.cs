@@ -87,7 +87,22 @@ public sealed class RegulEmbeddingRetrievalService(
         // existed still deserializes cleanly.
         IReadOnlyList<HybridFusionSelector.FusedMatch>? FusedMatches = null);
 
-    public async Task RunRetrievalAsync(NdAnalysisRun run, CancellationToken ct)
+    public Task RunRetrievalAsync(NdAnalysisRun run, CancellationToken ct) =>
+        RunRetrievalInternalAsync(run, additionalCorpusDocIds: [], pointIdsFilter: null, ct);
+
+    /// <summary>Re-run hybrid retrieval for specific clause points (e.g. gap evidence rerun), optionally including extra indexed documents.</summary>
+    public Task RunRetrievalForPointsAsync(
+        NdAnalysisRun run,
+        IReadOnlyCollection<Guid> pointIds,
+        IReadOnlyList<Guid> additionalCorpusDocIds,
+        CancellationToken ct) =>
+        RunRetrievalInternalAsync(run, additionalCorpusDocIds, pointIds, ct);
+
+    private async Task RunRetrievalInternalAsync(
+        NdAnalysisRun run,
+        IReadOnlyList<Guid> additionalCorpusDocIds,
+        IReadOnlyCollection<Guid>? pointIdsFilter,
+        CancellationToken ct)
     {
         try
         {
@@ -97,31 +112,36 @@ public sealed class RegulEmbeddingRetrievalService(
                 .Select(g => g!.Value)
                 .ToList();
 
-            if (internalDocIds.Count == 0)
+            var corpusDocIds = internalDocIds
+                .Concat(additionalCorpusDocIds ?? [])
+                .Distinct()
+                .ToList();
+
+            if (corpusDocIds.Count == 0)
             {
                 logger.LogInformation(
-                    "Retrieval skipped for run {RunId}: no internal documents attached", run.Id);
+                    "Retrieval skipped for run {RunId}: no internal or gap-evidence documents in corpus", run.Id);
                 return;
             }
 
             var extractions = await db.NdLocalDocumentExtractions
                 .AsNoTracking()
-                .Where(e => internalDocIds.Contains(e.StoredDocumentId) && e.IndexStatus == "indexed")
+                .Where(e => corpusDocIds.Contains(e.StoredDocumentId) && e.IndexStatus == "indexed")
                 .ToListAsync(ct);
 
             if (extractions.Count == 0)
             {
                 logger.LogInformation(
-                    "Retrieval skipped for run {RunId}: none of the {Count} attached internal document(s) are indexed yet",
-                    run.Id, internalDocIds.Count);
+                    "Retrieval skipped for run {RunId}: none of the {Count} corpus document(s) are indexed yet",
+                    run.Id, corpusDocIds.Count);
                 return;
             }
 
             var extractionIds = extractions.Select(e => e.Id).ToList();
             var docNameById = await db.StoredDocuments
                 .AsNoTracking()
-                .Where(d => internalDocIds.Contains(d.Id))
-                .ToDictionaryAsync(d => d.Id, d => d.Title, ct);
+                .Where(d => corpusDocIds.Contains(d.Id))
+                .ToDictionaryAsync(d => d.Id, d => d.Title ?? d.OriginalFileName, ct);
             var storedDocIdByExtractionId = extractions.ToDictionary(e => e.Id, e => e.StoredDocumentId);
 
             // Step 3's corpus — full section text, loaded once per run (not per clause). BM25
@@ -135,10 +155,18 @@ public sealed class RegulEmbeddingRetrievalService(
             var sectionById = allSections.ToDictionary(s => s.Id);
             var bm25Corpus = Bm25Scorer.BuildCorpus(allSections.Select(s => (s.Id, s.ClauseText)).ToList());
 
-            var findings = await db.NdRegulForwardFindings
+            var findingsQuery = db.NdRegulForwardFindings
                 .Where(f => f.AnalysisRunId == run.Id
-                    && !f.ClauseNo.StartsWith(NdRegulReverseIntRows.IntClausePrefix))
-                .ToListAsync(ct);
+                    && !f.ClauseNo.StartsWith(NdRegulReverseIntRows.IntClausePrefix));
+
+            if (pointIdsFilter is { Count: > 0 })
+            {
+                var pointIdSet = pointIdsFilter.ToHashSet();
+                findingsQuery = findingsQuery.Where(f =>
+                    f.AnalysisPointId != null && pointIdSet.Contains(f.AnalysisPointId.Value));
+            }
+
+            var findings = await findingsQuery.ToListAsync(ct);
 
             var processed = 0;
             foreach (var finding in findings)

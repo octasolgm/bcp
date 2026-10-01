@@ -10,14 +10,17 @@
         }
       </p>
     </div>
-    @if (canExport) {
-      <button type="button" class="btn-secondary" [disabled]="exporting" (click)="exportExcel.emit()">
-        {{ exporting ? 'Exporting…' : 'Export Excel' }}
-      </button>
-    }
   </header>
 
   <div class="gap-docs-panel">
+    <input
+      #reportEvidenceInput
+      type="file"
+      class="hidden-input"
+      multiple
+      accept=".pdf,.doc,.docx,.doc"
+      (change)="onReportFilesSelected($event)"
+    />
     <div class="gap-docs-head">
       <div class="gap-docs-title-wrap">
         <p class="gap-docs-title">Gap analysis documents</p>
@@ -25,45 +28,42 @@
           <span class="gap-docs-count">{{ uniqueReportAttachments.length }}</span>
         }
       </div>
-      @if (canUploadEvidence) {
-        <div class="gap-docs-head-actions">
-          <button
-            type="button"
-            class="gap-docs-rerun"
-            [disabled]="evidenceRerunning || evidenceUploading || !!evidenceDeletingId"
-            title="Rerun analysis for all gaps in this report"
-            (click)="rerunAllGaps.emit()"
-          >
-            {{ evidenceRerunning ? 'Rerunning…' : 'Rerun all gaps' }}
-          </button>
-          <input
-            #reportEvidenceInput
-            type="file"
-            class="hidden-input"
-            multiple
-            accept=".pdf,.doc,.docx,.doc"
-            (change)="onReportFilesSelected($event)"
-          />
-          <button
-            type="button"
-            class="gap-docs-upload"
-            [disabled]="evidenceUploading || evidenceRerunning || !!evidenceDeletingId"
-            title="Upload gap analysis for the whole analysis"
-            (click)="reportEvidenceInput.click()"
-          >
-            @if (evidenceUploading) {
-              Uploading…
-            } @else {
-              <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
-                <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M10 4v12M4 10h12" />
-              </svg>
-              Upload
-            }
-          </button>
-        </div>
-      }
+      <div class="gap-docs-head-actions">
+        <button
+          type="button"
+          class="gap-docs-rerun"
+          [disabled]="!canUploadEvidence || evidenceRerunning || evidenceUploading || !!evidenceDeletingId"
+          [title]="canUploadEvidence ? 'Rerun analysis for all gaps in this report' : evidenceUploadDisabledHint"
+          (click)="rerunAllGaps.emit()"
+        >
+          {{ evidenceRerunning ? 'Rerunning…' : 'Rerun all gaps' }}
+        </button>
+        <button
+          type="button"
+          class="gap-docs-upload"
+          [class.is-disabled]="!canUploadEvidence"
+          [disabled]="!canUploadEvidence || evidenceUploading || evidenceRerunning || !!evidenceDeletingId"
+          [title]="canUploadEvidence ? 'Upload supporting document for the whole analysis' : evidenceUploadDisabledHint"
+          (click)="onUploadClick(reportEvidenceInput)"
+        >
+          @if (evidenceUploading) {
+            Uploading…
+          } @else {
+            <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M10 4v12M4 10h12" />
+            </svg>
+            Upload
+          }
+        </button>
+      </div>
     </div>
-    <p class="gap-docs-hint">Attach supporting files for the whole analysis, then rerun all open gaps against those documents.</p>
+    <p class="gap-docs-hint">
+      @if (canUploadEvidence) {
+        Attach supporting files for the whole analysis, then rerun all open gaps against those documents. Each upload is a separate file (v2, v3, …) and also appears under Internal documents with source Gap evidence for this analysis.
+      } @else if (evidenceUploadDisabledHint) {
+        {{ evidenceUploadDisabledHint }}
+      }
+    </p>
     @if (uniqueReportAttachments.length) {
       <ul class="gap-docs-list">
         @for (att of uniqueReportAttachments; track att.storedDocumentId) {
@@ -74,6 +74,15 @@
                 {{ att.fileName }}
               </button>
               <p class="gap-docs-sub">{{ fileMeta(att) }}</p>
+              @if (showPrepStepRail(att)) {
+                <ol class="gap-docs-steps" aria-label="Document prepare progress">
+                  <li [class.is-done]="prepStepIndex(att) > 0" [class.is-active]="prepStepIndex(att) === 0">Upload</li>
+                  <li [class.is-done]="prepStepIndex(att) > 1" [class.is-active]="prepStepIndex(att) === 1">Azure parse</li>
+                  <li [class.is-done]="prepStepIndex(att) > 2" [class.is-active]="prepStepIndex(att) === 2">Structural extract</li>
+                  <li [class.is-done]="prepStepIndex(att) > 3" [class.is-active]="prepStepIndex(att) === 3">Index</li>
+                  <li [class.is-done]="prepStepIndex(att) >= 4" [class.is-active]="prepStepIndex(att) === 4">Ready</li>
+                </ol>
+              }
             </div>
             @if (isRemoving(att.storedDocumentId)) {
               <span class="gap-docs-busy">Removing…</span>
@@ -85,6 +94,16 @@
               </div>
             } @else {
               <div class="gap-docs-actions">
+                @if (canPrepareEvidence(att)) {
+                  <button
+                    type="button"
+                    class="gap-docs-btn primary"
+                    [disabled]="isPreparingEvidence(att) || evidenceRerunning || evidenceUploading || !!evidenceDeletingId"
+                    (click)="prepareEvidence.emit(att.storedDocumentId)"
+                  >
+                    {{ isPreparingEvidence(att) ? 'Preparing…' : 'Parse & extract' }}
+                  </button>
+                }
                 <button type="button" class="gap-docs-btn ghost" (click)="viewEvidence.emit(att.storedDocumentId)">Open</button>
                 @if (canUploadEvidence) {
                   <button type="button" class="gap-docs-btn danger-text" [disabled]="!!evidenceDeletingId" (click)="askRemove(att.storedDocumentId)">
@@ -97,9 +116,22 @@
         }
       </ul>
     } @else {
-      <div class="gap-docs-empty">
-        <p>No documents uploaded for this analysis yet.</p>
-      </div>
+      <button
+        type="button"
+        class="gap-docs-empty gap-docs-empty-drop"
+        [class.is-disabled]="!canUploadEvidence"
+        [disabled]="!canUploadEvidence || evidenceUploading"
+        [title]="canUploadEvidence ? 'Choose PDF or Word files' : evidenceUploadDisabledHint"
+        (click)="onUploadClick(reportEvidenceInput)"
+      >
+        @if (canUploadEvidence) {
+          <p><strong>No documents yet.</strong> Click here or use Upload to add PDF or Word files for the whole analysis.</p>
+        } @else if (evidenceUploadDisabledHint) {
+          <p>{{ evidenceUploadDisabledHint }}</p>
+        } @else {
+          <p>No documents uploaded for this analysis yet.</p>
+        }
+      </button>
     }
   </div>
 

@@ -195,28 +195,16 @@
                           class="rail-point demo-preview-item"
                           (click)="selectPreviewPoint(p)"
                         >
-                          <span class="rail-point-head">
-                            <span class="rail-point-num">{{ p.clauseNo }}</span>
-                            @if (templatePointSeverity(p); as sev) {
-                              <span class="severity-badge sm" [class]="sev">{{ previewStatusLabel(p) }}</span>
-                            }
-                          </span>
-                          <span class="rail-point-title">{{ p.clauseTitle || 'Untitled clause' }}</span>
-                          @if (templatePointGapCount(p) > 0) {
-                            <span class="gap-count-badge rail-gap-inline">
-                              {{ templatePointGapCount(p) }} gap
-                            </span>
-                          }
-                          <div class="rail-meta-slim">
-                            @if (templatePointPolicySnippet(p) !== '—') {
-                              <span class="rail-policy-line">
-                                <em>Policy</em> {{ templatePointPolicySnippet(p) }}
-                              </span>
-                            }
-                            <span class="rail-confidence-line">
-                              <em>Conf.</em> {{ formatTemplateConfidence(p) }}
-                            </span>
-                          </div>
+                          @let demoCard = demoClauseRailCard(p);
+                          <app-nd-clause-rail-card
+                            [clauseNum]="demoCard.clauseNum"
+                            [heading]="demoCard.titleLine"
+                            [clauseText]="demoCard.clauseText"
+                            [severity]="templatePointSeverity(p)"
+                            [severityLabelText]="previewStatusLabel(p)"
+                            [confidence]="formatTemplateConfidence(p)"
+                            [gapCount]="templatePointGapCount(p)"
+                          />
                         </button>
                         <button
                           type="button"

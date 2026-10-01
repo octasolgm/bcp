@@ -99,15 +99,73 @@
   }
 }
 
+.xo-format-bar {
+  display: flex;
+  align-items: center;
+  padding: 0.65rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle, var(--bg-muted));
+}
+
+.xo-format-label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.xo-format-label-text {
+  flex: 0 0 auto;
+}
+
+.xo-format-select {
+  min-width: 10.5rem;
+  padding: 0.4rem 2rem 0.4rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' stroke='%2364748b' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-tint, color-mix(in srgb, var(--accent) 18%, transparent));
+  }
+}
+
 .xo-body {
   padding: 1rem 1.25rem 1.1rem;
   overflow-y: auto;
 }
 
-.xo-section {
-  padding: 0.9rem 1rem;
+.xo-pdf-note {
+  margin: 0;
+  padding: 1rem 1.1rem;
   border-radius: 12px;
+  border: 1px dashed var(--border);
   background: var(--bg-subtle, var(--bg-muted));
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.xo-section {
+  padding: 0.85rem 1rem 1rem;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
 }
 
 .xo-section + .xo-section {
@@ -137,11 +195,10 @@
 
   h3 {
     margin: 0;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-secondary);
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
   }
 }
 
@@ -157,10 +214,10 @@
 
 .xo-count {
   font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--bg-card);
-  padding: 0.05rem 0.4rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-tint, color-mix(in srgb, var(--accent) 12%, transparent));
+  padding: 0.12rem 0.45rem;
   border-radius: 999px;
 }
 

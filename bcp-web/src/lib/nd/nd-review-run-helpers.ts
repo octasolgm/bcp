@@ -2,16 +2,40 @@ import { actionItemReviewsToDrafts } from './action-item-review';
 import type { ResultsData } from './types';
 import { isPulledBackRun, normalizeRunStatus } from './run-status';
 
+export type WorkflowSubmitAction =
+  | 'submit'
+  | 'approve'
+  | 'pullback'
+  | 'finalize'
+  | 'pullback_to_checker'
+  | 'pullback_to_maker';
+
+export type WorkflowSubmitTarget = {
+  role: 'maker' | 'checker' | 'reviewer';
+  label: string;
+  action: WorkflowSubmitAction;
+};
+
+const WORKFLOW_SUBMIT_MAKER: WorkflowSubmitTarget[] = [
+  { role: 'checker', label: 'Send to checker', action: 'submit' },
+];
+const WORKFLOW_SUBMIT_CHECKER: WorkflowSubmitTarget[] = [
+  { role: 'reviewer', label: 'Send to reviewer', action: 'approve' },
+  { role: 'maker', label: 'Pull back to maker', action: 'pullback' },
+];
+const WORKFLOW_SUBMIT_REVIEWER: WorkflowSubmitTarget[] = [
+  { role: 'checker', label: 'Pull back to checker', action: 'pullback_to_checker' },
+  { role: 'maker', label: 'Pull back to maker', action: 'pullback_to_maker' },
+];
+
 /** Checker/reviewer/super_admin can add saved reviews during active review stages. */
 export function canAddActionItemReviews(
   role: string | null | undefined,
   runStatus: string | null | undefined,
 ): boolean {
   if (!role || !runStatus) return false;
+  if (role === 'super_admin') return true;
   const status = normalizeRunStatus(runStatus);
-  if (role === 'super_admin') {
-    return status === 'submitted_for_review' || status === 'checker_approved' || isPulledBackRun(status);
-  }
   if (role === 'checker') return status === 'submitted_for_review' || isPulledBackRun(status);
   if (role === 'reviewer') return status === 'checker_approved' || isPulledBackRun(status);
   return false;
@@ -42,10 +66,26 @@ export function reviewWorkspaceLink(
   return null;
 }
 
+export type RunReviewPhase = 'none' | 'maker' | 'checker' | 'reviewer';
+
+/** Which workflow phase the run is in — same for every viewer. */
+export function runReviewPhaseFromStatus(runStatus: string | null | undefined): RunReviewPhase {
+  const status = normalizeRunStatus(runStatus ?? '');
+  if (status === 'submitted_for_review') return 'checker';
+  if (status === 'checker_approved') return 'reviewer';
+  if (
+    status === 'pulled_back' ||
+    ['completed', 'dual_verify_failed', 'landing_ai_complete', 'reviewer_approved'].includes(status)
+  ) {
+    return 'maker';
+  }
+  return 'none';
+}
+
 export function reviewWorkspaceModeForStatus(
   runStatus: string | null | undefined,
-): 'none' | 'maker' | 'checker' | 'reviewer' {
-  switch (runStatus) {
+): RunReviewPhase {
+  switch (normalizeRunStatus(runStatus ?? '')) {
     case 'pulled_back':
       return 'maker';
     case 'submitted_for_review':
@@ -57,8 +97,101 @@ export function reviewWorkspaceModeForStatus(
   }
 }
 
+/** Who may use the report-level submit panel — super_admin acts at the current phase. */
+export function runReviewSubmitModeForViewer(
+  phase: RunReviewPhase,
+  role: string | null | undefined,
+): RunReviewPhase {
+  if (phase === 'none') {
+    return role === 'super_admin' ? 'maker' : 'none';
+  }
+  if (role === 'super_admin') return phase;
+  if (role === 'reviewer' && phase === 'reviewer') return 'reviewer';
+  if (role === 'checker' && phase === 'checker') return 'checker';
+  if (role === 'maker' && phase === 'maker') return 'maker';
+  return 'none';
+}
+
+/** All workflow actions a super admin may take for this run status (deduped). */
+export function superAdminWorkflowSubmitTargets(
+  runStatus: string | null | undefined,
+): WorkflowSubmitTarget[] {
+  const status = normalizeRunStatus(runStatus ?? '');
+  const phase = runReviewPhaseFromStatus(status);
+  const out: WorkflowSubmitTarget[] = [];
+  const seen = new Set<WorkflowSubmitAction>();
+
+  const push = (list: WorkflowSubmitTarget[]) => {
+    for (const t of list) {
+      if (seen.has(t.action)) continue;
+      seen.add(t.action);
+      out.push(t);
+    }
+  };
+
+  if (
+    phase === 'maker' ||
+    ['completed', 'dual_verify_failed', 'landing_ai_complete', 'pulled_back'].includes(status)
+  ) {
+    push(WORKFLOW_SUBMIT_MAKER);
+  }
+  if (phase === 'checker' || status === 'submitted_for_review') {
+    push(WORKFLOW_SUBMIT_CHECKER);
+  }
+  if (phase === 'reviewer' || status === 'checker_approved') {
+    push(WORKFLOW_SUBMIT_REVIEWER);
+  }
+
+  return out;
+}
+
+export function workflowSubmitTargetsForViewer(
+  phase: RunReviewPhase,
+  role: string | null | undefined,
+  runStatus: string | null | undefined,
+): WorkflowSubmitTarget[] {
+  if (role === 'super_admin') {
+    return superAdminWorkflowSubmitTargets(runStatus);
+  }
+  if (phase === 'none') return [];
+  if (phase === 'maker') return WORKFLOW_SUBMIT_MAKER;
+  if (phase === 'checker') return WORKFLOW_SUBMIT_CHECKER;
+  return WORKFLOW_SUBMIT_REVIEWER;
+}
+
+export function canFinalizeWorkflowRun(
+  role: string | null | undefined,
+  runStatus: string | null | undefined,
+): boolean {
+  const status = normalizeRunStatus(runStatus ?? '');
+  if (role === 'super_admin') {
+    return status === 'checker_approved' || status === 'reviewer_approved';
+  }
+  return role === 'reviewer' && status === 'checker_approved';
+}
+
 export function isReviewRole(role: string | null | undefined): boolean {
   return role === 'checker' || role === 'reviewer' || role === 'super_admin';
+}
+
+const GAP_EVIDENCE_UPLOAD_ROLES = new Set(['super_admin', 'maker', 'checker', 'reviewer']);
+
+/** Report- or point-level gap evidence upload for any ND review role. */
+export function canUploadGapEvidence(
+  role: string | null | undefined,
+  _runStatus?: string | null | undefined,
+): boolean {
+  if (!role) return false;
+  return GAP_EVIDENCE_UPLOAD_ROLES.has(role);
+}
+
+export function gapEvidenceUploadDisabledHint(
+  role: string | null | undefined,
+  _runStatus?: string | null | undefined,
+): string {
+  if (canUploadGapEvidence(role)) return '';
+  if (!role) return 'Sign in to upload gap evidence.';
+  return 'Your account role cannot upload gap evidence for this analysis.';
 }
 
 export function reviewDisabledHint(
@@ -82,10 +215,7 @@ export function reviewDisabledHint(
     }
     return 'This analysis is not in final review yet.';
   }
-  if (role === 'super_admin') {
-    if (runStatus === 'pulled_back') return '';
-    return 'Gap reviews can be added when the analysis is with checker, reviewer, or pending correction.';
-  }
+  if (role === 'super_admin') return '';
   return '';
 }
 

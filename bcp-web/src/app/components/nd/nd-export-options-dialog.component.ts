@@ -1,8 +1,10 @@
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   EventEmitter,
   HostListener,
+  inject,
   Input,
   Output,
 } from '@angular/core';
@@ -11,7 +13,7 @@ import { FormsModule } from '@angular/forms';
 import {
   ACTION_PLAN_EXPORT_COLUMNS,
   REVIEW_EXPORT_COLUMNS,
-  type GapAnalysisExportSelection,
+  type GapAnalysisExportConfirm,
 } from '../../../lib/nd/export/gap-analysis-export';
 
 /**
@@ -27,19 +29,28 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NdExportOptionsDialogComponent {
+  private readonly cdr = inject(ChangeDetectorRef);
+
   /** Gap sheet columns for this run, in sheet order. */
   @Input() set gapColumns(value: string[]) {
     this.gapCols = value;
     this.selectedGap = new Set(value);
     this.gapLabels = Object.fromEntries(value.map((c) => [c, c]));
+    this.exportFormat = this.allowPdf && this.defaultFormat === 'pdf' ? 'pdf' : 'xlsx';
   }
 
   /** Hidden when the run has no action plans — there would be nothing to write. */
   @Input() hasActionPlans = false;
   @Input() hasReviews = false;
+  /** When false, the dialog only offers Excel (embedded views without PDF export). */
+  @Input() allowPdf = true;
+  /** Pre-select format when the dialog opens (e.g. last choice from the page). */
+  @Input() defaultFormat: 'xlsx' | 'pdf' = 'xlsx';
 
   @Output() cancelled = new EventEmitter<void>();
-  @Output() confirmed = new EventEmitter<GapAnalysisExportSelection>();
+  @Output() confirmed = new EventEmitter<GapAnalysisExportConfirm>();
+
+  exportFormat: 'xlsx' | 'pdf' = 'xlsx';
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
@@ -71,6 +82,11 @@ export class NdExportOptionsDialogComponent {
 
   toggleCollapsed(section: keyof typeof this.collapsed): void {
     this.collapsed = { ...this.collapsed, [section]: !this.collapsed[section] };
+    this.cdr.markForCheck();
+  }
+
+  onFormatChange(): void {
+    this.cdr.markForCheck();
   }
 
   isOn(set: Set<string>, col: string): boolean {
@@ -99,12 +115,21 @@ export class NdExportOptionsDialogComponent {
     return Object.keys(out).length ? out : undefined;
   }
 
+  get isExcel(): boolean {
+    return this.exportFormat !== 'pdf';
+  }
+
   get canConfirm(): boolean {
-    return this.selectedGap.size > 0;
+    return this.exportFormat === 'pdf' || this.selectedGap.size > 0;
+  }
+
+  get exportButtonLabel(): string {
+    return this.exportFormat === 'pdf' ? 'Export PDF' : 'Export Excel';
   }
 
   confirm(): void {
     this.confirmed.emit({
+      format: this.exportFormat,
       gapColumns: [...this.selectedGap],
       gapColumnLabels: NdExportOptionsDialogComponent.cleanLabels(this.gapLabels, this.selectedGap),
       includeActionPlans: this.hasActionPlans && this.includeActionPlans,

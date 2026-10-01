@@ -65,7 +65,12 @@ import {
   type SourcedGovPoint,
 } from '../../../lib/library-points-utils';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
+import { NdClauseRailCardComponent } from '../../components/nd/nd-clause-rail-card.component';
+import { buildClauseRailCardFields } from '../../../lib/nd/clause-rail-card-display';
+import { capGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
+import { rollupClause, type ClauseRollup } from '../../../lib/nd/gap-state';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
+import { NdReportSummaryStackComponent } from '../../components/nd/nd-report-summary-stack.component';
 import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
 import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints, exportRegulGapAnalysisExcelFromPoints } from '../../../lib/nd/export/gap-analysis-export';
 import {
@@ -93,7 +98,7 @@ const EMPTY_TEMP_COMMENTS: TempPointReviewComment[] = [];
 @Component({
   selector: 'app-analyse-regul',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, InProgressNavButtonComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdGapAnalysisComponent],
+  imports: [CommonModule, FormsModule, RouterLink, InProgressNavButtonComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdGapAnalysisComponent, NdClauseRailCardComponent, NdReportSummaryStackComponent],
   templateUrl: './analyse-regul.component.html',
   styleUrl: './analyse-regul.component.scss',
 })
@@ -1206,6 +1211,15 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return countDisplayGapsForAnalysisPoint(ap, this.attachmentsForPoint(pointId).length);
   }
 
+  /** Gap/action/review chips on the forward rail — same slot order as gap report cards. */
+  analysingPointRailRollup(pointId: string): ClauseRollup | null {
+    const ap = this.analysisPointRailSource(pointId);
+    if (!ap?.id || !this.analysingPointIsScored(pointId)) return null;
+    const gapIndexes = capGapsForAnalysisPoint(ap, this.isRegulPipelineRun()).map((g) => g.index);
+    if (!gapIndexes.length) return null;
+    return rollupClause(ap.id, gapIndexes, [], new Map());
+  }
+
   analysingPointRailShowsForwardChip(pointId: string): boolean {
     if (!this.usesForwardOnlyRunUi()) return false;
     return !this.analysingPointRailSeverity(pointId);
@@ -1252,6 +1266,46 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       uiStatus === 'completed' ? ap : null,
     );
     return { policySnippet, confidence };
+  }
+
+  /** Raw regulation text before shared rail excerpt formatting. */
+  analysingPointRailRawClauseText(pointId: string, fallbackTitle?: string): string {
+    const ap = this.analysisPointRailSource(pointId);
+    if (ap) {
+      const raw = parsePointSnapshot(ap.pointSnapshot);
+      const gov = this.govPointForAnalysis(
+        ap.regulationPointId ?? raw.regulationPointId ?? ap.id ?? pointId,
+      );
+      const snap = hydratePointSnapshotFromGov(
+        raw,
+        gov,
+        ap.regulationPointId ?? raw.regulationPointId,
+      );
+      const text = (snap.pointContent ?? '').trim();
+      if (text) return text;
+    }
+    return (fallbackTitle ?? '').trim();
+  }
+
+  /** Same clause card shape as gap analysis reviewer/maker rails. */
+  analysingPointRailCard(row: { pointId: string; displayId?: string; title?: string }) {
+    const clauseNum = row.displayId || this.displayLabelForPoint(row.pointId);
+    return buildClauseRailCardFields({
+      clauseNum,
+      title: row.title,
+      clauseText: this.analysingPointRailRawClauseText(row.pointId, row.title),
+    });
+  }
+
+  /** Regulation requirement excerpt for the shared clause rail card. */
+  analysingPointRailClauseText(pointId: string, fallbackTitle?: string): string {
+    const row = this.analysingListRows.find((r) => r.pointId === pointId);
+    const card = this.analysingPointRailCard({
+      pointId,
+      displayId: row?.displayId,
+      title: row?.title ?? fallbackTitle,
+    });
+    return card.clauseText;
   }
 
   private extractAiComplianceMessage(raw?: string | null): string {
@@ -4446,7 +4500,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         status: 'active',
         filter: 'document',
         fileType: 'PDF',
-        docKind: 'document',
+        docKind: d.source === 'gap_evidence' ? 'gap_evidence' : 'document',
         storagePath: '',
         history: [],
         sizeBytes: d.sizeBytes ?? 0,

@@ -44,12 +44,34 @@ public class InternalDocumentsController(
         await sectionService.RecoverAllStaleSectionExtractsAsync(ct);
         await parseService.RecoverAllStaleParsesAsync(ct);
 
-        var docs = await NdDemoDataFilters.ApplyToStoredDocuments(
+        var internalDocs = await NdDemoDataFilters.ApplyToStoredDocuments(
                 appDb.StoredDocuments.AsNoTracking()
                     .Where(d => (d.DocKind == "document" || d.DocKind == "internal") && d.IsHidden == hiddenOnly),
                 demoCtx)
-            .OrderByDescending(d => hiddenOnly ? d.HiddenAt ?? d.UpdatedAt : d.CreatedAt)
             .ToListAsync(ct);
+
+        var gapEvidenceDocs = await NdDemoDataFilters.ApplyToStoredDocuments(
+                appDb.StoredDocuments.AsNoTracking()
+                    .Where(d => d.DocKind == "gap_evidence" && d.IsHidden == hiddenOnly),
+                demoCtx)
+            .ToListAsync(ct);
+
+        var docs = internalDocs
+            .Concat(gapEvidenceDocs)
+            .OrderByDescending(d => hiddenOnly ? d.HiddenAt ?? d.UpdatedAt : d.CreatedAt)
+            .ToList();
+
+        var gapDocIds = gapEvidenceDocs.Select(d => d.Id).ToList();
+        var gapEvidenceRunByDocId = gapDocIds.Count == 0
+            ? new Dictionary<Guid, Guid>()
+            : await (
+                from att in appDb.NdAnalysisPointAttachments.AsNoTracking()
+                join pt in appDb.NdAnalysisPoints.AsNoTracking() on att.AnalysisPointId equals pt.Id
+                where gapDocIds.Contains(att.StoredDocumentId)
+                group pt by att.StoredDocumentId
+                into g
+                select new { StoredDocumentId = g.Key, RunId = g.Select(p => p.AnalysisRunId).First() }
+            ).ToDictionaryAsync(x => x.StoredDocumentId, x => x.RunId, ct);
 
         var profileNames = await LoadProfileNamesAsync(
             appDb,
@@ -59,7 +81,12 @@ public class InternalDocumentsController(
         var analysisCounts = await NdDocumentAnalysisRunCountHelper.LoadAsync(appDb, ct, demoCtx);
 
         var generatedFromRunIds = docs
-            .Select(d => TryGetGeneratedFromRunId(d.HistoryJson))
+            .Select(d =>
+            {
+                if (string.Equals(d.DocKind, "gap_evidence", StringComparison.OrdinalIgnoreCase))
+                    return gapEvidenceRunByDocId.TryGetValue(d.Id, out var rid) ? rid : (Guid?)null;
+                return TryGetGeneratedFromRunId(d.HistoryJson);
+            })
             .Where(id => id.HasValue)
             .Select(id => id!.Value)
             .Distinct()
@@ -73,16 +100,32 @@ public class InternalDocumentsController(
         var items = new List<object>();
         foreach (var d in docs)
         {
-            var recovered = await parseService.RecoverStaleParseIfNeededAsync(d.Id, ct);
-            var live = recovered ?? d;
-            var parseStatus = await parseService.ResolveDisplayParseStatusAsync(live, ct);
+            var isGapEvidence = string.Equals(d.DocKind, "gap_evidence", StringComparison.OrdinalIgnoreCase);
+            StoredDocument live;
+            string parseStatus;
+            if (isGapEvidence)
+            {
+                live = d;
+                parseStatus = string.IsNullOrWhiteSpace(d.ParseStatus) ? "pending" : d.ParseStatus;
+            }
+            else
+            {
+                var recovered = await parseService.RecoverStaleParseIfNeededAsync(d.Id, ct);
+                live = recovered ?? d;
+                parseStatus = await parseService.ResolveDisplayParseStatusAsync(live, ct);
+            }
+
             var exposePages = !string.Equals(parseStatus, "pending", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(parseStatus, "processing", StringComparison.OrdinalIgnoreCase);
-            var generatedFromRunId = TryGetGeneratedFromRunId(d.HistoryJson);
+            Guid? generatedFromRunIdValue;
+            if (isGapEvidence)
+                generatedFromRunIdValue = gapEvidenceRunByDocId.TryGetValue(d.Id, out var rid) ? rid : null;
+            else
+                generatedFromRunIdValue = TryGetGeneratedFromRunId(d.HistoryJson);
             items.Add(new
             {
                 id = d.Id,
-                source = "legacy",
+                source = isGapEvidence ? "gap_evidence" : "legacy",
                 title = d.Title,
                 name = d.Title,
                 originalFileName = d.OriginalFileName,
@@ -125,11 +168,14 @@ public class InternalDocumentsController(
                     ? d.OriginalFileName
                     : null,
                 landingAiFileName = Path.GetFileName(d.StoragePath),
-                generatedByAnalysis = IsGeneratedByAnalysis(d.HistoryJson),
-                generatedFromRunId = generatedFromRunId,
-                generatedFromRunName = generatedFromRunId is Guid grid && generatedFromRunNames.TryGetValue(grid, out var grName)
+                generatedByAnalysis = isGapEvidence
+                    ? generatedFromRunIdValue.HasValue
+                    : IsGeneratedByAnalysis(d.HistoryJson),
+                generatedFromRunId = generatedFromRunIdValue,
+                generatedFromRunName = generatedFromRunIdValue is Guid grid && generatedFromRunNames.TryGetValue(grid, out var grName)
                     ? grName
                     : null,
+                isGapEvidence,
             });
         }
 
@@ -361,7 +407,9 @@ public class InternalDocumentsController(
             return StatusCode(503, new { success = false, message = "Supabase Storage not configured." });
 
         var doc = await appDb.StoredDocuments.AsNoTracking()
-            .FirstOrDefaultAsync(d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+            .FirstOrDefaultAsync(
+                d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal" || d.DocKind == "gap_evidence"),
+                ct);
         if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath))
             return NotFound(new { success = false, message = "Document file not found." });
 
@@ -430,7 +478,9 @@ public class InternalDocumentsController(
             return StatusCode(503, new { success = false, message = "Supabase Storage not configured." });
 
         var doc = await appDb.StoredDocuments.AsNoTracking()
-            .FirstOrDefaultAsync(d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+            .FirstOrDefaultAsync(
+                d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal" || d.DocKind == "gap_evidence"),
+                ct);
         if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath))
             return NotFound(new { success = false, message = "Document file not found." });
 

@@ -1,0 +1,71 @@
+<div class="report-summary-stack" [class.report-summary-stack--with-rollup]="showRollup && rollup">
+  <div class="summary-row summary-row--compliance">
+    @if (filterable) {
+      <button
+        type="button"
+        class="summary-card compliant"
+        [class.active]="cardActive('compliant')"
+        [attr.aria-pressed]="cardActive('compliant')"
+        (click)="onCardClick('compliant')"
+      >
+        <span class="label">{{ labels.compliant }}</span>
+        <strong>{{ compliant }}</strong>
+        @if (showHints) {
+          <span class="hint">Fully addressed</span>
+        }
+      </button>
+      <button
+        type="button"
+        class="summary-card partial_compliant"
+        [class.active]="cardActive('partial_compliant')"
+        [attr.aria-pressed]="cardActive('partial_compliant')"
+        (click)="onCardClick('partial_compliant')"
+      >
+        <span class="label">{{ labels.partial_compliant }}</span>
+        <strong>{{ partialCompliant }}</strong>
+        @if (showHints) {
+          <span class="hint">Needs improvement</span>
+        }
+      </button>
+      <button
+        type="button"
+        class="summary-card non_compliant"
+        [class.active]="cardActive('non_compliant')"
+        [attr.aria-pressed]="cardActive('non_compliant')"
+        (click)="onCardClick('non_compliant')"
+      >
+        <span class="label">{{ labels.non_compliant }}</span>
+        <strong>{{ nonCompliant }}</strong>
+        @if (showHints) {
+          <span class="hint">Corrective action required</span>
+        }
+      </button>
+    } @else {
+      <div class="summary-card compliant">
+        <span class="label">{{ labels.compliant }}</span>
+        <strong>{{ compliant }}</strong>
+        @if (showHints) {
+          <span class="hint">Fully addressed</span>
+        }
+      </div>
+      <div class="summary-card partial_compliant">
+        <span class="label">{{ labels.partial_compliant }}</span>
+        <strong>{{ partialCompliant }}</strong>
+        @if (showHints) {
+          <span class="hint">Needs improvement</span>
+        }
+      </div>
+      <div class="summary-card non_compliant">
+        <span class="label">{{ labels.non_compliant }}</span>
+        <strong>{{ nonCompliant }}</strong>
+        @if (showHints) {
+          <span class="hint">Corrective action required</span>
+        }
+      </div>
+    }
+  </div>
+
+  @if (showRollup && rollup) {
+    <app-nd-rollup-stat-cards [rollup]="rollup" variant="report" />
+  }
+</div>

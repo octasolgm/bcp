@@ -93,3 +93,42 @@ Bug fixes
 
 Tasks
 - Internal documents catalog: analysis group labels use the same column layout as data rows; groups separated by a light box instead of a full-width banner and accent bars
+
+01 Oct 2026
+
+Tasks
+- Gap analysis report: uploaded gap-evidence documents auto-parse and extract (Azure DI + index on hybrid runs); Rerun all gaps re-judges only open clauses using that evidence and updates policy extracts when gaps close
+- Gap analysis UI: report attachment rows show prepare status and poll until indexing finishes
+- Gap evidence re-run: original gap text kept on record with evidence review appendix; policy extract cites new upload; action plans resolve, split, or stay open with status history; CAP history entry type "Gap evidence re-run"
+
+Bug fixes
+- Gap analysis review counts: "Action reviews" total and review summary pending-action cards now match the same corrective-action totals shown on clause cards (one slot per action plan, not per gap only)
+- Gap analysis report: resolving or editing actions, gaps, and reviews updates clause badges, rollups, and compliance status on the left rail immediately (then re-syncs with the server)
+- Compliant status color on analysis report badges and summary cards aligned to ss1 green (was using blue compliant tokens)
+- Checker/reviewer/maker review workspace: removed workflow bar (Running badge, Refresh run, All analysis runs); fixed stale Running when point status was still pending
+- Gap analysis: removed duplicate Export Excel from the report review panel (export stays in the page header with Excel/PDF)
+- Clause list cards: policy excerpt line hidden on the rail; full policy extract remains in the clause detail panel
+- Export popup: Excel/PDF format dropdown moved into the dialog; sheet sections labeled Gap analysis, Actions, Reviews (matches Excel tabs); Actions worksheet renamed from Action Plans
+- Clause rail cards: one clause number in the header row, then the clause title as heading (no duplicate number on reviewer or analyse-regul pages)
+- Clause rail cards: shared buildClauseRailCardFields for gap analysis, analyse-regul/full-v2, and admin demo preview; body excerpt drops repeated number/title
+- Clause rail cards: one layout everywhere (number + status, heading, excerpt, work chips, confidence) on gap report and analyse-regul/full-v2 rails
+- Internal documents catalog now lists gap-evidence uploads from analysis reports, grouped under the related run (open/download; parse stays on the report upload path)
+- Gap analysis documents (upload, list, Rerun all gaps) now show on the main gap analysis report URL and every workflow view, not only the dedicated reviewer workspace; evidence-only panel when the run is not in an active review phase
+- Gap evidence upload and rerun on the analysis report now show Azure parse, structural extract, and index progress (header marquee, step rail, hybrid pipeline panel) and keep polling until clauses actually finish re-judging instead of stopping on the first refresh
+- Super admin on the unified gap analysis report: all workflow actions for the run status (send, approve, pull back, finalize), gap reviews on any active stage, same report layout as other roles
+- Gap analysis report: compliant / partial / non-compliant summary cards now sit above the gaps-and-actions tally row on every view (including checker and reviewer)
+- Shared report summary stack (compliance row then gaps/actions row) on gap analysis, New Analysis / analyse-regul / full-v2 / v8 / v9 inline reports, legacy gap report, and embedded ND results
+- Opening a run from All analysis uses the same report layout as Pending review / Pending final review (shell title, summary stack, review panel, no workflow bar); dedicated review URLs still work the same
+- All analysis report view: reviewer sequence (compliance cards, AI draft, review summary with gap/action stats, gap documents) for every saved run including cancelled/finalized; no Re-run bar or duplicate gap stat row
+
+01 Oct 2026
+
+Tasks
+- Gap analysis documents: when a file was never parsed or extracted, the row shows that status and a Parse and extract button to start the Azure pipeline for that file only
+- Gap evidence uploads: report rows now show parse/extract status from the stored file; each re-upload on a run gets its own v2/v3 record; server starts Azure prepare after upload; gap evidence files list under Internal documents (source Gap evidence)
+- New analysis (hybrid) internal document picker now lists gap-evidence uploads from analysis reports, not only library uploads
+- Report summary layout: action stat row, then gap stat row, then AI draft banner
+- Review summary on gap analysis reports: compact pill button opens a right-side panel; open actions sorted by clause number; card layout for actions and review records
+
+Bug fixes
+- (none)

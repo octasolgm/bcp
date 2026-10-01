@@ -37,6 +37,9 @@ import {
   type ActionPlanResponsibilityType,
   type ActionPlanStatus,
   type ActionPlanTargetDateChange,
+  actionPlanCommentWithoutEvidence,
+  actionPlanEvidenceNote,
+  type ActionPlanEvidenceNote,
 } from '../../../lib/nd/action-plan';
 import { defaultTargetDateForGapRisk } from '../../../lib/nd/doc-analysis-ready';
 import { formatDate } from '../../../lib/nd/utils';
@@ -75,7 +78,7 @@ export class NdActionPlansSectionComponent implements OnChanges {
   /** Action id from an inbox deep link — expanded and scrolled into view once it loads. */
   @Input() focusPlanId: string | null = null;
 
-  @Output() plansChanged = new EventEmitter<void>();
+  @Output() plansChanged = new EventEmitter<ActionPlanEntry | undefined>();
   @Output() viewReviews = new EventEmitter<ActionPlanEntry>();
 
   readonly statusOptions = ACTION_PLAN_STATUS_OPTIONS;
@@ -358,7 +361,7 @@ export class NdActionPlansSectionComponent implements OnChanges {
     }
 
     this.resetEditor();
-    this.plansChanged.emit();
+    this.plansChanged.emit(res.data ?? undefined);
     this.cdr.markForCheck();
   }
 
@@ -372,13 +375,13 @@ export class NdActionPlansSectionComponent implements OnChanges {
       this.cdr.markForCheck();
       return;
     }
-    this.plansChanged.emit();
+    this.plansChanged.emit(undefined);
     this.cdr.markForCheck();
   }
 
   async move(plan: ActionPlanEntry, direction: 'up' | 'down'): Promise<void> {
     await this.api.reorderActionPlan(this.runId, plan.id, direction);
-    this.plansChanged.emit();
+    this.plansChanged.emit(undefined);
   }
 
   /** Action whose status is being written right now, so only its own button spins. */
@@ -415,7 +418,7 @@ export class NdActionPlansSectionComponent implements OnChanges {
       plan.id,
       next === 'resolved' ? 'Action resolved.' : 'Action reopened.',
     );
-    this.plansChanged.emit();
+    this.plansChanged.emit(res.data ?? undefined);
     this.cdr.markForCheck();
   }
 
@@ -468,6 +471,14 @@ export class NdActionPlansSectionComponent implements OnChanges {
   statusHistoryLabel(row: { previousStatus: string | null; newStatus: string }): string {
     const from = actionPlanStatusLabel(row.previousStatus ?? 'pending');
     return `${from} → ${actionPlanStatusLabel(row.newStatus)}`;
+  }
+
+  evidenceNote(plan: ActionPlanEntry): ActionPlanEvidenceNote | null {
+    return actionPlanEvidenceNote(plan.comment);
+  }
+
+  makerComment(plan: ActionPlanEntry): string {
+    return actionPlanCommentWithoutEvidence(plan.comment);
   }
 
   /** Falls back to the action's own resolve stamp when no history row exists yet. */
@@ -659,14 +670,14 @@ export class NdActionPlansSectionComponent implements OnChanges {
     }
 
     this.cancelReview();
-    this.plansChanged.emit();
+    this.plansChanged.emit(undefined);
     this.cdr.markForCheck();
   }
 
   async removeReview(plan: ActionPlanEntry, reviewId: string): Promise<void> {
     if (!confirm('Delete this review?')) return;
     await this.api.deleteActionPlanReview(this.runId, plan.id, reviewId);
-    this.plansChanged.emit();
+    this.plansChanged.emit(undefined);
   }
 
   onViewReviews(plan: ActionPlanEntry, event: Event): void {

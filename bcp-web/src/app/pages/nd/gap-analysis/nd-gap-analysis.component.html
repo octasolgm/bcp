@@ -1,30 +1,20 @@
-<div class="page-header" [class.embed-header]="embedMode">
+<div class="page-header" [class.embed-header]="embedMode" [class.page-header--run-subtitle]="hideDuplicateReportTitle">
   <div>
-    <div class="page-title-row">
-      @if (embedMode) {
-        <h2 class="embed-title">Gap Analysis — Working Document</h2>
-      } @else if (reviewWorkspaceMode === 'maker') {
-        <h1>Pending correction</h1>
-      } @else if (reviewWorkspaceMode === 'checker') {
-        <h1>Pending review</h1>
-      } @else if (reviewWorkspaceMode === 'reviewer') {
-        <h1>Pending final review</h1>
-      } @else {
-        <h1>Gap Analysis — Working Document</h1>
-      }
-      <button
-        type="button"
-        class="panel-collapse-btn"
-        [attr.aria-expanded]="!collapsed"
-        [title]="collapsed ? 'Expand' : 'Collapse'"
-        (click)="toggleCollapsed()"
-      >
-        <svg class="panel-collapse-icon" [class.is-collapsed]="collapsed" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
-          <path fill="none" stroke="currentColor" stroke-width="1.8" d="M5 8l5 5 5-5" />
-        </svg>
-        {{ collapsed ? 'Expand' : 'Collapse' }}
-      </button>
-    </div>
+    @if (!hideDuplicateReportTitle) {
+      <div class="page-title-row">
+        @if (embedMode) {
+          <h2 class="embed-title">Gap Analysis — Working Document</h2>
+        } @else if (reportPageTitleMode === 'maker') {
+          <h1>Pending correction</h1>
+        } @else if (reportPageTitleMode === 'checker') {
+          <h1>Pending review</h1>
+        } @else if (reportPageTitleMode === 'reviewer') {
+          <h1>Pending final review</h1>
+        } @else {
+          <h1>Gap Analysis — Working Document</h1>
+        }
+      </div>
+    }
     <p class="subtitle">
       {{ subtitle }}
       @if (!embedMode && ndRunId) {
@@ -45,29 +35,8 @@
         {{ deletingSession ? 'Deleting…' : 'Delete session' }}
       </button>
     }
-    @if (!embedMode) {
-      <button
-        type="button"
-        class="btn-secondary"
-        [disabled]="exporting || !items.length"
-        (click)="exportXlsx()"
-      >
-        {{ exporting ? 'Exporting…' : 'Export XLSX' }}
-      </button>
-      <button
-        type="button"
-        class="btn-secondary"
-        [disabled]="exporting || !items.length"
-        (click)="exportPdf()"
-      >
-        Export PDF
-      </button>
-    }
-    @if (!embedMode && ndRunId) {
-      <button type="button" class="btn-secondary" (click)="openRunHistory()">History</button>
-    }
-    @if (!embedMode) {
-      <a [routerLink]="ndRunId ? ['/nd/analyse-v8'] : ['/analyse-v8']" [queryParams]="ndRunId ? { run: ndRunId } : null" class="btn-primary">Re-run</a>
+    @if (!embedMode && !ndRunId) {
+      <a routerLink="/analyse-v8" class="btn-primary">Re-run</a>
     }
     @if (ndRunId && canSubmitNdReview && !hideHeaderSubmitForReview) {
       <button type="button" class="btn-primary" [disabled]="workflowLoading" (click)="submitNdReview()">
@@ -77,8 +46,8 @@
   </div>
 </div>
 
-<div class="gap-panel-collapsible" [class.is-collapsed]="collapsed">
-@if (ndRunId && ndRunData) {
+<div class="gap-panel-collapsible">
+@if (ndRunId && ndRunData && showWorkflowBar) {
   <div class="workflow-bar card-surface">
     <div class="workflow-bar-main">
       <app-nd-status-badge [status]="ndRunData.run.status" />
@@ -87,16 +56,6 @@
       }
       @if (reportPhaseLabel) {
         <span class="report-phase-chip">{{ reportPhaseLabel }}</span>
-      }
-      @if (runRollup; as rollup) {
-        <span class="report-rollup">
-          <span class="rollup-chip">{{ rollup.gaps }} gap{{ rollup.gaps === 1 ? '' : 's' }}</span>
-          <span class="rollup-chip is-resolved">{{ rollup.resolvedGaps }} resolved</span>
-          <span class="rollup-chip is-pending">{{ rollup.pendingGaps }} pending</span>
-          <span class="rollup-chip">{{ rollup.actions }} action{{ rollup.actions === 1 ? '' : 's' }}</span>
-          <span class="rollup-chip is-resolved">{{ rollup.resolvedActions }} resolved</span>
-          <span class="rollup-chip is-pending">{{ rollup.pendingActions }} pending</span>
-        </span>
       }
       @if (showDualVerifyFailedBanner) {
         <span class="dv-failed-pill">Dual verify failed</span>
@@ -107,7 +66,7 @@
     </div>
     <div class="workflow-bar-actions">
       @if (reviewWorkspaceRoute; as reviewRoute) {
-        @if (reviewWorkspaceMode === 'none') {
+        @if (reviewWorkspaceMode === 'none' && reportPageTitleMode === 'none') {
           <a [routerLink]="reviewRoute" class="workflow-link-btn primary">Open review workspace →</a>
         }
       }
@@ -126,16 +85,6 @@
       <button type="button" class="workflow-link-btn" (click)="openNdResultsEditor()">Refresh run</button>
     </div>
   </div>
-}
-
-@if (reviewWorkspaceBackLink; as backLink) {
-  <div class="review-back-link">
-    <a [routerLink]="backLink" [queryParams]="reviewWorkspaceBackQueryParams" class="workflow-link">← Back to queue</a>
-  </div>
-}
-
-@if (showReviewWorkspaceTabs) {
-  <app-nd-workspace-tabs [active]="reviewWorkspaceTabActive" />
 }
 
 @if (actionPlanFocusPriority) {
@@ -169,59 +118,40 @@
 }
 
 @if (!loading) {
-<div class="summary-row">
-  <button
-    type="button"
-    class="summary-card compliant"
-    [class.active]="isSummaryCardActive('compliant')"
-    [attr.aria-pressed]="isSummaryCardActive('compliant')"
-    (click)="filterFromSummaryCard('compliant')"
-  >
-    <span class="label">{{ complianceLabels.compliant }}</span>
-    <strong>{{ summary.compliant }}</strong>
-    <span class="hint">Fully addressed</span>
-  </button>
-  <button
-    type="button"
-    class="summary-card partial_compliant"
-    [class.active]="isSummaryCardActive('partial_compliant')"
-    [attr.aria-pressed]="isSummaryCardActive('partial_compliant')"
-    (click)="filterFromSummaryCard('partial_compliant')"
-  >
-    <span class="label">{{ complianceLabels.partial_compliant }}</span>
-    <strong>{{ summary.partialCompliant }}</strong>
-    <span class="hint">Needs improvement</span>
-  </button>
-  <button
-    type="button"
-    class="summary-card non_compliant"
-    [class.active]="isSummaryCardActive('non_compliant')"
-    [attr.aria-pressed]="isSummaryCardActive('non_compliant')"
-    (click)="filterFromSummaryCard('non_compliant')"
-  >
-    <span class="label">{{ complianceLabels.non_compliant }}</span>
-    <strong>{{ summary.nonCompliant }}</strong>
-    <span class="hint">Corrective action required</span>
-  </button>
-</div>
-
-@if (items.length) {
-<div class="ai-banner card-surface">
-  <span class="tag-ai">AI draft</span>
-  <p>Data was extracted from source documents using AI. All findings require human review before sign-off. Edit gaps, management responses, and effectiveness ratings below — changes are saved automatically.</p>
-</div>
-
-@if (finalizeProgressMessage) {
-  <p class="finalize-progress card-surface">{{ finalizeProgressMessage }}</p>
+  <app-nd-report-summary-stack
+    [compliant]="summary.compliant"
+    [partialCompliant]="summary.partialCompliant"
+    [nonCompliant]="summary.nonCompliant"
+    [labels]="complianceLabels"
+    [rollup]="runRollup"
+    [showRollup]="!!runRollup"
+    [filterable]="true"
+    [activeFilter]="reportSummaryActiveFilter"
+    (filterSelect)="filterFromSummaryCard($any($event))"
+  />
 }
 
-@if (showReviewSummary) {
-  <app-nd-review-summary-panel [plans]="allActionPlans" [clauseByPointId]="clauseByPointId" [rollup]="runRollup" />
+@if (!loading && items.length) {
+  <div class="ai-banner card-surface">
+    <span class="tag-ai">AI draft</span>
+    <p>Data was extracted from source documents using AI. All findings require human review before sign-off. Edit gaps, management responses, and effectiveness ratings below — changes are saved automatically.</p>
+  </div>
 }
 
-@if (showRunReviewPanel) {
+@if (!loading && showReviewSummary) {
+  <app-nd-review-summary-panel
+    [plans]="allActionPlans"
+    [clauseByPointId]="clauseByPointId"
+    [rollup]="null"
+  />
+}
+
+@if (showGapAnalysisDocumentsPanel) {
   <app-nd-run-review-panel
-    [mode]="effectiveReviewMode"
+    [mode]="runReviewPanelMode"
+    [evidenceOnly]="!showRunReviewForm"
+    [workflowSubmitTargets]="auth.getRole() === 'super_admin' ? superAdminWorkflowTargets : null"
+    [showFinalizeAction]="canFinalizeWorkflowRunFlag"
     [submitting]="runReviewSubmitting"
     [error]="runReviewError"
     [reviewProgress]="reviewProgress"
@@ -229,18 +159,113 @@
     [initialDraft]="runReviewInitialDraft"
     [reportAttachments]="reportGapAttachments"
     [canUploadEvidence]="canUploadGapEvidence"
+    [evidenceUploadDisabledHint]="gapEvidenceUploadDisabledHint"
+    [evidencePrepLabels]="evidencePrepLabels"
+    [evidencePrepSteps]="evidencePrepSteps"
+    [evidencePreparingDocIds]="reportEvidencePreparingIds"
     [evidenceUploading]="reportEvidenceBusy"
     [evidenceRerunning]="reportEvidenceRerunning"
     [evidenceDeletingId]="reportEvidenceDeletingId"
-    [canExport]="true"
-    [exporting]="exporting"
     (submitReview)="onRunReviewSubmit($event)"
     (uploadEvidence)="onReportEvidenceSelected($event)"
     (deleteEvidence)="onDeleteReportEvidence($event)"
     (viewEvidence)="openPdfFromNd({ docId: $event })"
     (rerunAllGaps)="onRerunAllGaps()"
-    (exportExcel)="exportXlsx()"
+    (prepareEvidence)="onPrepareReportEvidence($event)"
   />
+}
+
+@if (showEvidenceRerunProgressPanel && evidenceRerunProgressCounts; as prog) {
+  <section class="gap-rerun-progress card-surface" aria-label="Gap evidence re-analysis progress">
+    <h2 class="gap-rerun-progress-title">Re-judging open gaps</h2>
+    <p class="gap-rerun-progress-hint">{{ evidenceRerunPhaseHint }}</p>
+    <div class="gap-rerun-metrics metrics-row metrics-row-3" aria-label="Rerun summary">
+      <div class="stat-box">
+        <strong>{{ evidenceRerunWatchTotal }}</strong>
+        <em>Clauses in rerun</em>
+        @if (evidenceRerunWatchTotal > 0) {
+          <span class="stat-box-sub">{{ prog.completed }}/{{ evidenceRerunWatchTotal }} in run</span>
+        }
+      </div>
+      <div class="stat-box">
+        <strong>{{ prog.completed }}</strong>
+        <em>Done</em>
+      </div>
+      <div class="stat-box warn">
+        <strong>{{ prog.failed }}</strong>
+        <em>Failed</em>
+      </div>
+    </div>
+    <div class="analysing-status-tabs" role="tablist" aria-label="Filter clauses by rerun status">
+      <button
+        type="button"
+        role="tab"
+        class="status-tab"
+        [class.active]="evidenceRerunStatusFilter === 'all'"
+        [attr.aria-selected]="evidenceRerunStatusFilter === 'all'"
+        (click)="setEvidenceRerunStatusFilter('all')"
+      >
+        All ({{ prog.all }})
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="status-tab"
+        [class.active]="evidenceRerunStatusFilter === 'running'"
+        [attr.aria-selected]="evidenceRerunStatusFilter === 'running'"
+        (click)="setEvidenceRerunStatusFilter('running')"
+      >
+        Running ({{ prog.running }})
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="status-tab"
+        [class.active]="evidenceRerunStatusFilter === 'queued'"
+        [attr.aria-selected]="evidenceRerunStatusFilter === 'queued'"
+        (click)="setEvidenceRerunStatusFilter('queued')"
+      >
+        Queued ({{ prog.queued }})
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="status-tab"
+        [class.active]="evidenceRerunStatusFilter === 'completed'"
+        [attr.aria-selected]="evidenceRerunStatusFilter === 'completed'"
+        (click)="setEvidenceRerunStatusFilter('completed')"
+      >
+        Done ({{ prog.completed }})
+      </button>
+      @if (prog.failed > 0) {
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="evidenceRerunStatusFilter === 'failed'"
+          [attr.aria-selected]="evidenceRerunStatusFilter === 'failed'"
+          (click)="setEvidenceRerunStatusFilter('failed')"
+        >
+          Failed ({{ prog.failed }})
+        </button>
+      }
+    </div>
+    @if (evidenceRerunProgressRowsFiltered.length) {
+      <ul class="gap-rerun-clause-list">
+        @for (row of evidenceRerunProgressRowsFiltered; track row.pointId) {
+          <li class="gap-rerun-clause-row" [attr.data-status]="row.status">
+            <span class="gap-rerun-clause-no">{{ row.label }}</span>
+            <span class="gap-rerun-clause-status">{{ gapEvidenceRerunUiStatusLabel(row.status) }}</span>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+}
+
+@if (items.length) {
+@if (finalizeProgressMessage) {
+  <p class="finalize-progress card-surface">{{ finalizeProgressMessage }}</p>
 }
 
 <div class="points-toolbar card-surface" #findingsSection>
@@ -297,7 +322,6 @@
   </div>
 </div>
 }
-}
 
 @if (!loading && !items.length) {
   <div class="card-surface empty-state">
@@ -348,7 +372,7 @@
       [canReviewActionPlans]="canReviewActionPlans"
       [gapStates]="gapStates"
       (gapStateChanged)="onGapStateChanged()"
-      (actionPlansChanged)="onGapStateChanged()"
+      (actionPlansChanged)="onWorkStateChanged($event)"
       (viewActionPlanReviews)="openActionPlanReviews($event)"
       (tempReviewCommentsChanged)="onTempReviewCommentsChanged($event)"
       [showReviewPanel]="canShowReviewPanel"
@@ -411,7 +435,7 @@
       }
       <div class="nd-analysis-point-rail">
         @for (item of filteredItems; track item.id) {
-          @let meta = gapPointRailMeta(item);
+          @let card = gapClauseCardModel(item);
           @let gapCount = gapCountForItem(item);
           <div
             class="rail-point"
@@ -424,55 +448,18 @@
             (keydown.enter)="selectGapItem(item)"
             (keydown.space)="$event.preventDefault(); selectGapItem(item)"
           >
-            <span class="rail-point-head">
-              <button
-                type="button"
-                class="point-info-btn"
-                title="View full clause"
-                aria-label="View full clause"
-                (click)="openGapPointInfo($event, item)"
-              >
-                ⓘ
-              </button>
-              <span class="rail-point-num">{{ gapPointDisplayNum(item) }}</span>
-              <span class="severity-badge sm" [class]="item.severity">{{ severityLabel(item.severity) }}</span>
-            </span>
-            <span class="rail-point-title" [title]="item.title">{{ item.title }}</span>
-            @if (gapCount > 0) {
-              <span class="gap-count-badge rail-gap-inline">
-                {{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}
-              </span>
-            }
-            @if (clauseRollupFor(item); as rollup) {
-              @if (rollup.gaps || rollup.actions) {
-                <span class="rail-rollup">
-                  @if (rollup.resolvedGaps) {
-                    <span class="rollup-chip is-resolved">{{ rollup.resolvedGaps }} gap resolved</span>
-                  }
-                  @if (rollup.pendingGaps) {
-                    <span class="rollup-chip is-pending">{{ rollup.pendingGaps }} gap pending</span>
-                  }
-                  @if (rollup.actions) {
-                    <span class="rollup-chip">{{ rollup.actions }} action{{ rollup.actions === 1 ? '' : 's' }}</span>
-                  }
-                  @if (rollup.resolvedActions) {
-                    <span class="rollup-chip is-resolved">{{ rollup.resolvedActions }} action resolved</span>
-                  }
-                  @if (rollup.pendingActions) {
-                    <span class="rollup-chip is-pending">{{ rollup.pendingActions }} action pending</span>
-                  }
-                  @if (rollup.reviews) {
-                    <span class="rollup-chip">{{ rollup.reviews }} review{{ rollup.reviews === 1 ? '' : 's' }}</span>
-                  }
-                </span>
-              }
-            }
-            <div class="rail-meta-slim">
-              @if (meta.policySnippet && meta.policySnippet !== '—') {
-                <span class="rail-policy-line"><em>Policy</em> {{ meta.policySnippet }}</span>
-              }
-              <span class="rail-confidence-line"><em>Conf.</em> {{ meta.confidence }}</span>
-            </div>
+            <app-nd-clause-rail-card
+              [clauseNum]="card.clauseNum"
+              [heading]="card.titleLine"
+              [severity]="item.severity"
+              [severityLabelText]="severityLabel(item.severity)"
+              [clauseText]="card.clauseText"
+              [confidence]="card.confidence"
+              [gapCount]="gapCount"
+              [rollup]="clauseRollupFor(item)"
+              [showInfoButton]="true"
+              (infoClick)="openGapPointInfo($event, item)"
+            />
           </div>
         }
       </div>
@@ -497,28 +484,33 @@
       [class.expanded]="isRowExpanded(item)"
       [class.action-plan-focus]="itemHasFocusedActionPlan(item)"
     >
+      @let card = gapClauseCardModel(item);
+      @let gapCount = gapCountForItem(item);
       <div
-        class="item-header"
+        class="item-header item-header-clause-card"
         role="button"
         tabindex="0"
         (click)="toggleItem(item)"
         (keydown.enter)="toggleItem(item)"
         (keydown.space)="$event.preventDefault(); toggleItem(item)"
       >
-        <span class="item-index">{{ item.id }}</span>
-        <span class="item-section">{{ item.section }}</span>
-        <strong class="item-title">{{ item.title }}</strong>
-        @if ((item.gapCount ?? 0) > 0) {
-            <button
-              type="button"
-              class="gap-count-badge"
-              (click)="expandGapItem($event, item)"
-            >{{ item.gapCount }} gap{{ item.gapCount === 1 ? '' : 's' }}</button>
-        }
-        <span class="severity-badge" [class]="item.severity">{{ severityLabel(item.severity) }}</span>
-        @if (item.signedOff) {
-          <span class="signed-off">Signed off</span>
-        }
+        <app-nd-clause-rail-card
+          class="item-clause-card-body"
+          [clauseNum]="card.clauseNum"
+          [heading]="card.titleLine"
+          [severity]="item.severity"
+          [severityLabelText]="severityLabel(item.severity)"
+          [clauseText]="card.clauseText"
+          [confidence]="card.confidence"
+          [gapCount]="gapCount"
+          [rollup]="clauseRollupFor(item)"
+        >
+          <span railMetaExtra>
+            @if (item.signedOff) {
+              <span class="signed-off">Signed off</span>
+            }
+          </span>
+        </app-nd-clause-rail-card>
         <svg class="chevron" [class.open]="isRowExpanded(item)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M6 9l6 6 6-6"/>
         </svg>
@@ -639,7 +631,8 @@
     [gapColumns]="exportDialogColumns"
     [hasActionPlans]="exportDialogHasActionPlans"
     [hasReviews]="exportDialogHasReviews"
+    [defaultFormat]="headerExportFormat"
     (cancelled)="closeExportDialog()"
-    (confirmed)="runXlsxExport($event)"
+    (confirmed)="runExportConfirm($event)"
   />
 }

@@ -131,7 +131,7 @@ export type RegulationPoint = {
 
 export type InternalDocument = {
   id: string;
-  source?: 'legacy' | 'nd';
+  source?: 'legacy' | 'nd' | 'gap_evidence';
   title: string;
   originalFileName: string;
   version?: number;
@@ -280,7 +280,10 @@ export type PointGapAttachment = {
   storedDocumentId: string;
   fileName: string;
   parseStatus?: string | null;
+  sectionExtractStatus?: string | null;
   sizeBytes?: number | null;
+  docKind?: string | null;
+  storedDocumentUploadedAt?: string | null;
   createdAt: string;
 };
 
@@ -292,6 +295,7 @@ export type ResultsData = {
     workflowEngine?: string | null;
     regulLlmProvider?: string | null;
     regulLlmModel?: string | null;
+    regulPipelinePhase?: string | null;
     totalPointsCount: number;
     processedPointsCount: number;
     dualVerifyFailedCount: number;

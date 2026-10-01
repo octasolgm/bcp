@@ -63,23 +63,16 @@
 }
 
 @if (!loading) {
-<div class="summary-row">
-  <div class="summary-card compliant">
-    <span class="label">{{ complianceLabels.compliant }}</span>
-    <strong>{{ summary.compliant }}</strong>
-    <span class="hint">Fully addressed</span>
-  </div>
-  <div class="summary-card partial_compliant">
-    <span class="label">{{ complianceLabels.partial_compliant }}</span>
-    <strong>{{ summary.partialCompliant }}</strong>
-    <span class="hint">Needs improvement</span>
-  </div>
-  <div class="summary-card non_compliant">
-    <span class="label">{{ complianceLabels.non_compliant }}</span>
-    <strong>{{ summary.nonCompliant }}</strong>
-    <span class="hint">Corrective action required</span>
-  </div>
-</div>
+  <app-nd-report-summary-stack
+    [compliant]="summary.compliant"
+    [partialCompliant]="summary.partialCompliant"
+    [nonCompliant]="summary.nonCompliant"
+    [labels]="complianceLabels"
+    [rollup]="reportRollup"
+    [filterable]="true"
+    [activeFilter]="reportSummaryActiveFilter"
+    (filterSelect)="filterFromSummaryCard($any($event))"
+  />
 
 @if (items.length) {
 <div class="ai-banner card-surface">

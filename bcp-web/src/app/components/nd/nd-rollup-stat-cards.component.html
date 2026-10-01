@@ -1,0 +1,43 @@
+<div class="nd-rollup-compact" aria-label="Gaps and actions summary">
+  <div class="nd-rollup-compact-card nd-rollup-compact-card--actions">
+    <span class="nd-rollup-compact-title">Actions</span>
+    <div class="nd-rollup-compact-metrics">
+      <div class="nd-rollup-metric">
+        <span class="nd-rollup-metric-label">Total</span>
+        <strong class="nd-rollup-metric-value is-neutral">{{ rollup.actions }}</strong>
+      </div>
+      <div class="nd-rollup-metric">
+        <span class="nd-rollup-metric-label">Pending</span>
+        <strong class="nd-rollup-metric-value" [class.is-pending]="rollup.pendingActions > 0">{{ rollup.pendingActions }}</strong>
+      </div>
+      <div class="nd-rollup-metric">
+        <span class="nd-rollup-metric-label">Resolved</span>
+        <strong class="nd-rollup-metric-value is-resolved">{{ rollup.resolvedActions }}</strong>
+      </div>
+      @if (variant === 'review') {
+        <div class="nd-rollup-metric">
+          <span class="nd-rollup-metric-label">Overdue</span>
+          <strong class="nd-rollup-metric-value" [class.is-pending]="overdueActionPlans > 0">{{ overdueActionPlans }}</strong>
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="nd-rollup-compact-card nd-rollup-compact-card--gaps">
+    <span class="nd-rollup-compact-title">Gaps</span>
+    <div class="nd-rollup-compact-metrics">
+      <div class="nd-rollup-metric">
+        <span class="nd-rollup-metric-label">Total</span>
+        <strong class="nd-rollup-metric-value is-neutral">{{ rollup.gaps }}</strong>
+      </div>
+      <div class="nd-rollup-metric">
+        <span class="nd-rollup-metric-label">Pending</span>
+        <strong class="nd-rollup-metric-value" [class.is-pending]="rollup.pendingGaps > 0">{{ rollup.pendingGaps }}</strong>
+      </div>
+      <div class="nd-rollup-metric">
+        <span class="nd-rollup-metric-label">Resolved</span>
+        <strong class="nd-rollup-metric-value is-resolved">{{ rollup.resolvedGaps }}</strong>
+      </div>
+    </div>
+  </div>
+</div>

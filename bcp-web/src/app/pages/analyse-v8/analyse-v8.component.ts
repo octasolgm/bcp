@@ -54,6 +54,7 @@ import {
 } from '../../../lib/library-points-utils';
 import { NdStatusBadgeComponent } from '../../components/nd/nd-status-badge.component';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
+import { NdReportSummaryStackComponent } from '../../components/nd/nd-report-summary-stack.component';
 
 type PointsSource = 'regulation' | 'library';
 
@@ -70,7 +71,7 @@ const EMPTY_POINT_REVIEWS: ActionItemReviewEntry[] = [];
 @Component({
   selector: 'app-analyse-v8',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, InProgressNavButtonComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdGapAnalysisComponent],
+  imports: [CommonModule, FormsModule, RouterLink, InProgressNavButtonComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdGapAnalysisComponent, NdReportSummaryStackComponent],
   templateUrl: './analyse-v8.component.html',
   styleUrl: './analyse-v8.component.scss',
 })

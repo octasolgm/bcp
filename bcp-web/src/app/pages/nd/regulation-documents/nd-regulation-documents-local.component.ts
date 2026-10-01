@@ -17,6 +17,7 @@ import {
 import { formatDate, formatTableDate } from '../../../../lib/nd/utils';
 import { catalogPdfPageLabel } from '../../../../lib/nd/doc-page-count';
 import {
+  localExtractionHasParsedMarkdown,
   localExtractionHasSectionText,
   mergeFullLocalExtractionStatus,
   mergeLiteLocalExtractionStatus,
@@ -186,7 +187,8 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   showPointsPanel = false;
   showParsedText = false;
   /** Which extraction result selectedPoints currently reflects — for the two View buttons. */
-  viewMode: 'structural' | 'semantic' = 'structural';
+  viewMode: 'structural' | 'semantic' | 'parsed' = 'structural';
+  loadingParsedText = false;
   /** Left (table) share when points panel is open — kept small by default. */
   leftPanelPct = 20;
   analysisFor: RegulationDocument | null = null;
@@ -1225,7 +1227,13 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
    */
   private async ensureFullLocalResult(doc: RegulationDocument): Promise<NdLocalExtractionResult | null> {
     const cached = this.localResults.get(doc.id);
-    if (cached && cached.lite !== true && localExtractionHasSectionText(cached)) return cached;
+    if (
+      cached &&
+      cached.lite !== true &&
+      (localExtractionHasSectionText(cached) || localExtractionHasParsedMarkdown(cached))
+    ) {
+      return cached;
+    }
     const key = doc.storedDocumentId ?? doc.id;
     const res = await this.api.localExtractStatusBatch([key], this.engine);
     const full = res.success ? res.data?.[key] ?? null : null;
@@ -1284,6 +1292,8 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   closePointsPanel(): void {
     this.showPointsPanel = false;
     this.showParsedText = false;
+    this.viewMode = 'structural';
+    this.loadingParsedText = false;
     this.highlightPointNumber = '';
     this.shellFocus.setRegulationPointsPanelOpen(false);
   }
@@ -1325,13 +1335,32 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     this.clearGlobalPointSearch();
     this.selectedDoc = doc;
     this.showPointsPanel = true;
+    this.viewMode = 'parsed';
     this.showParsedText = true;
     this.highlightPointNumber = '';
+    this.pointsLoading = false;
+    this.selectedPoints = [];
     this.shellFocus.setRegulationPointsPanelOpen(true);
-    const local = await this.ensureFullLocalResult(doc);
-    if (!local?.markdownText) {
-      this.message = 'No parsed text yet — click Parse first.';
+    this.loadingParsedText = true;
+    this.message = '';
+    try {
+      const local = await this.ensureFullLocalResult(doc);
+      if (this.selectedDoc?.id !== doc.id) return;
+      if (!local?.markdownText?.trim()) {
+        this.message = 'No parsed text yet — click Parse first.';
+      }
+    } finally {
+      if (this.selectedDoc?.id === doc.id) this.loadingParsedText = false;
     }
+  }
+
+  showRowParsedTextButton(doc: RegulationDocument): boolean {
+    if (this.isManualDoc(doc)) return false;
+    return (
+      this.isParsedDoc(doc) ||
+      this.hasExtractedPoints(doc) ||
+      (doc.analysisRunCount ?? 0) > 0
+    );
   }
 
   @HostListener('document:keydown.escape')

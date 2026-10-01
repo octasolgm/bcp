@@ -223,6 +223,7 @@ export class NdRunHistoryPanelComponent implements OnChanges {
         data.points,
         data.actionItemReviews,
         attachmentCountsByPoint(data),
+        data.actionPlans,
       );
     }
   }

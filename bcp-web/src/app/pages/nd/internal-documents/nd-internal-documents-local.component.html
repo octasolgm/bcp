@@ -56,6 +56,7 @@
       <option value="">All sources</option>
       <option value="nd">ND</option>
       <option value="legacy">Legacy</option>
+      <option value="gap_evidence">Gap evidence</option>
     </select>
     <select class="filter-select" [(ngModel)]="sortColumn" aria-label="Sort by">
       <option value="uploaded">Sort: Uploaded</option>
@@ -123,9 +124,16 @@
           @if (showDocGroupHeader(group)) {
             <tr class="internal-doc-group-label-row">
               <td class="doc-cell col-doc">
-                <div class="internal-doc-group-heading">
+                <div
+                  class="internal-doc-group-heading"
+                  [class.internal-doc-group-heading-two-line]="group.kind === 'analysis'"
+                >
                   @if (group.kind === 'analysis') {
-                    <span class="internal-doc-group-kicker">Generated from analysis</span>
+                    <div class="internal-doc-group-meta-line">
+                      <span class="internal-doc-group-kicker">Generated from analysis</span>
+                      <span class="internal-doc-group-meta-sep" aria-hidden="true">·</span>
+                      <span class="internal-doc-group-count">{{ group.docs.length }} document{{ group.docs.length === 1 ? '' : 's' }}</span>
+                    </div>
                     <div class="internal-doc-group-title-line">
                       @if (group.runId) {
                         <a
@@ -133,15 +141,16 @@
                           [routerLink]="['/nd/gap-analysis']"
                           [queryParams]="{ run: group.runId }"
                           (click)="$event.stopPropagation()"
+                          [title]="group.runName"
                         >{{ group.runName }}</a>
                       } @else {
-                        <span class="internal-doc-group-title">{{ group.runName }}</span>
+                        <span class="internal-doc-group-title" [title]="group.runName">{{ group.runName }}</span>
                       }
-                      <span class="internal-doc-group-count">{{ analysisGroupDocCount(group.runId) }} document{{ analysisGroupDocCount(group.runId) === 1 ? '' : 's' }}</span>
                     </div>
                   } @else {
-                    <span class="internal-doc-group-kicker">Direct uploads</span>
-                    <div class="internal-doc-group-title-line">
+                    <div class="internal-doc-group-meta-line">
+                      <span class="internal-doc-group-kicker">Direct uploads</span>
+                      <span class="internal-doc-group-meta-sep" aria-hidden="true">·</span>
                       <span class="internal-doc-group-count">{{ group.docs.length }} document{{ group.docs.length === 1 ? '' : 's' }}</span>
                     </div>
                   }
@@ -155,7 +164,19 @@
               <td class="col-pts"></td>
               <td class="col-status"></td>
               <td class="col-status"></td>
-              <td class="col-actions internal-doc-actions-cell"></td>
+              <td class="col-actions internal-doc-actions-cell" (click)="$event.stopPropagation()">
+                @if (group.kind === 'analysis' && group.docs.length > 0) {
+                  <button
+                    type="button"
+                    class="row-action-btn compact"
+                    [disabled]="downloadingAnalysisGroupKey === group.key"
+                    [title]="'Download all ' + group.docs.length + ' source file(s) in this analysis batch'"
+                    (click)="downloadAllDocsInAnalysisGroup(group, $event)"
+                  >
+                    {{ downloadingAnalysisGroupKey === group.key ? 'Downloading…' : 'Download all' }}
+                  </button>
+                }
+              </td>
             </tr>
           }
           @for (d of group.docs; track d.id) {
@@ -220,24 +241,26 @@
             </td>
             <td class="col-actions nd-catalog-actions-cell" (click)="$event.stopPropagation()">
               <div class="nd-catalog-row-actions">
-                @if (showRowSectionsButton(d) && hasExtractedSections(d)) {
+                @if (showRowSectionsButton(d)) {
                   <button
                     type="button"
                     class="row-action-btn compact"
                     title="View extracted sections"
                     (click)="openSections(d, $event)"
                   >
-                    View
+                    View sections
                   </button>
                 }
-                <button
-                  type="button"
-                  class="row-action-btn compact"
-                  title="View the raw parsed text, independent of either extraction method"
-                  (click)="openParsedText(d, $event)"
-                >
-                  View parsed
-                </button>
+                @if (showRowParsedTextButton(d)) {
+                  <button
+                    type="button"
+                    class="row-action-btn compact"
+                    title="View parsed markdown from the Parse step (before Extract)"
+                    (click)="openParsedText(d, $event)"
+                  >
+                    View parsed
+                  </button>
+                }
                 @if (showSemanticExtract) {
                   <button
                     type="button"
@@ -248,7 +271,7 @@
                     View semantic
                   </button>
                 }
-                @if (canParse) {
+                @if (canRunLocalPipeline(d)) {
                   <button
                     type="button"
                     class="row-action-btn compact"
@@ -395,14 +418,26 @@
               <div class="panel-title-line">
                 <strong class="panel-title-truncate">{{ sectionsFor.title }}</strong>
                 <span class="muted panel-sub">
-                  {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
-                  @if (sectionsFor.sectionCount) {
-                    · {{ sectionsFor.sectionCount }} sections
+                  @if (viewMode === 'parsed') {
+                    Parsed text
+                    @if (parsedTextFor(sectionsFor); as pt) {
+                      · {{ pt.length | number }} characters
+                    }
+                  } @else if (viewMode === 'semantic') {
+                    Semantic extract
+                    @if (sectionsFor.sectionCount) {
+                      · {{ sectionRows.length }} sections
+                    }
+                  } @else {
+                    {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
+                    @if (sectionsFor.sectionCount) {
+                      · {{ sectionsFor.sectionCount }} sections
+                    }
                   }
                 </span>
               </div>
               <div class="panel-top-toolbar">
-            @if (canParse) {
+            @if (sectionsFor && canRunLocalPipeline(sectionsFor)) {
               <button
                 type="button"
                 class="btn-secondary btn-sm"
@@ -465,22 +500,34 @@
             }
           </p>
         }
-        @if (showParsedText && parsedTextFor(sectionsFor); as parsedText) {
-          <pre class="parsed-text-content-compact">{{ parsedText }}</pre>
+        @if (viewMode === 'parsed') {
+          @if (loadingParsedText) {
+            <p class="muted-loading parsed-text-panel-empty">Loading parsed text…</p>
+          } @else {
+            @if (parsedTextFor(sectionsFor); as parsedText) {
+              <pre class="parsed-text-content-compact parsed-text-panel-body">{{ parsedText }}</pre>
+            } @else {
+              <p class="parsed-text-panel-empty">No parsed text yet — click Parse first.</p>
+            }
+          }
+        } @else {
+          @if (showParsedText && parsedTextFor(sectionsFor); as parsedText) {
+            <pre class="parsed-text-content-compact">{{ parsedText }}</pre>
+          }
+          <app-nd-internal-document-sections-panel
+            [docTitle]="sectionsFor.title"
+            [sections]="sectionRows"
+            [loading]="loadingSections"
+            [extracting]="isParsingDoc(sectionsFor) || extractingId === sectionsFor.id"
+            [extractingLabel]="isParsingDoc(sectionsFor) ? parseStatusText(sectionsFor) : 'Extracting sections locally…'"
+            [extractingPct]="null"
+            [repairing]="false"
+            [repairingLabel]="''"
+            [repairingPct]="null"
+            [canOpenSource]="true"
+            (openSourcePage)="openInternalSourcePage(sectionsFor.id, $event)"
+          />
         }
-        <app-nd-internal-document-sections-panel
-          [docTitle]="sectionsFor.title"
-          [sections]="sectionRows"
-          [loading]="loadingSections"
-          [extracting]="isParsingDoc(sectionsFor) || extractingId === sectionsFor.id"
-          [extractingLabel]="isParsingDoc(sectionsFor) ? parseStatusText(sectionsFor) : 'Extracting sections locally…'"
-          [extractingPct]="null"
-          [repairing]="false"
-          [repairingLabel]="''"
-          [repairingPct]="null"
-          [canOpenSource]="true"
-          (openSourcePage)="openInternalSourcePage(sectionsFor.id, $event)"
-        />
       </aside>
     }
   </div>

@@ -65,7 +65,8 @@ public class AnalysisPointAttachmentsController(
         [FromForm] int? actionIndex,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
         var point = await RequirePointAsync(runId, pointId, profile!, ct);
@@ -135,6 +136,7 @@ public class AnalysisPointAttachmentsController(
                 sizeBytes = row.SizeBytes,
                 createdAt = link.CreatedAt,
             });
+
         }
 
         return Ok(new { success = true, data = uploaded });
@@ -147,7 +149,8 @@ public class AnalysisPointAttachmentsController(
         Guid attachmentId,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
         var point = await RequirePointAsync(runId, pointId, profile!, ct);
@@ -205,4 +208,5 @@ public class AnalysisPointAttachmentsController(
         var file = Path.GetFileName(name);
         return string.IsNullOrWhiteSpace(file) ? "upload.pdf" : file;
     }
+
 }

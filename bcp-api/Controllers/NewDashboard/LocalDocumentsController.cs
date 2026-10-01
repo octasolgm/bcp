@@ -175,6 +175,7 @@ public class LocalDocumentsController(
         // HTTP timeout. If the client has already disconnected by the time we get here, that must not
         // throw away minutes of completed OCR work; save it so the next status poll (or Extract) sees it.
         await db.SaveChangesAsync(CancellationToken.None);
+        await SyncGapEvidenceStoredDocumentParseStatusAsync(id, "parsed", null, CancellationToken.None);
 
         return Ok(new { success = true, data = ToDto(id, fileName, row) });
     }
@@ -269,6 +270,8 @@ public class LocalDocumentsController(
         {
             logger.LogWarning(ex, "Synonym candidate harvest failed for {DocId} — extract itself still succeeds", id);
         }
+
+        await SyncGapEvidenceStoredDocumentParseStatusAsync(id, "parsed", null, CancellationToken.None);
 
         return Ok(new { success = true, data = ToDto(id, fileName, row) });
     }
@@ -687,6 +690,21 @@ public class LocalDocumentsController(
         var sections = JsonSerializer.Deserialize<List<LocalSection>>(row.SectionsJson) ?? [];
         var report = LocalStructuralCoverage.Compute(row.MarkdownText, sections);
         return (report.CoverageRatio, report.OrphanSnippet);
+    }
+
+    private async Task SyncGapEvidenceStoredDocumentParseStatusAsync(
+        Guid storedDocumentId,
+        string status,
+        string? error,
+        CancellationToken ct)
+    {
+        var doc = await db.StoredDocuments.FirstOrDefaultAsync(
+            d => d.Id == storedDocumentId && d.DocKind == "gap_evidence", ct);
+        if (doc == null) return;
+        doc.ParseStatus = status;
+        doc.ParseError = error;
+        doc.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>Which extensions local extraction currently accepts — for the upload picker to filter on.

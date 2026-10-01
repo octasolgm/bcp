@@ -124,12 +124,10 @@ export function ndAnalysisRunLink(
 ): string[] {
   const status = normalizeRunStatus(run.status);
   if (role === 'checker') {
-    if (status === 'submitted_for_review') return ['/nd/checker/review', run.id];
     if (isPulledBackRun(status)) return ['/nd/correction/review', run.id];
     return ['/nd/gap-analysis'];
   }
   if (role === 'reviewer') {
-    if (status === 'checker_approved') return ['/nd/reviewer/review', run.id];
     if (isPulledBackRun(status)) return ['/nd/correction/review', run.id];
     return ['/nd/gap-analysis'];
   }
@@ -138,8 +136,6 @@ export function ndAnalysisRunLink(
   }
   if (role === 'super_admin') {
     if (isPulledBackRun(status)) return ['/nd/correction/review', run.id];
-    if (status === 'submitted_for_review') return ['/nd/checker/review', run.id];
-    if (status === 'checker_approved') return ['/nd/reviewer/review', run.id];
   }
 
   if (analysisRunNeedsExecutionView(run)) {
@@ -167,24 +163,18 @@ export function ndAnalysisRunQuery(
 ): Record<string, string> | undefined {
   const status = normalizeRunStatus(run.status);
   if (role === 'checker') {
-    if (status === 'submitted_for_review' || isPulledBackRun(status)) return undefined;
+    if (isPulledBackRun(status)) return undefined;
     return { run: run.id };
   }
   if (role === 'reviewer') {
-    if (status === 'checker_approved' || isPulledBackRun(status)) return undefined;
+    if (isPulledBackRun(status)) return undefined;
     return { run: run.id };
   }
   if (role === 'maker') {
     if (isPulledBackRun(status)) return undefined;
   }
   if (role === 'super_admin') {
-    if (
-      isPulledBackRun(status) ||
-      status === 'submitted_for_review' ||
-      status === 'checker_approved'
-    ) {
-      return undefined;
-    }
+    if (isPulledBackRun(status)) return undefined;
   }
 
   if (!isLegacyAnalysisRun(run)) {

@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard;
 using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Storage;
 
@@ -20,7 +22,9 @@ public class RunGapEvidenceController(
     AppDbContext db,
     SupabaseStorageService storage,
     NdDemoUserDirectory demoDirectory,
-    SupabaseJwtValidator jwt) : NdControllerBase
+    SupabaseJwtValidator jwt,
+    IServiceScopeFactory scopeFactory,
+    ILogger<RunGapEvidenceController> logger) : NdControllerBase
 {
     [HttpPost]
     [RequestSizeLimit(104_857_600)]
@@ -29,7 +33,8 @@ public class RunGapEvidenceController(
         [FromForm] List<IFormFile> files,
         CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct);
@@ -52,6 +57,7 @@ public class RunGapEvidenceController(
             demoDirectory, profile.Id, run.CreatedBy, ct);
 
         var uploaded = new List<object>();
+        var prepareDocIds = new List<Guid>();
         foreach (var file in files.Where(f => f.Length > 0))
         {
             await using var ms = new MemoryStream();
@@ -60,6 +66,7 @@ public class RunGapEvidenceController(
             var title = Path.GetFileNameWithoutExtension(file.FileName).Trim();
             var safeName = Path.GetFileName(file.FileName);
             if (string.IsNullOrWhiteSpace(safeName)) safeName = "upload.pdf";
+            var version = await ResolveNextGapEvidenceVersionAsync(pointIds, title, ct);
             var objectPath = $"documents/nd/gap-evidence/{runId:N}/report/{Guid.NewGuid():N}/{safeName}";
 
             await using (var stream = new MemoryStream(bytes))
@@ -67,7 +74,7 @@ public class RunGapEvidenceController(
 
             var doc = new StoredDocument
             {
-                Title = string.IsNullOrWhiteSpace(title) ? safeName : title,
+                Title = version.DisplayTitle,
                 OriginalFileName = file.FileName,
                 FileType = Path.GetExtension(file.FileName).TrimStart('.').ToUpperInvariant(),
                 DocKind = "gap_evidence",
@@ -79,6 +86,8 @@ public class RunGapEvidenceController(
                 ParseStatus = skipLiveParse ? "skipped" : "pending",
                 ParseError = skipLiveParse ? "Demo mode — evidence upload stored without live AI parse." : null,
                 UploadedBy = profile.Id,
+                VersionNumber = version.VersionNumber,
+                Version = version.VersionLabel,
             };
             db.StoredDocuments.Add(doc);
             await db.SaveChangesAsync(ct);
@@ -98,10 +107,15 @@ public class RunGapEvidenceController(
             }
             await db.SaveChangesAsync(ct);
 
+            if (!skipLiveParse)
+                prepareDocIds.Add(doc.Id);
+
             uploaded.Add(new
             {
                 storedDocumentId = doc.Id,
                 fileName = file.FileName,
+                displayTitle = doc.Title,
+                version = doc.Version,
                 parseStatus = doc.ParseStatus,
                 sizeBytes = doc.SizeBytes,
                 attachments = links.Select(l => new
@@ -112,17 +126,92 @@ public class RunGapEvidenceController(
                     fileName = l.FileName,
                     actionIndex = l.ActionIndex,
                     createdAt = l.CreatedAt,
+                    parseStatus = doc.ParseStatus,
+                    sizeBytes = doc.SizeBytes,
                 }),
             });
+
         }
 
+        if (prepareDocIds.Count > 0)
+            StartBackgroundGapEvidencePrepare(prepareDocIds, run.WorkflowEngine);
+
         return Ok(new { success = true, data = uploaded, linkedPoints = pointIds.Count });
+    }
+
+    private void StartBackgroundGapEvidencePrepare(IReadOnlyList<Guid> storedDocumentIds, string? workflowEngine)
+    {
+        var ids = storedDocumentIds.Distinct().ToList();
+        var engine = workflowEngine;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var prepare = scope.ServiceProvider.GetRequiredService<NdGapEvidencePrepareService>();
+                await prepare.PrepareDocumentsAsync(ids, engine, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Background gap evidence prepare failed for {Count} document(s)", ids.Count);
+            }
+        }, CancellationToken.None);
+    }
+
+    private async Task<(int VersionNumber, string VersionLabel, string DisplayTitle)> ResolveNextGapEvidenceVersionAsync(
+        List<Guid> pointIds,
+        string uploadTitle,
+        CancellationToken ct)
+    {
+        var linkedDocIds = await db.NdAnalysisPointAttachments.AsNoTracking()
+            .Where(a => pointIds.Contains(a.AnalysisPointId))
+            .Select(a => a.StoredDocumentId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        var baseKey = NormalizeGapEvidenceTitleKey(uploadTitle);
+        var maxVer = 0;
+        if (linkedDocIds.Count > 0)
+        {
+            var peers = await db.StoredDocuments.AsNoTracking()
+                .Where(d => linkedDocIds.Contains(d.Id) && d.DocKind == "gap_evidence")
+                .ToListAsync(ct);
+            foreach (var peer in peers)
+            {
+                var peerKey = NormalizeGapEvidenceTitleKey(peer.Title);
+                if (string.IsNullOrEmpty(peerKey)) continue;
+                if (peerKey == baseKey)
+                    maxVer = Math.Max(maxVer, peer.VersionNumber);
+            }
+        }
+
+        var next = Math.Max(1, maxVer + 1);
+        var stripped = StripTrailingCopySuffix(uploadTitle);
+        var display = next <= 1
+            ? (string.IsNullOrWhiteSpace(stripped) ? "document" : stripped)
+            : $"{stripped} (v{next})";
+        return (next, $"v{next}", display);
+    }
+
+    private static string NormalizeGapEvidenceTitleKey(string value)
+    {
+        var s = StripTrailingCopySuffix(value).Trim().ToLowerInvariant();
+        s = Regex.Replace(s, @"\s*\(v\d+\)\s*$", "", RegexOptions.IgnoreCase).Trim();
+        return s;
+    }
+
+    private static string StripTrailingCopySuffix(string value)
+    {
+        var s = (value ?? "").Trim();
+        s = Regex.Replace(s, @"\s*\(\d+\)\s*$", "").Trim();
+        return s;
     }
 
     [HttpDelete("{storedDocumentId:guid}")]
     public async Task<IActionResult> Delete(Guid runId, Guid storedDocumentId, CancellationToken ct)
     {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct);

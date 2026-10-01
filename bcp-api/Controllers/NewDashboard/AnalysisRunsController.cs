@@ -1090,7 +1090,10 @@ public class AnalysisRunsController(
         [FromQuery] int? actionIndex = null,
         CancellationToken ct = default)
     {
-        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
+        var authRoles = evidenceOnly
+            ? new[] { "super_admin", "maker", "checker", "reviewer" }
+            : new[] { "super_admin", "maker" };
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, authRoles);
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
@@ -1123,7 +1126,8 @@ public class AnalysisRunsController(
     [HttpPost("{id:guid}/rerun-with-evidence")]
     public async Task<IActionResult> RerunRunWithEvidence(Guid id, CancellationToken ct)
     {
-        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
         if (error != null) return error;
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == id, ct);
@@ -1256,7 +1260,13 @@ public class AnalysisRunsController(
                 if (useRegul)
                 {
                     var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
-                    await regulProc.ProcessPointAsync(runId, pointId, dualVerifyOnly, CancellationToken.None);
+                    await regulProc.ProcessPointAsync(
+                        runId,
+                        pointId,
+                        dualVerifyOnly,
+                        CancellationToken.None,
+                        evidenceOnly,
+                        actionIndex);
                 }
                 else
                 {

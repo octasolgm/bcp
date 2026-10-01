@@ -31,10 +31,6 @@ export function internalAnalysisReadyState(doc: {
   analysisRunCount?: number | null;
   generatedByAnalysis?: boolean | null;
 }): DocAnalysisReadyState {
-  // Written by a reviewer's finalize step, never uploaded — it has no parse/extract
-  // step to wait on, so it never reads as an unprocessed (red) document. It also isn't
-  // itself the output of a run, so it reads as 'ready' (uncolored), not 'analysed' (green).
-  if (doc.generatedByAnalysis) return 'ready';
   const parseStatus = (doc.parseStatus ?? '').trim();
   const extractStatus = (doc.sectionExtractStatus ?? '').trim();
   // Blank means the caller has no metadata for that step, which must not be

@@ -1152,20 +1152,16 @@
       </div>
     </div>
 
-    <div class="summary-row">
-      <div class="summary-card compliant">
-        <span class="label">{{ complianceSeverityLabels.compliant }}</span>
-        <strong>{{ inlineGapSummary.compliant }}</strong>
-      </div>
-      <div class="summary-card partial_compliant">
-        <span class="label">{{ complianceSeverityLabels.partial_compliant }}</span>
-        <strong>{{ inlineGapSummary.partialCompliant }}</strong>
-      </div>
-      <div class="summary-card non_compliant">
-        <span class="label">{{ complianceSeverityLabels.non_compliant }}</span>
-        <strong>{{ inlineGapSummary.nonCompliant }}</strong>
-      </div>
-    </div>
+    <app-nd-report-summary-stack
+      [compliant]="inlineGapSummary.compliant"
+      [partialCompliant]="inlineGapSummary.partialCompliant"
+      [nonCompliant]="inlineGapSummary.nonCompliant"
+      [labels]="complianceSeverityLabels"
+      [rollup]="inlineGapRollup"
+      [filterable]="true"
+      [activeFilter]="inlineGapFilter === 'all' ? 'all' : inlineGapFilter"
+      (filterSelect)="filterInlineFromSummaryCard($any($event))"
+    />
 
     @if (activeNdRunId && nonComplianceGapPoints.length) {
       <div class="gap-verify-panel card-surface">

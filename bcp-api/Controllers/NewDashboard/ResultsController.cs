@@ -110,6 +110,13 @@ public class ResultsController(
         var attachments = attachmentsTask.Result;
         var qualitativeRow = qualitativeRowTask.Result;
 
+        var attachmentStoredIds = attachments.Select(a => a.StoredDocumentId).Distinct().ToList();
+        var attachmentDocsById = attachmentStoredIds.Count == 0
+            ? new Dictionary<Guid, Reguliq.Api.Data.Entities.StoredDocument>()
+            : await db.StoredDocuments.AsNoTracking()
+                .Where(d => attachmentStoredIds.Contains(d.Id))
+                .ToDictionaryAsync(d => d.Id, ct);
+
         // Second wave: independent of each other, but each needs an id list from the first wave.
         var actionPlanIds = actionPlans.Select(p => p.Id).ToList();
         var actionPlanDeptIds = actionPlans
@@ -222,14 +229,23 @@ public class ResultsController(
                     run.CreatedAt,
                 },
                 points = enrichedPoints,
-                pointAttachments = attachments.Select(a => new
+                pointAttachments = attachments.Select(a =>
                 {
-                    id = a.Id,
-                    analysisPointId = a.AnalysisPointId,
-                    actionIndex = a.ActionIndex,
-                    storedDocumentId = a.StoredDocumentId,
-                    fileName = a.FileName,
-                    createdAt = a.CreatedAt,
+                    attachmentDocsById.TryGetValue(a.StoredDocumentId, out var doc);
+                    return new
+                    {
+                        id = a.Id,
+                        analysisPointId = a.AnalysisPointId,
+                        actionIndex = a.ActionIndex,
+                        storedDocumentId = a.StoredDocumentId,
+                        fileName = a.FileName,
+                        createdAt = a.CreatedAt,
+                        parseStatus = doc?.ParseStatus,
+                        sectionExtractStatus = doc?.SectionExtractStatus,
+                        sizeBytes = doc?.SizeBytes,
+                        docKind = doc?.DocKind,
+                        storedDocumentUploadedAt = doc?.CreatedAt,
+                    };
                 }),
                 reviews = reviews.Select(r => new
                 {

@@ -1,0 +1,70 @@
+<div class="clause-rail-card">
+  <div class="rail-point-head">
+    @if (showInfoButton) {
+      <button
+        type="button"
+        class="point-info-btn"
+        title="View full clause"
+        aria-label="View full clause"
+        (click)="onInfoClick($event)"
+      >
+        ⓘ
+      </button>
+    }
+    <span class="rail-point-num">{{ clauseNum }}</span>
+    @if (severity) {
+      <span class="severity-badge sm" [class]="severity">{{ severityLabelText }}</span>
+    }
+    @if (forwardStatusLabel) {
+      <span class="forward-status-chip" [class]="forwardStatusClass">{{ forwardStatusLabel }}</span>
+    }
+    <ng-content select="[railHeadExtra]" />
+  </div>
+
+  @if (displayHeading) {
+    <h3 class="rail-point-heading">{{ displayHeading }}</h3>
+  }
+
+  @if (clauseText && clauseText !== '—') {
+    <p class="rail-clause-text">{{ clauseText }}</p>
+  }
+
+  @if (gapCount > 0 || hasRollupChips) {
+    <div class="rail-work-chips">
+      @if (gapCount > 0) {
+        <span class="gap-count-badge rail-gap-inline" [class.zero]="gapCount === 0">
+          {{ gapCount }} gap{{ gapCount === 1 ? '' : 's' }}
+        </span>
+      }
+      @if (rollup) {
+        <span class="rail-rollup">
+          @if (rollup.resolvedGaps) {
+            <span class="rollup-chip is-resolved">{{ rollup.resolvedGaps }} gap resolved</span>
+          }
+          @if (rollup.pendingGaps) {
+            <span class="rollup-chip is-pending">{{ rollup.pendingGaps }} gap pending</span>
+          }
+          @if (rollup.actions) {
+            <span class="rollup-chip">{{ rollup.actions }} action{{ rollup.actions === 1 ? '' : 's' }}</span>
+          }
+          @if (rollup.resolvedActions) {
+            <span class="rollup-chip is-resolved">{{ rollup.resolvedActions }} action resolved</span>
+          }
+          @if (rollup.pendingActions) {
+            <span class="rollup-chip is-pending">{{ rollup.pendingActions }} action pending</span>
+          }
+          @if (rollup.reviews) {
+            <span class="rollup-chip">{{ rollup.reviews }} review{{ rollup.reviews === 1 ? '' : 's' }}</span>
+          }
+        </span>
+      }
+    </div>
+  }
+
+  <div class="rail-meta-slim">
+    @if (confidence && confidence !== '—') {
+      <span class="rail-confidence-line"><em>Conf.</em> {{ confidence }}</span>
+    }
+    <ng-content select="[railMetaExtra]" />
+  </div>
+</div>

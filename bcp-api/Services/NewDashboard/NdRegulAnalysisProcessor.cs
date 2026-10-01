@@ -31,6 +31,9 @@ public class NdRegulAnalysisProcessor(
     NdAnalysisRunCancellationTracker runCancellation,
     NdDemoUserDirectory demoDirectory,
     RegulEmbeddingRetrievalService embeddingRetrieval,
+    NdGapEvidencePrepareService gapEvidencePrepare,
+    NdGapEvidenceOutcomeService gapEvidenceOutcome,
+    NdLocalDocumentPayloadLoader localPayloadLoader,
     ILogger<NdRegulAnalysisProcessor> logger)
 {
     private const string ReverseMappingJsonInstruction =
@@ -824,8 +827,17 @@ public class NdRegulAnalysisProcessor(
             if (doc == null || string.IsNullOrWhiteSpace(doc.StoragePath)) continue;
             if (!storage.IsConfigured) continue;
 
-            var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
-            var payload = await internalParse.EnsureParsedAsync(doc, bytes, ct);
+            InternalDocPayload payload;
+            var localPayload = await localPayloadLoader.TryFromAzureDiExtractionAsync(doc, ct);
+            if (localPayload != null)
+            {
+                payload = localPayload;
+            }
+            else
+            {
+                var bytes = await storage.DownloadAsync(doc.StoragePath, ct);
+                payload = await internalParse.EnsureParsedAsync(doc, bytes, ct);
+            }
             var markdown = payload.Markdown;
             if (payload.Pdf is { Length: > 16 })
             {
@@ -1346,12 +1358,87 @@ public class NdRegulAnalysisProcessor(
         runCancellation.Clear(run.Id);
     }
 
+    private async Task<List<string>> ResolveGapEvidenceLabelsAsync(
+        Guid pointId,
+        int? actionIndex,
+        CancellationToken ct)
+    {
+        var query = db.NdAnalysisPointAttachments.AsNoTracking()
+            .Where(a => a.AnalysisPointId == pointId);
+        if (actionIndex.HasValue)
+            query = query.Where(a => a.ActionIndex == null || a.ActionIndex == actionIndex.Value);
+
+        var rows = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .Select(a => a.FileName)
+            .ToListAsync(ct);
+
+        return rows
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private async Task<List<Guid>> ResolveGapEvidenceStoredDocIdsAsync(
+        Guid pointId,
+        int? actionIndex,
+        CancellationToken ct)
+    {
+        var query = db.NdAnalysisPointAttachments.AsNoTracking()
+            .Where(a => a.AnalysisPointId == pointId);
+        if (actionIndex.HasValue)
+            query = query.Where(a => a.ActionIndex == null || a.ActionIndex == actionIndex.Value);
+
+        return await query
+            .Select(a => a.StoredDocumentId)
+            .Distinct()
+            .ToListAsync(ct);
+    }
+
+    private async Task<NdRegulPolicyContextService.PolicyBundle> ResolveForwardClauseBundleAsync(
+        NdAnalysisRun run,
+        NdRegulForwardFinding finding,
+        NdAnalysisPoint point,
+        bool evidenceOnly,
+        int? actionIndex,
+        CancellationToken ct)
+    {
+        if (evidenceOnly)
+        {
+            var gapDocIds = await ResolveGapEvidenceStoredDocIdsAsync(point.Id, actionIndex, ct);
+            if (gapDocIds.Count == 0)
+                throw new InvalidOperationException("No gap evidence documents uploaded for this point.");
+
+            await gapEvidencePrepare.PrepareDocumentsAsync(gapDocIds, run.WorkflowEngine, ct);
+
+            if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
+            {
+                await embeddingRetrieval.RunRetrievalForPointsAsync(run, [point.Id], gapDocIds, ct);
+                await db.Entry(finding).ReloadAsync(ct);
+                return await BuildRetrievalPolicyBundleAsync(finding, ct);
+            }
+
+            var idStrings = gapDocIds.Select(id => id.ToString()).ToList();
+            var payloads = await LoadInternalDocPayloadsAsync(idStrings, ct);
+            return NdRegulPolicyContextService.FromPayloads(
+                payloads,
+                NdRegulPolicyContextService.ResolveMode(run.WorkflowEngine));
+        }
+
+        if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
+            return await BuildRetrievalPolicyBundleAsync(finding, ct);
+
+        return await LoadPolicyBundleAsync(run, ct);
+    }
+
     /// <summary>Re-run forward (or full reverse phase) for one point on a Regul workflow run.</summary>
     public async Task ProcessPointAsync(
         Guid runId,
         Guid pointId,
         bool reverseOnly,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool evidenceOnly = false,
+        int? actionIndex = null)
     {
         var run = await db.NdAnalysisRuns
             .Include(r => r.Points)
@@ -1403,6 +1490,10 @@ public class NdRegulAnalysisProcessor(
         var finding = await db.NdRegulForwardFindings
             .FirstOrDefaultAsync(f => f.AnalysisRunId == runId && f.AnalysisPointId == pointId, ct);
 
+        NdGapEvidenceOutcomeService.EvidencePriorState? evidencePrior = null;
+        if (evidenceOnly)
+            evidencePrior = gapEvidenceOutcome.CapturePriorState(point, finding);
+
         point.LandingAiStatus = "pending";
         point.LandingAiResult = null;
         point.LandingAiError = null;
@@ -1427,19 +1518,46 @@ public class NdRegulAnalysisProcessor(
         if (finding == null)
             return;
 
-        var policyBundle = await LoadPolicyBundleAsync(run, ct);
-        var cacheContext = policyBundle.UsesFullMarkdown;
+        var clauseBundle = await ResolveForwardClauseBundleAsync(
+            run, finding, point, evidenceOnly, actionIndex, ct);
+        var cacheContext = clauseBundle.UsesFullMarkdown;
         try
         {
-            var prep = await PrepareForwardJudgmentAsync(finding, point, 1, policyBundle, cacheContext, run.WorkflowEngine, ct);
+            var prep = await PrepareForwardJudgmentAsync(finding, point, 1, clauseBundle, cacheContext, run.WorkflowEngine, ct);
+            if (evidenceOnly && evidencePrior != null)
+            {
+                var evidenceNames = await ResolveGapEvidenceLabelsAsync(point.Id, actionIndex, ct);
+                var appendix = NdRegulPromptDefaults.BuildEvidenceRerunQueryAppendix(
+                    evidencePrior.OriginalGapRecord, string.Join("; ", evidenceNames));
+                prep = prep with { QueryBlock = prep.QueryBlock + appendix };
+            }
+
             var judgment = await ExecuteForwardJudgmentAsync(prep, ct);
-            var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
-                finding.ClauseNo, finding.ClauseText, judgment);
             finding.Status = "completed";
-            finding.ResultJson = JsonSerializer.Serialize(judgment);
             finding.ErrorMessage = null;
             finding.UpdatedAt = DateTimeOffset.UtcNow;
-            NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, landingMessage);
+
+            if (evidenceOnly && evidencePrior != null)
+            {
+                var evidenceNames = await ResolveGapEvidenceLabelsAsync(point.Id, actionIndex, ct);
+                await gapEvidenceOutcome.ApplyRegulEvidenceOutcomeAsync(
+                    run,
+                    point,
+                    finding,
+                    judgment,
+                    evidencePrior,
+                    evidenceNames,
+                    run.CreatedBy,
+                    actionIndex,
+                    ct);
+            }
+            else
+            {
+                var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
+                    finding.ClauseNo, finding.ClauseText, judgment);
+                finding.ResultJson = JsonSerializer.Serialize(judgment);
+                NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, landingMessage);
+            }
         }
         catch (Exception ex)
         {

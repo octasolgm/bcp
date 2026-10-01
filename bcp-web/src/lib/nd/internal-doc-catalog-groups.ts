@@ -36,10 +36,14 @@ export function compareInternalDocumentsForCatalog(
   }
 }
 
+export function isGapEvidenceCatalogDoc(doc: InternalDocument): boolean {
+  return doc.source === 'gap_evidence';
+}
+
 function segmentKeyFor(doc: InternalDocument): string {
-  if (doc.generatedByAnalysis) {
-    const runId = doc.generatedFromRunId?.trim();
-    if (runId) return `run:${runId}`;
+  const runId = doc.generatedFromRunId?.trim();
+  if (runId && (doc.generatedByAnalysis || isGapEvidenceCatalogDoc(doc))) {
+    return `run:${runId}`;
   }
   return 'standalone';
 }

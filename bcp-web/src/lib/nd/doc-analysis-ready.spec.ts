@@ -45,6 +45,25 @@ describe('doc-analysis-ready', () => {
     ).toBe('ready');
   });
 
+  it('treats analysis-generated copies like direct uploads for readiness and actions', () => {
+    expect(
+      internalAnalysisReadyState({
+        generatedByAnalysis: true,
+        parseStatus: 'pending',
+        sectionExtractStatus: 'pending',
+      }),
+    ).toBe('not_ready');
+    expect(
+      internalAnalysisReadyState({
+        generatedByAnalysis: true,
+        parseStatus: 'parsed',
+        sectionExtractStatus: 'extracted',
+        sectionCount: 25,
+        analysisRunCount: 2,
+      }),
+    ).toBe('analysed');
+  });
+
   it('falls back to point count when extraction metadata is absent', () => {
     expect(regulationAnalysisReadyState({ pointCount: 12 })).toBe('ready');
     expect(regulationAnalysisReadyState({ pointCount: 0 })).toBe('not_ready');

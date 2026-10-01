@@ -79,6 +79,14 @@
     border-left-color: var(--critical, #dc2626);
   }
 
+  &.is-evidence-split {
+    border-left-color: var(--accent, #2563eb);
+  }
+
+  &.is-evidence-fulfilled.is-resolved {
+    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.12);
+  }
+
   // Deep link from My actions — fades out so it reads as a pointer, not a state.
   &.ap-card-focused {
     animation: ap-card-focus-flash 2.4s ease-out 1;
@@ -186,6 +194,61 @@
     background: var(--low-bg);
     color: var(--low);
   }
+}
+
+.ap-evidence-chip {
+  display: inline-block;
+  max-width: 6.5rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 0.625rem;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--accent, #2563eb);
+
+  &.is-split {
+    background: rgba(37, 99, 235, 0.14);
+    color: var(--accent, #2563eb);
+  }
+
+  &.is-partial {
+    background: rgba(234, 179, 8, 0.16);
+    color: var(--medium, #ca8a04);
+  }
+}
+
+.ap-evidence-callout {
+  margin: 0 0 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.06);
+
+  &.is-partial {
+    border-color: rgba(234, 179, 8, 0.35);
+    background: rgba(234, 179, 8, 0.08);
+  }
+
+  &.is-split {
+    border-color: rgba(37, 99, 235, 0.28);
+  }
+}
+
+.ap-evidence-callout-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ap-evidence-callout-body {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
 }
 
 .ap-priority-low {

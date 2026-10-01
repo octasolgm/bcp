@@ -700,9 +700,9 @@
   }
 
   &.tile-compliance.compliant {
-    background: var(--compliant-bg, #dbeafe);
-    border-color: color-mix(in srgb, var(--compliant, #1d4ed8) 35%, white);
-    color: var(--compliant, #1d4ed8);
+    background: var(--compliant-bg, #dcfce7);
+    border-color: color-mix(in srgb, var(--compliant, #16a34a) 35%, white);
+    color: var(--compliant, #16a34a);
   }
 
   &.tile-compliance.partial_compliant {

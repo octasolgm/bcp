@@ -300,14 +300,16 @@
                     >
                       View structural
                     </button>
-                    <button
-                      type="button"
-                      class="row-action-btn compact"
-                      title="View the raw parsed text, independent of either extraction method"
-                      (click)="viewParsedText(d, $event)"
-                    >
-                      View parsed
-                    </button>
+                    @if (showRowParsedTextButton(d)) {
+                      <button
+                        type="button"
+                        class="row-action-btn compact"
+                        title="View parsed markdown from the Parse step (before Extract)"
+                        (click)="viewParsedText(d, $event)"
+                      >
+                        View parsed
+                      </button>
+                    }
                     @if (showSemanticExtract) {
                       <button
                         type="button"
@@ -648,10 +650,17 @@
           }
         </p>
       }
-      @if (selectedDoc && showParsedText && parsedTextFor(selectedDoc); as parsedText) {
-        <pre class="parsed-text-content-compact">{{ parsedText }}</pre>
-      }
-      @if (selectedDoc && isManualDoc(selectedDoc)) {
+      @if (selectedDoc && showParsedText) {
+        @if (loadingParsedText) {
+          <p class="muted-loading parsed-text-panel-empty">Loading parsed text…</p>
+        } @else {
+          @if (parsedTextFor(selectedDoc); as parsedText) {
+            <pre class="parsed-text-content-compact parsed-text-panel-body">{{ parsedText }}</pre>
+          } @else {
+            <p class="parsed-text-panel-empty">No parsed text yet — click Parse first.</p>
+          }
+        }
+      } @else if (selectedDoc && isManualDoc(selectedDoc)) {
         <app-nd-manual-regulation-points-panel
           [docId]="selectedDoc.id"
           [docName]="selectedDoc.name"

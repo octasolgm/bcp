@@ -35,6 +35,11 @@ export type GapAnalysisExportSelection = {
   reviewColumnLabels?: Record<string, string>;
 };
 
+/** Column/sheet choices from the export dialog plus the chosen file format. */
+export type GapAnalysisExportConfirm = GapAnalysisExportSelection & {
+  format: 'xlsx' | 'pdf';
+};
+
 export type GapAnalysisExcelOptions = {
   /** Regulation document title shown in the first column of every row. */
   regulationDocumentName?: string;
@@ -228,7 +233,7 @@ function actionPlansSheet(
   ]);
   const picked = pickColumns(ACTION_PLAN_EXPORT_COLUMNS, rows, wanted, labels);
   return {
-    sheetName: 'Action Plans',
+    sheetName: 'Actions',
     headers: picked.displayHeaders,
     rows: picked.rows,
     colWidths: picked.headers.map((h) => ACTION_PLAN_COL_WIDTHS[h] ?? 20),

@@ -6,6 +6,9 @@ import { NdGapPointDetailComponent } from '../../../components/nd/nd-gap-point-d
 import { NdPointSortControlsComponent } from '../../../components/nd/nd-point-sort-controls.component';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
 import { NdRunReviewPanelComponent } from '../../../components/nd/nd-run-review-panel.component';
+import { NdReportSummaryStackComponent } from '../../../components/nd/nd-report-summary-stack.component';
+import { emptyClauseRollup, type ClauseRollup } from '../../../../lib/nd/gap-state';
+import { runWorkCounts } from '../../../../lib/nd/run-gap-stats';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
@@ -20,21 +23,35 @@ import {
   exportGapAnalysisExcelFromPoints,
   exportGapAnalysisPdfFromPoints,
   gapAnalysisExportColumns,
+  type GapAnalysisExportConfirm,
   type GapAnalysisExportSelection,
 } from '../../../../lib/nd/export/gap-analysis-export';
 import { NdExportOptionsDialogComponent } from '../../../components/nd/nd-export-options-dialog.component';
-import type { ActionPlanHistoryEntry, AnalysisPoint, PointGapAttachment, ResultsData } from '../../../../lib/nd/types';
+import type {
+  ActionPlanHistoryEntry,
+  AnalysisPoint,
+  AnalysisRunSummary,
+  PointGapAttachment,
+  ResultsData,
+} from '../../../../lib/nd/types';
 import { reviewsForPoint, type ActionItemReviewEntry, type ActionItemReviewStatus } from '../../../../lib/nd/action-item-review';
 import { tempCommentsForPoint, type TempPointReviewComment, type TempReviewCommentsChangeEvent } from '../../../../lib/nd/temp-point-review-comment';
-import { canAddActionItemReviews, isReviewRole, reviewDisabledHint } from '../../../../lib/nd/nd-review-run-helpers';
+import {
+  canAddActionItemReviews,
+  canUploadGapEvidence as canUploadGapEvidenceForRun,
+  gapEvidenceUploadDisabledHint,
+  isReviewRole,
+  reviewDisabledHint,
+} from '../../../../lib/nd/nd-review-run-helpers';
 import type { ComplianceSeverity } from '../../../../lib/nd/point-compliance-status';
+import { runGapEvidenceLocalPipeline } from '../../../../lib/nd/gap-evidence-local-pipeline';
 import { type SortDir } from '../../../../lib/nd/list-utils';
 import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sort';
 
 @Component({
   selector: 'app-nd-results',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdExportOptionsDialogComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdExportOptionsDialogComponent, NdReportSummaryStackComponent],
   templateUrl: './nd-results.component.html',
   styleUrls: ['./nd-results.component.scss', '../nd-shared.scss'],
 })
@@ -120,6 +137,16 @@ export class NdResultsComponent implements OnInit, OnChanges {
 
   get nonCompliantCount(): number {
     return this.data?.points.filter((p) => resolveAnalysisPointSeverity(p) === 'non_compliant').length ?? 0;
+  }
+
+  get runRollup(): ClauseRollup {
+    if (!this.data) return emptyClauseRollup();
+    const w = runWorkCounts(this.data.run as AnalysisRunSummary);
+    const reviews = this.data.actionItemReviews?.length ?? 0;
+    if (!w) {
+      return { ...emptyClauseRollup(), reviews };
+    }
+    return { ...w, reviews };
   }
 
   pointSeverity(point: AnalysisPoint): ComplianceSeverity | null {
@@ -302,7 +329,11 @@ export class NdResultsComponent implements OnInit, OnChanges {
   }
 
   get canUploadGapEvidence(): boolean {
-    return this.canEditCap;
+    return canUploadGapEvidenceForRun(this.auth.getRole(), this.data?.run.status);
+  }
+
+  get gapEvidenceUploadDisabledHint(): string {
+    return gapEvidenceUploadDisabledHint(this.auth.getRole(), this.data?.run.status);
   }
 
   async saveActionItemReview(
@@ -391,7 +422,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
     this.evidenceUploadingPointId = null;
     this.evidenceUploadingActionIndex = null;
     if (res.success) {
-      this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
+      this.toast.show(`Uploaded ${files.length} file(s) — parsing…`, 'success');
       const mapped = (res.data ?? []).map((att) => ({
         ...att,
         analysisPointId: att.analysisPointId || pointId,
@@ -404,6 +435,8 @@ export class NdResultsComponent implements OnInit, OnChanges {
           pointAttachments: [...(this.data.pointAttachments ?? []), ...mapped],
         };
       }
+      const docIds = [...new Set((res.data ?? []).map((a) => a.storedDocumentId).filter(Boolean))];
+      void this.prepareGapEvidenceDocs(docIds);
     } else {
       this.error = res.message ?? 'Upload failed';
       this.toast.show(this.error, 'error');
@@ -501,11 +534,21 @@ export class NdResultsComponent implements OnInit, OnChanges {
         this.toast.show(upload.message ?? 'Upload failed', 'error');
         return;
       }
-      this.toast.show(`Uploaded ${files.length} file(s)`, 'success');
-      await this.load();
+      const docIds = [...new Set((upload.data ?? []).map((item) => item.storedDocumentId).filter(Boolean))];
+      this.toast.show(`Uploaded ${files.length} file(s) — parsing and extracting…`, 'success');
+      void this.prepareGapEvidenceDocs(docIds);
     } finally {
       this.reportEvidenceBusy = false;
     }
+  }
+
+  private async prepareGapEvidenceDocs(storedDocumentIds: string[]): Promise<void> {
+    if (!storedDocumentIds.length) return;
+    for (const id of storedDocumentIds) {
+      const result = await runGapEvidenceLocalPipeline(this.api, id);
+      if (!result.ok) this.toast.show(result.message, 'error');
+    }
+    await this.load();
   }
 
   async onDeleteReportEvidence(storedDocumentId: string): Promise<void> {
@@ -680,8 +723,17 @@ export class NdResultsComponent implements OnInit, OnChanges {
     this.showExportDialog = false;
   }
 
-  async runXlsxExport(selection: GapAnalysisExportSelection): Promise<void> {
+  async runExportConfirm(confirm: GapAnalysisExportConfirm): Promise<void> {
     this.showExportDialog = false;
+    if (confirm.format === 'pdf') {
+      await this.exportPdf();
+      return;
+    }
+    const { format: _format, ...selection } = confirm;
+    await this.runXlsxExport(selection);
+  }
+
+  async runXlsxExport(selection: GapAnalysisExportSelection): Promise<void> {
     if (!this.data?.points?.length) return;
     await exportGapAnalysisExcelFromPoints(this.data.points, undefined, undefined, {
       ...this.exportOptions(),
