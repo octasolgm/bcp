@@ -271,6 +271,7 @@ builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisProcessor
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulAnalysisProcessor>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdGapEvidencePrepareService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdGapEvidenceOutcomeService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdGapEvidenceRerunService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdLocalDocumentPayloadLoader>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.DemoAnalysisSeedService>();
 builder.Services.Configure<Reguliq.Api.Services.NewDashboard.Demo.NdDemoIsolationOptions>(

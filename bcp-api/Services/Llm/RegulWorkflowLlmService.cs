@@ -43,7 +43,7 @@ public class RegulWorkflowLlmService(
     /// <summary>Same dispatch as AnalyzeTextAsync, but takes an already-resolved config instead of
     /// fetching it — lets a caller resolve the config once (DB read) and reuse it across several
     /// concurrent calls without each one touching the database.</summary>
-    private Task<string> AnalyzeTextWithConfigAsync(string prompt, DualVerifyLlmConfig cfg, CancellationToken ct)
+    public Task<string> AnalyzeTextWithConfigAsync(string prompt, DualVerifyLlmConfig cfg, CancellationToken ct)
     {
         logger.LogInformation("Regul workflow LLM using {Provider}/{Model}", cfg.Provider, cfg.Model);
         return cfg.Provider.ToLowerInvariant() switch

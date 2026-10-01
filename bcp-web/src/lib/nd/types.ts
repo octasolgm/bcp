@@ -319,6 +319,8 @@ export type ResultsData = {
   actionItemReviews?: ActionItemReviewEntry[];
   actionPlans?: import('./action-plan').ActionPlanEntry[];
   tempReviewComments?: TempPointReviewComment[];
+  /** Evidence re-check verdicts per clause, newest first. */
+  gapEvidenceReviews?: import('./gap-evidence-rerun').GapEvidenceReview[];
 };
 
 export type ActionPlanHistoryEntry = {

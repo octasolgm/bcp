@@ -91,6 +91,18 @@ import {
   NdTempPointReviewCommentsComponent,
 } from './nd-temp-point-review-comments.component';
 import type { TempPointReviewComment, TempReviewCommentsChangeEvent } from '../../../lib/nd/temp-point-review-comment';
+import {
+  evidenceDocNames,
+  evidenceQuoteRefLabel,
+  gapEvidenceOutcomeLabel,
+  latestGapVerdict,
+  rerunCount,
+  type GapEvidenceActionResult,
+  type GapEvidenceGapResult,
+  type GapEvidenceOutcome,
+  type GapEvidenceQuote,
+  type GapEvidenceReview,
+} from '../../../lib/nd/gap-evidence-rerun';
 
 @Component({
   selector: 'app-nd-gap-point-detail',
@@ -186,6 +198,10 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   @Input() actionPlans: ActionPlanEntry[] = [];
   @Input() canEditActionPlans = false;
   @Input() canReviewActionPlans = false;
+  /** Evidence re-check verdicts for this clause, newest first. */
+  @Input() evidenceReviews: GapEvidenceReview[] = [];
+  /** Parse / chunking / index progress per uploaded evidence document. */
+  @Input() evidencePrepLabels: Record<string, string> = {};
 
   @Output() startEdit = new EventEmitter<void>();
   @Output() cancelEdit = new EventEmitter<void>();
@@ -193,7 +209,7 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   @Output() openHistory = new EventEmitter<void>();
   @Output() closeHistory = new EventEmitter<void>();
   @Output() restoreVersion = new EventEmitter<ActionPlanHistoryEntry>();
-  @Output() openPdf = new EventEmitter<{ docId: string; page?: string | null }>();
+  @Output() openPdf = new EventEmitter<{ docId: string; page?: string | null; find?: string }>();
   @Output() saveActionItemReview = new EventEmitter<ItemReviewSaveEvent>();
   @Output() deleteActionItemReview = new EventEmitter<string>();
   @Output() reorderActionItemReview = new EventEmitter<{
@@ -594,11 +610,13 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
       this.point.finalActionPlan!.trim() !== (this.point.originalAiActionPlan?.trim() ?? '') &&
       !looksLikeRegulElementAssessment(this.point.finalActionPlan!);
 
+    // A clause the auto-rule flipped to compliant keeps its original (now-resolved) gaps, numbered
+    // the same way as before — same rule as capGapsForAnalysisPoint.
     if (
       this.isRegulWorkflow &&
       gapRaw &&
       this.resolvedSeverity &&
-      this.resolvedSeverity !== 'compliant' &&
+      (this.resolvedSeverity !== 'compliant' || this.point.finalStatusSource === 'auto') &&
       !userEditedPlan
     ) {
       const fixFromCap = this.primaryBlock.correctiveAction?.trim() ?? '';
@@ -1078,9 +1096,72 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   }
 
   fileMeta(att: PointGapAttachment): string {
+    const prep = this.evidencePrepLabels[att.storedDocumentId]?.trim();
+    if (prep) return prep;
     const kind = this.fileKind(att.fileName);
     const size = formatAttachmentSize(att.sizeBytes);
     return size ? `${kind} · ${size}` : kind;
+  }
+
+  // ------------------------------------------------------ evidence re-check
+
+  readonly gapEvidenceOutcomeLabel = gapEvidenceOutcomeLabel;
+  readonly evidenceQuoteRefLabel = evidenceQuoteRefLabel;
+  readonly evidenceDocNames = evidenceDocNames;
+
+  gapVerdict(index: number): { review: GapEvidenceReview; gap: GapEvidenceGapResult } | null {
+    return latestGapVerdict(this.evidenceReviews, index);
+  }
+
+  gapVerdictChipLabel(outcome: GapEvidenceOutcome | null | undefined): string {
+    switch (outcome) {
+      case 'fulfilled':
+        return 'Fulfilled by new evidence';
+      case 'partially_fulfilled':
+        return 'Partly covered by new evidence';
+      default:
+        return 'Not covered by new evidence';
+    }
+  }
+
+  actionResultsForGap(review: GapEvidenceReview, index: number): GapEvidenceActionResult[] {
+    return review.actions.filter((a) => a.gapIndex === index && a.applied !== 'unchanged');
+  }
+
+  actionResultLabel(action: GapEvidenceActionResult): string {
+    return action.applied === 'split' ? 'Split — done part resolved, rest kept open' : 'Resolved by evidence';
+  }
+
+  @Output() viewEvidenceHistory = new EventEmitter<void>();
+
+  get evidenceRerunCount(): number {
+    return rerunCount(this.evidenceReviews);
+  }
+
+  get latestEvidenceReview(): GapEvidenceReview | null {
+    return this.evidenceReviews.find((r) => r.status === 'completed') ?? null;
+  }
+
+  /** Quotes from the newest evidence review, shown with their document reference under Policy extract. */
+  get evidenceExtracts(): GapEvidenceQuote[] {
+    const review = this.latestEvidenceReview;
+    if (!review) return [];
+    const seen = new Set<string>();
+    const out: GapEvidenceQuote[] = [];
+    for (const gap of review.gaps) {
+      for (const quote of gap.quotes ?? []) {
+        const key = quote.text.trim().toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(quote);
+      }
+    }
+    return out.slice(0, 8);
+  }
+
+  openEvidenceQuote(quote: GapEvidenceQuote): void {
+    if (!quote.documentId) return;
+    this.openPdf.emit({ docId: quote.documentId, page: quote.page != null ? String(quote.page) : null, find: quote.text });
   }
 
   isPendingRemove(id: string): boolean {

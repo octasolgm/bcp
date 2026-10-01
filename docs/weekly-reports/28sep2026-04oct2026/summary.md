@@ -129,6 +129,31 @@ Tasks
 - New analysis (hybrid) internal document picker now lists gap-evidence uploads from analysis reports, not only library uploads
 - Report summary layout: action stat row, then gap stat row, then AI draft banner
 - Review summary on gap analysis reports: compact pill button opens a right-side panel; open actions sorted by clause number; card layout for actions and review records
+- Deployed bcp-api-dev and bcp-web-dev (build labels 2026.10.01.05 / 2026.10.01.08); production web budget bumped so deploy build completes
+- Gap evidence re-check rebuilt as a tracked job with the same stages as New Analysis: prepare documents (Azure DI parse, structural chunking, index), retrieve evidence sections (hybrid BM25 + embeddings over the uploaded docs only), judge each open gap and action, complete
+- Re-check judges gap by gap and action by action against the new document, with verbatim quotes checked against the source sections; unsupported "fulfilled" verdicts never close a gap
+- Original gaps are never rewritten: each verdict is stored as a separate evidence review per clause (covered, still missing, quotes with document/section/page, what happened to each action)
+- Action plans: fulfilled ones resolved, partly fulfilled ones split into a resolved part and a new pending part (same owners, date, priority), every change in status history and action comments
+- Gap analysis report: live re-check panel (stages, done/running/queued/failed counts, per-clause outcome), header marquee and step rail follow the job; page resumes the panel after refresh
+- Clause detail: per-gap evidence verdict chip and evidence box, new-evidence quotes with clickable references under Policy extract, evidence review history
+- Upload progress labels now read "Azure Document Intelligence parsing", "Structural chunking", "Indexing for hybrid retrieval", ready with page and section counts
+- Per-clause and per-gap evidence uploads are prepared on the server too, same as report-level uploads
+- Unit tests for the evidence verdict rules
+- Gap evidence re-check now runs the same New Analysis pipeline per clause (query expansion, sub-obligation split, BM25, embeddings, fusion, adaptive select, context, LLM judgment with the admin prompts) over the original policies plus the new evidence, then maps that verdict onto the existing gaps and actions; short evidence files are read in full
+- Re-check history: "Analysed N x" on each evidence document and "Re-checked N x" on each clause card, both opening a right-side history panel (collapsible per re-check) with clauses checked, re-analysis verdict, covered / still missing, quotes and action changes
+- Evidence quote references open the source: PDFs at the page, Word files in the document viewer filtered to the quoted passage
+- Upload step labels simplified to Parsing, Extracting, Indexing, Ready
 
 Bug fixes
-- (none)
+- Rerun all gaps showed "complete" immediately and appeared to do nothing: the page checked progress before the server had started, and the server kept no run-level progress to follow
+- Evidence rerun overwrote the report's workflow status (a finalized or in-review report could flip back to "completed")
+- Evidence rerun re-parsed the same uploaded document once per clause at the same time; each upload was also parsed twice (server and browser)
+- Evidence rerun replaced the clause's original judgment, so a fully covered clause lost its numbered gap list
+- Clause detail re-numbered gaps from a different source once all gaps were resolved and the clause auto-flipped to compliant
+- Word evidence files showed every section and quote as page 1 (Azure does not paginate .docx); pages now come from the layout Word saved in the file
+- Evidence re-check failed a clause with "Cannot get the value of a token type 'StartArray' as a string" when the AI answered a text field as a list; list and object answers are now read as text
+- Pipeline panel stayed empty during a re-check; it now shows each clause's step outputs (expansion, sub-obligations, BM25, embeddings, fusion) like New Analysis, and keeps them until the re-check panel is dismissed
+- Page now scrolls to the re-check panel when a re-check starts and again when it finishes
+- Kimi K3 answers were cut off mid-JSON on long clauses ("Expected end of string") because its reasoning shares the 16k output limit; limit raised to 32k for Kimi K3, and a failed re-analysis step no longer fails the clause's evidence check
+- Re-check history: clauses inside a re-check can be collapsed (open by default)
+- Evidence re-check failed to save a clause when an action was split (new action's history row was written before the action itself); re-check errors now show the real cause

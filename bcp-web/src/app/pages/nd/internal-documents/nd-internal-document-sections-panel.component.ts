@@ -38,7 +38,10 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
   @Input() repairingLabel = '';
   @Input() repairingPct: number | null = null;
   @Input() canOpenSource = false;
+  /** Pre-fills the panel search once sections load, so a deep link lands on the matching passage. */
+  @Input() initialSearch = '';
   @Output() openSourcePage = new EventEmitter<number>();
+  private initialSearchApplied = false;
 
   search = '';
   expandedRows = new Set<string>();
@@ -48,10 +51,23 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
   readonly formatSectionRef = normalizeInternalSectionRef;
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['initialSearch']) this.initialSearchApplied = false;
     if (!changes['sections']) return;
     this.sortedSections = sortInternalSectionsByPointRef(this.sections ?? []);
     this.expandedRows.clear();
     this.expandAll();
+    this.applyInitialSearch();
+  }
+
+  /** Narrows to the passage: the full quote when a section contains it, else its opening words. */
+  private applyInitialSearch(): void {
+    const find = this.initialSearch.trim();
+    if (this.initialSearchApplied || !find || !this.sortedSections.length) return;
+    this.initialSearchApplied = true;
+    const lower = find.toLowerCase();
+    const candidates = [lower, lower.split(/\s+/).slice(0, 8).join(' '), lower.split(/\s+/).slice(0, 4).join(' ')];
+    this.search =
+      candidates.find((c) => c && this.sortedSections.some((s) => this.matchesSearch(s, c))) ?? '';
   }
 
   get isBusy(): boolean {

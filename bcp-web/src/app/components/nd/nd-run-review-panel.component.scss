@@ -674,3 +674,28 @@
     cursor: not-allowed;
   }
 }
+
+.gap-docs-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
+  &.is-empty {
+    border-color: var(--border-strong);
+    background: transparent;
+    color: var(--text-muted);
+  }
+}

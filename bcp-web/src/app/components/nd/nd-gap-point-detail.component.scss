@@ -1936,3 +1936,111 @@
   background: var(--surface-muted, rgba(127, 127, 127, 0.08));
   border-radius: 6px;
 }
+
+// ----------------------------------------------------- evidence re-check
+
+.evidence-extracts {
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border-strong);
+}
+
+.evidence-extracts-label,
+.gap-evidence-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.evidence-date {
+  margin-left: 0.35rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.evidence-extract {
+  margin-bottom: 0.5rem;
+
+  .policy-quote {
+    margin: 0.25rem 0 0;
+  }
+}
+
+.evidence-unverified {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.6875rem;
+  color: #b45309;
+}
+
+.gap-evidence-chip {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+
+  &[data-outcome='fulfilled'] {
+    color: var(--compliant, #15803d);
+    background: color-mix(in srgb, var(--compliant, #15803d) 12%, transparent);
+  }
+
+  &[data-outcome='partially_fulfilled'] {
+    color: #b45309;
+    background: color-mix(in srgb, #f59e0b 14%, transparent);
+  }
+}
+
+.gap-evidence-box {
+  margin: 0.6rem 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  border-left-width: 3px;
+  background: var(--bg-input);
+
+  &[data-outcome='fulfilled'] {
+    border-left-color: var(--compliant, #15803d);
+  }
+
+  &[data-outcome='partially_fulfilled'] {
+    border-left-color: #f59e0b;
+  }
+}
+
+.gap-evidence-line,
+.gap-evidence-action {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.gap-evidence-action-tag {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--compliant, #15803d);
+  background: color-mix(in srgb, var(--compliant, #15803d) 12%, transparent);
+
+  &[data-applied='split'] {
+    color: #b45309;
+    background: color-mix(in srgb, #f59e0b 14%, transparent);
+  }
+}
+
+
+.evidence-history-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}

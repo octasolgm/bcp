@@ -129,6 +129,31 @@
       @if (policyExtract) {
         <blockquote class="policy-quote policy-quote-full">{{ policyExtract }}</blockquote>
       }
+      @if (latestEvidenceReview; as review) {
+        @if (evidenceExtracts.length) {
+          <div class="evidence-extracts">
+            <p class="evidence-extracts-label">
+              New evidence — {{ evidenceDocNames(review.evidenceDocuments) }}
+              <span class="evidence-date">{{ formatDate(review.completedAt || review.createdAt) }}</span>
+            </p>
+            @for (quote of evidenceExtracts; track quote.text) {
+              <div class="evidence-extract">
+                @if (quote.documentId) {
+                  <button type="button" class="source-ref-link policy-ref-chip" [attr.title]="'Open ' + evidenceQuoteRefLabel(quote)" (click)="openEvidenceQuote(quote)">
+                    {{ evidenceQuoteRefLabel(quote) }}
+                  </button>
+                } @else {
+                  <span class="policy-ref policy-ref-chip">{{ evidenceQuoteRefLabel(quote) }}</span>
+                }
+                <blockquote class="policy-quote">{{ quote.text }}</blockquote>
+                @if (!quote.verified) {
+                  <span class="evidence-unverified">Not found word-for-word in the document — confirm manually</span>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
     </section>
   </div>
 
@@ -275,6 +300,11 @@
                       <span class="gap-status-chip" [class.is-resolved]="gapStatus(gap) === 'resolved'">
                         {{ gapStatusLabel(gapStatus(gap)) }}
                       </span>
+                      @if (gapVerdict(gap.index); as verdict) {
+                        <span class="gap-evidence-chip" [attr.data-outcome]="verdict.gap.outcome">
+                          {{ gapVerdictChipLabel(verdict.gap.outcome) }}
+                        </span>
+                      }
                       @if (actionCountForGap(gap.index); as actionCount) {
                         <span class="gap-action-count-pill">{{ actionCount }} action{{ actionCount === 1 ? '' : 's' }}</span>
                       }
@@ -358,6 +388,43 @@
                 <div class="cap-gap-body">
                   <p class="gap-missing-label">Gap (what&rsquo;s missing)</p>
                   <p>{{ gap.missing }}</p>
+
+                  @if (gapVerdict(gap.index); as verdict) {
+                    <div class="gap-evidence-box" [attr.data-outcome]="verdict.gap.outcome">
+                      <p class="gap-evidence-title">
+                        Evidence review — {{ gapEvidenceOutcomeLabel(verdict.gap.outcome) }}
+                        <span class="evidence-date">
+                          {{ evidenceDocNames(verdict.review.evidenceDocuments) }} · {{ formatDate(verdict.review.completedAt || verdict.review.createdAt) }}
+                        </span>
+                      </p>
+                      @if (verdict.gap.covered) {
+                        <p class="gap-evidence-line"><strong>Now covered:</strong> {{ verdict.gap.covered }}</p>
+                      }
+                      @if (verdict.gap.remaining) {
+                        <p class="gap-evidence-line"><strong>Still missing:</strong> {{ verdict.gap.remaining }}</p>
+                      }
+                      @for (quote of verdict.gap.quotes ?? []; track quote.text) {
+                        <div class="evidence-extract">
+                          @if (quote.documentId) {
+                            <button type="button" class="source-ref-link policy-ref-chip" (click)="openEvidenceQuote(quote)">{{ evidenceQuoteRefLabel(quote) }}</button>
+                          } @else {
+                            <span class="policy-ref policy-ref-chip">{{ evidenceQuoteRefLabel(quote) }}</span>
+                          }
+                          <blockquote class="policy-quote">{{ quote.text }}</blockquote>
+                        </div>
+                      }
+                      @for (action of actionResultsForGap(verdict.review, gap.index); track action.actionPlanId) {
+                        <p class="gap-evidence-action">
+                          <span class="gap-evidence-action-tag" [attr.data-applied]="action.applied">{{ actionResultLabel(action) }}</span>
+                          @if (action.applied === 'split') {
+                            &ldquo;{{ action.originalText }}&rdquo; → done: {{ action.fulfilledPart }} · still open: {{ action.remainingPart }}
+                          } @else {
+                            {{ action.originalText }}
+                          }
+                        </p>
+                      }
+                    </div>
+                  }
 
                   <div class="gap-risk-meter" [class]="gapRiskClass(gap)">
                     <div class="gap-risk-meter-head">
@@ -501,6 +568,18 @@
         }
       </div>
     </section>
+  }
+
+  @if (evidenceReviews.length) {
+    <div class="evidence-history-bar">
+      <span>
+        Re-checked against uploaded evidence <strong>{{ evidenceRerunCount }}×</strong>
+        @if (latestEvidenceReview; as latest) {
+          · last: {{ gapEvidenceOutcomeLabel(latest.clauseOutcome) }}, {{ formatDate(latest.completedAt || latest.createdAt) }}
+        }
+      </span>
+      <button type="button" class="toolbar-btn" (click)="viewEvidenceHistory.emit()">Re-check history</button>
+    </div>
   }
 
   @if (showGapEvidenceSection && runId) {

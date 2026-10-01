@@ -4,6 +4,7 @@ import { firstValueFrom, timeout, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
 import type { PointGapAttachment } from '../../../lib/nd/types';
+import type { GapEvidenceRerun, GapEvidenceRerunRequest } from '../../../lib/nd/gap-evidence-rerun';
 
 export type RunGapEvidenceUpload = {
   storedDocumentId: string;
@@ -1717,6 +1718,26 @@ export class NdApiService {
       true,
       RERUN_API_TIMEOUT_MS,
     );
+  }
+
+  /** Re-check open gaps against uploaded gap evidence as a tracked job (Regul runs). Demo accounts
+   * get their fixed simulation back instead (`data.demo`). */
+  startGapEvidenceRerun(runId: string, body: GapEvidenceRerunRequest) {
+    return this.request<GapEvidenceRerun | { demo: true; updated: number }>(
+      'POST',
+      `/nd/results/${runId}/gap-evidence-reruns`,
+      body,
+      true,
+      RERUN_API_TIMEOUT_MS,
+    );
+  }
+
+  getLatestGapEvidenceRerun(runId: string) {
+    return this.request<GapEvidenceRerun | null>('GET', `/nd/results/${runId}/gap-evidence-reruns/latest`);
+  }
+
+  getGapEvidenceRerun(runId: string, rerunId: string) {
+    return this.request<GapEvidenceRerun>('GET', `/nd/results/${runId}/gap-evidence-reruns/${rerunId}`);
   }
 
   /** Re-run every open gap against evidence uploaded on the run. */

@@ -9,9 +9,9 @@ import {
 import type { AnalysisPoint } from './types';
 
 describe('gapEvidencePrepStepLabel', () => {
-  it('names Azure parse and structural chunking while processing', () => {
-    expect(gapEvidencePrepStepLabel('parsing', 'policy.pdf', 'processing')).toMatch(/Azure Document Intelligence/i);
-    expect(gapEvidencePrepStepLabel('extracting', 'policy.pdf', 'processing')).toMatch(/Structural chunking/i);
+  it('uses plain step names while processing', () => {
+    expect(gapEvidencePrepStepLabel('parsing', 'policy.pdf', 'processing')).toMatch(/^Parsing/);
+    expect(gapEvidencePrepStepLabel('extracting', 'policy.pdf', 'processing')).toMatch(/^Extracting/);
   });
 });
 

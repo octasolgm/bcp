@@ -396,6 +396,77 @@ public static class NdIncrementalSchemaBootstrap
           ADD COLUMN IF NOT EXISTS structural_coverage_ratio DOUBLE PRECISION NULL,
           ADD COLUMN IF NOT EXISTS structural_coverage_orphan_snippet TEXT NULL;
         """,
+        """
+        CREATE TABLE IF NOT EXISTS gap_evidence_reruns (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          analysis_run_id UUID NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
+          scope TEXT NOT NULL DEFAULT 'report',
+          status TEXT NOT NULL DEFAULT 'queued',
+          phase TEXT NOT NULL DEFAULT 'queued',
+          phase_detail TEXT NULL,
+          evidence_documents_json TEXT NOT NULL DEFAULT '[]',
+          total_points INT NOT NULL DEFAULT 0,
+          completed_points INT NOT NULL DEFAULT 0,
+          failed_points INT NOT NULL DEFAULT 0,
+          fulfilled_gaps INT NOT NULL DEFAULT 0,
+          partial_gaps INT NOT NULL DEFAULT 0,
+          open_gaps INT NOT NULL DEFAULT 0,
+          resolved_actions INT NOT NULL DEFAULT 0,
+          split_actions INT NOT NULL DEFAULT 0,
+          error TEXT NULL,
+          llm_provider TEXT NULL,
+          llm_model TEXT NULL,
+          created_by UUID NULL,
+          started_at TIMESTAMPTZ NULL,
+          finished_at TIMESTAMPTZ NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_gap_evidence_reruns_run
+          ON gap_evidence_reruns (analysis_run_id, created_at DESC);
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS gap_evidence_reviews (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rerun_id UUID NOT NULL REFERENCES gap_evidence_reruns(id) ON DELETE CASCADE,
+          analysis_run_id UUID NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
+          analysis_point_id UUID NOT NULL REFERENCES analysis_points(id) ON DELETE CASCADE,
+          gap_index_filter INT NULL,
+          status TEXT NOT NULL DEFAULT 'queued',
+          clause_no TEXT NULL,
+          clause_outcome TEXT NULL,
+          prior_final_status TEXT NULL,
+          new_final_status TEXT NULL,
+          summary TEXT NULL,
+          evidence_documents_json TEXT NOT NULL DEFAULT '[]',
+          gaps_json TEXT NOT NULL DEFAULT '[]',
+          actions_json TEXT NOT NULL DEFAULT '[]',
+          context_json TEXT NOT NULL DEFAULT '[]',
+          error TEXT NULL,
+          started_at TIMESTAMPTZ NULL,
+          completed_at TIMESTAMPTZ NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_gap_evidence_reviews_rerun
+          ON gap_evidence_reviews (rerun_id);
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_gap_evidence_reviews_point
+          ON gap_evidence_reviews (analysis_point_id, created_at DESC);
+        """,
+        """
+        ALTER TABLE gap_evidence_reviews ADD COLUMN IF NOT EXISTS reanalysis_json TEXT NULL;
+        ALTER TABLE gap_evidence_reviews ADD COLUMN IF NOT EXISTS retrieval_json TEXT NULL;
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_gap_evidence_reviews_run
+          ON gap_evidence_reviews (analysis_run_id, created_at DESC);
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

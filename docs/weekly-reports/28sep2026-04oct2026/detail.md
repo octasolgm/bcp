@@ -166,3 +166,35 @@ On the analysis report, each gap document row now states clearly when parse and 
 Review summary drawer
 
 Instead of a large inline accordion on the report page, Review summary is now a small button (with open and overdue counts when relevant). Clicking it opens a panel from the right with a clear header, open actions listed as cards sorted by clause number (3.9 before 3.10), target date and responsible party on each card, and review records below with the same date filter as before. Press Escape or click outside to close.
+
+Re-checking gaps against newly uploaded evidence
+
+After an analysis is finished, you can upload a new or updated policy document and re-check the open gaps against it. This now works the same way as running a new analysis, and you can watch it happen:
+
+- The uploaded document is prepared first: Azure Document Intelligence parsing, structural chunking, and indexing for search. Each stage is named on the document row while it runs, and the row shows page and section counts once the file is ready.
+- Clicking Rerun all gaps starts a re-check of only the clauses that still have gaps. A progress panel on the report shows the stages (prepare documents, retrieve evidence, judge gaps, complete), how many clauses are done, running, queued or failed, and the result for each clause as it finishes. The blue header and the progress rail follow the same steps. If you refresh or leave and come back, the page picks the progress back up.
+- For each clause, the most relevant passages are found in the new document, then the configured AI model checks every open gap and every open corrective action against them. Each conclusion must be backed by a quote taken word for word from the document; a "fulfilled" answer with no supporting quote is never allowed to close a gap.
+
+What happens to your gaps and actions:
+
+- The original gaps are never deleted or reworded. They stay on the clause exactly as found, with a clear marker on each gap: fulfilled, partly covered, or not covered by the new evidence.
+- Each gap shows what the new document now covers, what is still missing, and the supporting quotes with a reference to the document, section and page. These quotes also appear under Policy extract, and clicking a reference opens the document.
+- Corrective actions follow the evidence: actions the document fully satisfies are resolved; an action that is only partly satisfied is split in two, with the done part resolved and the remaining part kept open as a new action with the same owners, target date and priority. If every action on a gap is done but part of the gap is still missing, a new action is added for the remainder so it stays owned.
+- When every gap on a clause is resolved, the clause turns compliant automatically; a clause that was non-compliant and is now partly covered moves to partially compliant. A status someone set by hand is never changed.
+- Everything is kept on record: each re-check is saved in an Evidence review history on the clause (date, who ran it, documents used, AI model, outcome per gap), every action status change is in the action history, and split actions keep the original wording in their notes.
+
+The same re-check runs when you upload a document for a single clause or a single gap and use the rerun button there.
+
+Fixes in this area: Rerun all gaps previously showed "complete" straight away while nothing visible happened, because the page checked for progress before the work had started. A re-check could also change a report's workflow status (for example a finalized report moving back to completed), parsed the same uploaded file several times in parallel, and could replace a clause's original findings so that its gap list disappeared. All of these are fixed. Resolved gaps also keep their original numbering when a clause turns compliant.
+
+Re-checks now use the full New Analysis pipeline
+
+Re-checking open gaps against an uploaded document now runs every clause through exactly the same steps as a New Analysis: the same search over your documents and the same analysis prompts and checks, this time over your original policies plus the new document. That fresh verdict is then matched against each open gap and corrective action, and only text found in the new document is credited as newly covered. Short documents are read in full so no passage is skipped.
+
+Each evidence document on the report now shows how many times it has been used in a re-check, and each clause card shows how many times it has been re-checked. Clicking either opens a history panel on the right listing every re-check (collapsed to a one-line summary until opened) with the clauses checked, the fresh verdict, what is now covered, what is still missing, the supporting quotes, and which actions were resolved or split, or that nothing changed.
+
+Page references for Word documents are now correct. Word files used to cite page 1 for everything, because the document reading service does not paginate Word files; pages now come from the page layout Word saved in the file, for every section and every quote. Clicking a quote reference opens a PDF at that page, or opens a Word file in the document viewer filtered to the quoted passage. Upload progress now reads simply Parsing, Extracting, Indexing and Ready.
+
+Re-check fixes
+
+A re-check could fail on a clause with a technical error when the AI answered part of its verdict as a list of points instead of a single paragraph. Those answers are now read as normal text. During a re-check, the pipeline panel on the right now fills in each clause's search details (expanded terms, keyword and meaning-based matches, and the combined result) the same way it does on New Analysis, and the page scrolls to the re-check progress panel when you start a re-check and again when it finishes.

@@ -88,6 +88,13 @@ export class NdRunReviewPanelComponent implements OnInit, OnChanges {
   @Output() viewEvidence = new EventEmitter<string>();
   @Output() rerunAllGaps = new EventEmitter<void>();
   @Output() prepareEvidence = new EventEmitter<string>();
+  /** Number of gap re-checks each evidence document was used in, keyed by storedDocumentId. */
+  @Input() evidenceRerunCounts: Record<string, number> = {};
+  @Output() viewEvidenceHistory = new EventEmitter<string>();
+
+  rerunCountFor(att: PointGapAttachment): number {
+    return this.evidenceRerunCounts[att.storedDocumentId] ?? 0;
+  }
 
   draft: RunReviewDraft = emptyRunReviewDraft();
   statusOptions = RUN_REVIEW_STATUS_OPTIONS;
@@ -307,7 +314,7 @@ function formatParseStatus(status?: string | null): string {
   const s = (status ?? '').trim().toLowerCase();
   if (!s) return 'Not yet parsed or extracted';
   if (s === 'parsed' || s === 'completed') return 'Ready for gap re-analysis';
-  if (s === 'processing' || s === 'pending') return 'Azure parse…';
+  if (s === 'processing' || s === 'pending') return 'Parsing…';
   if (s === 'failed') return 'Prepare failed — retry upload';
   return s.replace(/_/g, ' ');
 }

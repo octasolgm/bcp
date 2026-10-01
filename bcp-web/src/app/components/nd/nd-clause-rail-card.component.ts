@@ -29,8 +29,16 @@ export class NdClauseRailCardComponent {
   @Input() gapCount = 0;
   @Input() rollup: ClauseRollup | null = null;
   @Input() showInfoButton = false;
+  /** How many gap evidence re-checks looked at this clause; shows a history chip when above 0. */
+  @Input() recheckCount = 0;
 
   @Output() infoClick = new EventEmitter<Event>();
+  @Output() recheckHistoryClick = new EventEmitter<Event>();
+
+  onRecheckHistoryClick(event: Event): void {
+    event.stopPropagation();
+    this.recheckHistoryClick.emit(event);
+  }
 
   /** Normalized title under the clause number row (never repeats the number alone). */
   get displayHeading(): string {

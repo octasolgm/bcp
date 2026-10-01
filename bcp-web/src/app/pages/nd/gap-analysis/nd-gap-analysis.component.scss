@@ -350,6 +350,107 @@
   color: var(--compliant, #15803d);
 }
 
+.gap-rerun-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.gap-rerun-progress .gap-rerun-metrics.metrics-row {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.gap-rerun-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0.25rem 0 0.6rem;
+  padding: 0;
+
+  li {
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg-input);
+  }
+
+  li.is-active {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, white);
+    background: color-mix(in srgb, var(--accent) 10%, white);
+  }
+
+  li.is-done {
+    color: var(--compliant, #15803d);
+    border-color: color-mix(in srgb, var(--compliant, #15803d) 35%, white);
+  }
+
+  li.is-done::before {
+    content: '✓ ';
+  }
+}
+
+.gap-rerun-phase-line,
+.gap-rerun-summary,
+.gap-rerun-error {
+  margin: 0 0 0.65rem;
+  font-size: 0.8125rem;
+}
+
+.gap-rerun-error {
+  color: var(--critical, #c62828);
+}
+
+.gap-rerun-clause-row .gap-rerun-clause-no {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  margin-right: auto;
+}
+
+.gap-rerun-outcome {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+
+  &[data-outcome='fulfilled'] {
+    color: var(--compliant, #15803d);
+    background: color-mix(in srgb, var(--compliant, #15803d) 12%, transparent);
+  }
+
+  &[data-outcome='partially_fulfilled'] {
+    color: #b45309;
+    background: color-mix(in srgb, #f59e0b 14%, transparent);
+  }
+}
+
+.gap-rerun-clause-error {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  color: var(--critical, #c62828);
+}
+
+.gap-rerun-clause-row {
+  flex-wrap: wrap;
+}
+
 .summary-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

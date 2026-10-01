@@ -31,8 +31,6 @@ public class NdRegulAnalysisProcessor(
     NdAnalysisRunCancellationTracker runCancellation,
     NdDemoUserDirectory demoDirectory,
     RegulEmbeddingRetrievalService embeddingRetrieval,
-    NdGapEvidencePrepareService gapEvidencePrepare,
-    NdGapEvidenceOutcomeService gapEvidenceOutcome,
     NdLocalDocumentPayloadLoader localPayloadLoader,
     ILogger<NdRegulAnalysisProcessor> logger)
 {
@@ -348,7 +346,7 @@ public class NdRegulAnalysisProcessor(
             ? configuredConcurrency
             : 4);
 
-    private sealed record ForwardJudgmentPrep(
+    public sealed record ForwardJudgmentPrep(
         NdRegulForwardFinding Finding,
         NdAnalysisPoint Point,
         int Index,
@@ -560,6 +558,12 @@ public class NdRegulAnalysisProcessor(
             return NdRegulPolicyContextService.FromRetrievalChunks([]);
         }
 
+        return await BuildBundleFromPreviewAsync(preview, ct);
+    }
+
+    private async Task<NdRegulPolicyContextService.PolicyBundle> BuildBundleFromPreviewAsync(
+        RegulEmbeddingRetrievalService.RetrievalPreview? preview, CancellationToken ct)
+    {
         if (preview == null || (preview.Matches.Count == 0 && preview.Bm25Matches.Count == 0))
             return NdRegulPolicyContextService.FromRetrievalChunks([]);
 
@@ -615,6 +619,48 @@ public class NdRegulAnalysisProcessor(
 
         return NdRegulPolicyContextService.FromRetrievalChunks(chunks);
     }
+
+    /// <summary>
+    /// One clause's judgment exactly as the analysis run makes it — same retrieval on the hybrid
+    /// engine, same admin prompt versions, same post-processing — but over the run's internal
+    /// documents plus extra ones (uploaded gap evidence). Prepares only; nothing is saved, so the
+    /// clause's original judgment stays on record. Run the returned prep with
+    /// <see cref="ExecuteClauseJudgmentAsync"/>, which touches no database and is safe in parallel.
+    /// </summary>
+    public async Task<(ForwardJudgmentPrep Prep, RegulEmbeddingRetrievalService.RetrievalPreview? Retrieval)> PrepareClauseJudgmentWithExtraDocsAsync(
+        NdAnalysisRun run,
+        NdRegulForwardFinding finding,
+        NdAnalysisPoint point,
+        IReadOnlyCollection<Guid> extraDocIds,
+        CancellationToken ct)
+    {
+        var internalIds = (JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [])
+            .Select(s => Guid.TryParse(s, out var g) ? g : (Guid?)null)
+            .Where(g => g.HasValue)
+            .Select(g => g!.Value);
+        var corpus = internalIds.Concat(extraDocIds).Distinct().ToList();
+
+        NdRegulPolicyContextService.PolicyBundle bundle;
+        RegulEmbeddingRetrievalService.RetrievalPreview? preview = null;
+        if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
+        {
+            preview = await embeddingRetrieval.RetrievePreviewForClauseAsync(corpus, finding.ClauseText, ct);
+            bundle = await BuildBundleFromPreviewAsync(preview, ct);
+        }
+        else
+        {
+            var payloads = await LoadInternalDocPayloadsAsync(corpus.Select(id => id.ToString()).ToList(), ct);
+            bundle = NdRegulPolicyContextService.FromPayloads(
+                payloads,
+                NdRegulPolicyContextService.ResolveMode(run.WorkflowEngine));
+        }
+
+        var prep = await PrepareForwardJudgmentAsync(finding, point, 1, bundle, bundle.UsesFullMarkdown, run.WorkflowEngine, ct);
+        return (prep, preview);
+    }
+
+    public Task<RegulJudgmentResult> ExecuteClauseJudgmentAsync(ForwardJudgmentPrep prep, CancellationToken ct) =>
+        ExecuteForwardJudgmentAsync(prep, ct);
 
     /// <summary>Phase 1 of forward judgment: resolves every DB-backed input a clause's judgment call
     /// needs (retrieval context, prompt templates, provider config) so phase 2 (ExecuteForwardJudgmentAsync)
@@ -1358,73 +1404,11 @@ public class NdRegulAnalysisProcessor(
         runCancellation.Clear(run.Id);
     }
 
-    private async Task<List<string>> ResolveGapEvidenceLabelsAsync(
-        Guid pointId,
-        int? actionIndex,
-        CancellationToken ct)
-    {
-        var query = db.NdAnalysisPointAttachments.AsNoTracking()
-            .Where(a => a.AnalysisPointId == pointId);
-        if (actionIndex.HasValue)
-            query = query.Where(a => a.ActionIndex == null || a.ActionIndex == actionIndex.Value);
-
-        var rows = await query
-            .OrderByDescending(a => a.CreatedAt)
-            .Select(a => a.FileName)
-            .ToListAsync(ct);
-
-        return rows
-            .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    private async Task<List<Guid>> ResolveGapEvidenceStoredDocIdsAsync(
-        Guid pointId,
-        int? actionIndex,
-        CancellationToken ct)
-    {
-        var query = db.NdAnalysisPointAttachments.AsNoTracking()
-            .Where(a => a.AnalysisPointId == pointId);
-        if (actionIndex.HasValue)
-            query = query.Where(a => a.ActionIndex == null || a.ActionIndex == actionIndex.Value);
-
-        return await query
-            .Select(a => a.StoredDocumentId)
-            .Distinct()
-            .ToListAsync(ct);
-    }
-
     private async Task<NdRegulPolicyContextService.PolicyBundle> ResolveForwardClauseBundleAsync(
         NdAnalysisRun run,
         NdRegulForwardFinding finding,
-        NdAnalysisPoint point,
-        bool evidenceOnly,
-        int? actionIndex,
         CancellationToken ct)
     {
-        if (evidenceOnly)
-        {
-            var gapDocIds = await ResolveGapEvidenceStoredDocIdsAsync(point.Id, actionIndex, ct);
-            if (gapDocIds.Count == 0)
-                throw new InvalidOperationException("No gap evidence documents uploaded for this point.");
-
-            await gapEvidencePrepare.PrepareDocumentsAsync(gapDocIds, run.WorkflowEngine, ct);
-
-            if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
-            {
-                await embeddingRetrieval.RunRetrievalForPointsAsync(run, [point.Id], gapDocIds, ct);
-                await db.Entry(finding).ReloadAsync(ct);
-                return await BuildRetrievalPolicyBundleAsync(finding, ct);
-            }
-
-            var idStrings = gapDocIds.Select(id => id.ToString()).ToList();
-            var payloads = await LoadInternalDocPayloadsAsync(idStrings, ct);
-            return NdRegulPolicyContextService.FromPayloads(
-                payloads,
-                NdRegulPolicyContextService.ResolveMode(run.WorkflowEngine));
-        }
-
         if (AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine))
             return await BuildRetrievalPolicyBundleAsync(finding, ct);
 
@@ -1436,9 +1420,7 @@ public class NdRegulAnalysisProcessor(
         Guid runId,
         Guid pointId,
         bool reverseOnly,
-        CancellationToken ct,
-        bool evidenceOnly = false,
-        int? actionIndex = null)
+        CancellationToken ct)
     {
         var run = await db.NdAnalysisRuns
             .Include(r => r.Points)
@@ -1490,10 +1472,6 @@ public class NdRegulAnalysisProcessor(
         var finding = await db.NdRegulForwardFindings
             .FirstOrDefaultAsync(f => f.AnalysisRunId == runId && f.AnalysisPointId == pointId, ct);
 
-        NdGapEvidenceOutcomeService.EvidencePriorState? evidencePrior = null;
-        if (evidenceOnly)
-            evidencePrior = gapEvidenceOutcome.CapturePriorState(point, finding);
-
         point.LandingAiStatus = "pending";
         point.LandingAiResult = null;
         point.LandingAiError = null;
@@ -1518,46 +1496,20 @@ public class NdRegulAnalysisProcessor(
         if (finding == null)
             return;
 
-        var clauseBundle = await ResolveForwardClauseBundleAsync(
-            run, finding, point, evidenceOnly, actionIndex, ct);
+        var clauseBundle = await ResolveForwardClauseBundleAsync(run, finding, ct);
         var cacheContext = clauseBundle.UsesFullMarkdown;
         try
         {
             var prep = await PrepareForwardJudgmentAsync(finding, point, 1, clauseBundle, cacheContext, run.WorkflowEngine, ct);
-            if (evidenceOnly && evidencePrior != null)
-            {
-                var evidenceNames = await ResolveGapEvidenceLabelsAsync(point.Id, actionIndex, ct);
-                var appendix = NdRegulPromptDefaults.BuildEvidenceRerunQueryAppendix(
-                    evidencePrior.OriginalGapRecord, string.Join("; ", evidenceNames));
-                prep = prep with { QueryBlock = prep.QueryBlock + appendix };
-            }
-
             var judgment = await ExecuteForwardJudgmentAsync(prep, ct);
             finding.Status = "completed";
             finding.ErrorMessage = null;
             finding.UpdatedAt = DateTimeOffset.UtcNow;
 
-            if (evidenceOnly && evidencePrior != null)
-            {
-                var evidenceNames = await ResolveGapEvidenceLabelsAsync(point.Id, actionIndex, ct);
-                await gapEvidenceOutcome.ApplyRegulEvidenceOutcomeAsync(
-                    run,
-                    point,
-                    finding,
-                    judgment,
-                    evidencePrior,
-                    evidenceNames,
-                    run.CreatedBy,
-                    actionIndex,
-                    ct);
-            }
-            else
-            {
-                var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
-                    finding.ClauseNo, finding.ClauseText, judgment);
-                finding.ResultJson = JsonSerializer.Serialize(judgment);
-                NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, landingMessage);
-            }
+            var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
+                finding.ClauseNo, finding.ClauseText, judgment);
+            finding.ResultJson = JsonSerializer.Serialize(judgment);
+            NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment, landingMessage);
         }
         catch (Exception ex)
         {

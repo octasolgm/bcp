@@ -52,6 +52,8 @@ public static class NdWorkspaceSchemaBootstrap
         ("nd_local_document_extractions", "stored_documents", "stored_document_id", null),
         ("nd_local_document_extraction_sections", "nd_local_document_extractions", "extraction_id", null),
         ("nd_ai_credit_ledger", null, null, "created_by"),
+        ("gap_evidence_reruns", "analysis_runs", "analysis_run_id", null),
+        ("gap_evidence_reviews", "analysis_runs", "analysis_run_id", null),
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

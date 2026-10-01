@@ -40,6 +40,7 @@ import {
   type ReportSummaryFilterId,
 } from '../../../components/nd/nd-report-summary-stack.component';
 import { NdClauseRailCardComponent } from '../../../components/nd/nd-clause-rail-card.component';
+import { NdEvidenceHistoryDrawerComponent } from '../../../components/nd/nd-evidence-history-drawer.component';
 import {
   buildSeededActionPlansForGap,
   type SeededActionPlan,
@@ -49,16 +50,29 @@ import { isAnalysisRunResultsReady } from '../../../../lib/nd/analysis-run-statu
 import { normalizeGapRisk } from '../../../../lib/nd/doc-analysis-ready';
 import {
   buildGapEvidencePrepMarquee,
-  buildGapEvidenceRerunMarquee,
   gapEvidencePrepStepLabel,
-  gapEvidenceRerunProgressRows,
-  gapEvidenceRerunUiStatusLabel,
   isGapEvidenceRerunInFlight,
   mergeActivityMarquee,
-  summarizeGapEvidenceRerunProgress,
   type GapEvidencePrepStep,
-  type GapEvidenceRerunUiStatus,
 } from '../../../../lib/nd/gap-evidence-activity';
+import {
+  evidenceDocNames,
+  gapEvidenceOutcomeLabel,
+  gapEvidencePhaseLabel,
+  gapEvidenceRerunCounts,
+  gapEvidenceRerunMarquee,
+  gapEvidenceRerunSummary,
+  gapRosterText,
+  isGapEvidenceRerunActive,
+  rerunCount,
+  reviewsUsingDocument,
+  type GapEvidenceJobStatus,
+  type GapEvidenceRerun,
+  type GapEvidenceRerunCounts,
+  type GapEvidenceRerunItem,
+  type GapEvidenceRerunRequest,
+  type GapEvidenceReview,
+} from '../../../../lib/nd/gap-evidence-rerun';
 import {
   GAP_EVIDENCE_LOCAL_ENGINE,
   gapEvidencePrepDetailFromLocalRow,
@@ -171,11 +185,14 @@ const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
 const EMPTY_GAP_ATTACHMENTS: PointGapAttachment[] = [];
 const EMPTY_ACTION_REVIEWS: ActionItemReviewEntry[] = [];
 const EMPTY_TEMP_COMMENTS: TempPointReviewComment[] = [];
+const EMPTY_EVIDENCE_REVIEWS: GapEvidenceReview[] = [];
+/** A doc uploaded this recently with no prepare row yet is still queued server-side, not stuck. */
+const PREP_QUEUE_GRACE_MS = 10 * 60_000;
 
 @Component({
   selector: 'app-nd-gap-analysis',
   standalone: true,
-  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent],
+  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent],
   templateUrl: './nd-gap-analysis.component.html',
   styleUrl: './nd-gap-analysis.component.scss',
 })
@@ -192,11 +209,14 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   private readonly stepTracker = inject(NdStepTrackerService);
   private readonly pipelinePanel = inject(NdPipelinePanelService);
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Open-gap point ids queued for report-level evidence re-run — drives poll completion. */
-  private evidenceRerunWatchPointIds: Set<string> | null = null;
-  /** Fixed at rerun start — stable "Points selected" total. */
-  evidenceRerunWatchTotal = 0;
-  evidenceRerunStatusFilter: 'all' | GapEvidenceRerunUiStatus = 'all';
+  /** The gap evidence re-check this page is following — live, or just finished until dismissed. */
+  evidenceRerun: GapEvidenceRerun | null = null;
+  evidenceRerunStatusFilter: 'all' | GapEvidenceJobStatus = 'all';
+  private evidenceRerunResumeCheckedFor: string | null = null;
+  private evidenceRerunSeenDone = -1;
+  private evidenceReviewsByPointId = new Map<string, GapEvidenceReview[]>();
+  /** Non-Regul runs still re-judge clauses in place; this watches those clauses settle. */
+  private legacyEvidenceWatch: { pointIds: Set<string>; startedAt: number } | null = null;
   private pipelinePanelActivatedHere = false;
 
   /** Embedded below the analyse-v8 columns: no page header, run supplied via input. */
@@ -255,41 +275,163 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return isRegulWorkflow(this.ndRunWorkflowEngine);
   }
 
-  get showEvidenceRerunProgressPanel(): boolean {
-    return this.reportEvidenceRerunning && !!this.evidenceRerunWatchPointIds?.size;
+  get evidenceRerunActive(): boolean {
+    return isGapEvidenceRerunActive(this.evidenceRerun);
   }
 
-  get evidenceRerunProgressCounts() {
-    if (!this.ndRunData || !this.evidenceRerunWatchPointIds?.size) return null;
-    return summarizeGapEvidenceRerunProgress(this.ndRunData.points ?? [], this.evidenceRerunWatchPointIds);
+  get evidenceRerunCounts(): GapEvidenceRerunCounts | null {
+    return this.evidenceRerun ? gapEvidenceRerunCounts(this.evidenceRerun) : null;
   }
 
-  get evidenceRerunProgressRowsFiltered() {
-    if (!this.ndRunData || !this.evidenceRerunWatchPointIds?.size) return [];
-    const rows = gapEvidenceRerunProgressRows(this.ndRunData.points ?? [], this.evidenceRerunWatchPointIds);
-    if (this.evidenceRerunStatusFilter === 'all') return rows;
-    return rows.filter((r) => r.status === this.evidenceRerunStatusFilter);
+  get evidenceRerunRowsFiltered(): GapEvidenceRerunItem[] {
+    const items = this.evidenceRerun?.items ?? [];
+    if (this.evidenceRerunStatusFilter === 'all') return items;
+    return items.filter((i) => i.status === this.evidenceRerunStatusFilter);
   }
 
-  get evidenceRerunPhaseHint(): string {
-    const phase = (this.ndRunData?.run.regulPipelinePhase ?? '').toLowerCase();
-    switch (phase) {
-      case 'retrieval':
-        return 'Retrieving relevant policy sections from gap evidence…';
-      case 'forward':
-        return 'Judging each open clause against uploaded evidence…';
-      case 'parsing':
-        return 'Preparing gap evidence documents…';
+  get evidenceRerunPhaseLabel(): string {
+    return gapEvidencePhaseLabel(this.evidenceRerun?.phase);
+  }
+
+  get evidenceRerunSummaryText(): string {
+    return this.evidenceRerun ? gapEvidenceRerunSummary(this.evidenceRerun) : '';
+  }
+
+  get evidenceRerunDocNames(): string {
+    return this.evidenceRerun ? evidenceDocNames(this.evidenceRerun.evidenceDocuments) : '';
+  }
+
+  /** Same stages as a new analysis, so both pages read the same way. */
+  readonly evidenceRerunStages: { key: 'parsing' | 'retrieval' | 'forward' | 'done'; label: string }[] = [
+    { key: 'parsing', label: 'Parse, extract & index' },
+    { key: 'retrieval', label: 'Retrieve evidence sections' },
+    { key: 'forward', label: 'Judge open gaps & actions' },
+    { key: 'done', label: 'Complete' },
+  ];
+
+  evidenceRerunStageState(key: string): 'done' | 'active' | 'pending' {
+    const order = ['queued', 'parsing', 'retrieval', 'forward', 'done'];
+    const current = order.indexOf(this.evidenceRerun?.phase ?? 'queued');
+    const mine = order.indexOf(key);
+    if (this.evidenceRerun?.status === 'completed' || this.evidenceRerun?.status === 'failed') {
+      return mine <= current ? 'done' : 'pending';
+    }
+    if (mine < current) return 'done';
+    return mine === current ? 'active' : 'pending';
+  }
+
+  readonly gapEvidenceOutcomeLabel = gapEvidenceOutcomeLabel;
+
+  evidenceRerunItemLabel(item: GapEvidenceRerunItem): string {
+    const point = this.ndRunData?.points.find((p) => p.id === item.analysisPointId);
+    const no = (item.clauseNo || (point ? parsePointSnapshot(point.pointSnapshot).pointNumber : '') || '')
+      .replace(/^§/, '')
+      .trim();
+    const base = no ? `§${no}` : 'Clause';
+    return item.gapIndexFilter ? `${base} · Gap ${item.gapIndexFilter}` : base;
+  }
+
+  evidenceRerunItemStatusLabel(status: GapEvidenceJobStatus): string {
+    switch (status) {
+      case 'running':
+        return 'Running';
+      case 'completed':
+        return 'Done';
+      case 'failed':
+        return 'Failed';
       default:
-        return 'Workers update each open clause — counts refresh every few seconds.';
+        return 'Queued';
     }
   }
 
-  readonly gapEvidenceRerunUiStatusLabel = gapEvidenceRerunUiStatusLabel;
-
-  setEvidenceRerunStatusFilter(filter: 'all' | GapEvidenceRerunUiStatus): void {
+  setEvidenceRerunStatusFilter(filter: 'all' | GapEvidenceJobStatus): void {
     this.evidenceRerunStatusFilter = filter;
     this.cdr.markForCheck();
+  }
+
+  dismissEvidenceRerun(): void {
+    if (this.evidenceRerunActive) return;
+    this.evidenceRerun = null;
+    this.syncGapActivityMarquee();
+    this.cdr.markForCheck();
+  }
+
+  openEvidenceRerunClause(item: GapEvidenceRerunItem): void {
+    const gapItem = this.items.find((i) => this.analysisPointForGap(i)?.id === item.analysisPointId);
+    if (gapItem) this.selectGapItem(gapItem);
+  }
+
+  evidenceReviewsFor(pointId: string): GapEvidenceReview[] {
+    return this.evidenceReviewsByPointId.get(pointId) ?? EMPTY_EVIDENCE_REVIEWS;
+  }
+
+  // ----------------------------------------------------- re-check history
+
+  /** Right-side history panel: one document's re-checks or one clause's. */
+  evidenceHistoryView: { eyebrow: string; title: string; reviews: GapEvidenceReview[] } | null = null;
+
+  private get allEvidenceReviews(): GapEvidenceReview[] {
+    return this.ndRunData?.gapEvidenceReviews ?? EMPTY_EVIDENCE_REVIEWS;
+  }
+
+  /** How many re-checks used each evidence document, keyed by storedDocumentId. */
+  get evidenceRerunCountsByDoc(): Record<string, number> {
+    const counts: Record<string, number> = {};
+    for (const att of this.reportGapAttachments) {
+      counts[att.storedDocumentId] = rerunCount(reviewsUsingDocument(this.allEvidenceReviews, att.storedDocumentId));
+    }
+    return counts;
+  }
+
+  recheckCountFor(item: GapItemData): number {
+    const pointId = this.analysisPointForGap(item)?.id;
+    return pointId ? rerunCount(this.evidenceReviewsFor(pointId)) : 0;
+  }
+
+  get evidenceClauseLabels(): Record<string, string> {
+    const labels: Record<string, string> = {};
+    for (const point of this.ndRunData?.points ?? []) {
+      if (!point.id) continue;
+      const snap = this.snapshotByPointId.get(point.id) ?? parsePointSnapshot(point.pointSnapshot);
+      const no = (snap.pointNumber ?? '').replace(/^§/, '').trim();
+      const title = (snap.pointTitle ?? '').trim();
+      labels[point.id] = [no ? `§${no}` : '', title].filter(Boolean).join(' ') || 'Clause';
+    }
+    return labels;
+  }
+
+  openDocEvidenceHistory(storedDocumentId: string): void {
+    this.evidenceHistoryView = {
+      eyebrow: 'Document re-check history',
+      title: this.fileNameForStoredDoc(storedDocumentId) ?? 'Evidence document',
+      reviews: reviewsUsingDocument(this.allEvidenceReviews, storedDocumentId),
+    };
+    this.cdr.markForCheck();
+  }
+
+  openClauseEvidenceHistory(pointId: string): void {
+    this.evidenceHistoryView = {
+      eyebrow: 'Clause re-check history',
+      title: this.evidenceClauseLabels[pointId] ?? 'Clause',
+      reviews: this.evidenceReviewsFor(pointId),
+    };
+    this.cdr.markForCheck();
+  }
+
+  openClauseEvidenceHistoryForItem(item: GapItemData): void {
+    const pointId = this.analysisPointForGap(item)?.id;
+    if (pointId) this.openClauseEvidenceHistory(pointId);
+  }
+
+  closeEvidenceHistory(): void {
+    this.evidenceHistoryView = null;
+    this.cdr.markForCheck();
+  }
+
+  openEvidenceHistoryClause(pointId: string): void {
+    this.closeEvidenceHistory();
+    const gapItem = this.items.find((i) => this.analysisPointForGap(i)?.id === pointId);
+    if (gapItem) this.selectGapItem(gapItem);
   }
 
   ndRunData: ResultsData | null = null;
@@ -629,6 +771,13 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.reviewsByPointId.clear();
     this.tempCommentsByPointId.clear();
     this.actionPlansByPointId.clear();
+    this.evidenceReviewsByPointId.clear();
+
+    for (const review of data.gapEvidenceReviews ?? []) {
+      const list = this.evidenceReviewsByPointId.get(review.analysisPointId);
+      if (list) list.push(review);
+      else this.evidenceReviewsByPointId.set(review.analysisPointId, [review]);
+    }
 
     for (const attachment of data.pointAttachments ?? []) {
       const count = this.attachmentCountByPointId.get(attachment.analysisPointId) ?? 0;
@@ -1618,9 +1767,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.evidenceUploadingActionIndex = null;
     if (res.success) {
       this.mergePointAttachments(pointId, res.data ?? [], actionIndex);
-      this.toast.show(`Uploaded ${files.length} file(s) — parsing…`, 'success');
-      const docIds = [...new Set((res.data ?? []).map((a) => a.storedDocumentId).filter(Boolean))];
-      void this.prepareGapEvidenceDocs(docIds);
+      this.toast.show(`Uploaded ${files.length} file(s) — parsing, extracting and indexing…`, 'success');
+      this.followServerPrepare((res.data ?? []).map((a) => a.storedDocumentId));
     } else {
       this.ndDetailError = res.message ?? 'Upload failed';
       this.toast.show(this.ndDetailError, 'error');
@@ -1632,7 +1780,24 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       const hit = list.find((a) => a.storedDocumentId === storedDocumentId);
       if (hit?.fileName) return hit.fileName;
     }
-    return this.reportGapAttachments.find((a) => a.storedDocumentId === storedDocumentId)?.fileName;
+    return undefined;
+  }
+
+  private attachmentForStoredDoc(storedDocumentId: string): PointGapAttachment | undefined {
+    for (const list of this.attachmentsByPointId.values()) {
+      const hit = list.find((a) => a.storedDocumentId === storedDocumentId);
+      if (hit) return hit;
+    }
+    return undefined;
+  }
+
+  /** The server prepares every upload itself; the page only follows its progress. */
+  private followServerPrepare(storedDocumentIds: string[]): void {
+    for (const id of new Set(storedDocumentIds.filter(Boolean))) {
+      this.setEvidencePrepStep(id, 'parsing', 'queued');
+    }
+    this.startEvidencePrepPolling();
+    void this.refreshEvidencePrepLabels();
   }
 
   private stopEvidencePrepPolling(): void {
@@ -1644,16 +1809,15 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   private startEvidencePrepPolling(): void {
     if (this.evidencePrepPollTimer) return;
-    this.evidencePrepPollTimer = setInterval(
-      () => void this.refreshEvidencePrepLabelsForReportDocs(),
-      2500,
-    );
+    this.evidencePrepPollTimer = setInterval(() => void this.refreshEvidencePrepLabels(), 2500);
   }
 
-  /** Load Azure parse / extract / index labels for attachments already on the report. */
-  private async refreshEvidencePrepLabelsForReportDocs(): Promise<void> {
+  /** Parse / extract / index state for every evidence document on the report. */
+  private async refreshEvidencePrepLabels(): Promise<void> {
     const ids = [
-      ...new Set(this.reportGapAttachments.map((a) => a.storedDocumentId).filter(Boolean)),
+      ...new Set(
+        [...this.attachmentsByPointId.values()].flat().map((a) => a.storedDocumentId).filter(Boolean),
+      ),
     ];
     if (!ids.length) {
       this.stopEvidencePrepPolling();
@@ -1674,6 +1838,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         continue;
       }
       const fileName = this.fileNameForStoredDoc(id);
+      const att = this.attachmentForStoredDoc(id);
       const row = res.success ? res.data?.[id] : undefined;
       let step: GapEvidencePrepStep;
       let detail: string | undefined;
@@ -1684,24 +1849,19 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
             ? gapEvidenceNotStartedDetail(row)
             : gapEvidencePrepDetailFromLocalRow(row, step);
       } else {
-        const att = this.reportGapAttachments.find((a) => a.storedDocumentId === id);
         const ps = (att?.parseStatus ?? '').trim().toLowerCase();
-        if (ps === 'failed') {
-          step = 'failed';
-        } else if (ps === 'parsed' || ps === 'completed') {
-          const ex = (att?.sectionExtractStatus ?? '').trim().toLowerCase();
-          if (ex === 'extracted' || ex === 'completed') step = 'ready';
-          else if (ex === 'failed') step = 'failed';
-          else step = 'extracting';
-        } else if (ps === 'processing' || ps === 'pending') {
-          step = 'parsing';
-          detail = ps;
-        } else {
-          step = 'not_started';
-          detail = gapEvidenceNotStartedDetail(undefined);
-        }
+        if (ps === 'failed') step = 'failed';
+        else if (ps === 'parsed' || ps === 'completed') step = 'ready';
+        else if (ps === 'skipped') step = 'ready';
+        else step = 'not_started';
       }
-      if (gapEvidencePrepInProgress(step)) anyInProgress = true;
+      // Freshly uploaded and not picked up yet: queued on the server, not waiting on the user.
+      if (step === 'not_started' && this.isRecentPendingUpload(att)) {
+        step = 'parsing';
+        detail = 'queued';
+      }
+      if (step === 'not_started') detail = detail ?? gapEvidenceNotStartedDetail(row);
+      if (step !== 'ready' && step !== 'failed' && step !== 'not_started') anyInProgress = true;
       nextSteps[id] = step;
       nextLabels[id] = gapEvidencePrepStepLabel(step, fileName, detail);
     }
@@ -1712,6 +1872,14 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     if (anyInProgress) this.startEvidencePrepPolling();
     else this.stopEvidencePrepPolling();
     this.cdr.markForCheck();
+  }
+
+  private isRecentPendingUpload(att: PointGapAttachment | undefined): boolean {
+    if (!att) return false;
+    const ps = (att.parseStatus ?? '').trim().toLowerCase();
+    if (ps && ps !== 'pending' && ps !== 'processing') return false;
+    const created = Date.parse(att.storedDocumentUploadedAt ?? att.createdAt ?? '');
+    return Number.isFinite(created) && Date.now() - created < PREP_QUEUE_GRACE_MS;
   }
 
   private setEvidencePrepStep(
@@ -1729,6 +1897,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  /** Manual retry for a document whose prepare failed or never started. */
   onPrepareReportEvidence(storedDocumentId: string): void {
     if (!storedDocumentId || this.reportEvidencePreparingIds.has(storedDocumentId)) return;
     void this.prepareGapEvidenceDocs([storedDocumentId]);
@@ -1738,57 +1907,54 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return this.reportEvidencePreparingIds.has(storedDocumentId);
   }
 
+  private get evidencePrepBusy(): boolean {
+    return Object.values(this.evidencePrepSteps).some(
+      (s) => s === 'uploading' || s === 'parsing' || s === 'extracting' || s === 'indexing',
+    );
+  }
+
   private syncGapActivityMarquee(): void {
     const prep = buildGapEvidencePrepMarquee(this.evidencePrepLabels);
-    const rerun =
-      this.reportEvidenceRerunning && this.ndRunData
-        ? buildGapEvidenceRerunMarquee(
-            this.ndRunData.run,
-            this.ndRunData.points ?? [],
-            this.evidenceRerunWatchPointIds,
-          )
-        : this.reportEvidenceRerunning
-          ? 'Gap evidence re-analysis starting…'
-          : null;
+    let rerun: string | null = null;
+    if (this.evidenceRerun && this.evidenceRerunActive) {
+      rerun = `Gap evidence re-check — ${gapEvidenceRerunMarquee(this.evidenceRerun)}`;
+    } else if (this.legacyEvidenceWatch) {
+      rerun = 'Re-analysing open gaps against the uploaded evidence…';
+    }
     this.gapActivityMarquee = mergeActivityMarquee(prep, rerun);
     this.syncEvidenceWorkflowChrome();
     this.syncShellPageHeader();
   }
 
   private evidenceWorkflowActive(): boolean {
-    const prepBusy = Object.values(this.evidencePrepLabels).some(
-      (l) => l && !/ready for gap re-analysis/i.test(l),
-    );
-    return this.reportEvidenceBusy || this.reportEvidenceRerunning || prepBusy;
+    return this.reportEvidenceBusy || this.evidenceRerunActive || !!this.legacyEvidenceWatch || this.evidencePrepBusy;
   }
 
   private computeEvidenceTrackerSteps(): NdStep[] {
     const defs = [
       'Upload gap documents',
-      'Azure parse & structural extract',
+      'Parse & extract',
       'Index for retrieval',
-      'Retrieve policy sections',
-      'Re-judge open gaps',
+      'Retrieve evidence sections',
+      'Judge open gaps',
       'Complete',
     ];
-    const prepBusy = Object.values(this.evidencePrepLabels).some(
-      (l) => l && !/ready for gap re-analysis/i.test(l),
-    );
-    const phase = (this.ndRunData?.run.regulPipelinePhase ?? '').toLowerCase();
-    const runSt = (this.ndRunData?.run.status ?? '').toLowerCase();
 
-    let current = 0;
-    if (this.reportEvidenceRerunning) {
-      if (phase === 'retrieval') current = 3;
-      else if (phase === 'forward' || runSt === 'running') current = 4;
-      else if (this.isEvidenceRerunInFlight()) current = 4;
-      else current = 5;
-    } else if (prepBusy || this.reportEvidenceBusy) {
-      const labels = Object.values(this.evidencePrepLabels).join(' ').toLowerCase();
-      if (/index|search index/.test(labels)) current = 2;
-      else if (/structural|extract/.test(labels)) current = 1;
-      else if (/azure|pars/.test(labels)) current = 1;
-      else current = 0;
+    let current: number;
+    const job = this.evidenceRerun;
+    if (job && this.evidenceRerunActive) {
+      const detail = (job.phaseDetail ?? '').toLowerCase();
+      if (job.phase === 'parsing') current = detail.includes('index') ? 2 : 1;
+      else if (job.phase === 'retrieval') current = 3;
+      else if (job.phase === 'forward') current = 4;
+      else current = 1;
+    } else if (this.legacyEvidenceWatch) {
+      current = 4;
+    } else if (this.evidencePrepBusy || this.reportEvidenceBusy) {
+      const steps = Object.values(this.evidencePrepSteps);
+      if (steps.includes('uploading')) current = 0;
+      else if (steps.includes('parsing') || steps.includes('extracting')) current = 1;
+      else current = 2;
     } else {
       current = defs.length;
     }
@@ -1803,6 +1969,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     if (this.embedMode) return;
 
     const active = this.evidenceWorkflowActive();
+    // The panel keeps the last re-check's step outputs on screen until it is dismissed.
+    const panelActive = active || !!this.evidenceRerun;
     if (active) {
       this.stepTracker.activate();
       this.stepTracker.setSteps(this.computeEvidenceTrackerSteps());
@@ -1814,7 +1982,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       this.auth.canManageWorkspaces() && isRegulPipelineHybridWorkflow(this.ndRunWorkflowEngine);
     if (!showPanel) return;
 
-    if (!active) {
+    if (!panelActive) {
       if (this.pipelinePanelActivatedHere) {
         this.pipelinePanel.deactivate();
         this.pipelinePanelActivatedHere = false;
@@ -1826,19 +1994,21 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       this.pipelinePanel.activate();
       this.pipelinePanelActivatedHere = true;
     }
-    const docs = this.reportGapAttachments.map((a) => ({
-      id: a.storedDocumentId,
-      name: a.fileName,
-    }));
+    const docs = this.evidenceRerun?.evidenceDocuments.length
+      ? this.evidenceRerun.evidenceDocuments.map((d) => ({ id: d.id, name: d.name }))
+      : this.reportGapAttachments.map((a) => ({ id: a.storedDocumentId, name: a.fileName }));
     this.pipelinePanel.setDocs(docs);
-    this.pipelinePanel.setRunActive(this.reportEvidenceRerunning);
-    const prepBusy = Object.values(this.evidencePrepLabels).some(
-      (l) => l && !/ready for gap re-analysis/i.test(l),
-    );
+    this.pipelinePanel.setRunActive(this.evidenceRerunActive);
     this.pipelinePanel.setPhase(
-      this.ndRunData?.run.regulPipelinePhase ??
-        (this.reportEvidenceRerunning ? 'forward' : prepBusy ? 'parsing' : null),
+      this.evidenceRerun ? this.evidenceRerun.phase : this.evidencePrepBusy ? 'parsing' : null,
     );
+    if (this.evidenceRerun) {
+      this.pipelinePanel.setRetrievalPreview(
+        this.evidenceRerun.items
+          .filter((i) => i.retrieval)
+          .map((i) => ({ clauseNo: i.clauseNo ?? '', retrieval: i.retrieval })),
+      );
+    }
   }
 
   private openGapPointIds(): string[] {
@@ -1849,15 +2019,6 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         return fs === 'non_compliant' || fs === 'partial_compliant';
       })
       .map((p) => p.id!);
-  }
-
-  private isEvidenceRerunInFlight(): boolean {
-    if (!this.ndRunData) return this.reportEvidenceRerunning;
-    return isGapEvidenceRerunInFlight(
-      this.ndRunData.run,
-      this.ndRunData.points ?? [],
-      this.evidenceRerunWatchPointIds,
-    );
   }
 
   /** Export + history on the shell title bar; activity ticker in the header marquee. */
@@ -1885,6 +2046,57 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.exportXlsx();
   }
 
+  // ------------------------------------------------------- evidence re-check job
+
+  /** Gap list sent with a re-check, numbered exactly as the clause shows its gaps. */
+  private gapRosterFor(pointId: string): { index: number; text: string }[] {
+    const point = this.ndRunData?.points.find((p) => p.id === pointId);
+    if (!point) return [];
+    return capGapsForAnalysisPoint(point, this.isNdRegulWorkflow)
+      .map((g) => ({ index: g.index, text: gapRosterText(g) }))
+      .filter((g) => g.text.trim().length > 0);
+  }
+
+  private async startEvidenceRerun(request: GapEvidenceRerunRequest): Promise<boolean> {
+    if (!this.ndRunId) return false;
+    const res = await this.ndApi.startGapEvidenceRerun(this.ndRunId, request);
+    if (!res.success || !res.data) {
+      this.ndDetailError = res.message ?? 'Could not start the re-check';
+      this.toast.show(this.ndDetailError, 'error');
+      return false;
+    }
+    if ('demo' in res.data) {
+      this.toast.show(res.message ?? 'Re-ran gaps against the uploaded evidence', 'success');
+      await this.loadNdRun(this.ndRunId, null, null);
+      return true;
+    }
+    this.toast.show(res.message ?? 'Re-checking open gaps against the uploaded evidence…', 'success');
+    this.followEvidenceRerun(res.data);
+    this.scrollToEvidenceRerunPanel();
+    return true;
+  }
+
+  private followEvidenceRerun(rerun: GapEvidenceRerun): void {
+    this.evidenceRerunStatusFilter = 'all';
+    this.evidenceRerunSeenDone = rerun.completedPoints + rerun.failedPoints;
+    this.applyEvidenceRerun(rerun);
+    this.stopEvidenceRerunPolling();
+    if (this.evidenceRerunActive) {
+      this.evidenceRerunPollTimer = setInterval(() => void this.tickEvidenceRerun(), 2000);
+    }
+  }
+
+  private applyEvidenceRerun(rerun: GapEvidenceRerun | null): void {
+    this.evidenceRerun = rerun;
+    const active = isGapEvidenceRerunActive(rerun);
+    this.reportEvidenceRerunning = active || !!this.legacyEvidenceWatch;
+    const clauseItem = active && rerun?.scope === 'clause' ? rerun.items[0] : undefined;
+    this.evidenceRerunningPointId = clauseItem?.analysisPointId ?? null;
+    this.evidenceRerunningActionIndex = clauseItem?.gapIndexFilter ?? null;
+    this.syncGapActivityMarquee();
+    this.cdr.markForCheck();
+  }
+
   private stopEvidenceRerunPolling(): void {
     if (this.evidenceRerunPollTimer) {
       clearInterval(this.evidenceRerunPollTimer);
@@ -1892,46 +2104,72 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
-  private startEvidenceRerunPolling(watchPointIds?: string[]): void {
-    this.stopEvidenceRerunPolling();
-    if (watchPointIds?.length) {
-      this.evidenceRerunWatchPointIds = new Set(watchPointIds);
-    } else if (!this.evidenceRerunWatchPointIds?.size) {
-      this.evidenceRerunWatchPointIds = new Set(this.openGapPointIds());
-    }
-    this.evidenceRerunWatchTotal = this.evidenceRerunWatchPointIds?.size ?? 0;
-    this.evidenceRerunStatusFilter = 'all';
-    this.reportEvidenceRerunning = true;
-    this.syncGapActivityMarquee();
-    this.evidenceRerunPollTimer = setInterval(() => void this.tickEvidenceRerunPoll(), 2000);
-    void this.tickEvidenceRerunPoll();
-  }
-
-  private async tickEvidenceRerunPoll(): Promise<void> {
-    if (!this.ndRunId) return;
-    await this.loadNdRun(this.ndRunId, null, null);
-    this.syncGapActivityMarquee();
-    if (this.isEvidenceRerunInFlight()) {
-      this.cdr.markForCheck();
+  private async tickEvidenceRerun(): Promise<void> {
+    if (!this.ndRunId || !this.evidenceRerun) return;
+    if (this.legacyEvidenceWatch) {
+      await this.tickLegacyEvidenceWatch();
       return;
     }
-    this.reportEvidenceRerunning = false;
-    this.evidenceRerunWatchPointIds = null;
-    this.evidenceRerunWatchTotal = 0;
+    const res = await this.ndApi.getGapEvidenceRerun(this.ndRunId, this.evidenceRerun.id);
+    if (!res.success || !res.data) return;
+    const rerun = res.data;
+
+    // Pull the clauses in as each one is judged, so the report updates while the job runs.
+    const done = rerun.completedPoints + rerun.failedPoints;
+    const finished = !isGapEvidenceRerunActive(rerun);
+    if (done !== this.evidenceRerunSeenDone || finished) {
+      this.evidenceRerunSeenDone = done;
+      await this.loadNdRun(this.ndRunId, null, null);
+    }
+    this.applyEvidenceRerun(rerun);
+
+    if (finished) {
+      this.stopEvidenceRerunPolling();
+      this.scrollToEvidenceRerunPanel();
+      if (rerun.status === 'failed') {
+        this.toast.show(rerun.error || 'The re-check could not finish', 'error');
+      } else {
+        this.toast.show(`Re-check complete — ${gapEvidenceRerunSummary(rerun)}`, 'success');
+      }
+    }
+  }
+
+  /** Brings the re-check panel into view once it has rendered. */
+  private scrollToEvidenceRerunPanel(): void {
+    if (this.embedMode) return;
+    setTimeout(() => {
+      document.querySelector('.gap-rerun-progress')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  }
+
+  /** Re-attach to a re-check still running after a refresh or navigation. */
+  private async resumeEvidenceRerunIfRunning(runId: string): Promise<void> {
+    if (this.evidenceRerunResumeCheckedFor === runId || !this.isNdRegulWorkflow) return;
+    this.evidenceRerunResumeCheckedFor = runId;
+    const res = await this.ndApi.getLatestGapEvidenceRerun(runId);
+    if (runId !== this.ndRunId || !res.success || !res.data) return;
+    if (isGapEvidenceRerunActive(res.data)) this.followEvidenceRerun(res.data);
+  }
+
+  private async tickLegacyEvidenceWatch(): Promise<void> {
+    const watch = this.legacyEvidenceWatch;
+    if (!this.ndRunId || !watch) return;
+    await this.loadNdRun(this.ndRunId, null, null);
+    const elapsed = Date.now() - watch.startedAt;
+    const inFlight =
+      !!this.ndRunData &&
+      isGapEvidenceRerunInFlight(this.ndRunData.run, this.ndRunData.points ?? [], watch.pointIds);
+    // The workers flip clauses to pending a moment after the request returns, so a quiet
+    // first poll is not "done".
+    if ((inFlight || elapsed < 8000) && elapsed < 15 * 60_000) return;
+    this.legacyEvidenceWatch = null;
     this.stopEvidenceRerunPolling();
-    this.syncGapActivityMarquee();
+    this.applyEvidenceRerun(null);
     this.toast.show('Gap evidence re-analysis complete', 'success');
-    this.cdr.markForCheck();
   }
 
   private async prepareGapEvidenceDocs(storedDocumentIds: string[]): Promise<void> {
     if (!storedDocumentIds.length) return;
-    const onlyReport = storedDocumentIds.every((id) =>
-      this.reportGapAttachments.some((a) => a.storedDocumentId === id),
-    );
-    if (onlyReport && storedDocumentIds.length === this.reportGapAttachments.length) {
-      this.reportEvidenceBusy = true;
-    }
     for (const id of storedDocumentIds) {
       this.reportEvidencePreparingIds.add(id);
     }
@@ -1939,26 +2177,19 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     try {
       for (const id of storedDocumentIds) {
         this.setEvidencePrepStep(id, 'parsing');
-        this.startEvidencePrepPolling();
         const result = await runGapEvidenceLocalPipeline(this.ndApi, id, (step, detail) => {
           this.setEvidencePrepStep(id, step, detail);
         });
         if (!result.ok) {
-          this.setEvidencePrepStep(id, 'failed');
+          this.setEvidencePrepStep(id, 'failed', result.message);
           this.toast.show(result.message, 'error');
         }
-      }
-      if (this.ndRunId) {
-        await this.loadNdRun(this.ndRunId, null, null);
-      } else {
-        await this.refreshEvidencePrepLabelsForReportDocs();
       }
     } finally {
       for (const id of storedDocumentIds) {
         this.reportEvidencePreparingIds.delete(id);
       }
-      this.reportEvidenceBusy = false;
-      this.syncGapActivityMarquee();
+      await this.refreshEvidencePrepLabels();
       this.cdr.markForCheck();
     }
   }
@@ -1970,37 +2201,44 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   async onRerunAllGaps(): Promise<void> {
     if (!this.ndRunId || this.reportEvidenceRerunning) return;
     this.ndDetailError = '';
-    const watchIds = this.openGapPointIds();
-    if (!watchIds.length) {
+    const openIds = this.openGapPointIds();
+    if (!openIds.length) {
       this.toast.show('No open gaps to re-run on this report.', 'error');
       return;
     }
-    this.evidenceRerunWatchPointIds = new Set(watchIds);
-    this.gapActivityMarquee = 'Gap evidence re-analysis starting…';
+
+    if (!this.isNdRegulWorkflow) {
+      await this.startLegacyEvidenceRerun(openIds);
+      return;
+    }
+
+    this.reportEvidenceRerunning = true;
+    this.gapActivityMarquee = 'Gap evidence re-check starting…';
     this.cdr.markForCheck();
     try {
-      const res = await this.ndApi.rerunRunWithEvidence(this.ndRunId);
-      if (res.success) {
-        const queued = res.data?.queued ?? watchIds.length;
-        if (queued === 0) {
-          this.evidenceRerunWatchPointIds = null;
-          this.gapActivityMarquee = '';
-          this.toast.show(res.message ?? 'No open gaps to re-run', 'error');
-          return;
-        }
-        this.toast.show(res.message ?? 'Rerunning analysis for all gaps…', 'success');
-        this.startEvidenceRerunPolling(watchIds);
-      } else {
-        this.ndDetailError = res.message ?? 'Rerun failed';
-        this.toast.show(this.ndDetailError, 'error');
-        this.gapActivityMarquee = '';
-      }
+      const started = await this.startEvidenceRerun({
+        scope: 'report',
+        points: openIds.map((pointId) => ({ pointId, gaps: this.gapRosterFor(pointId) })),
+      });
+      if (!started) this.applyEvidenceRerun(this.evidenceRerun);
     } catch {
-      this.gapActivityMarquee = '';
-      this.reportEvidenceRerunning = false;
-    } finally {
-      this.cdr.markForCheck();
+      this.applyEvidenceRerun(this.evidenceRerun);
     }
+  }
+
+  private async startLegacyEvidenceRerun(pointIds: string[]): Promise<void> {
+    if (!this.ndRunId) return;
+    const res = await this.ndApi.rerunRunWithEvidence(this.ndRunId);
+    if (!res.success) {
+      this.toast.show(res.message ?? 'Rerun failed', 'error');
+      return;
+    }
+    this.toast.show(res.message ?? 'Rerunning analysis for all gaps…', 'success');
+    this.legacyEvidenceWatch = { pointIds: new Set(pointIds), startedAt: Date.now() };
+    this.reportEvidenceRerunning = true;
+    this.syncGapActivityMarquee();
+    this.stopEvidenceRerunPolling();
+    this.evidenceRerunPollTimer = setInterval(() => void this.tickLegacyEvidenceWatch(), 3000);
   }
 
   async onReportEvidenceSelected(filesOrEvent: FileList | Event): Promise<void> {
@@ -2015,7 +2253,6 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       const upload = await this.ndApi.uploadRunGapEvidence(this.ndRunId, files);
       if (!upload.success) {
         this.toast.show(upload.message ?? 'Upload failed', 'error');
-        this.reportEvidenceBusy = false;
         return;
       }
       for (const item of upload.data ?? []) {
@@ -2029,20 +2266,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
           ]);
         }
       }
-      const docIds = [...new Set((upload.data ?? []).map((item) => item.storedDocumentId).filter(Boolean))];
-      for (const id of docIds) {
-        const name = files.find((_, i) => upload.data?.[i]?.storedDocumentId === id)?.name;
-        this.evidencePrepLabels = {
-          ...this.evidencePrepLabels,
-          [id]: gapEvidencePrepStepLabel('uploading', name ?? this.fileNameForStoredDoc(id)),
-        };
-      }
-      this.syncGapActivityMarquee();
-      this.toast.show(`Uploaded ${files.length} file(s) — preparing documents…`, 'success');
-      void this.prepareGapEvidenceDocs(docIds);
-    } catch {
-      this.reportEvidenceBusy = false;
+      this.toast.show(`Uploaded ${files.length} file(s) — parsing, extracting and indexing…`, 'success');
+      this.followServerPrepare((upload.data ?? []).map((item) => item.storedDocumentId));
     } finally {
+      this.reportEvidenceBusy = false;
+      this.syncGapActivityMarquee();
       this.cdr.markForCheck();
     }
   }
@@ -2155,12 +2383,25 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     mode: 'full' | 'dual',
     actionIndex?: number,
   ): Promise<void> {
-    if (!this.ndRunId) return;
+    if (!this.ndRunId || this.reportEvidenceRerunning) return;
+    this.ndDetailError = '';
+    const hasEvidence = this.pointHasGapEvidence(pointId, actionIndex);
+
+    if (this.isNdRegulWorkflow && hasEvidence) {
+      this.evidenceRerunningPointId = pointId;
+      this.evidenceRerunningActionIndex = actionIndex ?? null;
+      this.cdr.markForCheck();
+      const started = await this.startEvidenceRerun({
+        scope: 'clause',
+        points: [{ pointId, gapIndex: actionIndex ?? null, gaps: this.gapRosterFor(pointId) }],
+      });
+      if (!started) this.applyEvidenceRerun(this.evidenceRerun);
+      return;
+    }
+
     this.evidenceRerunningPointId = pointId;
     this.evidenceRerunningActionIndex = actionIndex ?? null;
-    this.ndDetailError = '';
     this.cdr.markForCheck();
-    const hasEvidence = this.pointHasGapEvidence(pointId, actionIndex);
     const opts = { evidenceOnly: hasEvidence, actionIndex };
     try {
       const res =
@@ -2170,7 +2411,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       if (res.success) {
         this.toast.show('Rerunning analysis for this gap…', 'success');
         if (hasEvidence) {
-          this.startEvidenceRerunPolling([pointId]);
+          this.legacyEvidenceWatch = { pointIds: new Set([pointId]), startedAt: Date.now() };
+          this.reportEvidenceRerunning = true;
+          this.syncGapActivityMarquee();
+          this.stopEvidenceRerunPolling();
+          this.evidenceRerunPollTimer = setInterval(() => void this.tickLegacyEvidenceWatch(), 3000);
         } else {
           await this.loadNdRun(this.ndRunId, null, null);
         }
@@ -2179,8 +2424,10 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         this.toast.show(this.ndDetailError, 'error');
       }
     } finally {
-      this.evidenceRerunningPointId = null;
-      this.evidenceRerunningActionIndex = null;
+      if (!this.legacyEvidenceWatch) {
+        this.evidenceRerunningPointId = null;
+        this.evidenceRerunningActionIndex = null;
+      }
       this.cdr.markForCheck();
     }
   }
@@ -2763,7 +3010,19 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.pdfPreview = null;
   }
 
-  openPdfFromNd(event: { docId: string; page?: string | null }): void {
+  openPdfFromNd(event: { docId: string; page?: string | null; find?: string }): void {
+    // A Word file has no pages a browser can jump to, so an evidence quote opens the document
+    // viewer at the passage instead.
+    const fileName = this.fileNameForStoredDoc(event.docId) ?? '';
+    if (event.find && /\.docx?$/i.test(fileName)) {
+      const url = this.router.serializeUrl(
+        this.router.createUrlTree(['/nd/internal-documents-azure-di'], {
+          queryParams: { doc: event.docId, find: event.find.slice(0, 200) },
+        }),
+      );
+      window.open(url, '_blank', 'noopener');
+      return;
+    }
     const openUrl = (url: string) => {
       const full = event.page ? `${url}#page=${event.page}` : url;
       window.open(full, '_blank', 'noopener');
@@ -3206,13 +3465,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       if (generation !== this.loadGeneration) return;
       this.applyNdRunData(data, section, focus);
 
-      if (this.reportEvidenceRerunning && !this.isEvidenceRerunInFlight()) {
-        this.reportEvidenceRerunning = false;
-        this.evidenceRerunWatchPointIds = null;
-        this.stopEvidenceRerunPolling();
-        this.syncGapActivityMarquee();
-      }
-
+      void this.resumeEvidenceRerunIfRunning(runId);
       void this.loadRunMetadata(runId, generation, liteRunPromise);
     } catch {
       if (generation !== this.loadGeneration) return;
@@ -3319,7 +3572,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.syncShellPageHeader();
     this.cdr.markForCheck();
 
-    void this.refreshEvidencePrepLabelsForReportDocs();
+    void this.refreshEvidencePrepLabels();
     requestAnimationFrame(() => this.enrichGapCountsFrom(0));
   }
 

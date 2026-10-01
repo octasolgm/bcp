@@ -1,0 +1,135 @@
+<div class="eh-backdrop" (click)="closed.emit()" aria-hidden="true"></div>
+<aside class="eh-drawer" role="dialog" aria-modal="true" aria-labelledby="evidence-history-title">
+  <header class="eh-head">
+    <div class="eh-head-copy">
+      <p class="eh-eyebrow">{{ eyebrow }}</p>
+      <h2 id="evidence-history-title">{{ title }}</h2>
+      <p class="eh-sub">
+        {{ runs.length }} re-check{{ runs.length === 1 ? '' : 's' }}
+      </p>
+    </div>
+    <button type="button" class="eh-close" (click)="closed.emit()" aria-label="Close history">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+        <path d="M5 5l10 10M15 5L5 15" />
+      </svg>
+    </button>
+  </header>
+
+  <div class="eh-body">
+    @if (!runs.length) {
+      <p class="eh-empty">No re-checks yet. Upload a document and use Rerun all gaps.</p>
+    }
+    @for (run of runs; track run.rerunId; let i = $index) {
+      <section class="eh-run">
+        <button
+          type="button"
+          class="eh-run-head"
+          [attr.aria-expanded]="isRunOpen(run.rerunId)"
+          (click)="toggleRun(run.rerunId)"
+        >
+          <span class="eh-run-no">#{{ runs.length - i }}</span>
+          <div class="eh-run-copy">
+            <p class="eh-run-title">
+              {{ run.scope === 'clause' ? 'Clause re-check' : 'Rerun all gaps' }}
+              <span class="eh-run-date">{{ formatDate(run.createdAt) }}</span>
+            </p>
+            <p class="eh-run-meta">
+              {{ evidenceDocNames(run.evidenceDocuments) }}
+              @if (run.createdByName) { · {{ run.createdByName }} }
+              @if (run.llmModel) { · AI: {{ run.llmModel }} }
+            </p>
+            <p class="eh-run-summary">{{ runSummary(run) }}</p>
+          </div>
+          <svg class="eh-chevron" [class.open]="isRunOpen(run.rerunId)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+
+        @if (isRunOpen(run.rerunId)) {
+
+        @for (review of run.reviews; track review.id) {
+          <article class="eh-clause" [attr.data-outcome]="review.status === 'failed' ? 'failed' : review.clauseOutcome">
+            <div class="eh-clause-head">
+              <button type="button" class="eh-clause-link" (click)="openClause.emit(review.analysisPointId)">
+                {{ clauseLabel(review) }}
+              </button>
+              @if (review.gapIndexFilter) {
+                <span class="eh-tag">Gap {{ review.gapIndexFilter }} only</span>
+              }
+              <span class="eh-outcome">
+                {{ review.status === 'failed' ? 'Failed' : gapEvidenceOutcomeLabel(review.clauseOutcome) }}
+              </span>
+              <button
+                type="button"
+                class="eh-clause-toggle"
+                [attr.aria-expanded]="!isClauseCollapsed(review.id)"
+                [attr.aria-label]="isClauseCollapsed(review.id) ? 'Expand clause' : 'Collapse clause'"
+                (click)="toggleClause(review.id)"
+              >
+                <svg class="eh-chevron" [class.open]="!isClauseCollapsed(review.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </div>
+
+            @if (isClauseCollapsed(review.id)) {
+            } @else if (review.status === 'failed') {
+              <p class="eh-error">{{ review.error || 'The re-check could not finish for this clause.' }}</p>
+            } @else {
+              @if (statusChange(review); as change) {
+                <p class="eh-line"><strong>Clause status:</strong> {{ change }}</p>
+              }
+              @if (review.reanalysis; as re) {
+                <p class="eh-line">
+                  <strong>Re-analysis (New Analysis pipeline):</strong> {{ judgmentStatusLabel(re.overallStatus) }}
+                  @if (re.interpretation) { — {{ re.interpretation }} }
+                </p>
+              }
+              @if (!reviewHasNewFindings(review)) {
+                <p class="eh-line eh-muted">No new findings — the document does not address the open gaps.</p>
+              }
+              @if (review.summary) {
+                <p class="eh-line">{{ review.summary }}</p>
+              }
+              @for (gap of review.gaps; track gap.index) {
+                <div class="eh-gap">
+                  <p class="eh-gap-head">
+                    Gap {{ gap.index }}
+                    <span class="eh-gap-outcome" [attr.data-outcome]="gap.outcome">{{ gapEvidenceOutcomeLabel(gap.outcome) }}</span>
+                  </p>
+                  @if (gap.covered) {
+                    <p class="eh-line"><strong>Now covered:</strong> {{ gap.covered }}</p>
+                  }
+                  @if (gap.remaining) {
+                    <p class="eh-line"><strong>Still missing:</strong> {{ gap.remaining }}</p>
+                  }
+                  @for (quote of gap.quotes ?? []; track quote.text) {
+                    <div class="eh-quote">
+                      <button type="button" class="eh-ref" [disabled]="!quote.documentId" (click)="openQuote(quote)">
+                        {{ evidenceQuoteRefLabel(quote) }}
+                      </button>
+                      <blockquote>{{ quote.text }}</blockquote>
+                    </div>
+                  }
+                </div>
+              }
+              @for (action of review.actions; track action.actionPlanId) {
+                @if (action.applied !== 'unchanged') {
+                  <p class="eh-action" [attr.data-applied]="action.applied">
+                    <span class="eh-action-tag">{{ action.applied === 'split' ? 'Action split' : 'Action resolved' }}</span>
+                    @if (action.applied === 'split') {
+                      &ldquo;{{ action.originalText }}&rdquo; → done: {{ action.fulfilledPart }} · still open: {{ action.remainingPart }}
+                    } @else {
+                      {{ action.originalText }}
+                    }
+                  </p>
+                }
+              }
+            }
+          </article>
+        }
+        }
+      </section>
+    }
+  </div>
+</aside>

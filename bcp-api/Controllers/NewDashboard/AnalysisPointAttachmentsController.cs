@@ -5,6 +5,7 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard;
 using Reguliq.Api.Services.NewDashboard.Demo;
 using Reguliq.Api.Services.Storage;
 
@@ -16,7 +17,9 @@ public class AnalysisPointAttachmentsController(
     AppDbContext db,
     SupabaseStorageService storage,
     NdDemoUserDirectory demoDirectory,
-    SupabaseJwtValidator jwt) : NdControllerBase
+    SupabaseJwtValidator jwt,
+    IServiceScopeFactory scopeFactory,
+    ILogger<AnalysisPointAttachmentsController> logger) : NdControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List(Guid runId, Guid pointId, CancellationToken ct)
@@ -83,6 +86,7 @@ public class AnalysisPointAttachmentsController(
             return BadRequest(new { success = false, message = "No files provided." });
 
         var uploaded = new List<object>();
+        var prepareDocIds = new List<Guid>();
         foreach (var file in files.Where(f => f.Length > 0))
         {
             await using var ms = new MemoryStream();
@@ -124,6 +128,7 @@ public class AnalysisPointAttachmentsController(
             };
             db.NdAnalysisPointAttachments.Add(link);
             await db.SaveChangesAsync(ct);
+            if (!skipLiveParse) prepareDocIds.Add(row.Id);
 
             uploaded.Add(new
             {
@@ -138,6 +143,8 @@ public class AnalysisPointAttachmentsController(
             });
 
         }
+
+        NdGapEvidencePrepareService.StartInBackground(scopeFactory, prepareDocIds, run?.WorkflowEngine, logger);
 
         return Ok(new { success = true, data = uploaded });
     }

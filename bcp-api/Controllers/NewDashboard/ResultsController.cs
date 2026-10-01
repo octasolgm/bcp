@@ -95,10 +95,13 @@ public class ResultsController(
             ? RunInScopeAsync((scopedDb, sct) => scopedDb.NdRegulQualitativeAssessments.AsNoTracking()
                 .FirstOrDefaultAsync(q => q.AnalysisRunId == runId, sct), ct)
             : Task.FromResult<NdRegulQualitativeAssessment?>(null);
+        var evidenceReviewsTask = isRegulFamily
+            ? RunInScopeAsync((scopedDb, sct) => NdGapEvidenceRerunService.LoadReviewsForRunAsync(scopedDb, runId, sct), ct)
+            : Task.FromResult(new List<object>());
 
         await Task.WhenAll(
             creatorTask, reviewsTask, commentsTask, actionItemReviewsTask, actionPlansTask,
-            tempReviewCommentsTask, historyTask, attachmentsTask, qualitativeRowTask);
+            tempReviewCommentsTask, historyTask, attachmentsTask, qualitativeRowTask, evidenceReviewsTask);
 
         var creator = creatorTask.Result;
         var reviews = reviewsTask.Result;
@@ -333,6 +336,7 @@ public class ResultsController(
                 }),
                 statusHistory = history,
                 regulQualitativeAssessment,
+                gapEvidenceReviews = evidenceReviewsTask.Result,
             },
         });
     }

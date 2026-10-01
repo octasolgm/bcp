@@ -181,6 +181,13 @@ export function gapEvidencePrepDetailFromLocalRow(
   if (step === 'parsing') return row?.status ?? undefined;
   if (step === 'extracting') return row?.extractStatus ?? undefined;
   if (step === 'indexing') return row?.indexStatus ?? undefined;
+  if (step === 'failed') return statusFailed(row) ?? undefined;
+  if (step === 'ready' && row) {
+    const parts: string[] = [];
+    if (row.totalPages) parts.push(`${row.totalPages} page${row.totalPages === 1 ? '' : 's'}`);
+    if (row.sectionCount) parts.push(`${row.sectionCount} section${row.sectionCount === 1 ? '' : 's'}`);
+    return parts.length ? parts.join(' · ') : undefined;
+  }
   return undefined;
 }
 

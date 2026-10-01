@@ -29,6 +29,7 @@ public class AnalysisRunsController(
     NdDemoWorkspaceService demoWorkspace,
     NdDemoInterceptionService demoIntercept,
     NdAiCreditService aiCredits,
+    NdGapEvidenceRerunService gapEvidenceReruns,
     ILogger<AnalysisRunsController> logger) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
@@ -1119,6 +1120,9 @@ public class AnalysisRunsController(
             return await SimulateDemoEvidenceRerunAsync(id, pointId, profile.Id, ct);
         }
 
+        if (evidenceOnly && AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
+            return await StartEvidenceRerunAsync(run, [pointId], actionIndex, profile.Id, ct);
+
         return QueuePointProcessing(run, id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex);
     }
 
@@ -1149,6 +1153,9 @@ public class AnalysisRunsController(
         if (openPointIds.Count == 0)
             return Ok(new { success = true, message = "No open gaps to re-run", queued = 0 });
 
+        if (AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
+            return await StartEvidenceRerunAsync(run, openPointIds, null, profile.Id, ct);
+
         var hasEvidence = await db.NdAnalysisPointAttachments
             .AnyAsync(a => openPointIds.Contains(a.AnalysisPointId), ct);
 
@@ -1162,6 +1169,40 @@ public class AnalysisRunsController(
                 ? $"Re-running {openPointIds.Count} gap(s) against the uploaded evidence"
                 : $"Re-running {openPointIds.Count} gap(s)",
             queued = openPointIds.Count,
+        });
+    }
+
+    /// <summary>Regul runs re-check evidence through the tracked gap-evidence rerun (same stages as a new
+    /// analysis, original gaps kept on record) rather than re-judging the clause in place.</summary>
+    private async Task<IActionResult> StartEvidenceRerunAsync(
+        NdAnalysisRun run,
+        IReadOnlyList<Guid> pointIds,
+        int? gapIndex,
+        Guid createdBy,
+        CancellationToken ct)
+    {
+        var creditError = await GuardAiCreditsAsync(ct);
+        if (creditError != null) return creditError;
+
+        var inputs = pointIds
+            .Select(pid => new NdGapEvidenceRerunService.PointInput(pid, gapIndex is > 0 ? gapIndex : null, null))
+            .ToList();
+        var scope = pointIds.Count == 1 ? GapEvidenceRerunScopes.Clause : GapEvidenceRerunScopes.Report;
+        var result = await gapEvidenceReruns.CreateAsync(run, inputs, scope, createdBy, ct);
+        if (result.Rerun == null)
+            return BadRequest(new { success = false, message = result.Error ?? "Could not start the re-check." });
+
+        if (!result.AlreadyRunning)
+            gapEvidenceReruns.StartInBackground(result.Rerun.Id, run.TenantId, run.Id, createdBy);
+
+        return Ok(new
+        {
+            success = true,
+            message = result.AlreadyRunning
+                ? "A re-check is already running for this report."
+                : $"Re-checking {result.Rerun.TotalPoints} clause(s) against the uploaded evidence.",
+            queued = result.Rerun.TotalPoints,
+            data = await gapEvidenceReruns.BuildRerunDtoAsync(result.Rerun, ct),
         });
     }
 
@@ -1260,13 +1301,7 @@ public class AnalysisRunsController(
                 if (useRegul)
                 {
                     var regulProc = scope.ServiceProvider.GetRequiredService<NdRegulAnalysisProcessor>();
-                    await regulProc.ProcessPointAsync(
-                        runId,
-                        pointId,
-                        dualVerifyOnly,
-                        CancellationToken.None,
-                        evidenceOnly,
-                        actionIndex);
+                    await regulProc.ProcessPointAsync(runId, pointId, dualVerifyOnly, CancellationToken.None);
                 }
                 else
                 {
@@ -1330,6 +1365,9 @@ public class AnalysisRunsController(
             }
             return await SimulateDemoEvidenceRerunAsync(id, pointId, profile.Id, ct);
         }
+
+        if (evidenceOnly && AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
+            return await StartEvidenceRerunAsync(run, [pointId], actionIndex, profile.Id, ct);
 
         return QueuePointProcessing(run, id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex);
     }

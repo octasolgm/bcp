@@ -87,22 +87,11 @@ public sealed class RegulEmbeddingRetrievalService(
         // existed still deserializes cleanly.
         IReadOnlyList<HybridFusionSelector.FusedMatch>? FusedMatches = null);
 
-    public Task RunRetrievalAsync(NdAnalysisRun run, CancellationToken ct) =>
-        RunRetrievalInternalAsync(run, additionalCorpusDocIds: [], pointIdsFilter: null, ct);
+    /// <summary>Same JSON shape as the clause's RetrievalJson, which the pipeline panel reads.</summary>
+    public static string SerializePreview(RetrievalPreview preview) =>
+        JsonSerializer.Serialize(preview, RetrievalJsonOptions);
 
-    /// <summary>Re-run hybrid retrieval for specific clause points (e.g. gap evidence rerun), optionally including extra indexed documents.</summary>
-    public Task RunRetrievalForPointsAsync(
-        NdAnalysisRun run,
-        IReadOnlyCollection<Guid> pointIds,
-        IReadOnlyList<Guid> additionalCorpusDocIds,
-        CancellationToken ct) =>
-        RunRetrievalInternalAsync(run, additionalCorpusDocIds, pointIds, ct);
-
-    private async Task RunRetrievalInternalAsync(
-        NdAnalysisRun run,
-        IReadOnlyList<Guid> additionalCorpusDocIds,
-        IReadOnlyCollection<Guid>? pointIdsFilter,
-        CancellationToken ct)
+    public async Task RunRetrievalAsync(NdAnalysisRun run, CancellationToken ct)
     {
         try
         {
@@ -112,24 +101,19 @@ public sealed class RegulEmbeddingRetrievalService(
                 .Select(g => g!.Value)
                 .ToList();
 
-            var corpusDocIds = internalDocIds
-                .Concat(additionalCorpusDocIds ?? [])
-                .Distinct()
-                .ToList();
+            var corpusDocIds = internalDocIds.Distinct().ToList();
 
             if (corpusDocIds.Count == 0)
             {
-                logger.LogInformation(
-                    "Retrieval skipped for run {RunId}: no internal or gap-evidence documents in corpus", run.Id);
+                logger.LogInformation("Retrieval skipped for run {RunId}: no internal documents in corpus", run.Id);
                 return;
             }
 
-            var extractions = await db.NdLocalDocumentExtractions
-                .AsNoTracking()
-                .Where(e => corpusDocIds.Contains(e.StoredDocumentId) && e.IndexStatus == "indexed")
-                .ToListAsync(ct);
-
-            if (extractions.Count == 0)
+            // Step 3's corpus — full section text, loaded once per run (not per clause). BM25
+            // scoring itself is plain in-memory term-frequency math, so this is the only DB round
+            // trip it needs; everything downstream just re-scores the same corpus per clause.
+            var corpus = await LoadCorpusAsync(corpusDocIds, ct);
+            if (corpus == null)
             {
                 logger.LogInformation(
                     "Retrieval skipped for run {RunId}: none of the {Count} corpus document(s) are indexed yet",
@@ -137,36 +121,10 @@ public sealed class RegulEmbeddingRetrievalService(
                 return;
             }
 
-            var extractionIds = extractions.Select(e => e.Id).ToList();
-            var docNameById = await db.StoredDocuments
-                .AsNoTracking()
-                .Where(d => corpusDocIds.Contains(d.Id))
-                .ToDictionaryAsync(d => d.Id, d => d.Title ?? d.OriginalFileName, ct);
-            var storedDocIdByExtractionId = extractions.ToDictionary(e => e.Id, e => e.StoredDocumentId);
-
-            // Step 3's corpus — full section text, loaded once per run (not per clause). BM25
-            // scoring itself is plain in-memory term-frequency math, so this is the only DB round
-            // trip it needs; everything downstream just re-scores the same corpus per clause.
-            var allSections = await db.NdLocalDocumentExtractionSections
-                .AsNoTracking()
-                .Where(s => extractionIds.Contains(s.ExtractionId))
-                .Select(s => new { s.Id, s.ExtractionId, s.ClauseNo, s.ClauseText, s.SourcePage })
-                .ToListAsync(ct);
-            var sectionById = allSections.ToDictionary(s => s.Id);
-            var bm25Corpus = Bm25Scorer.BuildCorpus(allSections.Select(s => (s.Id, s.ClauseText)).ToList());
-
-            var findingsQuery = db.NdRegulForwardFindings
+            var findings = await db.NdRegulForwardFindings
                 .Where(f => f.AnalysisRunId == run.Id
-                    && !f.ClauseNo.StartsWith(NdRegulReverseIntRows.IntClausePrefix));
-
-            if (pointIdsFilter is { Count: > 0 })
-            {
-                var pointIdSet = pointIdsFilter.ToHashSet();
-                findingsQuery = findingsQuery.Where(f =>
-                    f.AnalysisPointId != null && pointIdSet.Contains(f.AnalysisPointId.Value));
-            }
-
-            var findings = await findingsQuery.ToListAsync(ct);
+                    && !f.ClauseNo.StartsWith(NdRegulReverseIntRows.IntClausePrefix))
+                .ToListAsync(ct);
 
             var processed = 0;
             foreach (var finding in findings)
@@ -174,102 +132,8 @@ public sealed class RegulEmbeddingRetrievalService(
                 if (ct.IsCancellationRequested) throw new OperationCanceledException();
                 if (string.IsNullOrWhiteSpace(finding.ClauseText)) continue;
 
-                // Step 2 — split this clause into its distinct obligations (free, local, regex —
-                // see SubObligationSplitter). Each sub-obligation gets its own Step 1 expansion and
-                // Step 3/4 retrieval below, so a bundled clause searched as one blended query can't
-                // wash out a section that only matches one of its several obligations.
-                var subObligations = SubObligationSplitter.Split(finding.ClauseText);
-
-                var acronymMatches = new Dictionary<string, DictionaryExpansionService.ExpansionMatch>();
-                var synonymMatches = new Dictionary<string, DictionaryExpansionService.ExpansionMatch>();
-                var bm25BySection = new Dictionary<Guid, Bm25Match>();
-                var embeddingBySection = new Dictionary<Guid, RetrievalMatch>();
-
-                foreach (var subText in subObligations)
-                {
-                    var expanded = await dictionary.ExpandQueryDetailedAsync(subText, ct);
-                    foreach (var m in expanded.AcronymMatches) acronymMatches[$"{m.EntryId}:{m.MatchedText}"] = m;
-                    foreach (var m in expanded.SynonymMatches) synonymMatches[$"{m.EntryId}:{m.MatchedText}"] = m;
-                    var queryText = expanded.AllTerms.Count == 0
-                        ? subText
-                        : subText + " " + string.Join(" ", expanded.AllTerms);
-
-                    // Step 3 — BM25, dynamic cutoff (see Bm25Scorer.SelectDynamic doc comment): not
-                    // a fixed count, only however many sections actually clear the relevance bar for
-                    // this specific sub-obligation.
-                    var bm25Ranked = Bm25Scorer.Score(bm25Corpus, queryText);
-                    var bm25Selected = Bm25Scorer.SelectDynamic(bm25Ranked);
-                    foreach (var r in bm25Selected)
-                    {
-                        var s = sectionById[r.SectionId];
-                        // Keep whichever sub-obligation scored this section highest — a section can
-                        // legitimately match more than one sub-obligation of the same clause.
-                        if (bm25BySection.TryGetValue(s.Id, out var existing) && existing.Score >= r.Score) continue;
-                        var storedDocId = storedDocIdByExtractionId.GetValueOrDefault(s.ExtractionId);
-                        bm25BySection[s.Id] = new Bm25Match(
-                            s.Id,
-                            s.ClauseNo,
-                            Truncate(s.ClauseText, PreviewLength),
-                            storedDocId,
-                            docNameById.GetValueOrDefault(storedDocId),
-                            s.SourcePage,
-                            Math.Round(r.Score, 4),
-                            subObligations.Count > 1 ? Truncate(subText, PreviewLength) : null);
-                    }
-
-                    // Step 4 — embedding retrieval, same dynamic-cutoff principle: pull a generous
-                    // candidate set from pgvector by distance, then keep only those within
-                    // EmbeddingRelativeThreshold of this sub-obligation's own best match.
-                    var queryVector = new Vector(embedder.Embed(queryText));
-                    var candidates = await db.NdLocalDocumentExtractionSections
-                        .AsNoTracking()
-                        .Where(s => extractionIds.Contains(s.ExtractionId) && s.Embedding != null)
-                        .OrderBy(s => s.Embedding!.CosineDistance(queryVector))
-                        .Take(EmbeddingMaxKeep)
-                        .Select(s => new
-                        {
-                            s.Id,
-                            s.ExtractionId,
-                            s.ClauseNo,
-                            s.ClauseText,
-                            s.SourcePage,
-                            Distance = s.Embedding!.CosineDistance(queryVector),
-                        })
-                        .ToListAsync(ct);
-
-                    var bestSimilarity = candidates.Count == 0 ? 0 : 1 - candidates.Min(c => c.Distance);
-                    var similarityCutoff = bestSimilarity * EmbeddingRelativeThreshold;
-                    foreach (var x in candidates.Select(m => new { m, Similarity = 1 - m.Distance }))
-                    {
-                        if (x.Similarity < similarityCutoff) continue;
-                        if (embeddingBySection.TryGetValue(x.m.Id, out var existing) && existing.Similarity >= x.Similarity) continue;
-                        var storedDocId = storedDocIdByExtractionId.GetValueOrDefault(x.m.ExtractionId);
-                        embeddingBySection[x.m.Id] = new RetrievalMatch(
-                            x.m.Id,
-                            x.m.ClauseNo,
-                            Truncate(x.m.ClauseText, PreviewLength),
-                            storedDocId,
-                            docNameById.GetValueOrDefault(storedDocId),
-                            x.m.SourcePage,
-                            Math.Round(x.Similarity, 4),
-                            subObligations.Count > 1 ? Truncate(subText, PreviewLength) : null);
-                    }
-                }
-
-                // Step 5 — fuse the two lists into one ranked list (0.4 BM25 + 0.6 embedding,
-                // each normalized against this clause's own best score on that side); Step 6 —
-                // trim it with the same dynamic-cutoff principle as Steps 3/4, not a fixed count.
-                var fused = HybridFusionSelector.Fuse(bm25BySection.Values.ToList(), embeddingBySection.Values.ToList());
-                var fusedSelected = HybridFusionSelector.SelectDynamic(fused);
-
                 finding.RetrievalJson = JsonSerializer.Serialize(
-                    new RetrievalPreview(
-                        acronymMatches.Values.ToList(),
-                        synonymMatches.Values.ToList(),
-                        bm25BySection.Values.ToList(),
-                        embeddingBySection.Values.ToList(),
-                        subObligations,
-                        fusedSelected),
+                    await BuildPreviewAsync(corpus, finding.ClauseText, ct),
                     RetrievalJsonOptions);
                 finding.UpdatedAt = DateTimeOffset.UtcNow;
                 processed++;
@@ -278,7 +142,7 @@ public sealed class RegulEmbeddingRetrievalService(
             await db.SaveChangesAsync(ct);
             logger.LogInformation(
                 "Retrieval complete for run {RunId}: {Processed}/{Total} clause(s) processed against {ExtractionCount} indexed internal document(s)",
-                run.Id, processed, findings.Count, extractions.Count);
+                run.Id, processed, findings.Count, corpus.ExtractionIds.Count);
         }
         catch (OperationCanceledException)
         {
@@ -288,6 +152,222 @@ public sealed class RegulEmbeddingRetrievalService(
         {
             logger.LogWarning(ex,
                 "Retrieval failed for run {RunId} — forward judgment proceeds without retrieval preview", run.Id);
+        }
+    }
+
+    /// <summary>Steps 1-6 for one clause against a loaded corpus — exactly what the analysis run stores
+    /// on the clause's RetrievalJson.</summary>
+    private async Task<RetrievalPreview> BuildPreviewAsync(LoadedCorpus corpus, string clauseText, CancellationToken ct)
+    {
+        // Step 2 — split this clause into its distinct obligations (free, local, regex — see
+        // SubObligationSplitter). Each sub-obligation gets its own Step 1 expansion and Step 3/4
+        // retrieval, so a bundled clause searched as one blended query can't wash out a section
+        // that only matches one of its several obligations.
+        var subObligations = SubObligationSplitter.Split(clauseText);
+        var hits = new QueryHits();
+        foreach (var subText in subObligations)
+        {
+            await ScoreQueryAsync(
+                corpus,
+                subText,
+                subObligations.Count > 1 ? Truncate(subText, PreviewLength) : null,
+                hits,
+                ct);
+        }
+
+        // Step 5 — fuse the two lists into one ranked list (0.4 BM25 + 0.6 embedding, each
+        // normalized against this clause's own best score on that side); Step 6 — trim it with the
+        // same dynamic-cutoff principle as Steps 3/4, not a fixed count.
+        var fused = HybridFusionSelector.Fuse(hits.Bm25BySection.Values.ToList(), hits.EmbeddingBySection.Values.ToList());
+        return new RetrievalPreview(
+            hits.Acronyms.Values.ToList(),
+            hits.Synonyms.Values.ToList(),
+            hits.Bm25BySection.Values.ToList(),
+            hits.EmbeddingBySection.Values.ToList(),
+            subObligations,
+            HybridFusionSelector.SelectDynamic(fused));
+    }
+
+    /// <summary>The analysis run's own retrieval for one clause, over any set of indexed documents
+    /// (e.g. the run's internal documents plus newly uploaded gap evidence). Returned rather than
+    /// saved, so the clause's original retrieval record stays as it was.</summary>
+    public async Task<RetrievalPreview?> RetrievePreviewForClauseAsync(
+        IReadOnlyCollection<Guid> corpusDocIds,
+        string clauseText,
+        CancellationToken ct)
+    {
+        if (corpusDocIds.Count == 0 || string.IsNullOrWhiteSpace(clauseText)) return null;
+        var corpus = await LoadCorpusAsync(corpusDocIds, ct);
+        return corpus == null ? null : await BuildPreviewAsync(corpus, clauseText, ct);
+    }
+
+    public sealed record EvidenceSection(
+        Guid SectionId,
+        string? ClauseNo,
+        string Text,
+        Guid SourceDocumentId,
+        string? SourceDocumentName,
+        int? SourcePage,
+        double Score);
+
+    /// <summary>
+    /// Same Steps 1-6 hybrid search, restricted to the given documents and returned instead of
+    /// written to RetrievalJson — gap evidence re-checks must leave the clause's original retrieval
+    /// record from the analysis run untouched.
+    /// </summary>
+    public async Task<IReadOnlyList<EvidenceSection>> RetrieveFromDocumentsAsync(
+        IReadOnlyCollection<Guid> corpusDocIds,
+        IReadOnlyList<string> queryTexts,
+        int maxSections,
+        CancellationToken ct)
+    {
+        if (corpusDocIds.Count == 0) return [];
+        var corpus = await LoadCorpusAsync(corpusDocIds, ct);
+        if (corpus == null) return [];
+
+        var hits = new QueryHits();
+        foreach (var query in queryTexts.Where(q => !string.IsNullOrWhiteSpace(q)))
+        {
+            foreach (var subText in SubObligationSplitter.Split(query))
+                await ScoreQueryAsync(corpus, subText, null, hits, ct);
+        }
+
+        var fused = HybridFusionSelector.SelectDynamic(
+            HybridFusionSelector.Fuse(hits.Bm25BySection.Values.ToList(), hits.EmbeddingBySection.Values.ToList()));
+
+        return fused
+            .Take(maxSections)
+            .Select(m => new EvidenceSection(
+                m.SectionId,
+                m.ClauseNo,
+                corpus.SectionById.TryGetValue(m.SectionId, out var section) ? section.ClauseText : m.TextPreview,
+                m.SourceDocumentId,
+                m.SourceDocumentName,
+                m.SourcePage,
+                Math.Round(m.FusedScore, 4)))
+            .ToList();
+    }
+
+    private sealed record CorpusSection(Guid Id, Guid ExtractionId, string? ClauseNo, string ClauseText, int? SourcePage);
+
+    private sealed record LoadedCorpus(
+        List<Guid> ExtractionIds,
+        Dictionary<Guid, CorpusSection> SectionById,
+        Bm25Scorer.Corpus Bm25Corpus,
+        Dictionary<Guid, string?> DocNameById,
+        Dictionary<Guid, Guid> StoredDocIdByExtractionId);
+
+    private sealed class QueryHits
+    {
+        public Dictionary<string, DictionaryExpansionService.ExpansionMatch> Acronyms { get; } = new();
+        public Dictionary<string, DictionaryExpansionService.ExpansionMatch> Synonyms { get; } = new();
+        public Dictionary<Guid, Bm25Match> Bm25BySection { get; } = new();
+        public Dictionary<Guid, RetrievalMatch> EmbeddingBySection { get; } = new();
+    }
+
+    private async Task<LoadedCorpus?> LoadCorpusAsync(IReadOnlyCollection<Guid> corpusDocIds, CancellationToken ct)
+    {
+        var docIds = corpusDocIds.ToList();
+        var extractions = await db.NdLocalDocumentExtractions
+            .AsNoTracking()
+            .Where(e => docIds.Contains(e.StoredDocumentId) && e.IndexStatus == "indexed")
+            .ToListAsync(ct);
+        if (extractions.Count == 0) return null;
+
+        var extractionIds = extractions.Select(e => e.Id).ToList();
+        var docNameById = await db.StoredDocuments
+            .AsNoTracking()
+            .Where(d => docIds.Contains(d.Id))
+            .ToDictionaryAsync(d => d.Id, d => (string?)(d.Title ?? d.OriginalFileName), ct);
+
+        var sections = await db.NdLocalDocumentExtractionSections
+            .AsNoTracking()
+            .Where(s => extractionIds.Contains(s.ExtractionId))
+            .Select(s => new { s.Id, s.ExtractionId, s.ClauseNo, s.ClauseText, s.SourcePage })
+            .ToListAsync(ct);
+
+        return new LoadedCorpus(
+            extractionIds,
+            sections.ToDictionary(
+                s => s.Id,
+                s => new CorpusSection(s.Id, s.ExtractionId, s.ClauseNo, s.ClauseText, s.SourcePage)),
+            Bm25Scorer.BuildCorpus(sections.Select(s => (s.Id, s.ClauseText)).ToList()),
+            docNameById,
+            extractions.ToDictionary(e => e.Id, e => e.StoredDocumentId));
+    }
+
+    /// <summary>Steps 1, 3 and 4 for one query text, merged into <paramref name="hits"/> keeping each
+    /// section's best score.</summary>
+    private async Task ScoreQueryAsync(
+        LoadedCorpus corpus,
+        string subText,
+        string? subObligationLabel,
+        QueryHits hits,
+        CancellationToken ct)
+    {
+        var expanded = await dictionary.ExpandQueryDetailedAsync(subText, ct);
+        foreach (var m in expanded.AcronymMatches) hits.Acronyms[$"{m.EntryId}:{m.MatchedText}"] = m;
+        foreach (var m in expanded.SynonymMatches) hits.Synonyms[$"{m.EntryId}:{m.MatchedText}"] = m;
+        var queryText = expanded.AllTerms.Count == 0
+            ? subText
+            : subText + " " + string.Join(" ", expanded.AllTerms);
+
+        // Step 3 — BM25, dynamic cutoff (see Bm25Scorer.SelectDynamic doc comment): not a fixed
+        // count, only however many sections actually clear the relevance bar for this query.
+        var bm25Selected = Bm25Scorer.SelectDynamic(Bm25Scorer.Score(corpus.Bm25Corpus, queryText));
+        foreach (var r in bm25Selected)
+        {
+            var s = corpus.SectionById[r.SectionId];
+            if (hits.Bm25BySection.TryGetValue(s.Id, out var existing) && existing.Score >= r.Score) continue;
+            var storedDocId = corpus.StoredDocIdByExtractionId.GetValueOrDefault(s.ExtractionId);
+            hits.Bm25BySection[s.Id] = new Bm25Match(
+                s.Id,
+                s.ClauseNo,
+                Truncate(s.ClauseText, PreviewLength),
+                storedDocId,
+                corpus.DocNameById.GetValueOrDefault(storedDocId),
+                s.SourcePage,
+                Math.Round(r.Score, 4),
+                subObligationLabel);
+        }
+
+        // Step 4 — embedding retrieval, same dynamic-cutoff principle: pull a generous candidate
+        // set from pgvector by distance, then keep only those within EmbeddingRelativeThreshold of
+        // this query's own best match.
+        var queryVector = new Vector(embedder.Embed(queryText));
+        var extractionIds = corpus.ExtractionIds;
+        var candidates = await db.NdLocalDocumentExtractionSections
+            .AsNoTracking()
+            .Where(s => extractionIds.Contains(s.ExtractionId) && s.Embedding != null)
+            .OrderBy(s => s.Embedding!.CosineDistance(queryVector))
+            .Take(EmbeddingMaxKeep)
+            .Select(s => new
+            {
+                s.Id,
+                s.ExtractionId,
+                s.ClauseNo,
+                s.ClauseText,
+                s.SourcePage,
+                Distance = s.Embedding!.CosineDistance(queryVector),
+            })
+            .ToListAsync(ct);
+
+        var bestSimilarity = candidates.Count == 0 ? 0 : 1 - candidates.Min(c => c.Distance);
+        var similarityCutoff = bestSimilarity * EmbeddingRelativeThreshold;
+        foreach (var x in candidates.Select(m => new { m, Similarity = 1 - m.Distance }))
+        {
+            if (x.Similarity < similarityCutoff) continue;
+            if (hits.EmbeddingBySection.TryGetValue(x.m.Id, out var existing) && existing.Similarity >= x.Similarity) continue;
+            var storedDocId = corpus.StoredDocIdByExtractionId.GetValueOrDefault(x.m.ExtractionId);
+            hits.EmbeddingBySection[x.m.Id] = new RetrievalMatch(
+                x.m.Id,
+                x.m.ClauseNo,
+                Truncate(x.m.ClauseText, PreviewLength),
+                storedDocId,
+                corpus.DocNameById.GetValueOrDefault(storedDocId),
+                x.m.SourcePage,
+                Math.Round(x.Similarity, 4),
+                subObligationLabel);
         }
     }
 

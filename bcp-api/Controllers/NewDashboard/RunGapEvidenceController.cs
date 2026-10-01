@@ -133,29 +133,9 @@ public class RunGapEvidenceController(
 
         }
 
-        if (prepareDocIds.Count > 0)
-            StartBackgroundGapEvidencePrepare(prepareDocIds, run.WorkflowEngine);
+        NdGapEvidencePrepareService.StartInBackground(scopeFactory, prepareDocIds, run.WorkflowEngine, logger);
 
         return Ok(new { success = true, data = uploaded, linkedPoints = pointIds.Count });
-    }
-
-    private void StartBackgroundGapEvidencePrepare(IReadOnlyList<Guid> storedDocumentIds, string? workflowEngine)
-    {
-        var ids = storedDocumentIds.Distinct().ToList();
-        var engine = workflowEngine;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                using var scope = scopeFactory.CreateScope();
-                var prepare = scope.ServiceProvider.GetRequiredService<NdGapEvidencePrepareService>();
-                await prepare.PrepareDocumentsAsync(ids, engine, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Background gap evidence prepare failed for {Count} document(s)", ids.Count);
-            }
-        }, CancellationToken.None);
     }
 
     private async Task<(int VersionNumber, string VersionLabel, string DisplayTitle)> ResolveNextGapEvidenceVersionAsync(

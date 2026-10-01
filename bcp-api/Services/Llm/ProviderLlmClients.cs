@@ -476,8 +476,12 @@ public class MoonshotLlmClient(IHttpClientFactory httpFactory, IConfiguration co
     // "high" is plenty for clause judgment.
     protected override IReadOnlyDictionary<string, object?> ExtraFields(string model) =>
         model.StartsWith("kimi-k3", StringComparison.OrdinalIgnoreCase)
-            ? new Dictionary<string, object?> { ["reasoning_effort"] = "high" }
+            ? new Dictionary<string, object?> { ["reasoning_effort"] = "high", ["max_tokens"] = KimiMaxTokens }
             : new Dictionary<string, object?>();
+
+    // K3's reasoning tokens count against max_tokens; the default 16k could run out mid-answer on a
+    // long clause and return truncated JSON.
+    internal const int KimiMaxTokens = 32768;
 }
 
 /// <summary>DeepSeek (OpenAI-compatible API).</summary>
@@ -529,6 +533,10 @@ public class OpenRouterLlmClient(IHttpClientFactory httpFactory, IConfiguration 
     // top level), OpenRouter's unified reasoning parameter is nested under "reasoning".
     protected override IReadOnlyDictionary<string, object?> ExtraFields(string model) =>
         model.Contains("kimi-k3", StringComparison.OrdinalIgnoreCase)
-            ? new Dictionary<string, object?> { ["reasoning"] = new { effort = "high" } }
+            ? new Dictionary<string, object?>
+            {
+                ["reasoning"] = new { effort = "high" },
+                ["max_tokens"] = MoonshotLlmClient.KimiMaxTokens,
+            }
             : new Dictionary<string, object?>();
 }

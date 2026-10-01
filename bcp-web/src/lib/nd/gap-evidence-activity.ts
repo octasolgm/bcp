@@ -17,31 +17,25 @@ export function gapEvidencePrepStepLabel(
   detail?: string,
 ): string {
   const short = fileName?.trim() ? fileName.trim() : 'document';
-  const d = (detail ?? '').trim().toLowerCase();
+  const d = (detail ?? '').trim();
+  const queued = /^(pending|queued)$/i.test(d);
   switch (step) {
     case 'uploading':
       return `Uploading "${short}"…`;
     case 'not_started':
-      return detail?.trim() ? detail.trim() : `Not yet parsed or extracted`;
+      return d ? d : `Not yet parsed or extracted`;
     case 'parsing':
-      if (d === 'processing' || d === 'running') {
-        return `Parsing "${short}" with Azure Document Intelligence…`;
-      }
-      return `Azure parse — "${short}"…`;
+      return queued
+        ? `Queued for parsing — "${short}"`
+        : `Parsing "${short}"…`;
     case 'extracting':
-      if (d === 'processing' || d === 'running') {
-        return `Structural chunking for "${short}"…`;
-      }
-      return `Structural extract — "${short}"…`;
+      return `Extracting "${short}"…`;
     case 'indexing':
-      if (d === 'processing' || d === 'running') {
-        return `Indexing "${short}" for hybrid retrieval…`;
-      }
-      return `Search index — "${short}"…`;
+      return `Indexing "${short}"…`;
     case 'ready':
-      return `"${short}" ready for gap re-analysis`;
+      return d ? `"${short}" ready for gap re-analysis — ${d}` : `"${short}" ready for gap re-analysis`;
     case 'failed':
-      return `Prepare failed for "${short}"`;
+      return d ? `Prepare failed for "${short}" — ${d}` : `Prepare failed for "${short}"`;
   }
 }
 

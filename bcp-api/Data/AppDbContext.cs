@@ -41,6 +41,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdAnalysisActionPlanDateHistory> NdAnalysisActionPlanDateHistories => Set<NdAnalysisActionPlanDateHistory>();
     public DbSet<NdAnalysisActionPlanStatusHistory> NdAnalysisActionPlanStatusHistories => Set<NdAnalysisActionPlanStatusHistory>();
     public DbSet<NdAnalysisStatusHistory> NdAnalysisStatusHistories => Set<NdAnalysisStatusHistory>();
+    public DbSet<NdGapEvidenceRerun> NdGapEvidenceReruns => Set<NdGapEvidenceRerun>();
+    public DbSet<NdGapEvidenceReview> NdGapEvidenceReviews => Set<NdGapEvidenceReview>();
     public DbSet<NdHiddenLegacyRun> NdHiddenLegacyRuns => Set<NdHiddenLegacyRun>();
     public DbSet<NdSystemSetting> NdSystemSettings => Set<NdSystemSetting>();
     public DbSet<NdAnalysisPromptSuggestion> NdAnalysisPromptSuggestions => Set<NdAnalysisPromptSuggestion>();

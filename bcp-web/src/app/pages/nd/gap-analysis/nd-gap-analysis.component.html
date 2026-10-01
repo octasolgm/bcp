@@ -171,91 +171,107 @@
     (deleteEvidence)="onDeleteReportEvidence($event)"
     (viewEvidence)="openPdfFromNd({ docId: $event })"
     (rerunAllGaps)="onRerunAllGaps()"
+    [evidenceRerunCounts]="evidenceRerunCountsByDoc"
+    (viewEvidenceHistory)="openDocEvidenceHistory($event)"
     (prepareEvidence)="onPrepareReportEvidence($event)"
   />
 }
 
-@if (showEvidenceRerunProgressPanel && evidenceRerunProgressCounts; as prog) {
-  <section class="gap-rerun-progress card-surface" aria-label="Gap evidence re-analysis progress">
-    <h2 class="gap-rerun-progress-title">Re-judging open gaps</h2>
-    <p class="gap-rerun-progress-hint">{{ evidenceRerunPhaseHint }}</p>
-    <div class="gap-rerun-metrics metrics-row metrics-row-3" aria-label="Rerun summary">
+@if (evidenceRerun && evidenceRerunCounts; as prog) {
+  <section class="gap-rerun-progress card-surface" aria-label="Gap evidence re-check progress">
+    <div class="gap-rerun-head">
+      <div>
+        <h2 class="gap-rerun-progress-title">
+          @if (evidenceRerunActive) {
+            Re-checking open gaps against uploaded evidence
+          } @else if (evidenceRerun.status === 'failed') {
+            Gap evidence re-check stopped
+          } @else {
+            Gap evidence re-check complete
+          }
+        </h2>
+        <p class="gap-rerun-progress-hint">
+          @if (evidenceRerunDocNames) {
+            Evidence: <strong>{{ evidenceRerunDocNames }}</strong>
+          }
+          @if (evidenceRerun.llmModel) {
+            · AI: {{ evidenceRerun.llmProvider ? evidenceRerun.llmProvider + ' / ' : '' }}{{ evidenceRerun.llmModel }}
+          }
+        </p>
+      </div>
+      @if (!evidenceRerunActive) {
+        <button type="button" class="workflow-link-btn" (click)="dismissEvidenceRerun()">Dismiss</button>
+      }
+    </div>
+
+    <ol class="gap-rerun-stages" aria-label="Re-check stages">
+      @for (stage of evidenceRerunStages; track stage.key) {
+        <li [class.is-done]="evidenceRerunStageState(stage.key) === 'done'" [class.is-active]="evidenceRerunStageState(stage.key) === 'active'">
+          {{ stage.label }}
+        </li>
+      }
+    </ol>
+
+    @if (evidenceRerunActive) {
+      <p class="gap-rerun-phase-line">
+        <strong>{{ evidenceRerunPhaseLabel }}</strong>
+        @if (evidenceRerun.phaseDetail) { — {{ evidenceRerun.phaseDetail }} }
+      </p>
+    } @else if (evidenceRerun.status === 'failed' && evidenceRerun.error) {
+      <p class="gap-rerun-error" role="alert">{{ evidenceRerun.error }}</p>
+    } @else {
+      <p class="gap-rerun-summary">{{ evidenceRerunSummaryText }}</p>
+    }
+
+    <div class="gap-rerun-metrics metrics-row" aria-label="Re-check summary">
       <div class="stat-box">
-        <strong>{{ evidenceRerunWatchTotal }}</strong>
-        <em>Clauses in rerun</em>
-        @if (evidenceRerunWatchTotal > 0) {
-          <span class="stat-box-sub">{{ prog.completed }}/{{ evidenceRerunWatchTotal }} in run</span>
-        }
+        <strong>{{ prog.all }}</strong>
+        <em>Clauses in re-check</em>
+        <span class="stat-box-sub">{{ prog.completed + prog.failed }}/{{ prog.all }} done</span>
       </div>
       <div class="stat-box">
-        <strong>{{ prog.completed }}</strong>
-        <em>Done</em>
+        <strong>{{ evidenceRerun.fulfilledGaps }}</strong>
+        <em>Gaps fulfilled</em>
+      </div>
+      <div class="stat-box">
+        <strong>{{ evidenceRerun.partialGaps }}</strong>
+        <em>Partly fulfilled</em>
+      </div>
+      <div class="stat-box">
+        <strong>{{ evidenceRerun.resolvedActions }}</strong>
+        <em>Actions resolved</em>
+        @if (evidenceRerun.splitActions) {
+          <span class="stat-box-sub">{{ evidenceRerun.splitActions }} split</span>
+        }
       </div>
       <div class="stat-box warn">
         <strong>{{ prog.failed }}</strong>
         <em>Failed</em>
       </div>
     </div>
-    <div class="analysing-status-tabs" role="tablist" aria-label="Filter clauses by rerun status">
-      <button
-        type="button"
-        role="tab"
-        class="status-tab"
-        [class.active]="evidenceRerunStatusFilter === 'all'"
-        [attr.aria-selected]="evidenceRerunStatusFilter === 'all'"
-        (click)="setEvidenceRerunStatusFilter('all')"
-      >
-        All ({{ prog.all }})
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="status-tab"
-        [class.active]="evidenceRerunStatusFilter === 'running'"
-        [attr.aria-selected]="evidenceRerunStatusFilter === 'running'"
-        (click)="setEvidenceRerunStatusFilter('running')"
-      >
-        Running ({{ prog.running }})
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="status-tab"
-        [class.active]="evidenceRerunStatusFilter === 'queued'"
-        [attr.aria-selected]="evidenceRerunStatusFilter === 'queued'"
-        (click)="setEvidenceRerunStatusFilter('queued')"
-      >
-        Queued ({{ prog.queued }})
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="status-tab"
-        [class.active]="evidenceRerunStatusFilter === 'completed'"
-        [attr.aria-selected]="evidenceRerunStatusFilter === 'completed'"
-        (click)="setEvidenceRerunStatusFilter('completed')"
-      >
-        Done ({{ prog.completed }})
-      </button>
+
+    <div class="analysing-status-tabs" role="tablist" aria-label="Filter clauses by re-check status">
+      <button type="button" role="tab" class="status-tab" [class.active]="evidenceRerunStatusFilter === 'all'" [attr.aria-selected]="evidenceRerunStatusFilter === 'all'" (click)="setEvidenceRerunStatusFilter('all')">All ({{ prog.all }})</button>
+      <button type="button" role="tab" class="status-tab" [class.active]="evidenceRerunStatusFilter === 'running'" [attr.aria-selected]="evidenceRerunStatusFilter === 'running'" (click)="setEvidenceRerunStatusFilter('running')">Running ({{ prog.running }})</button>
+      <button type="button" role="tab" class="status-tab" [class.active]="evidenceRerunStatusFilter === 'queued'" [attr.aria-selected]="evidenceRerunStatusFilter === 'queued'" (click)="setEvidenceRerunStatusFilter('queued')">Queued ({{ prog.queued }})</button>
+      <button type="button" role="tab" class="status-tab" [class.active]="evidenceRerunStatusFilter === 'completed'" [attr.aria-selected]="evidenceRerunStatusFilter === 'completed'" (click)="setEvidenceRerunStatusFilter('completed')">Done ({{ prog.completed }})</button>
       @if (prog.failed > 0) {
-        <button
-          type="button"
-          role="tab"
-          class="status-tab"
-          [class.active]="evidenceRerunStatusFilter === 'failed'"
-          [attr.aria-selected]="evidenceRerunStatusFilter === 'failed'"
-          (click)="setEvidenceRerunStatusFilter('failed')"
-        >
-          Failed ({{ prog.failed }})
-        </button>
+        <button type="button" role="tab" class="status-tab" [class.active]="evidenceRerunStatusFilter === 'failed'" [attr.aria-selected]="evidenceRerunStatusFilter === 'failed'" (click)="setEvidenceRerunStatusFilter('failed')">Failed ({{ prog.failed }})</button>
       }
     </div>
-    @if (evidenceRerunProgressRowsFiltered.length) {
+
+    @if (evidenceRerunRowsFiltered.length) {
       <ul class="gap-rerun-clause-list">
-        @for (row of evidenceRerunProgressRowsFiltered; track row.pointId) {
+        @for (row of evidenceRerunRowsFiltered; track row.reviewId) {
           <li class="gap-rerun-clause-row" [attr.data-status]="row.status">
-            <span class="gap-rerun-clause-no">{{ row.label }}</span>
-            <span class="gap-rerun-clause-status">{{ gapEvidenceRerunUiStatusLabel(row.status) }}</span>
+            <button type="button" class="gap-rerun-clause-no" (click)="openEvidenceRerunClause(row)">{{ evidenceRerunItemLabel(row) }}</button>
+            <span class="gap-rerun-clause-status">{{ evidenceRerunItemStatusLabel(row.status) }}</span>
+            @if (row.clauseOutcome) {
+              <span class="gap-rerun-outcome" [attr.data-outcome]="row.clauseOutcome">{{ gapEvidenceOutcomeLabel(row.clauseOutcome) }}</span>
+            }
+            @if (row.error) {
+              <span class="gap-rerun-clause-error">{{ row.error }}</span>
+            }
           </li>
         }
       </ul>
@@ -362,6 +378,9 @@
       [regulationDocId]="regDocIdForPoint(ndPoint)"
       [runId]="ndRunId"
       [gapAttachments]="attachmentsForPoint(ndPoint.id)"
+      [evidenceReviews]="evidenceReviewsFor(ndPoint.id)"
+      [evidencePrepLabels]="evidencePrepLabels"
+      (viewEvidenceHistory)="openClauseEvidenceHistory(ndPoint.id)"
       [savedActionItemReviews]="savedReviewsForPoint(ndPoint.id)"
       [tempReviewComments]="savedTempCommentsForPoint(ndPoint.id)"
       [canEditTempReviewComments]="canEditTempReviewComments"
@@ -458,7 +477,9 @@
               [gapCount]="gapCount"
               [rollup]="clauseRollupFor(item)"
               [showInfoButton]="true"
+              [recheckCount]="recheckCountFor(item)"
               (infoClick)="openGapPointInfo($event, item)"
+              (recheckHistoryClick)="openClauseEvidenceHistoryForItem(item)"
             />
           </div>
         }
@@ -504,6 +525,8 @@
           [confidence]="card.confidence"
           [gapCount]="gapCount"
           [rollup]="clauseRollupFor(item)"
+          [recheckCount]="recheckCountFor(item)"
+          (recheckHistoryClick)="openClauseEvidenceHistoryForItem(item)"
         >
           <span railMetaExtra>
             @if (item.signedOff) {
@@ -624,6 +647,18 @@
       }
     </div>
   </aside>
+}
+
+@if (evidenceHistoryView; as view) {
+  <app-nd-evidence-history-drawer
+    [eyebrow]="view.eyebrow"
+    [title]="view.title"
+    [reviews]="view.reviews"
+    [clauseLabels]="evidenceClauseLabels"
+    (closed)="closeEvidenceHistory()"
+    (openClause)="openEvidenceHistoryClause($event)"
+    (openDocument)="openPdfFromNd($event)"
+  />
 }
 
 @if (showExportDialog) {

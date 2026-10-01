@@ -173,6 +173,21 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     await this.auth.refreshProfile();
     await this.load();
     this.syncPageHeaderToolbar();
+    await this.openFromDeepLink();
+  }
+
+  /** Text the sections panel opens filtered to — set by a `?doc=…&find=…` link (e.g. an evidence quote). */
+  sectionsFind = '';
+
+  /** `?doc=<id>&find=<text>` opens that document's sections at the passage containing the text. */
+  private async openFromDeepLink(): Promise<void> {
+    const params = this.route.snapshot.queryParamMap;
+    const docId = params.get('doc');
+    if (!docId) return;
+    const doc = this.docs.find((d) => d.id === docId);
+    if (!doc) return;
+    this.sectionsFind = (params.get('find') ?? '').trim();
+    await this.openSections(doc);
   }
 
   ngOnDestroy(): void {

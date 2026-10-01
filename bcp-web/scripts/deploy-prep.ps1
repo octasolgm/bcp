@@ -24,6 +24,7 @@ Write-Host "`n[2/5] Optional app-config.json from env vars..." -ForegroundColor 
 
 Write-Host "`n[3/5] npm run build:prod..." -ForegroundColor Cyan
 npm run build:prod
+if ($LASTEXITCODE -ne 0) { throw "npm run build:prod failed (exit $LASTEXITCODE)" }
 
 $distBrowser = Join-Path $webRoot "dist\reguliq-web\browser"
 if (-not (Test-Path $distBrowser)) {

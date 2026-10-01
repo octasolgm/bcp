@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
@@ -27,16 +28,49 @@ public sealed class NdGapEvidencePrepareService(
     private static readonly TimeSpan IndexWaitTimeout = TimeSpan.FromMinutes(12);
     private static readonly TimeSpan IndexPollInterval = TimeSpan.FromSeconds(2);
 
+    // The upload kicks off a prepare and a rerun started straight after it prepares the same file;
+    // the second caller waits here and then finds the document already done, instead of paying for a
+    // second Azure parse of the same file.
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> DocumentLocks = new();
+
+    /// <summary>Starts parse → structural chunking → index for freshly uploaded evidence on its own scope,
+    /// so the document is ready by the time someone reruns the gaps and survives the page being closed.</summary>
+    public static void StartInBackground(
+        IServiceScopeFactory scopeFactory,
+        IReadOnlyList<Guid> storedDocumentIds,
+        string? workflowEngine,
+        ILogger logger)
+    {
+        var ids = storedDocumentIds.Distinct().ToList();
+        if (ids.Count == 0) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var prepare = scope.ServiceProvider.GetRequiredService<NdGapEvidencePrepareService>();
+                await prepare.PrepareDocumentsAsync(ids, workflowEngine, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Background gap evidence prepare failed for {Count} document(s)", ids.Count);
+            }
+        }, CancellationToken.None);
+    }
+
     public async Task PrepareDocumentsAsync(
         IReadOnlyList<Guid> storedDocumentIds,
         string? workflowEngine,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Func<string, Task>? onStep = null)
     {
         if (storedDocumentIds.Count == 0) return;
 
         foreach (var docId in storedDocumentIds.Distinct())
         {
             if (ct.IsCancellationRequested) throw new OperationCanceledException();
+            var gate = DocumentLocks.GetOrAdd(docId, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(ct);
             try
             {
                 // Same azure-di parse → extract → index path as analyse-regul-full-v2 / internal-documents-azure-di.
@@ -44,7 +78,7 @@ public sealed class NdGapEvidencePrepareService(
                 if (AnalysisWorkflowEngine.IsRegulFamily(workflowEngine)
                     || string.Equals(workflowEngine, AnalysisWorkflowEngine.BcpLanding, StringComparison.OrdinalIgnoreCase))
                 {
-                    await PrepareHybridLocalPipelineAsync(docId, ct);
+                    await PrepareHybridLocalPipelineAsync(docId, onStep, ct);
                 }
                 else
                 {
@@ -55,6 +89,10 @@ public sealed class NdGapEvidencePrepareService(
             {
                 logger.LogError(ex, "Gap evidence prepare failed for stored document {DocId}", docId);
                 throw;
+            }
+            finally
+            {
+                gate.Release();
             }
         }
     }
@@ -76,7 +114,10 @@ public sealed class NdGapEvidencePrepareService(
         await internalSectionService.EnsureSectionsForWorkflowAsync(doc, ct);
     }
 
-    private async Task PrepareHybridLocalPipelineAsync(Guid storedDocumentId, CancellationToken ct)
+    private async Task PrepareHybridLocalPipelineAsync(
+        Guid storedDocumentId,
+        Func<string, Task>? onStep,
+        CancellationToken ct)
     {
         var doc = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedDocumentId, ct)
             ?? throw new InvalidOperationException("Gap evidence document not found.");
@@ -111,13 +152,22 @@ public sealed class NdGapEvidencePrepareService(
         }
 
         if (row.Status != "parsed" || string.IsNullOrWhiteSpace(row.MarkdownText))
+        {
+            if (onStep != null) await onStep($"Parsing \"{fileName}\"");
             await ParseLocalRowAsync(doc, row, fileName, engine, ct);
+        }
 
         if (row.ExtractStatus != "extracted" || row.SectionCount is null or 0)
+        {
+            if (onStep != null) await onStep($"Extracting \"{fileName}\"");
             await ExtractLocalRowAsync(doc, row, fileName, storedDocumentId, ct);
+        }
 
         if (row.IndexStatus != "indexed")
+        {
+            if (onStep != null) await onStep($"Indexing \"{fileName}\"");
             await WaitForIndexedAsync(row.Id, ct);
+        }
 
         await SyncStoredDocumentParseStatusAsync(doc, "parsed", null, ct);
     }
@@ -192,6 +242,11 @@ public sealed class NdGapEvidencePrepareService(
         {
             result = extraction.ExtractFromMarkdown(
                 fileName, row.MarkdownText, row.TotalPages ?? 0, row.OcrPageCount ?? 0);
+            if (DocxRenderedPages.IsWordFile(fileName) && !string.IsNullOrWhiteSpace(doc.StoragePath))
+            {
+                result = DocxRenderedPages.Apply(await storage.DownloadAsync(doc.StoragePath, ct), result);
+                row.TotalPages = result.TotalPages;
+            }
         }
         catch (Exception ex)
         {
