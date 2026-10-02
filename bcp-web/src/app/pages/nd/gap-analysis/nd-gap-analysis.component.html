@@ -655,9 +655,12 @@
     [title]="view.title"
     [reviews]="view.reviews"
     [clauseLabels]="evidenceClauseLabels"
+    [rerunDisabled]="reportEvidenceRerunning || reportEvidenceBusy"
     (closed)="closeEvidenceHistory()"
     (openClause)="openEvidenceHistoryClause($event)"
     (openDocument)="openPdfFromNd($event)"
+    (rerunFailedInRun)="onRerunFailedFromHistory($event)"
+    (rerunClause)="onRerunClauseFromHistory($event)"
   />
 }
 

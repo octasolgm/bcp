@@ -38,9 +38,15 @@ export class NdEvidenceHistoryDrawerComponent {
   @Input() reviews: GapEvidenceReview[] = [];
   /** Display label per analysis point id, e.g. "§3.3 Protection against liability". */
   @Input() clauseLabels: Record<string, string> = {};
+  /** Disable rerun buttons while a re-check is already in progress. */
+  @Input() rerunDisabled = false;
   @Output() closed = new EventEmitter<void>();
   @Output() openClause = new EventEmitter<string>();
   @Output() openDocument = new EventEmitter<{ docId: string; page?: string | null; find?: string }>();
+  /** Re-run every clause in this history entry that ended in failed status. */
+  @Output() rerunFailedInRun = new EventEmitter<GapEvidenceRunHistoryEntry>();
+  /** Re-run one clause that failed in a past re-check. */
+  @Output() rerunClause = new EventEmitter<GapEvidenceReview>();
 
   readonly gapEvidenceOutcomeLabel = gapEvidenceOutcomeLabel;
   readonly evidenceQuoteRefLabel = evidenceQuoteRefLabel;
@@ -86,9 +92,25 @@ export class NdEvidenceHistoryDrawerComponent {
     return this.clauseLabels[review.analysisPointId] || (review.clauseNo ? `§${review.clauseNo}` : 'Clause');
   }
 
+  failedReviews(run: GapEvidenceRunHistoryEntry): GapEvidenceReview[] {
+    return run.reviews.filter((r) => r.status === 'failed');
+  }
+
+  onRerunFailedInRun(run: GapEvidenceRunHistoryEntry, event: Event): void {
+    event.stopPropagation();
+    if (this.rerunDisabled || !this.failedReviews(run).length) return;
+    this.rerunFailedInRun.emit(run);
+  }
+
+  onRerunClause(review: GapEvidenceReview, event: Event): void {
+    event.stopPropagation();
+    if (this.rerunDisabled || review.status !== 'failed') return;
+    this.rerunClause.emit(review);
+  }
+
   runSummary(run: GapEvidenceRunHistoryEntry): string {
     const changed = run.reviews.filter(reviewHasNewFindings).length;
-    const failed = run.reviews.filter((r) => r.status === 'failed').length;
+    const failed = this.failedReviews(run).length;
     const parts = [`${run.reviews.length} clause${run.reviews.length === 1 ? '' : 's'} checked`];
     parts.push(changed ? `${changed} with new findings` : 'no new findings');
     if (failed) parts.push(`${failed} failed`);

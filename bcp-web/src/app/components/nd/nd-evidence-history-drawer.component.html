@@ -38,7 +38,20 @@
               @if (run.createdByName) { · {{ run.createdByName }} }
               @if (run.llmModel) { · AI: {{ run.llmModel }} }
             </p>
-            <p class="eh-run-summary">{{ runSummary(run) }}</p>
+            <div class="eh-run-summary-row">
+              <p class="eh-run-summary">{{ runSummary(run) }}</p>
+              @if (failedReviews(run).length) {
+                <button
+                  type="button"
+                  class="eh-rerun-btn"
+                  [disabled]="rerunDisabled"
+                  [title]="rerunDisabled ? 'A re-check is already running' : 'Re-run all failed clauses from this check'"
+                  (click)="onRerunFailedInRun(run, $event)"
+                >
+                  Rerun failed
+                </button>
+              }
+            </div>
           </div>
           <svg class="eh-chevron" [class.open]="isRunOpen(run.rerunId)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M6 9l6 6 6-6" />
@@ -59,6 +72,17 @@
               <span class="eh-outcome">
                 {{ review.status === 'failed' ? 'Failed' : gapEvidenceOutcomeLabel(review.clauseOutcome) }}
               </span>
+              @if (review.status === 'failed') {
+                <button
+                  type="button"
+                  class="eh-rerun-btn eh-rerun-btn--clause"
+                  [disabled]="rerunDisabled"
+                  [title]="rerunDisabled ? 'A re-check is already running' : 'Re-run this clause only'"
+                  (click)="onRerunClause(review, $event)"
+                >
+                  Rerun
+                </button>
+              }
               <button
                 type="button"
                 class="eh-clause-toggle"

@@ -71,6 +71,7 @@ import {
   type GapEvidenceRerunCounts,
   type GapEvidenceRerunItem,
   type GapEvidenceRerunRequest,
+  type GapEvidenceRunHistoryEntry,
   type GapEvidenceReview,
 } from '../../../../lib/nd/gap-evidence-rerun';
 import {
@@ -421,6 +422,42 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   openClauseEvidenceHistoryForItem(item: GapItemData): void {
     const pointId = this.analysisPointForGap(item)?.id;
     if (pointId) this.openClauseEvidenceHistory(pointId);
+  }
+
+  async onRerunFailedFromHistory(run: GapEvidenceRunHistoryEntry): Promise<void> {
+    const failed = run.reviews.filter((r) => r.status === 'failed');
+    await this.rerunEvidenceHistoryClauses(failed);
+  }
+
+  async onRerunClauseFromHistory(review: GapEvidenceReview): Promise<void> {
+    if (review.status !== 'failed') return;
+    await this.rerunEvidenceHistoryClauses([review]);
+  }
+
+  /** Re-check clauses that failed in a prior run (same pipeline as Rerun all gaps). */
+  private async rerunEvidenceHistoryClauses(reviews: GapEvidenceReview[]): Promise<void> {
+    if (!reviews.length || !this.ndRunId || this.reportEvidenceRerunning) return;
+    if (!this.isNdRegulWorkflow) {
+      this.toast.show('Evidence re-check history reruns require the Regul workflow.', 'error');
+      return;
+    }
+    this.closeEvidenceHistory();
+    this.ndDetailError = '';
+    this.reportEvidenceRerunning = true;
+    this.gapActivityMarquee = 'Gap evidence re-check starting…';
+    this.cdr.markForCheck();
+    const points = reviews.map((r) => ({
+      pointId: r.analysisPointId,
+      gapIndex: r.gapIndexFilter ?? null,
+      gaps: this.gapRosterFor(r.analysisPointId),
+    }));
+    const scope = points.length === 1 ? 'clause' as const : 'report' as const;
+    try {
+      const started = await this.startEvidenceRerun({ scope, points });
+      if (!started) this.applyEvidenceRerun(this.evidenceRerun);
+    } catch {
+      this.applyEvidenceRerun(this.evidenceRerun);
+    }
   }
 
   closeEvidenceHistory(): void {

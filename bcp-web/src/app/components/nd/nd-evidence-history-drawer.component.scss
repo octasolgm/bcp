@@ -183,8 +183,45 @@
   color: var(--text-secondary);
 }
 
+.eh-run-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  margin-top: 0.15rem;
+}
+
 .eh-run-summary {
+  margin: 0;
   font-weight: 600;
+}
+
+.eh-rerun-btn {
+  flex-shrink: 0;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  &--clause {
+    margin-left: auto;
+  }
 }
 
 .eh-clause {
