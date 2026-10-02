@@ -87,6 +87,8 @@ export class NdPipelinePanelService {
   private readonly _runActive = signal(false);
   private readonly _clauses = signal<PipelineClauseRetrieval[]>([]);
   private readonly _docs = signal<PipelineDocRef[]>([]);
+  /** Clauses whose forward LLM judgment failed — Step 8 stays in an error state until retried. */
+  private readonly _judgmentFailures = signal(0);
 
   readonly active = this._active.asReadonly();
   readonly collapsed = this._collapsed.asReadonly();
@@ -97,6 +99,7 @@ export class NdPipelinePanelService {
   readonly runActive = this._runActive.asReadonly();
   readonly clauses = this._clauses.asReadonly();
   readonly docs = this._docs.asReadonly();
+  readonly judgmentFailures = this._judgmentFailures.asReadonly();
 
   /** Called by AnalyseRegulFullV2Component on init — makes the shell show the panel toggle. */
   activate(): void {
@@ -110,6 +113,12 @@ export class NdPipelinePanelService {
     this._runActive.set(false);
     this._clauses.set([]);
     this._docs.set([]);
+    this._judgmentFailures.set(0);
+  }
+
+  setJudgmentFailures(count: number): void {
+    const n = Math.max(0, count);
+    if (n !== this._judgmentFailures()) this._judgmentFailures.set(n);
   }
 
   setPhase(phase: string | null): void {

@@ -114,10 +114,17 @@ export type NdApiResult<T> = {
   };
 };
 
+export type NdLocalExtractionSectionPageBlock = {
+  page: number;
+  text: string;
+};
+
 export type NdLocalExtractionSection = {
   clauseNo: string;
   clauseText: string;
   sourcePage: number | null;
+  sourcePageEnd?: number | null;
+  pageBlocks?: NdLocalExtractionSectionPageBlock[] | null;
 };
 
 /** Which local OCR engine parsed a document — each engine gets its own independent result per document,
@@ -1151,21 +1158,53 @@ export class NdApiService {
   async openRegulationDocumentPdf(docId: string, page?: number | null): Promise<boolean> {
     const res = await this.getRegulationDocumentFileUrl(docId);
     if (!res.success || !res.data?.url) return false;
-    this.openSignedPdfUrl(res.data.url, page);
+    await this.openSignedPdfUrl(res.data.url, page);
     return true;
   }
 
   async openInternalDocumentPdf(docId: string, page?: number | null): Promise<boolean> {
     const res = await this.getInternalDocumentFileUrl(docId);
     if (!res.success || !res.data?.url) return false;
-    this.openSignedPdfUrl(res.data.url, page);
+    await this.openSignedPdfUrl(res.data.url, page);
     return true;
   }
 
-  private openSignedPdfUrl(url: string, page?: number | null): void {
+  /** Open a stored ND document in a new tab (internal, regulation, then legacy signed-url). */
+  async openStoredDocumentPdf(docId: string, page?: number | string | null): Promise<boolean> {
+    const pageNum = this.parsePdfPage(page);
+    if (await this.openInternalDocumentPdf(docId, pageNum)) return true;
+    if (await this.openRegulationDocumentPdf(docId, pageNum)) return true;
+    return false;
+  }
+
+  private parsePdfPage(page?: number | string | null): number | null {
+    if (page == null || page === '') return null;
+    const n = typeof page === 'number' ? page : parseInt(String(page).trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  async openPdfUrlInNewTab(url: string, page?: number | string | null): Promise<void> {
+    await this.openSignedPdfUrl(url, this.parsePdfPage(page));
+  }
+
+  private async openSignedPdfUrl(url: string, page?: number | null): Promise<void> {
     const pdfPage = page != null && page > 0 ? page : null;
-    const full = pdfPage ? `${url}#page=${pdfPage}` : url;
-    window.open(full, '_blank', 'noopener');
+    const hash = pdfPage ? `#page=${pdfPage}` : '';
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const pdfBlob =
+        blob.type === 'application/pdf' || blob.type === ''
+          ? new Blob([blob], { type: 'application/pdf' })
+          : blob;
+      const objectUrl = URL.createObjectURL(pdfBlob);
+      const opened = window.open(`${objectUrl}${hash}`, '_blank', 'noopener');
+      if (!opened) URL.revokeObjectURL(objectUrl);
+      else window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000);
+    } catch {
+      window.open(`${url}${hash}`, '_blank', 'noopener');
+    }
   }
 
   private parseDownloadFilename(header: string | null, fallback: string): string {

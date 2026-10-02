@@ -203,6 +203,10 @@
     background: color-mix(in srgb, var(--status-info, #2563eb) 6%, var(--bg-surface, transparent));
   }
 
+  &.status-error {
+    background: color-mix(in srgb, var(--status-danger, #dc2626) 6%, var(--bg-surface, transparent));
+  }
+
   &.status-not_built {
     opacity: 0.65;
   }

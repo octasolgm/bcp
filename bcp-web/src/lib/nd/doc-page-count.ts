@@ -7,3 +7,10 @@ export function catalogPdfPageLabel(
   const pages = pageCount ?? 0;
   return pages > 0 ? `${pages}` : '—';
 }
+
+/** Side panel subtitle, e.g. "63 pages". */
+export function detailPanelPagesPhrase(pageCount: number | null | undefined): string | null {
+  const pages = pageCount ?? 0;
+  if (pages <= 0) return null;
+  return `${pages} page${pages === 1 ? '' : 's'}`;
+}

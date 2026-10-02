@@ -3,6 +3,9 @@ import {
   formatPolicyRefLabel,
   parsePolicyCitationFromLine,
   parseRegulDocumentReferenceLines,
+  buildPolicyExtractBlocks,
+  resolveDocIdForDocumentRefLine,
+  resolvePolicyDocId,
   sanitizePolicySection,
 } from './policy-doc-resolve';
 
@@ -64,6 +67,19 @@ describe('parsePolicyCitationFromLine', () => {
   });
 });
 
+describe('resolvePolicyDocId', () => {
+  it('matches OCR-spaced document titles to catalog file names', () => {
+    const catalog = [
+      { id: 'aml-doc', originalFileName: 'Internal AML Manual 290626 azure (1).pdf' },
+      { id: 'other-doc', originalFileName: 'Branch Operations Manual.pdf' },
+    ];
+    const spaced =
+      'Internal A M L M a n u a l 290626 azure (1) — section rule 13.2.2, p.40';
+    expect(resolvePolicyDocId(spaced, catalog)).toBe('aml-doc');
+    expect(resolveDocIdForDocumentRefLine(spaced, catalog)).toBe('aml-doc');
+  });
+});
+
 describe('parseRegulDocumentReferenceLines', () => {
   const catalog = [{ id: 'doc-1', originalFileName: 'Internal AML Manual 290626 (1).pdf' }];
 
@@ -77,6 +93,35 @@ describe('parseRegulDocumentReferenceLines', () => {
     expect(refs[0].page).toBe('12');
     expect(refs[1].section).toBe('9.4.1');
     expect(refs[1].page).toBe('63');
+  });
+
+  it('resolves doc id per line when catalog has multiple manuals', () => {
+    const multi = [
+      { id: 'aml', originalFileName: 'Internal AML Manual 290626 (1).pdf' },
+      { id: 'branch', originalFileName: 'Branch Manual.pdf' },
+    ];
+    const lineA = 'Internal AML Manual — section 6, p.13';
+    const lineB = 'Branch Manual — section 4.1, p.25';
+    expect(resolveDocIdForDocumentRefLine(lineA, multi)).toBe('aml');
+    expect(resolveDocIdForDocumentRefLine(lineB, multi)).toBe('branch');
+  });
+});
+
+describe('buildPolicyExtractBlocks', () => {
+  const catalog = [{ id: 'doc-1', originalFileName: 'Internal AML Manual.pdf' }];
+
+  it('pairs each document reference line with numbered policy extract', () => {
+    const extract =
+      '(1) First quote about SAR confidentiality.\n\n(2) Second quote about employee liability.';
+    const refs =
+      'Internal AML Manual — section rule 13.2.2, p.40; Internal AML Manual — section 6, p.13';
+    const lines = refs.split(';').map((l) => l.trim());
+    const blocks = buildPolicyExtractBlocks(lines, [], extract, catalog);
+    expect(blocks.length).toBe(2);
+    expect(blocks[0].refLine).toContain('p.40');
+    expect(blocks[0].detail).toContain('SAR confidentiality');
+    expect(blocks[1].refLine).toContain('p.13');
+    expect(blocks[1].detail).toContain('employee liability');
   });
 });
 

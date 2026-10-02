@@ -170,11 +170,18 @@ export type InternalDocument = {
   generatedFromRunName?: string | null;
 };
 
+export type InternalDocumentSectionPageBlock = {
+  page: number;
+  text: string;
+};
+
 export type InternalDocumentSection = {
   id: string;
   sectionRef: string;
   sectionText: string;
   sourcePage?: number | null;
+  sourcePageEnd?: number | null;
+  pageBlocks?: InternalDocumentSectionPageBlock[] | null;
   displayOrder?: number;
 };
 

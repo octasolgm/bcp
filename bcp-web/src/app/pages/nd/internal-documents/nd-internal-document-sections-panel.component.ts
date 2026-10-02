@@ -12,7 +12,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import type { InternalDocumentSection } from '../../../../lib/nd/types';
+import type { InternalDocumentSection, InternalDocumentSectionPageBlock } from '../../../../lib/nd/types';
 import { sortInternalSectionsByPointRef, normalizeInternalSectionRef } from '../../../../lib/nd/internal-section-group';
 import { splitSectionDisplayText } from '../../../../lib/nd/clause-section-display';
 import { sanitizePolicySectionText } from '../../../../lib/nd/policy-section-text';
@@ -170,6 +170,30 @@ export class NdInternalDocumentSectionsPanelComponent implements OnChanges {
   sectionPage(section: InternalDocumentSection): number | null {
     const page = section.sourcePage;
     return page != null && page > 0 ? page : null;
+  }
+
+  sectionPageLabel(section: InternalDocumentSection): string | null {
+    const start = section.sourcePage;
+    if (start == null || start < 1) return null;
+    const end = section.sourcePageEnd;
+    if (end != null && end > start) return `${start}–${end}`;
+    return String(start);
+  }
+
+  sectionPageBlocks(section: InternalDocumentSection): InternalDocumentSectionPageBlock[] {
+    if (section.pageBlocks?.length) return section.pageBlocks;
+    const page = this.sectionPage(section);
+    const body = splitSectionDisplayText(section.sectionText, section.sectionRef).body;
+    if (!body) return [];
+    return page ? [{ page, text: body }] : [{ page: 1, text: body }];
+  }
+
+  sectionBlockParagraphs(text: string): string[] {
+    const t = text.trim();
+    if (!t) return [];
+    const byBlank = t.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean);
+    if (byBlank.length > 1) return byBlank;
+    return t.split(/\n+/).map((s) => s.trim()).filter(Boolean);
   }
 
   openPage(page: number | null | undefined, event: Event): void {

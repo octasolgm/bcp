@@ -420,16 +420,25 @@
                 <span class="muted panel-sub">
                   @if (viewMode === 'parsed') {
                     Parsed text
+                    @if (detailPagesLabel(sectionsFor); as pg) {
+                      · {{ pg }}
+                    }
                     @if (parsedTextFor(sectionsFor); as pt) {
                       · {{ pt.length | number }} characters
                     }
                   } @else if (viewMode === 'semantic') {
                     Semantic extract
+                    @if (detailPagesLabel(sectionsFor); as pg) {
+                      · {{ pg }}
+                    }
                     @if (sectionsFor.sectionCount) {
                       · {{ sectionRows.length }} sections
                     }
                   } @else {
                     {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
+                    @if (detailPagesLabel(sectionsFor); as pg) {
+                      · {{ pg }}
+                    }
                     @if (sectionsFor.sectionCount) {
                       · {{ sectionsFor.sectionCount }} sections
                     }

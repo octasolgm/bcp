@@ -15,7 +15,7 @@ import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.
 import { ToastService } from '../../../services/toast.service';
 import { startPanelResize } from '../../shared/panel-resize';
 import { formatBytes, formatDate, formatTableDate } from '../../../../lib/nd/utils';
-import { catalogPdfPageLabel } from '../../../../lib/nd/doc-page-count';
+import { catalogPdfPageLabel, detailPanelPagesPhrase } from '../../../../lib/nd/doc-page-count';
 import {
   localExtractionHasParsedMarkdown,
   localExtractionHasSectionText,
@@ -471,6 +471,8 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
       sectionRef: s.clauseNo,
       sectionText: s.clauseText,
       sourcePage: s.sourcePage,
+      sourcePageEnd: s.sourcePageEnd ?? null,
+      pageBlocks: s.pageBlocks?.length ? s.pageBlocks : null,
       displayOrder: i,
     }));
   }
@@ -1017,5 +1019,10 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
 
   docPageMeta(doc: InternalDocument): string {
     return catalogPdfPageLabel(doc.pageCount, this.isParsingDoc(doc));
+  }
+
+  detailPagesLabel(doc: InternalDocument | null): string | null {
+    if (!doc) return null;
+    return detailPanelPagesPhrase(doc.pageCount);
   }
 }

@@ -886,18 +886,16 @@
         >
           Queued ({{ analysingStatusCounts.queued }})
         </button>
-        @if (!usesForwardOnlyRunUi()) {
-          <button
-            type="button"
-            role="tab"
-            class="status-tab"
-            [class.active]="analysingStatusFilter === 'failed'"
-            [attr.aria-selected]="analysingStatusFilter === 'failed'"
-            (click)="setAnalysingStatusFilter('failed')"
-          >
-            Failed ({{ analysingStatusCounts.failed }})
-          </button>
-        }
+        <button
+          type="button"
+          role="tab"
+          class="status-tab"
+          [class.active]="analysingStatusFilter === 'failed'"
+          [attr.aria-selected]="analysingStatusFilter === 'failed'"
+          (click)="setAnalysingStatusFilter('failed')"
+        >
+          Failed ({{ analysingStatusCounts.failed }})
+        </button>
         <button
           type="button"
           role="tab"
@@ -914,6 +912,16 @@
         <button type="button" class="btn-sm" [disabled]="!hasResumableRun || !!retryingPointId || ndQueuedOrNotRunCount === 0" (click)="runRemainingPoints()">
           Run remaining ({{ ndQueuedOrNotRunCount }})
         </button>
+        }
+        @if (!isDemoViewer && usesForwardOnlyRunUi() && coverageCounts.failed > 0) {
+          <button
+            type="button"
+            class="btn-sm"
+            [disabled]="!hasResumableRun || !!retryingPointId"
+            (click)="retryFailedOnly()"
+          >
+            {{ retryingPointId === '__batch__' ? 'Rerunning…' : 'Rerun failed (' + coverageCounts.failed + ')' }}
+          </button>
         }
         @if (!isDemoViewer && ndQueuedOrNotRunCount > 0) {
           <button
@@ -988,7 +996,19 @@
                 [rollup]="analysingPointRailRollup(row.pointId)"
                 [showInfoButton]="true"
                 (infoClick)="openPointDetailModal(row.pointId, $event)"
-              />
+              >
+                @if (canShowPointRerunActions(row.pointId)) {
+                  <button
+                    type="button"
+                    class="rail-rerun-btn"
+                    railHeadExtra
+                    [disabled]="isPointRerunInFlight(row.pointId) || (!!retryingPointId && retryingPointId !== row.pointId && retryingPointId !== '__batch__')"
+                    (click)="rerunPointAll(row.pointId); $event.stopPropagation()"
+                  >
+                    {{ pointRerunButtonLabel(row.pointId, row.status === 'failed' ? 'Re-run' : 'Rerun forward', 'all') }}
+                  </button>
+                }
+              </app-nd-clause-rail-card>
             </div>
           }
         </div>

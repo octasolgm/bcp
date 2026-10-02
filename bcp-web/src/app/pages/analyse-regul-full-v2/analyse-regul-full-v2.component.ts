@@ -255,6 +255,9 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       this.stepTracker.setSteps(this.computeTrackerSteps());
       if (this.showEnginePipelinePanel) {
         this.pipelinePanel.setRunActive(!!this.ndRunId);
+        this.pipelinePanel.setJudgmentFailures(
+          this.analysingListRows.filter((r) => r.status === 'failed').length,
+        );
       }
       this.syncPageHeaderMarquee();
     }, 400);

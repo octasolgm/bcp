@@ -89,18 +89,18 @@
                   <span class="chevron" [class.open]="isRowExpanded(rowKey(section, i))">›</span>
                   <span class="section-headline">{{ sectionHeader(section) }}</span>
                 </button>
-                @if (sectionPage(section); as page) {
+                @if (sectionPageLabel(section); as pageLabel) {
                   @if (canOpenSource) {
                     <button
                       type="button"
                       class="source-ref-link section-page"
-                      [attr.title]="'Open ' + docTitle + ' at page ' + page"
+                      [attr.title]="'Open ' + docTitle + ' at page ' + section.sourcePage"
                       (click)="openPage(section.sourcePage, $event)"
                     >
-                      p. {{ page }}
+                      p. {{ pageLabel }}
                     </button>
                   } @else {
-                    <span class="section-page">p. {{ page }}</span>
+                    <span class="section-page">p. {{ pageLabel }}</span>
                   }
                 }
                 @if (showSectionNav()) {
@@ -130,8 +130,26 @@
               </header>
               @if (isRowExpanded(rowKey(section, i))) {
                 <div class="section-body">
-                  @for (para of sectionParagraphs(section); track $index) {
-                    <p class="section-para">{{ para }}</p>
+                  @for (block of sectionPageBlocks(section); track block.page + '|' + block.text.slice(0, 48)) {
+                    <div class="section-page-block">
+                      @if (section.pageBlocks?.length) {
+                        @if (canOpenSource) {
+                          <button
+                            type="button"
+                            class="source-ref-link section-page section-page-inline"
+                            [attr.title]="'Open ' + docTitle + ' at page ' + block.page"
+                            (click)="openPage(block.page, $event)"
+                          >
+                            p. {{ block.page }}
+                          </button>
+                        } @else {
+                          <span class="section-page section-page-inline">p. {{ block.page }}</span>
+                        }
+                      }
+                      @for (para of sectionBlockParagraphs(block.text); track $index) {
+                        <p class="section-para">{{ para }}</p>
+                      }
+                    </div>
                   }
                 </div>
               } @else {

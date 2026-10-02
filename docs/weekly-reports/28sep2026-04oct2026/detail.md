@@ -198,3 +198,23 @@ Page references for Word documents are now correct. Word files used to cite page
 Re-check fixes
 
 A re-check could fail on a clause with a technical error when the AI answered part of its verdict as a list of points instead of a single paragraph. Those answers are now read as normal text. During a re-check, the pipeline panel on the right now fills in each clause's search details (expanded terms, keyword and meaning-based matches, and the combined result) the same way it does on New Analysis, and the page scrolls to the re-check progress panel when you start a re-check and again when it finishes.
+
+Regul analysis prompts (version 5)
+
+Forward clause judgment for the hybrid New Analysis path now has an updated prompt set (version 5) that keeps verbatim evidence quotes and OCR tolerance, adds clearer rules for when institutional policy wording covers officers and representatives, treats equivalent legal outcomes as covered, and limits gaps to what the regulatory clause actually states (no invented deadlines or templates). Gap text lists only missing atomic requirements; suggested actions are numbered draft policy wording the bank can paste into its manual. After the next API deployment, the platform applies version 5 automatically on startup where it is not already present; admins can still switch versions under Analysis prompts (Regul workflow V3 tab).
+
+Policy extract document links
+
+On the gap analysis report, the document reference lines and the page/section chips under Policy extract now open the internal document and page shown in the label. Previously the UI could show the correct manual name (including titles where OCR had inserted spaces between letters) but still open another attached document from the same run. Each reference is matched to its own file before opening, and the page number is taken from that line.
+
+Policy extract is now shown as a stack: each clickable reference appears directly above the verbatim quote it supports, then the next reference and quote, instead of listing all references first and all text afterward. Clicking a reference opens the source PDF in a new browser tab for viewing rather than downloading the file.
+
+Internal document structural extract (local and Azure DI) now keeps page numbers exactly where Parse wrote them (BCP_PDF_PAGE markers). Each line of a section is tagged with the page it came from during split; we no longer try to guess pages by matching text back to the markdown, which had been stretching some sections to the wrong range (for example p. 13–18 instead of p. 13–14). Multi-page sections show a short span and separate blocks per page in the side panel. Restart the API if needed, then Re-extract on a document to refresh stored sections; Parse is unchanged.
+
+Regul analysis prompts (version 6)
+
+Forward clause judgment for hybrid New Analysis now requires the AI to pull verbatim supporting quotes from every relevant internal document in the retrieved context (main manual, implementation guides, SOPs, annexes), not only the first or primary file. Document references must list each source. After the next API restart, version 6 is applied automatically where it is not already present.
+
+Failed clause judgment on New Analysis (hybrid)
+
+When a clause's forward LLM step errors out, the point rail now shows a Re-run control on that clause, and the points toolbar offers Rerun failed for all failed clauses in the run. The hybrid pipeline panel marks Step 8 as failed (with a count) instead of Done until those clauses succeed on retry.

@@ -51,11 +51,15 @@ import {
   resolveRegulationPdfPage,
 } from '../../../lib/nd/regulation-pdf-page';
 import {
+  buildPolicyExtractBlocks,
   buildPolicyRefProofs,
   docLabelForId,
   formatPolicyRefLabel,
+  resolveDocIdForDocumentRefLine,
   resolvePolicyDocId,
+  resolvePolicyRefDocId,
   type PolicyDocCatalogEntry,
+  type PolicyExtractBlock,
   type PolicyRefProof,
 } from '../../../lib/nd/policy-doc-resolve';
 import { NdItemReviewSectionComponent, type ItemReviewSaveEvent } from './nd-item-review-section.component';
@@ -283,6 +287,7 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   policySection: string | null = null;
   policyRefLabel = '';
   policyRefs: PolicyRefProof[] = [];
+  policyExtractBlocks: PolicyExtractBlock[] = [];
   regulationPage: number | null = null;
   regulationPageLabel: string | null = null;
   landingMessage = '';
@@ -487,6 +492,7 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
     this.policySection = null;
     this.policyExtract = '';
     this.policyRefs = [];
+    this.policyExtractBlocks = [];
     const catalog = this.policyDocCatalog.length
       ? this.policyDocCatalog
       : this.policyDocId
@@ -547,6 +553,13 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
         ? 'Analysis not started yet — run forward/reverse to extract policy text.'
         : 'No corresponding policy extract found.';
     }
+
+    this.policyExtractBlocks = buildPolicyExtractBlocks(
+      this.documentRefLines,
+      this.policyRefs,
+      this.policyExtract,
+      catalog,
+    );
 
     const refPdf =
       resolvedDocRef ||
@@ -1054,22 +1067,77 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
     if (this.policyDocId) this.openPdf.emit({ docId: this.policyDocId, page: this.policyPage });
   }
 
+  private policyCatalogForResolve(): PolicyDocCatalogEntry[] {
+    return this.policyDocCatalog.length
+      ? this.policyDocCatalog
+      : this.policyDocId
+        ? [{ id: this.policyDocId, title: null, originalFileName: null }]
+        : [];
+  }
+
+  canOpenDocumentRefLine(line: string): boolean {
+    return Boolean(
+      resolveDocIdForDocumentRefLine(line, this.policyCatalogForResolve(), this.documentRefDocId),
+    );
+  }
+
+  openDocIdForPolicyRef(ref: PolicyRefProof): string | null {
+    return resolvePolicyRefDocId(ref, this.policyCatalogForResolve(), this.policyDocId);
+  }
+
   onViewDocumentReference(): void {
-    if (!this.documentRefDocId) return;
     const line = this.documentRefLines[0] ?? this.documentReference;
     this.onViewDocumentReferenceLine(line);
   }
 
   onViewDocumentReferenceLine(line: string): void {
-    if (!this.documentRefDocId) return;
+    const id = resolveDocIdForDocumentRefLine(
+      line,
+      this.policyCatalogForResolve(),
+      this.documentRefDocId,
+    );
+    if (!id) return;
     const pageMatch = line.match(/(?:p\.?|page)\s*(\d+)/i);
     const page = pageMatch?.[1] ?? this.policyPage;
-    this.onViewPolicyPage(page, this.documentRefDocId);
+    this.openPdf.emit({ docId: id, page: page ?? undefined });
   }
 
   onViewPolicyPage(page?: string | null, docId?: string | null): void {
-    const id = docId ?? this.policyDocId;
+    const catalog = this.policyCatalogForResolve();
+    let id = docId?.trim() || null;
+    if (!id && catalog.length === 1) id = catalog[0].id;
+    if (!id && catalog.length === 0) id = this.policyDocId;
     if (id) this.openPdf.emit({ docId: id, page: page ?? undefined });
+  }
+
+  onViewPolicyRef(ref: PolicyRefProof): void {
+    const id = this.openDocIdForPolicyRef(ref);
+    if (!id) return;
+    this.openPdf.emit({ docId: id, page: ref.page || undefined });
+  }
+
+  onViewPolicyExtractBlock(block: PolicyExtractBlock): void {
+    if (block.refLine?.trim()) {
+      this.onViewDocumentReferenceLine(block.refLine);
+      return;
+    }
+    if (block.ref) this.onViewPolicyRef(block.ref);
+  }
+
+  canOpenPolicyExtractBlock(block: PolicyExtractBlock): boolean {
+    if (block.refLine?.trim()) return this.canOpenDocumentRefLine(block.refLine);
+    if (block.ref) return this.canOpenPolicyRef(block.ref);
+    return false;
+  }
+
+  policyExtractBlockLabel(block: PolicyExtractBlock): string {
+    if (block.refLine?.trim()) return block.refLine.trim();
+    if (block.ref) return this.formatPolicyRefLabel(block.ref);
+    return 'Policy source';
+  }
+
+  policyExtractBlockTrack(block: PolicyExtractBlock, index: number): string {
+    return `${index}|${block.refLine ?? ''}|${block.ref?.page ?? ''}|${block.detail.slice(0, 48)}`;
   }
 
   onViewGapEvidence(storedDocumentId: string): void {
@@ -1082,7 +1150,7 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   }
 
   canOpenPolicyRef(ref: PolicyRefProof): boolean {
-    return Boolean(ref.docId ?? this.policyDocId);
+    return Boolean(this.openDocIdForPolicyRef(ref));
   }
 
   attachmentsForGap(actionIndex: number): PointGapAttachment[] {

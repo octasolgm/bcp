@@ -3048,9 +3048,18 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   openPdfFromNd(event: { docId: string; page?: string | null; find?: string }): void {
-    // A Word file has no pages a browser can jump to, so an evidence quote opens the document
-    // viewer at the passage instead.
-    const fileName = this.fileNameForStoredDoc(event.docId) ?? '';
+    void this.openPdfFromNdAsync(event);
+  }
+
+  private async openPdfFromNdAsync(event: {
+    docId: string;
+    page?: string | null;
+    find?: string;
+  }): Promise<void> {
+    const fileName =
+      this.fileNameForStoredDoc(event.docId) ??
+      this.ndPolicyDocCatalog.find((d) => d.id === event.docId)?.originalFileName ??
+      '';
     if (event.find && /\.docx?$/i.test(fileName)) {
       const url = this.router.serializeUrl(
         this.router.createUrlTree(['/nd/internal-documents-azure-di'], {
@@ -3060,14 +3069,14 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       window.open(url, '_blank', 'noopener');
       return;
     }
-    const openUrl = (url: string) => {
-      const full = event.page ? `${url}#page=${event.page}` : url;
-      window.open(full, '_blank', 'noopener');
-    };
+
+    const opened = await this.ndApi.openStoredDocumentPdf(event.docId, event.page);
+    if (opened) return;
+
     this.api.getDocumentSignedUrl(event.docId).subscribe({
       next: (r) => {
         if (r.url) {
-          openUrl(r.url);
+          void this.ndApi.openPdfUrlInNewTab(r.url, event.page);
           return;
         }
         void this.openRegulationFileUrl(event.docId, event.page);

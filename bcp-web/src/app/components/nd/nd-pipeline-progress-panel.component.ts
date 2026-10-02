@@ -12,7 +12,7 @@ import { sortByPointRef } from '../../../lib/nd/list-utils';
 type ExpansionMatchKind = 'acronym' | 'synonym';
 
 type StepKind = 'live' | 'placeholder';
-type StepStatus = 'done' | 'running' | 'pending' | 'not_built' | 'not_started';
+type StepStatus = 'done' | 'running' | 'pending' | 'error' | 'not_built' | 'not_started';
 
 type StepRow = {
   key: string;
@@ -103,6 +103,7 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
     this.panel.clauses();
     this.panel.phase();
     this.panel.runActive();
+    this.panel.judgmentFailures();
     this.cdr.markForCheck();
     this.cdr.detectChanges();
   });
@@ -122,7 +123,9 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
   readonly judgmentStatus = computed<StepStatus>(() => {
     if (!this.panel.runActive()) return 'not_started';
     const phase = (this.panel.phase() ?? '').toLowerCase();
-    if (phase === 'done') return 'done';
+    if (phase === 'done') {
+      return this.panel.judgmentFailures() > 0 ? 'error' : 'done';
+    }
     if (PHASES_PAST_RETRIEVAL.has(phase)) return 'running';
     return 'pending';
   });
@@ -154,7 +157,11 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
     return this.retrievalStatus();
   }
 
-  statusLabel(status: StepStatus): string {
+  statusLabel(status: StepStatus, step?: StepRow): string {
+    if (status === 'error' && step?.key === 'step8') {
+      const n = this.panel.judgmentFailures();
+      return n === 1 ? '1 clause failed — retry' : `${n} clauses failed — retry`;
+    }
     switch (status) {
       case 'done':
         return 'Done';
@@ -162,6 +169,8 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
         return 'Processing…';
       case 'pending':
         return 'Queued';
+      case 'error':
+        return 'Failed';
       case 'not_started':
         return '';
       default:

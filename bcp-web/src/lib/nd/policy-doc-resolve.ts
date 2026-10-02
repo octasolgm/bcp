@@ -18,6 +18,12 @@ export type PolicyRefProof = {
   quote?: string | null;
 };
 
+export type PolicyExtractBlock = {
+  refLine: string | null;
+  ref: PolicyRefProof | null;
+  detail: string;
+};
+
 const UUID_RE =
   /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
@@ -67,6 +73,20 @@ function normalizeName(value: string): string {
     .trim();
 }
 
+/** Ignore spaces/punctuation so OCR titles like "A M L M a n u a l" match "AML Manual". */
+function compactAlphaNum(value: string): string {
+  return value.replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+function namesMatchReference(refNorm: string, nameNorm: string): boolean {
+  if (!refNorm || !nameNorm) return false;
+  if (refNorm.includes(nameNorm) || nameNorm.includes(refNorm)) return true;
+  const refCompact = compactAlphaNum(refNorm);
+  const nameCompact = compactAlphaNum(nameNorm);
+  if (refCompact.length < 10 || nameCompact.length < 10) return false;
+  return refCompact.includes(nameCompact) || nameCompact.includes(refCompact);
+}
+
 /** Match Reference PDF / file name text to an internal document id. */
 export function resolvePolicyDocId(
   reference: string | null | undefined,
@@ -81,7 +101,7 @@ export function resolvePolicyDocId(
     for (const name of names) {
       const nameNorm = normalizeName(name);
       if (!nameNorm) continue;
-      if (refNorm.includes(nameNorm) || nameNorm.includes(refNorm)) return doc.id;
+      if (namesMatchReference(refNorm, nameNorm)) return doc.id;
     }
   }
 
@@ -244,6 +264,60 @@ function pushPolicyRef(
   });
 }
 
+/** Split Regul formatter output like "(1) quote…\n\n(2) quote…" into separate passages. */
+export function parseNumberedPolicyExtractText(text: string): string[] {
+  const t = text.trim();
+  if (!t || /no corresponding policy extract found/i.test(t)) return [];
+
+  const segments = t
+    .split(/\n\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const numbered = segments
+    .map((s) => s.replace(/^\(\d+\)\s*/, '').trim())
+    .filter(Boolean);
+
+  if (
+    numbered.length > 1 ||
+    (numbered.length === 1 && /^\(\d+\)\s/.test(segments[0] ?? ''))
+  ) {
+    return numbered;
+  }
+
+  return [t.replace(/^\(\d+\)\s*/, '').trim()].filter(Boolean);
+}
+
+/** Pair each document reference line with its policy extract for stacked UI. */
+export function buildPolicyExtractBlocks(
+  documentRefLines: string[],
+  policyRefs: PolicyRefProof[],
+  policyExtract: string,
+  catalog: PolicyDocCatalogEntry[],
+): PolicyExtractBlock[] {
+  const details = parseNumberedPolicyExtractText(policyExtract);
+  const refLineCount = documentRefLines.filter((l) => l.trim()).length;
+  const count = Math.max(refLineCount, policyRefs.length, details.length, policyExtract.trim() ? 1 : 0);
+  if (!count) return [];
+
+  const blocks: PolicyExtractBlock[] = [];
+  for (let i = 0; i < count; i++) {
+    const refLine = documentRefLines[i]?.trim() || null;
+    let ref: PolicyRefProof | null = policyRefs[i] ?? null;
+    if (!ref && refLine) {
+      ref = parseRegulDocumentReferenceLines(refLine, catalog)[0] ?? null;
+    }
+
+    let detail = details[i]?.trim() ?? '';
+    if (!detail && count === 1) detail = details[0]?.trim() ?? policyExtract.trim();
+    if (!detail && ref?.quote?.trim()) detail = ref.quote.trim();
+
+    if (!refLine && !ref && !detail) continue;
+    blocks.push({ refLine, ref, detail });
+  }
+
+  return blocks;
+}
+
 /** Parse Regul forward-judgment document_reference lines (one cite per policy_extract). */
 export function parseRegulDocumentReferenceLines(
   documentReference: string | null | undefined,
@@ -302,6 +376,55 @@ export function parseRegulDocumentReferenceLines(
   }
 
   return refs;
+}
+
+/** Resolve stored document id for one document_reference line (Regul or legacy cite). */
+export function resolveDocIdForDocumentRefLine(
+  line: string,
+  catalog: PolicyDocCatalogEntry[],
+  fallbackDocId?: string | null,
+): string | null {
+  const trimmed = line?.trim();
+  if (!trimmed || !catalog.length) {
+    return fallbackDocId ?? (catalog.length === 1 ? catalog[0]?.id ?? null : null);
+  }
+
+  const regulRefs = parseRegulDocumentReferenceLines(trimmed, catalog);
+  if (regulRefs[0]?.docId) return regulRefs[0].docId;
+
+  const parsed = parsePolicyCitationFromLine(trimmed);
+  if (parsed.docName) {
+    const fromName = resolvePolicyDocId(parsed.docName, catalog);
+    if (fromName) return fromName;
+  }
+
+  const dashDoc = trimmed.match(/^(.+?)\s+—\s+/);
+  if (dashDoc?.[1]) {
+    const fromDash = resolvePolicyDocId(dashDoc[1].trim(), catalog);
+    if (fromDash) return fromDash;
+  }
+
+  const fromLine = resolvePolicyDocId(trimmed, catalog);
+  if (fromLine) return fromLine;
+
+  if (fallbackDocId) return fallbackDocId;
+  return catalog.length === 1 ? catalog[0].id : null;
+}
+
+/** Stored document id to open for a policy ref chip (no wrong-doc fallback on multi-doc runs). */
+export function resolvePolicyRefDocId(
+  ref: PolicyRefProof,
+  catalog: PolicyDocCatalogEntry[],
+  runDefaultDocId?: string | null,
+): string | null {
+  if (ref.docId) return ref.docId;
+  if (ref.docLabel && ref.docLabel !== 'Policy') {
+    const fromLabel = resolvePolicyDocId(ref.docLabel, catalog);
+    if (fromLabel) return fromLabel;
+  }
+  if (catalog.length === 1) return catalog[0].id;
+  if (catalog.length === 0 && runDefaultDocId) return runDefaultDocId;
+  return null;
 }
 
 /** Build per-page policy refs from AI messages, resolving doc id from Reference PDF when possible. */

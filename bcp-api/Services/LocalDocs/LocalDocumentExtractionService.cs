@@ -177,6 +177,7 @@ public sealed class LocalDocumentExtractionService(
     public LocalExtractionResult ExtractFromMarkdown(string fileName, string markdown, int totalPages, int ocrPageCount)
     {
         var pages = SplitMarkdownIntoPages(markdown);
+        // Page numbers come from parse markers (BCP_PDF_PAGE) via SplitMarkdownIntoPages — do not re-guess.
         var sections = LocalSectionSplitter.Split(pages);
 
         var warnings = new List<string>();

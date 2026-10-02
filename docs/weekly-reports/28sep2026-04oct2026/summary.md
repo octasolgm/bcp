@@ -157,3 +157,20 @@ Bug fixes
 - Kimi K3 answers were cut off mid-JSON on long clauses ("Expected end of string") because its reasoning shares the 16k output limit; limit raised to 32k for Kimi K3, and a failed re-analysis step no longer fails the clause's evidence check
 - Re-check history: clauses inside a re-check can be collapsed (open by default)
 - Evidence re-check failed to save a clause when an action was split (new action's history row was written before the action itself); re-check errors now show the real cause
+
+02 Oct 2026
+
+Tasks
+- Regul forward judgment prompt version 5 (system, user context, user query): institutional/entity coverage, legal-outcome equivalence, strict clause-only scoping, atomic gap list and matching draft-policy suggested_action; startup seeder sets v5 current on first deploy after release
+
+03 Oct 2026
+
+Tasks
+- Regul forward judgment prompt v6: multi-document evidence rule (verbatim quotes and document_reference from every distinct internal doc in the retrieval bundle); startup seeder sets v6 current on next API restart
+
+Bug fixes
+- Gap analysis report: clicking a document reference or policy page chip under Policy extract now opens the cited internal document and page (per-line doc match, including OCR-spaced file names), instead of the run default document
+- Gap analysis Policy extract: each reference stacks above its quote (ref then detail, repeated); PDF links open in a new tab via inline blob view instead of triggering a file download
+- Local/Azure structural extract: section pages come only from parse BCP_PDF_PAGE markers during split (removed fuzzy text rematch that inflated spans like p. 13–18)
+- Multi-page sections: extract stores page span and per-page text blocks from those markers; re-extract after API update to refresh stored sections
+- New Analysis (hybrid V5): failed clause judgments show Re-run on the point rail and Rerun failed in the toolbar; pipeline Step 8 shows failed (not Done) when any clause judgment failed

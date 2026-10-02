@@ -3567,6 +3567,10 @@ ${this.findingsPreview
   }
 
   retryFailedOnly(): void {
+    if (this.ndRunId && this.usesForwardOnlyRunUi()) {
+      void this.retryFailedNdForwardClauses();
+      return;
+    }
     if (this.ndRunId) {
       void this.retryAllNdPhase2();
       return;
@@ -3610,6 +3614,22 @@ ${this.findingsPreview
     }
     this.toast.show(phase2Only ? 'Re-running Phase 2…' : 'Re-queued point', 'success', 2200);
     this.pollNdRun(this.ndRunId);
+  }
+
+  /** Re-run forward judgment for every clause in this run that ended in failed status. */
+  protected async retryFailedNdForwardClauses(): Promise<void> {
+    if (!this.ndRunId) return;
+    const ids = this.analysingListRows.filter((r) => r.status === 'failed').map((r) => r.pointId);
+    if (!ids.length) {
+      this.toast.show('No failed clauses to rerun', 'info');
+      return;
+    }
+    this.retryingPointId = '__batch__';
+    this.analysisState = 'running';
+    for (const id of ids) {
+      await this.retryNdPoint(id, false);
+    }
+    this.retryingPointId = null;
   }
 
   protected async retryAllNdPhase2(): Promise<void> {

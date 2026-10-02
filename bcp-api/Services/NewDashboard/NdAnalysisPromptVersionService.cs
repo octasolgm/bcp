@@ -15,6 +15,8 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public const int JudgmentSemanticV2VersionNumber = 2;
     public const int JudgmentSemanticV3VersionNumber = 3;
     public const int JudgmentSemanticV4VersionNumber = 4;
+    public const int JudgmentSemanticV5VersionNumber = 5;
+    public const int JudgmentSemanticV6VersionNumber = 6;
     public const int JudgmentFullMarkdownV2VersionNumber = 2;
 
     private static readonly string[] JudgmentPromptKeys =
@@ -95,6 +97,8 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
         await EnsureJudgmentSemanticV2Async(ct);
         await EnsureJudgmentSemanticV3Async(ct);
         await EnsureJudgmentSemanticV4Async(ct);
+        await EnsureJudgmentSemanticV5Async(ct);
+        await EnsureJudgmentSemanticV6Async(ct);
         await EnsureJudgmentFullMarkdownV1Async(ct);
         await EnsureJudgmentFullMarkdownV2Async(ct);
     }
@@ -249,6 +253,95 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
                 PromptKey = key,
                 VersionNumber = JudgmentSemanticV4VersionNumber,
                 Label = NdRegulPromptDefaults.JudgmentSemanticV4Label,
+                PromptText = text,
+                IsCurrent = true,
+            });
+            changed = true;
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Creates judgment prompt v5 (atomic gaps, institutional coverage, draft policy actions,
+    /// strict clause scoping, domain-neutral analyst) and sets it current when missing.
+    /// Safe to call on every startup — skips each key that already has version_number >= 5.
+    /// Inserts only; does not modify or delete existing rows.
+    /// </summary>
+    public async Task EnsureJudgmentSemanticV5Async(CancellationToken ct = default)
+    {
+        var textByKey = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV5.Trim(),
+            [JudgmentUserContextKey] = NdRegulPromptDefaults.JudgmentUserContextTemplateV5.Trim(),
+            [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV5.Trim(),
+        };
+
+        var changed = false;
+        foreach (var (key, text) in textByKey)
+        {
+            var hasV5 = await db.NdAnalysisPromptVersions.AsNoTracking()
+                .AnyAsync(v => v.PromptKey == key && v.VersionNumber >= JudgmentSemanticV5VersionNumber, ct);
+            if (hasV5) continue;
+
+            ValidatePromptText(key, text);
+
+            var siblings = await db.NdAnalysisPromptVersions
+                .Where(v => v.PromptKey == key)
+                .ToListAsync(ct);
+            foreach (var sibling in siblings)
+                sibling.IsCurrent = false;
+
+            db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+            {
+                PromptKey = key,
+                VersionNumber = JudgmentSemanticV5VersionNumber,
+                Label = NdRegulPromptDefaults.JudgmentSemanticV5Label,
+                PromptText = text,
+                IsCurrent = true,
+            });
+            changed = true;
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Creates judgment prompt v6 (multi-document evidence citation on top of v5 rules)
+    /// and sets it current when missing. Safe on every startup — skips keys that already
+    /// have version_number >= 6. Inserts only; does not modify or delete existing rows.
+    /// </summary>
+    public async Task EnsureJudgmentSemanticV6Async(CancellationToken ct = default)
+    {
+        var textByKey = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV5.Trim(),
+            [JudgmentUserContextKey] = NdRegulPromptDefaults.JudgmentUserContextTemplateV5.Trim(),
+            [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV5.Trim(),
+        };
+
+        var changed = false;
+        foreach (var (key, text) in textByKey)
+        {
+            var hasV6 = await db.NdAnalysisPromptVersions.AsNoTracking()
+                .AnyAsync(v => v.PromptKey == key && v.VersionNumber >= JudgmentSemanticV6VersionNumber, ct);
+            if (hasV6) continue;
+
+            ValidatePromptText(key, text);
+
+            var siblings = await db.NdAnalysisPromptVersions
+                .Where(v => v.PromptKey == key)
+                .ToListAsync(ct);
+            foreach (var sibling in siblings)
+                sibling.IsCurrent = false;
+
+            db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+            {
+                PromptKey = key,
+                VersionNumber = JudgmentSemanticV6VersionNumber,
+                Label = NdRegulPromptDefaults.JudgmentSemanticV6Label,
                 PromptText = text,
                 IsCurrent = true,
             });

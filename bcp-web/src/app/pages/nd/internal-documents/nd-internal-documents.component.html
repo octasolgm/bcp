@@ -480,6 +480,9 @@
                     {{ sectionPageRepairStatusText(sectionsFor) }}
                   } @else {
                     {{ sectionExtractLabel(sectionsFor.sectionExtractStatus) }}
+                    @if (detailPagesLabel(sectionsFor); as pg) {
+                      · {{ pg }}
+                    }
                     @if (sectionsFor.sectionCount) {
                       · {{ sectionsFor.sectionCount }} section(s)
                     }

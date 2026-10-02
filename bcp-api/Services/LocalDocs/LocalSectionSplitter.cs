@@ -2,7 +2,14 @@ using System.Text.RegularExpressions;
 
 namespace Reguliq.Api.Services.LocalDocs;
 
-public sealed record LocalSection(string ClauseNo, string ClauseText, int? SourcePage);
+public sealed record LocalSection(
+    string ClauseNo,
+    string ClauseText,
+    int? SourcePage,
+    int? SourcePageEnd = null,
+    IReadOnlyList<LocalSectionPageBlock>? PageBlocks = null);
+
+public sealed record LocalSectionPageBlock(int Page, string Text);
 
 /// <summary>
 /// Local, offline clause/section detection — regex over numbering conventions regulation and policy
@@ -89,6 +96,9 @@ public static partial class LocalSectionSplitter
         string? currentNo = null;
         var currentText = new System.Text.StringBuilder();
         int? currentPage = null;
+        var currentPageBlocks = new List<LocalSectionPageBlock>();
+        int? blockPage = null;
+        var blockText = new System.Text.StringBuilder();
 
         // An Annex commonly restarts its own "1., 2., 3." numbering for a red-flag/checklist-style
         // sub-list — those numbers collide with the document's real top-level clauses of the same
@@ -99,13 +109,49 @@ public static partial class LocalSectionSplitter
         string? currentAnnexLabel = null;
         var usedTopLevelNumbers = new HashSet<string>(StringComparer.Ordinal);
 
+        void FlushPageBlock()
+        {
+            if (blockPage is not > 0) return;
+            var chunk = blockText.ToString().Trim();
+            if (chunk.Length > 0)
+                currentPageBlocks.Add(new LocalSectionPageBlock(blockPage.Value, chunk));
+            blockText.Clear();
+        }
+
+        void AppendLine(int pageNumber, string line)
+        {
+            if (blockPage != pageNumber && blockText.Length > 0)
+                FlushPageBlock();
+            blockPage = pageNumber;
+            if (blockText.Length > 0)
+                blockText.Append('\n');
+            blockText.Append(line);
+            currentText.AppendLine(line);
+        }
+
         void Flush()
         {
             if (currentNo == null) return;
+            FlushPageBlock();
             var text = currentText.ToString().Trim();
             if (text.Length > 0)
-                sections.Add(new LocalSection(currentNo, text, currentPage));
+            {
+                var blockPages = currentPageBlocks.Select(b => b.Page).Where(p => p > 0).ToList();
+                int? sourcePage = blockPages.Count > 0 ? blockPages.Min() : currentPage;
+                int? sourceEnd = blockPages.Count > 0 ? blockPages.Max() : currentPage;
+                var multi = sourcePage is > 0 && sourceEnd is > 0 && sourceEnd > sourcePage;
+                sections.Add(new LocalSection(
+                    currentNo,
+                    text,
+                    sourcePage,
+                    multi ? sourceEnd : null,
+                    multi ? currentPageBlocks.ToList() : null));
+            }
+
             currentText.Clear();
+            currentPageBlocks.Clear();
+            blockPage = null;
+            blockText.Clear();
         }
 
         foreach (var page in pages)
@@ -126,7 +172,7 @@ public static partial class LocalSectionSplitter
                     {
                         currentNo ??= "Introduction";
                         currentPage ??= page.PageNumber;
-                        currentText.AppendLine(line);
+                        AppendLine(page.PageNumber, line);
                         continue;
                     }
 
@@ -138,7 +184,7 @@ public static partial class LocalSectionSplitter
                     TrackTopLevelNumber(headingNo, usedTopLevelNumbers);
                     currentNo = headingNo;
                     currentPage = page.PageNumber;
-                    currentText.AppendLine(line);
+                    AppendLine(page.PageNumber, line);
                     continue;
                 }
 
@@ -146,7 +192,7 @@ public static partial class LocalSectionSplitter
                 // so nothing from the document is silently lost even if numbering hasn't started yet.
                 currentNo ??= "Introduction";
                 currentPage ??= page.PageNumber;
-                currentText.AppendLine(line);
+                AppendLine(page.PageNumber, line);
             }
         }
 
@@ -259,7 +305,7 @@ public static partial class LocalSectionSplitter
                 if (!hasOwnSubClauses)
                 {
                     var previous = merged[^1];
-                    merged[^1] = previous with { ClauseText = previous.ClauseText.TrimEnd() + "\n" + section.ClauseText };
+                    merged[^1] = MergeSections(previous, section);
                     continue;
                 }
             }
@@ -269,6 +315,34 @@ public static partial class LocalSectionSplitter
         }
 
         return merged;
+    }
+
+    private static LocalSection MergeSections(LocalSection previous, LocalSection next)
+    {
+        var blocks = new List<LocalSectionPageBlock>();
+        if (previous.PageBlocks?.Count > 0)
+            blocks.AddRange(previous.PageBlocks);
+        else if (previous.SourcePage is > 0)
+            blocks.Add(new LocalSectionPageBlock(previous.SourcePage.Value, previous.ClauseText));
+
+        if (next.PageBlocks?.Count > 0)
+            blocks.AddRange(next.PageBlocks);
+        else if (next.SourcePage is > 0)
+            blocks.Add(new LocalSectionPageBlock(next.SourcePage.Value, next.ClauseText));
+
+        var pages = blocks.Select(b => b.Page).Where(p => p > 0).ToList();
+        var min = pages.Count > 0 ? pages.Min() : previous.SourcePage ?? next.SourcePage;
+        var max = pages.Count > 0 ? pages.Max() : previous.SourcePageEnd ?? next.SourcePageEnd ?? min;
+        var multi = min is > 0 && max is > 0 && max > min;
+        var text = previous.ClauseText.TrimEnd() + "\n" + next.ClauseText;
+
+        return previous with
+        {
+            ClauseText = text,
+            SourcePage = min,
+            SourcePageEnd = multi ? max : null,
+            PageBlocks = multi ? blocks : null,
+        };
     }
 
     private const int MinContentsEntriesPerPage = 4;
