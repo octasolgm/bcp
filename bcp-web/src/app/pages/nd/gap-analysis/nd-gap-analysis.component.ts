@@ -47,6 +47,7 @@ import {
 } from '../../../../lib/nd/action-plan-seed';
 import { capGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
 import { isAnalysisRunResultsReady } from '../../../../lib/nd/analysis-run-status';
+import { finalizeEmbedToastNote } from '../../../../lib/nd/finalize-embed-toast';
 import { normalizeGapRisk } from '../../../../lib/nd/doc-analysis-ready';
 import {
   buildGapEvidencePrepMarquee,
@@ -2830,11 +2831,13 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         this.finalizeProgressMessage = '';
         if (finalizeRes.success) {
           const docs = finalizeRes.data?.correctedDocuments ?? [];
+          const embedNote = finalizeEmbedToastNote(finalizeRes.data?.embed);
           this.toast.show(
             docs.length
-              ? `Finalized. ${docs.map((d) => `${d.title} v${d.version}`).join(', ')} saved to the document library.`
-              : 'Report finalized.',
+              ? `Finalized. ${docs.map((d) => `${d.title} v${d.version}`).join(', ')} saved to the document library.${embedNote}`
+              : `Report finalized.${embedNote}`,
             'success',
+            embedNote ? 8000 : 4000,
           );
         }
         res = finalizeRes;

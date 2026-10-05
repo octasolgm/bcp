@@ -4,6 +4,7 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services.NewDashboard;
+using Reguliq.Api.Services.NewDashboard.CorrectedDocs;
 using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -14,7 +15,8 @@ public class ReviewerController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
     NdDemoUserDirectory demoDirectory,
-    NdCorrectedDocumentService correctedDocuments) : NdControllerBase
+    NdCorrectedDocumentService correctedDocuments,
+    NdActionPlanEmbedResolver embedResolver) : NdControllerBase
 {
     [HttpGet("queue")]
     public async Task<IActionResult> Queue(CancellationToken ct)
@@ -84,6 +86,7 @@ public class ReviewerController(
         await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
 
         var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile.Id, ct);
+        var embed = await embedResolver.DescribeForRunAsync(runId, ct);
 
         return Ok(new
         {
@@ -96,6 +99,7 @@ public class ReviewerController(
                     title = c.Title,
                     version = c.VersionNumber,
                 }),
+                embed = MapEmbedDiagnostics(embed),
             },
         });
     }
@@ -117,6 +121,7 @@ public class ReviewerController(
             return BadRequest(new { success = false, message = "Run is not finalized yet." });
 
         var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile!.Id, ct, force: true);
+        var embed = await embedResolver.DescribeForRunAsync(runId, ct);
         return Ok(new
         {
             success = true,
@@ -128,9 +133,22 @@ public class ReviewerController(
                     title = c.Title,
                     version = c.VersionNumber,
                 }),
+                embed = MapEmbedDiagnostics(embed),
             },
         });
     }
+
+    private static object MapEmbedDiagnostics(NdActionPlanEmbedResolver.EmbedDiagnostics embed) => new
+    {
+        resolvedActionPlans = embed.ResolvedActionPlanCount,
+        embedTargets = embed.EmbedTargetCount,
+        documents = embed.Documents.Select(d => new
+        {
+            documentId = d.DocumentId,
+            title = d.Title,
+            targetCount = d.TargetCount,
+        }),
+    };
 
     [HttpPost("review/{runId:guid}/pull-back")]
     public async Task<IActionResult> PullBack(Guid runId, [FromBody] ReviewRequest body, CancellationToken ct)

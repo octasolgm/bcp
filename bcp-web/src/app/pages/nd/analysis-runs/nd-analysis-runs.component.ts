@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
+import { finalizeEmbedToastNote } from '../../../../lib/nd/finalize-embed-toast';
 import { bumpsForAnalysisRunSoftDelete } from '../../../../lib/nd/nav-badge-bumps';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
@@ -624,7 +625,8 @@ export class NdAnalysisRunsComponent implements OnInit {
     const res = await this.api.regenerateCorrectedDocuments(run.id);
     this.regeneratingRunId = null;
     if (res.success) {
-      this.toast.show('Regenerated the corrected document(s) for this run', 'success');
+      const embedNote = finalizeEmbedToastNote(res.data?.embed);
+      this.toast.show(`Regenerated the corrected document(s) for this run.${embedNote}`, 'success', embedNote ? 8000 : 4000);
     } else {
       this.toast.show(res.message ?? 'Could not regenerate corrected documents', 'error');
     }

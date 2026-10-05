@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
+using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.NewDashboard;
@@ -21,12 +22,41 @@ namespace Reguliq.Api.Services.NewDashboard.CorrectedDocs;
 ///    matching the judgment's own document_reference text against the run's attached document
 ///    titles, then locating the cited quote in that document's parsed markdown the same way the
 ///    live gap-analysis page grounds a citation (PolicyPageResolver).
-/// A clause whose document can't be identified either way is skipped — the corrected copy generator
-/// still produces a copy of that document, it simply has nothing embedded for that clause instead of
-/// a guess planted at the wrong place.
+/// When nothing else names a document, resolved actions for that clause embed into the run's first
+/// selected internal document so finalize still produces a marked-up copy rather than a byte-identical
+/// placeholder.
 /// </summary>
-public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbedResolver> logger)
+public class NdActionPlanEmbedResolver(
+    AppDbContext db,
+    LandingAiCacheRepository parseCache,
+    ILogger<NdActionPlanEmbedResolver> logger)
 {
+    public sealed record EmbedDiagnostics(
+        int ResolvedActionPlanCount,
+        int EmbedTargetCount,
+        IReadOnlyList<EmbedDocSummary> Documents);
+
+    public sealed record EmbedDocSummary(Guid DocumentId, string? Title, int TargetCount);
+
+    public async Task<EmbedDiagnostics> DescribeForRunAsync(Guid runId, CancellationToken ct)
+    {
+        var resolvedCount = await db.NdAnalysisActionPlans.AsNoTracking()
+            .CountAsync(p => p.AnalysisRunId == runId && p.Status == ActionPlanStatuses.Resolved, ct);
+        var jobs = await ResolveForRunAsync(runId, ct);
+        var titles = await db.StoredDocuments.AsNoTracking()
+            .Where(d => jobs.Select(j => j.StoredDocumentId).Contains(d.Id))
+            .Select(d => new { d.Id, d.Title })
+            .ToListAsync(ct);
+        var titleById = titles.ToDictionary(t => t.Id, t => t.Title);
+        return new EmbedDiagnostics(
+            resolvedCount,
+            jobs.Sum(j => j.Targets.Count),
+            jobs.Select(j => new EmbedDocSummary(
+                j.StoredDocumentId,
+                titleById.GetValueOrDefault(j.StoredDocumentId),
+                j.Targets.Count)).ToList());
+    }
+
     public async Task<IReadOnlyList<NdActionPlanEmbedJob>> ResolveForRunAsync(Guid runId, CancellationToken ct)
     {
         var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runId, ct);
@@ -92,26 +122,30 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
             {
                 gap = gaps.FirstOrDefault(g => g.AnalysisPointId == plan.AnalysisPointId);
             }
-            if (gap == null) continue;
 
+            var finding = ResolveFindingForPoint(point, findingByPointId, findings);
             var (clauseNo, clauseTitle) = ParseClause(point.PointSnapshot);
+            if (string.IsNullOrWhiteSpace(clauseNo))
+                clauseNo = finding?.ClauseNo?.Trim().TrimStart('§') ?? "";
             if (string.IsNullOrWhiteSpace(clauseNo)) continue;
 
             if (!docsByPoint.TryGetValue(point.Id, out var pointDocs))
             {
                 pointDocs = await ResolveDocsForPointAsync(
-                    point, findingByPointId.GetValueOrDefault(point.Id), docIds, docTitles, ct);
+                    point, finding, docIds, docTitles, ct);
                 docsByPoint[point.Id] = pointDocs;
             }
             if (pointDocs.Count == 0) continue;
 
-            var gapText = ExtractGapText(point, gap.GapIndex);
-            var finding = ResolveFindingForPoint(point, findingByPointId, findings);
+            var gapIndexForText = gap?.GapIndex ?? plan.GapIndex;
+            var gapText = ExtractGapText(point, gapIndexForText);
+            if (string.IsNullOrWhiteSpace(gapText))
+                gapText = plan.ActionPlan ?? "Gap addressed";
             var judgmentContext = ParseJudgmentContext(finding);
             var resolvedByName = plan.ResolvedBy.HasValue && namesById.TryGetValue(plan.ResolvedBy.Value, out var n)
                 ? n
-                : gap.ResolvedBy.HasValue && namesById.TryGetValue(gap.ResolvedBy.Value, out var gn) ? gn : null;
-            var resolvedAt = plan.ResolvedAt ?? gap.ResolvedAt ?? plan.UpdatedAt;
+                : gap?.ResolvedBy is Guid gapResolver && namesById.TryGetValue(gapResolver, out var gn) ? gn : null;
+            var resolvedAt = plan.ResolvedAt ?? gap?.ResolvedAt ?? plan.UpdatedAt;
 
             foreach (var (docId, page) in pointDocs)
             {
@@ -122,7 +156,7 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
                     clauseNo,
                     clauseTitle,
                     gapText,
-                    plan.ActionPlan,
+                    plan.ActionPlan ?? "",
                     plan.ResponsibilityLabel,
                     resolvedAt,
                     resolvedByName,
@@ -247,6 +281,20 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
             if (judgment != null)
                 page = await TryResolvePageFromJudgmentQuoteAsync(onlyId, judgment, ct);
             result[onlyId] = page;
+            return result;
+        }
+
+        // Last resort for multi-document runs: primary (first-selected) internal document.
+        if (attachedDocIds.Count > 0)
+        {
+            var primaryId = attachedDocIds[0];
+            int? page = null;
+            if (judgment != null)
+                page = await TryResolvePageFromJudgmentQuoteAsync(primaryId, judgment, ct);
+            logger.LogInformation(
+                "Finalize embed: no document match for clause point {PointId} — using primary internal doc {DocId}",
+                point.Id, primaryId);
+            result[primaryId] = page;
         }
 
         return result;
@@ -275,12 +323,24 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
         return PolicyPageResolver.ResolveQuoteLocation(markdown, quote).Page;
     }
 
-    private async Task<string?> LoadParsedMarkdownAsync(Guid docId, CancellationToken ct) =>
-        await db.NdLocalDocumentExtractions.AsNoTracking()
+    private async Task<string?> LoadParsedMarkdownAsync(Guid docId, CancellationToken ct)
+    {
+        var fromLocal = await db.NdLocalDocumentExtractions.AsNoTracking()
             .Where(e => e.StoredDocumentId == docId && e.MarkdownText != null)
             .OrderByDescending(e => e.ParsedAt)
             .Select(e => e.MarkdownText)
             .FirstOrDefaultAsync(ct);
+        if (!string.IsNullOrWhiteSpace(fromLocal)) return fromLocal;
+
+        var doc = await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == docId, ct);
+        if (doc == null) return null;
+
+        var cacheKey = await NdStoredDocumentExtractionCache.EnsureKeyAsync(db, doc, ct);
+        var row = await parseCache.GetParseCacheAsync(cacheKey, ct);
+        if (string.IsNullOrWhiteSpace(row?.Markdown) && !string.IsNullOrWhiteSpace(doc.FileHash))
+            row = await parseCache.GetParseCacheAsync(doc.FileHash.Trim(), ct);
+        return row?.Markdown;
+    }
 
     private static bool QuoteAppearsInMarkdown(string markdown, string quote)
     {

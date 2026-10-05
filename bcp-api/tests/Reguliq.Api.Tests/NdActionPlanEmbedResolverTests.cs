@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
+using Reguliq.Api.Services.LandingAi;
 using Reguliq.Api.Services.NewDashboard.CorrectedDocs;
 using Xunit;
 
@@ -13,6 +14,12 @@ namespace Reguliq.Api.Tests;
 /// clause's retrieval named one of them, and an unresolved gap that must be left out entirely.</summary>
 public class NdActionPlanEmbedResolverTests
 {
+    private static NdActionPlanEmbedResolver CreateResolver(AppDbContext db) =>
+        new(
+            db,
+            new LandingAiCacheRepository(db, NullLogger<LandingAiCacheRepository>.Instance),
+            NullLogger<NdActionPlanEmbedResolver>.Instance);
+
     private static AppDbContext CreateDb() => new InMemoryAppDbContext(
         new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
@@ -116,7 +123,7 @@ public class NdActionPlanEmbedResolverTests
         });
         await db.SaveChangesAsync();
 
-        var resolver = new NdActionPlanEmbedResolver(db, NullLogger<NdActionPlanEmbedResolver>.Instance);
+        var resolver = CreateResolver(db);
         var jobs = await resolver.ResolveForRunAsync(runId, CancellationToken.None);
 
         var job = Assert.Single(jobs);
@@ -186,7 +193,7 @@ public class NdActionPlanEmbedResolverTests
         });
         await db.SaveChangesAsync();
 
-        var resolver = new NdActionPlanEmbedResolver(db, NullLogger<NdActionPlanEmbedResolver>.Instance);
+        var resolver = CreateResolver(db);
         var jobs = await resolver.ResolveForRunAsync(runId, CancellationToken.None);
 
         var job = Assert.Single(jobs);
@@ -243,7 +250,7 @@ public class NdActionPlanEmbedResolverTests
         });
         await db.SaveChangesAsync();
 
-        var resolver = new NdActionPlanEmbedResolver(db, NullLogger<NdActionPlanEmbedResolver>.Instance);
+        var resolver = CreateResolver(db);
         var jobs = await resolver.ResolveForRunAsync(runId, CancellationToken.None);
 
         var job = Assert.Single(jobs);
@@ -296,7 +303,7 @@ public class NdActionPlanEmbedResolverTests
         });
         await db.SaveChangesAsync();
 
-        var resolver = new NdActionPlanEmbedResolver(db, NullLogger<NdActionPlanEmbedResolver>.Instance);
+        var resolver = CreateResolver(db);
         var jobs = await resolver.ResolveForRunAsync(runId, CancellationToken.None);
 
         var job = Assert.Single(jobs);

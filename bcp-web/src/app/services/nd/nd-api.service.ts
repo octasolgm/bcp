@@ -361,6 +361,12 @@ export type NdWorkspaceMember = {
   isPlatformAdmin: boolean;
 };
 
+export type FinalizeEmbedSummary = {
+  resolvedActionPlans: number;
+  embedTargets: number;
+  documents?: { documentId: string; title?: string | null; targetCount: number }[];
+};
+
 export type NdRunReviewBody = {
   overallComment?: string;
   reviewStatus?: string;
@@ -2286,6 +2292,7 @@ export class NdApiService {
   finalizeAnalysis(runId: string, body: NdRunReviewBody) {
     return this.request<{
       correctedDocuments: { documentId: string; title: string; version: number }[];
+      embed?: FinalizeEmbedSummary;
     }>('POST', `/nd/reviewer/review/${runId}/finalize`, body, true, CORRECTED_DOCS_TIMEOUT_MS);
   }
 
@@ -2293,6 +2300,7 @@ export class NdApiService {
   regenerateCorrectedDocuments(runId: string) {
     return this.request<{
       correctedDocuments: { documentId: string; title: string; version: number }[];
+      embed?: FinalizeEmbedSummary;
     }>(
       'POST',
       `/nd/reviewer/review/${runId}/regenerate-corrected-documents`,

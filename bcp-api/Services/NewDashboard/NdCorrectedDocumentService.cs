@@ -85,9 +85,17 @@ public class NdCorrectedDocumentService(
             async (i, itemCt) =>
             {
                 var (source, nextVersion) = toGenerate[i];
-                var embedded = jobsByDocId.TryGetValue(source.Id, out var job)
-                    ? await TryEmbedActionPlansAsync(source, job, itemCt)
-                    : null;
+                EmbeddedFile? embedded = null;
+                if (jobsByDocId.TryGetValue(source.Id, out var job))
+                {
+                    embedded = await TryEmbedActionPlansAsync(source, job, itemCt);
+                    if (embedded == null && job.Targets.Count > 0)
+                    {
+                        logger.LogWarning(
+                            "Finalize embed failed for document {DocumentId} ({Title}) — {TargetCount} action(s) could not be written into the file; corrected copy will match the source bytes.",
+                            source.Id, source.Title, job.Targets.Count);
+                    }
+                }
                 embedResults[i] = (source, nextVersion, embedded);
             });
 
@@ -193,9 +201,14 @@ public class NdCorrectedDocumentService(
         try
         {
             var original = await storage.DownloadAsync(source.StoragePath, ct);
+            var useDocxEmbedder = fileType is "DOCX" or "DOC";
             var embeddedBytes = fileType == "PDF"
                 ? NdCorrectedPdfEmbedder.Embed(original, job.Targets)
-                : NdCorrectedDocxEmbedder.Embed(original, job.Targets);
+                : useDocxEmbedder
+                    ? NdCorrectedDocxEmbedder.Embed(original, job.Targets)
+                    : original;
+            if (!useDocxEmbedder && fileType != "PDF")
+                return null;
 
             var prepared = await uploadPrep.PrepareAsync(
                 embeddedBytes,

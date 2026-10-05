@@ -54,3 +54,4 @@ Tasks
 
 Bug fixes
 - Finalize corrected documents often had no embedded resolved actions when retrieval or document_reference did not map a clause to an internal doc; single-document runs, policy-quote matching, and clause-level finding fallback now produce embed targets so PDF/DOCX copies include policy notes
+- Finalize embed still empty on multi-doc runs: resolver now reads Azure/Landing parse cache markdown (not only local extraction), does not require a gap roster row, falls back to the first selected internal doc, and finalize/regenerate toasts report resolved-action vs embed-target counts
