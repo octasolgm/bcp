@@ -2073,6 +2073,22 @@ tr.doc-ready-green td:first-child {
       overflow-wrap: anywhere;
     }
 
+    /* Checkbox sits in its own gutter at the left of the cell, so long titles wrap beside it
+       instead of dropping below it. */
+    th.nd-sticky-left,
+    td.nd-sticky-left {
+      padding-left: 2.6rem;
+    }
+
+    th.nd-sticky-left > .nd-row-check,
+    td.nd-sticky-left > .nd-row-check {
+      position: absolute;
+      left: 0.9rem;
+      top: 50%;
+      margin: 0;
+      transform: translateY(-50%);
+    }
+
     /* Actions column: fixed width; rows with many buttons wrap to a second line instead of every
        row reserving the widest row's width. */
     th.nd-sticky-right,

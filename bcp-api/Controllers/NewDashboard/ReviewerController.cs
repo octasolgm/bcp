@@ -104,7 +104,9 @@ public class ReviewerController(
         if (!isRefinalize)
             await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
 
-        var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile.Id, ct, force: isRefinalize);
+        // Every finalize produces fresh corrected copies (a new version) from the actions resolved now —
+        // including a run sent back for review and finalized again.
+        var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile.Id, ct, force: true);
         var embed = await embedResolver.DescribeForRunAsync(runId, ct);
 
         return Ok(new

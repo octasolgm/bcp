@@ -53,9 +53,6 @@ public class NdCorrectedDocumentService(
             .Where(d => docIds.Contains(d.Id))
             .ToListAsync(ct);
 
-        var embedJobs = await EnrichEmbedJobsAsync(await embedResolver.ResolveForRunAsync(runId, ct), ct);
-        var jobsByDocId = embedJobs.ToDictionary(j => j.StoredDocumentId);
-
         // Decide which sources actually need a new version first — cheap DB reads only, done
         // sequentially since they share this method's DbContext.
         var toGenerate = new List<(StoredDocument Source, int NextVersion)>();
@@ -72,6 +69,15 @@ public class NdCorrectedDocumentService(
             var nextVersion = siblings.Count == 0 ? 1 : siblings.Max(d => d.VersionNumber) + 1;
             toGenerate.Add((source, nextVersion));
         }
+
+        if (toGenerate.Count == 0) return created;
+
+        // The AI note writing is paid per call, so it runs only for documents that actually get a new copy.
+        var generatingIds = toGenerate.Select(t => t.Source.Id).ToHashSet();
+        var embedJobs = await EnrichEmbedJobsAsync(
+            (await embedResolver.ResolveForRunAsync(runId, ct)).Where(j => generatingIds.Contains(j.StoredDocumentId)).ToList(),
+            ct);
+        var jobsByDocId = embedJobs.ToDictionary(j => j.StoredDocumentId);
 
         // The slow part — downloading and (for a malformed PDF) rendering every page — runs a
         // few documents at a time instead of one after another, so a run with many internal
