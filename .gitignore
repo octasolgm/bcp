@@ -25,6 +25,7 @@ bcp-api/publish/
 bcp-api/publish_old_*/
 bcp-api/publish-secrets-test/
 bcp-api/_buildcheck*/
+bcp-api/_build_verify/
 bcp-api/_buildlog/
 bcp-api/_publishcheck*/
 bcp-api/_runout/
