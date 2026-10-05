@@ -80,33 +80,52 @@ public sealed class LocalDocumentExtractionService(
         string sourceUrl, string fileName, CancellationToken ct = default)
     {
         var result = await azureDocIntelligence.ConvertAsync(sourceUrl, ct);
-        var rawPages = result.Markdown.Split(AzurePageBreakMarker);
+        var pageChunks = ResolveAzurePageChunks(result);
 
         var sb = new System.Text.StringBuilder();
-        for (var i = 0; i < rawPages.Length; i++)
+        for (var i = 0; i < pageChunks.Count; i++)
         {
-            var pageText = AzureLayoutCommentPattern.Replace(rawPages[i], "").Trim();
+            var pageText = AzureLayoutCommentPattern.Replace(pageChunks[i], "").Trim();
             sb.Append(PolicyPageResolver.PageMarkerPrefix).Append(i + 1).Append(" -->\n");
             sb.Append(pageText).Append('\n');
         }
         var markdown = sb.ToString();
+        var billedPages = Math.Max(result.Pages, pageChunks.Count);
 
         var warnings = new List<string>
         {
-            $"Parsed via Azure Document Intelligence in {result.ElapsedSeconds:F1}s ({rawPages.Length} page(s)).",
+            $"Parsed via Azure Document Intelligence in {result.ElapsedSeconds:F1}s ({billedPages} page(s)).",
         };
+        if (pageChunks.Count > 1 && result.Pages > 1 && !result.Markdown.Contains(AzurePageBreakMarker, StringComparison.Ordinal))
+            warnings.Add("Word/Office: page markers built from Azure layout page lines (markdown had no PageBreak comments).");
 
         logger.LogInformation(
-            "Azure Document Intelligence parse for {File}: {Pages} pages, {Elapsed:F1}s",
-            fileName, rawPages.Length, result.ElapsedSeconds);
+            "Azure Document Intelligence parse for {File}: {Pages} pages ({Markers} markers), {Elapsed:F1}s",
+            fileName, billedPages, pageChunks.Count, result.ElapsedSeconds);
 
         await aiUsage.RecordNonLlmCostAsync(
             "azure-document-intelligence",
-            $"{rawPages.Length} page(s)",
-            rawPages.Length * AzureDocIntelligenceUsdPerPage,
+            $"{billedPages} page(s)",
+            billedPages * AzureDocIntelligenceUsdPerPage,
             ct);
 
-        return new LocalParseResult(fileName, rawPages.Length, rawPages.Length, markdown, warnings);
+        return new LocalParseResult(fileName, billedPages, billedPages, markdown, warnings);
+    }
+
+    private static IReadOnlyList<string> ResolveAzurePageChunks(AzureDocIntelligenceResult result)
+    {
+        if (result.PageTexts is { Count: > 1 })
+            return result.PageTexts;
+
+        var fromBoundaries = AzureDocumentIntelligencePageBuilder.SplitMarkdownOnPageBoundaries(result.Markdown);
+        if (fromBoundaries.Count > 1)
+            return fromBoundaries;
+
+        var fromBreaks = result.Markdown.Split(AzurePageBreakMarker, StringSplitOptions.None);
+        if (fromBreaks.Length > 1)
+            return fromBreaks;
+
+        return fromBreaks;
     }
 
     /// <summary>

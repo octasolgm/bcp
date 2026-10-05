@@ -169,8 +169,14 @@ Tasks
 - Regul forward judgment prompt v6: multi-document evidence rule (verbatim quotes and document_reference from every distinct internal doc in the retrieval bundle); startup seeder sets v6 current on next API restart
 
 Bug fixes
+- Internal Documents (Azure DI): Parse/Re-parse and Extract/Re-extract available again for analysis-linked and gap-evidence rows; side panel toolbar shows those actions next to Parsed text/Source
+- Word on Azure DI parse: stop replacing Azure markdown with OpenXml layout text (restores accurate body and page markers from Azure; PDF parse unchanged)
+- Word on Azure DI: when markdown lacks PageBreak comments, build BCP_PDF_PAGE markers from Azure analyzeResult.pages[].lines (span slice into content, or line text fallback; same Azure body, multi-page like PDF)
 - Gap analysis report: clicking a document reference or policy page chip under Policy extract now opens the cited internal document and page (per-line doc match, including OCR-spaced file names), instead of the run default document
 - Gap analysis Policy extract: each reference stacks above its quote (ref then detail, repeated); PDF links open in a new tab via inline blob view instead of triggering a file download
 - Local/Azure structural extract: section pages come only from parse BCP_PDF_PAGE markers during split (removed fuzzy text rematch that inflated spans like p. 13–18)
 - Multi-page sections: extract stores page span and per-page text blocks from those markers; re-extract after API update to refresh stored sections
 - New Analysis (hybrid V5): failed clause judgments show Re-run on the point rail and Rerun failed in the toolbar; pipeline Step 8 shows failed (not Done) when any clause judgment failed
+- Word internal docs: parse injects BCP_PDF_PAGE markers from Word saved layout (not page 1 only); re-parse and re-extract to refresh
+- Hybrid policy extract refs: document_reference page comes from quote location in parsed markdown, not section start page only
+- New Analysis rerun UI: no more stuck Running with Cancelled chip; forward-only reruns settle when judgment finishes

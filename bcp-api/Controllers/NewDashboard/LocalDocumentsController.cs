@@ -156,6 +156,21 @@ public class LocalDocumentsController(
             cts.Dispose();
         }
 
+        if (DocxRenderedPages.IsWordFile(fileName) && !isAzureDi)
+        {
+            try
+            {
+                bytes ??= await storage.DownloadAsync(doc.StoragePath!, CancellationToken.None);
+                var enhanced = DocxRenderedPages.EnhanceParseResult(bytes, result);
+                if (enhanced != null)
+                    result = enhanced;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not apply Word layout page markers for {DocId}", id);
+            }
+        }
+
         row.Status = "parsed";
         row.TotalPages = result.TotalPages;
         row.OcrPageCount = result.OcrPageCount;
@@ -211,7 +226,10 @@ public class LocalDocumentsController(
         try
         {
             result = extraction.ExtractFromMarkdown(fileName, row.MarkdownText, row.TotalPages ?? 0, row.OcrPageCount ?? 0);
-            if (DocxRenderedPages.IsWordFile(fileName) && !string.IsNullOrWhiteSpace(doc?.StoragePath) && storage.IsConfigured)
+            if (DocxRenderedPages.IsWordFile(fileName)
+                && !OcrEngineNames.IsAzureDocIntelligence(engine)
+                && !string.IsNullOrWhiteSpace(doc?.StoragePath)
+                && storage.IsConfigured)
             {
                 result = DocxRenderedPages.Apply(await storage.DownloadAsync(doc!.StoragePath!, ct), result);
                 row.TotalPages = result.TotalPages;

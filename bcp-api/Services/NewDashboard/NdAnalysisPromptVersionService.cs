@@ -17,6 +17,8 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public const int JudgmentSemanticV4VersionNumber = 4;
     public const int JudgmentSemanticV5VersionNumber = 5;
     public const int JudgmentSemanticV6VersionNumber = 6;
+    public const int JudgmentSemanticV7VersionNumber = 7;
+    public const int JudgmentSemanticV8VersionNumber = 8;
     public const int JudgmentFullMarkdownV2VersionNumber = 2;
 
     private static readonly string[] JudgmentPromptKeys =
@@ -71,7 +73,21 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
             .ToList();
     }
 
+    // Seeding is insert-only and prompt versions are platform-wide, so once it has completed in this
+    // process there is nothing left to do. Without this, every prompt read (three per clause judgment)
+    // re-ran ~30 existence queries against the database.
+    private static volatile bool _seededThisProcess;
+
     public async Task EnsureSeededAsync(CancellationToken ct = default)
+    {
+        // Only for the real (relational) database; tests use a fresh in-memory store each time.
+        var cacheable = db.Database.IsRelational();
+        if (cacheable && _seededThisProcess) return;
+        await EnsureSeededCoreAsync(ct);
+        if (cacheable) _seededThisProcess = true;
+    }
+
+    private async Task EnsureSeededCoreAsync(CancellationToken ct)
     {
         var changed = false;
         foreach (var def in NdAnalysisPromptCatalog.AllPrompts)
@@ -99,6 +115,8 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
         await EnsureJudgmentSemanticV4Async(ct);
         await EnsureJudgmentSemanticV5Async(ct);
         await EnsureJudgmentSemanticV6Async(ct);
+        await EnsureJudgmentSemanticV7Async(ct);
+        await EnsureJudgmentSemanticV8Async(ct);
         await EnsureJudgmentFullMarkdownV1Async(ct);
         await EnsureJudgmentFullMarkdownV2Async(ct);
     }
@@ -342,6 +360,57 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
                 PromptKey = key,
                 VersionNumber = JudgmentSemanticV6VersionNumber,
                 Label = NdRegulPromptDefaults.JudgmentSemanticV6Label,
+                PromptText = text,
+                IsCurrent = true,
+            });
+            changed = true;
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Creates judgment prompt v7 (v6 rules, but document_reference stays one string so models without
+    /// schema enforcement stop returning an array) and sets it current when missing. Insert-only.
+    /// </summary>
+    public Task EnsureJudgmentSemanticV7Async(CancellationToken ct = default) =>
+        EnsureJudgmentSemanticFromV5DefaultsAsync(JudgmentSemanticV7VersionNumber, NdRegulPromptDefaults.JudgmentSemanticV7Label, ct);
+
+    /// <summary>v8: covered_elements, one gap line per missing requirement, status/gap consistency, legal
+    /// definitions vs context. Insert-only; sets current when no version >= 8 exists.</summary>
+    public Task EnsureJudgmentSemanticV8Async(CancellationToken ct = default) =>
+        EnsureJudgmentSemanticFromV5DefaultsAsync(JudgmentSemanticV8VersionNumber, NdRegulPromptDefaults.JudgmentSemanticV8Label, ct);
+
+    private async Task EnsureJudgmentSemanticFromV5DefaultsAsync(int versionNumber, string label, CancellationToken ct)
+    {
+        var textByKey = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV5.Trim(),
+            [JudgmentUserContextKey] = NdRegulPromptDefaults.JudgmentUserContextTemplateV5.Trim(),
+            [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV5.Trim(),
+        };
+
+        var changed = false;
+        foreach (var (key, text) in textByKey)
+        {
+            var exists = await db.NdAnalysisPromptVersions.AsNoTracking()
+                .AnyAsync(v => v.PromptKey == key && v.VersionNumber >= versionNumber, ct);
+            if (exists) continue;
+
+            ValidatePromptText(key, text);
+
+            var siblings = await db.NdAnalysisPromptVersions
+                .Where(v => v.PromptKey == key)
+                .ToListAsync(ct);
+            foreach (var sibling in siblings)
+                sibling.IsCurrent = false;
+
+            db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
+            {
+                PromptKey = key,
+                VersionNumber = versionNumber,
+                Label = label,
                 PromptText = text,
                 IsCurrent = true,
             });

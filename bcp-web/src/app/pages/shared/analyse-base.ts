@@ -345,8 +345,28 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   /** V4 full-markdown page hides reverse / INT pipeline chrome. */
   protected showReversePipelineUi = true;
 
+  /** Coverage status for list/rail chips — while a per-point rerun is in flight, never show a stale terminal state (cancelled/failed). */
+  protected pointUiCoverageStatus(pointId: string): string {
+    if (this.isPointRerunInFlight(pointId)) {
+      for (const key of this.sessionLookupKeysForPointId(pointId)) {
+        const st = (this.sessionPointStatus.get(key) ?? '').toLowerCase();
+        if (st === 'running' || st === 'processing') return st;
+        if (st === 'queued' || st === 'pending') return 'queued';
+      }
+      return 'running';
+    }
+    const resolved = this.resolveSessionPointStatus(pointId);
+    if (resolved) return resolved;
+    const displayId = this.analysingDisplayId(pointId);
+    if (displayId && displayId !== pointId) {
+      const byDisplay = this.resolveSessionPointStatus(displayId);
+      if (byDisplay) return byDisplay;
+    }
+    return 'not-run';
+  }
+
   forwardPointStatusLabel(pointId: string): string {
-    const s = (this.resolveSessionPointStatus(pointId) ?? '').toLowerCase();
+    const s = this.pointUiCoverageStatus(pointId).toLowerCase();
     if (s === 'running' || s === 'processing') return 'Running';
     if (s === 'queued' || s === 'pending') return 'Queued';
     if (s === 'failed') return 'Failed';
@@ -357,7 +377,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
   }
 
   forwardPointStatusClass(pointId: string): string {
-    const s = (this.resolveSessionPointStatus(pointId) ?? '').toLowerCase();
+    const s = this.pointUiCoverageStatus(pointId).toLowerCase();
     if (s === 'running' || s === 'processing') return 'fwd-running';
     if (s === 'completed') return 'fwd-done';
     if (s === 'failed' || s === 'cancelled') return 'fwd-failed';
@@ -3612,6 +3632,10 @@ ${this.findingsPreview
     for (const key of this.sessionLookupKeysForPointId(pointId)) {
       this.sessionPointStatus.set(key, 'queued');
     }
+    this.ndRunWorkflowStatus = 'running';
+    if ((this.ndRegulPipelinePhase ?? '').toLowerCase() === 'done') {
+      this.ndRegulPipelinePhase = 'forward';
+    }
     this.toast.show(phase2Only ? 'Re-running Phase 2…' : 'Re-queued point', 'success', 2200);
     this.pollNdRun(this.ndRunId);
   }
@@ -4698,7 +4722,17 @@ ${this.findingsPreview
       if (snap.regulationPointId?.trim()) keys.add(snap.regulationPointId.trim());
       if (snap.pageReference?.trim()) keys.add(snap.pageReference.trim());
       for (const key of keys) {
-        this.sessionPointStatus.set(key, pointStatus);
+        let statusForKey = pointStatus;
+        const rerunActive = [...keys].some((k) => this.pointPhaseRerun.has(k));
+        if (rerunActive) {
+          const landing = (p.landingAiStatus ?? '').toLowerCase();
+          if (landing === 'running') statusForKey = 'running';
+          else if (landing === 'pending') statusForKey = 'queued';
+          else if (statusForKey === 'cancelled' || statusForKey === 'failed' || statusForKey === 'completed') {
+            statusForKey = 'running';
+          }
+        }
+        this.sessionPointStatus.set(key, statusForKey);
         this.sessionPointResults.set(key, mapped);
       }
       // Prefer regulationPointId so selection matches govPoints after assignUniqueLibraryPointIds.
@@ -5166,6 +5200,14 @@ ${this.findingsPreview
   }
 
   private isNdPointRerunSettled(p: AnalysisPoint, entry: PointPhaseRerunEntry): boolean {
+    if (this.usesForwardOnlyRunUi()) {
+      const landing = (p.landingAiStatus ?? '').toLowerCase();
+      if (landing === 'running' || landing === 'pending') return false;
+      if (this.isLandingTerminal(p.landingAiStatus)) return true;
+      if (landing === 'failed') return true;
+      return false;
+    }
+
     const mode = entry.mode;
     const baseline = entry.baseline;
     const changed = baseline ? this.ndPointChangedSinceRerunBaseline(p, baseline) : false;

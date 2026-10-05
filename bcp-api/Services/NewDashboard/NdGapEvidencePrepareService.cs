@@ -242,11 +242,6 @@ public sealed class NdGapEvidencePrepareService(
         {
             result = extraction.ExtractFromMarkdown(
                 fileName, row.MarkdownText, row.TotalPages ?? 0, row.OcrPageCount ?? 0);
-            if (DocxRenderedPages.IsWordFile(fileName) && !string.IsNullOrWhiteSpace(doc.StoragePath))
-            {
-                result = DocxRenderedPages.Apply(await storage.DownloadAsync(doc.StoragePath, ct), result);
-                row.TotalPages = result.TotalPages;
-            }
         }
         catch (Exception ex)
         {

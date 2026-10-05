@@ -6,6 +6,28 @@ namespace Reguliq.Api.Tests;
 public class NdRegulLlmJsonHelperTests
 {
     [Fact]
+    public void ParseJudgmentResult_accepts_arrays_for_single_string_fields()
+    {
+        const string json = """
+            {
+              "overall_status": "partial",
+              "confidence": 0.6,
+              "policy_extract": ["Quote A", "Quote B"],
+              "document_reference": ["Manual.pdf p.6", "Guide.pdf — 32 p.4"],
+              "gap_description": ["[1] Funds definition — Missing: x", "[2] Proceeds — Missing: y"],
+              "suggested_action": ["[1] Amend A", "[2] Amend B"]
+            }
+            """;
+
+        var result = NdRegulLlmJsonHelper.ParseJudgmentResult(json);
+
+        Assert.Equal("Manual.pdf p.6; Guide.pdf — 32 p.4", result.DocumentReference);
+        Assert.Equal("[1] Funds definition — Missing: x\n[2] Proceeds — Missing: y", result.GapDescription);
+        Assert.Equal("[1] Amend A\n[2] Amend B", result.SuggestedAction);
+        Assert.Equal(2, result.PolicyExtract.Count);
+    }
+
+    [Fact]
     public void ParseJsonObject_maps_snake_case_judgment_fields()
     {
         const string json = """

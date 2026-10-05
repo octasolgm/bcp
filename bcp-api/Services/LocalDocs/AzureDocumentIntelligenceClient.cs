@@ -8,7 +8,11 @@ public sealed class AzureDocumentIntelligenceOptions
     public string ApiKey { get; set; } = "";
 }
 
-public sealed record AzureDocIntelligenceResult(string Markdown, int Pages, double ElapsedSeconds);
+public sealed record AzureDocIntelligenceResult(
+    string Markdown,
+    int Pages,
+    double ElapsedSeconds,
+    IReadOnlyList<string>? PageTexts = null);
 
 /// <summary>
 /// Calls Azure AI Document Intelligence's prebuilt-layout model (submit-then-poll REST API) to convert a
@@ -90,9 +94,14 @@ public sealed class AzureDocumentIntelligenceClient(HttpClient http, Microsoft.E
                 var pageCount = analyzeResult.TryGetProperty("pages", out var pagesEl) && pagesEl.ValueKind == JsonValueKind.Array
                     ? pagesEl.GetArrayLength()
                     : 1;
+                pageCount = Math.Max(pageCount, 1);
+                var pageTexts = AzureDocumentIntelligencePageBuilder.BuildPerPageContent(analyzeResult, markdown, pageCount);
 
                 return new AzureDocIntelligenceResult(
-                    markdown, Math.Max(pageCount, 1), (DateTimeOffset.UtcNow - started).TotalSeconds);
+                    markdown,
+                    pageCount,
+                    (DateTimeOffset.UtcNow - started).TotalSeconds,
+                    pageTexts);
             }
 
             if (string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase))

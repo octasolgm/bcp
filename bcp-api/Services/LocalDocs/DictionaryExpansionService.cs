@@ -52,7 +52,7 @@ public sealed class DictionaryExpansionService(
             await UpsertAsync(h.Acronym, h.Definition, "auto", sourceDocumentId, h.SourcePage, ct);
             // A real definition just showed up for this acronym — any earlier "unresolved"
             // placeholder (empty definition) for the same acronym is stale now, clear it.
-            await db.Database.ExecuteSqlInterpolatedAsync($@"
+            _activeEntries = null; _activeSynonyms = null; await db.Database.ExecuteSqlInterpolatedAsync($@"
                 DELETE FROM nd_dictionary_entries
                 WHERE lower(acronym) = lower({h.Acronym}) AND definition = ''", ct);
         }
@@ -228,7 +228,7 @@ public sealed class DictionaryExpansionService(
         termB = termB.Trim();
         if (termA.Length == 0 || termB.Length == 0) return;
 
-        await db.Database.ExecuteSqlInterpolatedAsync($@"
+        _activeEntries = null; _activeSynonyms = null; await db.Database.ExecuteSqlInterpolatedAsync($@"
             INSERT INTO nd_synonym_entries
                 (id, term_a, term_b, source, source_document_id, source_page, is_active, created_at)
             VALUES
@@ -248,7 +248,7 @@ public sealed class DictionaryExpansionService(
         definition = definition.Trim();
         if (acronym.Length == 0) return;
 
-        await db.Database.ExecuteSqlInterpolatedAsync($@"
+        _activeEntries = null; _activeSynonyms = null; await db.Database.ExecuteSqlInterpolatedAsync($@"
             INSERT INTO nd_dictionary_entries
                 (id, acronym, definition, source, source_document_id, source_page, is_active, created_at)
             VALUES
@@ -282,12 +282,17 @@ public sealed class DictionaryExpansionService(
     /// acronym/full-form pairs (<see cref="Data.Entities.NdDictionaryEntry"/>) and plain synonym
     /// pairs (<see cref="Data.Entities.NdSynonymEntry"/>) — for Step 4's embedding search to add
     /// to its query. Only active entries are considered.</summary>
+    private List<Data.Entities.NdDictionaryEntry>? _activeEntries;
+    private List<Data.Entities.NdSynonymEntry>? _activeSynonyms;
+
     public async Task<QueryExpansionResult> ExpandQueryDetailedAsync(string clauseText, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(clauseText))
             return new QueryExpansionResult([], []);
 
-        var entries = await db.NdDictionaryEntries.AsNoTracking()
+        // Loaded once per scope (one analysis job): a clause split into N sub-obligations used to
+        // re-read both dictionary tables N times.
+        var entries = _activeEntries ??= await db.NdDictionaryEntries.AsNoTracking()
             .Where(e => e.IsActive)
             .ToListAsync(ct);
 
@@ -307,7 +312,7 @@ public sealed class DictionaryExpansionService(
                 acronymMatches.Add(new ExpansionMatch(e.Id, e.Acronym, e.Definition, e.Definition, e.Acronym));
         }
 
-        var synonyms = await db.NdSynonymEntries.AsNoTracking()
+        var synonyms = _activeSynonyms ??= await db.NdSynonymEntries.AsNoTracking()
             .Where(s => s.IsActive)
             .ToListAsync(ct);
 

@@ -26,6 +26,44 @@ public static class NdRegulJudgmentPostProcessor
         return DowngradeForUnverifiedQuotes(judgment);
     }
 
+    public const string UnverifiedEvidenceGap =
+        "[1] Verifiable policy evidence — Missing: none of the quoted policy text could be found verbatim in the internal documents, so coverage of this clause is not evidenced.";
+
+    public const string UnverifiedEvidenceAction =
+        "[1] Have the policy owner confirm which internal policy section implements this clause and cite it; if no section implements it, amend the policy to address each requirement of the clause.";
+
+    /// <summary>V5 (hybrid) only. Quotes that cannot be found in the source are dropped rather than
+    /// silently flipping the verdict. Only a compliant verdict left with no verifiable evidence at all is
+    /// downgraded, and then with an explicit gap + action so it never shows as partial with no gap.</summary>
+    public static RegulJudgmentResult ApplyQuoteVerificationHybrid(
+        RegulJudgmentResult judgment,
+        string policySourceText)
+    {
+        var quotes = judgment.PolicyExtract.Where(q => !string.IsNullOrWhiteSpace(q)).ToList();
+        if (quotes.Count == 0)
+            return judgment;
+
+        var verified = quotes.Where(q => VerifyQuote(q, policySourceText)).ToList();
+        if (verified.Count == quotes.Count)
+            return judgment;
+
+        judgment.PolicyExtract = verified;
+        judgment.Confidence = Math.Min(judgment.Confidence, verified.Count > 0 ? 0.8 : 0.5);
+
+        if (verified.Count == 0
+            && string.Equals(judgment.OverallStatus?.Trim(), "compliant", StringComparison.OrdinalIgnoreCase))
+        {
+            judgment.DesignStatus = "partial";
+            judgment.OperatingStatus = "partial";
+            judgment.OverallStatus = "partial";
+            judgment.GapDirection = "basis_not_verifiable";
+            judgment.GapDescription = UnverifiedEvidenceGap;
+            judgment.SuggestedAction = UnverifiedEvidenceAction;
+        }
+
+        return judgment;
+    }
+
     public static bool NeedsReview(RegulJudgmentResult judgment, bool hadUnverifiedQuotes)
     {
         if (judgment.Confidence < LowConfidenceThreshold)
@@ -147,6 +185,19 @@ public static class NdRegulJudgmentPostProcessor
             return FormatGroundedReference(located.DocName, located.Section, located.Page);
 
         var chunk = FindBestMatchingChunk(quote, chunks);
+        if (chunk != null && !string.IsNullOrWhiteSpace(chunk.SourceDoc))
+        {
+            foreach (var kv in markdownByFile)
+            {
+                if (!string.Equals(kv.Key, chunk.SourceDoc, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var (page, section) = PolicyPageResolver.ResolveQuoteLocation(kv.Value, quote);
+                if (page is > 0 || !string.IsNullOrWhiteSpace(section))
+                    return FormatGroundedReference(chunk.SourceDoc, section ?? chunk.SectionRef, page ?? chunk.SourcePage);
+                break;
+            }
+        }
+
         if (chunk != null && ChunkContainsQuote(quote, chunk.Text))
             return FormatGroundedReference(chunk.SourceDoc, chunk.SectionRef, chunk.SourcePage);
 

@@ -438,6 +438,16 @@ public abstract class ChatCompletionsClientBase(
         {
             foreach (var choice in choices.EnumerateArray())
             {
+                // Reasoning models spend part of max_tokens thinking; an answer cut off at the limit is
+                // incomplete JSON. Say so explicitly so the caller retries instead of saving half a verdict.
+                if (choice.TryGetProperty("finish_reason", out var finish)
+                    && finish.ValueKind == JsonValueKind.String
+                    && finish.GetString() is "length" or "max_tokens")
+                {
+                    throw new LlmResponseTruncatedException(
+                        $"{label} response was cut off at the token limit before the answer was complete.");
+                }
+
                 if (choice.TryGetProperty("message", out var message)
                     && message.TryGetProperty("content", out var content))
                 {
@@ -456,9 +466,15 @@ public abstract class ChatCompletionsClientBase(
         {
             if (!root.TryGetProperty("usage", out var u)) return;
             long Get(string name) => u.TryGetProperty(name, out var v) && v.TryGetInt64(out var n) ? n : 0;
+            long reasoning = 0;
+            if (u.TryGetProperty("completion_tokens_details", out var details)
+                && details.ValueKind == JsonValueKind.Object
+                && details.TryGetProperty("reasoning_tokens", out var r)
+                && r.TryGetInt64(out var rn))
+                reasoning = rn;
             logger.LogInformation(
-                "LLM usage provider={Provider} model={Model} input={Input} output={Output}",
-                label, model, Get("prompt_tokens"), Get("completion_tokens"));
+                "LLM usage provider={Provider} model={Model} input={Input} output={Output} (reasoning={Reasoning})",
+                label, model, Get("prompt_tokens"), Get("completion_tokens"), reasoning);
         }
         catch { /* usage logging must never break a call */ }
     }
@@ -479,9 +495,10 @@ public class MoonshotLlmClient(IHttpClientFactory httpFactory, IConfiguration co
             ? new Dictionary<string, object?> { ["reasoning_effort"] = "high", ["max_tokens"] = KimiMaxTokens }
             : new Dictionary<string, object?>();
 
-    // K3's reasoning tokens count against max_tokens; the default 16k could run out mid-answer on a
-    // long clause and return truncated JSON.
-    internal const int KimiMaxTokens = 32768;
+    // K3's reasoning tokens count against max_tokens, so a low cap can cut the answer off mid-JSON on a
+    // long clause. This is only a ceiling (billing is for tokens actually generated); K3's own output
+    // limit on OpenRouter is ~943k, so 128k leaves ample room for high-effort reasoning plus the answer.
+    internal const int KimiMaxTokens = 131072;
 }
 
 /// <summary>DeepSeek (OpenAI-compatible API).</summary>
@@ -540,3 +557,6 @@ public class OpenRouterLlmClient(IHttpClientFactory httpFactory, IConfiguration 
             }
             : new Dictionary<string, object?>();
 }
+
+/// <summary>The model hit its token limit mid-answer (finish_reason "length"); the text is incomplete.</summary>
+public sealed class LlmResponseTruncatedException(string message) : InvalidOperationException(message);

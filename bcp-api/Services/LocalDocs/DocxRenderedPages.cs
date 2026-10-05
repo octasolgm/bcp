@@ -1,15 +1,15 @@
 using System.Text;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using Reguliq.Api.Services.LandingAi;
 
 namespace Reguliq.Api.Services.LocalDocs;
 
 /// <summary>
-/// Real page numbers for Word files. Azure Document Intelligence does not paginate .docx (the whole
-/// file comes back as page 1), so every section would otherwise cite page 1. Word stores where it
-/// last laid out each page break (<c>w:lastRenderedPageBreak</c>); reading those gives the page each
-/// paragraph appeared on when the file was last saved in Word. Files saved without layout information
-/// fall back to explicit page breaks.
+/// Word layout page markers for the <b>local</b> OpenXml parse path (Tesseract/RapidOCR/Docling routes on
+/// .docx). Do <b>not</b> replace Azure Document Intelligence output — Azure prebuilt-layout already returns
+/// paginated markdown for Office files, and swapping in OpenXml text skews both body copy and page numbers.
+/// Word stores layout in <c>w:lastRenderedPageBreak</c> (or explicit page breaks when layout was never saved).
 /// </summary>
 public static class DocxRenderedPages
 {
@@ -64,6 +64,42 @@ public static class DocxRenderedPages
     public static bool IsWordFile(string? fileName) =>
         string.Equals(Path.GetExtension(fileName ?? ""), ".docx", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Build parse markdown with BCP_PDF_PAGE markers from Word's saved layout (same marker format as PDF parse).
+    /// Returns null when the file has no usable multi-page layout.
+    /// </summary>
+    public static LocalParseResult? EnhanceParseResult(byte[] docxBytes, LocalParseResult result)
+    {
+        var paged = Read(docxBytes);
+        if (paged == null || paged.PageCount <= 1)
+            return null;
+
+        var sb = new StringBuilder();
+        var starts = paged.PageStarts.OrderBy(x => x.Start).ToList();
+        for (var i = 0; i < starts.Count; i++)
+        {
+            var start = starts[i].Start;
+            var end = i + 1 < starts.Count ? starts[i + 1].Start : paged.NormalizedText.Length;
+            var slice = paged.NormalizedText[start..end].Trim();
+            if (slice.Length == 0 && i > 0)
+                continue;
+            sb.Append(PolicyPageResolver.PageMarkerPrefix).Append(starts[i].Page).Append(" -->\n");
+            sb.AppendLine(slice);
+        }
+
+        var warnings = result.Warnings.ToList();
+        warnings.Add(
+            $"Word page markers use layout Word saved in the file ({paged.PageCount} page(s)); re-run Extract to refresh sections.");
+
+        return result with
+        {
+            TotalPages = paged.PageCount,
+            OcrPageCount = 0,
+            Markdown = sb.ToString().TrimEnd(),
+            Warnings = warnings,
+        };
+    }
+
     /// <summary>Re-pages an extract from the Word file's own layout; unchanged when the file has none.</summary>
     public static LocalExtractionResult Apply(byte[] docxBytes, LocalExtractionResult result)
     {
@@ -86,7 +122,15 @@ public static class DocxRenderedPages
                 continue;
             }
             cursor = at;
-            result.Add(section with { SourcePage = PageAt(paged, at) });
+            var startPage = PageAt(paged, at);
+            var clauseNorm = NormalizeWithMap(section.ClauseText).Normalized;
+            var endAt = clauseNorm.Length > 0
+                ? Math.Min(paged.NormalizedText.Length - 1, at + clauseNorm.Length)
+                : at;
+            var endPage = PageAt(paged, endAt);
+            result.Add(endPage > startPage
+                ? section with { SourcePage = startPage, SourcePageEnd = endPage }
+                : section with { SourcePage = startPage });
         }
         return result;
     }

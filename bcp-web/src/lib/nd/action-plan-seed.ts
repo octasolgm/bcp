@@ -3,7 +3,8 @@ import { normalizeGapRisk, defaultTargetDateForGapRisk } from './doc-analysis-re
 import type { ActionPlanPriority } from './action-plan';
 
 /**
- * Demo feed for the first draft of an action plan. Every entry is editable in the UI
+ * Demo feed for the first draft of an action plan (demo accounts only; real accounts seed
+ * the AI's own suggested_action via buildSeededActionPlansForGap's useAiAction). Every entry is editable in the UI
  * afterwards — this only decides what the maker sees before they touch anything.
  *
  * `match` is tested against the gap text. The first matching rule wins, so put the
@@ -180,15 +181,62 @@ export function buildSeededActionPlan(
 }
 
 /**
- * The draft actions a gap starts life with: the fix, plus a verification step when the
- * gap carries enough risk to warrant one. Low-risk gaps get the single action, so the
- * report does not open with busywork attached to minor findings.
+ * The AI's own corrective action(s) for this gap. suggested_action is numbered lines keyed to
+ * gap_description ("[1] Amend ...\n[1] Amend ...\n[2] Amend ..."): every line numbered
+ * [gap.index] is one action for that gap. A single unnumbered action applies as-is.
+ */
+export function aiActionsForGap(gap: CapGap): string[] {
+  const fix = (gap.fix || '').replace(/\r\n/g, '\n').trim();
+  if (!fix) return [];
+
+  const markers = [...fix.matchAll(/(?:^|\n|\s)\[(\d+)\]\s*/g)];
+  if (markers.length === 0) return [fix];
+
+  const entries = markers.map((m, i) => {
+    const start = (m.index ?? 0) + m[0].length;
+    const end = i + 1 < markers.length ? markers[i + 1].index ?? fix.length : fix.length;
+    return { n: Number(m[1]), text: fix.slice(start, end).trim() };
+  });
+  const matches = entries.filter((e) => e.n === gap.index && e.text).map((e) => e.text);
+  if (matches.length > 0) return matches;
+  return entries.length === 1 && entries[0].text ? [entries[0].text] : [];
+}
+
+/** Real (non-demo) accounts: the AI's own action(s), never a keyword template. */
+function buildAiSeededActionPlans(
+  analysisPointId: string,
+  gap: CapGap,
+  from: Date,
+): SeededActionPlan[] {
+  const priority = normalizeGapRisk(gap.priority);
+  const missing = (gap.missing || '').replace(/\s+/g, ' ').trim();
+  const actions = aiActionsForGap(gap);
+  if (actions.length === 0) {
+    actions.push(missing ? `Update the internal policy to address: ${missing}` : 'Update the internal policy to address this gap.');
+  }
+  return actions.map((actionPlan) => ({
+    analysisPointId,
+    gapIndex: gap.index,
+    actionPlan,
+    priority,
+    targetDate: defaultTargetDateForGapRisk(priority, from),
+    ownerLabel: 'Compliance',
+  }));
+}
+
+/**
+ * The draft actions a gap starts life with. Real accounts get exactly the AI's own
+ * corrective action. Demo accounts keep the catalog templates: the fix, plus a
+ * verification step when the gap carries enough risk to warrant one.
  */
 export function buildSeededActionPlansForGap(
   analysisPointId: string,
   gap: CapGap,
   from: Date = new Date(),
+  opts: { useAiAction?: boolean } = {},
 ): SeededActionPlan[] {
+  if (opts.useAiAction) return buildAiSeededActionPlans(analysisPointId, gap, from);
+
   const primary = buildSeededActionPlan(analysisPointId, gap, from);
   const rule = ruleFor(`${gap.missing ?? ''} ${gap.fix ?? ''}`);
   if (!rule.followUp || primary.priority === 'low') return [primary];

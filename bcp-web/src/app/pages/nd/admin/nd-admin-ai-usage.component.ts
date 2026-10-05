@@ -165,6 +165,10 @@ export class NdAdminAiUsageComponent implements OnInit {
         return 'Forward rerun';
       case 'rerun_reverse':
         return 'Reverse rerun';
+      case 'rerun_point':
+        return 'Clause rerun';
+      case 'gap_evidence_rerun':
+        return 'Gap evidence re-check';
       case 'request':
         return 'Other';
       default:

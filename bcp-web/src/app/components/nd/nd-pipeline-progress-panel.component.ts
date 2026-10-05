@@ -6,10 +6,17 @@ import {
   type PipelineDocRef,
   type PipelineExpansionMatch,
 } from '../../services/nd/nd-pipeline-panel.service';
-import { NdApiService, type NdOcrEngine } from '../../services/nd/nd-api.service';
+import { NdApiService, type NdClauseTrace, type NdOcrEngine } from '../../services/nd/nd-api.service';
 import { sortByPointRef } from '../../../lib/nd/list-utils';
 
 type ExpansionMatchKind = 'acronym' | 'synonym';
+
+function formatDuration(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return m > 0 ? `${m}m ${rem.toString().padStart(2, '0')}s` : `${rem}s`;
+}
 
 type StepKind = 'live' | 'placeholder';
 type StepStatus = 'done' | 'running' | 'pending' | 'error' | 'not_built' | 'not_started';
@@ -104,6 +111,14 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
     this.panel.phase();
     this.panel.runActive();
     this.panel.judgmentFailures();
+    this.panel.totalClauses();
+    this.panel.judgedClauses();
+    this.fullTexts();
+    this.loadingSectionIds();
+    this.tracesByClause();
+    this.tracesLoading();
+    this.tracesError();
+    if (this.judgmentStatus() === 'running') this.now();
     this.cdr.markForCheck();
     this.cdr.detectChanges();
   });
@@ -141,13 +156,100 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
 
   readonly processedCount = computed(() => this.panel.clauses().length);
 
+  /** Ticks every second so elapsed / remaining time on Step 8 stays live. */
+  private readonly now = signal(Date.now());
+  private clockTimer: ReturnType<typeof setInterval> | null = null;
+  private judgmentStartedAt: number | null = null;
+  private judgmentStartedRunId: string | null = null;
+
+  private readonly trackJudgmentStart = effect(() => {
+    const status = this.judgmentStatus();
+    const runId = this.panel.runId();
+    if (runId !== this.judgmentStartedRunId) {
+      this.judgmentStartedRunId = runId;
+      this.judgmentStartedAt = null;
+    }
+    if (status === 'running' && this.judgmentStartedAt == null) this.judgmentStartedAt = Date.now();
+  });
+
+  progressFor(step: StepRow): { done: number; total: number; percent: number; timing: string } | null {
+    if (!this.panel.runActive()) return null;
+    const total = this.panel.totalClauses();
+    if (total <= 0) return null;
+
+    const isJudgment = step.key === 'step8' || step.key === 'step9';
+    const status = this.statusFor(step);
+    let done: number;
+    if (isJudgment) {
+      done = status === 'done' || status === 'error' ? total : this.panel.judgedClauses();
+    } else {
+      done = status === 'done' ? total : this.panel.clauses().length;
+    }
+    done = Math.min(total, Math.max(0, done));
+    const percent = Math.round((done / total) * 100);
+
+    let timing = '';
+    if (step.key === 'step8' && status === 'running' && this.judgmentStartedAt != null) {
+      const elapsedMs = this.now() - this.judgmentStartedAt;
+      timing = `elapsed ${formatDuration(elapsedMs)}`;
+      if (done > 0 && done < total) {
+        timing += ` · ~${formatDuration((elapsedMs / done) * (total - done))} left`;
+      }
+    }
+    return { done, total, percent, timing };
+  }
+
+  /** Full section text, fetched on demand when a clause is expanded (the poll only carries a preview). */
+  private readonly fullTexts = signal<Record<string, string>>({});
+  private readonly loadingSectionIds = signal<ReadonlySet<string>>(new Set());
+
+  fullTextFor(match: { sectionId: string; textPreview: string }): string {
+    return this.fullTexts()[match.sectionId] ?? match.textPreview;
+  }
+
+  isLoadingFullText(match: { sectionId: string }): boolean {
+    return this.loadingSectionIds().has(match.sectionId);
+  }
+
+  private async loadFullTextsForClause(clauseNo: string): Promise<void> {
+    const runId = this.panel.runId();
+    const clause = this.panel.clauses().find((c) => c.clauseNo === clauseNo);
+    if (!runId || !clause) return;
+
+    const have = this.fullTexts();
+    const loading = this.loadingSectionIds();
+    const ids = [
+      ...new Set(
+        [...clause.bm25Matches, ...clause.matches, ...clause.fusedMatches]
+          .map((m) => m.sectionId)
+          .filter((id) => id && !(id in have) && !loading.has(id)),
+      ),
+    ];
+    if (ids.length === 0) return;
+
+    this.loadingSectionIds.set(new Set([...loading, ...ids]));
+    try {
+      const res = await this.ndApi.getRetrievalSectionTexts(runId, ids);
+      if (res.success && res.data) this.fullTexts.update((cur) => ({ ...cur, ...res.data }));
+    } finally {
+      this.loadingSectionIds.update((cur) => {
+        const next = new Set(cur);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      this.cdr.markForCheck();
+    }
+  }
+
   ngOnInit(): void {
     this.docPollTimer = setInterval(() => void this.refreshDocStatuses(this.panel.docs()), DOC_POLL_MS);
+    this.clockTimer = setInterval(() => this.now.set(Date.now()), 1000);
   }
 
   ngOnDestroy(): void {
     this.panelResizeCleanup?.();
     if (this.docPollTimer) clearInterval(this.docPollTimer);
+    if (this.clockTimer) clearInterval(this.clockTimer);
   }
 
   statusFor(step: StepRow): StepStatus {
@@ -217,8 +319,77 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
     this.panel.toggleCollapsed();
   }
 
-  toggleClause(clauseNo: string): void {
-    this.expandedClauseNo = this.expandedClauseNo === clauseNo ? null : clauseNo;
+  toggleClause(key: string): void {
+    this.expandedClauseNo = this.expandedClauseNo === key ? null : key;
+    if (this.expandedClauseNo) {
+      // Keys are "<clauseNo>" or "<clauseNo>:<view>[:<step>]".
+      const clauseNo = this.panel.clauses().find((c) => key === c.clauseNo || key.startsWith(c.clauseNo + ':'))?.clauseNo;
+      if (!clauseNo) return;
+      if (key.endsWith(':ctx') || key.endsWith(':llm')) void this.loadTraces(clauseNo);
+      else void this.loadFullTextsForClause(clauseNo);
+    }
+  }
+
+  // ---- Step 7 / Step 8 audit trail (what the LLM was sent and returned), platform admin only.
+  private readonly tracesByClause = signal<Record<string, NdClauseTrace[]>>({});
+  readonly tracesLoading = signal<string | null>(null);
+  readonly tracesError = signal<string | null>(null);
+  /** Which raw text block is expanded: "<traceId>:<field>". */
+  openTraceBlock: string | null = null;
+
+  tracesFor(clauseNo: string): NdClauseTrace[] {
+    return this.tracesByClause()[clauseNo] ?? [];
+  }
+
+  contextTraceFor(clauseNo: string): NdClauseTrace | null {
+    const rows = this.tracesFor(clauseNo).filter((t) => t.step === 'context');
+    return rows.length ? rows[rows.length - 1] : null;
+  }
+
+  /** Calls and final result of the latest judgment pass (a rerun starts a new pass with a new context row). */
+  latestPassFor(clauseNo: string): NdClauseTrace[] {
+    const rows = this.tracesFor(clauseNo);
+    let start = 0;
+    rows.forEach((t, i) => {
+      if (t.step === 'context') start = i;
+    });
+    return rows.slice(start).filter((t) => t.step !== 'context');
+  }
+
+  chunkListFor(trace: NdClauseTrace | null): Array<{ label: string; chars: number }> {
+    if (!trace?.chunksJson) return [];
+    try {
+      return JSON.parse(trace.chunksJson) as Array<{ label: string; chars: number }>;
+    } catch {
+      return [];
+    }
+  }
+
+  toggleTraceBlock(key: string): void {
+    this.openTraceBlock = this.openTraceBlock === key ? null : key;
+  }
+
+  formatMs(ms: number | null): string {
+    return ms == null ? '' : formatDuration(ms);
+  }
+
+  private async loadTraces(clauseNo: string): Promise<void> {
+    const runId = this.panel.runId();
+    if (!runId) return;
+    this.tracesLoading.set(clauseNo);
+    this.tracesError.set(null);
+    try {
+      const res = await this.ndApi.getClauseTraces(runId, clauseNo);
+      if (res.success && res.data) {
+        const rows = res.data;
+        this.tracesByClause.update((cur) => ({ ...cur, [clauseNo]: rows }));
+      } else {
+        this.tracesError.set(res.message || 'Could not load the AI call log.');
+      }
+    } finally {
+      this.tracesLoading.set(null);
+      this.cdr.markForCheck();
+    }
   }
 
   matchPercent(similarity: number): number {

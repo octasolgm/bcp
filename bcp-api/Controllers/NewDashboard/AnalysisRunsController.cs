@@ -689,6 +689,103 @@ public class AnalysisRunsController(
         });
     }
 
+    /// <summary>Full text of retrieved internal sections for the V5 pipeline panel. The poll payload only
+    /// carries a short preview per match; the panel fetches the full chunk on demand when a clause is expanded.</summary>
+    [HttpGet("{id:guid}/retrieval-sections")]
+    public async Task<IActionResult> RetrievalSections(
+        Guid id,
+        [FromQuery] string? ids,
+        CancellationToken ct = default)
+    {
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null || run.Status == DeletedStatus)
+            return NotFound(new { success = false, message = "Not found" });
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, demoCtx))
+            return StatusCode(403, new { success = false, message = "Forbidden" });
+
+        var requested = (ids ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => Guid.TryParse(s, out var g) ? g : Guid.Empty)
+            .Where(g => g != Guid.Empty)
+            .Distinct()
+            .Take(200)
+            .ToList();
+        if (requested.Count == 0)
+            return Ok(new { success = true, data = new Dictionary<string, string>() });
+
+        // Only sections this run actually retrieved.
+        var retrievalJson = string.Join('\n', await db.NdRegulForwardFindings.AsNoTracking()
+            .Where(f => f.AnalysisRunId == id && f.RetrievalJson != null)
+            .Select(f => f.RetrievalJson!)
+            .ToListAsync(ct));
+        var allowed = requested
+            .Where(g => retrievalJson.Contains(g.ToString(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var texts = await db.NdLocalDocumentExtractionSections.AsNoTracking()
+            .Where(s => allowed.Contains(s.Id))
+            .Select(s => new { s.Id, s.ClauseText })
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            success = true,
+            data = texts.ToDictionary(t => t.Id.ToString(), t => t.ClauseText),
+        });
+    }
+
+    /// <summary>Per-clause audit trail of the judgment step: the Step 7 context sent, each Step 8 LLM call
+    /// (request and raw response) and the saved result. Platform admin only — it exposes the system prompt.</summary>
+    [HttpGet("{id:guid}/clause-traces")]
+    public async Task<IActionResult> ClauseTraces(
+        Guid id,
+        [FromQuery] string? clauseNo,
+        CancellationToken ct = default)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null || run.Status == DeletedStatus)
+            return NotFound(new { success = false, message = "Not found" });
+
+        var query = db.NdRegulClauseTraces.AsNoTracking().Where(t => t.AnalysisRunId == id);
+        if (!string.IsNullOrWhiteSpace(clauseNo))
+            query = query.Where(t => t.ClauseNo == clauseNo);
+
+        var rows = await query
+            .OrderBy(t => t.ClauseNo).ThenBy(t => t.CreatedAt)
+            .Select(t => new
+            {
+                t.Id,
+                t.ClauseNo,
+                t.Step,
+                t.Source,
+                t.Attempt,
+                t.Provider,
+                t.Model,
+                t.SystemPrompt,
+                t.ContextText,
+                t.ChunksJson,
+                t.QueryText,
+                t.ResponseText,
+                t.ResultJson,
+                t.Notes,
+                t.Error,
+                t.CharsSent,
+                t.DurationMs,
+                t.CreatedAt,
+            })
+            .ToListAsync(ct);
+
+        return Ok(new { success = true, data = rows });
+    }
+
     [HttpGet("{id:guid}/history")]
     public async Task<IActionResult> History(Guid id, CancellationToken ct)
     {
@@ -1123,7 +1220,10 @@ public class AnalysisRunsController(
         if (evidenceOnly && AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return await StartEvidenceRerunAsync(run, [pointId], actionIndex, profile.Id, ct);
 
-        return QueuePointProcessing(run, id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex);
+        var pointCreditError = await GuardAiCreditsAsync(ct);
+        if (pointCreditError != null) return pointCreditError;
+
+        return QueuePointProcessing(run, id, pointId, dualVerifyOnly: false, evidenceOnly, actionIndex, profile.Id);
     }
 
     /// <summary>Re-run every open gap in the run against a freshly uploaded evidence document.</summary>
@@ -1160,7 +1260,7 @@ public class AnalysisRunsController(
             .AnyAsync(a => openPointIds.Contains(a.AnalysisPointId), ct);
 
         foreach (var openPointId in openPointIds)
-            QueuePointProcessing(run, id, openPointId, dualVerifyOnly: false, evidenceOnly: hasEvidence, actionIndex: null);
+            QueuePointProcessing(run, id, openPointId, dualVerifyOnly: false, evidenceOnly: hasEvidence, actionIndex: null, profile.Id);
 
         return Ok(new
         {
@@ -1287,14 +1387,17 @@ public class AnalysisRunsController(
         Guid pointId,
         bool dualVerifyOnly,
         bool evidenceOnly,
-        int? actionIndex)
+        int? actionIndex,
+        Guid userId)
     {
         var useRegul = AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine);
         if (useRegul && evidenceOnly)
             dualVerifyOnly = false;
 
+        var tenantId = run.TenantId;
         _ = Task.Run(async () =>
         {
+            using var billing = NdAiUsageContext.Enter(tenantId, runId, "rerun_point", userId);
             using var scope = scopeFactory.CreateScope();
             try
             {
@@ -1369,7 +1472,10 @@ public class AnalysisRunsController(
         if (evidenceOnly && AnalysisWorkflowEngine.IsRegulFamily(run.WorkflowEngine))
             return await StartEvidenceRerunAsync(run, [pointId], actionIndex, profile.Id, ct);
 
-        return QueuePointProcessing(run, id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex);
+        var dualCreditError = await GuardAiCreditsAsync(ct);
+        if (dualCreditError != null) return dualCreditError;
+
+        return QueuePointProcessing(run, id, pointId, dualVerifyOnly: true, evidenceOnly, actionIndex, profile.Id);
     }
 
     [HttpPost("{id:guid}/rerun-dual-verify/all")]

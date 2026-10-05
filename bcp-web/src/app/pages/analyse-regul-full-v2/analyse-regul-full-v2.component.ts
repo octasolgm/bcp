@@ -24,6 +24,17 @@ import { startPanelResize } from '../shared/panel-resize';
 import { capGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
 import { resolveAnalysisPointSeverity } from '../../../lib/nd/point-compliance-status';
 import { buildSeededActionPlansForGap, type SeededActionPlan } from '../../../lib/nd/action-plan-seed';
+import { logClauseRetrieval, logClauseTraces } from '../../../lib/nd/pipeline-console-log';
+
+function clauseNoFromSnapshot(snapshot: string | null | undefined): string | null {
+  if (!snapshot) return null;
+  try {
+    const parsed = JSON.parse(snapshot) as { pointNumber?: string };
+    return parsed.pointNumber?.trim() || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * V5 — isolated clone of analyse-regul-full (V4), created specifically so the upcoming
@@ -255,9 +266,15 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       this.stepTracker.setSteps(this.computeTrackerSteps());
       if (this.showEnginePipelinePanel) {
         this.pipelinePanel.setRunActive(!!this.ndRunId);
+        this.pipelinePanel.setRunId(this.ndRunId ?? this.activeNdRunId ?? null);
         this.pipelinePanel.setJudgmentFailures(
           this.analysingListRows.filter((r) => r.status === 'failed').length,
         );
+        this.pipelinePanel.setClauseProgress(
+          this.analysingListRows.length,
+          this.analysingListRows.filter((r) => r.status === 'completed' || r.status === 'failed').length,
+        );
+        this.pipelinePanel.setPhase(this.ndRegulPipelinePhase);
       }
       this.syncPageHeaderMarquee();
     }, 400);
@@ -530,6 +547,45 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     if (!this.showEnginePipelinePanel) return;
     this.pipelinePanel.setPhase(this.ndRegulPipelinePhase);
     this.pipelinePanel.setRetrievalPreview(preview);
+    this.logRetrievalToConsole(preview);
+  }
+
+  // ---- DevTools console log of each clause's pipeline (Steps 1-6) and AI judgment (Steps 7-8).
+  private readonly consoleLoggedRetrieval = new Map<string, string>();
+  private readonly consoleLoggedTraceIds = new Set<string>();
+  private readonly consolePointStatus = new Map<string, string>();
+
+  private logRetrievalToConsole(preview: Array<{ clauseNo: string; retrieval: unknown }>): void {
+    for (const p of preview) {
+      const r = p.retrieval as { fusedMatches?: Array<{ sectionId?: string }> } | null;
+      const signature = (r?.fusedMatches ?? []).map((m) => m.sectionId).join(',');
+      if (this.consoleLoggedRetrieval.get(p.clauseNo) === signature) continue;
+      this.consoleLoggedRetrieval.set(p.clauseNo, signature);
+      logClauseRetrieval(p.clauseNo, p.retrieval);
+    }
+  }
+
+  /** When a clause reaches a terminal status, print its AI call log (only new rows, so a rerun
+   * prints just the new pass). The endpoint is platform-admin only; others simply get nothing. */
+  private async logTracesForFinishedPoints(points: AnalysisPoint[]): Promise<void> {
+    const runId = this.activeNdRunId;
+    if (!runId) return;
+    const terminal = new Set(['completed', 'failed', 'cancelled']);
+    for (const point of points) {
+      if (!point.id) continue;
+      const status = (point.landingAiStatus || '').toLowerCase();
+      const previous = this.consolePointStatus.get(point.id);
+      this.consolePointStatus.set(point.id, status);
+      if (!terminal.has(status) || previous === status) continue;
+
+      const clauseNo = clauseNoFromSnapshot(point.pointSnapshot);
+      if (!clauseNo) continue;
+      const res = await this.ndApi.getClauseTraces(runId, clauseNo);
+      if (!res.success || !res.data) continue;
+      const fresh = res.data.filter((t) => !this.consoleLoggedTraceIds.has(t.id));
+      fresh.forEach((t) => this.consoleLoggedTraceIds.add(t.id));
+      logClauseTraces(clauseNo, fresh);
+    }
   }
 
   /** Point ids already checked for a gap since the run started — avoids re-checking (and
@@ -559,7 +615,11 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
 
       if (resolveAnalysisPointSeverity(point) === 'compliant') continue;
       for (const gap of capGapsForAnalysisPoint(point, true)) {
-        items.push(...buildSeededActionPlansForGap(point.id, gap));
+        items.push(
+          ...buildSeededActionPlansForGap(point.id, gap, new Date(), {
+            useAiAction: !this.ndAuth.isDemoViewer(),
+          }),
+        );
       }
     }
     if (!items.length) return;
@@ -577,6 +637,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   protected override onNdRunPointsLiveUpdate(points: AnalysisPoint[]): void {
     super.onNdRunPointsLiveUpdate(points);
     void this.seedActionPlansForCompletedPoints(points);
+    void this.logTracesForFinishedPoints(points);
   }
 
   /** Always runs forward-only (full markdown); reverse is not used on this page — same as V4. */
@@ -704,6 +765,8 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
         );
         this.cdr.markForCheck();
         this.cdr.detectChanges();
+        // A finished run opened from its link is never polled, so print its AI call log here.
+        void this.logTracesForFinishedPoints(points as AnalysisPoint[]);
       }
     }
     const statusData = statusRes.data as

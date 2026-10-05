@@ -129,7 +129,30 @@ export type NdLocalExtractionSection = {
 
 /** Which local OCR engine parsed a document — each engine gets its own independent result per document,
  * so the same upload can be run through more than one and compared. */
-export type NdOcrEngine = 'tesseract' | 'rapidocr' | 'docling-light' | 'docling-glm' | 'azure-di';
+export type NdClauseTrace = {
+  id: string;
+  clauseNo: string;
+  /** context | llm_call | postprocess | evidence_check */
+  step: string;
+  /** analysis | rerun_all | clause_rerun | gap_evidence */
+  source: string;
+  attempt: number;
+  provider: string | null;
+  model: string | null;
+  systemPrompt: string | null;
+  contextText: string | null;
+  chunksJson: string | null;
+  queryText: string | null;
+  responseText: string | null;
+  resultJson: string | null;
+  notes: string | null;
+  error: string | null;
+  charsSent: number | null;
+  durationMs: number | null;
+  createdAt: string;
+};
+
+export type NdOcrEngine ='tesseract' | 'rapidocr' | 'docling-light' | 'docling-glm' | 'azure-di';
 
 /**
  * Parse and Extract are two independent steps, not one combined status — matching the old pages'
@@ -1673,6 +1696,21 @@ export class NdApiService {
 
   getAnalysisRunHistory(id: string) {
     return this.request<unknown>('GET', `/nd/analysis-runs/${id}/history`);
+  }
+
+  /** V5 audit trail for one clause: Step 7 context, each Step 8 LLM call, saved result. Platform admin only. */
+  getClauseTraces(runId: string, clauseNo?: string) {
+    const q = clauseNo ? `?clauseNo=${encodeURIComponent(clauseNo)}` : '';
+    return this.request<NdClauseTrace[]>('GET', `/nd/analysis-runs/${runId}/clause-traces${q}`);
+  }
+
+  /** Full text of retrieved sections (V5 pipeline panel), keyed by section id. */
+  getRetrievalSectionTexts(runId: string, sectionIds: string[]) {
+    const ids = encodeURIComponent(sectionIds.join(','));
+    return this.request<Record<string, string>>(
+      'GET',
+      `/nd/analysis-runs/${runId}/retrieval-sections?ids=${ids}`,
+    );
   }
 
   stopAnalysisRun(id: string) {

@@ -447,6 +447,102 @@
   font-size: 0.7rem;
   color: var(--text-secondary);
   line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.match-loading {
+  margin: 0.2rem 0 0;
+  font-size: 0.65rem;
+  font-style: italic;
+  color: var(--text-tertiary, var(--text-secondary));
+}
+
+.trace-meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.trace-error-text {
+  color: var(--danger, #c62828);
+}
+
+.trace-chunk {
+  margin: 0.15rem 0 0;
+  font-size: 0.66rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.trace-call {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 8px;
+
+  &.trace-error {
+    border-color: color-mix(in srgb, var(--danger, #c62828) 50%, transparent);
+  }
+}
+
+.trace-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.trace-toggle {
+  margin-top: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.66rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.trace-pre {
+  margin: 0.35rem 0 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 0.5rem;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--border) 25%, transparent);
+  border-radius: 6px;
+}
+
+.step-progress {
+  margin: 0.45rem 0 0 1.6rem;
+}
+
+.step-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+  overflow: hidden;
+}
+
+.step-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary, #1565c0);
+  transition: width 0.4s ease;
+}
+
+.step-progress-text {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
 }
 
 .match-sub-obligation {

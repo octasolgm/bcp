@@ -5,6 +5,54 @@ namespace Reguliq.Api.Tests;
 
 public class NdRegulJudgmentPostProcessorTests
 {
+    private const string HybridSource =
+        "DIFC will also integrate findings from the National Risk Assessment (NRA) and Sectoral Risk Assessment (SRA) into RBA.";
+
+    [Fact]
+    public void ApplyQuoteVerificationHybrid_drops_unverified_quotes_and_keeps_compliant_verdict()
+    {
+        var judgment = new RegulJudgmentResult
+        {
+            OverallStatus = "compliant",
+            DesignStatus = "compliant",
+            Confidence = 0.9,
+            PolicyExtract =
+            [
+                "DIFC will also integrate findings from the National Risk Assessment (NRA)",
+                "A sentence the model invented that is nowhere in the policy text at all.",
+            ],
+            GapDescription = "N/A",
+            SuggestedAction = "N/A",
+        };
+
+        var result = NdRegulJudgmentPostProcessor.ApplyQuoteVerificationHybrid(judgment, HybridSource);
+
+        Assert.Equal("compliant", result.OverallStatus);
+        Assert.Single(result.PolicyExtract);
+        Assert.True(result.Confidence <= 0.8);
+    }
+
+    [Fact]
+    public void ApplyQuoteVerificationHybrid_compliant_with_no_verifiable_evidence_gets_explicit_gap_and_action()
+    {
+        var judgment = new RegulJudgmentResult
+        {
+            OverallStatus = "compliant",
+            DesignStatus = "compliant",
+            Confidence = 0.9,
+            PolicyExtract = ["A sentence the model invented that is nowhere in the policy text at all."],
+            GapDescription = "N/A",
+            SuggestedAction = "N/A",
+        };
+
+        var result = NdRegulJudgmentPostProcessor.ApplyQuoteVerificationHybrid(judgment, HybridSource);
+
+        Assert.Equal("partial", result.OverallStatus);
+        Assert.Equal(NdRegulJudgmentPostProcessor.UnverifiedEvidenceGap, result.GapDescription);
+        Assert.Equal(NdRegulJudgmentPostProcessor.UnverifiedEvidenceAction, result.SuggestedAction);
+        Assert.False(NdRegulJudgmentPostProcessor.RequiresGapOrActionRetry(result));
+    }
+
     [Fact]
     public void ApplyGroundedDocumentReference_uses_quote_location_in_markdown()
     {

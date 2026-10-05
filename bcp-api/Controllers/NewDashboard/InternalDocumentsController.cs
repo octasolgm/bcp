@@ -95,6 +95,7 @@ public class InternalDocumentsController(
             ? new Dictionary<Guid, string>()
             : await appDb.NdAnalysisRuns.AsNoTracking()
                 .Where(r => generatedFromRunIds.Contains(r.Id))
+                .Select(r => new { r.Id, r.Name })
                 .ToDictionaryAsync(r => r.Id, r => r.Name, ct);
 
         var items = new List<object>();
@@ -108,11 +109,19 @@ public class InternalDocumentsController(
                 live = d;
                 parseStatus = string.IsNullOrWhiteSpace(d.ParseStatus) ? "pending" : d.ParseStatus;
             }
-            else
+            else if (string.Equals(d.ParseStatus, "processing", StringComparison.OrdinalIgnoreCase))
             {
                 var recovered = await parseService.RecoverStaleParseIfNeededAsync(d.Id, ct);
                 live = recovered ?? d;
                 parseStatus = await parseService.ResolveDisplayParseStatusAsync(live, ct);
+            }
+            else
+            {
+                // Stale "processing" rows were already recovered above (RecoverAllStaleParsesAsync) and
+                // this row was read after that, so the two per-document lookups would only re-read it.
+                live = d;
+                var status = (d.ParseStatus ?? "").Trim().ToLowerInvariant();
+                parseStatus = status is "parsed" or "failed" or "pending" ? status : "pending";
             }
 
             var exposePages = !string.Equals(parseStatus, "pending", StringComparison.OrdinalIgnoreCase)

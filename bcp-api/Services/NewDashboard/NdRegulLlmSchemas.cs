@@ -62,6 +62,15 @@ public static class NdRegulLlmSchemas
         Describe("gap_description", "What is missing versus the clause. REQUIRED when overall_status is partial or non_compliant. Must be \"N/A\" when overall_status is compliant: a compliant clause has no gap, so do not list minor observations here.");
         Describe("suggested_action", "Concrete corrective action that closes the gap. REQUIRED whenever gap_description is not N/A (partial or non_compliant). Must be \"N/A\" when overall_status is compliant.");
         Describe("gap_direction", "Kind of gap, or an empty string when there is none.");
+        props["covered_elements"] = new JsonObject
+        {
+            ["type"] = "string",
+            ["description"] =
+                "Numbered list (one per line) of the clause's atomic requirements that ARE substantively covered, each with the " +
+                "[bracket label] of its evidence: [n] <requirement> — Covered: <label>. \"None\" if nothing is covered. Every atomic " +
+                "requirement must appear either here or in gap_description, never both and never neither.",
+        };
+        ((JsonArray)schema["required"]!).Add("covered_elements");
         return schema;
     }
 

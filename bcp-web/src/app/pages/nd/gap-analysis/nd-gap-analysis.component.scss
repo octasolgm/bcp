@@ -12,6 +12,32 @@
   }
 }
 
+.analysis-ai-model {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.analysis-ai-model-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+
+.analysis-ai-model-value {
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--nav-active-bg, transparent);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
 .run-rename-btn {
   display: inline-flex;
   align-items: center;

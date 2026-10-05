@@ -1174,6 +1174,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   analysingPointCoverageStatus(pointId: string): string {
+    if (!this.isDemoRunInFlight()) {
+      return this.pointUiCoverageStatus(pointId);
+    }
     return this.demoRowCoverageStatus(pointId, this.analysingDisplayId(pointId));
   }
 

@@ -397,6 +397,17 @@ file static class StartupBootstrap
                 await NdIncrementalSchemaBootstrap.EnsureAsync(db, CancellationToken.None);
                 try
                 {
+                    // Seed prompt versions here so the first analysis after a restart doesn't pay for it.
+                    await scope.ServiceProvider
+                        .GetRequiredService<Reguliq.Api.Services.NewDashboard.NdAnalysisPromptVersionService>()
+                        .EnsureSeededAsync(CancellationToken.None);
+                }
+                catch (Exception seedEx)
+                {
+                    logger.LogWarning(seedEx, "Analysis prompt version seed skipped at startup.");
+                }
+                try
+                {
                     var demoWorkspace = scope.ServiceProvider
                         .GetRequiredService<Reguliq.Api.Services.NewDashboard.Demo.NdDemoWorkspaceService>();
                     await demoWorkspace.EnsureTemplatesSeededAsync(CancellationToken.None);

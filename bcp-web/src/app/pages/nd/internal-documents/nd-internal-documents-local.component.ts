@@ -44,6 +44,7 @@ import {
 } from '../../../../lib/nd/internal-doc-catalog-groups';
 import {
   hasListFilters,
+  catalogDocumentFormatLabel,
   isDistinctOriginalFileName,
   matchesSearch,
   nextSortState,
@@ -275,8 +276,25 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     return this.hasExtractedSections(doc) || this.analysisReadyState(doc) === 'analysed';
   }
 
-  canRunLocalPipeline(doc: InternalDocument): boolean {
-    return this.canParse && !isGapEvidenceCatalogDoc(doc);
+  /** Azure/local parse+extract applies to every catalog row (including gap-evidence uploads). */
+  canRunLocalPipeline(_doc: InternalDocument): boolean {
+    return this.canParse;
+  }
+
+  canShowExtract(doc: InternalDocument): boolean {
+    return this.isDocParsed(doc) || this.hasExtractedSections(doc);
+  }
+
+  canClickRowExtract(doc: InternalDocument): boolean {
+    return this.canShowExtract(doc) && this.extractingId !== doc.id;
+  }
+
+  extractButtonTitle(doc: InternalDocument): string {
+    if (!this.canShowExtract(doc)) return 'Parse the document first.';
+    if (this.extractingId === doc.id) return 'Extraction in progress.';
+    return this.hasExtractedSections(doc)
+      ? 'Re-extract policy sections from parsed text'
+      : 'Extract policy sections from parsed text';
   }
 
   showRowParsedTextButton(doc: InternalDocument): boolean {
@@ -288,7 +306,8 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   }
 
   isDocParsed(doc: InternalDocument): boolean {
-    return (doc.parseStatus ?? '').toLowerCase() === 'parsed';
+    const s = (doc.parseStatus ?? '').toLowerCase();
+    return s === 'parsed' || s === 'completed';
   }
 
   hasExtractedSections(doc: InternalDocument): boolean {
@@ -421,7 +440,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   /** Step 2 — split the already-parsed text into sections. Requires handleParse to have run first. */
   async handleExtractSections(doc: InternalDocument, event?: Event): Promise<void> {
     event?.stopPropagation();
-    if (doc.parseStatus !== 'parsed') {
+    if (!this.canShowExtract(doc)) {
       this.toast.show('Parse the document first', 'warning', 4000);
       return;
     }
@@ -1016,6 +1035,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   formatDate = formatDate;
   formatTableDate = formatTableDate;
   formatBytes = formatBytes;
+  docFormatLabel = catalogDocumentFormatLabel;
 
   docPageMeta(doc: InternalDocument): string {
     return catalogPdfPageLabel(doc.pageCount, this.isParsingDoc(doc));

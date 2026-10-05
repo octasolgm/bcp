@@ -176,7 +176,8 @@ import {
 } from '../../../../lib/nd/nd-review-run-helpers';
 import { computeRunGapStats, type RunGapStatsSummary } from '../../../../lib/nd/run-gap-stats';
 import { buildNdGapListItems, ndComplianceSummaryFromPoints } from '../../../../lib/nd/nd-run-display';
-import type { NdRunReviewBody } from '../../../services/nd/nd-api.service';
+import type { NdClauseTrace, NdRunReviewBody } from '../../../services/nd/nd-api.service';
+import { logClauseTraces } from '../../../../lib/nd/pipeline-console-log';
 import { NdPageHeaderActionsService } from '../../../services/nd/nd-page-header-actions.service';
 import type { RunReviewDraft } from '../../../../lib/nd/run-review';
 
@@ -253,9 +254,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   ndRunStatus = '';
   ndRunWorkflowEngine: string | null = null;
 
-  /** "provider / model" that judged this run - shown for the hybrid V5 engine only. */
+  /** "provider / model" that judged this run, for any run that recorded its model (demo runs never do). */
   get ndRunLlmLabel(): string {
-    if (!isRegulPipelineHybridWorkflow(this.ndRunWorkflowEngine)) return '';
     const run = this.ndRunData?.run;
     const model = run?.regulLlmModel?.trim();
     if (!model) return '';
@@ -1098,7 +1098,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       if (resolveAnalysisPointSeverity(point) === 'compliant') continue;
       for (const gap of capGapsForAnalysisPoint(point, this.isNdRegulWorkflow)) {
         if (covered.has(`${point.id}:${gap.index}`)) continue;
-        items.push(...buildSeededActionPlansForGap(point.id, gap));
+        items.push(
+          ...buildSeededActionPlansForGap(point.id, gap, new Date(), {
+            useAiAction: this.isNdRegulWorkflow && !this.auth.isDemoViewer(),
+          }),
+        );
       }
     }
     if (!items.length) return;
@@ -2163,12 +2167,24 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     if (finished) {
       this.stopEvidenceRerunPolling();
       this.scrollToEvidenceRerunPanel();
+      void this.logEvidenceRerunTraces(this.ndRunId, rerun.startedAt || rerun.createdAt);
       if (rerun.status === 'failed') {
         this.toast.show(rerun.error || 'The re-check could not finish', 'error');
       } else {
         this.toast.show(`Re-check complete — ${gapEvidenceRerunSummary(rerun)}`, 'success');
       }
     }
+  }
+
+  /** DevTools console: what this re-check sent to the AI and got back, per clause (platform admin only). */
+  private async logEvidenceRerunTraces(runId: string, since: string): Promise<void> {
+    const res = await this.ndApi.getClauseTraces(runId);
+    if (!res.success || !res.data) return;
+    const from = new Date(since).getTime() - 5000;
+    const rows = res.data.filter((t) => t.source === 'gap_evidence' && new Date(t.createdAt).getTime() >= from);
+    const byClause = new Map<string, NdClauseTrace[]>();
+    for (const t of rows) byClause.set(t.clauseNo, [...(byClause.get(t.clauseNo) ?? []), t]);
+    for (const [clauseNo, traces] of byClause) logClauseTraces(clauseNo, traces);
   }
 
   /** Brings the re-check panel into view once it has rendered. */

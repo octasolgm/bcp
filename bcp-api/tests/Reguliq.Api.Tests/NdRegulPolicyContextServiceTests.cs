@@ -7,6 +7,23 @@ namespace Reguliq.Api.Tests;
 public class NdRegulPolicyContextServiceTests
 {
     [Fact]
+    public void RetrievalBundle_context_is_the_retrieved_chunks_not_the_full_documents()
+    {
+        var chunks = new List<NdRegulPolicyContextService.PolicyChunk>
+        {
+            new("Manual.pdf — 7.7 p.40", "All suspicious transactions must be reported regardless of amount.", "Manual.pdf", "7.7", 40),
+        };
+        var markdown = new Dictionary<string, string> { ["Manual.pdf"] = "FULL MANUAL TEXT that was not retrieved for this clause." };
+
+        var bundle = NdRegulPolicyContextService.FromRetrievalChunks(chunks, markdown);
+        var ctx = bundle.BuildContextForClause("Report suspicious transactions.");
+
+        Assert.Contains("[Manual.pdf — 7.7 p.40]", ctx);
+        Assert.DoesNotContain("FULL MANUAL TEXT", ctx);
+        Assert.Contains("FULL MANUAL TEXT", bundle.SourceTextForQuotes);
+    }
+
+    [Fact]
     public void BuildContextForClause_uses_full_manual_when_pages_le_50()
     {
         var bundle = NdRegulPolicyContextService.FromPayloads([

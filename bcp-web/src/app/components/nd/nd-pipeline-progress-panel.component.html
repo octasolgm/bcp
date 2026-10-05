@@ -138,6 +138,20 @@
               }
             </div>
 
+            @if (progressFor(step); as p) {
+              <div class="step-progress">
+                <div class="step-progress-track">
+                  <div class="step-progress-fill" [style.width.%]="p.percent"></div>
+                </div>
+                <div class="step-progress-text">
+                  <span>{{ p.done }} / {{ p.total }} clauses · {{ p.percent }}%</span>
+                  @if (p.timing) {
+                    <span>{{ p.timing }}</span>
+                  }
+                </div>
+              </div>
+            }
+
             @if (step.key === 'step1' && clauses().length > 0) {
               <ul class="clause-feed">
                 @for (clause of clauses(); track clause.clauseNo) {
@@ -267,7 +281,10 @@
                                 @if (match.matchedSubObligation) {
                                   <p class="match-sub-obligation">via: {{ match.matchedSubObligation }}</p>
                                 }
-                                <p class="match-preview">{{ match.textPreview }}</p>
+                                <p class="match-preview">{{ fullTextFor(match) }}</p>
+                                @if (isLoadingFullText(match)) {
+                                  <p class="match-loading">Loading full text…</p>
+                                }
                               </div>
                             }
                           </div>
@@ -304,7 +321,10 @@
                                 @if (match.matchedSubObligation) {
                                   <p class="match-sub-obligation">via: {{ match.matchedSubObligation }}</p>
                                 }
-                                <p class="match-preview">{{ match.textPreview }}</p>
+                                <p class="match-preview">{{ fullTextFor(match) }}</p>
+                                @if (isLoadingFullText(match)) {
+                                  <p class="match-loading">Loading full text…</p>
+                                }
                               </div>
                             }
                           </div>
@@ -350,12 +370,102 @@
                                     · via: {{ match.matchedSubObligation }}
                                   }
                                 </p>
-                                <p class="match-preview">{{ match.textPreview }}</p>
+                                <p class="match-preview">{{ fullTextFor(match) }}</p>
+                                @if (isLoadingFullText(match)) {
+                                  <p class="match-loading">Loading full text…</p>
+                                }
                               </div>
                             }
                           </div>
                         } @else {
                           <p class="no-matches">No matches to fuse for this clause.</p>
+                        }
+                      </div>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+
+            @if ((step.key === 'step7' || step.key === 'step8') && clauses().length > 0) {
+              <ul class="clause-feed">
+                @for (clause of clauses(); track clause.clauseNo) {
+                  @let key = clause.clauseNo + (step.key === 'step7' ? ':ctx' : ':llm');
+                  <li class="clause-item">
+                    <button type="button" class="clause-summary" (click)="toggleClause(key)">
+                      <span class="clause-no">{{ clause.clauseNo }}</span>
+                      <span class="clause-meta">{{ step.key === 'step7' ? 'context sent to AI' : 'AI calls' }}</span>
+                    </button>
+
+                    @if (expandedClauseNo === key) {
+                      <div class="clause-detail">
+                        @if (tracesLoading() === clause.clauseNo) {
+                          <p class="match-loading">Loading…</p>
+                        } @else if (tracesError()) {
+                          <p class="no-matches">{{ tracesError() }}</p>
+                        } @else if (tracesFor(clause.clauseNo).length === 0) {
+                          <p class="no-matches">No AI call log for this clause yet (runs before this log existed have none).</p>
+                        } @else if (step.key === 'step7') {
+                          @if (contextTraceFor(clause.clauseNo); as ctx) {
+                            <p class="trace-meta">{{ ctx.notes }}</p>
+                            <div class="matches">
+                              <span class="detail-label">Chunks in the context (from Step 6):</span>
+                              @for (c of chunkListFor(ctx); track $index) {
+                                <p class="trace-chunk">{{ $index + 1 }}. {{ c.label }} · {{ c.chars }} chars</p>
+                              }
+                            </div>
+                            <button type="button" class="trace-toggle" (click)="toggleTraceBlock(ctx.id + ':context')">
+                              {{ openTraceBlock === ctx.id + ':context' ? 'Hide' : 'Show' }} exact context text
+                            </button>
+                            @if (openTraceBlock === ctx.id + ':context') {
+                              <pre class="trace-pre">{{ ctx.contextText }}</pre>
+                            }
+                          }
+                        } @else {
+                          @for (t of latestPassFor(clause.clauseNo); track t.id) {
+                            <div class="trace-call" [class.trace-error]="!!t.error">
+                              @if (t.step === 'llm_call') {
+                                <div class="match-row-header">
+                                  <span class="match-doc">Attempt {{ t.attempt }} · {{ t.provider }}/{{ t.model }}</span>
+                                  <span class="match-similarity">{{ formatMs(t.durationMs) }}</span>
+                                </div>
+                                <p class="trace-meta">Sent {{ t.charsSent }} chars · received {{ t.responseText?.length ?? 0 }} chars</p>
+                                @if (t.notes) {
+                                  <p class="trace-meta">{{ t.notes }}</p>
+                                }
+                                @if (t.error) {
+                                  <p class="trace-meta trace-error-text">Error: {{ t.error }}</p>
+                                }
+                                <div class="trace-toggles">
+                                  @if (t.systemPrompt) {
+                                    <button type="button" class="trace-toggle" (click)="toggleTraceBlock(t.id + ':system')">System prompt</button>
+                                  }
+                                  <button type="button" class="trace-toggle" (click)="toggleTraceBlock(t.id + ':query')">Request (clause + instructions)</button>
+                                  <button type="button" class="trace-toggle" (click)="toggleTraceBlock(t.id + ':response')">Raw AI response</button>
+                                </div>
+                                @if (openTraceBlock === t.id + ':system') {
+                                  <pre class="trace-pre">{{ t.systemPrompt }}</pre>
+                                }
+                                @if (openTraceBlock === t.id + ':query') {
+                                  <pre class="trace-pre">{{ t.queryText }}</pre>
+                                }
+                                @if (openTraceBlock === t.id + ':response') {
+                                  <pre class="trace-pre">{{ t.responseText || '(no response)' }}</pre>
+                                }
+                              } @else {
+                                <div class="match-row-header">
+                                  <span class="match-doc">Saved result (after post-processing)</span>
+                                </div>
+                                <p class="trace-meta">{{ t.notes }}</p>
+                                <button type="button" class="trace-toggle" (click)="toggleTraceBlock(t.id + ':result')">
+                                  {{ openTraceBlock === t.id + ':result' ? 'Hide' : 'Show' }} saved judgment
+                                </button>
+                                @if (openTraceBlock === t.id + ':result') {
+                                  <pre class="trace-pre">{{ t.resultJson }}</pre>
+                                }
+                              }
+                            </div>
+                          }
                         }
                       </div>
                     }

@@ -54,6 +54,7 @@ public static class NdWorkspaceSchemaBootstrap
         ("nd_ai_credit_ledger", null, null, "created_by"),
         ("gap_evidence_reruns", "analysis_runs", "analysis_run_id", null),
         ("gap_evidence_reviews", "analysis_runs", "analysis_run_id", null),
+        ("regul_clause_traces", "analysis_runs", "analysis_run_id", null),
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

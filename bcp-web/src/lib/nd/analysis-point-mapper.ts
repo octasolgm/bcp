@@ -60,14 +60,17 @@ export function analysisPointCoverageStatus(
   const forwardStatus = regulForwardStatus(point);
 
   if (run === 'cancelled') {
+    if (point.landingAiStatus === 'running' || point.landingAiStatus === 'pending') return 'running';
     if (point.landingAiStatus === 'cancelled' || point.dualVerifyStatus === 'cancelled') return 'cancelled';
     if (forwardStatus === 'completed') return 'completed';
     if (forwardStatus === 'failed') return 'failed';
+    if (forwardStatus === 'running' || forwardStatus === 'pending') return 'running';
     return 'cancelled';
   }
 
-  // Regul forward-only (V4): each point can be queued / running / done while the run is in flight.
-  if (isRegul && isForwardOnlyRegul && point.regulationPointId && runActive && phase !== 'done') {
+  // Regul forward-only (V4/V5 hybrid): per-point queued / running / done while the run is in flight.
+  // V5 clauses often have no regulationPointId (synthetic snapshot ids) — still map live status.
+  if (isRegul && isForwardOnlyRegul && runActive && phase !== 'done') {
     if (forwardStatus === 'cancelled' || point.landingAiStatus === 'cancelled') return 'cancelled';
     if (forwardStatus === 'failed' || point.landingAiStatus === 'failed') return 'failed';
     if (forwardStatus === 'completed' || point.landingAiStatus === 'completed') return 'completed';

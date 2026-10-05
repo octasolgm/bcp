@@ -467,6 +467,36 @@ public static class NdIncrementalSchemaBootstrap
         CREATE INDEX IF NOT EXISTS idx_gap_evidence_reviews_run
           ON gap_evidence_reviews (analysis_run_id, created_at DESC);
         """,
+        """
+        CREATE TABLE IF NOT EXISTS regul_clause_traces (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          analysis_run_id UUID NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
+          finding_id UUID NULL,
+          clause_no TEXT NOT NULL DEFAULT '',
+          step TEXT NOT NULL,
+          attempt INT NOT NULL DEFAULT 0,
+          provider TEXT NULL,
+          model TEXT NULL,
+          system_prompt TEXT NULL,
+          context_text TEXT NULL,
+          chunks_json TEXT NULL,
+          query_text TEXT NULL,
+          response_text TEXT NULL,
+          result_json TEXT NULL,
+          notes TEXT NULL,
+          error TEXT NULL,
+          chars_sent INT NULL,
+          duration_ms INT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_regul_clause_traces_run
+          ON regul_clause_traces (analysis_run_id, clause_no, created_at);
+        """,
+        """
+        ALTER TABLE regul_clause_traces ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'analysis';
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

@@ -39,6 +39,7 @@ import {
   compareNumber,
   compareText,
   hasListFilters,
+  catalogDocumentFormatLabel,
   isDistinctOriginalFileName,
   matchesSearch,
   nextSortState,
@@ -1761,6 +1762,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
 
   formatDate = formatDate;
   formatTableDate = formatTableDate;
+  docFormatLabel = catalogDocumentFormatLabel;
 
   extractionClass(status: string): string {
     if (status === 'extracted' || status === 'manual' || status === 'completed') return 'completed';

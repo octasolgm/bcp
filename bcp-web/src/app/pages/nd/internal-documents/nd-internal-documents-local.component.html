@@ -189,6 +189,9 @@
           >
             <td class="doc-cell col-doc">
               <strong [title]="d.title">{{ d.title }}</strong>
+              @if (docFormatLabel(d); as fmt) {
+                <span class="cell-subline doc-format-line"><span class="meta-pill doc-format-pill">{{ fmt }}</span></span>
+              }
               @if (d.convertedFromWord && d.sourceOriginalFileName) {
                 <span class="doc-meta original-source-label cell-subline">Original: {{ d.sourceOriginalFileName }}</span>
               } @else if (showOriginalFileName(d)) {
@@ -271,41 +274,6 @@
                     View semantic
                   </button>
                 }
-                @if (canRunLocalPipeline(d)) {
-                  <button
-                    type="button"
-                    class="row-action-btn compact"
-                    [class.primary]="!isDocParsed(d)"
-                    [title]="isCloudEngine ? 'Parse to text with page references using Azure (cloud, billed per page)' : 'Parse to text with page references, locally (PdfPig + Tesseract, no Landing AI)'"
-                    [disabled]="parsingId === d.id"
-                    (click)="handleParse(d, $event)"
-                  >
-                    {{ parseButtonLabel(d) }}
-                  </button>
-                  @if (isDocParsed(d)) {
-                    <button
-                      type="button"
-                      class="row-action-btn compact"
-                      [class.primary]="!hasExtractedSections(d)"
-                      title="Split parsed text into sections (no re-parse, no Landing AI)"
-                      [disabled]="extractingId === d.id"
-                      (click)="handleExtractSections(d, $event)"
-                    >
-                      {{ extractingId === d.id ? 'Extracting…' : extractButtonLabel(d) }}
-                    </button>
-                    @if (showSemanticExtract) {
-                      <button
-                        type="button"
-                        class="row-action-btn compact"
-                        title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result"
-                        [disabled]="extractingSemanticId === d.id"
-                        (click)="handleExtractSemanticSections(d, $event)"
-                      >
-                        {{ extractingSemanticId === d.id ? 'Extracting…' : 'Extract (semantic)' }}
-                      </button>
-                    }
-                  }
-                }
                 <div class="row-export-actions">
                   <button
                     type="button"
@@ -383,6 +351,39 @@
                     </svg>
                   </button>
                 }
+                @if (canRunLocalPipeline(d)) {
+                  <button
+                    type="button"
+                    class="row-action-btn compact"
+                    [class.primary]="!isDocParsed(d)"
+                    [title]="isCloudEngine ? 'Parse to text with page references using Azure (cloud, billed per page)' : 'Parse to text with page references, locally (PdfPig + Tesseract, no Landing AI)'"
+                    [disabled]="parsingId === d.id"
+                    (click)="handleParse(d, $event)"
+                  >
+                    {{ parseButtonLabel(d) }}
+                  </button>
+                  <button
+                    type="button"
+                    class="row-action-btn compact"
+                    [class.primary]="canShowExtract(d) && !hasExtractedSections(d)"
+                    [title]="extractButtonTitle(d)"
+                    [disabled]="!canClickRowExtract(d)"
+                    (click)="handleExtractSections(d, $event)"
+                  >
+                    {{ extractingId === d.id ? 'Extracting…' : extractButtonLabel(d) }}
+                  </button>
+                  @if (showSemanticExtract) {
+                    <button
+                      type="button"
+                      class="row-action-btn compact"
+                      title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result"
+                      [disabled]="extractingSemanticId === d.id || !canShowExtract(d)"
+                      (click)="handleExtractSemanticSections(d, $event)"
+                    >
+                      {{ extractingSemanticId === d.id ? 'Extracting…' : 'Extract (semantic)' }}
+                    </button>
+                  }
+                }
               </div>
             </td>
           </tr>
@@ -446,37 +447,6 @@
                 </span>
               </div>
               <div class="panel-top-toolbar">
-            @if (sectionsFor && canRunLocalPipeline(sectionsFor)) {
-              <button
-                type="button"
-                class="btn-secondary btn-sm"
-                [disabled]="parsingId === sectionsFor.id"
-                (click)="handleParse(sectionsFor)"
-              >
-                {{ parseButtonLabel(sectionsFor) }}
-              </button>
-              @if (isDocParsed(sectionsFor)) {
-                <button
-                  type="button"
-                  class="btn-primary btn-sm"
-                  [disabled]="extractingId === sectionsFor.id"
-                  (click)="handleExtractSections(sectionsFor)"
-                >
-                  {{ extractingId === sectionsFor.id ? 'Extracting…' : extractButtonLabel(sectionsFor) }}
-                </button>
-                @if (showSemanticExtract) {
-                  <button
-                    type="button"
-                    class="btn-secondary btn-sm"
-                    title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result above"
-                    [disabled]="extractingSemanticId === sectionsFor.id"
-                    (click)="handleExtractSemanticSections(sectionsFor)"
-                  >
-                    {{ extractingSemanticId === sectionsFor.id ? 'Extracting…' : 'Semantic' }}
-                  </button>
-                }
-              }
-            }
             @if (parsedTextFor(sectionsFor)) {
               <button type="button" class="btn-secondary btn-sm" (click)="toggleParsedText()">
                 {{ showParsedText ? 'Hide parsed' : 'Parsed text' }}
@@ -491,6 +461,36 @@
             >
               {{ exportingFileId === sectionsFor.id ? '…' : 'Source' }}
             </button>
+            @if (sectionsFor && canRunLocalPipeline(sectionsFor)) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                [disabled]="parsingId === sectionsFor.id"
+                (click)="handleParse(sectionsFor)"
+              >
+                {{ parseButtonLabel(sectionsFor) }}
+              </button>
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                [title]="extractButtonTitle(sectionsFor)"
+                [disabled]="!canClickRowExtract(sectionsFor)"
+                (click)="handleExtractSections(sectionsFor)"
+              >
+                {{ extractingId === sectionsFor.id ? 'Extracting…' : extractButtonLabel(sectionsFor) }}
+              </button>
+              @if (showSemanticExtract) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  title="Extract semantically (embedding-based, Azure OpenAI) — independent of the structural result above"
+                  [disabled]="extractingSemanticId === sectionsFor.id || !canShowExtract(sectionsFor)"
+                  (click)="handleExtractSemanticSections(sectionsFor)"
+                >
+                  {{ extractingSemanticId === sectionsFor.id ? 'Extracting…' : 'Semantic' }}
+                </button>
+              }
+            }
               </div>
             </div>
           </div>

@@ -28,10 +28,13 @@ public class RegulWorkflowLlmService(
     private const string HybridJudgmentJsonInstruction =
         "Respond with ONLY a JSON object (no markdown fences) with keys: " +
         "design_status, operating_status, overall_status, confidence (0 to 1), interpretation, " +
-        "policy_extract, document_reference, gap_description, suggested_action, gap_direction. " +
+        "policy_extract, document_reference, covered_elements, gap_description, suggested_action, gap_direction. " +
+        "covered_elements MUST be a single string listing, one per line, each atomic requirement of the clause that IS covered: " +
+        "\"[n] <requirement> — Covered: <bracket label>\" (or \"None\"). Every atomic requirement must appear in exactly one of covered_elements or gap_description. " +
         "policy_extract MUST be an array of strings: quotes copied VERBATIM, character for character, from the internal policy " +
         "excerpts above (keep OCR artifacts, never paraphrase), one item per supporting passage; return an empty array only if no " +
-        "excerpt is relevant at all. document_reference must use the exact [bracket label] of the excerpts you quoted. " +
+        "excerpt is relevant at all. document_reference MUST be a single string (never an array) using the exact [bracket label] of the excerpts you quoted, " +
+        "with several labels separated by \"; \". gap_description and suggested_action MUST each be a single string (numbered lines inside it), never an array. " +
         "If overall_status is compliant, gap_description and suggested_action MUST both be \"N/A\" (a compliant clause has no gap). If it is partial or non_compliant, BOTH gap_description and suggested_action are REQUIRED and non-empty.";
 
     public async Task<string> AnalyzeTextAsync(string prompt, CancellationToken ct = default)

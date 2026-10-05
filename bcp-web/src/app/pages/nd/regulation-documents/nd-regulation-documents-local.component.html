@@ -224,6 +224,9 @@
               >
                 <td class="reg-cell col-reg">
                   <strong [title]="d.name">{{ d.name }}</strong>
+                  @if (docFormatLabel(d); as fmt) {
+                    <span class="cell-subline doc-format-line"><span class="meta-pill doc-format-pill">{{ fmt }}</span></span>
+                  }
                   @if (d.convertedFromWord && d.sourceOriginalFileName) {
                     <span class="original-source-label cell-subline">Original: {{ d.sourceOriginalFileName }}</span>
                     @if (d.landingAiFileName) {

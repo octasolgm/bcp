@@ -230,6 +230,28 @@ public class ActionPlansController(
         if (items.Count == 0)
             return Ok(new { success = true, data = new { seeded = 0, skipped = false } });
 
+        // The analysis page and its embedded gap panel can both seed the same clause within
+        // milliseconds; serialize per run so the "already covered" check below sees the other's rows.
+        var seedLock = SeedLocks.GetOrAdd(runId, _ => new SemaphoreSlim(1, 1));
+        await seedLock.WaitAsync(ct);
+        try
+        {
+            return await SeedLockedAsync(runId, items, profile!, ct);
+        }
+        finally
+        {
+            seedLock.Release();
+        }
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, SemaphoreSlim> SeedLocks = new();
+
+    private async Task<IActionResult> SeedLockedAsync(
+        Guid runId,
+        List<SeedActionPlanItem> items,
+        NdProfile profile,
+        CancellationToken ct)
+    {
         var coveredGaps = (await db.NdAnalysisActionPlans.AsNoTracking()
             .Where(p => p.AnalysisRunId == runId)
             .Select(p => new { p.AnalysisPointId, p.GapIndex })

@@ -132,14 +132,25 @@ public sealed class RegulEmbeddingRetrievalService(
                 if (ct.IsCancellationRequested) throw new OperationCanceledException();
                 if (string.IsNullOrWhiteSpace(finding.ClauseText)) continue;
 
-                finding.RetrievalJson = JsonSerializer.Serialize(
-                    await BuildPreviewAsync(corpus, finding.ClauseText, ct),
-                    RetrievalJsonOptions);
+                var preview = await BuildPreviewAsync(corpus, finding.ClauseText, ct);
+                finding.RetrievalJson = JsonSerializer.Serialize(preview, RetrievalJsonOptions);
+                logger.LogInformation(
+                    "Regul Steps 1-6 for clause {ClauseNo}: step1 acronyms={Acronyms} synonyms={Synonyms}; step2 sub-obligations={Subs}; " +
+                    "step3 bm25={Bm25}; step4 embedding={Embedding}; step5+6 fused and selected={Fused} — {Selected}",
+                    finding.ClauseNo,
+                    preview.AcronymMatches.Count,
+                    preview.SynonymMatches.Count,
+                    preview.SubObligations.Count,
+                    preview.Bm25Matches.Count,
+                    preview.Matches.Count,
+                    preview.FusedMatches?.Count ?? 0,
+                    string.Join(" | ", (preview.FusedMatches ?? []).Select(m =>
+                        $"{m.SourceDocumentName} {m.ClauseNo} p.{m.SourcePage}")));
                 finding.UpdatedAt = DateTimeOffset.UtcNow;
                 processed++;
+                // Per clause, so the pipeline panel can show retrieval progress (N of M clauses).
+                await db.SaveChangesAsync(ct);
             }
-
-            await db.SaveChangesAsync(ct);
             logger.LogInformation(
                 "Retrieval complete for run {RunId}: {Processed}/{Total} clause(s) processed against {ExtractionCount} indexed internal document(s)",
                 run.Id, processed, findings.Count, corpus.ExtractionIds.Count);
@@ -150,9 +161,39 @@ public sealed class RegulEmbeddingRetrievalService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex,
-                "Retrieval failed for run {RunId} — forward judgment proceeds without retrieval preview", run.Id);
+            // Judging with an empty context would report every clause as a gap, so stop the run instead.
+            logger.LogError(ex, "Retrieval failed for run {RunId}", run.Id);
+            throw new InvalidOperationException($"Retrieval (Steps 1-6) failed: {ex.Message}", ex);
         }
+    }
+
+    /// <summary>Steps 1-6 again for one clause of a run (clause rerun), against the run's internal documents.
+    /// Saves the clause's RetrievalJson exactly like <see cref="RunRetrievalAsync"/> does for every clause.</summary>
+    public async Task RunRetrievalForFindingAsync(NdAnalysisRun run, NdRegulForwardFinding finding, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(finding.ClauseText)) return;
+        var corpusDocIds = (JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [])
+            .Select(s => Guid.TryParse(s, out var g) ? g : (Guid?)null)
+            .Where(g => g.HasValue)
+            .Select(g => g!.Value)
+            .Distinct()
+            .ToList();
+        if (corpusDocIds.Count == 0) return;
+
+        var corpus = await LoadCorpusAsync(corpusDocIds, ct);
+        if (corpus == null)
+        {
+            logger.LogInformation("Clause retrieval skipped for {ClauseNo}: no indexed internal documents", finding.ClauseNo);
+            return;
+        }
+
+        var preview = await BuildPreviewAsync(corpus, finding.ClauseText, ct);
+        finding.RetrievalJson = JsonSerializer.Serialize(preview, RetrievalJsonOptions);
+        finding.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation(
+            "Regul Steps 1-6 (clause rerun) for clause {ClauseNo}: bm25={Bm25}, embedding={Embedding}, selected={Fused}",
+            finding.ClauseNo, preview.Bm25Matches.Count, preview.Matches.Count, preview.FusedMatches?.Count ?? 0);
     }
 
     /// <summary>Steps 1-6 for one clause against a loaded corpus — exactly what the analysis run stores
@@ -268,10 +309,19 @@ public sealed class RegulEmbeddingRetrievalService(
     private async Task<LoadedCorpus?> LoadCorpusAsync(IReadOnlyCollection<Guid> corpusDocIds, CancellationToken ct)
     {
         var docIds = corpusDocIds.ToList();
-        var extractions = await db.NdLocalDocumentExtractions
+        var indexed = await db.NdLocalDocumentExtractions
             .AsNoTracking()
             .Where(e => docIds.Contains(e.StoredDocumentId) && e.IndexStatus == "indexed")
             .ToListAsync(ct);
+        // One index per document: a file indexed under several OCR engines would otherwise put the same
+        // policy text into the corpus (and the judgment context) more than once.
+        var extractions = indexed
+            .GroupBy(e => e.StoredDocumentId)
+            .Select(g => g
+                .OrderByDescending(e => OcrEngineNames.IsAzureDocIntelligence(e.Engine))
+                .ThenByDescending(e => e.IndexedAt ?? DateTimeOffset.MinValue)
+                .First())
+            .ToList();
         if (extractions.Count == 0) return null;
 
         var extractionIds = extractions.Select(e => e.Id).ToList();
@@ -341,15 +391,9 @@ public sealed class RegulEmbeddingRetrievalService(
             .Where(s => extractionIds.Contains(s.ExtractionId) && s.Embedding != null)
             .OrderBy(s => s.Embedding!.CosineDistance(queryVector))
             .Take(EmbeddingMaxKeep)
-            .Select(s => new
-            {
-                s.Id,
-                s.ExtractionId,
-                s.ClauseNo,
-                s.ClauseText,
-                s.SourcePage,
-                Distance = s.Embedding!.CosineDistance(queryVector),
-            })
+            // Ids and distances only — every section's text is already in the loaded corpus, so pulling
+            // up to 300 full section texts over the wire again per query was pure transfer cost.
+            .Select(s => new { s.Id, Distance = s.Embedding!.CosineDistance(queryVector) })
             .ToListAsync(ct);
 
         var bestSimilarity = candidates.Count == 0 ? 0 : 1 - candidates.Min(c => c.Distance);
@@ -357,15 +401,16 @@ public sealed class RegulEmbeddingRetrievalService(
         foreach (var x in candidates.Select(m => new { m, Similarity = 1 - m.Distance }))
         {
             if (x.Similarity < similarityCutoff) continue;
+            if (!corpus.SectionById.TryGetValue(x.m.Id, out var section)) continue;
             if (hits.EmbeddingBySection.TryGetValue(x.m.Id, out var existing) && existing.Similarity >= x.Similarity) continue;
-            var storedDocId = corpus.StoredDocIdByExtractionId.GetValueOrDefault(x.m.ExtractionId);
+            var storedDocId = corpus.StoredDocIdByExtractionId.GetValueOrDefault(section.ExtractionId);
             hits.EmbeddingBySection[x.m.Id] = new RetrievalMatch(
                 x.m.Id,
-                x.m.ClauseNo,
-                Truncate(x.m.ClauseText, PreviewLength),
+                section.ClauseNo,
+                Truncate(section.ClauseText, PreviewLength),
                 storedDocId,
                 corpus.DocNameById.GetValueOrDefault(storedDocId),
-                x.m.SourcePage,
+                section.SourcePage,
                 Math.Round(x.Similarity, 4),
                 subObligationLabel);
         }

@@ -89,6 +89,9 @@ export class NdPipelinePanelService {
   private readonly _docs = signal<PipelineDocRef[]>([]);
   /** Clauses whose forward LLM judgment failed — Step 8 stays in an error state until retried. */
   private readonly _judgmentFailures = signal(0);
+  private readonly _runId = signal<string | null>(null);
+  private readonly _totalClauses = signal(0);
+  private readonly _judgedClauses = signal(0);
 
   readonly active = this._active.asReadonly();
   readonly collapsed = this._collapsed.asReadonly();
@@ -100,6 +103,19 @@ export class NdPipelinePanelService {
   readonly clauses = this._clauses.asReadonly();
   readonly docs = this._docs.asReadonly();
   readonly judgmentFailures = this._judgmentFailures.asReadonly();
+  readonly runId = this._runId.asReadonly();
+  /** Clauses selected in the run, and how many have finished Step 8 (completed or failed). */
+  readonly totalClauses = this._totalClauses.asReadonly();
+  readonly judgedClauses = this._judgedClauses.asReadonly();
+
+  setRunId(id: string | null): void {
+    if (id !== this._runId()) this._runId.set(id);
+  }
+
+  setClauseProgress(total: number, judged: number): void {
+    if (total !== this._totalClauses()) this._totalClauses.set(Math.max(0, total));
+    if (judged !== this._judgedClauses()) this._judgedClauses.set(Math.max(0, judged));
+  }
 
   /** Called by AnalyseRegulFullV2Component on init — makes the shell show the panel toggle. */
   activate(): void {
@@ -114,6 +130,9 @@ export class NdPipelinePanelService {
     this._clauses.set([]);
     this._docs.set([]);
     this._judgmentFailures.set(0);
+    this._runId.set(null);
+    this._totalClauses.set(0);
+    this._judgedClauses.set(0);
   }
 
   setJudgmentFailures(count: number): void {

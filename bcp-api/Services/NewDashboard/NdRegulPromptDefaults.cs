@@ -84,6 +84,8 @@ You judge whether the internal policy excerpts cover the requirement (design) an
 
 Document-perspective rule — judge the internal manual as a bank IMPLEMENTING the regulator's requirements, never as a mirror expected to restate the regulatory document itself. Some regulatory clause content only makes sense coming from the regulator and has no implementing counterpart to look for: statements about which OTHER entity types the guidance applies to, "this document does not constitute legislation"/disclaimer-of-legal-force language, or instructions addressed to supervisors or the regulator's own staff rather than to the regulated entity. When a regulatory clause is this kind of regulator-only content, its correct and expected internal-policy counterpart is that the internal document says nothing about it — this is NEVER a gap. Mark it compliant with an interpretation noting it is regulator-facing content with no implementing counterpart expected.
 
+Legal definitions versus context — legal definitions and scope statements in the clause (for example what constitutes money laundering, what "funds" or "proceeds" mean, what a predicate offence is) ARE implementable: staff must apply them to recognise and report suspicion, so the policy is expected to state or expressly adopt them (directly, or by explicit reference to the law's definition). Purely contextual or statistical statements (for example which threats a national risk assessment ranked highest) are NOT requirements on their own; only when the clause directs the institution to act on them (for example "FIs should pay special attention to the most serious threats identified in the NRA") is there a requirement, and it is met when the policy's own risk assessment explicitly takes those findings into account.
+
 Institutional and entity coverage — when internal policy grants protection, rights, duties, liabilities, reporting obligations, or similar legal effects to the institution by its corporate or legal name (e.g. "DIFC", "the Bank", "the Institution", "the Firm", "the Company"), treat that as extending to its board members, directors, officers, employees, contractors, agents, and authorised representatives acting within their official or authorised capacity, unless the regulatory clause explicitly requires separate enumeration by role or named category. Do NOT flag a gap solely because board members, individual roles, or authorised representatives are not named alongside the institutional name.
 
 Strict regulatory scoping — evaluate ONLY what is explicitly written in the regulatory clause text supplied in the user message. Do NOT infer, assume, or import requirements from external knowledge, other clauses, industry templates, or "typical" regulatory practice. If the clause does not mention a timeline, target date, deadline, escalation path, reporting cycle, committee name, or similar detail, do NOT flag its absence as a gap and do NOT demand it in suggested_action.
@@ -97,6 +99,10 @@ Functional equivalence — map regulatory role or function names to common inter
 OCR/formatting tolerance — the internal excerpts are machine-parsed. Tolerate spacing artifacts (e.g. "A M L" = "AML"), hyphenation/line-break splits, minor typos, and inconsistent numbering when matching evidence. Never treat an OCR artifact as a substantive difference. policy_extract must still be copied verbatim from the parsed text, artifacts included.
 
 Atomic requirement analysis — decompose the regulatory clause into discrete atomic requirements (obligations, prohibitions, conditions, or enumerated elements). Decide coverage requirement-by-requirement against the excerpts. Derive overall_status from the aggregate: compliant only if every atomic requirement is substantively covered; partial if some but not all; non_compliant if none are covered. Search all excerpts thoroughly before concluding non_compliant.
+
+Completeness and consistency — every atomic requirement must be accounted for exactly once: either in covered_elements (with its evidence label) or in gap_description (with what is missing). overall_status and the gap list must agree: if gap_description lists no missing requirement, overall_status MUST be compliant; if overall_status is partial or non_compliant, gap_description MUST list at least one missing requirement. Never return partial with gap_description "N/A".
+
+Gap granularity — write ONE gap line per distinct missing requirement. Do not merge unrelated missing requirements into one line, and do not split a single requirement across several lines. The number of gaps is whatever the clause and evidence produce: one gap is correct when only one requirement is missing; several gaps when several distinct requirements are missing.
 
 Semantic matching — compare by regulatory meaning and operational or legal outcome, not keyword overlap. Different wording, section numbers, headings, and document structure are acceptable when the outcome is equivalent. Do not mark non_compliant when the excerpts clearly implement the regulatory intent with different terminology. Coverage may be split across multiple excerpts or files.
 
@@ -112,10 +118,11 @@ Rules:
 - operating_status: set equal to design_status (documents alone cannot prove operating effectiveness — a human will adjust this later with evidence).
 - overall_status: same as design_status in MVP.
 - confidence: your calibrated confidence (0-1) in this judgment given the available text (see calibration above).
-- policy_extract: copy supporting text VERBATIM, character-for-character, from the internal policy excerpts provided below (including OCR artifacts). Do not paraphrase, summarize, or fix typos. One array item per supporting passage. Return an empty array only if no excerpt is relevant at all, and lower design_status/confidence accordingly.
-- document_reference: name the specific internal document and section/page using the exact [bracket label] from the excerpts that contain your policy_extract (e.g. Manual.pdf — 6.2.2 p.45). Never invent page or section numbers.
+- policy_extract: copy supporting text VERBATIM, character-for-character, from the internal policy excerpts provided below (including OCR artifacts). Do not paraphrase, summarize, or fix typos. One array item per supporting passage. Each item must be one contiguous passage from a single excerpt (never spliced across excerpts), starting at the beginning of a word, sentence or list item (no leading punctuation fragments). Return an empty array only if no excerpt is relevant at all, and lower design_status/confidence accordingly.
+- covered_elements: a single string, one line per atomic requirement that IS substantively covered: [n] <atomic requirement> — Covered: <exact [bracket label] of the evidence>. Use "None" if no requirement is covered.
+- document_reference: a single string naming the specific internal document and section/page using the exact [bracket label] from the excerpts that contain your policy_extract (e.g. Manual.pdf — 6.2.2 p.45). When quoting from several documents, put every label in that one string separated by "; ". Never return an array. Never invent page or section numbers.
 - gap_description: if overall_status is compliant, MUST be exactly "N/A". If partial or non_compliant, MUST be a single string containing ONLY a numbered list of atomic requirements that are genuinely missing or materially weak — format each line as: [n] <atomic requirement> — Missing: <what the excerpts lack>. Do NOT list fully covered items. Do NOT include requirements not stated in the clause text.
-- suggested_action: if overall_status is compliant, MUST be exactly "N/A". If partial or non_compliant, MUST be a single string with a numbered list matching gap_description 1:1 — format each line as: [n] Amend <relevant section or "Policy"> to include: "<exact draft rule wording in professional compliance terminology>." Write copy-paste-ready policy language only; do NOT write audit narratives (e.g. do not say "The policy is missing X" or "Ensure the bank adds Y").
+- suggested_action: if overall_status is compliant, MUST be exactly "N/A". If partial or non_compliant, MUST be a single string of numbered lines keyed to gap_description: every gap [n] gets at least one action line starting with the same [n]; when closing a gap needs more than one distinct change (e.g. a definition in one section AND a procedure step in another), write one line per change, each starting with that same [n]. Format each line as: [n] Amend <relevant section or "Policy"> to include: "<exact draft rule wording in professional compliance terminology>." Write copy-paste-ready policy language only; do NOT write audit narratives (e.g. do not say "The policy is missing X" or "Ensure the bank adds Y").
 - gap_direction: set to "missing_in_internal" whenever overall_status is partial or non_compliant. Leave as an empty string when overall_status is compliant.
 """;
 
@@ -219,6 +226,8 @@ Also give an overall_rating (strong/adequate/weak), 2-5 strengths, and 2-5 concr
     public const string JudgmentSemanticV4Label = "Semantic matching v4 — abbreviation & equivalence aware";
     public const string JudgmentSemanticV5Label = "v5 — atomic decomposition, institutional coverage & draft policy actions";
     public const string JudgmentSemanticV6Label = "v6 — multi-document evidence citation & atomic decomposition";
+    public const string JudgmentSemanticV7Label = "v7 — multi-document citation as a single document_reference string";
+    public const string JudgmentSemanticV8Label = "v8 — covered elements, one gap per missing requirement, status/gap consistency, legal definitions";
 
     public static string BuildJudgmentContextText(string policyContext) =>
         $"--- INTERNAL POLICY DOCUMENT EXCERPTS (retrieved as the sections most likely relevant to a clause -- they may not be the full manual, and if nothing here addresses a given clause it may still be covered elsewhere) ---\n{policyContext}\n--- END EXCERPTS ---\n\nBefore concluding non_compliant, consider whether the requirement might be implemented elsewhere in the manual under different section titles, headings, or terminology than the regulator used. If excerpts are incomplete, prefer partial with low confidence over non_compliant.";
@@ -313,18 +322,22 @@ Strict scoping: evaluate ONLY what is explicitly written in the clause text abov
 Steps:
 1. Decompose the clause into atomic requirements (obligations, prohibitions, conditions, enumerated elements).
 2. For each atomic requirement, search ALL excerpts for substantive coverage, including institutional/entity coverage, abbreviation equivalence, functional equivalence, and legal-outcome equivalence per the system prompt.
-3. Check ALL provided document excerpts. If multiple documents (e.g. both Main Manual and Implementation Guide) contain supporting text for this clause, include verbatim quotes from EACH distinct document in policy_extract and list all corresponding labels in document_reference.
-4. Set overall_status from the aggregate of atomic results.
+3. Check ALL provided document excerpts. If multiple documents (e.g. both Main Manual and Implementation Guide) contain supporting text for this clause, include verbatim quotes from EACH distinct document in policy_extract and put all corresponding labels in the single document_reference string, separated by "; " (never an array).
+4. Account for EVERY atomic requirement exactly once: covered ones go in covered_elements (with the [bracket label] of the evidence), missing or materially weak ones go in gap_description.
+5. Set overall_status from the aggregate of atomic results. If no requirement is missing, overall_status is compliant; if one or more is missing, it is partial or non_compliant. Never return partial with gap_description "N/A".
+
+covered_elements (single string field):
+- One line per covered atomic requirement: [n] <atomic requirement> — Covered: <exact [bracket label]>. "None" if nothing is covered.
 
 gap_description (single string field):
 - If overall_status is compliant: MUST be exactly "N/A".
-- If partial or non_compliant: MUST be a numbered list containing ONLY atomic requirements that are missing or materially weak, one per line:
+- If partial or non_compliant: MUST be a numbered list containing ONLY atomic requirements that are missing or materially weak, ONE line per distinct missing requirement (as many lines as there are distinct missing requirements — do not merge unrelated ones into one line):
   [1] <atomic requirement> — Missing: <what the excerpts lack>.
   Do NOT list covered items. Do NOT include items not stated in the clause.
 
 suggested_action (single string field):
 - If overall_status is compliant: MUST be exactly "N/A".
-- If partial or non_compliant: MUST be a numbered list with the same count and order as gap_description, one draft policy amendment per line:
+- If partial or non_compliant: numbered lines keyed to gap_description. Every gap [n] gets at least one action line starting with the same [n]; if closing that gap needs more than one distinct change (e.g. a definition in one section and a procedure step in another), write one line per change, each starting with that same [n]:
   [1] Amend <relevant section or 'Policy'> to include: '<exact draft rule wording in professional compliance terminology>.'
   Provide copy-paste-ready policy language only — no audit-style commentary.
 

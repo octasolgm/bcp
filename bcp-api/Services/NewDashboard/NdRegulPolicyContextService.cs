@@ -59,10 +59,14 @@ public static class NdRegulPolicyContextService
             return string.Join("\n\n", Chunks.Select(c => $"[{c.Label}]\n{c.Text}"));
         }
 
+        // Retrieval-aware (V5) bundles carry MarkdownByFile only for page grounding of quotes; the
+        // judgment context must stay the clause's own retrieved chunks, never the whole documents.
         public string BuildContextForClause(string clauseText) =>
-            UsesFullMarkdown
-                ? BuildFullContext()
-                : BuildRetrievedContext(clauseText);
+            Mode == RegulPolicyContextMode.RetrievalAware
+                ? string.Join("\n\n", Chunks.Select(c => $"[{c.Label}]\n{c.Text}"))
+                : UsesFullMarkdown
+                    ? BuildFullContext()
+                    : BuildRetrievedContext(clauseText);
 
         public IReadOnlyList<PolicyChunk> GetChunksForClause(string clauseText) =>
             UsesFullMarkdown
@@ -138,9 +142,17 @@ public static class NdRegulPolicyContextService
     /// meaningless for a scoped chunk set, so <see cref="RegulPolicyContextMode.RetrievalAware"/>
     /// makes <see cref="PolicyBundle.UsesFullMarkdown"/> true regardless of TotalPages.
     /// </summary>
-    public static PolicyBundle FromRetrievalChunks(IReadOnlyList<PolicyChunk> chunks) =>
-        new(chunks, chunks.Count, string.Join("\n\n", chunks.Select(c => c.Text)),
-            new Dictionary<string, string>(), RegulPolicyContextMode.RetrievalAware);
+    public static PolicyBundle FromRetrievalChunks(
+        IReadOnlyList<PolicyChunk> chunks,
+        IReadOnlyDictionary<string, string>? markdownByFile = null) =>
+        new(
+            chunks,
+            chunks.Count,
+            // Quotes are checked against the chunks the model saw plus the full parsed documents, so a
+            // verbatim quote that crosses a chunk boundary still verifies.
+            string.Join("\n\n", chunks.Select(c => c.Text).Concat(markdownByFile?.Values ?? [])),
+            markdownByFile ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            RegulPolicyContextMode.RetrievalAware);
 
     /// <summary>
     /// Forward judgment context from per-run internal sections (same corpus reverse uses).

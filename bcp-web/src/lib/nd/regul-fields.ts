@@ -107,6 +107,10 @@ export function parseRegulElementCapSegments(gapText: string): string[] {
   const text = gapText.trim();
   if (!text) return [];
 
+  // V5 hybrid format: one "[n] <requirement> — Missing: ..." line per missing requirement.
+  const numbered = splitBracketNumberedLines(text);
+  if (numbered.length > 0) return numbered;
+
   const parts = text.split(/(?=Element\s+\d+\s*\()/i).map((s) => s.trim()).filter(Boolean);
   const segments: string[] = [];
 
@@ -122,6 +126,20 @@ export function parseRegulElementCapSegments(gapText: string): string[] {
 
   if (!segments.length) return [text];
   return segments;
+}
+
+/** "[1] ...\n[2] ..." → ["...", "..."]; [] when the text has no line-leading [n] markers. */
+export function splitBracketNumberedLines(text: string): string[] {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const markers = [...normalized.matchAll(/(?:^|\n)\s*\[(\d+)\]\s*/g)];
+  if (markers.length === 0) return [];
+  return markers
+    .map((m, i) => {
+      const start = (m.index ?? 0) + m[0].length;
+      const end = i + 1 < markers.length ? markers[i + 1].index ?? normalized.length : normalized.length;
+      return normalized.slice(start, end).trim();
+    })
+    .filter(Boolean);
 }
 
 /** Seed / Excel gap phrases beyond strict "NOT covered" / "partially covered". */

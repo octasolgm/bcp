@@ -64,6 +64,54 @@ function stripAllExtensions(name: string): string {
 /** True when a document's original filename is worth showing next to its title — false when it's
  * just the same name with a " (vN)" version suffix and/or a doubled extension tacked on (or the
  * exact same string), which reads as the name printed twice rather than as extra information. */
+const FORMAT_LABEL_BY_EXT: Record<string, string> = {
+  pdf: 'PDF',
+  doc: 'DOC',
+  docx: 'DOC',
+  xls: 'XLS',
+  xlsx: 'XLS',
+  xlsm: 'XLS',
+  ppt: 'PPT',
+  pptx: 'PPT',
+  txt: 'TXT',
+  csv: 'CSV',
+  rtf: 'RTF',
+  odt: 'ODT',
+  ods: 'ODS',
+};
+
+/** Short pill label (PDF, DOC, XLS, …) from a file name's extension. */
+export function documentFormatLabelFromFileName(fileName: string | null | undefined): string | null {
+  if (!fileName?.trim()) return null;
+  const m = fileName.trim().match(/\.([a-z0-9]{1,5})$/i);
+  if (!m) return null;
+  const ext = m[1].toLowerCase();
+  return FORMAT_LABEL_BY_EXT[ext] ?? ext.toUpperCase();
+}
+
+/** Best stored name to infer format for catalog rows (internal / regulation documents). */
+export function catalogDocumentFormatLabel(doc: {
+  originalFileName?: string | null;
+  sourceOriginalFileName?: string | null;
+  landingAiFileName?: string | null;
+  title?: string | null;
+  name?: string | null;
+  isManual?: boolean;
+}): string | null {
+  if (doc.isManual) return null;
+  const candidates = [
+    doc.originalFileName,
+    doc.landingAiFileName,
+    doc.sourceOriginalFileName,
+    doc.title ?? doc.name,
+  ];
+  for (const name of candidates) {
+    const label = documentFormatLabelFromFileName(name);
+    if (label) return label;
+  }
+  return null;
+}
+
 export function isDistinctOriginalFileName(title: string | null | undefined, originalFileName: string | null | undefined): boolean {
   if (!originalFileName) return false;
   const t = (title ?? '').trim().toLowerCase();

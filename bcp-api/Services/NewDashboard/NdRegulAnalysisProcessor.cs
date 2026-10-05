@@ -32,8 +32,51 @@ public class NdRegulAnalysisProcessor(
     NdDemoUserDirectory demoDirectory,
     RegulEmbeddingRetrievalService embeddingRetrieval,
     NdLocalDocumentPayloadLoader localPayloadLoader,
+    NdGapEvidencePrepareService documentPrepare,
     ILogger<NdRegulAnalysisProcessor> logger)
 {
+    /// <summary>V5: every internal document must be parsed, extracted and indexed before Steps 1-6, or
+    /// retrieval silently leaves it out. Documents already indexed under any engine are left as they are;
+    /// the rest go through the same azure-di parse → extract → index as uploaded gap evidence.</summary>
+    private async Task EnsureInternalDocsIndexedAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        var docIds = (JsonSerializer.Deserialize<List<string>>(run.SelectedInternalDocIds) ?? [])
+            .Select(s => Guid.TryParse(s, out var g) ? g : (Guid?)null)
+            .Where(g => g.HasValue)
+            .Select(g => g!.Value)
+            .Distinct()
+            .ToList();
+        if (docIds.Count == 0) return;
+
+        var indexed = await db.NdLocalDocumentExtractions.AsNoTracking()
+            .Where(e => docIds.Contains(e.StoredDocumentId) && e.IndexStatus == "indexed")
+            .Select(e => e.StoredDocumentId)
+            .Distinct()
+            .ToListAsync(ct);
+        var missing = docIds.Except(indexed).ToList();
+        if (missing.Count == 0)
+        {
+            logger.LogInformation("Regul V5 run {RunId}: all {Count} internal document(s) already indexed", run.Id, docIds.Count);
+            return;
+        }
+
+        logger.LogInformation(
+            "Regul V5 run {RunId}: preparing {Missing} of {Count} internal document(s) (parse → extract → index)",
+            run.Id, missing.Count, docIds.Count);
+        foreach (var docId in missing)
+        {
+            if (runCancellation.IsStopRequested(run.Id)) throw new OperationCanceledException();
+            try
+            {
+                await documentPrepare.PrepareDocumentsAsync([docId], run.WorkflowEngine, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                throw new InvalidOperationException(
+                    $"Internal document {docId} could not be parsed, extracted and indexed: {ex.GetBaseException().Message}", ex);
+            }
+        }
+    }
     private const string ReverseMappingJsonInstruction =
         "Respond with ONLY a JSON object (no markdown fences) with keys: " +
         "mapped_clause_nos (array of strings), mapping (covered|no_regulatory_basis|basis_not_verifiable), " +
@@ -344,7 +387,7 @@ public class NdRegulAnalysisProcessor(
         1,
         int.TryParse(Environment.GetEnvironmentVariable("BCP_REGUL_FORWARD_JUDGMENT_CONCURRENCY"), out var configuredConcurrency)
             ? configuredConcurrency
-            : 4);
+            : 8);
 
     public sealed record ForwardJudgmentPrep(
         NdRegulForwardFinding Finding,
@@ -358,9 +401,14 @@ public class NdRegulAnalysisProcessor(
         string SystemPrompt,
         bool CacheContextBlock,
         bool IsHybridEngine,
-        string? WorkflowEngine);
+        string? WorkflowEngine)
+    {
+        /// <summary>Step 7/8 audit rows for this clause. Filled in memory while the LLM call runs (no DB
+        /// access in phase 2) and saved together with the clause's result.</summary>
+        public List<NdRegulClauseTrace> Traces { get; } = [];
+    }
 
-    private async Task RunForwardPhaseAsync(NdAnalysisRun run, CancellationToken ct)
+    private async Task RunForwardPhaseAsync(NdAnalysisRun run, CancellationToken ct, string traceSource = RegulClauseTraceSources.Analysis)
     {
         var policyMode = NdRegulPolicyContextService.ResolveMode(run.WorkflowEngine);
         var policyBundle = await LoadPolicyBundleAsync(run, policyMode, ct);
@@ -425,96 +473,58 @@ public class NdRegulAnalysisProcessor(
             preps.Add(await PrepareForwardJudgmentAsync(finding, point, index, clauseBundle, cacheContext, run.WorkflowEngine, ct));
         }
 
-        // Phase 2 — bounded-concurrency execute: only the outbound LLM call, nothing DB-touching.
+        // Phase 2 — bounded-concurrency execute: only the outbound LLM call runs in parallel. Each clause
+        // is finalized and saved the moment its own call returns (under dbLock, so DB writes never
+        // overlap on the shared DbContext) — the UI sees clauses complete one by one instead of all
+        // at once after the slowest call.
         using var gate = new SemaphoreSlim(ForwardJudgmentConcurrency);
+        using var dbLock = new SemaphoreSlim(1, 1);
+        var cancelled = false;
         var executions = preps.Select(async prep =>
         {
+            RegulJudgmentResult? judgment = null;
+            Exception? error = null;
             await gate.WaitAsync(ct);
             try
             {
                 logger.LogInformation(
                     "Regul forward judgment started for run {RunId} clause {ClauseNo} ({Index}/{Total})",
                     run.Id, prep.Finding.ClauseNo, prep.Index, total);
-                var judgment = await ExecuteForwardJudgmentAsync(prep, ct);
+                judgment = await ExecuteForwardJudgmentAsync(prep, ct);
                 if (runCancellation.IsStopRequested(run.Id) || ct.IsCancellationRequested)
                     throw new OperationCanceledException();
-                return (Prep: prep, Judgment: judgment, Error: (Exception?)null);
             }
             catch (Exception ex)
             {
-                return (Prep: prep, Judgment: (RegulJudgmentResult?)null, Error: ex);
+                error = ex;
             }
             finally
             {
                 gate.Release();
             }
+
+            await dbLock.WaitAsync(CancellationToken.None);
+            try
+            {
+                if (FinalizeForwardJudgment(prep, judgment, error))
+                    cancelled = true;
+                else if (error == null)
+                    completed++;
+                db.NdRegulClauseTraces.AddRange(WithSource(prep.Traces, traceSource));
+
+                run.ProcessedPointsCount = completed;
+                run.LandingAiCompletedCount = completed;
+                run.DualVerifyCompletedCount = completed;
+                run.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(CancellationToken.None);
+            }
+            finally
+            {
+                dbLock.Release();
+            }
         }).ToList();
 
-        var results = await Task.WhenAll(executions);
-
-        // Phase 3 — sequential finalize: same per-clause status/error handling as before, just applied
-        // after the fact instead of inline, so DB writes never overlap.
-        var cancelled = false;
-        foreach (var result in results.OrderBy(r => r.Prep.Index))
-        {
-            var (prep, judgment, error) = result;
-            var finding = prep.Finding;
-            var point = prep.Point;
-
-            if (error is OperationCanceledException)
-            {
-                cancelled = true;
-                finding.Status = "cancelled";
-                finding.ErrorMessage = "Stopped by user";
-                finding.UpdatedAt = DateTimeOffset.UtcNow;
-                if (point.LandingAiStatus is "pending" or "running")
-                {
-                    point.LandingAiStatus = "cancelled";
-                    point.LandingAiError = "Stopped by user";
-                    point.DualVerifyStatus = "skipped";
-                    point.UpdatedAt = DateTimeOffset.UtcNow;
-                }
-            }
-            else if (error != null)
-            {
-                logger.LogError(error, "Regul forward judgment failed for run {RunId} clause {ClauseNo} ({Index}/{Total})",
-                    run.Id, finding.ClauseNo, prep.Index, total);
-                finding.Status = "failed";
-                finding.ErrorMessage = error.Message;
-                finding.UpdatedAt = DateTimeOffset.UtcNow;
-                point.LandingAiStatus = "failed";
-                point.LandingAiError = error.Message;
-                point.UpdatedAt = DateTimeOffset.UtcNow;
-            }
-            else
-            {
-                var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
-                    finding.ClauseNo, finding.ClauseText, judgment!);
-
-                finding.Status = "completed";
-                finding.ResultJson = JsonSerializer.Serialize(judgment);
-                finding.ErrorMessage = null;
-                finding.UpdatedAt = DateTimeOffset.UtcNow;
-
-                NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment!, landingMessage);
-                completed++;
-                logger.LogInformation(
-                    "Regul forward judgment completed for run {RunId} clause {ClauseNo} ({Index}/{Total}) status={Status} confidence={Confidence} policyExtracts={ExtractCount}",
-                    run.Id,
-                    finding.ClauseNo,
-                    prep.Index,
-                    total,
-                    judgment!.OverallStatus,
-                    judgment.Confidence,
-                    judgment.PolicyExtract.Count);
-            }
-
-            run.ProcessedPointsCount = completed;
-            run.LandingAiCompletedCount = completed;
-            run.DualVerifyCompletedCount = completed;
-            run.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
-        }
+        await Task.WhenAll(executions);
 
         logger.LogInformation(
             "Regul forward phase completed for run {RunId} ({Completed}/{Total}, policyPages={Pages}, retrieval={Retrieval})",
@@ -525,6 +535,61 @@ public class NdRegulAnalysisProcessor(
             !policyBundle.UsesFullMarkdown);
 
         if (cancelled) throw new OperationCanceledException();
+    }
+
+    /// <summary>Applies one clause's judgment outcome to its finding + point. Returns true when the
+    /// clause was cancelled. Caller saves.</summary>
+    private bool FinalizeForwardJudgment(ForwardJudgmentPrep prep, RegulJudgmentResult? judgment, Exception? error)
+    {
+        var finding = prep.Finding;
+        var point = prep.Point;
+
+        if (error is OperationCanceledException)
+        {
+            finding.Status = "cancelled";
+            finding.ErrorMessage = "Stopped by user";
+            finding.UpdatedAt = DateTimeOffset.UtcNow;
+            if (point.LandingAiStatus is "pending" or "running")
+            {
+                point.LandingAiStatus = "cancelled";
+                point.LandingAiError = "Stopped by user";
+                point.DualVerifyStatus = "skipped";
+                point.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+            return true;
+        }
+
+        if (error != null)
+        {
+            logger.LogError(error, "Regul forward judgment failed for run {RunId} clause {ClauseNo} (#{Index})",
+                finding.AnalysisRunId, finding.ClauseNo, prep.Index);
+            finding.Status = "failed";
+            finding.ErrorMessage = error.Message;
+            finding.UpdatedAt = DateTimeOffset.UtcNow;
+            point.LandingAiStatus = "failed";
+            point.LandingAiError = error.Message;
+            point.UpdatedAt = DateTimeOffset.UtcNow;
+            return false;
+        }
+
+        var landingMessage = NdRegulJudgmentFormatter.FormatLandingMessage(
+            finding.ClauseNo, finding.ClauseText, judgment!);
+
+        finding.Status = "completed";
+        finding.ResultJson = JsonSerializer.Serialize(judgment);
+        finding.ErrorMessage = null;
+        finding.UpdatedAt = DateTimeOffset.UtcNow;
+
+        NdRegulAnalysisPointSync.ApplyForwardJudgment(point, judgment!, landingMessage);
+        logger.LogInformation(
+            "Regul forward judgment completed for run {RunId} clause {ClauseNo} (#{Index}) status={Status} confidence={Confidence} policyExtracts={ExtractCount}",
+            finding.AnalysisRunId,
+            finding.ClauseNo,
+            prep.Index,
+            judgment!.OverallStatus,
+            judgment.Confidence,
+            judgment.PolicyExtract.Count);
+        return false;
     }
 
     // camelCase — RetrievalJson was written with this same policy (see RegulEmbeddingRetrievalService).
@@ -593,7 +658,9 @@ public class NdRegulAnalysisProcessor(
             foreach (var m in fused)
                 chunks.Add(ToChunk(m.SectionId, m.ClauseNo, m.TextPreview, m.SourceDocumentName, m.SourcePage, fusedFullTextById));
 
-            return NdRegulPolicyContextService.FromRetrievalChunks(chunks);
+            var fusedDocIds = fused.Select(m => m.SourceDocumentId).Distinct().ToList();
+            var fusedMarkdown = await LoadParsedMarkdownByDocumentNameAsync(fusedDocIds, ct);
+            return NdRegulPolicyContextService.FromRetrievalChunks(chunks, fusedMarkdown);
         }
 
         var sectionIds = preview.Matches.Select(m => m.SectionId)
@@ -617,7 +684,50 @@ public class NdRegulAnalysisProcessor(
             chunks.Add(ToChunk(m.SectionId, m.ClauseNo, m.TextPreview, m.SourceDocumentName, m.SourcePage, fullTextById));
         }
 
-        return NdRegulPolicyContextService.FromRetrievalChunks(chunks);
+        var docIds = preview.Matches.Select(m => m.SourceDocumentId)
+            .Concat(preview.Bm25Matches.Select(m => m.SourceDocumentId))
+            .Distinct()
+            .ToList();
+        var markdownByFile = await LoadParsedMarkdownByDocumentNameAsync(docIds, ct);
+        return NdRegulPolicyContextService.FromRetrievalChunks(chunks, markdownByFile);
+    }
+
+    /// <summary>Parsed markdown per document for this job (the processor is scoped to one run/job), so
+    /// each clause doesn't re-download every document's full text just to resolve quote pages.</summary>
+    private readonly Dictionary<Guid, (string Name, string? Markdown)> _markdownByDocId = new();
+
+    private async Task<Dictionary<string, string>> LoadParsedMarkdownByDocumentNameAsync(
+        IReadOnlyCollection<Guid> storedDocumentIds,
+        CancellationToken ct)
+    {
+        var missing = storedDocumentIds.Where(id => !_markdownByDocId.ContainsKey(id)).Distinct().ToList();
+        if (missing.Count > 0)
+        {
+            var docs = await db.StoredDocuments.AsNoTracking()
+                .Where(d => missing.Contains(d.Id))
+                .Select(d => new { d.Id, Name = d.OriginalFileName ?? d.Title ?? "document" })
+                .ToListAsync(ct);
+
+            var rows = await db.NdLocalDocumentExtractions.AsNoTracking()
+                .Where(e => missing.Contains(e.StoredDocumentId)
+                            && e.Status == "parsed"
+                            && e.MarkdownText != null)
+                .OrderByDescending(e => e.ParsedAt)
+                .Select(e => new { e.StoredDocumentId, e.MarkdownText })
+                .ToListAsync(ct);
+
+            foreach (var doc in docs)
+                _markdownByDocId[doc.Id] = (doc.Name, rows.FirstOrDefault(r => r.StoredDocumentId == doc.Id)?.MarkdownText);
+        }
+
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in storedDocumentIds)
+        {
+            if (_markdownByDocId.TryGetValue(id, out var entry) && entry.Markdown is { Length: > 0 } md)
+                dict[entry.Name] = md;
+        }
+
+        return dict;
     }
 
     /// <summary>
@@ -698,7 +808,7 @@ public class NdRegulAnalysisProcessor(
         var (cfg, systemPrompt, resolvedCacheContextBlock, isHybridEngine) =
             await regulLlm.ResolveJudgmentCallInputsAsync(cacheContextBlock, workflowEngine, ct);
 
-        return new ForwardJudgmentPrep(
+        var prep = new ForwardJudgmentPrep(
             finding,
             point,
             index,
@@ -711,12 +821,41 @@ public class NdRegulAnalysisProcessor(
             resolvedCacheContextBlock,
             isHybridEngine,
             workflowEngine);
+
+        // Step 7 — exactly what the judgment call will be given as policy context.
+        prep.Traces.Add(new NdRegulClauseTrace
+        {
+            AnalysisRunId = finding.AnalysisRunId,
+            FindingId = finding.Id,
+            ClauseNo = clauseNo,
+            Step = RegulClauseTraceSteps.Context,
+            ContextText = contextBlock,
+            ChunksJson = JsonSerializer.Serialize(contextChunks.Select(c => new
+            {
+                label = c.Label,
+                sourceDocument = c.SourceDoc,
+                page = c.SourcePage,
+                chars = c.Text.Length,
+            })),
+            CharsSent = contextBlock.Length,
+            Notes = $"{contextChunks.Count} chunk(s) from the clause's Step 6 selection, {contextBlock.Length} chars",
+            TenantId = finding.TenantId,
+        });
+        logger.LogInformation(
+            "Regul Step 7 for clause {ClauseNo}: context built from {ChunkCount} retrieved chunk(s), {Chars} chars — {Labels}",
+            clauseNo, contextChunks.Count, contextBlock.Length,
+            string.Join(" | ", contextChunks.Select(c => c.Label)));
+
+        return prep;
     }
 
     /// <summary>Phase 2 of forward judgment: the actual LLM call(s) for one clause, including the same
     /// gap-description retry loop CallForwardJudgmentAsync used to run — everything here is either a pure
     /// network call or in-memory post-processing, so it's safe to run for several clauses at once (see
     /// RunForwardPhaseAsync's bounded-concurrency phase 2, which is the whole point of this split).</summary>
+    /// <summary>How many times one judgment request is sent before the clause is marked failed.</summary>
+    private const int MaxDeliveryAttempts = 3;
+
     private async Task<RegulJudgmentResult> ExecuteForwardJudgmentAsync(ForwardJudgmentPrep prep, CancellationToken ct)
     {
         var policyBundle = prep.ClauseBundle;
@@ -738,13 +877,67 @@ public class NdRegulAnalysisProcessor(
                         string.IsNullOrWhiteSpace(judgment.SuggestedAction) || judgment.SuggestedAction.Trim() == "N/A")
                     : NdRegulPromptDefaults.BuildJudgmentRetryNote(judgment.OverallStatus));
 
-            var raw = await regulLlm.DispatchJudgmentAsync(
-                prep.Config, prep.SystemPrompt, prep.ContextBlock, query, prep.CacheContextBlock, prep.IsHybridEngine, ct);
-            judgment = NdRegulLlmJsonHelper.ParseJudgmentResult(raw);
+            // Delivery retries: a provider error, an answer cut off at the token limit, or unreadable JSON
+            // re-sends the same request (same prompt, same reasoning effort) instead of failing the clause.
+            NdRegulClauseTrace callTrace = null!;
+            for (var delivery = 1; ; delivery++)
+            {
+                callTrace = new NdRegulClauseTrace
+                {
+                    AnalysisRunId = prep.Finding.AnalysisRunId,
+                    FindingId = prep.Finding.Id,
+                    ClauseNo = prep.Finding.ClauseNo,
+                    Step = RegulClauseTraceSteps.LlmCall,
+                    Attempt = prep.Traces.Count(t => t.Step == RegulClauseTraceSteps.LlmCall) + 1,
+                    Provider = prep.Config.Provider,
+                    Model = prep.Config.Model,
+                    SystemPrompt = attempt == 0 && delivery == 1 ? prep.SystemPrompt : null,
+                    QueryText = query,
+                    CharsSent = prep.SystemPrompt.Length + prep.ContextBlock.Length + query.Length,
+                    TenantId = prep.Finding.TenantId,
+                };
+                prep.Traces.Add(callTrace);
+                var started = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    var raw = await regulLlm.DispatchJudgmentAsync(
+                        prep.Config, prep.SystemPrompt, prep.ContextBlock, query, prep.CacheContextBlock, prep.IsHybridEngine, ct);
+                    callTrace.DurationMs = (int)started.ElapsedMilliseconds;
+                    callTrace.ResponseText = raw;
+                    logger.LogInformation(
+                        "Regul Step 8 call for clause {ClauseNo} attempt {Attempt}: {Provider}/{Model}, sent {CharsSent} chars, received {CharsReceived} chars in {Ms} ms",
+                        prep.Finding.ClauseNo, callTrace.Attempt, prep.Config.Provider, prep.Config.Model,
+                        callTrace.CharsSent, raw.Length, callTrace.DurationMs);
+                    try
+                    {
+                        judgment = NdRegulLlmJsonHelper.ParseJudgmentResult(raw);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException($"Could not parse the response: {ex.Message}", ex);
+                    }
+                    break;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException && !ct.IsCancellationRequested)
+                {
+                    callTrace.DurationMs ??= (int)started.ElapsedMilliseconds;
+                    callTrace.Error = ex.Message;
+                    if (delivery >= MaxDeliveryAttempts)
+                        throw new InvalidOperationException(
+                            $"The AI call failed {MaxDeliveryAttempts} times for this clause. Last error: {ex.Message}", ex);
+                    callTrace.Notes = $"retrying the same request ({delivery}/{MaxDeliveryAttempts - 1})";
+                    logger.LogWarning(ex,
+                        "Regul Step 8 call for clause {ClauseNo} failed (delivery {Delivery}/{Max}); retrying the same request",
+                        prep.Finding.ClauseNo, delivery, MaxDeliveryAttempts);
+                    await Task.Delay(TimeSpan.FromSeconds(2 * delivery), ct);
+                }
+            }
+            var parsedStatus = judgment.OverallStatus;
+            var parsedQuotes = judgment.PolicyExtract.Count;
 
-            judgment = NdRegulJudgmentPostProcessor.ApplyQuoteVerification(
-                judgment,
-                policyBundle.SourceTextForQuotes);
+            judgment = prep.IsHybridEngine
+                ? NdRegulJudgmentPostProcessor.ApplyQuoteVerificationHybrid(judgment, policyBundle.SourceTextForQuotes)
+                : NdRegulJudgmentPostProcessor.ApplyQuoteVerification(judgment, policyBundle.SourceTextForQuotes);
 
             judgment = NdRegulJudgmentPostProcessor.ApplyGroundedDocumentReference(
                 judgment,
@@ -762,20 +955,62 @@ public class NdRegulAnalysisProcessor(
             {
                 // V5 only: compliant => no gap / no action; gap => must also have an action plan.
                 judgment = NdRegulJudgmentPostProcessor.ApplyStatusConsistency(judgment);
-                if (!NdRegulJudgmentPostProcessor.RequiresGapOrActionRetry(judgment))
-                    return judgment;
+                var needsRetry = NdRegulJudgmentPostProcessor.RequiresGapOrActionRetry(judgment);
+                callTrace.Notes = DescribePostProcessing(parsedStatus, parsedQuotes, judgment, needsRetry, attempt);
+                if (!needsRetry)
+                    return RecordFinal(prep, judgment);
                 if (attempt >= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries)
-                    return NdRegulJudgmentPostProcessor.EnsureActionPlanForGap(judgment);
+                    return RecordFinal(prep, NdRegulJudgmentPostProcessor.EnsureActionPlanForGap(judgment));
                 continue;
             }
 
-            if (!NdRegulJudgmentPostProcessor.RequiresGapDescriptionRetry(judgment))
-                return judgment;
+            var needsGapRetry = NdRegulJudgmentPostProcessor.RequiresGapDescriptionRetry(judgment);
+            callTrace.Notes = DescribePostProcessing(parsedStatus, parsedQuotes, judgment, needsGapRetry, attempt);
+            if (!needsGapRetry)
+                return RecordFinal(prep, judgment);
 
             if (attempt >= NdRegulJudgmentPostProcessor.MaxGapDescriptionRetries)
-                return judgment;
+                return RecordFinal(prep, judgment);
         }
 
+        return RecordFinal(prep, judgment);
+    }
+
+    private static string DescribePostProcessing(
+        string modelStatus, int modelQuotes, RegulJudgmentResult after, bool retrying, int attempt)
+    {
+        var notes = new List<string> { $"model status: {modelStatus}, quotes: {modelQuotes}" };
+        if (!string.Equals(modelStatus?.Trim(), after.OverallStatus?.Trim(), StringComparison.OrdinalIgnoreCase))
+            notes.Add($"status changed by post-processing to: {after.OverallStatus}");
+        if (after.PolicyExtract.Count != modelQuotes)
+            notes.Add($"{modelQuotes - after.PolicyExtract.Count} quote(s) dropped (not found verbatim in the documents)");
+        notes.Add(retrying
+            ? $"retry requested: gap and/or action missing for a {after.OverallStatus} verdict (attempt {attempt + 1})"
+            : "accepted");
+        return string.Join("; ", notes);
+    }
+
+    public static IEnumerable<NdRegulClauseTrace> WithSource(IEnumerable<NdRegulClauseTrace> traces, string source)
+    {
+        foreach (var t in traces)
+        {
+            t.Source = source;
+            yield return t;
+        }
+    }
+
+    private static RegulJudgmentResult RecordFinal(ForwardJudgmentPrep prep, RegulJudgmentResult judgment)
+    {
+        prep.Traces.Add(new NdRegulClauseTrace
+        {
+            AnalysisRunId = prep.Finding.AnalysisRunId,
+            FindingId = prep.Finding.Id,
+            ClauseNo = prep.Finding.ClauseNo,
+            Step = RegulClauseTraceSteps.PostProcess,
+            ResultJson = JsonSerializer.Serialize(judgment, new JsonSerializerOptions { WriteIndented = true }),
+            Notes = $"final status: {judgment.OverallStatus}, confidence: {judgment.Confidence:0.00}, quotes kept: {judgment.PolicyExtract.Count}",
+            TenantId = prep.Finding.TenantId,
+        });
         return judgment;
     }
 
@@ -1123,6 +1358,7 @@ public class NdRegulAnalysisProcessor(
             logger.LogInformation(
                 "Regul V5 pre-forward prep for run {RunId}: no legacy parse needed, retrieval reads the local-docs index directly",
                 run.Id);
+            await EnsureInternalDocsIndexedAsync(run, ct);
             return;
         }
 
@@ -1467,7 +1703,10 @@ public class NdRegulAnalysisProcessor(
             return;
         }
 
-        await EnsureInternalSectionsForRunAsync(run, ct);
+        // V5 judges from the local-docs index (the clause's own retrieval), so the legacy Landing AI
+        // section parse — a separate paid service — must never run here, same as PrepareRegulRunPreForwardAsync.
+        if (!isHybridPoint)
+            await EnsureInternalSectionsForRunAsync(run, ct);
         await EnsureForwardFindingsAsync(run, ct);
         var finding = await db.NdRegulForwardFindings
             .FirstOrDefaultAsync(f => f.AnalysisRunId == runId && f.AnalysisPointId == pointId, ct);
@@ -1496,11 +1735,26 @@ public class NdRegulAnalysisProcessor(
         if (finding == null)
             return;
 
-        var clauseBundle = await ResolveForwardClauseBundleAsync(run, finding, ct);
-        var cacheContext = clauseBundle.UsesFullMarkdown;
+        ForwardJudgmentPrep? rerunPrep = null;
         try
         {
-            var prep = await PrepareForwardJudgmentAsync(finding, point, 1, clauseBundle, cacheContext, run.WorkflowEngine, ct);
+            if (isHybridPoint)
+            {
+                // Same parse → extract → index check and Steps 1-6 as a new analysis, for this clause only.
+                point.LandingAiStatus = "running";
+                run.RegulPipelinePhase = "parsing";
+                await db.SaveChangesAsync(ct);
+                await EnsureInternalDocsIndexedAsync(run, ct);
+                run.RegulPipelinePhase = "retrieval";
+                await db.SaveChangesAsync(ct);
+                await embeddingRetrieval.RunRetrievalForFindingAsync(run, finding, ct);
+                run.RegulPipelinePhase = "forward";
+                await db.SaveChangesAsync(ct);
+            }
+
+            var clauseBundle = await ResolveForwardClauseBundleAsync(run, finding, ct);
+            var cacheContext = clauseBundle.UsesFullMarkdown;
+            var prep = rerunPrep = await PrepareForwardJudgmentAsync(finding, point, 1, clauseBundle, cacheContext, run.WorkflowEngine, ct);
             var judgment = await ExecuteForwardJudgmentAsync(prep, ct);
             finding.Status = "completed";
             finding.ErrorMessage = null;
@@ -1522,6 +1776,8 @@ public class NdRegulAnalysisProcessor(
             point.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
+        if (rerunPrep != null)
+            db.NdRegulClauseTraces.AddRange(WithSource(rerunPrep.Traces, RegulClauseTraceSources.ClauseRerun));
         await FinalizePointCountsAsync(run, ct);
         var reversePreserved = await db.NdRegulReverseMappings.AnyAsync(m => m.AnalysisRunId == runId, ct);
         if (reversePreserved)
@@ -1556,17 +1812,23 @@ public class NdRegulAnalysisProcessor(
             return;
         }
 
+        // Every clause is judged again, so the run's recorded model must be the one used now.
+        var rerunLlm = await llmSettings.GetConfigAsync(ct);
+        run.RegulLlmProvider = rerunLlm.Provider;
+        run.RegulLlmModel = rerunLlm.Model;
         run.Status = "running";
         run.RegulPipelinePhase = "forward";
         run.RegulPipelineError = null;
         run.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
 
-        await EnsureInternalSectionsForRunAsync(run, ct);
-
         // Same reasoning as EnsureForwardFindingsAsync — hybrid engine (V5) points never have a
         // real RegulationPointId.
         var isHybridRerun = AnalysisWorkflowEngine.IsRegulPipelineHybrid(run.WorkflowEngine);
+
+        // V5 never uses the legacy Landing AI section parse (see PrepareRegulRunPreForwardAsync).
+        if (!isHybridRerun)
+            await EnsureInternalSectionsForRunAsync(run, ct);
         var regulatoryPointIds = run.Points
             .Where(p => p.RegulationPointId.HasValue || (isHybridRerun && !string.IsNullOrWhiteSpace(p.PointSnapshot)))
             .Select(p => p.Id)
@@ -1608,15 +1870,45 @@ public class NdRegulAnalysisProcessor(
             runId,
             regulatoryPointIds.Count);
 
-        await RunForwardPhaseAsync(run, ct);
+        try
+        {
+            if (isHybridRerun)
+            {
+                // Same parse → extract → index check and Steps 1-6 as a new analysis.
+                run.RegulPipelinePhase = "parsing";
+                await db.SaveChangesAsync(ct);
+                await EnsureInternalDocsIndexedAsync(run, ct);
+                run.RegulPipelinePhase = "retrieval";
+                run.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+                await embeddingRetrieval.RunRetrievalAsync(run, ct);
+                run.RegulPipelinePhase = "forward";
+                run.UpdatedAt = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
 
-        run.RegulPipelinePhase = "done";
-        run.Status = "completed";
-        await FinalizePointCountsAsync(run, ct);
-        run.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
+            await RunForwardPhaseAsync(run, ct, RegulClauseTraceSources.RerunAll);
 
-        logger.LogInformation("Regul forward-only rerun completed for run {RunId} (reverse preserved)", runId);
+            run.RegulPipelinePhase = "done";
+            run.Status = "completed";
+            await FinalizePointCountsAsync(run, ct);
+            run.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+
+            logger.LogInformation("Regul forward-only rerun completed for run {RunId} (reverse preserved)", runId);
+        }
+        catch (OperationCanceledException)
+        {
+            await MarkCancelledAsync(run, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Regul forward-only rerun failed for run {RunId}", runId);
+            run.Status = "failed";
+            run.RegulPipelineError = ex.Message;
+            run.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(CancellationToken.None);
+        }
     }
 
     /// <summary>Re-run reverse mapping for all internal sections (Regul workflow only).</summary>

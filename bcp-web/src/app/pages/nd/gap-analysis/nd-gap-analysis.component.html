@@ -23,6 +23,12 @@
         </button>
       }
     </p>
+    @if (ndRunLlmLabel) {
+      <p class="analysis-ai-model" title="AI model that judged the clauses in this analysis">
+        <span class="analysis-ai-model-label">AI model</span>
+        <span class="analysis-ai-model-value">{{ ndRunLlmLabel }}</span>
+      </p>
+    }
   </div>
   <div class="header-actions">
     @if (!embedMode && canDeleteSession) {

@@ -17,6 +17,7 @@ public sealed class RegulJudgmentResult
     public double Confidence { get; set; }
 
     [JsonPropertyName("interpretation")]
+    [JsonConverter(typeof(JsonLineJoinedStringConverter))]
     public string Interpretation { get; set; } = "";
 
     [JsonPropertyName("policy_extract")]
@@ -24,16 +25,24 @@ public sealed class RegulJudgmentResult
     public List<string> PolicyExtract { get; set; } = [];
 
     [JsonPropertyName("document_reference")]
+    [JsonConverter(typeof(JsonSemicolonJoinedStringConverter))]
     public string DocumentReference { get; set; } = "";
 
     [JsonPropertyName("gap_description")]
+    [JsonConverter(typeof(JsonLineJoinedStringConverter))]
     public string GapDescription { get; set; } = "";
 
     [JsonPropertyName("suggested_action")]
+    [JsonConverter(typeof(JsonLineJoinedStringConverter))]
     public string SuggestedAction { get; set; } = "";
 
     [JsonPropertyName("gap_direction")]
     public string GapDirection { get; set; } = "";
+
+    /// <summary>V5: numbered list of the clause's atomic requirements that ARE covered, each with its evidence.</summary>
+    [JsonPropertyName("covered_elements")]
+    [JsonConverter(typeof(JsonLineJoinedStringConverter))]
+    public string CoveredElements { get; set; } = "";
 }
 
 public sealed class RegulReverseMappingResult

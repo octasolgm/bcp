@@ -10,7 +10,11 @@ public static class NdRegulJudgmentFormatter
         var status = MapDisplayStatus(judgment.OverallStatus, judgment.DesignStatus);
         var confidencePct = (int)Math.Round(Math.Clamp(judgment.Confidence, 0, 1) * 100);
         var policyResponse = BuildPolicyResponse(judgment);
-        var fulfilled = status == "Compliant" ? "All required elements addressed." : "None";
+        var covered = (judgment.CoveredElements ?? "").Trim();
+        var fulfilled = covered.Length > 0 && !covered.Equals("none", StringComparison.OrdinalIgnoreCase)
+            && !covered.Equals("N/A", StringComparison.OrdinalIgnoreCase)
+            ? covered
+            : status == "Compliant" ? "All required elements addressed." : "None";
         var gapAnalysis = BuildGapAnalysisText(judgment, status);
         var corrective = !string.IsNullOrWhiteSpace(judgment.SuggestedAction)
             ? judgment.SuggestedAction.Trim()

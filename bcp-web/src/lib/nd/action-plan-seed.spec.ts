@@ -1,6 +1,23 @@
-import { buildSeededActionPlan, summarizeGapForAction } from './action-plan-seed';
+import { aiActionsForGap, buildSeededActionPlan, buildSeededActionPlansForGap, summarizeGapForAction } from './action-plan-seed';
+import { parseRegulElementCapSegments } from './regul-fields';
 
 describe('action plan seed', () => {
+  it('splits V5 "[n]" gap lines into one gap per missing requirement', () => {
+    const segs = parseRegulElementCapSegments('[1] Funds definition — Missing: a\n[2] Timeframe irrelevant — Missing: b');
+    expect(segs).toEqual(['Funds definition — Missing: a', 'Timeframe irrelevant — Missing: b']);
+  });
+
+  it('gives each gap every AI action line that carries its number', () => {
+    const fix = '[1] Amend Section 4 to include: "x".\n[1] Amend Section 7 to include: "y".\n[2] Amend Section 9 to include: "z".';
+    expect(aiActionsForGap({ index: 1, missing: 'm', fix })).toEqual([
+      'Amend Section 4 to include: "x".',
+      'Amend Section 7 to include: "y".',
+    ]);
+    const rows = buildSeededActionPlansForGap('p', { index: 2, missing: 'm', fix }, new Date(), { useAiAction: true });
+    expect(rows.map((r) => r.actionPlan)).toEqual(['Amend Section 9 to include: "z".']);
+    expect(rows[0].gapIndex).toBe(2);
+  });
+
   it('summarizes a gap into a phrase that reads mid-sentence', () => {
     const text = summarizeGapForAction({
       index: 1,

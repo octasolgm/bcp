@@ -5,15 +5,22 @@ using Reguliq.Api.Services.LandingAi;
 namespace Reguliq.Api.Services.LocalDocs;
 
 /// <summary>
-/// Local, offline .docx text extraction (Microsoft's own open-source OpenXml SDK — no AI, no conversion step).
-/// Word has no native PDF-style page concept, so output is marked as one logical page ("page 1") — page
-/// references for Word uploads stay approximate, matching the existing system's documented limitation
-/// (see docs/PAGE-REFERENCES.md: "Word uploads: Grounding uses converted PDF in storage when available").
+/// Local, offline .docx text extraction (OpenXml SDK). When Word saved page-break layout in the file,
+/// output uses the same BCP_PDF_PAGE markers as PDF parse; otherwise a single page-1 marker.
 /// </summary>
 public sealed class LocalDocxExtractionService
 {
     public LocalPdfResult Extract(byte[] docxBytes)
     {
+        var enhanced = DocxRenderedPages.EnhanceParseResult(
+            docxBytes,
+            new LocalParseResult("document.docx", 1, 0, "", []));
+        if (enhanced != null)
+        {
+            var pages = SplitMarkdownIntoPages(enhanced.Markdown);
+            return new LocalPdfResult(enhanced.TotalPages, enhanced.Markdown, pages);
+        }
+
         using var stream = new MemoryStream(docxBytes);
         using var doc = WordprocessingDocument.Open(stream, isEditable: false);
 
@@ -25,5 +32,21 @@ public sealed class LocalDocxExtractionService
         var page = new LocalPageResult(1, text, text.Length > 0 ? PageExtractionMethod.Native : PageExtractionMethod.Empty);
         var markdown = $"{PolicyPageResolver.PageMarkerPrefix}1 -->\n{text}";
         return new LocalPdfResult(1, markdown, [page]);
+    }
+
+    private static List<LocalPageResult> SplitMarkdownIntoPages(string markdown)
+    {
+        var pattern = System.Text.RegularExpressions.Regex.Escape(PolicyPageResolver.PageMarkerPrefix) + @"(\d+)\s*-->";
+        var matches = System.Text.RegularExpressions.Regex.Matches(markdown, pattern);
+        var pages = new List<LocalPageResult>();
+        for (var i = 0; i < matches.Count; i++)
+        {
+            var start = matches[i].Index + matches[i].Length;
+            var end = i + 1 < matches.Count ? matches[i + 1].Index : markdown.Length;
+            var pageNum = int.Parse(matches[i].Groups[1].Value);
+            pages.Add(new LocalPageResult(pageNum, markdown[start..end].Trim(), PageExtractionMethod.Native));
+        }
+
+        return pages;
     }
 }

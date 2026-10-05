@@ -41,12 +41,16 @@ public class NdRegulLlmSchemasTests
         var original = NdRegulLlmSchemas.JudgmentToolSchema();
         var hybrid = NdRegulLlmSchemas.HybridJudgmentToolSchema();
 
-        Assert.Equal(original["required"]!.ToJsonString(), hybrid["required"]!.ToJsonString());
+        // Hybrid adds exactly one field on top of the original: covered_elements.
+        var expectedRequired = ((JsonArray)original["required"]!.DeepClone());
+        expectedRequired.Add("covered_elements");
+        Assert.Equal(expectedRequired.ToJsonString(), hybrid["required"]!.ToJsonString());
         Assert.Equal(original["additionalProperties"]!.ToJsonString(), hybrid["additionalProperties"]!.ToJsonString());
 
         var originalProps = (JsonObject)original["properties"]!;
         var hybridProps = (JsonObject)hybrid["properties"]!;
-        Assert.Equal(originalProps.Select(p => p.Key), hybridProps.Select(p => p.Key));
+        Assert.Equal(originalProps.Select(p => p.Key).Append("covered_elements"), hybridProps.Select(p => p.Key));
+        Assert.Equal("string", hybridProps["covered_elements"]!["type"]!.GetValue<string>());
         foreach (var field in Fields)
         {
             var o = (JsonObject)originalProps[field]!;

@@ -218,3 +218,11 @@ Forward clause judgment for hybrid New Analysis now requires the AI to pull verb
 Failed clause judgment on New Analysis (hybrid)
 
 When a clause's forward LLM step errors out, the point rail now shows a Re-run control on that clause, and the points toolbar offers Rerun failed for all failed clauses in the run. The hybrid pipeline panel marks Step 8 as failed (with a count) instead of Done until those clauses succeed on retry.
+
+Word document page references and policy extract pages
+
+For Azure Document Intelligence, Word parse keeps Azure's own markdown body and builds BCP_PDF_PAGE markers from Azure's per-page layout (page line spans into the analyze result), because Office markdown often has no PageBreak comments even when Azure reports dozens of pages. Local Word engines still use the page layout saved in the file. Re-parse and re-extract after an API update to refresh stored text, section pages, and search index rows. Hybrid analysis policy extract citations resolve the page from where the quoted sentence appears in that parsed text, instead of defaulting to the first page of the section block.
+
+Rerun status on New Analysis
+
+Per-clause re-run no longer leaves the rail showing Running or Rerunning together with an old Cancelled label, and a refresh after a finished re-run shows the real outcome instead of a stale cancelled state when the run had been stopped earlier.

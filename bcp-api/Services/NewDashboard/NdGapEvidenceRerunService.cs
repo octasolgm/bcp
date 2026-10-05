@@ -242,6 +242,13 @@ public sealed class NdGapEvidenceRerunService(
         public NdRegulAnalysisProcessor.ForwardJudgmentPrep? AnalysisPrep { get; set; }
         public RegulJudgmentResult? Reanalysis { get; set; }
         public string Prompt { get; set; } = "";
+        /// <summary>Evidence-check LLM calls (request + raw response), saved with the clause's outcome.</summary>
+        public List<NdRegulClauseTrace> EvidenceTraces { get; } = [];
+
+        public IEnumerable<NdRegulClauseTrace> AllTraces() =>
+            NdRegulAnalysisProcessor.WithSource(
+                (AnalysisPrep?.Traces ?? []).Concat(EvidenceTraces).ToList(),
+                RegulClauseTraceSources.GapEvidence);
     }
 
     public async Task ExecuteAsync(Guid rerunId, CancellationToken ct)
@@ -575,6 +582,8 @@ public sealed class NdGapEvidenceRerunService(
                 await dbGate.WaitAsync(CancellationToken.None);
                 try
                 {
+                    // Saved by the outcome/failure SaveChanges below.
+                    db.NdRegulClauseTraces.AddRange(work.AllTraces());
                     if (judgment != null)
                     {
                         try
@@ -626,13 +635,42 @@ public sealed class NdGapEvidenceRerunService(
             var prompt = attempt == 0
                 ? work.Prompt
                 : work.Prompt + "\n\nYour previous reply was not valid JSON. Reply again with ONLY the JSON object described above.";
-            var raw = await regulLlm.AnalyzeTextWithConfigAsync(prompt, cfg, ct);
+            var trace = new NdRegulClauseTrace
+            {
+                AnalysisRunId = work.Review.AnalysisRunId,
+                FindingId = work.Finding?.Id,
+                ClauseNo = work.ClauseNo,
+                Step = RegulClauseTraceSteps.EvidenceCheck,
+                Attempt = attempt + 1,
+                Provider = cfg.Provider,
+                Model = cfg.Model,
+                QueryText = prompt,
+                CharsSent = prompt.Length,
+                Notes = $"evidence: {string.Join("; ", work.Docs.Select(d => d.Name))}; {work.Sections.Count} evidence section(s); {work.Gaps.Count} gap(s), {work.Actions.Count} action(s) checked",
+                TenantId = work.Review.TenantId,
+            };
+            work.EvidenceTraces.Add(trace);
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            string raw;
+            try
+            {
+                raw = await regulLlm.AnalyzeTextWithConfigAsync(prompt, cfg, ct);
+            }
+            catch (Exception ex)
+            {
+                trace.DurationMs = (int)started.ElapsedMilliseconds;
+                trace.Error = ex.Message;
+                throw;
+            }
+            trace.DurationMs = (int)started.ElapsedMilliseconds;
+            trace.ResponseText = raw;
             try
             {
                 return NdRegulLlmJsonHelper.ParseJsonObject<EvidenceJudgment>(raw);
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException)
             {
+                trace.Error = $"Could not parse the response: {ex.Message}";
                 last = ex;
             }
         }
