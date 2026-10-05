@@ -139,10 +139,13 @@ public class NdActionPlanEmbedResolver(
             if (planDocs.Count == 0) continue;
 
             var gapIndexForText = gap?.GapIndex ?? plan.GapIndex;
-            var gapText = ExtractGapText(point, gapIndexForText);
-            if (string.IsNullOrWhiteSpace(gapText))
-                gapText = plan.ActionPlan ?? "Gap addressed";
             var judgmentContext = ParseJudgmentContext(finding);
+            // This action's own gap: its numbered line in the judgment's gap list; never the whole list,
+            // or the AI rewrite covers every gap of the clause in every note.
+            var gapText = NumberedItem(judgmentContext.GapDescription, gapIndexForText)
+                ?? NumberedItem(point.OriginalAiActionPlan ?? point.FinalActionPlan, gapIndexForText)
+                ?? plan.ActionPlan
+                ?? "Gap addressed";
             var resolvedByName = plan.ResolvedBy.HasValue && namesById.TryGetValue(plan.ResolvedBy.Value, out var n)
                 ? n
                 : gap?.ResolvedBy is Guid gapResolver && namesById.TryGetValue(gapResolver, out var gn) ? gn : null;
@@ -482,18 +485,27 @@ public class NdActionPlanEmbedResolver(
         return t.Length > 60 ? t[..60] : t;
     }
 
-    /// <summary>The specific gap's own text within a clause's (possibly multi-gap) CAP block, falling
-    /// back to the whole block when the numbered split doesn't line up (single-gap clauses).</summary>
-    private static string ExtractGapText(NdAnalysisPoint point, int gapIndex)
+    private static readonly System.Text.RegularExpressions.Regex NumberedItemMarker = new(
+        @"(?:^|\n)\s*[\[(](?<n>\d+)[\])]\s*");
+
+    /// <summary>Item [n] (or (n)) of a numbered list such as the judgment's gap_description; the whole
+    /// text when it is a single unnumbered item and n is 1; null when item n isn't there.</summary>
+    internal static string? NumberedItem(string? text, int index)
     {
-        var whole = point.OriginalAiActionPlan ?? point.FinalActionPlan ?? point.LandingAiActionPlan ?? "";
-        if (gapIndex <= 0) return whole;
-        var marker = $"({gapIndex})";
-        var idx = whole.IndexOf(marker, StringComparison.Ordinal);
-        if (idx < 0) return whole;
-        var next = whole.IndexOf($"({gapIndex + 1})", idx, StringComparison.Ordinal);
-        var slice = next > idx ? whole[(idx + marker.Length)..next] : whole[(idx + marker.Length)..];
-        return slice.Trim();
+        if (string.IsNullOrWhiteSpace(text) || index <= 0) return null;
+        var normalized = text.Replace("\r\n", "\n").Trim();
+        if (normalized == "N/A") return null;
+        var markers = NumberedItemMarker.Matches(normalized);
+        if (markers.Count == 0) return index == 1 ? normalized : null;
+        for (var i = 0; i < markers.Count; i++)
+        {
+            if (!int.TryParse(markers[i].Groups["n"].Value, out var n) || n != index) continue;
+            var start = markers[i].Index + markers[i].Length;
+            var end = i + 1 < markers.Count ? markers[i + 1].Index : normalized.Length;
+            var item = normalized[start..end].Trim();
+            return item.Length > 0 ? item : null;
+        }
+        return null;
     }
 
     private static (string ClauseNo, string? ClauseTitle) ParseClause(string? snapshotJson)

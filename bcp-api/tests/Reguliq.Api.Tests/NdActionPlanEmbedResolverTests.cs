@@ -310,4 +310,16 @@ public class NdActionPlanEmbedResolverTests
         Assert.Equal(onlyDocId, job.StoredDocumentId);
         Assert.Single(job.Targets);
     }
+
+    [Fact]
+    public void NumberedItem_returns_only_the_requested_gap()
+    {
+        const string gaps = "[1] Funds definition - Missing: a\n[2] Proceeds definition - Missing: b\n[3] Timeframe - Missing: c";
+
+        Assert.Equal("Funds definition - Missing: a", NdActionPlanEmbedResolver.NumberedItem(gaps, 1));
+        Assert.Equal("Proceeds definition - Missing: b", NdActionPlanEmbedResolver.NumberedItem(gaps, 2));
+        Assert.Null(NdActionPlanEmbedResolver.NumberedItem(gaps, 4));
+        Assert.Equal("Only gap", NdActionPlanEmbedResolver.NumberedItem("Only gap", 1));
+        Assert.Null(NdActionPlanEmbedResolver.NumberedItem("N/A", 1));
+    }
 }

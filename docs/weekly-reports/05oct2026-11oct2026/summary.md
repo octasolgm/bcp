@@ -69,4 +69,5 @@ Bug fixes
 - Finalize embeds now go after the section the action names ("Section 7.7", "Definitions section"), found in the document's own text with table-of-contents lines skipped, instead of all notes of a clause going after the clause's first evidence page
 - Finalizing a run that was sent back to review and approved again created no new corrected files (a duplicate guard skipped documents the run had already produced) while still paying for the AI note writing; every finalize now produces a new version of each corrected copy, and the AI note writing only runs for documents that get a new copy
 - Catalog tables: row checkbox sits in its own gutter so long document titles wrap beside it instead of dropping below it
+- Finalize embeds: a note could still restate other gaps (clause 3.5 gap 1 also defined "Proceeds" and the timeframe rule) because the gap text was cut from the clause's action list using "(n)" numbering while the AI numbers items "[n]", so the whole list was used; each note now gets its own numbered line from the judgment's gap list
 
