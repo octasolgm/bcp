@@ -2032,3 +2032,112 @@ tr.doc-ready-green td:first-child {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(250%); }
 }
+
+/* Catalog tables: Document column pinned left, Actions pinned right, middle columns scroll.
+   Pinned cells paint the row tint over a solid card colour, because some tints are translucent.
+   Only when the table area is wide enough for both pinned columns plus some scrolling room. */
+.table-wrap:has(> .nd-sticky-edges) {
+  container-type: inline-size;
+}
+
+@container (min-width: 760px) {
+  .nd-sticky-edges {
+    th.nd-sticky-left,
+    td.nd-sticky-left {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+    }
+
+    th.nd-sticky-right,
+    td.nd-sticky-right {
+      position: sticky;
+      right: 0;
+      z-index: 1;
+    }
+
+    thead th.nd-sticky-left,
+    thead th.nd-sticky-right {
+      z-index: 3;
+    }
+
+    tbody td.nd-sticky-left,
+    tbody td.nd-sticky-right {
+      background-color: var(--bg-card, #fff) !important;
+      background-image: linear-gradient(var(--nd-row-tint, transparent), var(--nd-row-tint, transparent)) !important;
+    }
+
+    td.nd-sticky-left,
+    th.nd-sticky-left {
+      box-shadow: 1px 0 0 var(--border);
+    }
+
+    td.nd-sticky-right,
+    th.nd-sticky-right {
+      box-shadow: -1px 0 0 var(--border);
+    }
+
+    tbody tr.doc-ready-red {
+      --nd-row-tint: var(--critical-bg);
+    }
+
+    tbody tr.doc-ready-green {
+      --nd-row-tint: var(--low-bg);
+    }
+
+    tbody tr.nd-row-checked {
+      --nd-row-tint: var(--accent-tint);
+    }
+
+    tbody tr.selected-row {
+      --nd-row-tint: var(--accent-tint);
+    }
+  }
+}
+
+.nd-row-check {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+
+  input {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
+}
+
+.nd-cell-with-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.nd-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-tint);
+  font-size: 0.8125rem;
+
+  .nd-bulk-count {
+    font-weight: 600;
+    margin-right: 0.35rem;
+  }
+
+  .nd-bulk-progress {
+    color: var(--text-secondary);
+  }
+
+  .nd-bulk-spacer {
+    flex: 1 1 auto;
+  }
+}

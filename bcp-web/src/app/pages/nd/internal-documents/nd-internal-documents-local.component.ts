@@ -53,6 +53,7 @@ import {
 } from '../../../../lib/nd/list-utils';
 import { internalDocVersionLabel } from '../../../../lib/nd/internal-doc-version';
 import { ndAnalysisRunTarget } from '../../../../lib/nd/run-links';
+import { CatalogSelection } from '../../../../lib/nd/catalog-selection';
 import type { AnalysisRunSummary, InternalDocument, InternalDocumentSection } from '../../../../lib/nd/types';
 import { NdInternalDocumentSectionsPanelComponent } from './nd-internal-document-sections-panel.component';
 
@@ -640,6 +641,104 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   }
 
   readonly internalDocsTableColSpan = 10;
+
+  /** Analysis group whose embed history panel is open. */
+  embedHistoryGroupKey: string | null = null;
+
+  /** Newest finalized copy of each document in an analysis group (older regenerations are superseded). */
+  latestVersionsInGroup(group: InternalDocCatalogGroup): InternalDocument[] {
+    const byTitle = new Map<string, InternalDocument>();
+    for (const d of group.docs) {
+      const key = (d.title ?? '').trim().toLowerCase();
+      const cur = byTitle.get(key);
+      if (!cur || (d.version ?? 0) > (cur.version ?? 0)) byTitle.set(key, d);
+    }
+    return [...byTitle.values()];
+  }
+
+  groupEmbedCount(group: InternalDocCatalogGroup): number {
+    return this.latestVersionsInGroup(group).reduce((n, d) => n + (d.finalizeEmbeds?.length ?? 0), 0);
+  }
+
+  // ---- Multi-select + bulk actions
+  readonly selection = new CatalogSelection();
+  /** Progress text while a bulk action runs; actions are hidden meanwhile. */
+  bulkProgress = '';
+
+  get visibleDocIds(): string[] {
+    return this.visibleDocs.map((d) => d.id);
+  }
+
+  private selectedVisibleDocs(): InternalDocument[] {
+    return this.selection.pick(this.visibleDocs);
+  }
+
+  private async runBulk(
+    verb: string,
+    docs: InternalDocument[],
+    action: (d: InternalDocument) => Promise<boolean | void>,
+  ): Promise<void> {
+    if (!docs.length) {
+      this.toast.show(`None of the selected documents can be ${verb.toLowerCase()}ed right now.`, 'warning', 4000);
+      return;
+    }
+    let failed = 0;
+    try {
+      for (let i = 0; i < docs.length; i++) {
+        this.bulkProgress = `${verb} ${i + 1} of ${docs.length}: ${docs[i]!.title}`;
+        if ((await action(docs[i]!)) === false) failed++;
+      }
+    } finally {
+      this.bulkProgress = '';
+    }
+    this.toast.show(
+      failed ? `${verb}: ${docs.length - failed} done, ${failed} failed.` : `${verb}: ${docs.length} document(s) done.`,
+      failed ? 'error' : 'success',
+      5000,
+    );
+  }
+
+  async bulkParse(): Promise<void> {
+    const docs = this.selectedVisibleDocs().filter((d) => this.canRunLocalPipeline(d));
+    await this.runBulk('Parse', docs, async (d) => {
+      await this.handleParse(d);
+      return this.docs.find((x) => x.id === d.id)?.parseStatus !== 'failed';
+    });
+  }
+
+  async bulkExtract(): Promise<void> {
+    const docs = this.selectedVisibleDocs().filter((d) => this.canRunLocalPipeline(d) && this.canShowExtract(d));
+    await this.runBulk('Extract', docs, async (d) => {
+      await this.handleExtractSections(d);
+      return this.docs.find((x) => x.id === d.id)?.sectionExtractStatus !== 'failed';
+    });
+  }
+
+  async bulkDownload(): Promise<void> {
+    await this.runBulk('Download', this.selectedVisibleDocs(), async (d) => {
+      const res = await this.api.downloadInternalFileExport(d.id);
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      return res.success;
+    });
+  }
+
+  async bulkDelete(): Promise<void> {
+    const docs = this.selectedVisibleDocs();
+    if (!docs.length || !this.canDelete) return;
+    if (!confirm(`Remove ${docs.length} document(s) from the library?
+
+Nothing is deleted from the database — file data is kept.`)) return;
+    await this.runBulk('Delete', docs, async (d) => {
+      const res = await this.api.hideInternalDocument(d.id);
+      if (res.success) {
+        this.removeInternalDocFromList(d);
+        this.workspaceNav.bumpNavBadges({ internalDocuments: -1 });
+      }
+      return res.success;
+    });
+    this.selection.clear();
+    await this.load(true);
+  }
 
   showDocGroupHeader(group: InternalDocCatalogGroup): boolean {
     return showInternalDocCatalogGroupHeader(group, this.visibleDocGroups);

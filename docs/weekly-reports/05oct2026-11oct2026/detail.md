@@ -74,3 +74,5 @@ Finalized PDF and Word copies now embed resolved action plans as policy notes mo
 
 Each finalized document now shows what was added to it. In the Internal Documents list, a finalized copy shows how many resolved actions were embedded; expanding it lists the clause, gap and page for each one, together with the policy wording that was inserted. Notes are now placed only in the documents the analysis cited as evidence for that clause, and when an action names a specific document, only in that document. The inserted text is written as finished policy wording rather than a copy of the action plan, and it is never cut short.
 
+Document tables are easier to work with. In Internal Documents and Regulation Documents the document name stays visible on the left and the actions stay visible on the right while you scroll through the other columns. You can tick several documents (or all of them) and parse, extract, download or delete them in one go. Each group of documents generated from an analysis now has a History button that shows, for every document, exactly which resolved actions were added to it and where.
+

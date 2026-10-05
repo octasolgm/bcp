@@ -24,7 +24,7 @@ public class NdFinalizeEmbedPromptTests
 
         var prompt = NdFinalizeEmbedContentService.BuildPrompt(target);
         Assert.Contains("Regulatory clause: 3.5", prompt);
-        Assert.Contains("Missing FATF predicate categories", prompt);
+        Assert.Contains("The manual does not weight NRA top threats.", prompt);
         Assert.Contains("Revise enterprise-wide", prompt);
         Assert.Contains("assess ML/FT risk annually", prompt);
         Assert.Contains("Do NOT include operational instructions", prompt);

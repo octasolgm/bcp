@@ -88,8 +88,27 @@
     [style.grid-template-columns]="panelGridColumns"
   >
     <div class="library-main" [class.library-main-dimmed]="showSectionsPanel">
+  @if (selection.size > 0) {
+    <div class="nd-bulk-bar" role="toolbar" aria-label="Actions for selected documents">
+      <span class="nd-bulk-count">{{ selection.size }} selected</span>
+      @if (bulkProgress) {
+        <span class="nd-bulk-progress">{{ bulkProgress }}</span>
+      } @else {
+        @if (canParse) {
+          <button type="button" class="row-action-btn compact" (click)="bulkParse()">Parse</button>
+          <button type="button" class="row-action-btn compact" (click)="bulkExtract()">Extract</button>
+        }
+        <button type="button" class="row-action-btn compact" (click)="bulkDownload()">Download</button>
+        @if (canDelete) {
+          <button type="button" class="row-action-btn compact danger" (click)="bulkDelete()">Delete</button>
+        }
+      }
+      <span class="nd-bulk-spacer"></span>
+      <button type="button" class="filter-clear" [disabled]="!!bulkProgress" (click)="selection.clear()">Clear selection</button>
+    </div>
+  }
   <div class="card-surface table-wrap table-scroll-body nd-table-fit internal-docs-table-wrap">
-    <table class="internal-docs-table">
+    <table class="internal-docs-table nd-sticky-edges">
       <colgroup>
         <col class="col-doc" />
         <col class="col-date" />
@@ -104,7 +123,18 @@
       </colgroup>
       <thead>
         <tr>
-          <th class="col-doc">Document</th>
+          <th class="col-doc nd-sticky-left">
+            <label class="nd-row-check" title="Select all documents shown">
+              <input
+                type="checkbox"
+                [checked]="selection.allSelected(visibleDocIds)"
+                [indeterminate]="selection.someSelected(visibleDocIds)"
+                (change)="selection.toggleAll(visibleDocIds)"
+                aria-label="Select all documents shown"
+              />
+            </label>
+            Document
+          </th>
           <th class="col-date">Uploaded</th>
           <th class="col-actor">Uploaded by</th>
           <th class="col-actor">Parsed by</th>
@@ -113,7 +143,7 @@
           <th class="sortable col-pts" (click)="toggleSort('analyses')" title="Analysis runs that use this document">Used in analyses <span class="sort-indicator">{{ sortMark('analyses') }}</span></th>
           <th class="col-status">Status</th>
           <th class="col-status">Sections status</th>
-          <th class="col-actions internal-doc-actions-cell">Actions</th>
+          <th class="col-actions internal-doc-actions-cell nd-sticky-right">Actions</th>
         </tr>
       </thead>
       @for (group of visibleDocGroups; track groupTrackKey(group); let lastGroup = $last) {
@@ -123,7 +153,7 @@
         >
           @if (showDocGroupHeader(group)) {
             <tr class="internal-doc-group-label-row">
-              <td class="doc-cell col-doc">
+              <td class="doc-cell col-doc nd-sticky-left">
                 <div
                   class="internal-doc-group-heading"
                   [class.internal-doc-group-heading-two-line]="group.kind === 'analysis'"
@@ -164,8 +194,18 @@
               <td class="col-pts"></td>
               <td class="col-status"></td>
               <td class="col-status"></td>
-              <td class="col-actions internal-doc-actions-cell" (click)="$event.stopPropagation()">
+              <td class="col-actions internal-doc-actions-cell nd-sticky-right" (click)="$event.stopPropagation()">
                 @if (group.kind === 'analysis' && group.docs.length > 0) {
+                  <button
+                    type="button"
+                    class="row-action-btn compact"
+                    [class.primary]="embedHistoryGroupKey === group.key"
+                    [attr.aria-expanded]="embedHistoryGroupKey === group.key"
+                    title="Which resolved actions were embedded into which document"
+                    (click)="embedHistoryGroupKey = embedHistoryGroupKey === group.key ? null : group.key"
+                  >
+                    History ({{ groupEmbedCount(group) }})
+                  </button>
                   <button
                     type="button"
                     class="row-action-btn compact"
@@ -178,16 +218,62 @@
                 }
               </td>
             </tr>
+            @if (embedHistoryGroupKey === group.key) {
+              <tr class="embed-history-row">
+                <td [attr.colspan]="internalDocsTableColSpan" (click)="$event.stopPropagation()">
+                  <div class="embed-history">
+                    <p class="embed-history-title">Embedded actions in the latest finalized copies</p>
+                    @for (d of latestVersionsInGroup(group); track d.id) {
+                      <div class="embed-history-doc">
+                        <div class="embed-history-doc-head">
+                          <strong>{{ d.title }}</strong>
+                          @if (docVersionLabel(d); as ver) {
+                            <span class="meta-pill doc-version-pill">{{ ver }}</span>
+                          }
+                          <span class="embed-history-count">{{ d.finalizeEmbeds?.length || 0 }} embedded</span>
+                        </div>
+                        @if (d.finalizeEmbeds?.length) {
+                          <ul>
+                            @for (e of d.finalizeEmbeds ?? []; track $index) {
+                              <li>
+                                <span class="embed-history-where">
+                                  §{{ e.clauseNo }}@if (e.gapIndex) { · Gap {{ e.gapIndex }}} · {{ e.page ? 'after p.' + e.page : 'end of document' }}
+                                </span>
+                                <span class="embed-history-action">Action: {{ e.action }}</span>
+                                @if (e.embeddedText) {
+                                  <span class="embed-history-text">Embedded: {{ e.embeddedText }}</span>
+                                }
+                              </li>
+                            }
+                          </ul>
+                        } @else {
+                          <p class="embed-history-none">No resolved actions cite this document.</p>
+                        }
+                      </div>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
           }
           @for (d of group.docs; track d.id) {
           <tr
             class="clickable-row"
             [class.selected-row]="isSelected(d)"
+            [class.nd-row-checked]="selection.has(d.id)"
             [class.doc-ready-red]="analysisReadyState(d) === 'not_ready'"
             [class.doc-ready-green]="analysisReadyState(d) === 'analysed'"
             (click)="openSections(d)"
           >
-            <td class="doc-cell col-doc">
+            <td class="doc-cell col-doc nd-sticky-left">
+              <label class="nd-row-check" (click)="$event.stopPropagation()" [title]="'Select ' + d.title">
+                <input
+                  type="checkbox"
+                  [checked]="selection.has(d.id)"
+                  (change)="selection.toggle(d.id)"
+                  [attr.aria-label]="'Select ' + d.title"
+                />
+              </label>
               <span class="doc-title-row">
                 <strong [title]="d.title">{{ d.title }}</strong>
                 @if (docVersionLabel(d); as ver) {
@@ -224,12 +310,12 @@
                     [attr.aria-expanded]="expandedEmbedsDocId === d.id"
                     (click)="$event.stopPropagation(); expandedEmbedsDocId = expandedEmbedsDocId === d.id ? null : d.id"
                   >
-                    {{ d.finalizeEmbeds.length }} embedded action{{ d.finalizeEmbeds.length === 1 ? '' : 's' }}
+                    {{ (d.finalizeEmbeds?.length ?? 0) }} embedded action{{ (d.finalizeEmbeds?.length ?? 0) === 1 ? '' : 's' }}
                     {{ expandedEmbedsDocId === d.id ? '▴' : '▾' }}
                   </button>
                   @if (expandedEmbedsDocId === d.id) {
                     <ul class="finalize-embeds-list" (click)="$event.stopPropagation()">
-                      @for (e of d.finalizeEmbeds; track $index) {
+                      @for (e of d.finalizeEmbeds ?? []; track $index) {
                         <li [title]="e.embeddedText || e.action">
                           <strong>§{{ e.clauseNo }}</strong>
                           @if (e.gapIndex) { · Gap {{ e.gapIndex }} }
@@ -275,7 +361,7 @@
                   }
                 </span>
             </td>
-            <td class="col-actions nd-catalog-actions-cell" (click)="$event.stopPropagation()">
+            <td class="col-actions nd-catalog-actions-cell nd-sticky-right" (click)="$event.stopPropagation()">
               <div class="nd-catalog-row-actions">
                 @if (showRowSectionsButton(d)) {
                   <button

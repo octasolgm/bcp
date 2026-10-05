@@ -178,8 +178,27 @@
         <p>Try a different search or <button type="button" class="filter-clear" (click)="clearFilters()">clear filters</button>.</p>
       </div>
     } @else {
+      @if (selection.size > 0) {
+        <div class="nd-bulk-bar" role="toolbar" aria-label="Actions for selected regulations">
+          <span class="nd-bulk-count">{{ selection.size }} selected</span>
+          @if (bulkProgress) {
+            <span class="nd-bulk-progress">{{ bulkProgress }}</span>
+          } @else {
+            @if (canExtract) {
+              <button type="button" class="row-action-btn compact" (click)="bulkParse()">Parse</button>
+              <button type="button" class="row-action-btn compact" (click)="bulkExtract()">Extract</button>
+            }
+            <button type="button" class="row-action-btn compact" (click)="bulkDownload()">Download</button>
+            @if (canUpload && !showDeleted) {
+              <button type="button" class="row-action-btn compact danger" (click)="bulkDelete()">Delete</button>
+            }
+          }
+          <span class="nd-bulk-spacer"></span>
+          <button type="button" class="filter-clear" [disabled]="!!bulkProgress" (click)="selection.clear()">Clear selection</button>
+        </div>
+      }
       <div class="card-surface table-wrap table-scroll-body nd-table-fit reg-docs-table-wrap">
-        <table class="reg-docs-table">
+        <table class="reg-docs-table nd-sticky-edges">
           <colgroup>
             <col class="col-reg" />
             <col class="col-dept" />
@@ -197,7 +216,18 @@
           </colgroup>
           <thead>
             <tr>
-              <th class="sortable col-reg" (click)="toggleSort('name')">Regulation <span class="sort-indicator">{{ sortMark('name') }}</span></th>
+              <th class="sortable col-reg nd-sticky-left" (click)="toggleSort('name')">
+                <label class="nd-row-check" (click)="$event.stopPropagation()" title="Select all regulations shown">
+                  <input
+                    type="checkbox"
+                    [checked]="selection.allSelected(visibleDocIds)"
+                    [indeterminate]="selection.someSelected(visibleDocIds)"
+                    (change)="selection.toggleAll(visibleDocIds)"
+                    aria-label="Select all regulations shown"
+                  />
+                </label>
+                Regulation <span class="sort-indicator">{{ sortMark('name') }}</span>
+              </th>
               <th class="sortable col-dept" (click)="toggleSort('department')">Department <span class="sort-indicator">{{ sortMark('department') }}</span></th>
               <th class="sortable col-pts" (click)="toggleSort('points')">Points <span class="sort-indicator">{{ sortMark('points') }}</span></th>
               <th class="sortable col-pts" (click)="toggleSort('pages')" title="Total PDF pages in the uploaded document">Pages <span class="sort-indicator">{{ sortMark('pages') }}</span></th>
@@ -209,7 +239,7 @@
               <th class="col-actor">Uploaded by</th>
               <th class="col-actor">Extracted by</th>
               <th class="sortable col-status" (click)="toggleSort('status')">Status <span class="sort-indicator">{{ sortMark('status') }}</span></th>
-              <th class="col-actions reg-doc-actions-cell">Actions</th>
+              <th class="col-actions reg-doc-actions-cell nd-sticky-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -217,12 +247,21 @@
               <tr
                 class="clickable-row"
                 [class.selected-row]="isSelected(d)"
+                [class.nd-row-checked]="selection.has(d.id)"
                 [class.row-saving]="savingDeptId === d.id || extractingId === d.id || hidingId === d.id"
                 [class.doc-ready-red]="rowReadyState(d) === 'not_ready'"
                 [class.doc-ready-green]="rowReadyState(d) === 'analysed'"
                 (click)="viewPoints(d)"
               >
-                <td class="reg-cell col-reg">
+                <td class="reg-cell col-reg nd-sticky-left">
+                  <label class="nd-row-check" (click)="$event.stopPropagation()" [title]="'Select ' + d.name">
+                    <input
+                      type="checkbox"
+                      [checked]="selection.has(d.id)"
+                      (change)="selection.toggle(d.id)"
+                      [attr.aria-label]="'Select ' + d.name"
+                    />
+                  </label>
                   <strong [title]="d.name">{{ d.name }}</strong>
                   @if (docFormatLabel(d); as fmt) {
                     <span class="cell-subline doc-format-line"><span class="meta-pill doc-format-pill">{{ fmt }}</span></span>
@@ -291,7 +330,7 @@
                     </span>
                   }
                 </td>
-                <td class="col-actions nd-catalog-actions-cell" (click)="$event.stopPropagation()">
+                <td class="col-actions nd-catalog-actions-cell nd-sticky-right" (click)="$event.stopPropagation()">
                   <div class="nd-catalog-row-actions">
                     <button
                       type="button"

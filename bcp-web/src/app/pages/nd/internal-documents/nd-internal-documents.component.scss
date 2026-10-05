@@ -769,3 +769,80 @@
 .finalize-embed-text {
   font-style: italic;
 }
+
+.internal-doc-group-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+tr.embed-history-row > td {
+  white-space: normal !important;
+  background: var(--bg-card, #fff);
+}
+
+.embed-history {
+  /* Stays in view while the table scrolls sideways; as wide as the visible table area. */
+  position: sticky;
+  left: 0;
+  box-sizing: border-box;
+  width: min(70rem, calc(100cqi - 1rem));
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.embed-history-title {
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+}
+
+.embed-history-doc {
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+
+  ul {
+    margin: 0.35rem 0 0;
+    padding-left: 1.1rem;
+  }
+
+  li + li {
+    margin-top: 0.4rem;
+  }
+}
+
+.embed-history-doc-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.embed-history-count {
+  color: var(--text-secondary);
+}
+
+.embed-history-where {
+  font-weight: 600;
+}
+
+.embed-history-action,
+.embed-history-text {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.embed-history-text {
+  font-style: italic;
+}
+
+.embed-history-none {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+}

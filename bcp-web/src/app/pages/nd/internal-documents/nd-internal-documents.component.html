@@ -236,12 +236,12 @@
                     [attr.aria-expanded]="expandedEmbedsDocId === d.id"
                     (click)="$event.stopPropagation(); expandedEmbedsDocId = expandedEmbedsDocId === d.id ? null : d.id"
                   >
-                    {{ d.finalizeEmbeds.length }} embedded action{{ d.finalizeEmbeds.length === 1 ? '' : 's' }}
+                    {{ (d.finalizeEmbeds?.length ?? 0) }} embedded action{{ (d.finalizeEmbeds?.length ?? 0) === 1 ? '' : 's' }}
                     {{ expandedEmbedsDocId === d.id ? '▴' : '▾' }}
                   </button>
                   @if (expandedEmbedsDocId === d.id) {
                     <ul class="finalize-embeds-list" (click)="$event.stopPropagation()">
-                      @for (e of d.finalizeEmbeds; track $index) {
+                      @for (e of d.finalizeEmbeds ?? []; track $index) {
                         <li [title]="e.embeddedText || e.action">
                           <strong>§{{ e.clauseNo }}</strong>
                           @if (e.gapIndex) { · Gap {{ e.gapIndex }} }

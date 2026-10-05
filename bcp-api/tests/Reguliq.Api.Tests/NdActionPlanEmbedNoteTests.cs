@@ -21,7 +21,7 @@ public class NdActionPlanEmbedNoteTests
     public void Note_names_the_exact_clause_it_fulfills()
     {
         var note = NdActionPlanEmbedNote.Build(Target());
-        Assert.Contains("This action plan fulfills Regulatory Clause 3.1", note);
+        Assert.Contains("This update addresses Regulatory Clause 3.1", note);
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public class NdActionPlanEmbedNoteTests
     public void Note_omits_the_page_citation_when_page_is_unknown()
     {
         var note = NdActionPlanEmbedNote.Build(Target(page: null));
-        Assert.Contains("This action plan fulfills Regulatory Clause 3.1.", note);
+        Assert.Contains("This update addresses Regulatory Clause 3.1.", note);
         Assert.DoesNotContain("referenced at p.", note);
     }
 
@@ -54,7 +54,7 @@ public class NdActionPlanEmbedNoteTests
     public void Note_starts_with_a_clause_labeled_header()
     {
         var note = NdActionPlanEmbedNote.Build(Target());
-        Assert.StartsWith("COMPLIANCE ACTION — Clause 3.1", note);
+        Assert.StartsWith("COMPLIANCE ACTION - Clause 3.1", note);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class NdActionPlanEmbedNoteTests
                 + "whether committed inside or outside the UAE, consistent with AML-CFT Law Articles 2.1–3.",
         };
         var note = NdActionPlanEmbedNote.Build(t);
-        Assert.StartsWith("POLICY UPDATE — Regulatory Clause 3.1", note);
+        Assert.StartsWith("POLICY UPDATE - Regulatory Clause 3.1", note);
         Assert.Contains("independent crime from the predicate offence", note);
         Assert.DoesNotContain("Gap identified:", note);
         Assert.DoesNotContain("Action taken:", note);

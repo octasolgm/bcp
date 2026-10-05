@@ -66,7 +66,7 @@ public static class NdActionPlanEmbedNote
         var clauseLabel = ClauseLabel(t);
         var lines = new List<string>
         {
-            $"POLICY UPDATE — Regulatory Clause {clauseLabel}",
+            $"POLICY UPDATE - Regulatory Clause {clauseLabel}",
             "",
             body,
             "",
@@ -80,7 +80,7 @@ public static class NdActionPlanEmbedNote
         var clauseLabel = ClauseLabel(t);
         var lines = new List<string>
         {
-            $"COMPLIANCE ACTION — Clause {clauseLabel}",
+            $"COMPLIANCE ACTION - Clause {clauseLabel}",
             "",
             $"Gap identified: {CleanOneLine(t.GapText)}",
             "",
@@ -97,7 +97,7 @@ public static class NdActionPlanEmbedNote
     }
 
     private static string ClauseLabel(NdActionPlanEmbedTarget t) =>
-        string.IsNullOrWhiteSpace(t.ClauseTitle) ? t.ClauseNo : $"{t.ClauseNo} — {t.ClauseTitle}";
+        string.IsNullOrWhiteSpace(t.ClauseTitle) ? t.ClauseNo : $"{t.ClauseNo} - {t.ClauseTitle}";
 
     private static string FulfillmentFooter(NdActionPlanEmbedTarget t) =>
         t.Page is > 0

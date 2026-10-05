@@ -61,6 +61,7 @@ import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.
 import { startPanelResize } from '../../shared/panel-resize';
 import { formatPointPageRef, resolveRegulationPdfPage } from '../../../../lib/nd/regulation-pdf-page';
 import { ndAnalysisRunTarget } from '../../../../lib/nd/run-links';
+import { CatalogSelection } from '../../../../lib/nd/catalog-selection';
 
 export type RegulationPointSearchHit = {
   id: string;
@@ -1616,6 +1617,82 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
       this.message = `Downloaded points JSON for "${doc.name}"`;
     }
     this.exportingPointsId = null;
+  }
+
+  // ---- Multi-select + bulk actions
+  readonly selection = new CatalogSelection();
+  /** Progress text while a bulk action runs; actions are hidden meanwhile. */
+  bulkProgress = '';
+
+  get visibleDocIds(): string[] {
+    return this.visibleDocs.map((d) => d.id);
+  }
+
+  private async runBulk(
+    verb: string,
+    docs: RegulationDocument[],
+    action: (d: RegulationDocument) => Promise<boolean | void>,
+  ): Promise<void> {
+    if (!docs.length) {
+      this.toast.show(`None of the selected regulations can be ${verb.toLowerCase()}ed right now.`, 'warning', 4000);
+      return;
+    }
+    let failed = 0;
+    try {
+      for (let i = 0; i < docs.length; i++) {
+        this.bulkProgress = `${verb} ${i + 1} of ${docs.length}: ${docs[i]!.name}`;
+        if ((await action(docs[i]!)) === false) failed++;
+      }
+    } finally {
+      this.bulkProgress = '';
+    }
+    this.toast.show(
+      failed ? `${verb}: ${docs.length - failed} done, ${failed} failed.` : `${verb}: ${docs.length} regulation(s) done.`,
+      failed ? 'error' : 'success',
+      5000,
+    );
+  }
+
+  async bulkParse(): Promise<void> {
+    const docs = this.selection.pick(this.visibleDocs).filter((d) => this.showRowParseButton(d) && !this.parseDisabledReason(d));
+    await this.runBulk('Parse', docs, (d) => this.handleParse(d));
+  }
+
+  async bulkExtract(): Promise<void> {
+    const docs = this.selection.pick(this.visibleDocs).filter((d) => this.showRowExtractButton(d) && !this.extractDisabledReason(d));
+    await this.runBulk('Extract', docs, (d) => this.handleExtract(d));
+  }
+
+  async bulkDownload(): Promise<void> {
+    const docs = this.selection.pick(this.visibleDocs).filter((d) => !this.isManualDoc(d));
+    await this.runBulk('Download', docs, async (d) => {
+      const res = await this.api.downloadRegulationFileExport(d.id);
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      return res.success;
+    });
+  }
+
+  async bulkDelete(): Promise<void> {
+    const docs = this.selection.pick(this.visibleDocs).filter((d) => !this.isManualDoc(d));
+    if (!docs.length || !this.canUpload || this.showDeleted) return;
+    if (
+      !confirm(
+        `Delete ${docs.length} regulation(s) from the library?
+
+Nothing is deleted from the database — extraction credits and points are kept. A super admin can restore them from the Deleted tab.`,
+      )
+    ) return;
+    await this.runBulk('Delete', docs, async (d) => {
+      const res = await this.api.hideRegulationDocument(d.id);
+      if (res.success) {
+        if (this.selectedDoc?.id === d.id) this.closePointsPanel();
+        this.removeRegulationDocFromList(d);
+        this.workspaceNav.bumpNavBadges({ regulationDocuments: -1 });
+      }
+      return res.success;
+    });
+    this.selection.clear();
+    await this.loadDocs(true, true);
   }
 
   async downloadRegulationFile(doc: RegulationDocument, event?: Event): Promise<void> {
