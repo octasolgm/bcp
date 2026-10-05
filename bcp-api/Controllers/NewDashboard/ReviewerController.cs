@@ -63,8 +63,19 @@ public class ReviewerController(
 
         var run = await db.NdAnalysisRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
         if (run == null) return NotFound();
-        if (run.Status != "checker_approved")
-            return BadRequest(new { success = false, message = "Run is not ready for final review." });
+        // A super admin may finalize an already-finalized run again (the page offers it): the run stays
+        // finalized, the re-finalize is logged, and the corrected documents are generated afresh.
+        var isRefinalize = run.Status == "reviewer_approved" && profile!.Role == "super_admin";
+        if (run.Status != "checker_approved" && !isRefinalize)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = run.Status == "reviewer_approved"
+                    ? "This analysis is already finalized."
+                    : "Run is not ready for final review: the checker has not approved it yet.",
+            });
+        }
 
         var from = run.Status;
         run.Status = "reviewer_approved";
@@ -79,13 +90,21 @@ public class ReviewerController(
             Action = "finalized",
         };
         ApplyReviewMetadata(review, body);
+        if (isRefinalize)
+        {
+            // analysis_reviews.action is constrained to a fixed set, so a re-finalize is a "finalized"
+            // review whose comment says so.
+            const string note = "Finalized again: corrected documents regenerated.";
+            review.OverallComment = string.IsNullOrWhiteSpace(review.OverallComment) ? note : $"{note} {review.OverallComment}";
+        }
         db.NdAnalysisReviews.Add(review);
         await db.SaveChangesAsync(ct);
         await SavePointCommentsAsync(db, review.Id, body.PointComments, profile.Id, ct);
         await SaveActionItemReviewsAsync(db, review.Id, body.ActionItemReviews, profile.Id, ct);
-        await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
+        if (!isRefinalize)
+            await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
 
-        var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile.Id, ct);
+        var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile.Id, ct, force: isRefinalize);
         var embed = await embedResolver.DescribeForRunAsync(runId, ct);
 
         return Ok(new
