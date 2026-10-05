@@ -148,8 +148,11 @@ public class NdActionPlanEmbedResolver(
                 : gap?.ResolvedBy is Guid gapResolver && namesById.TryGetValue(gapResolver, out var gn) ? gn : null;
             var resolvedAt = plan.ResolvedAt ?? gap?.ResolvedAt ?? plan.UpdatedAt;
 
-            foreach (var (docId, page) in planDocs)
+            foreach (var (docId, clausePage) in planDocs)
             {
+                // The section the action amends ("Section 7.7", "Definitions section") is where the note
+                // belongs; the clause's evidence page is only the fallback.
+                var page = await FindSectionPageAsync(docId, plan.ActionPlan ?? "", ct) ?? clausePage;
                 targets.Add(new NdActionPlanEmbedTarget(
                     docId,
                     page,
@@ -308,6 +311,54 @@ public class NdActionPlanEmbedResolver(
             if (matches) named[docId] = page;
         }
         return named.Count > 0 ? named : candidates;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex SectionNumberInAction = new(
+        @"\b(?:section|rule|paragraph|clause)\s+(?<num>\d+(?:\.\d+)*)",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static readonly System.Text.RegularExpressions.Regex SectionNameInAction = new(
+        @"^\s*\[?\d*\]?\s*(?:amend|update|revise|extend)\s+(?:the\s+)?(?:[\w\s'\.-]{0,40}?'s\s+)?(?<name>[A-Za-z][A-Za-z /&-]{2,50}?)\s+section\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>Table-of-contents lines ("7.7 Financial Transactions ........ 37") are not the section.</summary>
+    private static readonly System.Text.RegularExpressions.Regex TocLine = new(
+        @"(\.{3,}|…|\s\d{1,3}\s*$)");
+
+    /// <summary>Page of the section an action names, from the document's own page-marked text; null when
+    /// the action names no section or it can't be found.</summary>
+    private async Task<int?> FindSectionPageAsync(Guid docId, string actionText, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(actionText)) return null;
+        var numMatch = SectionNumberInAction.Match(actionText);
+        var nameMatch = numMatch.Success ? null : SectionNameInAction.Match(actionText);
+        var number = numMatch.Success ? numMatch.Groups["num"].Value : null;
+        var name = nameMatch is { Success: true } ? nameMatch.Groups["name"].Value.Trim() : null;
+        if (number == null && string.IsNullOrWhiteSpace(name)) return null;
+
+        var markdown = await LoadParsedMarkdownAsync(docId, ct);
+        if (string.IsNullOrWhiteSpace(markdown)) return null;
+
+        foreach (var (page, text) in PolicyPageResolver.SplitMarkdownIntoPageSegments(markdown))
+        {
+            foreach (var raw in text.Split('\n'))
+            {
+                var isHeading = raw.TrimStart().StartsWith('#');
+                var line = raw.Trim().TrimStart('#', '*', ' ').TrimEnd('*', ' ');
+                if (line.Length == 0 || line.Length > 120 || TocLine.IsMatch(line)) continue;
+                if (number != null)
+                {
+                    if (System.Text.RegularExpressions.Regex.IsMatch(line, $@"^{System.Text.RegularExpressions.Regex.Escape(number)}(\.|\s|$)"))
+                        return page;
+                }
+                else if ((isHeading || line.Length <= 60)
+                         && line.Contains(name!, StringComparison.OrdinalIgnoreCase))
+                {
+                    return page;
+                }
+            }
+        }
+        return null;
     }
 
     /// <summary>"Internal A M L M a n u a l 290626 azure (1).pdf" → "amlmanual".</summary>

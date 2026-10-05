@@ -54,13 +54,18 @@ public class NdFinalizeEmbedContentService(
         var clauseLabel = string.IsNullOrWhiteSpace(target.ClauseTitle)
             ? target.ClauseNo
             : $"{target.ClauseNo} — {target.ClauseTitle}";
-        var gap = PreferNonEmpty(target.JudgmentGapDescription, target.GapText);
+        // Only this action's own gap: the clause's other gaps get their own notes, and giving the model the
+        // whole gap list made every note restate all of them.
+        var gap = PreferNonEmpty(target.GapText, target.JudgmentGapDescription ?? "");
         var parts = new List<string>
         {
             SystemInstruction,
             "",
             "---",
             $"Regulatory clause: {clauseLabel}",
+            "",
+            "Write policy text for THIS ONE gap only. The clause may have other gaps; each of those gets its own",
+            "separate text, so do not cover, mention or repeat anything outside this gap.",
             "",
             "What was missing (for your understanding only — do not repeat as a checklist):",
             gap,

@@ -66,7 +66,7 @@ public static class NdActionPlanEmbedNote
         var clauseLabel = ClauseLabel(t);
         var lines = new List<string>
         {
-            $"POLICY UPDATE - Regulatory Clause {clauseLabel}",
+            $"POLICY UPDATE - Regulatory Clause {clauseLabel}" + (t.GapIndex > 0 ? $", Gap {t.GapIndex}" : ""),
             "",
             body,
             "",
