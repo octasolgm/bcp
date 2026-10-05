@@ -202,7 +202,7 @@
                     [class.primary]="embedHistoryGroupKey === group.key"
                     [attr.aria-expanded]="embedHistoryGroupKey === group.key"
                     title="Which resolved actions were embedded into which document"
-                    (click)="embedHistoryGroupKey = embedHistoryGroupKey === group.key ? null : group.key"
+                    (click)="openEmbedHistory(group)"
                   >
                     History ({{ groupEmbedCount(group) }})
                   </button>
@@ -218,43 +218,6 @@
                 }
               </td>
             </tr>
-            @if (embedHistoryGroupKey === group.key) {
-              <tr class="embed-history-row">
-                <td [attr.colspan]="internalDocsTableColSpan" (click)="$event.stopPropagation()">
-                  <div class="embed-history">
-                    <p class="embed-history-title">Embedded actions in the latest finalized copies</p>
-                    @for (d of latestVersionsInGroup(group); track d.id) {
-                      <div class="embed-history-doc">
-                        <div class="embed-history-doc-head">
-                          <strong>{{ d.title }}</strong>
-                          @if (docVersionLabel(d); as ver) {
-                            <span class="meta-pill doc-version-pill">{{ ver }}</span>
-                          }
-                          <span class="embed-history-count">{{ d.finalizeEmbeds?.length || 0 }} embedded</span>
-                        </div>
-                        @if (d.finalizeEmbeds?.length) {
-                          <ul>
-                            @for (e of d.finalizeEmbeds ?? []; track $index) {
-                              <li>
-                                <span class="embed-history-where">
-                                  §{{ e.clauseNo }}@if (e.gapIndex) { · Gap {{ e.gapIndex }}} · {{ e.page ? 'after p.' + e.page : 'end of document' }}
-                                </span>
-                                <span class="embed-history-action">Action: {{ e.action }}</span>
-                                @if (e.embeddedText) {
-                                  <span class="embed-history-text">Embedded: {{ e.embeddedText }}</span>
-                                }
-                              </li>
-                            }
-                          </ul>
-                        } @else {
-                          <p class="embed-history-none">No resolved actions cite this document.</p>
-                        }
-                      </div>
-                    }
-                  </div>
-                </td>
-              </tr>
-            }
           }
           @for (d of group.docs; track d.id) {
           <tr
@@ -717,5 +680,55 @@
         }
       </ul>
     }
+  </aside>
+}
+
+@if (embedHistoryGroup; as hg) {
+  <div class="embed-history-backdrop" (click)="closeEmbedHistory()"></div>
+  <aside class="embed-history-drawer" role="dialog" aria-modal="true" aria-label="Embedded actions history">
+    <header class="embed-history-drawer-head">
+      <div>
+        <p class="embed-history-kicker">Embedded actions history</p>
+        <h3>{{ hg.runName }}</h3>
+        <p class="embed-history-sub">Latest finalized copy of each document and the resolved actions written into it.</p>
+      </div>
+      <button type="button" class="embed-history-close" aria-label="Close" (click)="closeEmbedHistory()">×</button>
+    </header>
+    <div class="embed-history-drawer-body">
+      @for (d of latestVersionsInGroup(hg); track d.id) {
+        <section class="embed-history-doc">
+          <div class="embed-history-doc-head">
+            <strong>{{ d.title }}</strong>
+            @if (docVersionLabel(d); as ver) {
+              <span class="meta-pill doc-version-pill">{{ ver }}</span>
+            }
+            <span class="embed-history-count">{{ d.finalizeEmbeds?.length || 0 }} embedded</span>
+          </div>
+          @if (d.finalizeEmbeds?.length) {
+            @for (e of d.finalizeEmbeds ?? []; track $index) {
+              <div class="embed-history-item">
+                <div class="embed-history-where">
+                  §{{ e.clauseNo }}@if (e.clauseTitle) { {{ e.clauseTitle }}}@if (e.gapIndex) { · Gap {{ e.gapIndex }}} · {{ e.page ? 'inserted after p.' + e.page : 'inserted at end of document' }}
+                </div>
+                @if (e.gap && e.gap !== e.action) {
+                  <p class="embed-history-field"><span>Gap</span>{{ e.gap }}</p>
+                }
+                <p class="embed-history-field"><span>Action</span>{{ e.action }}</p>
+                @if (e.embeddedText) {
+                  <p class="embed-history-field embed-history-text"><span>Embedded text</span>{{ e.embeddedText }}</p>
+                }
+                @if (e.resolvedBy || e.resolvedAt) {
+                  <p class="embed-history-meta">
+                    Resolved{{ e.resolvedBy ? ' by ' + e.resolvedBy : '' }}{{ e.resolvedAt ? ' on ' + formatTableDate(e.resolvedAt) : '' }}
+                  </p>
+                }
+              </div>
+            }
+          } @else {
+            <p class="embed-history-none">No resolved actions cite this document.</p>
+          }
+        </section>
+      }
+    </div>
   </aside>
 }

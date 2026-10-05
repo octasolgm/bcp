@@ -176,6 +176,8 @@ export type InternalDocumentFinalizeEmbed = {
   clauseNo: string;
   clauseTitle?: string | null;
   gapIndex?: number | null;
+  /** What was missing (the gap this action closed). */
+  gap?: string | null;
   action: string;
   page?: number | null;
   embeddedText?: string | null;

@@ -62,4 +62,6 @@ Bug fixes
 - Internal Documents analysis group header: History button lists the latest finalized copy of each document with the clause, gap, page, action and embedded text of every note; document count shown as a filled pill
 - Fixed a template error from the earlier embed list change that stopped the web build (nullable embed list); embed note headings use plain hyphens so PDF fonts render them; outdated embed tests updated (21/21 pass)
 - Verified "new analysis 2": its corrected copies dated 30 Sep / 1 Oct were made before the embed fixes; after regenerating, the AML Manual copy (v15) contains the 3 resolved clause 3.3 actions as policy text on new pages after page 40
+- Embed history opens in a right-side drawer instead of an inline row, and each embedded note now shows the gap it closed, the action, the inserted text, the page and who resolved it (gap text recorded for copies generated from now on)
+- Catalog tables: Document column fixed at a comfortable width with padding and wrapping (titles no longer spill into the next column); Actions column capped at a fixed width with extra buttons wrapping, instead of every row reserving the widest row's width; spacing between History and Download all
 

@@ -642,8 +642,26 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
 
   readonly internalDocsTableColSpan = 10;
 
-  /** Analysis group whose embed history panel is open. */
+  /** Analysis group whose embed history drawer is open. */
   embedHistoryGroupKey: string | null = null;
+
+  get embedHistoryGroup(): InternalDocCatalogGroup | null {
+    if (!this.embedHistoryGroupKey) return null;
+    return this.visibleDocGroups.find((g) => g.key === this.embedHistoryGroupKey) ?? null;
+  }
+
+  openEmbedHistory(group: InternalDocCatalogGroup): void {
+    this.embedHistoryGroupKey = group.key;
+  }
+
+  closeEmbedHistory(): void {
+    this.embedHistoryGroupKey = null;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeCloseEmbedHistory(): void {
+    if (this.embedHistoryGroupKey) this.closeEmbedHistory();
+  }
 
   /** Newest finalized copy of each document in an analysis group (older regenerations are superseded). */
   latestVersionsInGroup(group: InternalDocCatalogGroup): InternalDocument[] {

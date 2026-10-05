@@ -2061,6 +2061,38 @@ tr.doc-ready-green td:first-child {
       z-index: 3;
     }
 
+    /* Document column: fixed comfortable width, wraps long titles, never spills into the next column. */
+    th.nd-sticky-left,
+    td.nd-sticky-left {
+      width: 22rem;
+      min-width: 22rem;
+      max-width: 22rem;
+      padding-left: 1rem;
+      padding-right: 1rem;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    /* Actions column: fixed width; rows with many buttons wrap to a second line instead of every
+       row reserving the widest row's width. */
+    th.nd-sticky-right,
+    td.nd-sticky-right {
+      width: 21rem;
+      min-width: 21rem !important;
+      max-width: 21rem;
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+      white-space: normal !important;
+    }
+
+    td.nd-sticky-right > .nd-catalog-row-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      row-gap: 0.35rem;
+    }
+
     tbody td.nd-sticky-left,
     tbody td.nd-sticky-right {
       background-color: var(--bg-card, #fff) !important;

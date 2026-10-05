@@ -280,6 +280,7 @@ public class NdCorrectedDocumentService(
                 clauseNo = t.ClauseNo,
                 clauseTitle = t.ClauseTitle,
                 gapIndex = t.GapIndex,
+                gap = t.GapText,
                 action = t.ActionText,
                 page = t.Page,
                 embeddedText = t.GeneratedEmbedBody,
