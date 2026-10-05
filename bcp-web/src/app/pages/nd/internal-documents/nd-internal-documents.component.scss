@@ -135,6 +135,22 @@
   letter-spacing: 0.02em;
 }
 
+.doc-title-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+}
+
+.doc-version-pill {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  background: var(--primary-soft, rgba(59, 130, 246, 0.12));
+  color: var(--primary, #2563eb);
+}
+
 .severity-badge.completed {
   background: var(--low-bg);
   color: var(--low);

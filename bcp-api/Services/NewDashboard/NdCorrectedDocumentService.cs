@@ -187,7 +187,7 @@ public class NdCorrectedDocumentService(
         StoredDocument source, NdActionPlanEmbedJob job, CancellationToken ct)
     {
         if (!storage.IsConfigured || string.IsNullOrWhiteSpace(source.StoragePath)) return null;
-        var fileType = (source.FileType ?? "").Trim().ToUpperInvariant();
+        var fileType = ResolveEmbedFileType(source);
         if (fileType is not ("PDF" or "DOCX" or "DOC")) return null;
 
         try
@@ -225,6 +225,17 @@ public class NdCorrectedDocumentService(
     // Postgres re-serializes jsonb on every read, always inserting a space after each colon —
     // matching the raw "generatedFromRunId":"..." syntax (no space) never finds a real row.
     // The run id alone is globally unique, so matching on just that substring is safe.
+    private static string ResolveEmbedFileType(StoredDocument source)
+    {
+        var fileType = (source.FileType ?? "").Trim().ToUpperInvariant();
+        if (fileType is "PDF" or "DOCX" or "DOC") return fileType;
+        var name = source.OriginalFileName ?? source.Title ?? "";
+        if (name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) return "PDF";
+        if (name.EndsWith(".docx", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith(".doc", StringComparison.OrdinalIgnoreCase)) return "DOC";
+        return fileType;
+    }
+
     private static string RunMarker(Guid runId) => runId.ToString();
 
     private static string BuildHistory(StoredDocument source, Guid runId, int version, NdActionPlanEmbedJob? embeddedJob = null)

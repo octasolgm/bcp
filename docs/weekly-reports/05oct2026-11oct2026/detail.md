@@ -63,3 +63,11 @@ Re-running a single clause no longer triggers an unnecessary document re-process
 Safer handling of search errors
 
 If the step that finds relevant policy sections fails, the analysis now stops with a clear error instead of continuing without any policy text, which could otherwise have reported gaps that do not exist.
+
+Internal document versions after final review
+
+When a reviewer finalizes an analysis, the corrected internal document appears in the library with a clear version label (for example v2) next to the document title, so you can tell the finalized copy apart from the original upload at a glance.
+
+Resolved actions in finalized files
+
+Finalized PDF and Word copies now embed resolved action plans as policy notes more reliably. If the run used only one internal document, or the AI cited a passage that appears in a specific file, those actions are written into the downloaded corrected document (PDFs add note pages after the cited page). For a run you already finalized, use Regenerate corrected documents on the analysis run row, then download the new version.

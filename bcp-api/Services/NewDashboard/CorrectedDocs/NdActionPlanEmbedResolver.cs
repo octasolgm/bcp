@@ -106,7 +106,7 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
             if (pointDocs.Count == 0) continue;
 
             var gapText = ExtractGapText(point, gap.GapIndex);
-            findingByPointId.TryGetValue(point.Id, out var finding);
+            var finding = ResolveFindingForPoint(point, findingByPointId, findings);
             var judgmentContext = ParseJudgmentContext(finding);
             var resolvedByName = plan.ResolvedBy.HasValue && namesById.TryGetValue(plan.ResolvedBy.Value, out var n)
                 ? n
@@ -168,10 +168,10 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
                     if (!root.TryGetProperty(listName, out var arr) || arr.ValueKind != JsonValueKind.Array) continue;
                     foreach (var m in arr.EnumerateArray().Take(topRankedMatches))
                     {
-                        if (!m.TryGetProperty("sourceDocumentId", out var idEl)) continue;
-                        if (!Guid.TryParse(idEl.GetString(), out var docId) || !attachedDocIds.Contains(docId)) continue;
-                        int? page = m.TryGetProperty("sourcePage", out var pEl) && pEl.ValueKind == JsonValueKind.Number
-                            ? pEl.GetInt32()
+                        if (!TryGetGuidProperty(m, "sourceDocumentId", "SourceDocumentId", out var docId)
+                            || !attachedDocIds.Contains(docId)) continue;
+                        int? page = TryGetIntProperty(m, "sourcePage", "SourcePage", out var pageNum)
+                            ? pageNum
                             : null;
                         if (!result.ContainsKey(docId)) result[docId] = page;
                     }
@@ -186,44 +186,126 @@ public class NdActionPlanEmbedResolver(AppDbContext db, ILogger<NdActionPlanEmbe
 
         if (result.Count > 0) return result;
 
-        // Fallback: match the judgment's own document_reference text against the attached titles, then
-        // locate its cited quote in that document's own parsed markdown for a real page number.
+        RegulJudgmentResult? judgment = null;
         if (finding?.ResultJson is { Length: > 0 } resultJson)
         {
             try
             {
-                var judgment = NdRegulLlmJsonHelper.ParseJsonObject<RegulJudgmentResult>(resultJson);
-                var reference = judgment.DocumentReference ?? "";
-                foreach (var d in docTitles)
-                {
-                    var title = d.Title ?? "";
-                    var fileName = d.OriginalFileName ?? "";
-                    if (!NameMatchesReference(reference, title) && !NameMatchesReference(reference, fileName)) continue;
-
-                    int? page = null;
-                    var quote = judgment.PolicyExtract.FirstOrDefault(q => !string.IsNullOrWhiteSpace(q));
-                    if (!string.IsNullOrWhiteSpace(quote))
-                    {
-                        var markdown = await db.NdLocalDocumentExtractions.AsNoTracking()
-                            .Where(e => e.StoredDocumentId == d.Id && e.MarkdownText != null)
-                            .OrderByDescending(e => e.ParsedAt)
-                            .Select(e => e.MarkdownText)
-                            .FirstOrDefaultAsync(ct);
-                        if (!string.IsNullOrWhiteSpace(markdown))
-                            page = PolicyPageResolver.ResolveQuoteLocation(markdown, quote).Page;
-                    }
-
-                    result[d.Id] = page;
-                    break;
-                }
+                judgment = NdRegulLlmJsonHelper.ParseJsonObject<RegulJudgmentResult>(resultJson);
             }
             catch
             {
-                // No usable judgment JSON — nothing more to try for this clause.
+                // No usable judgment JSON — fall through to other heuristics.
             }
         }
 
+        // Fallback: match the judgment's own document_reference text against the attached titles, then
+        // locate its cited quote in that document's own parsed markdown for a real page number.
+        if (judgment != null)
+        {
+            var reference = judgment.DocumentReference ?? "";
+            foreach (var d in docTitles)
+            {
+                var title = d.Title ?? "";
+                var fileName = d.OriginalFileName ?? "";
+                if (!NameMatchesReference(reference, title) && !NameMatchesReference(reference, fileName)) continue;
+
+                var page = await TryResolvePageFromJudgmentQuoteAsync(d.Id, judgment, ct);
+                result[d.Id] = page;
+                break;
+            }
+        }
+
+        if (result.Count > 0) return result;
+
+        // Policy quote appears in exactly one attached document's parsed text — use that doc even when
+        // document_reference was empty or did not match a title.
+        if (judgment != null)
+        {
+            var quote = judgment.PolicyExtract.FirstOrDefault(q => !string.IsNullOrWhiteSpace(q));
+            if (!string.IsNullOrWhiteSpace(quote))
+            {
+                foreach (var d in docTitles)
+                {
+                    var markdown = await LoadParsedMarkdownAsync(d.Id, ct);
+                    if (string.IsNullOrWhiteSpace(markdown)) continue;
+                    if (!QuoteAppearsInMarkdown(markdown, quote)) continue;
+                    result[d.Id] = PolicyPageResolver.ResolveQuoteLocation(markdown, quote).Page;
+                    break;
+                }
+            }
+        }
+
+        if (result.Count > 0) return result;
+
+        // Single internal document on the run — embed resolved actions there rather than dropping them
+        // when retrieval and judgment metadata could not name a document.
+        if (attachedDocIds.Count == 1)
+        {
+            var onlyId = attachedDocIds[0];
+            int? page = null;
+            if (judgment != null)
+                page = await TryResolvePageFromJudgmentQuoteAsync(onlyId, judgment, ct);
+            result[onlyId] = page;
+        }
+
         return result;
+    }
+
+    private static NdRegulForwardFinding? ResolveFindingForPoint(
+        NdAnalysisPoint point,
+        Dictionary<Guid, NdRegulForwardFinding> findingByPointId,
+        List<NdRegulForwardFinding> findings)
+    {
+        if (findingByPointId.TryGetValue(point.Id, out var linked)) return linked;
+        var (clauseNo, _) = ParseClause(point.PointSnapshot);
+        if (string.IsNullOrWhiteSpace(clauseNo)) return null;
+        return findings.FirstOrDefault(f =>
+            string.Equals(f.ClauseNo?.TrimStart('§'), clauseNo, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(f.ClauseNo, clauseNo, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<int?> TryResolvePageFromJudgmentQuoteAsync(
+        Guid docId, RegulJudgmentResult judgment, CancellationToken ct)
+    {
+        var quote = judgment.PolicyExtract.FirstOrDefault(q => !string.IsNullOrWhiteSpace(q));
+        if (string.IsNullOrWhiteSpace(quote)) return null;
+        var markdown = await LoadParsedMarkdownAsync(docId, ct);
+        if (string.IsNullOrWhiteSpace(markdown)) return null;
+        return PolicyPageResolver.ResolveQuoteLocation(markdown, quote).Page;
+    }
+
+    private async Task<string?> LoadParsedMarkdownAsync(Guid docId, CancellationToken ct) =>
+        await db.NdLocalDocumentExtractions.AsNoTracking()
+            .Where(e => e.StoredDocumentId == docId && e.MarkdownText != null)
+            .OrderByDescending(e => e.ParsedAt)
+            .Select(e => e.MarkdownText)
+            .FirstOrDefaultAsync(ct);
+
+    private static bool QuoteAppearsInMarkdown(string markdown, string quote)
+    {
+        if (markdown.Contains(quote.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        var compactMd = Normalize(markdown);
+        var compactQuote = Normalize(quote);
+        return compactQuote.Length >= 12 && compactMd.Contains(compactQuote, StringComparison.Ordinal);
+    }
+
+    private static bool TryGetGuidProperty(JsonElement el, string camel, string pascal, out Guid id)
+    {
+        id = Guid.Empty;
+        if (el.TryGetProperty(camel, out var prop) || el.TryGetProperty(pascal, out prop))
+            return Guid.TryParse(prop.GetString(), out id);
+        return false;
+    }
+
+    private static bool TryGetIntProperty(JsonElement el, string camel, string pascal, out int value)
+    {
+        value = 0;
+        if (!el.TryGetProperty(camel, out var prop) && !el.TryGetProperty(pascal, out prop))
+            return false;
+        if (prop.ValueKind != JsonValueKind.Number) return false;
+        value = prop.GetInt32();
+        return true;
     }
 
     private static bool NameMatchesReference(string reference, string name)

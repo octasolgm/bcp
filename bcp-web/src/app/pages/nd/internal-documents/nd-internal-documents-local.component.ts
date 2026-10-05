@@ -51,6 +51,7 @@ import {
   sortIndicator,
   type SortDir,
 } from '../../../../lib/nd/list-utils';
+import { internalDocVersionLabel } from '../../../../lib/nd/internal-doc-version';
 import { ndAnalysisRunTarget } from '../../../../lib/nd/run-links';
 import type { AnalysisRunSummary, InternalDocument, InternalDocumentSection } from '../../../../lib/nd/types';
 import { NdInternalDocumentSectionsPanelComponent } from './nd-internal-document-sections-panel.component';
@@ -1036,6 +1037,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   formatTableDate = formatTableDate;
   formatBytes = formatBytes;
   docFormatLabel = catalogDocumentFormatLabel;
+  docVersionLabel = internalDocVersionLabel;
 
   docPageMeta(doc: InternalDocument): string {
     return catalogPdfPageLabel(doc.pageCount, this.isParsingDoc(doc));

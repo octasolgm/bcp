@@ -48,3 +48,9 @@ Tasks (continued)
 - One V5 workflow at every entry point (new analysis, rerun all, clause rerun, gap evidence re-check all / one clause): index check, Steps 1-6, Step 7 context, Step 8 judgment, with the AI call log tagged by entry point; gap evidence re-checks also log the evidence-check AI call, and the gap report prints them to the DevTools console when a re-check finishes
 - Regul forward judgment prompt v8: covered_elements field, every requirement accounted for as covered or missing, one gap line per missing requirement, several action lines per gap when needed, status and gap list must agree, rules for legal definitions vs contextual statements, verbatim quotes from one excerpt only; startup seeder sets v8 current
 - Verified run a7e51682 against the 5 parsed internal documents: clause 3.5 gaps (no funds/proceeds definitions; timeframe and asset form not stated as irrelevant) are accurate; clause 3.6 was a post-processing artifact (see bug fixes) and needs a rerun
+
+Tasks
+- Internal Documents catalog shows a version pill (v2, v3, etc.) on finalized corrected copies and on any upload with version above 1
+
+Bug fixes
+- Finalize corrected documents often had no embedded resolved actions when retrieval or document_reference did not map a clause to an internal doc; single-document runs, policy-quote matching, and clause-level finding fallback now produce embed targets so PDF/DOCX copies include policy notes

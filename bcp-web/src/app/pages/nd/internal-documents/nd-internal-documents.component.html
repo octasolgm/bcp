@@ -200,7 +200,12 @@
             (click)="openSections(d)"
           >
             <td class="doc-cell col-doc">
-              <strong [title]="d.title">{{ d.title }}</strong>
+              <span class="doc-title-row">
+                <strong [title]="d.title">{{ d.title }}</strong>
+                @if (docVersionLabel(d); as ver) {
+                  <span class="meta-pill doc-version-pill" [title]="'Document version ' + ver">{{ ver }}</span>
+                }
+              </span>
               @if (d.convertedFromWord && d.sourceOriginalFileName) {
                 <span class="doc-meta original-source-label cell-subline">Original: {{ d.sourceOriginalFileName }}</span>
                 <span class="doc-meta muted cell-subline" [title]="d.landingAiFileName ?? ''">

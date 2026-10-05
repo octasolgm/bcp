@@ -249,4 +249,58 @@ public class NdActionPlanEmbedResolverTests
         var job = Assert.Single(jobs);
         Assert.Equal(manualDocId, job.StoredDocumentId); // matched by name, not the unrelated doc
     }
+
+    [Fact]
+    public async Task Single_attached_document_gets_embed_targets_without_retrieval_or_reference()
+    {
+        await using var db = CreateDb();
+        var runId = Guid.NewGuid();
+        var onlyDocId = Guid.NewGuid();
+        var pointId = Guid.NewGuid();
+
+        db.NdAnalysisRuns.Add(new NdAnalysisRun
+        {
+            Id = runId,
+            Name = "Single-doc run",
+            SelectedInternalDocIds = JsonSerializer.Serialize(new[] { onlyDocId }),
+        });
+        db.StoredDocuments.Add(new StoredDocument { Id = onlyDocId, Title = "Policy Manual", OriginalFileName = "policy-manual.pdf" });
+        db.NdAnalysisPoints.Add(new NdAnalysisPoint
+        {
+            Id = pointId,
+            AnalysisRunId = runId,
+            PointSnapshot = JsonSerializer.Serialize(new { pointNumber = "2.1" }),
+        });
+        db.NdRegulForwardFindings.Add(new NdRegulForwardFinding
+        {
+            AnalysisRunId = runId,
+            AnalysisPointId = pointId,
+            ClauseNo = "2.1",
+            RetrievalJson = null,
+            ResultJson = ResultJson(""),
+        });
+        db.NdAnalysisGaps.Add(new NdAnalysisGap
+        {
+            AnalysisRunId = runId,
+            AnalysisPointId = pointId,
+            GapIndex = 1,
+            Status = GapStatuses.Resolved,
+        });
+        db.NdAnalysisActionPlans.Add(new NdAnalysisActionPlan
+        {
+            AnalysisRunId = runId,
+            AnalysisPointId = pointId,
+            GapIndex = 1,
+            Status = ActionPlanStatuses.Resolved,
+            ActionPlan = "Documented the control.",
+        });
+        await db.SaveChangesAsync();
+
+        var resolver = new NdActionPlanEmbedResolver(db, NullLogger<NdActionPlanEmbedResolver>.Instance);
+        var jobs = await resolver.ResolveForRunAsync(runId, CancellationToken.None);
+
+        var job = Assert.Single(jobs);
+        Assert.Equal(onlyDocId, job.StoredDocumentId);
+        Assert.Single(job.Targets);
+    }
 }
