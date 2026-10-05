@@ -228,6 +228,34 @@
                   }
                 </span>
               }
+              @if (d.finalizeEmbeds?.length) {
+                <span class="cell-subline finalize-embeds">
+                  <button
+                    type="button"
+                    class="finalize-embeds-toggle"
+                    [attr.aria-expanded]="expandedEmbedsDocId === d.id"
+                    (click)="$event.stopPropagation(); expandedEmbedsDocId = expandedEmbedsDocId === d.id ? null : d.id"
+                  >
+                    {{ d.finalizeEmbeds.length }} embedded action{{ d.finalizeEmbeds.length === 1 ? '' : 's' }}
+                    {{ expandedEmbedsDocId === d.id ? '▴' : '▾' }}
+                  </button>
+                  @if (expandedEmbedsDocId === d.id) {
+                    <ul class="finalize-embeds-list" (click)="$event.stopPropagation()">
+                      @for (e of d.finalizeEmbeds; track $index) {
+                        <li [title]="e.embeddedText || e.action">
+                          <strong>§{{ e.clauseNo }}</strong>
+                          @if (e.gapIndex) { · Gap {{ e.gapIndex }} }
+                          · {{ e.page ? 'after p.' + e.page : 'end of document' }}
+                          <span class="finalize-embed-action">{{ e.action }}</span>
+                          @if (e.embeddedText) {
+                            <span class="finalize-embed-text">Embedded: {{ e.embeddedText }}</span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  }
+                </span>
+              }
             </td>
             <td class="muted col-date">{{ formatTableDate(d.uploaded) }}</td>
             @if (showDeleted) {

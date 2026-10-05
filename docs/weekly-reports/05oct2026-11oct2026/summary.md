@@ -55,3 +55,7 @@ Tasks
 Bug fixes
 - Finalize corrected documents often had no embedded resolved actions when retrieval or document_reference did not map a clause to an internal doc; single-document runs, policy-quote matching, and clause-level finding fallback now produce embed targets so PDF/DOCX copies include policy notes
 - Finalize embed still empty on multi-doc runs: resolver now reads Azure/Landing parse cache markdown (not only local extraction), does not require a gap roster row, falls back to the first selected internal doc, and finalize/regenerate toasts report resolved-action vs embed-target counts
+- Finalize embeds: notes now go only into the documents the AI cited as evidence for the clause (then documents containing its quotes, then the single best search match); an action that names a document ("Amend the AML Manual ...") goes only into that document; removed the fallback that dropped notes into the first selected document; the same note was previously copied into 3 documents
+- Finalize embed text: the AI rewrite was failing with OpenRouter 402 (balance could not cover the 131k max_tokens reservation), so every note fell back to the raw action text cut at 480 characters; Kimi cap set to 65,536, a 402 now retries once with the affordable amount, and the fallback uses the full draft wording inside the action's quotes instead of a cut-off copy of the action
+- Internal Documents: finalized copies list each embedded note (clause, gap, page, action and the embedded policy text) under the title; version history records the same detail
+

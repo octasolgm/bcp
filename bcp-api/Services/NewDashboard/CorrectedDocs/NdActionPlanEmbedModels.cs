@@ -25,7 +25,9 @@ public sealed record NdActionPlanEmbedTarget(
     string? JudgmentGapDescription = null,
     IReadOnlyList<string>? PolicyExtracts = null,
     /// <summary>LLM-generated policy prose; when set, <see cref="NdActionPlanEmbedNote.Build"/> embeds this instead of the raw action plan.</summary>
-    string? GeneratedEmbedBody = null);
+    string? GeneratedEmbedBody = null,
+    /// <summary>Gap number on the clause this action closes (for the document's embed history).</summary>
+    int GapIndex = 0);
 
 /// <summary>One target document's embed job: every resolved action that traced back to it, grouped so
 /// the embedders can batch everything landing on the same page/anchor into one inserted block.</summary>
@@ -46,12 +48,17 @@ public static class NdActionPlanEmbedNote
         return BuildLegacyActionPlanNote(t);
     }
 
-    /// <summary>Short policy fallback when the finalize LLM is unavailable.</summary>
+    /// <summary>Policy fallback when the finalize LLM is unavailable. AI actions read
+    /// <c>Amend &lt;section&gt; to include: "&lt;draft policy wording&gt;"</c>, so the quoted draft wording is
+    /// the policy text itself; otherwise the full action. Never shortened.</summary>
     public static string BuildLegacyPolicyFallback(NdActionPlanEmbedTarget t)
     {
         var action = CleanOneLine(t.ActionText);
-        if (action.Length > 480) action = action[..477] + "…";
-        return action;
+        var quoted = System.Text.RegularExpressions.Regex.Match(
+            action,
+            @"include[^:]{0,40}:\s*[""'“‘](?<text>.{40,})[""'”’]\s*\.?\s*$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+        return quoted.Success ? quoted.Groups["text"].Value.Trim() : action;
     }
 
     private static string BuildFromGeneratedPolicy(NdActionPlanEmbedTarget t, string body)

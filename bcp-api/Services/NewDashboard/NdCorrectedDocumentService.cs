@@ -275,6 +275,17 @@ public class NdCorrectedDocumentService(
             generatedFromRunId = runId.ToString(),
             generatedFromDocumentId = source.Id.ToString(),
             embeddedClauses = embeddedJob?.Targets.Select(t => t.ClauseNo).Distinct().ToList() ?? [],
+            embeds = embeddedJob?.Targets.Select(t => new
+            {
+                clauseNo = t.ClauseNo,
+                clauseTitle = t.ClauseTitle,
+                gapIndex = t.GapIndex,
+                action = t.ActionText,
+                page = t.Page,
+                embeddedText = t.GeneratedEmbedBody,
+                resolvedBy = t.ResolvedByName,
+                resolvedAt = t.ResolvedAt,
+            }).ToList(),
             at = DateTimeOffset.UtcNow,
         });
         entries.Add(entry);

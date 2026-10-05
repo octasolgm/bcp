@@ -1038,6 +1038,8 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   formatBytes = formatBytes;
   docFormatLabel = catalogDocumentFormatLabel;
   docVersionLabel = internalDocVersionLabel;
+  /** Finalized copy whose embedded-action list is expanded in the table. */
+  expandedEmbedsDocId: string | null = null;
 
   docPageMeta(doc: InternalDocument): string {
     return catalogPdfPageLabel(doc.pageCount, this.isParsingDoc(doc));

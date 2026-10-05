@@ -403,6 +403,9 @@ public abstract class ChatCompletionsClientBase(
         return PostChatAsync(prompt, model, ct);
     }
 
+    /// <summary>Below this a reasoning model can't think and answer, so a 402 retry isn't worth it.</summary>
+    private const int MinAffordableMaxTokens = 12000;
+
     private async Task<string> PostChatAsync(string prompt, string model, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(ApiKey))
@@ -419,16 +422,44 @@ public abstract class ChatCompletionsClientBase(
 
         var http = httpFactory.CreateClient(GetType().Name);
         var url = $"{BaseUrl.TrimEnd('/')}/chat/completions";
-        using var req = new HttpRequestMessage(HttpMethod.Post, url)
-        {
-            Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"),
-        };
-        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiKey);
-        foreach (var (key, value) in ExtraHeaders())
-            req.Headers.TryAddWithoutValidation(key, value);
 
-        var res = await http.SendAsync(req, ct);
-        var text = await res.Content.ReadAsStringAsync(ct);
+        async Task<(HttpResponseMessage Res, string Text)> SendAsync()
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"),
+            };
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ApiKey);
+            foreach (var (key, value) in ExtraHeaders())
+                req.Headers.TryAddWithoutValidation(key, value);
+            var r = await http.SendAsync(req, ct);
+            return (r, await r.Content.ReadAsStringAsync(ct));
+        }
+
+        var (res, text) = await SendAsync();
+
+        // OpenRouter pre-authorises max_tokens against the account balance and answers 402 "...can only
+        // afford N" when the balance can't cover the full cap. Retry once with what the balance covers,
+        // as long as that still leaves a usable budget; otherwise surface the credit problem clearly.
+        if (res.StatusCode == System.Net.HttpStatusCode.PaymentRequired)
+        {
+            var afford = System.Text.RegularExpressions.Regex.Match(text, @"can only afford (\d+)");
+            if (afford.Success && int.TryParse(afford.Groups[1].Value, out var affordable) && affordable >= MinAffordableMaxTokens)
+            {
+                var reduced = affordable - 256;
+                logger.LogWarning(
+                    "{Label}: balance cannot cover max_tokens {Requested}; retrying with {Reduced}. Top up the {Label} account to restore the full budget.",
+                    label, body["max_tokens"], reduced, label);
+                body["max_tokens"] = reduced;
+                res.Dispose();
+                (res, text) = await SendAsync();
+            }
+        }
+
+        using var _ = res;
+        if (res.StatusCode == System.Net.HttpStatusCode.PaymentRequired)
+            throw new HttpRequestException(
+                $"{label} account is out of credit (402). Top up the {label} balance and run again. Details: {text[..Math.Min(300, text.Length)]}");
         if (!res.IsSuccessStatusCode)
             throw new HttpRequestException($"{label} API error ({res.StatusCode}): {text[..Math.Min(300, text.Length)]}");
 
@@ -496,9 +527,10 @@ public class MoonshotLlmClient(IHttpClientFactory httpFactory, IConfiguration co
             : new Dictionary<string, object?>();
 
     // K3's reasoning tokens count against max_tokens, so a low cap can cut the answer off mid-JSON on a
-    // long clause. This is only a ceiling (billing is for tokens actually generated); K3's own output
-    // limit on OpenRouter is ~943k, so 128k leaves ample room for high-effort reasoning plus the answer.
-    internal const int KimiMaxTokens = 131072;
+    // long clause. Billing is for tokens actually generated, BUT OpenRouter pre-authorises the full
+    // max_tokens against the account balance (402 "can only afford N" otherwise), so the cap must stay
+    // affordable; ChatCompletionsClientBase also retries a 402 with the affordable amount.
+    internal const int KimiMaxTokens = 65536;
 }
 
 /// <summary>DeepSeek (OpenAI-compatible API).</summary>

@@ -185,6 +185,7 @@ public class InternalDocumentsController(
                     ? grName
                     : null,
                 isGapEvidence,
+                finalizeEmbeds = isGapEvidence ? null : LatestFinalizeEmbeds(d.HistoryJson),
             });
         }
 
@@ -909,6 +910,29 @@ public class InternalDocumentsController(
     /// NdCorrectedDocumentService). It never went through a real upload, so it should not
     /// read as an unprocessed document waiting on parse/extract.
     /// </summary>
+    /// <summary>The resolved action notes embedded into this finalized copy (latest history entry that
+    /// recorded them): which clause, gap, action and page each note covers.</summary>
+    private static System.Text.Json.Nodes.JsonNode? LatestFinalizeEmbeds(string? historyJson)
+    {
+        if (string.IsNullOrEmpty(historyJson) || !historyJson.Contains("\"embeds\"", StringComparison.Ordinal))
+            return null;
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(historyJson) is not System.Text.Json.Nodes.JsonArray entries)
+                return null;
+            for (var i = entries.Count - 1; i >= 0; i--)
+            {
+                if (entries[i]?["embeds"] is System.Text.Json.Nodes.JsonArray embeds)
+                    return embeds.DeepClone();
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Malformed history: show no embed list rather than failing the whole document list.
+        }
+        return null;
+    }
+
     private static bool IsGeneratedByAnalysis(string? historyJson) =>
         !string.IsNullOrEmpty(historyJson) && historyJson.Contains("\"generatedFromRunId\"", StringComparison.Ordinal);
 

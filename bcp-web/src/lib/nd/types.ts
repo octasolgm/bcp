@@ -168,6 +168,19 @@ export type InternalDocument = {
   /** Which analysis run's finalize step generated this version, when generatedByAnalysis is true. */
   generatedFromRunId?: string | null;
   generatedFromRunName?: string | null;
+  /** Resolved action notes embedded into this finalized copy (latest generation). */
+  finalizeEmbeds?: InternalDocumentFinalizeEmbed[] | null;
+};
+
+export type InternalDocumentFinalizeEmbed = {
+  clauseNo: string;
+  clauseTitle?: string | null;
+  gapIndex?: number | null;
+  action: string;
+  page?: number | null;
+  embeddedText?: string | null;
+  resolvedBy?: string | null;
+  resolvedAt?: string | null;
 };
 
 export type InternalDocumentSectionPageBlock = {

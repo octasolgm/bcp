@@ -725,3 +725,47 @@
   border: 1px solid var(--nd-border, #e2e2e2);
   border-radius: 6px;
 }
+
+.finalize-embeds {
+  display: block;
+}
+
+.finalize-embeds-toggle {
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent, var(--text-primary));
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.finalize-embeds-list {
+  margin: 0.35rem 0 0;
+  padding: 0.4rem 0.6rem;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  font-size: 0.72rem;
+  white-space: normal;
+
+  li + li {
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
+  }
+}
+
+.finalize-embed-action,
+.finalize-embed-text {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.finalize-embed-text {
+  font-style: italic;
+}

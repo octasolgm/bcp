@@ -71,3 +71,6 @@ When a reviewer finalizes an analysis, the corrected internal document appears i
 Resolved actions in finalized files
 
 Finalized PDF and Word copies now embed resolved action plans as policy notes more reliably. If the run used only one internal document, or the AI cited a passage that appears in a specific file, those actions are written into the downloaded corrected document (PDFs add note pages after the cited page). For a run you already finalized, use Regenerate corrected documents on the analysis run row, then download the new version.
+
+Each finalized document now shows what was added to it. In the Internal Documents list, a finalized copy shows how many resolved actions were embedded; expanding it lists the clause, gap and page for each one, together with the policy wording that was inserted. Notes are now placed only in the documents the analysis cited as evidence for that clause, and when an action names a specific document, only in that document. The inserted text is written as finished policy wording rather than a copy of the action plan, and it is never cut short.
+
