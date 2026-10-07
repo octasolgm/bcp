@@ -134,6 +134,9 @@
           <th class="sortable col-date" (click)="toggleSort('created')">
             Date <span class="col-date-format">({{ dateColumnPattern }})</span> <span class="sort-indicator">{{ sortIndicator('created') }}</span>
           </th>
+          @if (showAiSetup) {
+            <th class="col-ai-setup" title="AI model, retrieval pipeline version and prompt versions used">AI setup</th>
+          }
           <th class="sortable col-maker" (click)="toggleSort('maker')">
             Submitted by <span class="sort-indicator">{{ sortIndicator('maker') }}</span>
           </th>
@@ -251,6 +254,19 @@
               <span class="date-line">{{ formatRunDateOnly(submittedDate(run)) }}</span>
               <span class="date-line time-line">{{ formatRunTimeOnly(submittedDate(run)) }}</span>
             </td>
+            @if (showAiSetup) {
+              <td class="col-ai-setup" data-label="AI setup">
+                @if (run.regulLlmModel || run.regulPipelineVersion || run.regulPromptVersions) {
+                  <div class="ai-setup">
+                    <span><span class="ai-setup-label">AI</span> {{ run.regulLlmModel || '-' }}</span>
+                    <span><span class="ai-setup-label">Pipeline</span> {{ run.regulPipelineVersion ? 'v' + run.regulPipelineVersion : '-' }}</span>
+                    <span><span class="ai-setup-label">Prompts</span> {{ run.regulPromptVersions || 'not recorded' }}</span>
+                  </div>
+                } @else {
+                  <span class="muted">-</span>
+                }
+              </td>
+            }
             <td class="col-maker" data-label="Submitted by">
               <span class="submitted-by-label">{{ submittedByCaption(run) }}</span>
               <span class="submitted-by-name" [title]="submittedByLabel(run)">{{ submittedByLabel(run) }}</span>

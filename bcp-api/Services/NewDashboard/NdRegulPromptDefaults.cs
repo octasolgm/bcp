@@ -228,6 +228,25 @@ Also give an overall_rating (strong/adequate/weak), 2-5 strengths, and 2-5 concr
     public const string JudgmentSemanticV6Label = "v6 — multi-document evidence citation & atomic decomposition";
     public const string JudgmentSemanticV7Label = "v7 — multi-document citation as a single document_reference string";
     public const string JudgmentSemanticV8Label = "v8 — covered elements, one gap per missing requirement, status/gap consistency, legal definitions";
+    public const string JudgmentSemanticV9Label = "v9 - v8 rules plus supporting regulatory context (parent, sibling and sub-clause headings)";
+
+    /// <summary>v9 system rule: how to use the supporting-context headings sent with each clause.</summary>
+    public const string SupportingContextSystemRule = """
+Supporting regulatory context - the user message includes a SUPPORTING REGULATORY CONTEXT block that lists, as headings only, the parent heading(s) of the clause being judged, the other clauses at the same level (the clause being judged is marked), and the clause's own sub-clauses. Use it only to understand the clause's scope and where its subject ends. A subject that has its own clause elsewhere in the outline (for example a separate "Predicate Offences" clause next to a "Money Laundering" clause) is judged under that clause: do not require it here unless the text of the clause being judged states it. Sub-clause headings show topics the regulation develops in its own sub-clauses; still judge only what the supplied clause text states. The headings are never requirements and never evidence: do not quote them in policy_extract and do not cite them in covered_elements, gap_description or suggested_action. If the block says no context is available, judge the clause on its text alone.
+""";
+
+    public const string JudgmentSystemPromptV9 = JudgmentSystemPromptV5 + "\n\n" + SupportingContextSystemRule;
+
+    public static string BuildJudgmentQueryTextV9(string clauseNo, string clauseText, string clauseContext) =>
+        $"""
+--- SUPPORTING REGULATORY CONTEXT (headings only: where clause {clauseNo} sits in its regulation. For scope and interpretation only - these headings are NOT requirements to judge and NOT evidence) ---
+{clauseContext}
+--- END SUPPORTING CONTEXT ---
+
+""" + "\n" + BuildJudgmentQueryTextV5(clauseNo, clauseText);
+
+    /// <summary>Inserted for {clause_context} when a clause has no outline (manual clause, no dotted number).</summary>
+    public const string NoClauseContextAvailable = "(no supporting context available for this clause)";
 
     public static string BuildJudgmentContextText(string policyContext) =>
         $"--- INTERNAL POLICY DOCUMENT EXCERPTS (retrieved as the sections most likely relevant to a clause -- they may not be the full manual, and if nothing here addresses a given clause it may still be covered elsewhere) ---\n{policyContext}\n--- END EXCERPTS ---\n\nBefore concluding non_compliant, consider whether the requirement might be implemented elsewhere in the manual under different section titles, headings, or terminology than the regulator used. If excerpts are incomplete, prefer partial with low confidence over non_compliant.";
@@ -381,6 +400,9 @@ Mark non_compliant only when no substantive equivalent for an atomic requirement
 
     public static string JudgmentUserQueryTemplateV5 =>
         BuildJudgmentQueryTextV5("{clause_no}", "{clause_text}");
+
+    public static string JudgmentUserQueryTemplateV9 =>
+        BuildJudgmentQueryTextV9("{clause_no}", "{clause_text}", "{clause_context}");
 
     public static string BuildReverseMappingContextText(IReadOnlyList<(string ClauseNo, string ClauseText)> regulatoryClauses)
     {

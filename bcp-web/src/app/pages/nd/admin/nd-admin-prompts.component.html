@@ -321,6 +321,42 @@
               </section>
             }
           </div>
+          @if (showRetrievalCacheCard && pipelineSetting) {
+            <section class="nd-card cache-card">
+              <div class="cache-card-text">
+                <h2>Retrieval pipeline version (Analysis V5)</h2>
+                <p class="nd-muted">
+                  Steps 1-6 that pick the policy sections each clause is judged against. New analyses, rerun all,
+                  clause reruns and gap evidence re-checks use the current version; each clause records the version
+                  it used, and evals keep it, so you can switch back if a version gives worse results.
+                </p>
+                @if (selectedPipelineInfo; as info) {
+                  <p class="nd-muted"><strong>{{ info.label }}:</strong> {{ info.description }}</p>
+                }
+                @if (pipelineError) {
+                  <p class="nd-error">{{ pipelineError }}</p>
+                }
+                @if (pipelineMessage) {
+                  <p class="nd-success">{{ pipelineMessage }}</p>
+                }
+              </div>
+              <div class="cache-card-actions">
+                <select class="nd-input pipeline-select" [(ngModel)]="pipelineSelected" aria-label="Pipeline version">
+                  @for (v of pipelineSetting.versions; track v.version) {
+                    <option [ngValue]="v.version">{{ v.label }}{{ v.version === pipelineSetting.current ? ' (current)' : '' }}</option>
+                  }
+                </select>
+                <button
+                  type="button"
+                  class="nd-btn-primary"
+                  [disabled]="pipelineSaving || pipelineSelected === pipelineSetting.current"
+                  (click)="savePipelineVersion()"
+                >
+                  {{ pipelineSaving ? 'Saving...' : 'Set as current' }}
+                </button>
+              </div>
+            </section>
+          }
           @if (showRetrievalCacheCard) {
             <section class="nd-card cache-card">
               <div class="cache-card-text">

@@ -270,6 +270,8 @@ builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdInternalDocumentS
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisProcessor>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulAnalysisProcessor>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdGapEvidencePrepareService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdRegulClauseContextService>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdAnalysisEvalService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdGapEvidenceOutcomeService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdGapEvidenceRerunService>();
 builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.NdLocalDocumentPayloadLoader>();
@@ -405,6 +407,18 @@ file static class StartupBootstrap
                 catch (Exception seedEx)
                 {
                     logger.LogWarning(seedEx, "Analysis prompt version seed skipped at startup.");
+                }
+                try
+                {
+                    var filled = await scope.ServiceProvider
+                        .GetRequiredService<Reguliq.Api.Services.NewDashboard.NdAnalysisEvalService>()
+                        .BackfillRunSetupAsync(CancellationToken.None);
+                    if (filled > 0)
+                        logger.LogInformation("Recorded pipeline and prompt versions on {Count} earlier analysis run(s).", filled);
+                }
+                catch (Exception fillEx)
+                {
+                    logger.LogWarning(fillEx, "Analysis setup backfill skipped at startup.");
                 }
                 try
                 {

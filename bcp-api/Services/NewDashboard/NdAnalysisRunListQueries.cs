@@ -18,6 +18,8 @@ public static class NdAnalysisRunListQueries
             RegulPipelinePhase = r.RegulPipelinePhase,
             RegulLlmProvider = r.RegulLlmProvider,
             RegulLlmModel = r.RegulLlmModel,
+            RegulPipelineVersion = r.RegulPipelineVersion,
+            RegulPromptVersions = r.RegulPromptVersions,
             Status = r.Status,
             StatusBeforeDelete = r.StatusBeforeDelete,
             DeletedAt = r.DeletedAt,

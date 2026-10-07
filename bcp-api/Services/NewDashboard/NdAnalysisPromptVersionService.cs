@@ -19,6 +19,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public const int JudgmentSemanticV6VersionNumber = 6;
     public const int JudgmentSemanticV7VersionNumber = 7;
     public const int JudgmentSemanticV8VersionNumber = 8;
+    public const int JudgmentSemanticV9VersionNumber = 9;
     public const int JudgmentFullMarkdownV2VersionNumber = 2;
 
     private static readonly string[] JudgmentPromptKeys =
@@ -117,6 +118,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
         await EnsureJudgmentSemanticV6Async(ct);
         await EnsureJudgmentSemanticV7Async(ct);
         await EnsureJudgmentSemanticV8Async(ct);
+        await EnsureJudgmentSemanticV9Async(ct);
         await EnsureJudgmentFullMarkdownV1Async(ct);
         await EnsureJudgmentFullMarkdownV2Async(ct);
     }
@@ -382,15 +384,35 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public Task EnsureJudgmentSemanticV8Async(CancellationToken ct = default) =>
         EnsureJudgmentSemanticFromV5DefaultsAsync(JudgmentSemanticV8VersionNumber, NdRegulPromptDefaults.JudgmentSemanticV8Label, ct);
 
-    private async Task EnsureJudgmentSemanticFromV5DefaultsAsync(int versionNumber, string label, CancellationToken ct)
-    {
-        var textByKey = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV5.Trim(),
-            [JudgmentUserContextKey] = NdRegulPromptDefaults.JudgmentUserContextTemplateV5.Trim(),
-            [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV5.Trim(),
-        };
+    /// <summary>v9: v8 rules plus the supporting regulatory context ({clause_context}: parent, sibling and
+    /// sub-clause headings). Insert-only; sets current when no version >= 9 exists.</summary>
+    public Task EnsureJudgmentSemanticV9Async(CancellationToken ct = default) =>
+        EnsureJudgmentSemanticVersionAsync(
+            JudgmentSemanticV9VersionNumber,
+            NdRegulPromptDefaults.JudgmentSemanticV9Label,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV9.Trim(),
+                [JudgmentUserContextKey] = NdRegulPromptDefaults.JudgmentUserContextTemplateV5.Trim(),
+                [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV9.Trim(),
+            },
+            ct);
 
+    private Task EnsureJudgmentSemanticFromV5DefaultsAsync(int versionNumber, string label, CancellationToken ct) =>
+        EnsureJudgmentSemanticVersionAsync(
+            versionNumber,
+            label,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV5.Trim(),
+                [JudgmentUserContextKey] = NdRegulPromptDefaults.JudgmentUserContextTemplateV5.Trim(),
+                [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV5.Trim(),
+            },
+            ct);
+
+    private async Task EnsureJudgmentSemanticVersionAsync(
+        int versionNumber, string label, Dictionary<string, string> textByKey, CancellationToken ct)
+    {
         var changed = false;
         foreach (var (key, text) in textByKey)
         {
@@ -511,20 +533,37 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
         return template.Replace("{policy_context}", policyContext, StringComparison.Ordinal);
     }
 
+    /// <summary>Fills the current user block 2. {clause_context} (v9+) receives the clause's supporting
+    /// regulatory context; templates without the placeholder simply do not send it.</summary>
     public async Task<string> BuildJudgmentQueryAsync(
         string clauseNo,
         string clauseText,
         string? workflowEngine = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? clauseContext = null)
     {
         var key = AnalysisWorkflowEngine.IsRegulPipelineFull(workflowEngine)
             ? JudgmentFullUserQueryKey
             : JudgmentUserQueryKey;
         var template = await GetCurrentTextAsync(key, ct);
         ValidatePromptText(key, template);
+        // {clause_context} first so a clause text that happens to contain the placeholder is never touched.
         return template
+            .Replace(
+                "{clause_context}",
+                string.IsNullOrWhiteSpace(clauseContext) ? NdRegulPromptDefaults.NoClauseContextAvailable : clauseContext,
+                StringComparison.Ordinal)
             .Replace("{clause_no}", clauseNo, StringComparison.Ordinal)
             .Replace("{clause_text}", clauseText, StringComparison.Ordinal);
+    }
+
+    /// <summary>Whether the current user block 2 sends the supporting regulatory context.</summary>
+    public async Task<bool> CurrentQueryUsesClauseContextAsync(string? workflowEngine = null, CancellationToken ct = default)
+    {
+        var key = AnalysisWorkflowEngine.IsRegulPipelineFull(workflowEngine)
+            ? JudgmentFullUserQueryKey
+            : JudgmentUserQueryKey;
+        return (await GetCurrentTextAsync(key, ct)).Contains("{clause_context}", StringComparison.Ordinal);
     }
 
     public static void ValidatePromptText(string promptKey, string text)

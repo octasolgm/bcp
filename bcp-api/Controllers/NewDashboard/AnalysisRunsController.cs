@@ -771,6 +771,8 @@ public class AnalysisRunsController(
                 t.Model,
                 t.SystemPrompt,
                 t.ContextText,
+                t.ClauseContext,
+                t.ClauseContextSent,
                 t.ChunksJson,
                 t.QueryText,
                 t.ResponseText,

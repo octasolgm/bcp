@@ -1,4 +1,4 @@
-Weekly Summary - 05 Oct 2026 to 11 Oct 2026
+﻿Weekly Summary - 05 Oct 2026 to 11 Oct 2026
 
 05 Oct 2026
 
@@ -74,9 +74,27 @@ Bug fixes
 07 Oct 2026
 
 Bug fixes
+- Startup database update failed on every restart after the clause evals table was added (raw SQL read the empty-JSON default as a placeholder), so the clause evals table and the earlier-run setup fill-in never ran; fixed, 65 earlier runs now have pipeline and prompt versions recorded
+- Analysis prompts page: the version list items on the right shrank and clipped their titles ("v9 · v9 - v8 rules plus..."); items now keep their full height
 - Regulation Documents: opening a regulation showed its chapter groups as thin empty bars with no points; the groups were shrinking to a few pixels inside the scrolling panel and their content was clipped. Groups now keep their full height, so chapters and points show again
 - Regulation Documents points panel: the coverage note and point counts now scroll with the points instead of staying fixed above them, so only the search and expand/collapse bar stays pinned and more of the list is visible
 
+Tasks
+- Regul judgment prompt v9 (system, user 1, user 2) set current: v8 rules plus a supporting regulatory context block ({clause_context}) with the clause's parent heading(s), every sibling clause at the same level (the judged clause marked) and its sub-clause headings, taken from the regulation's extracted points; the system prompt says the headings are for scope only, never requirements or evidence. Same retrieval, same AI calls, same workflow at every entry point (new analysis, rerun all, clause rerun, gap evidence re-check)
+- Supporting context is recorded on each clause's Step 7 trace (new columns clause_context, clause_context_sent), shown in the pipeline panel under Step 7, printed in the DevTools console with the clause's AI calls, and written to the API log
+- Clause evals (platform super admins, real accounts only): new workspace-scoped table nd_clause_evals replaces the first run-level eval table (dropped only if empty); "Save clauses as evals" on an analysis report saves ticked clauses, each as the next version for that clause (3.5 v1, v2, ...) with verdict, confidence, gaps, actions, covered elements, evidence, and the prompt versions (with text), pipeline version and AI model read from the clause's own AI call log; the newest saved version is current by default, one current version per clause
+- Evals page (Analysis > Evals): one row per clause with its current version, expand to see every version, view the result and prompt texts, set current, delete (deleting the current version promotes the newest remaining one)
+- "Compare with evals" on every analysis report: two columns (this analysis's clauses on the left, current clause evals on the right) with checkboxes, matching clauses pre-ticked; comparison is local and rule-based (verdict match, gap counts, gap wording overlap), no AI call and no cost
+- Analysis list: "AI setup" column (AI model, pipeline version, prompt versions) for platform super admins; analysis report header shows pipeline and prompt versions next to the AI model, read from the clause AI call log (older runs show v1 and the versions found in their log)
+- Runs now record the prompt versions of their last full judgment pass (analysis_runs.regul_prompt_versions)
+- Earlier analyses filled in at startup (once, demo runs untouched): pipeline v1 for every run that called the AI, and prompt versions from the run's AI call log, or for runs without a log the versions that were current when the run was created
+- Unit tests for the context hierarchy, prompt version matching and the comparison (11 new, all pass)
+- Retrieval pipeline versions: v1 = the pipeline as it was (expansion terms only appended to the clause text), v2 = v1 plus a second BM25 + embedding search per sub-obligation with every matched acronym/synonym swapped for its counterpart (CDD <-> customer due diligence), so sections written in the other form are found; admin setting on Analysis prompts (default and current v2); each clause's retrieval record and the run store the version used
+- Pipeline panel and DevTools console show the pipeline version, the expanded wording that was searched, and which BM25/embedding matches came from it; evals store and compare the pipeline version per clause
+- 5 new unit tests for the rewording (both directions, whole-word acronyms, synonyms, no chaining)
+
 Investigated, follow up pending
+- Checked whether query expansion reaches Steps 3 and 4: it did, but only as a few words appended to the clause, which barely moves BM25 or the embedding, so a section using only the other form (full form vs acronym) could be missed; fixed as pipeline v2 above
 - Traced the full real-account compliance analysis path (create run, confirm clauses, hybrid retrieval, one judgment call per clause, post-processing, saved status/confidence/gaps/actions) so later changes start from a written map of the current workflow
+
 

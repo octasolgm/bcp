@@ -220,6 +220,11 @@ export class NdAnalysisRunsComponent implements OnInit {
     return role === 'maker' || role === 'checker' || role === 'reviewer' || role === 'super_admin';
   }
 
+  /** AI model / pipeline / prompt versions column: platform super admins only, never demo accounts. */
+  get showAiSetup(): boolean {
+    return this.auth.isPlatformAdmin() && !this.auth.isDemoViewer();
+  }
+
   get visibleRuns(): AnalysisRunSummary[] {
     const query = this.searchQuery.trim().toLowerCase();
     let list = this.allRuns.filter((run) => {

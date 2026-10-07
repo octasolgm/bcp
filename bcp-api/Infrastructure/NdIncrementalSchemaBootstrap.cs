@@ -497,6 +497,52 @@ public static class NdIncrementalSchemaBootstrap
         """
         ALTER TABLE regul_clause_traces ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'analysis';
         """,
+        """
+        ALTER TABLE regul_clause_traces ADD COLUMN IF NOT EXISTS clause_context TEXT NULL;
+        ALTER TABLE regul_clause_traces ADD COLUMN IF NOT EXISTS clause_context_sent BOOLEAN NOT NULL DEFAULT false;
+        """,
+        """
+        ALTER TABLE analysis_runs ADD COLUMN IF NOT EXISTS regul_pipeline_version INT NULL;
+        """,
+        """
+        ALTER TABLE analysis_runs ADD COLUMN IF NOT EXISTS regul_prompt_versions TEXT NULL;
+        """,
+        // The first, run-level eval table (never used) was replaced by clause evals; dropped only if empty.
+        """
+        DO $$
+        BEGIN
+          IF to_regclass('nd_analysis_evals') IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM nd_analysis_evals) THEN
+            DROP TABLE nd_analysis_evals;
+          END IF;
+        END $$;
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS nd_clause_evals (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          clause_no TEXT NOT NULL,
+          clause_key TEXT NOT NULL,
+          clause_title TEXT NOT NULL DEFAULT '',
+          clause_text TEXT NOT NULL DEFAULT '',
+          regulation_document_id UUID NULL,
+          regulation_name TEXT NULL,
+          version_number INT NOT NULL,
+          is_current BOOLEAN NOT NULL DEFAULT false,
+          notes TEXT NULL,
+          source_run_id UUID NULL,
+          source_run_name TEXT NOT NULL DEFAULT '',
+          llm_provider TEXT NULL,
+          llm_model TEXT NULL,
+          pipeline_version INT NULL,
+          overall_status TEXT NOT NULL DEFAULT '',
+          gap_count INT NOT NULL DEFAULT 0,
+          prompt_versions_json TEXT NOT NULL DEFAULT '[]',
+          result_json TEXT NOT NULL DEFAULT '{{}}',
+          created_by UUID NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_nd_clause_evals_key ON nd_clause_evals (clause_key, version_number DESC);
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

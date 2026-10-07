@@ -306,6 +306,14 @@ public class NdAnalysisRun : ITenantScoped
     [Column("regul_llm_model")]
     public string? RegulLlmModel { get; set; }
 
+    /// <summary>Hybrid retrieval pipeline version the run's last full retrieval used (NdRegulPipelineVersions).</summary>
+    [Column("regul_pipeline_version")]
+    public int? RegulPipelineVersion { get; set; }
+
+    /// <summary>Judgment prompt versions the run's last full judgment pass used, e.g. "system v9, user 1 v9, user 2 v9".</summary>
+    [Column("regul_prompt_versions")]
+    public string? RegulPromptVersions { get; set; }
+
     /// <summary>forward | reverse | qualitative | done</summary>
     [Column("regul_pipeline_phase")]
     public string? RegulPipelinePhase { get; set; }

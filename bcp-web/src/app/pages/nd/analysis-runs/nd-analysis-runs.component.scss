@@ -414,3 +414,24 @@
   border-radius: var(--radius-sm);
   background: var(--bg-muted);
 }
+
+.col-ai-setup {
+  min-width: 11rem;
+}
+
+.ai-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.ai-setup-label {
+  display: inline-block;
+  min-width: 3.6rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}

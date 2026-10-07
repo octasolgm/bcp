@@ -1,0 +1,211 @@
+<div class="ev-backdrop" (click)="closed.emit()" aria-hidden="true"></div>
+<aside class="ev-drawer" role="dialog" aria-modal="true" aria-labelledby="eval-drawer-title">
+  <header class="ev-head">
+    <div class="ev-head-copy">
+      <p class="ev-eyebrow">Clause evals</p>
+      <h2 id="eval-drawer-title">{{ runName || 'This analysis' }}</h2>
+      <div class="ev-tabs" role="tablist">
+        <button type="button" role="tab" [class.active]="mode === 'compare'" [attr.aria-selected]="mode === 'compare'" (click)="setMode('compare')">
+          Compare with evals
+        </button>
+        <button type="button" role="tab" [class.active]="mode === 'save'" [attr.aria-selected]="mode === 'save'" (click)="setMode('save')">
+          Save clauses as evals
+        </button>
+      </div>
+    </div>
+    <button type="button" class="ev-close" (click)="closed.emit()" aria-label="Close">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+        <path d="M5 5l10 10M15 5L5 15" />
+      </svg>
+    </button>
+  </header>
+
+  <div class="ev-body">
+    @if (error) {
+      <p class="ev-error">{{ error }}</p>
+    }
+    @if (loading) {
+      <p class="ev-muted">Loading...</p>
+    } @else if (mode === 'save') {
+      <section class="ev-card">
+        <p class="ev-help">
+          Tick the clauses whose results you trust. Each is saved as the next version of that clause's eval (for example
+          3.5 v2), with its verdict, gaps, actions and evidence, and the prompt versions, pipeline version and AI model
+          that produced it.
+        </p>
+        <div class="ev-col-tools">
+          <button type="button" class="ev-mini" (click)="setAllSave(true)">Tick all</button>
+          <button type="button" class="ev-mini" (click)="setAllSave(false)">Clear</button>
+        </div>
+        <div class="ev-pick-list">
+          @for (c of runClauses; track c.clauseNo) {
+            <label class="ev-pick" [class.disabled]="!c.overallStatus">
+              <input type="checkbox" [checked]="saveChecked.has(c.clauseNo)" [disabled]="!c.overallStatus" (change)="toggleSave(c)" />
+              <span class="ev-pick-main">
+                <strong>{{ c.clauseNo }}</strong> {{ c.clauseTitle }}
+                <span class="ev-pick-sub">
+                  {{ c.gapCount }} gap{{ c.gapCount === 1 ? '' : 's' }}
+                  @if (c.overallStatus) { · will be saved as v{{ nextVersion(c) }} } @else { · no AI result yet }
+                </span>
+              </span>
+              <span class="nd-badge nd-badge-{{ statusTone(c.overallStatus) }}">{{ statusLabel(c.overallStatus) }}</span>
+            </label>
+          }
+        </div>
+        <label class="ev-field">
+          <span>Notes (optional)</span>
+          <textarea class="nd-input" rows="2" [(ngModel)]="saveNotes" placeholder="Why these results are the reference"></textarea>
+        </label>
+        <label class="ev-check">
+          <input type="checkbox" [(ngModel)]="saveAsCurrent" />
+          Make each saved version the current eval for its clause
+        </label>
+        <div class="ev-actions">
+          <button type="button" class="nd-btn-primary" [disabled]="saving || saveChecked.size === 0" (click)="save()">
+            {{ saving ? 'Saving...' : 'Save ' + saveChecked.size + ' clause' + (saveChecked.size === 1 ? '' : 's') + ' as eval' }}
+          </button>
+          <a routerLink="/nd/evals" class="ev-link">Open evals</a>
+        </div>
+        @if (savedMessage) {
+          <p class="ev-success">{{ savedMessage }}</p>
+        }
+      </section>
+    } @else {
+      <p class="ev-method">
+        Compared locally, without AI and at no cost: verdicts are compared directly, gaps by how much of their wording
+        overlaps.
+      </p>
+      <div class="ev-columns">
+        <section class="ev-col">
+          <div class="ev-col-head">
+            <h3>This analysis</h3>
+            <div class="ev-col-tools">
+              <button type="button" class="ev-mini" (click)="setAllLeft(true)">All</button>
+              <button type="button" class="ev-mini" (click)="setAllLeft(false)">None</button>
+            </div>
+          </div>
+          @for (c of runClauses; track c.clauseNo) {
+            <label class="ev-pick">
+              <input type="checkbox" [checked]="leftChecked.has(c.clauseNo)" (change)="toggleLeft(c)" />
+              <span class="ev-pick-main">
+                <strong>{{ c.clauseNo }}</strong> {{ c.clauseTitle }}
+                <span class="ev-pick-sub">
+                  {{ statusLabel(c.overallStatus) }} · {{ c.gapCount }} gap{{ c.gapCount === 1 ? '' : 's' }}
+                  · pipeline {{ c.pipelineVersion ? 'v' + c.pipelineVersion : '-' }}
+                  @if (!hasEval(c)) { · <em>no current eval</em> }
+                </span>
+              </span>
+            </label>
+          } @empty {
+            <p class="ev-muted">This analysis has no clauses.</p>
+          }
+        </section>
+        <section class="ev-col">
+          <div class="ev-col-head">
+            <h3>Current evals</h3>
+            <div class="ev-col-tools">
+              <button type="button" class="ev-mini" (click)="setAllRight(true)">All</button>
+              <button type="button" class="ev-mini" (click)="setAllRight(false)">None</button>
+            </div>
+          </div>
+          @for (e of currentEvals; track e.id) {
+            <label class="ev-pick">
+              <input type="checkbox" [checked]="rightChecked.has(e.id)" (change)="toggleRight(e)" />
+              <span class="ev-pick-main">
+                <strong>{{ e.clauseNo }}</strong> v{{ e.versionNumber }} {{ e.clauseTitle }}
+                <span class="ev-pick-sub">
+                  {{ statusLabel(e.overallStatus) }} · {{ e.gapCount }} gap{{ e.gapCount === 1 ? '' : 's' }}
+                  · {{ e.regulationName || 'regulation unknown' }} · saved {{ formatDate(e.createdAt) }}
+                </span>
+              </span>
+            </label>
+          } @empty {
+            <p class="ev-muted">No clause evals yet. Use "Save clauses as evals" on an analysis you trust.</p>
+          }
+        </section>
+      </div>
+      <div class="ev-actions">
+        <button type="button" class="nd-btn-primary" [disabled]="!canCompare" (click)="compare()">
+          {{ comparing ? 'Comparing...' : 'Compare ' + leftChecked.size + ' clause' + (leftChecked.size === 1 ? '' : 's') + ' with ' + rightChecked.size + ' eval' + (rightChecked.size === 1 ? '' : 's') }}
+        </button>
+      </div>
+
+      @if (comparison) {
+        @let c = comparison;
+        <section class="ev-score">
+          <div class="ev-stat">
+            <span class="ev-stat-value">{{ pct(c.summary.statusAgreementPct) }}</span>
+            <span class="ev-stat-label">Same verdict<br />{{ c.summary.statusMatches }} / {{ c.summary.clausesCompared }} clauses</span>
+          </div>
+          <div class="ev-stat">
+            <span class="ev-stat-value">{{ pct(c.summary.avgGapOverlapPct) }}</span>
+            <span class="ev-stat-label">Gap wording overlap<br />average per clause</span>
+          </div>
+          <div class="ev-stat">
+            <span class="ev-stat-value">{{ c.summary.runGapTotal }} <small>vs {{ c.summary.evalGapTotal }}</small></span>
+            <span class="ev-stat-label">Gaps found<br />this analysis vs evals</span>
+          </div>
+        </section>
+        <p class="ev-counts">
+          This analysis: AI {{ c.run.setup.llmModel || 'unknown' }} · pipeline {{ c.run.setup.pipelineVersions || 'unknown' }}
+          · prompts {{ c.run.setup.promptVersions || 'unknown' }}
+        </p>
+        <p class="ev-counts">
+          {{ c.summary.unchanged }} same · {{ c.summary.changed }} gaps changed · {{ c.summary.moreCompliant }} more compliant ·
+          {{ c.summary.lessCompliant }} less compliant
+          @if (c.summary.onlyInEval) { · {{ c.summary.onlyInEval }} eval(s) without a ticked clause }
+          @if (c.summary.onlyInRun) { · {{ c.summary.onlyInRun }} clause(s) without a ticked eval }
+        </p>
+
+        <div class="ev-filter">
+          <button type="button" [class.active]="filter === 'all'" (click)="filter = 'all'">All ({{ c.clauses.length }})</button>
+          <button type="button" [class.active]="filter === 'changed'" (click)="filter = 'changed'">Changed only</button>
+        </div>
+
+        @for (row of visibleRows; track row.clauseNo + (row.evalId ?? '')) {
+          <section class="ev-row">
+            <button type="button" class="ev-row-head" [attr.aria-expanded]="isOpen(row)" (click)="toggle(row)">
+              <span class="ev-chevron" [class.open]="isOpen(row)">›</span>
+              <span class="ev-row-title">
+                <strong>{{ row.clauseNo }}</strong> {{ row.clauseTitle }}
+                @if (row.evalVersion) { <span class="ev-ver">vs eval v{{ row.evalVersion }}</span> }
+              </span>
+              <span class="nd-badge nd-badge-{{ changeTone(row.change) }}">{{ changeLabel(row.change) }}</span>
+            </button>
+            <div class="ev-row-sub">
+              Eval {{ statusLabel(row.evalStatus) }} -> now {{ statusLabel(row.runStatus) }}
+              · gaps {{ row.evalGapCount }} -> {{ row.runGapCount }}
+              @if (row.gapOverlapPct != null) { · overlap {{ pct(row.gapOverlapPct) }} }
+              · confidence {{ confidence(row.evalConfidence) }} -> {{ confidence(row.runConfidence) }}
+            </div>
+            @if (isOpen(row)) {
+              <div class="ev-sides">
+                <div class="ev-side">
+                  <p class="ev-side-head">This analysis</p>
+                  <p class="ev-side-meta">
+                    {{ row.runModel || '-' }} · pipeline {{ row.runPipelineVersion ? 'v' + row.runPipelineVersion : '-' }} · {{ row.runPrompts || 'prompts unknown' }}
+                    @if (row.runClauseContextSent) { · supporting context sent }
+                  </p>
+                  <p class="ev-side-label">Gaps</p>
+                  @for (g of row.runGaps; track $index) { <p class="ev-item">{{ g }}</p> } @empty { <p class="ev-item ev-none">None</p> }
+                  <p class="ev-side-label">Actions</p>
+                  @for (a of row.runActions; track $index) { <p class="ev-item">{{ a }}</p> } @empty { <p class="ev-item ev-none">None</p> }
+                </div>
+                <div class="ev-side">
+                  <p class="ev-side-head">Eval{{ row.evalVersion ? ' v' + row.evalVersion : '' }}</p>
+                  <p class="ev-side-meta">
+                    {{ row.evalModel || '-' }} · pipeline {{ row.evalPipelineVersion ? 'v' + row.evalPipelineVersion : '-' }} · {{ row.evalPrompts || 'prompts unknown' }}
+                  </p>
+                  <p class="ev-side-label">Gaps</p>
+                  @for (g of row.evalGaps; track $index) { <p class="ev-item">{{ g }}</p> } @empty { <p class="ev-item ev-none">None</p> }
+                  <p class="ev-side-label">Actions</p>
+                  @for (a of row.evalActions; track $index) { <p class="ev-item">{{ a }}</p> } @empty { <p class="ev-item ev-none">None</p> }
+                </div>
+              </div>
+            }
+          </section>
+        }
+      }
+    }
+  </div>
+</aside>

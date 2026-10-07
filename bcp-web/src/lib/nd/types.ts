@@ -268,6 +268,10 @@ export type AnalysisRunSummary = {
   regulReverseSectionFailed?: number;
   regulLlmProvider?: string | null;
   regulLlmModel?: string | null;
+  /** Retrieval pipeline version of the run's last full retrieval (hybrid engine). */
+  regulPipelineVersion?: number | null;
+  /** Judgment prompt versions of the run's last full judgment pass, e.g. "system v9, user 1 v9, user 2 v9". */
+  regulPromptVersions?: string | null;
   runningPoints?: number;
   isActive?: boolean;
 };
@@ -317,6 +321,8 @@ export type ResultsData = {
     workflowEngine?: string | null;
     regulLlmProvider?: string | null;
     regulLlmModel?: string | null;
+    regulPipelineVersion?: number | null;
+    regulPromptVersions?: string | null;
     regulPipelinePhase?: string | null;
     totalPointsCount: number;
     processedPointsCount: number;

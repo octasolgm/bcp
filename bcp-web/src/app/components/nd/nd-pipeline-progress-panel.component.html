@@ -160,6 +160,7 @@
                       <span class="clause-no">{{ clause.clauseNo }}</span>
                       <span class="clause-meta">
                         {{ clause.acronymMatches.length }} acronym · {{ clause.synonymMatches.length }} synonym
+                        · pipeline v{{ clause.pipelineVersion }}
                       </span>
                     </button>
 
@@ -217,6 +218,19 @@
                                 </button>
                               }
                             </div>
+                          }
+                        </div>
+                        <div class="expansion-group">
+                          <span class="detail-label">
+                            Expanded wording also searched in Steps 3 and 4 (pipeline v{{ clause.pipelineVersion }}):
+                          </span>
+                          @if (clause.pipelineVersion < 2) {
+                            <p class="no-matches">Pipeline v1: the expansion terms were only appended to the clause text.</p>
+                          } @else if (clause.expandedQueries.length === 0) {
+                            <p class="no-matches">No acronym or synonym in this clause, so there was no reworded search.</p>
+                          }
+                          @for (q of clause.expandedQueries; track $index) {
+                            <p class="match-preview">{{ q }}</p>
                           }
                         </div>
                       </div>
@@ -278,6 +292,9 @@
                                   <span class="match-doc">{{ match.sourceDocumentName || 'Internal document' }}</span>
                                   <span class="match-similarity">score {{ match.score }}</span>
                                 </div>
+                                @if (match.matchedVia === 'expanded') {
+                                  <p class="match-sub-obligation">found by the expanded wording (acronym / synonym swapped)</p>
+                                }
                                 @if (match.matchedSubObligation) {
                                   <p class="match-sub-obligation">via: {{ match.matchedSubObligation }}</p>
                                 }
@@ -318,6 +335,9 @@
                                   <span class="match-doc">{{ match.sourceDocumentName || 'Internal document' }}</span>
                                   <span class="match-similarity">{{ matchPercent(match.similarity) }}%</span>
                                 </div>
+                                @if (match.matchedVia === 'expanded') {
+                                  <p class="match-sub-obligation">found by the expanded wording (acronym / synonym swapped)</p>
+                                }
                                 @if (match.matchedSubObligation) {
                                   <p class="match-sub-obligation">via: {{ match.matchedSubObligation }}</p>
                                 }
@@ -419,6 +439,15 @@
                             </button>
                             @if (openTraceBlock === ctx.id + ':context') {
                               <pre class="trace-pre">{{ ctx.contextText }}</pre>
+                            }
+                            @if (ctx.clauseContext != null) {
+                              <div class="matches">
+                                <span class="detail-label">
+                                  Supporting regulatory context (parent, sibling and sub-clause headings) ·
+                                  {{ ctx.clauseContextSent ? 'sent with the clause' : 'not sent: the current prompt has no {clause_context}' }}
+                                </span>
+                                <pre class="trace-pre">{{ ctx.clauseContext }}</pre>
+                              </div>
                             }
                           }
                         } @else {

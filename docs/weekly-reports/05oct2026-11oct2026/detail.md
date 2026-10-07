@@ -80,6 +80,26 @@ Regulation points visible again
 
 Opening a regulation in Regulation Documents showed its chapters as thin empty bars instead of the extracted points. The chapters now display at full size, with their points readable and expandable as before. The extraction coverage note and point counts at the top of the panel now scroll away with the list, leaving only the search bar pinned so more points fit on screen.
 
+Wider regulatory context for each clause
+
+When the AI judges a clause, it now also sees where that clause sits in its regulation: the chapter heading above it, the titles of the other clauses in the same chapter, and the titles of any sub-clauses under it. For example, when judging "Money Laundering" it can see that "Predicate Offences" has its own clause right next to it. This helps it keep each finding inside the clause's real scope instead of asking for content that belongs to a neighbouring clause. The headings are only used for orientation; the clause text is still the only thing judged. Administrators can see exactly what context was given for each clause in the pipeline panel and the browser developer console.
+
+Evals: saved reference results per clause
+
+Administrators can now save individual clauses from any analysis as reference results, called evals. Each saved clause keeps its verdict, gaps and actions, together with the exact AI instructions, the version of the analysis pipeline and the AI model that produced it. Saving the same clause again creates a new version, and the newest one becomes the reference by default; any earlier version can be made the reference again. On every analysis report, "Compare with evals" shows the analysis's clauses next to the reference clauses, lets you choose which ones to compare, and shows how many reached the same verdict and how similar their gaps are. The comparison is done by the platform itself, with no AI involved and no cost. Saved clauses are listed on the Evals page.
+
+Analysis setup at a glance
+
+Administrators can now see, for every analysis, which AI model, analysis pipeline version and AI instruction versions were used, both in a new column on the analysis list and at the top of each analysis report.
+
+Better matching of abbreviations and synonyms
+
+When a regulation uses an abbreviation such as "CDD" and your policy writes it out in full as "customer due diligence" (or the other way round, or uses a recognised synonym), the search for relevant policy sections now runs a second time with the wording switched. Previously the alternative term was only added at the end of the search, which often was not enough to surface a policy section that used only the other form. This means fewer clauses are judged without the policy section that actually covers them.
+
+Versioned analysis pipeline
+
+The steps that select which policy sections each clause is judged against are now versioned. The previous behaviour is kept as version 1 and the improved abbreviation and synonym search is version 2, which is now in use. Administrators can switch between versions in the analysis settings, every analysis records which version it used, and saved evals include it, so any change that makes results worse can be undone.
+
 Being worked on
 
 The full path from starting an analysis to the saved compliance result (status, confidence, gaps, and actions) was mapped in detail for the current hybrid analysis. No product behavior changed. The map is the baseline for any later change to how clauses are judged.

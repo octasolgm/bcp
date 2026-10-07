@@ -88,6 +88,40 @@ public class SystemSettingsController(
 
     public sealed record RetrievalPromptCacheRequest(bool Enabled);
 
+    [HttpGet("regul-pipeline-version")]
+    public async Task<IActionResult> GetRegulPipelineVersion(CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                current = await regulLlmSettings.GetPipelineVersionAsync(ct),
+                versions = Services.NewDashboard.NdRegulPipelineVersions.All,
+            },
+        });
+    }
+
+    [HttpPut("regul-pipeline-version")]
+    public async Task<IActionResult> UpdateRegulPipelineVersion([FromBody] PipelineVersionRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+        if (!Services.NewDashboard.NdRegulPipelineVersions.IsKnown(body.Version))
+            return BadRequest(new { success = false, message = $"Unknown pipeline version {body.Version}." });
+        var version = await regulLlmSettings.SetPipelineVersionAsync(body.Version, profile.Id, ct);
+        return Ok(new
+        {
+            success = true,
+            data = new { current = version, versions = Services.NewDashboard.NdRegulPipelineVersions.All },
+            message = $"New analyses and re-runs now use pipeline {Services.NewDashboard.NdRegulPipelineVersions.Label(version)}.",
+        });
+    }
+
+    public sealed record PipelineVersionRequest(int Version);
+
     [HttpPut("regul-workflow-llm")]
     public async Task<IActionResult> UpdateRegulWorkflowLlm(
         [FromBody] DualVerifyLlmUpdateRequest body,

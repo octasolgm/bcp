@@ -80,7 +80,7 @@ public class NdPromptAiGenerationService(
         sb.AppendLine("Reviewers submitted the following improvement suggestions. Rewrite the base prompt so the INTENT of EVERY suggestion below is clearly reflected — integrate them naturally into the wording and structure rather than just appending a list.");
         sb.AppendLine();
         sb.AppendLine("CRITICAL RULES:");
-        sb.AppendLine("- Preserve every literal placeholder tag exactly as written (e.g. {policy_context}, {clause_no}, {clause_text}). Never remove, rename, translate, or reformat these tags.");
+        sb.AppendLine("- Preserve every literal placeholder tag exactly as written (e.g. {policy_context}, {clause_no}, {clause_text}, {clause_context}). Never remove, rename, translate, or reformat these tags.");
         sb.AppendLine("- Keep the overall purpose and tone of the base prompt intact.");
         sb.AppendLine("- Do not invent new placeholder tags.");
         sb.AppendLine();

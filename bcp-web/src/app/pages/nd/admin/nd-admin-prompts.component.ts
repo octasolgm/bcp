@@ -1,7 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { NdApiService } from '../../../services/nd/nd-api.service';
+import { NdApiService, NdPipelineVersionSetting } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { startPanelResize } from '../../shared/panel-resize';
 import type {
@@ -63,6 +63,39 @@ export class NdAdminPromptsComponent implements OnInit {
     return this.selectedWorkflow.includes('Analysis V3');
   }
 
+  pipelineSetting: NdPipelineVersionSetting | null = null;
+  pipelineSelected = 0;
+  pipelineSaving = false;
+  pipelineError = '';
+  pipelineMessage = '';
+
+  async loadPipelineVersion(): Promise<void> {
+    const res = await this.api.getRegulPipelineVersion();
+    if (res.success && res.data) {
+      this.pipelineSetting = res.data;
+      this.pipelineSelected = res.data.current;
+    }
+  }
+
+  async savePipelineVersion(): Promise<void> {
+    this.pipelineSaving = true;
+    this.pipelineError = '';
+    this.pipelineMessage = '';
+    const res = await this.api.updateRegulPipelineVersion(Number(this.pipelineSelected));
+    this.pipelineSaving = false;
+    if (!res.success || !res.data) {
+      this.pipelineError = res.message ?? 'Could not save the pipeline version. Please try again.';
+      return;
+    }
+    this.pipelineSetting = res.data;
+    this.pipelineSelected = res.data.current;
+    this.pipelineMessage = `New analyses and re-runs now use pipeline v${res.data.current}.`;
+  }
+
+  get selectedPipelineInfo() {
+    return this.pipelineSetting?.versions.find((v) => v.version === Number(this.pipelineSelected)) ?? null;
+  }
+
   async loadRetrievalCache(): Promise<void> {
     const res = await this.api.getRegulRetrievalPromptCache();
     if (res.success && res.data) this.retrievalCacheEnabled = res.data.enabled;
@@ -91,7 +124,7 @@ export class NdAdminPromptsComponent implements OnInit {
       if (!Number.isNaN(n)) this.versionsPanelPct = Math.min(45, Math.max(18, n));
     }
     await this.auth.refreshProfile();
-    await Promise.all([this.load(), this.loadLlmProviders(), this.loadRetrievalCache()]);
+    await Promise.all([this.load(), this.loadLlmProviders(), this.loadRetrievalCache(), this.loadPipelineVersion()]);
   }
 
   async loadLlmProviders(): Promise<void> {
@@ -316,7 +349,7 @@ export class NdAdminPromptsComponent implements OnInit {
       return 'At runtime, {policy_context} is replaced with complete parsed markdown for every attached internal file (V4).';
     }
     if (prompt.key === 'regul_judgment_user_query') {
-      return 'At runtime, {clause_no} and {clause_text} are replaced with the regulatory clause being judged.';
+      return 'At runtime, {clause_no} and {clause_text} are replaced with the regulatory clause being judged. Optional {clause_context} (v9+) is replaced with the supporting regulatory context: parent, sibling and sub-clause headings.';
     }
     return null;
   }

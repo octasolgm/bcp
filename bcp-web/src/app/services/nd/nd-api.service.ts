@@ -141,6 +141,10 @@ export type NdClauseTrace = {
   model: string | null;
   systemPrompt: string | null;
   contextText: string | null;
+  /** Step 7: the clause's supporting regulatory context (parent, sibling and sub-clause headings). */
+  clauseContext?: string | null;
+  /** Step 7: whether that context was sent to the AI (the current prompt has {clause_context}). */
+  clauseContextSent?: boolean;
   chunksJson: string | null;
   queryText: string | null;
   responseText: string | null;
@@ -150,6 +154,145 @@ export type NdClauseTrace = {
   charsSent: number | null;
   durationMs: number | null;
   createdAt: string;
+};
+
+export type NdPipelineVersionInfo = { version: number; label: string; description: string };
+
+export type NdPipelineVersionSetting = { current: number; versions: NdPipelineVersionInfo[] };
+
+export type NdEvalPromptVersionRef = { promptKey: string; versionNumber: number; label: string };
+
+export type NdEvalPromptVersion = NdEvalPromptVersionRef & { promptText: string };
+
+/** One saved clause eval version (3.5 v2 ...). */
+export type NdClauseEvalSummary = {
+  id: string;
+  clauseNo: string;
+  clauseKey: string;
+  clauseTitle: string;
+  regulationName: string | null;
+  versionNumber: number;
+  isCurrent: boolean;
+  notes: string | null;
+  sourceRunId: string | null;
+  sourceRunName: string;
+  llmModel: string | null;
+  pipelineVersion: number | null;
+  /** "system v9, user 1 v9, user 2 v9" */
+  promptVersions: string | null;
+  overallStatus: string;
+  gapCount: number;
+  createdAt: string;
+  createdByName: string | null;
+};
+
+export type NdEvalClause = {
+  clauseNo: string;
+  clauseTitle: string;
+  clauseText: string;
+  regulationName: string | null;
+  findingStatus: string;
+  error: string | null;
+  overallStatus: string;
+  confidence: number;
+  interpretation: string;
+  coveredElements: string;
+  documentReference: string;
+  policyExtract: string[];
+  gapDescription: string;
+  suggestedAction: string;
+  gaps: string[];
+  actions: string[];
+  provider: string | null;
+  model: string | null;
+  promptVersions: NdEvalPromptVersionRef[];
+  clauseContextSent: boolean;
+  pipelineVersion: number | null;
+  judgedAt: string | null;
+};
+
+export type NdClauseEvalDetail = {
+  eval: NdClauseEvalSummary;
+  promptVersions: NdEvalPromptVersion[];
+  result: NdEvalClause;
+};
+
+/** AI setup that produced an analysis: model(s), retrieval pipeline version(s), prompt versions. */
+export type NdRunAiSetup = {
+  llmModel: string | null;
+  pipelineVersions: string | null;
+  promptVersions: string | null;
+};
+
+export type NdRunEvalClause = {
+  clauseNo: string;
+  clauseTitle: string;
+  regulationName: string | null;
+  clauseKey: string;
+  overallStatus: string;
+  confidence: number;
+  gapCount: number;
+  model: string | null;
+  pipelineVersion: number | null;
+  promptVersions: string | null;
+  findingStatus: string;
+};
+
+export type NdRunEvalClauses = { setup: NdRunAiSetup; clauses: NdRunEvalClause[] };
+
+/** same | gaps_changed | more_compliant | less_compliant | missing_in_run | new_in_run | not_judged */
+export type NdEvalChange = string;
+
+export type NdEvalClauseComparison = {
+  clauseNo: string;
+  clauseTitle: string;
+  inEval: boolean;
+  inRun: boolean;
+  evalStatus: string | null;
+  runStatus: string | null;
+  statusMatch: boolean;
+  evalConfidence: number | null;
+  runConfidence: number | null;
+  evalGapCount: number;
+  runGapCount: number;
+  gapOverlapPct: number | null;
+  evalGaps: string[];
+  runGaps: string[];
+  evalActions: string[];
+  runActions: string[];
+  evalPrompts: string;
+  runPrompts: string;
+  evalModel: string | null;
+  runModel: string | null;
+  evalPipelineVersion: number | null;
+  runPipelineVersion: number | null;
+  runClauseContextSent: boolean;
+  change: NdEvalChange;
+  evalId: string | null;
+  evalVersion: number | null;
+};
+
+export type NdEvalComparison = {
+  /** Always "local": rule-based comparison, no AI call. */
+  method: string;
+  run: { id: string; name: string; setup: NdRunAiSetup };
+  summary: {
+    clausesCompared: number;
+    statusMatches: number;
+    statusAgreementPct: number;
+    gapCountMatches: number;
+    gapCountAgreementPct: number;
+    avgGapOverlapPct: number | null;
+    evalGapTotal: number;
+    runGapTotal: number;
+    onlyInEval: number;
+    onlyInRun: number;
+    moreCompliant: number;
+    lessCompliant: number;
+    changed: number;
+    unchanged: number;
+  };
+  clauses: NdEvalClauseComparison[];
 };
 
 export type NdOcrEngine ='tesseract' | 'rapidocr' | 'docling-light' | 'docling-glm' | 'azure-di';
@@ -938,6 +1081,14 @@ export class NdApiService {
     return this.request<{ enabled: boolean }>('GET', '/nd/admin/settings/regul-retrieval-prompt-cache');
   }
 
+  getRegulPipelineVersion() {
+    return this.request<NdPipelineVersionSetting>('GET', '/nd/admin/settings/regul-pipeline-version');
+  }
+
+  updateRegulPipelineVersion(version: number) {
+    return this.request<NdPipelineVersionSetting>('PUT', '/nd/admin/settings/regul-pipeline-version', { version });
+  }
+
   updateRegulRetrievalPromptCache(enabled: boolean) {
     return this.request<{ enabled: boolean }>('PUT', '/nd/admin/settings/regul-retrieval-prompt-cache', { enabled });
   }
@@ -1708,6 +1859,39 @@ export class NdApiService {
   getClauseTraces(runId: string, clauseNo?: string) {
     const q = clauseNo ? `?clauseNo=${encodeURIComponent(clauseNo)}` : '';
     return this.request<NdClauseTrace[]>('GET', `/nd/analysis-runs/${runId}/clause-traces${q}`);
+  }
+
+  // ---- Clause evals (platform super admin): saved reference clause results and comparisons ----
+
+  listEvals() {
+    return this.request<NdClauseEvalSummary[]>('GET', '/nd/evals');
+  }
+
+  getEval(evalId: string) {
+    return this.request<NdClauseEvalDetail>('GET', `/nd/evals/${evalId}`);
+  }
+
+  /** Saves the chosen clauses of an analysis as clause evals (a new version each, current by default). */
+  saveClauseEvals(body: { runId: string; clauseNos: string[]; notes?: string; setCurrent: boolean }) {
+    return this.request<NdClauseEvalSummary[]>('POST', '/nd/evals', body);
+  }
+
+  setCurrentEval(evalId: string) {
+    return this.request<unknown>('POST', `/nd/evals/${evalId}/set-current`);
+  }
+
+  deleteEval(evalId: string) {
+    return this.request<unknown>('DELETE', `/nd/evals/${evalId}`);
+  }
+
+  /** An analysis's clauses with their AI setup (left column of the compare view, report header details). */
+  getRunEvalClauses(runId: string) {
+    return this.request<NdRunEvalClauses>('GET', `/nd/evals/runs/${runId}`);
+  }
+
+  /** Local, rule-based comparison (no AI call) of chosen analysis clauses with chosen clause evals. */
+  compareClausesWithEvals(body: { runId: string; clauseNos: string[]; evalIds: string[] }) {
+    return this.request<NdEvalComparison>('POST', '/nd/evals/compare', body);
   }
 
   /** Full text of retrieved sections (V5 pipeline panel), keyed by section id. */

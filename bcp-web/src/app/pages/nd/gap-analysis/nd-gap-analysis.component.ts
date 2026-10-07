@@ -41,6 +41,7 @@ import {
 } from '../../../components/nd/nd-report-summary-stack.component';
 import { NdClauseRailCardComponent } from '../../../components/nd/nd-clause-rail-card.component';
 import { NdEvidenceHistoryDrawerComponent } from '../../../components/nd/nd-evidence-history-drawer.component';
+import { NdEvalCompareDrawerComponent, NdEvalDrawerMode } from '../../../components/nd/nd-eval-compare-drawer.component';
 import {
   buildSeededActionPlansForGap,
   type SeededActionPlan,
@@ -116,7 +117,7 @@ import {
 } from '../../../services/reguliq-store';
 import { analysisPointToReportItem } from '../../../../lib/nd/analysis-point-mapper';
 import type { AnalysisPoint, PointGapAttachment, PointSnapshot } from '../../../../lib/nd/types';
-import { NdApiService } from '../../../services/nd/nd-api.service';
+import { NdApiService, NdRunAiSetup } from '../../../services/nd/nd-api.service';
 import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
@@ -195,7 +196,7 @@ const PREP_QUEUE_GRACE_MS = 10 * 60_000;
 @Component({
   selector: 'app-nd-gap-analysis',
   standalone: true,
-  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent],
+  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent, NdEvalCompareDrawerComponent],
   templateUrl: './nd-gap-analysis.component.html',
   styleUrl: './nd-gap-analysis.component.scss',
 })
@@ -365,6 +366,48 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   evidenceReviewsFor(pointId: string): GapEvidenceReview[] {
     return this.evidenceReviewsByPointId.get(pointId) ?? EMPTY_EVIDENCE_REVIEWS;
+  }
+
+  // ----------------------------------------------------- evals
+
+  /** Evals drawer (compare with an eval / save as eval); null when closed. */
+  evalDrawerMode: NdEvalDrawerMode | null = null;
+
+  /** Evals are a platform-admin tool for real Regul analyses (never shown to demo accounts). */
+  get canUseEvals(): boolean {
+    return !this.embedMode && !!this.ndRunId && this.isNdRegulWorkflow
+      && this.auth.isPlatformAdmin() && !this.auth.isDemoViewer();
+  }
+
+  openEvalDrawer(mode: NdEvalDrawerMode): void {
+    this.evalDrawerMode = mode;
+  }
+
+  /** Prompt versions, pipeline version(s) and model actually used by this analysis's clauses (read from
+   * the AI call log), shown in the header for platform super admins. */
+  runAiSetup: NdRunAiSetup | null = null;
+
+  get showRunAiSetup(): boolean {
+    return this.auth.isPlatformAdmin() && !this.auth.isDemoViewer() && this.isNdRegulWorkflow;
+  }
+
+  /** Header values: the clause-level setup once loaded, the run's recorded values until then. */
+  get runAiSetupView(): { pipeline: string; prompts: string } | null {
+    const run = this.ndRunData?.run;
+    const pipeline =
+      this.runAiSetup?.pipelineVersions ?? (run?.regulPipelineVersion ? `v${run.regulPipelineVersion}` : null);
+    const prompts = this.runAiSetup?.promptVersions ?? run?.regulPromptVersions ?? null;
+    if (!pipeline && !prompts) return null;
+    return { pipeline: pipeline ?? '-', prompts: prompts ?? 'not recorded' };
+  }
+
+  private async loadRunAiSetup(runId: string): Promise<void> {
+    this.runAiSetup = null;
+    if (!this.auth.isPlatformAdmin() || this.auth.isDemoViewer()) return;
+    const res = await this.ndApi.getRunEvalClauses(runId);
+    if (runId !== this.ndRunId || !res.success || !res.data) return;
+    this.runAiSetup = res.data.setup;
+    this.cdr.markForCheck();
   }
 
   // ----------------------------------------------------- re-check history
@@ -3275,6 +3318,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       this.ndRunId = runId;
       this.sessionKey = `nd-run:${runId}`;
       void this.loadNdRun(runId, section, focus);
+      void this.loadRunAiSetup(runId);
       return;
     }
 

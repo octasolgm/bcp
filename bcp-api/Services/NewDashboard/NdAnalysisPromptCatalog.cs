@@ -24,7 +24,7 @@ public static class NdAnalysisPromptCatalog
             "regul_judgment_user_query",
             "Forward judgment — user block 2 (clause query)",
             "Regul workflow (Analysis V3)",
-            "Sent with each clause after block 1. Contains the regulatory clause ({clause_no}, {clause_text}) to judge against the excerpts.",
+            "Sent with each clause after block 1. Contains the regulatory clause ({clause_no}, {clause_text}) to judge against the excerpts, and optionally {clause_context} (v9+): the clause's parent, sibling and sub-clause headings as supporting context.",
             NdRegulPromptDefaults.JudgmentUserQueryTemplate),
         new(
             "dual_verify_pass1_v3",

@@ -52,6 +52,14 @@ public class NdRegulClauseTrace : ITenantScoped
     [Column("chunks_json")]
     public string? ChunksJson { get; set; }
 
+    /// <summary>Step 7: the clause's supporting regulatory context (parent, sibling and sub-clause headings).</summary>
+    [Column("clause_context")]
+    public string? ClauseContext { get; set; }
+
+    /// <summary>Step 7: whether that context was sent (the current prompt has {clause_context}).</summary>
+    [Column("clause_context_sent")]
+    public bool ClauseContextSent { get; set; }
+
     [Column("query_text")]
     public string? QueryText { get; set; }
 

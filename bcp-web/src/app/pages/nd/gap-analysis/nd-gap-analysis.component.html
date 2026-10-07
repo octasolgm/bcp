@@ -27,10 +27,24 @@
       <p class="analysis-ai-model" title="AI model that judged the clauses in this analysis">
         <span class="analysis-ai-model-label">AI model</span>
         <span class="analysis-ai-model-value">{{ ndRunLlmLabel }}</span>
+        @if (showRunAiSetup && runAiSetupView; as setup) {
+          <span class="analysis-ai-model-label">Pipeline</span>
+          <span class="analysis-ai-model-value" title="Retrieval pipeline version (Admin -> Analysis prompts)">{{ setup.pipeline }}</span>
+          <span class="analysis-ai-model-label">Prompts</span>
+          <span class="analysis-ai-model-value" title="Judgment prompt versions used for this analysis's clauses">{{ setup.prompts }}</span>
+        }
       </p>
     }
   </div>
   <div class="header-actions">
+    @if (canUseEvals) {
+      <button type="button" class="btn-secondary" title="Compare this analysis's clauses with the current clause evals (local comparison, no AI)" (click)="openEvalDrawer('compare')">
+        Compare with evals
+      </button>
+      <button type="button" class="btn-secondary" title="Save chosen clauses of this analysis as clause evals" (click)="openEvalDrawer('save')">
+        Save clauses as evals
+      </button>
+    }
     @if (!embedMode && canDeleteSession) {
       <button
         type="button"
@@ -667,6 +681,15 @@
     (openDocument)="openPdfFromNd($event)"
     (rerunFailedInRun)="onRerunFailedFromHistory($event)"
     (rerunClause)="onRerunClauseFromHistory($event)"
+  />
+}
+
+@if (evalDrawerMode && ndRunId) {
+  <app-nd-eval-compare-drawer
+    [runId]="ndRunId"
+    [runName]="ndRunData?.run?.name ?? ''"
+    [mode]="evalDrawerMode"
+    (closed)="evalDrawerMode = null"
   />
 }
 

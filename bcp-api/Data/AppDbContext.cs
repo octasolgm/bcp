@@ -49,6 +49,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdAnalysisPromptVersion> NdAnalysisPromptVersions => Set<NdAnalysisPromptVersion>();
     public DbSet<NdRegulForwardFinding> NdRegulForwardFindings => Set<NdRegulForwardFinding>();
     public DbSet<NdRegulClauseTrace> NdRegulClauseTraces => Set<NdRegulClauseTrace>();
+    public DbSet<NdClauseEval> NdClauseEvals => Set<NdClauseEval>();
     public DbSet<NdRegulInternalSection> NdRegulInternalSections => Set<NdRegulInternalSection>();
     public DbSet<NdRegulReverseMapping> NdRegulReverseMappings => Set<NdRegulReverseMapping>();
     public DbSet<NdRegulQualitativeAssessment> NdRegulQualitativeAssessments => Set<NdRegulQualitativeAssessment>();

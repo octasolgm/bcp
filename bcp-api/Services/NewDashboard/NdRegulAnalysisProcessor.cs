@@ -33,6 +33,7 @@ public class NdRegulAnalysisProcessor(
     RegulEmbeddingRetrievalService embeddingRetrieval,
     NdLocalDocumentPayloadLoader localPayloadLoader,
     NdGapEvidencePrepareService documentPrepare,
+    NdRegulClauseContextService clauseContexts,
     ILogger<NdRegulAnalysisProcessor> logger)
 {
     /// <summary>V5: every internal document must be parsed, extracted and indexed before Steps 1-6, or
@@ -425,6 +426,8 @@ public class NdRegulAnalysisProcessor(
         var cacheContext = policyBundle.UsesFullMarkdown;
 
         var promptVersionsInUse = await promptVersions.GetJudgmentPromptVersionsAsync(run.WorkflowEngine, ct);
+        run.RegulPromptVersions = NdAnalysisEvalService.DescribePromptVersions(
+            promptVersionsInUse.Select(v => new NdAnalysisEvalService.PromptVersionRef(v.PromptKey, v.VersionNumber, v.Label)));
         logger.LogInformation(
             "Regul forward phase using admin prompt versions for run {RunId}: {PromptVersions}",
             run.Id,
@@ -804,7 +807,11 @@ public class NdRegulAnalysisProcessor(
             policyContext.Length,
             policyContext.Length / 4);
         var contextBlock = await promptVersions.BuildJudgmentContextAsync(policyContext, workflowEngine, ct);
-        var queryBlock = await promptVersions.BuildJudgmentQueryAsync(clauseNo, clauseText, workflowEngine, ct);
+        // Supporting regulatory context (parent, sibling and sub-clause headings). Built for every clause so
+        // it is always logged; only sent when the current user block 2 has {clause_context} (v9+).
+        var clauseContext = await clauseContexts.BuildAsync(point, clauseNo, ct);
+        var clauseContextSent = await promptVersions.CurrentQueryUsesClauseContextAsync(workflowEngine, ct);
+        var queryBlock = await promptVersions.BuildJudgmentQueryAsync(clauseNo, clauseText, workflowEngine, ct, clauseContext?.Text);
         var (cfg, systemPrompt, resolvedCacheContextBlock, isHybridEngine) =
             await regulLlm.ResolveJudgmentCallInputsAsync(cacheContextBlock, workflowEngine, ct);
 
@@ -838,9 +845,16 @@ public class NdRegulAnalysisProcessor(
                 chars = c.Text.Length,
             })),
             CharsSent = contextBlock.Length,
-            Notes = $"{contextChunks.Count} chunk(s) from the clause's Step 6 selection, {contextBlock.Length} chars",
+            Notes = $"{contextChunks.Count} chunk(s) from the clause's Step 6 selection, {contextBlock.Length} chars; "
+                + DescribeClauseContext(clauseContext, clauseContextSent),
+            ClauseContext = clauseContext?.Text,
+            ClauseContextSent = clauseContextSent,
             TenantId = finding.TenantId,
         });
+        logger.LogInformation(
+            "Regul Step 7 supporting regulatory context for clause {ClauseNo}: {Description}{NewLine}{ClauseContext}",
+            clauseNo, DescribeClauseContext(clauseContext, clauseContextSent), Environment.NewLine,
+            clauseContext?.Text ?? "(none)");
         logger.LogInformation(
             "Regul Step 7 for clause {ClauseNo}: context built from {ChunkCount} retrieved chunk(s), {Chars} chars — {Labels}",
             clauseNo, contextChunks.Count, contextBlock.Length,
@@ -988,6 +1002,18 @@ public class NdRegulAnalysisProcessor(
             ? $"retry requested: gap and/or action missing for a {after.OverallStatus} verdict (attempt {attempt + 1})"
             : "accepted");
         return string.Join("; ", notes);
+    }
+
+    private static string DescribeClauseContext(NdRegulClauseContextService.ClauseContext? context, bool sent)
+    {
+        if (context == null)
+            return sent
+                ? "supporting regulatory context: none available for this clause (prompt told so)"
+                : "supporting regulatory context: none available";
+        var counts = $"{context.Ancestors.Count} parent, {context.Siblings.Count - 1} sibling, {context.Children.Count} sub-clause heading(s), {context.Text.Length} chars";
+        return sent
+            ? $"supporting regulatory context sent: {counts}"
+            : $"supporting regulatory context built but NOT sent (current prompt has no {{clause_context}}): {counts}";
     }
 
     public static IEnumerable<NdRegulClauseTrace> WithSource(IEnumerable<NdRegulClauseTrace> traces, string source)

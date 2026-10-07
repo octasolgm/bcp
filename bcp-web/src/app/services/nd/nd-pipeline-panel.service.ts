@@ -11,6 +11,8 @@ export type PipelineRetrievalMatch = {
   /** Step 2 — which sub-obligation of the clause this match came from, when the clause was split
    * into more than one; null when the clause wasn't split (matched as a single whole clause). */
   matchedSubObligation?: string | null;
+  /** Pipeline v2 — "expanded" when the best score came from the expanded-wording search. */
+  matchedVia?: string | null;
 };
 
 export type PipelineBm25Match = {
@@ -22,6 +24,7 @@ export type PipelineBm25Match = {
   sourcePage: number | null;
   score: number;
   matchedSubObligation?: string | null;
+  matchedVia?: string | null;
 };
 
 export type PipelineFusedMatch = {
@@ -64,6 +67,10 @@ export type PipelineClauseRetrieval = {
   subObligations: string[];
   /** Step 5+6 — the fused, ranked, trimmed list Step 7 actually builds context from. */
   fusedMatches: PipelineFusedMatch[];
+  /** Retrieval pipeline version that produced this record (records from before versions existed are v1). */
+  pipelineVersion: number;
+  /** Pipeline v2 — the clause wording with acronyms/synonyms swapped, also searched in Steps 3 and 4. */
+  expandedQueries: string[];
 };
 
 export type PipelineDocRef = {
@@ -166,6 +173,8 @@ export class NdPipelinePanelService {
         matches?: unknown;
         subObligations?: unknown;
         fusedMatches?: unknown;
+        pipelineVersion?: unknown;
+        expandedQueries?: unknown;
       };
       return {
         clauseNo: e.clauseNo,
@@ -182,6 +191,8 @@ export class NdPipelinePanelService {
         matches: Array.isArray(r.matches) ? (r.matches as PipelineRetrievalMatch[]) : [],
         subObligations: Array.isArray(r.subObligations) ? (r.subObligations as string[]) : [],
         fusedMatches: Array.isArray(r.fusedMatches) ? (r.fusedMatches as PipelineFusedMatch[]) : [],
+        pipelineVersion: typeof r.pipelineVersion === 'number' ? r.pipelineVersion : 1,
+        expandedQueries: Array.isArray(r.expandedQueries) ? (r.expandedQueries as string[]) : [],
       };
     });
     this._clauses.set(parsed);

@@ -160,6 +160,8 @@
 }
 
 .version-item {
+  // .version-list is a scrolling flex column: without this, items shrink and overflow clips their text.
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg, 10px);
   background: var(--bg-muted);
@@ -650,4 +652,8 @@
     opacity: 1;
     color: #15803d;
   }
+}
+
+.pipeline-select {
+  min-width: 14rem;
 }

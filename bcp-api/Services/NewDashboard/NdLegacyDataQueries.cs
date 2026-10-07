@@ -141,6 +141,9 @@ public static class NdLegacyDataQueries
         regulPipelinePhase = r.RegulPipelinePhase,
         regulLlmProvider = r.RegulLlmProvider,
         regulLlmModel = r.RegulLlmModel,
+        // AI setup (shown to platform super admins on the analysis list).
+        regulPipelineVersion = NdRunEnrichmentHelper.EffectivePipelineVersion(r),
+        regulPromptVersions = r.RegulPromptVersions,
         status = r.Status,
         statusBeforeDelete = r.StatusBeforeDelete,
         deletedAt = r.DeletedAt,

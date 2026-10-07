@@ -1,0 +1,201 @@
+<div class="page-header nd-shrink">
+  <div>
+    <h1>Evals</h1>
+    <p class="subtitle">
+      Saved reference results per clause. Saving the same clause again adds a new version; one version per clause is
+      current. On any analysis report, "Compare with evals" compares its clauses with the current versions.
+    </p>
+  </div>
+</div>
+
+<div class="nd-page-body">
+  @if (error) {
+    <p class="nd-error ev-page-error">{{ error }}</p>
+  }
+
+  @if (loading) {
+    <p class="nd-muted">Loading evals...</p>
+  } @else if (!groups.length) {
+    <div class="ev-empty">
+      <p><strong>No clause evals yet.</strong></p>
+      <p class="nd-muted">
+        Open an analysis report, click "Save clauses as evals" and tick the clauses whose results you trust.
+      </p>
+    </div>
+  } @else {
+    <div class="ev-table-wrap">
+      <table class="ev-table">
+        <thead>
+          <tr>
+            <th>Clause</th>
+            <th>Version</th>
+            <th>Result</th>
+            <th>From analysis</th>
+            <th>AI model</th>
+            <th>Pipeline</th>
+            <th>Prompt versions</th>
+            <th>Saved</th>
+            <th class="ev-actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (g of groups; track g.clauseKey) {
+            @let cur = current(g);
+            <tr class="ev-group-row">
+              <td>
+                <button type="button" class="ev-group-toggle" (click)="toggle(g)" [attr.aria-expanded]="isExpanded(g)">
+                  <span class="ev-chevron" [class.open]="isExpanded(g)">›</span>
+                  <span>
+                    <strong>{{ g.clauseNo }}</strong> {{ g.clauseTitle }}
+                    <span class="ev-reg">{{ g.regulationName || 'regulation unknown' }}</span>
+                  </span>
+                </button>
+              </td>
+              <td class="ev-small">
+                @if (cur) {
+                  <span class="nd-badge nd-badge-green">Current v{{ cur.versionNumber }}</span>
+                } @else {
+                  <span class="nd-badge nd-badge-gray">No current</span>
+                }
+                <br />{{ g.versions.length }} version{{ g.versions.length === 1 ? '' : 's' }}
+              </td>
+              @if (cur) {
+                <td>
+                  <span class="nd-badge nd-badge-{{ statusTone(cur.overallStatus) }}">{{ statusLabel(cur.overallStatus) }}</span>
+                  <span class="ev-small"> {{ cur.gapCount }} gap{{ cur.gapCount === 1 ? '' : 's' }}</span>
+                </td>
+                <td class="ev-small">
+                  @if (cur.sourceRunId) {
+                    <a [routerLink]="['/nd/gap-analysis']" [queryParams]="{ run: cur.sourceRunId }" class="ev-link">{{ cur.sourceRunName }}</a>
+                  } @else {
+                    {{ cur.sourceRunName }}
+                  }
+                </td>
+                <td class="ev-small">{{ cur.llmModel || 'unknown' }}</td>
+                <td class="ev-small">{{ cur.pipelineVersion ? 'v' + cur.pipelineVersion : '-' }}</td>
+                <td class="ev-small">{{ cur.promptVersions || 'unknown' }}</td>
+                <td class="ev-small">{{ formatDate(cur.createdAt) }}</td>
+                <td class="ev-actions-col">
+                  <div class="ev-row-actions">
+                    <button type="button" class="nd-btn-secondary" (click)="view(cur)">View</button>
+                  </div>
+                </td>
+              } @else {
+                <td colspan="7"></td>
+              }
+            </tr>
+            @if (isExpanded(g)) {
+              @for (v of g.versions; track v.id) {
+                <tr class="ev-version-row" [class.ev-current-row]="v.isCurrent">
+                  <td class="ev-small ev-indent">
+                    @if (v.notes) { {{ v.notes }} }
+                  </td>
+                  <td class="ev-small">
+                    v{{ v.versionNumber }}
+                    @if (v.isCurrent) { <span class="nd-badge nd-badge-green">Current</span> }
+                  </td>
+                  <td>
+                    <span class="nd-badge nd-badge-{{ statusTone(v.overallStatus) }}">{{ statusLabel(v.overallStatus) }}</span>
+                    <span class="ev-small"> {{ v.gapCount }} gap{{ v.gapCount === 1 ? '' : 's' }}</span>
+                  </td>
+                  <td class="ev-small">
+                    @if (v.sourceRunId) {
+                      <a [routerLink]="['/nd/gap-analysis']" [queryParams]="{ run: v.sourceRunId }" class="ev-link">{{ v.sourceRunName }}</a>
+                    } @else {
+                      {{ v.sourceRunName }}
+                    }
+                  </td>
+                  <td class="ev-small">{{ v.llmModel || 'unknown' }}</td>
+                  <td class="ev-small">{{ v.pipelineVersion ? 'v' + v.pipelineVersion : '-' }}</td>
+                  <td class="ev-small">{{ v.promptVersions || 'unknown' }}</td>
+                  <td class="ev-small">
+                    {{ formatDate(v.createdAt) }}
+                    @if (v.createdByName) { <br />{{ v.createdByName }} }
+                  </td>
+                  <td class="ev-actions-col">
+                    <div class="ev-row-actions">
+                      <button type="button" class="nd-btn-secondary" (click)="view(v)">View</button>
+                      @if (!v.isCurrent) {
+                        <button type="button" class="nd-btn-secondary" [disabled]="busyId === v.id" (click)="setCurrent(v)">Set current</button>
+                      }
+                      <button type="button" class="nd-btn-secondary ev-danger" [disabled]="busyId === v.id" (click)="remove(v)">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+@if (detail || detailLoading) {
+  <div class="ev-backdrop" (click)="closeDetail()" aria-hidden="true"></div>
+  <aside class="ev-drawer" role="dialog" aria-modal="true" aria-labelledby="eval-detail-title">
+    <header class="ev-head">
+      <div>
+        <p class="ev-eyebrow">Clause eval</p>
+        <h2 id="eval-detail-title">
+          @if (detail; as d) { {{ d.eval.clauseNo }} v{{ d.eval.versionNumber }} {{ d.eval.clauseTitle }} } @else { Loading... }
+        </h2>
+        @if (detail; as d) {
+          <p class="ev-sub">
+            From {{ d.eval.sourceRunName }} · AI: {{ d.eval.llmModel || 'unknown' }} · Pipeline:
+            {{ d.eval.pipelineVersion ? 'v' + d.eval.pipelineVersion : '-' }}
+            @if (d.eval.isCurrent) { · current }
+          </p>
+        }
+      </div>
+      <button type="button" class="ev-close" (click)="closeDetail()" aria-label="Close">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+          <path d="M5 5l10 10M15 5L5 15" />
+        </svg>
+      </button>
+    </header>
+    <div class="ev-body">
+      @if (detailLoading) {
+        <p class="nd-muted">Loading...</p>
+      }
+      @if (detail; as d) {
+        @let r = d.result;
+        <section class="ev-clause-card">
+          <p class="ev-label">Result</p>
+          <p class="ev-item">
+            <span class="nd-badge nd-badge-{{ statusTone(r.overallStatus) }}">{{ statusLabel(r.overallStatus) }}</span>
+            · confidence {{ r.confidence.toFixed(2) }}
+            @if (r.clauseContextSent) { · supporting context sent }
+          </p>
+          <p class="ev-label">Clause text</p>
+          <p class="ev-item ev-pre">{{ r.clauseText }}</p>
+          <p class="ev-label">Gaps</p>
+          @for (g of r.gaps; track $index) { <p class="ev-item">{{ g }}</p> } @empty { <p class="ev-item nd-muted">None</p> }
+          <p class="ev-label">Actions</p>
+          @for (a of r.actions; track $index) { <p class="ev-item">{{ a }}</p> } @empty { <p class="ev-item nd-muted">None</p> }
+          @if (r.coveredElements) {
+            <p class="ev-label">Covered</p>
+            <p class="ev-item ev-pre">{{ r.coveredElements }}</p>
+          }
+          @if (r.documentReference) {
+            <p class="ev-label">Evidence</p>
+            <p class="ev-item">{{ r.documentReference }}</p>
+          }
+        </section>
+
+        <h3 class="ev-section-title">Prompt versions that produced it</h3>
+        @for (p of d.promptVersions; track p.promptKey + p.versionNumber) {
+          <details class="ev-prompt">
+            <summary>
+              <strong>{{ promptName(p.promptKey) }}</strong> v{{ p.versionNumber }}
+              <span class="ev-prompt-label">{{ p.label }}</span>
+            </summary>
+            <pre>{{ p.promptText }}</pre>
+          </details>
+        } @empty {
+          <p class="nd-muted">No AI call log was found for this clause, so its prompt versions are unknown.</p>
+        }
+      }
+    </div>
+  </aside>
+}

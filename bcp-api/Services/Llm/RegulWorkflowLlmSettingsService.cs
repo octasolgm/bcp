@@ -91,6 +91,50 @@ public class RegulWorkflowLlmSettingsService(
         return enabled;
     }
 
+    private const string PipelineVersionSettingKey = "regul_pipeline_version";
+    private const string PipelineVersionMemoKey = "regul_pipeline_version_current";
+
+    /// <summary>Hybrid retrieval pipeline version new retrievals use (see NdRegulPipelineVersions).</summary>
+    public async Task<int> GetPipelineVersionAsync(CancellationToken ct = default)
+    {
+        if (cache.TryGetValue(PipelineVersionMemoKey, out int cached)) return cached;
+        var row = await db.NdSystemSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == PipelineVersionSettingKey, ct);
+        var version = row != null && int.TryParse(row.ValueJson, out var v)
+            && Reguliq.Api.Services.NewDashboard.NdRegulPipelineVersions.IsKnown(v)
+                ? v
+                : Reguliq.Api.Services.NewDashboard.NdRegulPipelineVersions.Default;
+        cache.Set(PipelineVersionMemoKey, version, CacheTtl);
+        return version;
+    }
+
+    public async Task<int> SetPipelineVersionAsync(int version, Guid updatedBy, CancellationToken ct = default)
+    {
+        if (!Reguliq.Api.Services.NewDashboard.NdRegulPipelineVersions.IsKnown(version))
+            throw new InvalidOperationException($"Unknown pipeline version {version}.");
+        var row = await db.NdSystemSettings.FirstOrDefaultAsync(s => s.Key == PipelineVersionSettingKey, ct);
+        var json = version.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (row == null)
+        {
+            db.NdSystemSettings.Add(new NdSystemSetting
+            {
+                Key = PipelineVersionSettingKey,
+                ValueJson = json,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                UpdatedBy = updatedBy,
+            });
+        }
+        else
+        {
+            row.ValueJson = json;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+            row.UpdatedBy = updatedBy;
+        }
+        await db.SaveChangesAsync(ct);
+        cache.Remove(PipelineVersionMemoKey);
+        return version;
+    }
+
     public async Task<DualVerifyLlmSettingsResponse> GetAdminViewAsync(CancellationToken ct = default)
     {
         var cfg = await GetConfigAsync(ct);

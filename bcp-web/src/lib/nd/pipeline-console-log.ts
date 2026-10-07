@@ -25,9 +25,12 @@ type AnyMatch = {
   bm25Score?: number | null;
   embeddingSimilarity?: number | null;
   matchedSubObligation?: string | null;
+  matchedVia?: string | null;
 };
 
 type Retrieval = {
+  pipelineVersion?: number;
+  expandedQueries?: string[];
   acronymMatches?: Array<{ matchedText?: string; addedText?: string }>;
   synonymMatches?: Array<{ matchedText?: string; addedText?: string }>;
   subObligations?: string[];
@@ -44,6 +47,7 @@ function matchRows(list: AnyMatch[] | undefined, scoreKey: keyof AnyMatch) {
     page: m.sourcePage ?? '',
     score: m[scoreKey] ?? '',
     via: m.matchedSubObligation ?? '',
+    wording: m.matchedVia === 'expanded' ? 'expanded (acronym/synonym swapped)' : 'clause',
     preview: (m.textPreview ?? '').slice(0, 160),
   }));
 }
@@ -52,7 +56,7 @@ function matchRows(list: AnyMatch[] | undefined, scoreKey: keyof AnyMatch) {
 export function logClauseRetrieval(clauseNo: string, raw: unknown): void {
   const r = (raw ?? {}) as Retrieval;
   console.groupCollapsed(
-    `%c[Pipeline] Clause ${clauseNo} — Steps 1-6 (retrieval): ${r.fusedMatches?.length ?? 0} chunk(s) selected for the AI`,
+    `%c[Pipeline] Clause ${clauseNo} — Steps 1-6 (retrieval, pipeline v${r.pipelineVersion ?? 1}): ${r.fusedMatches?.length ?? 0} chunk(s) selected for the AI`,
     STYLE_HEAD,
   );
 
@@ -61,6 +65,15 @@ export function logClauseRetrieval(clauseNo: string, raw: unknown): void {
     ...(r.acronymMatches ?? []).map((m) => ({ type: 'acronym', matched: m.matchedText, added: m.addedText })),
     ...(r.synonymMatches ?? []).map((m) => ({ type: 'synonym', matched: m.matchedText, added: m.addedText })),
   ]);
+
+  if ((r.pipelineVersion ?? 1) >= 2) {
+    console.log(
+      '%cStep 1 — Expanded wording also searched in Steps 3 and 4',
+      STYLE_STEP,
+      `${r.expandedQueries?.length ?? 0} query(ies)`,
+    );
+    (r.expandedQueries ?? []).forEach((q, i) => console.log(`  ${i + 1}.`, q));
+  }
 
   console.log('%cStep 2 — Sub-obligation split', STYLE_STEP, `${r.subObligations?.length ?? 0} part(s)`);
   (r.subObligations ?? []).forEach((s, i) => console.log(`  ${i + 1}.`, s));
@@ -102,6 +115,14 @@ export function logClauseTraces(clauseNo: string, traces: NdClauseTrace[]): void
         /* chunk list is informational only */
       }
       console.log(t.contextText);
+      if (t.clauseContext != null) {
+        console.groupCollapsed(
+          `%cSupporting regulatory context (parent, sibling and sub-clause headings) · ${t.clauseContextSent ? 'SENT in the request' : 'built, NOT sent (current prompt has no {clause_context})'}`,
+          STYLE_STEP,
+        );
+        console.log(t.clauseContext);
+        console.groupEnd();
+      }
       console.groupEnd();
     } else if (t.step === 'llm_call' || t.step === 'evidence_check') {
       const label = t.step === 'evidence_check' ? 'Evidence check AI call (gap by gap)' : 'Step 8 — AI call';

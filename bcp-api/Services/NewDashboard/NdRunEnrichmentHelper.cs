@@ -196,6 +196,11 @@ public static class NdRunEnrichmentHelper
                 totalPointsCount = run.TotalPointsCount,
                 processedPointsCount = run.ProcessedPointsCount,
                 dualVerifyFailedCount = run.DualVerifyFailedCount,
+                // AI setup (shown to platform super admins): model, retrieval pipeline and prompt versions.
+                workflowEngine = run.WorkflowEngine,
+                regulLlmModel = run.RegulLlmModel,
+                regulPipelineVersion = EffectivePipelineVersion(run),
+                regulPromptVersions = run.RegulPromptVersions,
                 legacySessionId = (Guid?)null,
                 legacyHref = (string?)null,
             });
@@ -203,6 +208,12 @@ public static class NdRunEnrichmentHelper
 
         return result;
     }
+
+    /// <summary>Runs that called the AI before pipeline versions were recorded all ran v1 (the startup backfill
+    /// stores it too; this covers a run read before that finished).</summary>
+    public static int? EffectivePipelineVersion(NdAnalysisRun run) =>
+        run.RegulPipelineVersion
+        ?? (run.RegulLlmModel != null && run.Status != "running" ? NdRegulPipelineVersions.V1 : null);
 
     private sealed record RunPointStatusAggregate(
         Guid RunId,

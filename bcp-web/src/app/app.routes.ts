@@ -436,6 +436,14 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'evals',
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard, ndDenyDemoViewerGuard],
+            data: { ndRoles: ['super_admin'] },
+            title: 'Evals · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/evals/nd-evals.component').then((m) => m.NdEvalsComponent),
+          },
+          {
             path: 'dual-verify',
             loadComponent: () =>
               import('./pages/dual-verify/dual-verify.component').then((m) => m.DualVerifyComponent),

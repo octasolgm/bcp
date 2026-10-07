@@ -944,6 +944,10 @@ export class NdShellComponent implements OnInit, OnDestroy {
         });
       }
     }
+    // Evals: saved reference results to compare analyses against (platform admins, never demo accounts).
+    if (!demo && this.auth.isPlatformAdmin()) {
+      children.push({ id: 'evals', path: '/nd/evals', label: 'Evals', icon: 'check' });
+    }
     return { id: 'analysis', label: 'Analysis', icon: 'list', children };
   }
 
