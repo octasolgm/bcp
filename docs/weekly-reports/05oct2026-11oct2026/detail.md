@@ -76,3 +76,11 @@ Each finalized document now shows what was added to it. In the Internal Document
 
 Document tables are easier to work with. In Internal Documents and Regulation Documents the document name stays visible on the left and the actions stay visible on the right while you scroll through the other columns. You can tick several documents (or all of them) and parse, extract, download or delete them in one go. Each group of documents generated from an analysis now has a History button that shows, for every document, exactly which resolved actions were added to it and where.
 
+Regulation points visible again
+
+Opening a regulation in Regulation Documents showed its chapters as thin empty bars instead of the extracted points. The chapters now display at full size, with their points readable and expandable as before. The extraction coverage note and point counts at the top of the panel now scroll away with the list, leaving only the search bar pinned so more points fit on screen.
+
+Being worked on
+
+The full path from starting an analysis to the saved compliance result (status, confidence, gaps, and actions) was mapped in detail for the current hybrid analysis. No product behavior changed. The map is the baseline for any later change to how clauses are judged.
+

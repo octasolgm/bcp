@@ -71,3 +71,12 @@ Bug fixes
 - Catalog tables: row checkbox sits in its own gutter so long document titles wrap beside it instead of dropping below it
 - Finalize embeds: a note could still restate other gaps (clause 3.5 gap 1 also defined "Proceeds" and the timeframe rule) because the gap text was cut from the clause's action list using "(n)" numbering while the AI numbers items "[n]", so the whole list was used; each note now gets its own numbered line from the judgment's gap list
 
+07 Oct 2026
+
+Bug fixes
+- Regulation Documents: opening a regulation showed its chapter groups as thin empty bars with no points; the groups were shrinking to a few pixels inside the scrolling panel and their content was clipped. Groups now keep their full height, so chapters and points show again
+- Regulation Documents points panel: the coverage note and point counts now scroll with the points instead of staying fixed above them, so only the search and expand/collapse bar stays pinned and more of the list is visible
+
+Investigated, follow up pending
+- Traced the full real-account compliance analysis path (create run, confirm clauses, hybrid retrieval, one judgment call per clause, post-processing, saved status/confidence/gaps/actions) so later changes start from a written map of the current workflow
+

@@ -26,6 +26,11 @@
   background: color-mix(in srgb, var(--bg-muted) 35%, var(--surface));
 }
 
+.panel-intro {
+  flex-shrink: 0;
+  padding: 0 0.15rem 0.15rem;
+}
+
 .panel-status {
   margin: 0;
   font-size: 0.8125rem;
@@ -104,6 +109,8 @@
 
 .acc-item {
   margin-bottom: 0;
+  // .panel-body is a flex column: without this the items shrink to a few px and overflow clips the headers.
+  flex-shrink: 0;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   overflow: hidden;

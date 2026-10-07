@@ -678,19 +678,24 @@
           }
         </div>
       </div>
-      @if (selectedDoc && structuralCoveragePct(selectedDoc); as covPct) {
-        <p
-          class="structural-coverage-note"
-          [class.structural-coverage-note-warn]="structuralCoverageLow(selectedDoc)"
-        >
-          Structural extract covers <strong>{{ covPct }}</strong> of parsed text
-          @if (structuralCoverageLow(selectedDoc)) {
-            (below 98% target). Some content may be in tables, skipped TOC pages, or under another clause — compare parsed text with points.
-          }
-          @if (structuralCoverageOrphan(selectedDoc); as orphan) {
-            <span class="structural-coverage-orphan">Missing sample: “{{ orphan }}”</span>
-          }
-        </p>
+      <ng-template #coverageNote>
+        @if (selectedDoc && structuralCoveragePct(selectedDoc); as covPct) {
+          <p
+            class="structural-coverage-note"
+            [class.structural-coverage-note-warn]="structuralCoverageLow(selectedDoc)"
+          >
+            Structural extract covers <strong>{{ covPct }}</strong> of parsed text
+            @if (structuralCoverageLow(selectedDoc)) {
+              (below 98% target). Some content may be in tables, skipped TOC pages, or under another clause — compare parsed text with points.
+            }
+            @if (structuralCoverageOrphan(selectedDoc); as orphan) {
+              <span class="structural-coverage-orphan">Missing sample: “{{ orphan }}”</span>
+            }
+          </p>
+        }
+      </ng-template>
+      @if (selectedDoc && (showParsedText || isManualDoc(selectedDoc))) {
+        <ng-container [ngTemplateOutlet]="coverageNote" />
       }
       @if (selectedDoc && showParsedText) {
         @if (loadingParsedText) {
@@ -721,7 +726,9 @@
             [highlightPointNumber]="highlightPointNumber"
             [canOpenSource]="!isManualDoc(selectedDoc!)"
             (openSourcePage)="openRegulationSourcePage(selectedDoc!, $event)"
-          />
+          >
+            <div panelIntro><ng-container [ngTemplateOutlet]="coverageNote" /></div>
+          </app-nd-regulation-points-panel>
           @if (selectedDoc && (repairingPointsId === selectedDoc.id || refreshingPagesId === selectedDoc.id)) {
             <div class="panel-busy-overlay" role="status" aria-live="polite">
               <div class="panel-busy-spinner" aria-hidden="true"></div>

@@ -1,10 +1,6 @@
 <div class="points-panel">
-  <div class="panel-head">
-    <p class="panel-status">{{ statusLabel }}</p>
-    @if (viewNote) {
-      <p class="panel-note">{{ viewNote }}</p>
-    }
-    @if (points.length > 0) {
+  @if (points.length > 0) {
+    <div class="panel-head">
       <div class="panel-toolbar">
         <input
           type="search"
@@ -26,10 +22,18 @@
           </div>
         }
       </div>
-    }
-  </div>
+    </div>
+  }
 
   <div class="panel-body" #pointsPanelScroll>
+    <!-- Status and notes scroll away with the points; only the search toolbar stays pinned. -->
+    <div class="panel-intro">
+      <ng-content select="[panelIntro]" />
+      <p class="panel-status">{{ statusLabel }}</p>
+      @if (viewNote) {
+        <p class="panel-note">{{ viewNote }}</p>
+      }
+    </div>
     @if (loading || building) {
       <p class="empty">Loading…</p>
     } @else if (visibleChapterGroups.length === 0) {

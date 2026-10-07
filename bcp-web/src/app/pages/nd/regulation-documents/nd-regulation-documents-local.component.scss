@@ -20,3 +20,10 @@ table.reg-docs-table {
     background: var(--low-bg);
   }
 }
+
+// Coverage note projected into the points panel scrolls with the points, so it sits as a card there.
+[panelIntro] .structural-coverage-note {
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
