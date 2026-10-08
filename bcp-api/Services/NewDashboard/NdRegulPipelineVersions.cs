@@ -13,6 +13,8 @@ public static class NdRegulPipelineVersions
     public const int V1 = 1;
     public const int V2ExpandedWording = 2;
     public const int V3RelevanceSelection = 3;
+    public const int V4Passages = 4;
+    public const int V5GapVerification = 5;
 
     /// <summary>Used when no admin choice is stored.</summary>
     public const int Default = V2ExpandedWording;
@@ -29,6 +31,15 @@ public static class NdRegulPipelineVersions
             + "is scored (no 300-candidate limit); a section is selected when it scores clearly above the rest of the documents "
             + "for at least one part of the clause, on keywords or on meaning; the two searches are combined by rank (keyword-only "
             + "matches are no longer dropped) and there is no minimum or maximum number of selected sections."),
+        new(V4Passages, "v4 - search passages and equivalent terms",
+            "v3, plus: documents are searched as passages of ~150-300 words with their heading path instead of whole sections "
+            + "(a long section was only partly visible to the meaning search); a clause part using a term from a group of "
+            + "equivalent terms (e.g. timeframe / time period / duration) is also searched once with each alternative; passage "
+            + "vectors are loaded once per run and scored in memory (faster)."),
+        new(V5GapVerification, "v5 - v4 plus gap double-check",
+            "v4, plus: before a gap is saved, its requirement is searched again across every passage of every selected "
+            + "document and the AI is asked one short question - does any of these passages cover it? A gap with verified "
+            + "covering text is turned into a covered element with that evidence (one small AI call per gap)."),
     ];
 
     public static bool IsKnown(int version) => All.Any(v => v.Version == version);

@@ -95,6 +95,8 @@ public static class RegulClauseTraceSteps
     public const string LlmCall = "llm_call";
     public const string PostProcess = "postprocess";
     public const string EvidenceCheck = "evidence_check";
+    /// <summary>Pipeline v5: the double-check of one gap after judgment (wider search + one short AI question).</summary>
+    public const string GapVerify = "gap_verify";
 }
 
 public static class RegulClauseTraceSources

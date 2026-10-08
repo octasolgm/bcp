@@ -132,7 +132,7 @@ export type NdLocalExtractionSection = {
 export type NdClauseTrace = {
   id: string;
   clauseNo: string;
-  /** context | llm_call | postprocess | evidence_check */
+  /** context | llm_call | postprocess | evidence_check | gap_verify */
   step: string;
   /** analysis | rerun_all | clause_rerun | gap_evidence */
   source: string;
@@ -239,6 +239,33 @@ export type NdRunEvalClause = {
 };
 
 export type NdRunEvalClauses = { setup: NdRunAiSetup; clauses: NdRunEvalClause[] };
+
+/** Retrieval check (platform super admin): expected evidence per clause and Steps 1-6 results, no AI call. */
+export type NdRetrievalCheckClause = { clauseNo: string; clauseTitle: string; clauseKey: string; expected: string[] };
+export type NdRetrievalCheckSetup = { pipelineVersion: number; pipelineLabel: string; clauses: NdRetrievalCheckClause[] };
+export type NdRetrievalCheckSnippet = {
+  snippet: string;
+  selected: boolean;
+  rank: number | null;
+  selectedLabel: string | null;
+  /** Where the snippet is in the indexed text; empty when it is not in the indexed text at all. */
+  foundIn: string[];
+};
+export type NdRetrievalCheckResult = {
+  clauseNo: string;
+  clauseTitle: string;
+  clauseKey: string;
+  pipelineVersion: number;
+  parts: number;
+  expandedQueries: number;
+  selected: number;
+  contextChars: number;
+  approxTokens: number;
+  elapsedMs: number;
+  found: number;
+  expectedCount: number;
+  snippets: NdRetrievalCheckSnippet[];
+};
 
 /** same | gaps_changed | more_compliant | less_compliant | missing_in_run | new_in_run | not_judged */
 export type NdEvalChange = string;
@@ -1887,6 +1914,27 @@ export class NdApiService {
   /** An analysis's clauses with their AI setup (left column of the compare view, report header details). */
   getRunEvalClauses(runId: string) {
     return this.request<NdRunEvalClauses>('GET', `/nd/evals/runs/${runId}`);
+  }
+
+  /** Retrieval check: the analysis's clauses with their saved expected evidence. */
+  getRetrievalCheckSetup(runId: string) {
+    return this.request<NdRetrievalCheckSetup>('GET', `/nd/evals/retrieval-check/${runId}`);
+  }
+
+  saveRetrievalExpectation(body: { clauseKey: string; clauseNo: string; expected: string[] }) {
+    return this.request<{ clauseKey: string; expected: string[] }>('PUT', '/nd/evals/retrieval-expectations', body);
+  }
+
+  /** Runs Steps 1-6 only (no AI call, no cost) and checks the expected evidence of each chosen clause. */
+  runRetrievalCheck(runId: string, clauseNos: string[]) {
+    // The first check on a document also builds its search passages, which can take a few minutes.
+    return this.request<{ clauses: NdRetrievalCheckResult[] }>(
+      'POST',
+      `/nd/evals/retrieval-check/${runId}`,
+      { clauseNos },
+      true,
+      10 * 60_000,
+    );
   }
 
   /** Local, rule-based comparison (no AI call) of chosen analysis clauses with chosen clause evals. */

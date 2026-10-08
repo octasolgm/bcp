@@ -22,6 +22,71 @@ reflect what the pipeline indexed.
 
 ---
 
+## Status - built 08 Oct 2026 (pipeline v4 / v5, prompt v10), waiting for your test
+
+Decided with you: Fix 7 (duplicate documents) and Fix 8 (citation check) are **not** done; evidence from every
+file that contains it stays as it is. Everything else is in the code:
+
+| Fix | Built as | Where it is switched on |
+|---|---|---|
+| 1 Free retrieval check | "Retrieval check" button on the analysis report (platform super admins, real accounts): paste the expected evidence snippets per clause, saved per clause; the check runs Steps 1-6 only and shows per snippet: Selected #rank / Not selected (with where it is) / Not in indexed text. Also shows parts searched, sections selected, context size and time. No AI call | Always available |
+| 2 Search passages | Every indexed section is cut into passages of ~150-300 words with a heading path ("AML Manual > Annex 1 > B.18 Other payment technologies"); passages are what v4+ searches and what the AI reads (with a "Heading:" line). Built when a document is indexed, or automatically before the first v4 search of a document indexed earlier | Pipeline **v4** or **v5** |
+| 3 Equivalent terms | 27 new seed pairs from the audit (timeframe / time period / period of time / duration; intangible asset / virtual assets / digital assets; predicate offence / original offence / original crime; and more). A clause part with a term that has several equivalents is searched once with each of them | Seeds load at API start; variants used by v4+ |
+| 4 Embedding model | Setting `RegulRetrieval:EmbeddingProvider` in appsettings: `local` (default, unchanged, bge-micro-v2) or `azure-openai` (the AzureOpenAI embedding deployment). Passages store which model made them; switching re-embeds on next use | appsettings, default local |
+| 5 Speed | Passage vectors loaded once per run and scored in memory; dictionary matchers built once per run; query vectors cached; each clause's Steps 1-6 time is in the API log | v4+ |
+| 6 Selection | Same relevance gate as v3 (no count limits) applied to passages | v4+ |
+| 9 Prompt v10 | Clause type first; definition / interpretation clauses covered when the concept is applied in practice; "such as / including / not limited to" lists are one requirement; parties named with the institution are not separate requirements; one gap per missing concept with the clause words and a materiality; no document-specific examples | Seeded as **v10 but NOT current**: switch to it in Admin > Analysis prompts for Checkpoint B |
+| 10 Gap check | After judgment, each gap is searched again over every passage of every selected document and one short AI question asks whether any passage covers it; a gap is removed only when the answer quotes text verbatim from the passage it names. Shown as "Gap check" in the pipeline panel and the browser console | Pipeline **v5** |
+
+Measured here, without your database (keyword search only, because the local embedding model cannot be
+downloaded in this environment; the meaning search adds to these):
+- The 5 PDFs give 147-180 passages per manual, largest 271 words (sections were up to 3,635), and no text is lost.
+- With keywords alone, 7 of the 9 missed passages are now selected for their clause: AML Manual p.5, p.14, p.31,
+  p.62, Implementation Manual p.22, CandNM p.2 (and p.42 as before). Still not selected by keywords: Implementation
+  Manual p.23-24 ("30 days to 90 days") and AML Manual p.36 ("accept assets ... proceeds"). The gap check (v5) is
+  the safety net for those.
+- 3.5 selects ~67 passages by keywords (~75k characters, about a third of v2's 211k).
+- The new tables and the vector column were tested on a real PostgreSQL 16 + pgvector.
+
+How to test, in order (each step only after the previous one looks right):
+1. Restart the API (creates the new tables, loads the new seed terms, adds prompt v10 as non-current).
+2. Admin > Analysis prompts: pipeline **v4**, prompt stays **v9**.
+3. Open the v3 analysis report (run f8a76442) > **Retrieval check** and paste the snippets below; Run. The first run
+   builds the passages (a minute or two). Free.
+4. If the snippets show Selected: **Checkpoint A** - run 3.3, 3.5, 3.6 on v4 / prompt v9 (~$1).
+5. **Checkpoint B** - pipeline **v5**, prompt **v10**; run 3.3, 3.5, 3.6 again (~$1-2).
+
+Snippets for the retrieval check (copy one block per clause):
+
+3.3
+```
+The employee who reports an STR will not be held liable whether the suspicion is proven true or not
+DIFC is protected from any criminal, civil or administrative liability
+```
+3.5
+```
+describe the duration of the activity
+from 30 days to 90 days
+Involvement in virtual assets
+virtual currencies/cryptocurrencies
+investments in securities, artwork
+Accept assets known or suspected to be the proceeds of criminal activity
+The crime of Money Laundering is considered an independent crime from the original crime
+There is no minimum reporting threshold
+```
+3.6
+```
+whether the original crime was committed inside or outside the UAE
+related predicate offences
+The findings of the recent National/ Sectorial Risk Assessment should be taken into consideration
+```
+
+Gap check cost, corrected after building it: each gap's question carries every passage the wider search selects
+(no limit), typically 30-60 passages, so about $0.05-0.10 per gap with Kimi K3 rather than the $0.02-0.04
+estimated below.
+
+---
+
 ## 1. Scorecard - how much of the result is correct
 
 | Item | Total | Correct | Partly correct | Wrong |

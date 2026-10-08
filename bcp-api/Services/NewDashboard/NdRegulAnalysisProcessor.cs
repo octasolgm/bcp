@@ -407,6 +407,9 @@ public class NdRegulAnalysisProcessor(
         /// <summary>Step 7/8 audit rows for this clause. Filled in memory while the LLM call runs (no DB
         /// access in phase 2) and saved together with the clause's result.</summary>
         public List<NdRegulClauseTrace> Traces { get; } = [];
+
+        /// <summary>Pipeline v5: in-memory search session for the gap double-check after judgment; null when off.</summary>
+        public RegulEmbeddingRetrievalService.EvidenceSession? GapCheck { get; set; }
     }
 
     private async Task RunForwardPhaseAsync(NdAnalysisRun run, CancellationToken ct, string traceSource = RegulClauseTraceSources.Analysis)
@@ -652,11 +655,8 @@ public class NdRegulAnalysisProcessor(
         // where FusedMatches is null.
         if (preview.FusedMatches is { Count: > 0 } fused)
         {
-            var fusedSectionIds = fused.Select(m => m.SectionId).ToList();
-            var fusedFullTextById = await db.NdLocalDocumentExtractionSections
-                .AsNoTracking()
-                .Where(s => fusedSectionIds.Contains(s.Id))
-                .ToDictionaryAsync(s => s.Id, s => s.ClauseText, ct);
+            // Sections (v1-v3) or passages with their heading path (v4+).
+            var fusedFullTextById = await embeddingRetrieval.LoadUnitTextsAsync(fused.Select(m => m.SectionId).ToList(), ct);
 
             foreach (var m in fused)
                 chunks.Add(ToChunk(m.SectionId, m.ClauseNo, m.TextPreview, m.SourceDocumentName, m.SourcePage, fusedFullTextById));
@@ -670,10 +670,7 @@ public class NdRegulAnalysisProcessor(
             .Concat(preview.Bm25Matches.Select(m => m.SectionId))
             .Distinct()
             .ToList();
-        var fullTextById = await db.NdLocalDocumentExtractionSections
-            .AsNoTracking()
-            .Where(s => sectionIds.Contains(s.Id))
-            .ToDictionaryAsync(s => s.Id, s => s.ClauseText, ct);
+        var fullTextById = await embeddingRetrieval.LoadUnitTextsAsync(sectionIds, ct);
 
         var seen = new HashSet<Guid>();
         foreach (var m in preview.Matches)
@@ -768,7 +765,7 @@ public class NdRegulAnalysisProcessor(
                 NdRegulPolicyContextService.ResolveMode(run.WorkflowEngine));
         }
 
-        var prep = await PrepareForwardJudgmentAsync(finding, point, 1, bundle, bundle.UsesFullMarkdown, run.WorkflowEngine, ct);
+        var prep = await PrepareForwardJudgmentAsync(finding, point, 1, bundle, bundle.UsesFullMarkdown, run.WorkflowEngine, ct, corpus);
         return (prep, preview);
     }
 
@@ -786,7 +783,8 @@ public class NdRegulAnalysisProcessor(
         NdRegulPolicyContextService.PolicyBundle policyBundle,
         bool cacheContextBlock,
         string? workflowEngine,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyCollection<Guid>? corpusDocIds = null)
     {
         var clauseNo = finding.ClauseNo;
         var clauseText = finding.ClauseText;
@@ -828,6 +826,9 @@ public class NdRegulAnalysisProcessor(
             resolvedCacheContextBlock,
             isHybridEngine,
             workflowEngine);
+
+        if (isHybridEngine)
+            prep.GapCheck = await GetGapCheckSessionAsync(finding.AnalysisRunId, corpusDocIds, ct);
 
         // Step 7 — exactly what the judgment call will be given as policy context.
         prep.Traces.Add(new NdRegulClauseTrace
@@ -882,6 +883,14 @@ public class NdRegulAnalysisProcessor(
     private const int MaxDeliveryAttempts = 3;
 
     private async Task<RegulJudgmentResult> ExecuteForwardJudgmentAsync(ForwardJudgmentPrep prep, CancellationToken ct)
+    {
+        var judgment = await ExecuteForwardJudgmentCoreAsync(prep, ct);
+        return prep.GapCheck == null || !NdRegulJudgmentPostProcessor.IsGapStatus(judgment.OverallStatus)
+            ? judgment
+            : await VerifyGapsAsync(prep, prep.GapCheck, judgment, ct);
+    }
+
+    private async Task<RegulJudgmentResult> ExecuteForwardJudgmentCoreAsync(ForwardJudgmentPrep prep, CancellationToken ct)
     {
         var policyBundle = prep.ClauseBundle;
         var contextChunks = prep.ContextChunks;
@@ -999,6 +1008,113 @@ public class NdRegulAnalysisProcessor(
         }
 
         return RecordFinal(prep, judgment);
+    }
+
+    // One in-memory search session per processor job and document set (pipeline v5 gap check).
+    private (string Key, RegulEmbeddingRetrievalService.EvidenceSession? Session)? _gapCheckSession;
+
+    private async Task<RegulEmbeddingRetrievalService.EvidenceSession?> GetGapCheckSessionAsync(
+        Guid runId, IReadOnlyCollection<Guid>? corpusDocIds, CancellationToken ct)
+    {
+        if (await llmSettings.GetPipelineVersionAsync(ct) < NdRegulPipelineVersions.V5GapVerification) return null;
+
+        var docIds = corpusDocIds?.ToList();
+        if (docIds == null)
+        {
+            var selected = await db.NdAnalysisRuns.AsNoTracking()
+                .Where(r => r.Id == runId)
+                .Select(r => r.SelectedInternalDocIds)
+                .FirstOrDefaultAsync(ct);
+            docIds = (JsonSerializer.Deserialize<List<string>>(selected ?? "[]") ?? [])
+                .Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty)
+                .Where(g => g != Guid.Empty)
+                .Distinct()
+                .ToList();
+        }
+
+        var key = string.Join(',', docIds.OrderBy(g => g));
+        if (_gapCheckSession is { } cached && cached.Key == key) return cached.Session;
+        var session = await embeddingRetrieval.CreateEvidenceSessionAsync(docIds, ct);
+        _gapCheckSession = (key, session);
+        return session;
+    }
+
+    /// <summary>
+    /// Pipeline v5 gap double-check: for every gap, a wider search over every passage of every selected document
+    /// (the missing requirement and the clause words it comes from, with query expansion), then one short AI
+    /// question per gap. A gap whose covering text is quoted verbatim becomes a covered element; one partly
+    /// covered gets a note; the rest stay. Runs in the parallel phase: searches use the in-memory session only.
+    /// </summary>
+    private async Task<RegulJudgmentResult> VerifyGapsAsync(
+        ForwardJudgmentPrep prep,
+        RegulEmbeddingRetrievalService.EvidenceSession session,
+        RegulJudgmentResult judgment,
+        CancellationToken ct)
+    {
+        var gaps = NdRegulGapVerifier.ParseGaps(judgment.GapDescription);
+        if (gaps.Count == 0) return judgment;
+
+        var outcomes = new List<NdRegulGapVerifier.Outcome>();
+        foreach (var gap in gaps)
+        {
+            var evidence = await embeddingRetrieval.SearchEvidenceAsync(session, NdRegulGapVerifier.QueriesFor(gap), ct);
+            var excerpts = evidence
+                .Select((e, i) => new NdRegulGapVerifier.Excerpt(
+                    $"E{i + 1}",
+                    $"{e.SourceDocumentName ?? "internal policy"}{(string.IsNullOrWhiteSpace(e.ClauseNo) ? "" : $" — {e.ClauseNo}")}{(e.SourcePage.HasValue ? $" p.{e.SourcePage}" : "")}",
+                    e.Text))
+                .ToList();
+            var trace = new NdRegulClauseTrace
+            {
+                AnalysisRunId = prep.Finding.AnalysisRunId,
+                FindingId = prep.Finding.Id,
+                ClauseNo = prep.Finding.ClauseNo,
+                Step = RegulClauseTraceSteps.GapVerify,
+                Provider = prep.Config.Provider,
+                Model = prep.Config.Model,
+                TenantId = prep.Finding.TenantId,
+            };
+            prep.Traces.Add(trace);
+            if (excerpts.Count == 0)
+            {
+                trace.Notes = $"gap [{gap.Number}]: no passage selected by the wider search; gap kept";
+                outcomes.Add(new NdRegulGapVerifier.Outcome(gap, "not_covered", null, "", "no passage found"));
+                continue;
+            }
+
+            var prompt = NdRegulGapVerifier.BuildPrompt(prep.Finding.ClauseNo, prep.Finding.ClauseText, gap, excerpts);
+            trace.QueryText = prompt;
+            trace.CharsSent = prompt.Length;
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var raw = await regulLlm.AnalyzeTextWithConfigAsync(prompt, prep.Config, ct);
+                trace.DurationMs = (int)started.ElapsedMilliseconds;
+                trace.ResponseText = raw;
+                var outcome = NdRegulGapVerifier.Decide(gap, NdRegulGapVerifier.ParseAnswer(raw), excerpts);
+                outcomes.Add(outcome);
+                trace.Notes = $"gap [{gap.Number}]: {outcome.Status}"
+                    + (outcome.Evidence != null ? $" by [{outcome.Evidence.Label}]" : "")
+                    + $" ({excerpts.Count} passage(s) checked); {outcome.Reason}";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A failed check never changes the result: the gap stays as the judgment reported it.
+                trace.DurationMs = (int)started.ElapsedMilliseconds;
+                trace.Error = ex.Message;
+                trace.Notes = $"gap [{gap.Number}]: check failed, gap kept";
+                outcomes.Add(new NdRegulGapVerifier.Outcome(gap, "not_covered", null, "", "check failed"));
+                logger.LogWarning(ex, "Gap check failed for clause {ClauseNo} gap {Gap}", prep.Finding.ClauseNo, gap.Number);
+            }
+        }
+
+        var before = judgment.OverallStatus;
+        var verified = NdRegulGapVerifier.Apply(judgment, outcomes);
+        logger.LogInformation(
+            "Regul gap check for clause {ClauseNo}: {Gaps} gap(s) checked, {Covered} covered, {Partial} partly covered; status {Before} -> {After}",
+            prep.Finding.ClauseNo, gaps.Count, outcomes.Count(o => o.Status == "covered"),
+            outcomes.Count(o => o.Status == "partial"), before, verified.OverallStatus);
+        return RecordFinal(prep, verified);
     }
 
     private static string DescribePostProcessing(

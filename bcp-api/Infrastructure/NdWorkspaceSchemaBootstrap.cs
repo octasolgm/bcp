@@ -51,11 +51,13 @@ public static class NdWorkspaceSchemaBootstrap
         ("regul_qualitative_assessments", "analysis_runs", "analysis_run_id", null),
         ("nd_local_document_extractions", "stored_documents", "stored_document_id", null),
         ("nd_local_document_extraction_sections", "nd_local_document_extractions", "extraction_id", null),
+        ("nd_local_document_passages", "nd_local_document_extractions", "extraction_id", null),
         ("nd_ai_credit_ledger", null, null, "created_by"),
         ("gap_evidence_reruns", "analysis_runs", "analysis_run_id", null),
         ("gap_evidence_reviews", "analysis_runs", "analysis_run_id", null),
         ("regul_clause_traces", "analysis_runs", "analysis_run_id", null),
         ("nd_clause_evals", null, null, "created_by"),
+        ("nd_retrieval_expectations", null, null, "updated_by"),
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)

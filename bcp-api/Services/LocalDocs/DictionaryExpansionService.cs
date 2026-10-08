@@ -350,9 +350,9 @@ public sealed class DictionaryExpansionService(
         foreach (var e in entries)
         {
             if (string.IsNullOrWhiteSpace(e.Acronym) || string.IsNullOrWhiteSpace(e.Definition)) continue;
-            if (Regex.IsMatch(clauseText, $@"\b{Regex.Escape(e.Acronym)}\b"))
+            if (CachedRegex($@"\b{Regex.Escape(e.Acronym)}\b", RegexOptions.None).IsMatch(clauseText))
                 acronymMatches.Add(new ExpansionMatch(e.Id, e.Acronym, e.Definition, e.Acronym, e.Definition));
-            if (ContainsWholePhrase(clauseText, e.Definition))
+            if (ContainsWholePhraseCached(clauseText, e.Definition))
                 acronymMatches.Add(new ExpansionMatch(e.Id, e.Acronym, e.Definition, e.Definition, e.Acronym));
         }
 
@@ -364,14 +364,30 @@ public sealed class DictionaryExpansionService(
         foreach (var s in synonyms)
         {
             if (string.IsNullOrWhiteSpace(s.TermA) || string.IsNullOrWhiteSpace(s.TermB)) continue;
-            if (ContainsWholePhrase(clauseText, s.TermA))
+            if (ContainsWholePhraseCached(clauseText, s.TermA))
                 synonymMatches.Add(new ExpansionMatch(s.Id, s.TermA, s.TermB, s.TermA, s.TermB));
-            if (ContainsWholePhrase(clauseText, s.TermB))
+            if (ContainsWholePhraseCached(clauseText, s.TermB))
                 synonymMatches.Add(new ExpansionMatch(s.Id, s.TermA, s.TermB, s.TermB, s.TermA));
         }
 
         return new QueryExpansionResult(acronymMatches, synonymMatches);
     }
+
+    // Built once per pattern per job (a clause is matched against every dictionary entry, for every part of every
+    // clause; re-parsing each pattern every time was a noticeable part of retrieval time).
+    private readonly Dictionary<(string Pattern, RegexOptions Options), Regex> _regexCache = new();
+
+    private Regex CachedRegex(string pattern, RegexOptions options)
+    {
+        if (_regexCache.TryGetValue((pattern, options), out var regex)) return regex;
+        regex = new Regex(pattern, options);
+        _regexCache[(pattern, options)] = regex;
+        return regex;
+    }
+
+    private bool ContainsWholePhraseCached(string text, string phrase) =>
+        !string.IsNullOrWhiteSpace(phrase)
+        && CachedRegex(WholePhrasePattern(phrase), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).IsMatch(text);
 
     /// <summary>Case-insensitive match on word boundaries: "policy" matches "the policy" but not
     /// "policyholder", "risk assessment" matches "Risk Assessment" but not "risk assessments-based".</summary>

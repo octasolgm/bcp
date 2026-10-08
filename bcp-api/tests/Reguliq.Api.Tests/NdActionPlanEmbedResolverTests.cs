@@ -29,6 +29,7 @@ public class NdActionPlanEmbedResolverTests
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<NdLocalDocumentExtractionSection>().Ignore(s => s.Embedding);
+            modelBuilder.Entity<NdLocalDocumentPassage>().Ignore(p => p.Embedding);
         }
     }
 

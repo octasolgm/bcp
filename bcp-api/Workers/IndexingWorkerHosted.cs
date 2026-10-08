@@ -78,6 +78,17 @@ public class IndexingWorkerHosted(
             row.IndexedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
 
+            // Search passages (retrieval pipeline v4+). A failure here never fails indexing: retrieval rebuilds
+            // missing passages itself before searching.
+            try
+            {
+                await scope.ServiceProvider.GetRequiredService<NdPassageIndexService>().RebuildAsync(msg.ExtractionId, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Passage indexing failed for extraction {ExtractionId}; retrieval will rebuild it", msg.ExtractionId);
+            }
+
             logger.LogInformation(
                 "Indexed extraction {ExtractionId}: {Count} section(s) embedded", msg.ExtractionId, sections.Count);
         }

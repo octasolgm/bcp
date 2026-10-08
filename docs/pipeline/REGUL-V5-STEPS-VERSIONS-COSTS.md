@@ -65,6 +65,8 @@ assessment, Azure OpenAI semantic chunking (a separate test page only).
 | Parse engine | Azure DI `prebuilt-layout`, API 2024-11-30 | appsettings |
 | Embedding model | bge-micro-v2, 384 dimensions | code (fixed) |
 
+**Pipeline v4 / v5 and prompt v10** (built 08 Oct, see `REGUL-V5-FIX-PLAN-V1.md`, Status): v4 searches ~150-300 word passages with their heading path and equivalent terms, scored in memory; v5 adds the gap check after judgment; prompt v10 is seeded but not current.
+
 **Pipeline v3** (built 08 Oct, select it in Admin > Analysis prompts to test): every paragraph and list item of the
 clause is searched, every section is scored, selection is by relevance with no count limits, keyword-only matches
 are kept. See `REGUL-V5-FIX-PLAN.md`, Status.

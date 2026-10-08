@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<StoredDocument> StoredDocuments => Set<StoredDocument>();
     public DbSet<NdLocalDocumentExtraction> NdLocalDocumentExtractions => Set<NdLocalDocumentExtraction>();
     public DbSet<NdLocalDocumentExtractionSection> NdLocalDocumentExtractionSections => Set<NdLocalDocumentExtractionSection>();
+    public DbSet<NdLocalDocumentPassage> NdLocalDocumentPassages => Set<NdLocalDocumentPassage>();
     public DbSet<NdDictionaryEntry> NdDictionaryEntries => Set<NdDictionaryEntry>();
     public DbSet<NdSynonymEntry> NdSynonymEntries => Set<NdSynonymEntry>();
     public DbSet<DocumentAnalysisRun> DocumentAnalysisRuns => Set<DocumentAnalysisRun>();
@@ -50,6 +51,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdRegulForwardFinding> NdRegulForwardFindings => Set<NdRegulForwardFinding>();
     public DbSet<NdRegulClauseTrace> NdRegulClauseTraces => Set<NdRegulClauseTrace>();
     public DbSet<NdClauseEval> NdClauseEvals => Set<NdClauseEval>();
+    public DbSet<NdRetrievalExpectation> NdRetrievalExpectations => Set<NdRetrievalExpectation>();
     public DbSet<NdRegulInternalSection> NdRegulInternalSections => Set<NdRegulInternalSection>();
     public DbSet<NdRegulReverseMapping> NdRegulReverseMappings => Set<NdRegulReverseMapping>();
     public DbSet<NdRegulQualitativeAssessment> NdRegulQualitativeAssessments => Set<NdRegulQualitativeAssessment>();
@@ -227,6 +229,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.SourcePage).HasColumnName("source_page");
             e.Property(x => x.Embedding).HasColumnName("embedding").HasColumnType("vector(384)");
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<NdLocalDocumentPassage>(e =>
+        {
+            e.ToTable("nd_local_document_passages");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ExtractionId);
+            e.Property(x => x.Id).HasColumnName("id");
+            e.Property(x => x.ExtractionId).HasColumnName("extraction_id");
+            e.Property(x => x.SectionId).HasColumnName("section_id");
+            e.Property(x => x.SectionIndex).HasColumnName("section_index");
+            e.Property(x => x.PassageIndex).HasColumnName("passage_index");
+            e.Property(x => x.ClauseNo).HasColumnName("clause_no");
+            e.Property(x => x.HeadingPath).HasColumnName("heading_path");
+            e.Property(x => x.PassageText).HasColumnName("passage_text");
+            e.Property(x => x.SourcePage).HasColumnName("source_page");
+            e.Property(x => x.Embedding).HasColumnName("embedding").HasColumnType("vector");
+            e.Property(x => x.EmbeddingModel).HasColumnName("embedding_model");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at");
+            e.Ignore(x => x.SearchText);
         });
 
         modelBuilder.Entity<NdDictionaryEntry>(e =>

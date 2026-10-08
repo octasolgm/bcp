@@ -38,6 +38,8 @@ public sealed class RegulEmbeddingRetrievalService(
     AppDbContext db,
     DictionaryExpansionService dictionary,
     LocalEmbeddingService embedder,
+    PassageEmbeddingService passageEmbeddings,
+    NdPassageIndexService passageIndex,
     RegulWorkflowLlmSettingsService settings,
     ILogger<RegulEmbeddingRetrievalService> logger)
 {
@@ -121,10 +123,11 @@ public sealed class RegulEmbeddingRetrievalService(
                 return;
             }
 
-            // Step 3's corpus — full section text, loaded once per run (not per clause). BM25
-            // scoring itself is plain in-memory term-frequency math, so this is the only DB round
-            // trip it needs; everything downstream just re-scores the same corpus per clause.
-            var corpus = await LoadCorpusAsync(corpusDocIds, ct);
+            var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
+
+            // Step 3's corpus — full section text (v4+: passages and their vectors), loaded once per run (not per
+            // clause). Everything downstream just re-scores the same corpus per clause.
+            var corpus = await LoadCorpusAsync(corpusDocIds, pipelineVersion, ct);
             if (corpus == null)
             {
                 logger.LogInformation(
@@ -138,7 +141,6 @@ public sealed class RegulEmbeddingRetrievalService(
                     && !f.ClauseNo.StartsWith(NdRegulReverseIntRows.IntClausePrefix))
                 .ToListAsync(ct);
 
-            var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
             run.RegulPipelineVersion = pipelineVersion;
             logger.LogInformation("Regul retrieval for run {RunId} uses pipeline {Version}", run.Id,
                 NdRegulPipelineVersions.Label(pipelineVersion));
@@ -149,13 +151,15 @@ public sealed class RegulEmbeddingRetrievalService(
                 if (ct.IsCancellationRequested) throw new OperationCanceledException();
                 if (string.IsNullOrWhiteSpace(finding.ClauseText)) continue;
 
+                var clauseTimer = System.Diagnostics.Stopwatch.StartNew();
                 var preview = await BuildPreviewAsync(corpus, finding.ClauseText, pipelineVersion, ct);
                 finding.RetrievalJson = JsonSerializer.Serialize(preview, RetrievalJsonOptions);
                 logger.LogInformation(
-                    "Regul Steps 1-6 ({Pipeline}) for clause {ClauseNo}: step1 acronyms={Acronyms} synonyms={Synonyms} expanded queries={Expanded}; step2 sub-obligations={Subs}; " +
+                    "Regul Steps 1-6 ({Pipeline}) for clause {ClauseNo} in {Ms} ms: step1 acronyms={Acronyms} synonyms={Synonyms} expanded queries={Expanded}; step2 sub-obligations={Subs}; " +
                     "step3 bm25={Bm25} ({Bm25Expanded} via expanded wording); step4 embedding={Embedding} ({EmbeddingExpanded} via expanded wording); step5+6 fused and selected={Fused} — {Selected}",
                     NdRegulPipelineVersions.Label(pipelineVersion),
                     finding.ClauseNo,
+                    clauseTimer.ElapsedMilliseconds,
                     preview.AcronymMatches.Count,
                     preview.SynonymMatches.Count,
                     preview.ExpandedQueries?.Count ?? 0,
@@ -173,8 +177,8 @@ public sealed class RegulEmbeddingRetrievalService(
                 await db.SaveChangesAsync(ct);
             }
             logger.LogInformation(
-                "Retrieval complete for run {RunId}: {Processed}/{Total} clause(s) processed against {ExtractionCount} indexed internal document(s)",
-                run.Id, processed, findings.Count, corpus.ExtractionIds.Count);
+                "Retrieval complete for run {RunId}: {Processed}/{Total} clause(s) processed against {ExtractionCount} indexed internal document(s), {Units} search unit(s)",
+                run.Id, processed, findings.Count, corpus.ExtractionIds.Count, corpus.SectionById.Count);
         }
         catch (OperationCanceledException)
         {
@@ -201,14 +205,14 @@ public sealed class RegulEmbeddingRetrievalService(
             .ToList();
         if (corpusDocIds.Count == 0) return;
 
-        var corpus = await LoadCorpusAsync(corpusDocIds, ct);
+        var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
+        var corpus = await LoadCorpusAsync(corpusDocIds, pipelineVersion, ct);
         if (corpus == null)
         {
             logger.LogInformation("Clause retrieval skipped for {ClauseNo}: no indexed internal documents", finding.ClauseNo);
             return;
         }
 
-        var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
         var preview = await BuildPreviewAsync(corpus, finding.ClauseText, pipelineVersion, ct);
         finding.RetrievalJson = JsonSerializer.Serialize(preview, RetrievalJsonOptions);
         finding.UpdatedAt = DateTimeOffset.UtcNow;
@@ -265,10 +269,103 @@ public sealed class RegulEmbeddingRetrievalService(
         CancellationToken ct)
     {
         if (corpusDocIds.Count == 0 || string.IsNullOrWhiteSpace(clauseText)) return null;
-        var corpus = await LoadCorpusAsync(corpusDocIds, ct);
-        return corpus == null
-            ? null
-            : await BuildPreviewAsync(corpus, clauseText, await settings.GetPipelineVersionAsync(ct), ct);
+        var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
+        var corpus = await LoadCorpusAsync(corpusDocIds, pipelineVersion, ct);
+        return corpus == null ? null : await BuildPreviewAsync(corpus, clauseText, pipelineVersion, ct);
+    }
+
+    /// <summary>One expected-evidence snippet: whether a selected unit contains it (and its rank in the selection),
+    /// and where it is in the indexed text at all. Empty <see cref="FoundIn"/> means the snippet is not in the indexed
+    /// text (a parsing / extraction problem, or the snippet was typed differently).</summary>
+    public sealed record AnchorCheck(string Snippet, bool Selected, int? Rank, string? SelectedLabel, IReadOnlyList<string> FoundIn);
+
+    public sealed record RetrievalCheckResult(
+        int PipelineVersion,
+        int Parts,
+        int ExpandedQueries,
+        int Selected,
+        int ContextChars,
+        long ElapsedMs,
+        IReadOnlyList<AnchorCheck> Snippets);
+
+    // The retrieval check runs several clauses against the same documents; load them once per request.
+    private (string Key, LoadedCorpus Corpus)? _checkCorpus;
+
+    /// <summary>
+    /// Free retrieval check: Steps 1-6 for one clause exactly as an analysis runs them (current pipeline version),
+    /// without any AI call, then looks each expected snippet up in the selected sections / passages and in the
+    /// whole indexed corpus. Null when none of the documents is indexed.
+    /// </summary>
+    public async Task<RetrievalCheckResult?> CheckClauseAsync(
+        IReadOnlyCollection<Guid> corpusDocIds, string clauseText, IReadOnlyList<string> snippets, CancellationToken ct)
+    {
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
+        var key = $"{pipelineVersion}|{string.Join(',', corpusDocIds.OrderBy(g => g))}";
+        LoadedCorpus? corpus;
+        if (_checkCorpus is { } cached && cached.Key == key)
+        {
+            corpus = cached.Corpus;
+        }
+        else
+        {
+            corpus = await LoadCorpusAsync(corpusDocIds, pipelineVersion, ct);
+            if (corpus == null) return null;
+            _checkCorpus = (key, corpus);
+        }
+
+        var preview = await BuildPreviewAsync(corpus, clauseText, pipelineVersion, ct);
+        var selected = preview.FusedMatches ?? [];
+        var rankById = selected.Select((m, i) => (m.SectionId, Rank: i + 1)).ToDictionary(x => x.SectionId, x => x.Rank);
+        var contextChars = selected.Sum(m => corpus.SectionById.TryGetValue(m.SectionId, out var u) ? u.ClauseText.Length : m.TextPreview.Length);
+
+        var checks = new List<AnchorCheck>();
+        foreach (var snippet in snippets.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()))
+        {
+            var units = corpus.SectionById.Values.Where(u => SnippetMatches(u.ClauseText, snippet)).ToList();
+            var best = units
+                .Where(u => rankById.ContainsKey(u.Id))
+                .OrderBy(u => rankById[u.Id])
+                .FirstOrDefault();
+            checks.Add(new AnchorCheck(
+                snippet,
+                best != null,
+                best == null ? null : rankById[best.Id],
+                best == null ? null : UnitLabel(corpus, best),
+                units.Select(u => UnitLabel(corpus, u)).Distinct().ToList()));
+        }
+
+        return new RetrievalCheckResult(
+            pipelineVersion,
+            preview.SubObligations.Count,
+            preview.ExpandedQueries?.Count ?? 0,
+            selected.Count,
+            contextChars,
+            timer.ElapsedMilliseconds,
+            checks);
+    }
+
+    private static string UnitLabel(LoadedCorpus corpus, CorpusSection unit)
+    {
+        var storedDocId = corpus.StoredDocIdByExtractionId.GetValueOrDefault(unit.ExtractionId);
+        var name = corpus.DocNameById.GetValueOrDefault(storedDocId) ?? "document";
+        var no = string.IsNullOrWhiteSpace(unit.ClauseNo) ? "" : $" - {unit.ClauseNo}";
+        var page = unit.SourcePage is int p ? $" p.{p}" : "";
+        return $"{name}{no}{page}";
+    }
+
+    /// <summary>A snippet matches a unit when its normalized text appears in it, or, tolerating line breaks and
+    /// small parsing differences, when every word of 3+ letters of the snippet appears in the unit.</summary>
+    public static bool SnippetMatches(string unitText, string snippet)
+    {
+        var text = NdRegulPolicyContextService.NormalizeForMatching(unitText);
+        var needle = NdRegulPolicyContextService.NormalizeForMatching(snippet);
+        if (needle.Length == 0) return false;
+        if (text.Contains(needle, StringComparison.Ordinal)) return true;
+        var words = needle.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w.Length >= 3).Distinct().ToList();
+        if (words.Count < 3) return false;
+        var textWords = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+        return words.All(textWords.Contains);
     }
 
     public sealed record EvidenceSection(
@@ -292,11 +389,11 @@ public sealed class RegulEmbeddingRetrievalService(
         CancellationToken ct)
     {
         if (corpusDocIds.Count == 0) return [];
-        var corpus = await LoadCorpusAsync(corpusDocIds, ct);
+        var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
+        var corpus = await LoadCorpusAsync(corpusDocIds, pipelineVersion, ct);
         if (corpus == null) return [];
 
         var hits = new QueryHits();
-        var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
         foreach (var query in queryTexts.Where(q => !string.IsNullOrWhiteSpace(q)))
         {
             foreach (var subText in SubObligationSplitter.Split(query, pipelineVersion))
@@ -318,14 +415,83 @@ public sealed class RegulEmbeddingRetrievalService(
             .ToList();
     }
 
+    /// <summary>
+    /// A run's search corpus held in memory for gap verification (pipeline v5): passages, vectors and the
+    /// dictionary are loaded once, so searches during the parallel judgment phase never touch the database.
+    /// Searches are serialized (one at a time per service, whatever the session: the query-vector and dictionary
+    /// caches are shared); only the AI calls around them run in parallel.
+    /// </summary>
+    public sealed class EvidenceSession
+    {
+        private readonly LoadedCorpus _corpus;
+
+        internal EvidenceSession(object corpus, int pipelineVersion)
+        {
+            _corpus = (LoadedCorpus)corpus;
+            PipelineVersion = pipelineVersion;
+        }
+
+        public int PipelineVersion { get; }
+        internal object Corpus => _corpus;
+    }
+
+    private readonly SemaphoreSlim _evidenceGate = new(1, 1);
+
+    /// <summary>In-memory evidence session for the given documents; null below pipeline v4 (sections are scored in
+    /// the database there) or when none of the documents is indexed.</summary>
+    public async Task<EvidenceSession?> CreateEvidenceSessionAsync(IReadOnlyCollection<Guid> corpusDocIds, CancellationToken ct)
+    {
+        var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
+        if (pipelineVersion < NdRegulPipelineVersions.V4Passages || corpusDocIds.Count == 0) return null;
+        var corpus = await LoadCorpusAsync(corpusDocIds, pipelineVersion, ct);
+        if (corpus == null) return null;
+        // Loads the dictionary tables now, so query expansion during the session needs no database access.
+        await dictionary.ExpandQueryDetailedAsync("warm-up", ct);
+        return new EvidenceSession(corpus, pipelineVersion);
+    }
+
+    /// <summary>Steps 1-6 for free-text queries against a session's corpus (same expansion, splitting, relevance gates
+    /// and rank fusion as an analysis), every selected unit returned with its full text. No count limit.</summary>
+    public async Task<IReadOnlyList<EvidenceSection>> SearchEvidenceAsync(
+        EvidenceSession session, IReadOnlyList<string> queries, CancellationToken ct)
+    {
+        var corpus = (LoadedCorpus)session.Corpus;
+        await _evidenceGate.WaitAsync(ct);
+        try
+        {
+            var hits = new QueryHits();
+            foreach (var query in queries.Where(q => !string.IsNullOrWhiteSpace(q)))
+                foreach (var part in SubObligationSplitter.Split(query, session.PipelineVersion))
+                    await ScoreQueryAsync(corpus, part, null, hits, session.PipelineVersion, ct);
+
+            return SelectFused(hits, session.PipelineVersion)
+                .Select(m => new EvidenceSection(
+                    m.SectionId,
+                    m.ClauseNo,
+                    corpus.SectionById.TryGetValue(m.SectionId, out var unit) ? unit.ClauseText : m.TextPreview,
+                    m.SourceDocumentId,
+                    m.SourceDocumentName,
+                    m.SourcePage,
+                    Math.Round(m.FusedScore, 4)))
+                .ToList();
+        }
+        finally
+        {
+            _evidenceGate.Release();
+        }
+    }
+
     private sealed record CorpusSection(Guid Id, Guid ExtractionId, string? ClauseNo, string ClauseText, int? SourcePage);
 
+    /// <summary>The run's search units: whole sections (v1-v3) or passages with their heading path (v4+, where
+    /// <see cref="VectorById"/> also holds every passage vector for in-memory scoring).</summary>
     private sealed record LoadedCorpus(
         List<Guid> ExtractionIds,
         Dictionary<Guid, CorpusSection> SectionById,
         Bm25Scorer.Corpus Bm25Corpus,
         Dictionary<Guid, string?> DocNameById,
-        Dictionary<Guid, Guid> StoredDocIdByExtractionId);
+        Dictionary<Guid, Guid> StoredDocIdByExtractionId,
+        IReadOnlyList<(Guid Id, float[] Vector, double Norm)>? Vectors = null);
 
     private sealed class QueryHits
     {
@@ -347,7 +513,7 @@ public sealed class RegulEmbeddingRetrievalService(
 
     public const string ExpandedVia = "expanded";
 
-    private async Task<LoadedCorpus?> LoadCorpusAsync(IReadOnlyCollection<Guid> corpusDocIds, CancellationToken ct)
+    private async Task<LoadedCorpus?> LoadCorpusAsync(IReadOnlyCollection<Guid> corpusDocIds, int pipelineVersion, CancellationToken ct)
     {
         var docIds = corpusDocIds.ToList();
         var indexed = await db.NdLocalDocumentExtractions
@@ -371,6 +537,9 @@ public sealed class RegulEmbeddingRetrievalService(
             .Where(d => docIds.Contains(d.Id))
             .ToDictionaryAsync(d => d.Id, d => (string?)(d.Title ?? d.OriginalFileName), ct);
 
+        if (pipelineVersion >= NdRegulPipelineVersions.V4Passages)
+            return await LoadPassageCorpusAsync(extractionIds, docNameById, extractions.ToDictionary(e => e.Id, e => e.StoredDocumentId), ct);
+
         var sections = await db.NdLocalDocumentExtractionSections
             .AsNoTracking()
             .Where(s => extractionIds.Contains(s.ExtractionId))
@@ -385,6 +554,75 @@ public sealed class RegulEmbeddingRetrievalService(
             Bm25Scorer.BuildCorpus(sections.Select(s => (s.Id, s.ClauseText)).ToList()),
             docNameById,
             extractions.ToDictionary(e => e.Id, e => e.StoredDocumentId));
+    }
+
+    /// <summary>
+    /// v4+ corpus: every passage of the run's documents with its vector. A document indexed before passages
+    /// existed, or embedded with another model, gets its passages built now, so it is never left out.
+    /// </summary>
+    private async Task<LoadedCorpus> LoadPassageCorpusAsync(
+        List<Guid> extractionIds,
+        Dictionary<Guid, string?> docNameById,
+        Dictionary<Guid, Guid> storedDocIdByExtractionId,
+        CancellationToken ct)
+    {
+        foreach (var extractionId in extractionIds)
+        {
+            if (await passageIndex.HasCurrentPassagesAsync(extractionId, ct)) continue;
+            logger.LogInformation("Building search passages for extraction {ExtractionId} before retrieval", extractionId);
+            await passageIndex.RebuildAsync(extractionId, ct);
+        }
+
+        var model = passageEmbeddings.ModelName;
+        var passages = await db.NdLocalDocumentPassages
+            .AsNoTracking()
+            .Where(p => extractionIds.Contains(p.ExtractionId) && p.EmbeddingModel == model)
+            .Select(p => new { p.Id, p.ExtractionId, p.ClauseNo, p.HeadingPath, p.PassageText, p.SourcePage, p.Embedding })
+            .ToListAsync(ct);
+
+        var units = passages.ToDictionary(
+            p => p.Id,
+            p => new CorpusSection(p.Id, p.ExtractionId, p.ClauseNo, PassageContextText(p.HeadingPath, p.PassageText), p.SourcePage));
+        var vectors = passages
+            .Where(p => p.Embedding != null)
+            .Select(p =>
+            {
+                var v = p.Embedding!.ToArray();
+                return (p.Id, v, Math.Sqrt(v.Sum(x => (double)x * x)));
+            })
+            .ToList();
+
+        return new LoadedCorpus(
+            extractionIds,
+            units,
+            Bm25Scorer.BuildCorpus(units.Values.Select(u => (u.Id, u.ClauseText)).ToList()),
+            docNameById,
+            storedDocIdByExtractionId,
+            vectors);
+    }
+
+    /// <summary>What the search scores and the AI reads for a passage: its heading path, then its text. Not in square
+    /// brackets: those are the evidence labels the AI cites.</summary>
+    public static string PassageContextText(string? headingPath, string passageText) =>
+        string.IsNullOrWhiteSpace(headingPath) ? passageText : $"Heading: {headingPath}\n{passageText}";
+
+    /// <summary>Full text of retrieved search units by id: section rows (v1-v3) or passages (v4+, heading path
+    /// included). The retrieval record only stores a short preview.</summary>
+    public async Task<Dictionary<Guid, string>> LoadUnitTextsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0) return [];
+        var list = ids.Distinct().ToList();
+        var texts = await db.NdLocalDocumentExtractionSections.AsNoTracking()
+            .Where(s => list.Contains(s.Id))
+            .ToDictionaryAsync(s => s.Id, s => s.ClauseText, ct);
+        var missing = list.Where(id => !texts.ContainsKey(id)).ToList();
+        if (missing.Count == 0) return texts;
+        var passages = await db.NdLocalDocumentPassages.AsNoTracking()
+            .Where(p => missing.Contains(p.Id))
+            .Select(p => new { p.Id, p.HeadingPath, p.PassageText })
+            .ToListAsync(ct);
+        foreach (var p in passages) texts[p.Id] = PassageContextText(p.HeadingPath, p.PassageText);
+        return texts;
     }
 
     /// <summary>Steps 1, 3 and 4 for one query text, merged into <paramref name="hits"/> keeping each
@@ -410,10 +648,17 @@ public sealed class RegulEmbeddingRetrievalService(
         // so search the sub-obligation again with every matched term swapped for its counterpart: sections
         // written in the other form then score like the clause itself on both sides.
         if (pipelineVersion < NdRegulPipelineVersions.V2ExpandedWording) return;
-        var reworded = BuildExpandedWording(subText, expanded);
-        if (reworded == null) return;
-        hits.ExpandedQueries.Add(reworded);
-        await SearchAsync(corpus, reworded, subObligationLabel, ExpandedVia, hits, pipelineVersion, ct);
+
+        // v4: a term with several equivalents (timeframe / time period / period of time / duration) is searched
+        // once with each of them, not only with the first.
+        var variants = pipelineVersion >= NdRegulPipelineVersions.V4Passages
+            ? BuildExpandedWordingVariants(subText, expanded)
+            : BuildExpandedWording(subText, expanded) is { } single ? [single] : [];
+        foreach (var reworded in variants)
+        {
+            hits.ExpandedQueries.Add(reworded);
+            await SearchAsync(corpus, reworded, subObligationLabel, ExpandedVia, hits, pipelineVersion, ct);
+        }
     }
 
     /// <summary>Step 3 (BM25) and Step 4 (embedding) for one query text.</summary>
@@ -426,6 +671,12 @@ public sealed class RegulEmbeddingRetrievalService(
         int pipelineVersion,
         CancellationToken ct)
     {
+        if (pipelineVersion >= NdRegulPipelineVersions.V4Passages && corpus.Vectors != null)
+        {
+            await SearchRelevantInMemoryAsync(corpus, queryText, subObligationLabel, via, hits, ct);
+            return;
+        }
+
         if (pipelineVersion >= NdRegulPipelineVersions.V3RelevanceSelection)
         {
             await SearchRelevantAsync(corpus, queryText, subObligationLabel, via, hits, ct);
@@ -502,6 +753,59 @@ public sealed class RegulEmbeddingRetrievalService(
         QueryHits hits,
         CancellationToken ct)
     {
+        AddBm25Relevant(corpus, queryText, subObligationLabel, via, hits);
+
+        var queryVector = new Vector(embedder.Embed(queryText));
+        var extractionIds = corpus.ExtractionIds;
+        var distances = await db.NdLocalDocumentExtractionSections
+            .AsNoTracking()
+            .Where(s => extractionIds.Contains(s.ExtractionId) && s.Embedding != null)
+            .OrderBy(s => s.Embedding!.CosineDistance(queryVector))
+            .Select(s => new { s.Id, Distance = s.Embedding!.CosineDistance(queryVector) })
+            .ToListAsync(ct);
+        AddEmbeddingRelevant(
+            corpus, distances.Select(d => (d.Id, 1 - d.Distance)).ToList(), subObligationLabel, via, hits);
+    }
+
+    /// <summary>v4+: same as <see cref="SearchRelevantAsync"/> over passages, with the query compared to every
+    /// passage vector in memory (vectors were loaded once for the run) instead of a database query per search.</summary>
+    private async Task SearchRelevantInMemoryAsync(
+        LoadedCorpus corpus,
+        string queryText,
+        string? subObligationLabel,
+        string? via,
+        QueryHits hits,
+        CancellationToken ct)
+    {
+        AddBm25Relevant(corpus, queryText, subObligationLabel, via, hits);
+
+        var query = await EmbedQueryAsync(queryText, ct);
+        var queryNorm = Math.Sqrt(query.Sum(x => (double)x * x));
+        var similarities = new List<(Guid SectionId, double Score)>(corpus.Vectors!.Count);
+        foreach (var (id, vector, norm) in corpus.Vectors!)
+        {
+            if (norm == 0 || queryNorm == 0 || vector.Length != query.Length) continue;
+            double dot = 0;
+            for (var k = 0; k < vector.Length; k++) dot += vector[k] * query[k];
+            similarities.Add((id, dot / (norm * queryNorm)));
+        }
+
+        AddEmbeddingRelevant(corpus, similarities, subObligationLabel, via, hits);
+    }
+
+    // One embedding per distinct query text per job (the same part can be searched from several entry points).
+    private readonly Dictionary<string, float[]> _queryVectors = new(StringComparer.Ordinal);
+
+    private async Task<float[]> EmbedQueryAsync(string text, CancellationToken ct)
+    {
+        if (_queryVectors.TryGetValue(text, out var cached)) return cached;
+        var vector = await passageEmbeddings.EmbedAsync(text, ct);
+        _queryVectors[text] = vector;
+        return vector;
+    }
+
+    private static void AddBm25Relevant(LoadedCorpus corpus, string queryText, string? subObligationLabel, string? via, QueryHits hits)
+    {
         var bm25Relevant = HybridFusionSelector.SelectRelevant(
             Bm25Scorer.Score(corpus.Bm25Corpus, queryText), corpus.Bm25Corpus.Docs.Count);
         for (var i = 0; i < bm25Relevant.Count; i++)
@@ -522,17 +826,16 @@ public sealed class RegulEmbeddingRetrievalService(
                 subObligationLabel,
                 via);
         }
+    }
 
-        var queryVector = new Vector(embedder.Embed(queryText));
-        var extractionIds = corpus.ExtractionIds;
-        var distances = await db.NdLocalDocumentExtractionSections
-            .AsNoTracking()
-            .Where(s => extractionIds.Contains(s.ExtractionId) && s.Embedding != null)
-            .OrderBy(s => s.Embedding!.CosineDistance(queryVector))
-            .Select(s => new { s.Id, Distance = s.Embedding!.CosineDistance(queryVector) })
-            .ToListAsync(ct);
-        var embeddingRelevant = HybridFusionSelector.SelectRelevant(
-            distances.Select(d => (d.Id, 1 - d.Distance)).ToList(), distances.Count);
+    private static void AddEmbeddingRelevant(
+        LoadedCorpus corpus,
+        IReadOnlyList<(Guid SectionId, double Score)> similarities,
+        string? subObligationLabel,
+        string? via,
+        QueryHits hits)
+    {
+        var embeddingRelevant = HybridFusionSelector.SelectRelevant(similarities, similarities.Count);
         for (var i = 0; i < embeddingRelevant.Count; i++)
         {
             var (sectionId, similarity) = embeddingRelevant[i];
@@ -593,6 +896,36 @@ public sealed class RegulEmbeddingRetrievalService(
         for (var i = 0; i < replacements.Count; i++)
             result = result.Replace($"{Mark}{i}{Mark}", replacements[i], StringComparison.Ordinal);
         return result;
+    }
+
+    /// <summary>
+    /// v4: the expanded wording once per alternative. A term matched with several equivalents ("timeframe" with
+    /// "time period", "period of time", "duration") gives one rewording per equivalent; other matched terms take
+    /// their first (or only) counterpart in every variant. Empty when nothing matched; no count limit, the number
+    /// of variants is the size of the largest matched group.
+    /// </summary>
+    public static IReadOnlyList<string> BuildExpandedWordingVariants(string text, DictionaryExpansionService.QueryExpansionResult expanded)
+    {
+        var groups = expanded.AcronymMatches
+            .Concat(expanded.SynonymMatches)
+            .Where(m => !string.IsNullOrWhiteSpace(m.MatchedText) && !string.IsNullOrWhiteSpace(m.AddedText))
+            .GroupBy(m => m.MatchedText.ToLowerInvariant())
+            .Select(g => g.GroupBy(m => m.AddedText.ToLowerInvariant()).Select(x => x.First()).ToList())
+            .ToList();
+        if (groups.Count == 0) return [];
+
+        var rounds = groups.Max(g => g.Count);
+        var variants = new List<string>();
+        for (var round = 0; round < rounds; round++)
+        {
+            var picked = groups.Select(g => g[Math.Min(round, g.Count - 1)]).ToList();
+            var acronyms = picked.Where(m => expanded.AcronymMatches.Contains(m)).ToList();
+            var synonyms = picked.Where(m => !expanded.AcronymMatches.Contains(m)).ToList();
+            var reworded = BuildExpandedWording(text, new DictionaryExpansionService.QueryExpansionResult(acronyms, synonyms));
+            if (reworded != null && !variants.Contains(reworded, StringComparer.Ordinal)) variants.Add(reworded);
+        }
+
+        return variants;
     }
 
     private static string Truncate(string text, int maxChars) =>

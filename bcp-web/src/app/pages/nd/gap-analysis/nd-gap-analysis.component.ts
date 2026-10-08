@@ -42,6 +42,7 @@ import {
 import { NdClauseRailCardComponent } from '../../../components/nd/nd-clause-rail-card.component';
 import { NdEvidenceHistoryDrawerComponent } from '../../../components/nd/nd-evidence-history-drawer.component';
 import { NdEvalCompareDrawerComponent, NdEvalDrawerMode } from '../../../components/nd/nd-eval-compare-drawer.component';
+import { NdRetrievalCheckDrawerComponent } from '../../../components/nd/nd-retrieval-check-drawer.component';
 import {
   buildSeededActionPlansForGap,
   isSeedTemplateActionText,
@@ -197,7 +198,7 @@ const PREP_QUEUE_GRACE_MS = 10 * 60_000;
 @Component({
   selector: 'app-nd-gap-analysis',
   standalone: true,
-  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent, NdEvalCompareDrawerComponent],
+  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent, NdEvalCompareDrawerComponent, NdRetrievalCheckDrawerComponent],
   templateUrl: './nd-gap-analysis.component.html',
   styleUrl: './nd-gap-analysis.component.scss',
 })
@@ -379,6 +380,9 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return !this.embedMode && !!this.ndRunId && this.isNdRegulWorkflow
       && this.auth.isPlatformAdmin() && !this.auth.isDemoViewer();
   }
+
+  /** Free retrieval check drawer (Steps 1-6 only, no AI call). */
+  retrievalCheckOpen = false;
 
   openEvalDrawer(mode: NdEvalDrawerMode): void {
     this.evalDrawerMode = mode;

@@ -453,9 +453,9 @@
                         } @else {
                           @for (t of latestPassFor(clause.clauseNo); track t.id) {
                             <div class="trace-call" [class.trace-error]="!!t.error">
-                              @if (t.step === 'llm_call') {
+                              @if (t.step === 'llm_call' || t.step === 'gap_verify') {
                                 <div class="match-row-header">
-                                  <span class="match-doc">Attempt {{ t.attempt }} · {{ t.provider }}/{{ t.model }}</span>
+                                  <span class="match-doc">{{ t.step === 'gap_verify' ? 'Gap check' : 'Attempt ' + t.attempt }} · {{ t.provider }}/{{ t.model }}</span>
                                   <span class="match-similarity">{{ formatMs(t.durationMs) }}</span>
                                 </div>
                                 <p class="trace-meta">Sent {{ t.charsSent }} chars · received {{ t.responseText?.length ?? 0 }} chars</p>
@@ -469,7 +469,7 @@
                                   @if (t.systemPrompt) {
                                     <button type="button" class="trace-toggle" (click)="toggleTraceBlock(t.id + ':system')">System prompt</button>
                                   }
-                                  <button type="button" class="trace-toggle" (click)="toggleTraceBlock(t.id + ':query')">Request (clause + instructions)</button>
+                                  <button type="button" class="trace-toggle" (click)="toggleTraceBlock(t.id + ':query')">{{ t.step === 'gap_verify' ? 'Request (gap + passages searched)' : 'Request (clause + instructions)' }}</button>
                                   <button type="button" class="trace-toggle" (click)="toggleTraceBlock(t.id + ':response')">Raw AI response</button>
                                 </div>
                                 @if (openTraceBlock === t.id + ':system') {

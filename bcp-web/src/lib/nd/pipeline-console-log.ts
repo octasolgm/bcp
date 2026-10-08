@@ -96,7 +96,7 @@ export function logClauseRetrieval(clauseNo: string, raw: unknown): void {
 /** Step 7 context, every Step 8 AI call (request + raw response) and the saved result for one clause. */
 export function logClauseTraces(clauseNo: string, traces: NdClauseTrace[]): void {
   if (traces.length === 0) return;
-  const calls = traces.filter((t) => t.step === 'llm_call' || t.step === 'evidence_check');
+  const calls = traces.filter((t) => t.step === 'llm_call' || t.step === 'evidence_check' || t.step === 'gap_verify');
   const failed = calls.some((t) => !!t.error);
   const sources = [...new Set(traces.map((t) => SOURCE_LABELS[t.source] ?? t.source))].join(', ');
   console.groupCollapsed(
@@ -124,8 +124,13 @@ export function logClauseTraces(clauseNo: string, traces: NdClauseTrace[]): void
         console.groupEnd();
       }
       console.groupEnd();
-    } else if (t.step === 'llm_call' || t.step === 'evidence_check') {
-      const label = t.step === 'evidence_check' ? 'Evidence check AI call (gap by gap)' : 'Step 8 — AI call';
+    } else if (t.step === 'llm_call' || t.step === 'evidence_check' || t.step === 'gap_verify') {
+      const label =
+        t.step === 'evidence_check'
+          ? 'Evidence check AI call (gap by gap)'
+          : t.step === 'gap_verify'
+            ? 'Gap check AI call (pipeline v5)'
+            : 'Step 8 — AI call';
       console.groupCollapsed(
         `%c${label}, attempt ${t.attempt} · ${t.provider}/${t.model} · ${t.durationMs ?? '?'} ms · ${when}${t.error ? ' · ERROR' : ''}`,
         t.error ? STYLE_WARN : STYLE_STEP,
@@ -141,7 +146,9 @@ export function logClauseTraces(clauseNo: string, traces: NdClauseTrace[]): void
       console.groupCollapsed(
         t.step === 'evidence_check'
           ? 'Request (full prompt incl. gaps, actions, re-analysis and evidence text)'
-          : 'Request (clause + instructions; the context is in Step 7)',
+          : t.step === 'gap_verify'
+            ? 'Request (the gap and every passage the wider search selected)'
+            : 'Request (clause + instructions; the context is in Step 7)',
       );
       console.log(t.queryText);
       console.groupEnd();

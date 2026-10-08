@@ -201,6 +201,10 @@ builder.Services.AddHttpClient<Reguliq.Api.Services.LocalDocs.AzureOpenAIEmbeddi
 // worker, deliberately not sharing LocalJobQueue/DualVerifyWorkerHosted below (see IndexingJobQueue's
 // own doc comment for why).
 builder.Services.AddSingleton<Reguliq.Api.Services.LocalDocs.LocalEmbeddingService>();
+builder.Services.Configure<Reguliq.Api.Services.LocalDocs.RegulRetrievalOptions>(
+    builder.Configuration.GetSection("RegulRetrieval"));
+builder.Services.AddScoped<Reguliq.Api.Services.LocalDocs.PassageEmbeddingService>();
+builder.Services.AddScoped<Reguliq.Api.Services.LocalDocs.NdPassageIndexService>();
 builder.Services.AddSingleton<Reguliq.Api.Workers.IndexingJobQueue>();
 builder.Services.AddHostedService<Reguliq.Api.Workers.IndexingWorkerHosted>();
 

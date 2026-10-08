@@ -20,6 +20,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public const int JudgmentSemanticV7VersionNumber = 7;
     public const int JudgmentSemanticV8VersionNumber = 8;
     public const int JudgmentSemanticV9VersionNumber = 9;
+    public const int JudgmentSemanticV10VersionNumber = 10;
     public const int JudgmentFullMarkdownV2VersionNumber = 2;
 
     private static readonly string[] JudgmentPromptKeys =
@@ -119,6 +120,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
         await EnsureJudgmentSemanticV7Async(ct);
         await EnsureJudgmentSemanticV8Async(ct);
         await EnsureJudgmentSemanticV9Async(ct);
+        await EnsureJudgmentSemanticV10Async(ct);
         await EnsureJudgmentFullMarkdownV1Async(ct);
         await EnsureJudgmentFullMarkdownV2Async(ct);
     }
@@ -398,6 +400,22 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
             },
             ct);
 
+    /// <summary>v10: clause types, definition clauses covered by practice, illustrative lists as one requirement,
+    /// merged gaps with clause words and materiality. Insert-only and NOT made current: an admin switches to it
+    /// (Admin > Analysis prompts) when testing it, so runs keep using the current version until then.</summary>
+    public Task EnsureJudgmentSemanticV10Async(CancellationToken ct = default) =>
+        EnsureJudgmentSemanticVersionAsync(
+            JudgmentSemanticV10VersionNumber,
+            NdRegulPromptDefaults.JudgmentSemanticV10Label,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV10.Trim(),
+                [JudgmentUserContextKey] = NdRegulPromptDefaults.JudgmentUserContextTemplateV5.Trim(),
+                [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV10.Trim(),
+            },
+            ct,
+            makeCurrent: false);
+
     private Task EnsureJudgmentSemanticFromV5DefaultsAsync(int versionNumber, string label, CancellationToken ct) =>
         EnsureJudgmentSemanticVersionAsync(
             versionNumber,
@@ -411,7 +429,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
             ct);
 
     private async Task EnsureJudgmentSemanticVersionAsync(
-        int versionNumber, string label, Dictionary<string, string> textByKey, CancellationToken ct)
+        int versionNumber, string label, Dictionary<string, string> textByKey, CancellationToken ct, bool makeCurrent = true)
     {
         var changed = false;
         foreach (var (key, text) in textByKey)
@@ -422,11 +440,14 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
 
             ValidatePromptText(key, text);
 
-            var siblings = await db.NdAnalysisPromptVersions
-                .Where(v => v.PromptKey == key)
-                .ToListAsync(ct);
-            foreach (var sibling in siblings)
-                sibling.IsCurrent = false;
+            if (makeCurrent)
+            {
+                var siblings = await db.NdAnalysisPromptVersions
+                    .Where(v => v.PromptKey == key)
+                    .ToListAsync(ct);
+                foreach (var sibling in siblings)
+                    sibling.IsCurrent = false;
+            }
 
             db.NdAnalysisPromptVersions.Add(new NdAnalysisPromptVersion
             {
@@ -434,7 +455,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
                 VersionNumber = versionNumber,
                 Label = label,
                 PromptText = text,
-                IsCurrent = true,
+                IsCurrent = makeCurrent,
             });
             changed = true;
         }

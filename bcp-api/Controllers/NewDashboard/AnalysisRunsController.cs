@@ -30,6 +30,7 @@ public class AnalysisRunsController(
     NdDemoInterceptionService demoIntercept,
     NdAiCreditService aiCredits,
     NdGapEvidenceRerunService gapEvidenceReruns,
+    RegulEmbeddingRetrievalService embeddingRetrieval,
     ILogger<AnalysisRunsController> logger) : NdControllerBase
 {
     private const string DeletedStatus = "deleted";
@@ -727,15 +728,13 @@ public class AnalysisRunsController(
             .Where(g => retrievalJson.Contains(g.ToString(), StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        var texts = await db.NdLocalDocumentExtractionSections.AsNoTracking()
-            .Where(s => allowed.Contains(s.Id))
-            .Select(s => new { s.Id, s.ClauseText })
-            .ToListAsync(ct);
+        // Sections (pipeline v1-v3) or passages (v4+).
+        var texts = await embeddingRetrieval.LoadUnitTextsAsync(allowed, ct);
 
         return Ok(new
         {
             success = true,
-            data = texts.ToDictionary(t => t.Id.ToString(), t => t.ClauseText),
+            data = texts.ToDictionary(t => t.Key.ToString(), t => t.Value),
         });
     }
 

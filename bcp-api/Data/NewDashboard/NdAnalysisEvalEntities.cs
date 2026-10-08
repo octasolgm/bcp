@@ -85,3 +85,35 @@ public class NdClauseEval : ITenantScoped
     /// <summary>Owning workspace (nd_workspaces.id).</summary>
     public Guid? TenantId { get; set; }
 }
+
+/// <summary>
+/// The evidence a clause is expected to retrieve: short text snippets from the internal documents (one per
+/// line), written by a reviewer who checked the documents. The retrieval check runs Steps 1-6 only (no AI)
+/// and reports, for each snippet, whether a selected section or passage contains it. Keyed like clause evals
+/// (regulation document + clause number), so it applies to every analysis of that clause in the workspace.
+/// </summary>
+[Table("nd_retrieval_expectations")]
+public class NdRetrievalExpectation : ITenantScoped
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("clause_key")]
+    public string ClauseKey { get; set; } = "";
+
+    [Column("clause_no")]
+    public string ClauseNo { get; set; } = "";
+
+    /// <summary>JSON array of snippet strings.</summary>
+    [Column("expected_json")]
+    public string ExpectedJson { get; set; } = "[]";
+
+    [Column("updated_by")]
+    public Guid? UpdatedBy { get; set; }
+
+    [Column("updated_at")]
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public Guid? TenantId { get; set; }
+}

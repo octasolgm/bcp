@@ -55,6 +55,9 @@
       <button type="button" class="btn-secondary" title="Save chosen clauses of this analysis as clause evals" (click)="openEvalDrawer('save')">
         Save clauses as evals
       </button>
+      <button type="button" class="btn-secondary" title="Check that each clause's expected evidence is retrieved (Steps 1-6 only, no AI call, no cost)" (click)="retrievalCheckOpen = true">
+        Retrieval check
+      </button>
     }
     @if (!embedMode && canDeleteSession) {
       <button
@@ -701,6 +704,14 @@
     [runName]="ndRunData?.run?.name ?? ''"
     [mode]="evalDrawerMode"
     (closed)="evalDrawerMode = null"
+  />
+}
+
+@if (retrievalCheckOpen && canUseEvals && ndRunId) {
+  <app-nd-retrieval-check-drawer
+    [runId]="ndRunId"
+    [runName]="ndRunData?.run?.name ?? ''"
+    (closed)="retrievalCheckOpen = false"
   />
 }
 

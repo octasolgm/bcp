@@ -1,0 +1,105 @@
+<div class="rc-backdrop" (click)="closed.emit()" aria-hidden="true"></div>
+<aside class="rc-drawer" role="dialog" aria-modal="true" aria-labelledby="retrieval-check-title">
+  <header class="rc-head">
+    <div class="rc-head-copy">
+      <p class="rc-eyebrow">Retrieval check - no AI, no cost</p>
+      <h2 id="retrieval-check-title">{{ runName || 'This analysis' }}</h2>
+      @if (pipelineLabel) {
+        <p class="rc-sub">Runs Steps 1-6 with the current pipeline: <strong>{{ pipelineLabel }}</strong></p>
+      }
+    </div>
+    <button type="button" class="rc-close" (click)="closed.emit()" aria-label="Close">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+        <path d="M5 5l10 10M15 5L5 15" />
+      </svg>
+    </button>
+  </header>
+
+  <div class="rc-body">
+    <p class="rc-help">
+      For each clause, paste short pieces of internal-document text the clause should find (one per line, a few words
+      to a sentence, copied from the document). The check searches this analysis's documents exactly as an analysis
+      does and shows whether each piece reaches the AI. Saved per clause, so the next check reuses them.
+    </p>
+    @if (error) {
+      <p class="rc-error">{{ error }}</p>
+    }
+    @if (loading) {
+      <p class="rc-muted">Loading...</p>
+    } @else {
+      @for (clause of clauses; track clause.clauseKey) {
+        <section class="rc-card">
+          <div class="rc-card-head">
+            <label class="rc-pick">
+              <input
+                type="checkbox"
+                [checked]="checked.has(clause.clauseNo)"
+                (change)="toggle(clause.clauseNo, $any($event.target).checked)"
+              />
+              <span class="rc-clause-no">§{{ clause.clauseNo }}</span>
+              <span class="rc-clause-title">{{ clause.clauseTitle }}</span>
+            </label>
+            <button
+              type="button"
+              class="rc-mini"
+              [disabled]="savingKeys.has(clause.clauseKey) || !isDirty(clause)"
+              (click)="save(clause)"
+            >
+              {{ savingKeys.has(clause.clauseKey) ? 'Saving...' : isDirty(clause) ? 'Save' : savedKeys.has(clause.clauseKey) ? 'Saved' : 'Save' }}
+            </button>
+          </div>
+          <textarea
+            class="rc-input"
+            rows="3"
+            [(ngModel)]="drafts[clause.clauseKey]"
+            placeholder="Expected evidence, one snippet per line"
+            [attr.aria-label]="'Expected evidence for clause ' + clause.clauseNo"
+          ></textarea>
+
+          @if (results[clause.clauseKey]; as r) {
+            <div class="rc-result">
+              <p class="rc-stats">
+                <span class="rc-found" [class.rc-all]="r.found === r.expectedCount">{{ r.found }} / {{ r.expectedCount }} found</span>
+                <span>{{ r.parts }} part(s) searched</span>
+                <span>{{ r.expandedQueries }} reworded search(es)</span>
+                <span>{{ r.selected }} selected</span>
+                <span>{{ formatNumber(r.contextChars) }} chars (~{{ formatNumber(r.approxTokens) }} tokens)</span>
+                <span>{{ seconds(r.elapsedMs) }} s</span>
+              </p>
+              <ul class="rc-snippets">
+                @for (s of r.snippets; track s.snippet) {
+                  <li [attr.data-state]="snippetState(s)">
+                    <span class="rc-chip">
+                      @switch (snippetState(s)) {
+                        @case ('selected') { Selected #{{ s.rank }} }
+                        @case ('missed') { Not selected }
+                        @default { Not in indexed text }
+                      }
+                    </span>
+                    <span class="rc-snippet">{{ s.snippet }}</span>
+                    @if (s.selected && s.selectedLabel) {
+                      <span class="rc-where">{{ s.selectedLabel }}</span>
+                    } @else if (s.foundIn.length) {
+                      <span class="rc-where">In: {{ s.foundIn.join('; ') }}</span>
+                    } @else {
+                      <span class="rc-where">Not in any indexed section of these documents (parsing, or the snippet differs from the document text)</span>
+                    }
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        </section>
+      } @empty {
+        <p class="rc-muted">This analysis has no clauses.</p>
+      }
+    }
+  </div>
+
+  <footer class="rc-foot">
+    <span class="rc-muted">{{ checked.size }} clause(s) ticked</span>
+    <button type="button" class="rc-primary" [disabled]="!checked.size || running" (click)="run()">
+      {{ running ? 'Checking...' : 'Run retrieval check' }}
+    </button>
+  </footer>
+</aside>

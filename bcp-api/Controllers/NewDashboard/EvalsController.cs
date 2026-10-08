@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.Llm;
 using Reguliq.Api.Services.NewDashboard;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -17,13 +18,19 @@ namespace Reguliq.Api.Controllers.NewDashboard;
 public class EvalsController(
     AppDbContext db,
     SupabaseJwtValidator jwt,
-    NdAnalysisEvalService evals) : NdControllerBase
+    NdAnalysisEvalService evals,
+    RegulEmbeddingRetrievalService retrieval,
+    RegulWorkflowLlmSettingsService regulSettings) : NdControllerBase
 {
     private static readonly Dictionary<Guid, string> NoNames = [];
 
     public sealed record SaveClausesRequest(Guid RunId, List<string> ClauseNos, string? Notes, bool? SetCurrent);
 
     public sealed record CompareRequest(Guid RunId, List<string> ClauseNos, List<Guid> EvalIds);
+
+    public sealed record SaveExpectationRequest(string ClauseKey, string ClauseNo, List<string>? Expected);
+
+    public sealed record RetrievalCheckRequest(List<string>? ClauseNos);
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
@@ -186,6 +193,140 @@ public class EvalsController(
                 clauses = rows,
             },
         });
+    }
+
+    // ------------------------------------------------------------ retrieval check (free, no AI)
+
+    /// <summary>An analysis's clauses with the expected evidence saved for each (by clause identity).</summary>
+    [HttpGet("retrieval-check/{runId:guid}")]
+    public async Task<IActionResult> RetrievalCheckSetup(Guid runId, CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        var snap = await evals.SnapshotRunAsync(runId, ct);
+        if (snap == null || snap.Run.Status == "deleted")
+            return NotFound(new { success = false, message = "Analysis not found." });
+
+        var keys = snap.Clauses.Select(NdAnalysisEvalService.ClauseKeyOf).ToList();
+        var saved = await db.NdRetrievalExpectations.AsNoTracking()
+            .Where(x => keys.Contains(x.ClauseKey))
+            .ToListAsync(ct);
+        var version = await regulSettings.GetPipelineVersionAsync(ct);
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                pipelineVersion = version,
+                pipelineLabel = NdRegulPipelineVersions.Label(version),
+                clauses = snap.Clauses
+                    .OrderBy(c => c.ClauseNo, NdAnalysisEvalService.ClauseNoComparer.Instance)
+                    .Select(c =>
+                    {
+                        var key = NdAnalysisEvalService.ClauseKeyOf(c);
+                        return new
+                        {
+                            c.ClauseNo,
+                            c.ClauseTitle,
+                            clauseKey = key,
+                            expected = ReadExpected(saved.FirstOrDefault(x => x.ClauseKey == key)?.ExpectedJson),
+                        };
+                    }),
+            },
+        });
+    }
+
+    /// <summary>Saves the expected evidence snippets for one clause (replaces the previous list).</summary>
+    [HttpPut("retrieval-expectations")]
+    public async Task<IActionResult> SaveRetrievalExpectation([FromBody] SaveExpectationRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+        if (string.IsNullOrWhiteSpace(body.ClauseKey))
+            return BadRequest(new { success = false, message = "Clause is required." });
+
+        var expected = (body.Expected ?? []).Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
+        var row = await db.NdRetrievalExpectations.FirstOrDefaultAsync(x => x.ClauseKey == body.ClauseKey, ct);
+        if (row == null)
+        {
+            row = new Data.NewDashboard.Entities.NdRetrievalExpectation { ClauseKey = body.ClauseKey.Trim() };
+            db.NdRetrievalExpectations.Add(row);
+        }
+
+        row.ClauseNo = body.ClauseNo?.Trim() ?? "";
+        row.ExpectedJson = System.Text.Json.JsonSerializer.Serialize(expected);
+        row.UpdatedBy = profile!.Id;
+        row.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return Ok(new { success = true, data = new { clauseKey = row.ClauseKey, expected } });
+    }
+
+    /// <summary>
+    /// Runs Steps 1-6 only (current pipeline version, the analysis's own internal documents) for the chosen
+    /// clauses and reports, for each expected snippet, whether the selected sections / passages contain it.
+    /// No AI call and no cost: use it to confirm retrieval finds the right text before paying for a judgment run.
+    /// </summary>
+    [HttpPost("retrieval-check/{runId:guid}")]
+    public async Task<IActionResult> RunRetrievalCheck(Guid runId, [FromBody] RetrievalCheckRequest body, CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        var snap = await evals.SnapshotRunAsync(runId, ct);
+        if (snap == null || snap.Run.Status == "deleted")
+            return NotFound(new { success = false, message = "Analysis not found." });
+
+        var docIds = (System.Text.Json.JsonSerializer.Deserialize<List<string>>(snap.Run.SelectedInternalDocIds) ?? [])
+            .Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty)
+            .Where(g => g != Guid.Empty)
+            .Distinct()
+            .ToList();
+        if (docIds.Count == 0)
+            return BadRequest(new { success = false, message = "This analysis has no internal documents." });
+
+        var wanted = (body.ClauseNos ?? []).Select(NdAnalysisEvalService.NumberKey).ToHashSet(StringComparer.Ordinal);
+        var clauses = snap.Clauses
+            .Where(c => wanted.Count == 0 || wanted.Contains(NdAnalysisEvalService.NumberKey(c.ClauseNo)))
+            .OrderBy(c => c.ClauseNo, NdAnalysisEvalService.ClauseNoComparer.Instance)
+            .ToList();
+        var keys = clauses.Select(NdAnalysisEvalService.ClauseKeyOf).ToList();
+        var saved = await db.NdRetrievalExpectations.AsNoTracking().Where(x => keys.Contains(x.ClauseKey)).ToListAsync(ct);
+
+        var results = new List<object>();
+        foreach (var clause in clauses)
+        {
+            var key = NdAnalysisEvalService.ClauseKeyOf(clause);
+            var expected = ReadExpected(saved.FirstOrDefault(x => x.ClauseKey == key)?.ExpectedJson);
+            var check = await retrieval.CheckClauseAsync(docIds, clause.ClauseText, expected, ct);
+            if (check == null)
+                return BadRequest(new { success = false, message = "None of this analysis's internal documents is indexed yet." });
+            results.Add(new
+            {
+                clause.ClauseNo,
+                clause.ClauseTitle,
+                clauseKey = key,
+                check.PipelineVersion,
+                check.Parts,
+                check.ExpandedQueries,
+                check.Selected,
+                check.ContextChars,
+                approxTokens = check.ContextChars / 4,
+                check.ElapsedMs,
+                found = check.Snippets.Count(x => x.Selected),
+                expectedCount = check.Snippets.Count,
+                snippets = check.Snippets,
+            });
+        }
+
+        return Ok(new { success = true, data = new { clauses = results } });
+    }
+
+    private static List<string> ReadExpected(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try { return System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? []; }
+        catch (System.Text.Json.JsonException) { return []; }
     }
 
     private async Task<Dictionary<Guid, string>> CreatorNamesAsync(IEnumerable<NdClauseEval> rows, CancellationToken ct)

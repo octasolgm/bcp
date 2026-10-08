@@ -543,6 +543,35 @@ public static class NdIncrementalSchemaBootstrap
         );
         CREATE INDEX IF NOT EXISTS idx_nd_clause_evals_key ON nd_clause_evals (clause_key, version_number DESC);
         """,
+        """
+        CREATE TABLE IF NOT EXISTS nd_local_document_passages (
+          id UUID PRIMARY KEY,
+          extraction_id UUID NOT NULL REFERENCES nd_local_document_extractions(id) ON DELETE CASCADE,
+          section_id UUID NOT NULL,
+          section_index INTEGER NOT NULL,
+          passage_index INTEGER NOT NULL,
+          clause_no TEXT NULL,
+          heading_path TEXT NOT NULL DEFAULT '',
+          passage_text TEXT NOT NULL,
+          source_page INTEGER NULL,
+          embedding vector NULL,
+          embedding_model TEXT NOT NULL DEFAULT '',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS ix_nd_local_document_passages_extraction
+          ON nd_local_document_passages (extraction_id);
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS nd_retrieval_expectations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          clause_key TEXT NOT NULL,
+          clause_no TEXT NOT NULL,
+          expected_json TEXT NOT NULL DEFAULT '[]',
+          updated_by UUID NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_nd_retrieval_expectations_key ON nd_retrieval_expectations (clause_key);
+        """,
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)
