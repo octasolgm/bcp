@@ -41,12 +41,16 @@ public class NdRegulClauseContextService(AppDbContext db)
     public async Task<ClauseContext?> BuildAsync(NdAnalysisPoint point, string clauseNo, CancellationToken ct)
     {
         var number = NormalizeNumber(clauseNo);
-        if (number == null || point.RegulationPointId is not Guid regPointId) return null;
+        if (number == null) return null;
 
-        var docId = await db.NdRegulationPoints.AsNoTracking()
-            .Where(p => p.Id == regPointId)
-            .Select(p => (Guid?)p.RegulationDocumentId)
-            .FirstOrDefaultAsync(ct);
+        Guid? docId = null;
+        if (point.RegulationPointId is Guid regPointId)
+            docId = await db.NdRegulationPoints.AsNoTracking()
+                .Where(p => p.Id == regPointId)
+                .Select(p => (Guid?)p.RegulationDocumentId)
+                .FirstOrDefaultAsync(ct);
+        // Points picked on the V5 new analysis page carry no regulation point link, only a "{docId}:{number}" id.
+        docId ??= RegulationDocumentIdFromSnapshot(point.PointSnapshot);
         if (docId is not Guid regulationDocumentId) return null;
 
         var outline = await LoadOutlineAsync(regulationDocumentId, ct);
@@ -146,6 +150,25 @@ public class NdRegulClauseContextService(AppDbContext db)
     private static string Line(Heading h) => string.IsNullOrWhiteSpace(h.Title) ? h.Number : $"{h.Number} {h.Title}";
 
     private static int SegmentCount(string number) => number.Count(c => c == '.') + 1;
+
+    /// <summary>The regulation document id from a point snapshot whose pointId is "{documentId}:{pointNumber}".</summary>
+    public static Guid? RegulationDocumentIdFromSnapshot(string? snapshotJson)
+    {
+        if (string.IsNullOrWhiteSpace(snapshotJson)) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(snapshotJson);
+            if (!doc.RootElement.TryGetProperty("pointId", out var pid) || pid.ValueKind != System.Text.Json.JsonValueKind.String)
+                return null;
+            var raw = pid.GetString() ?? "";
+            var colon = raw.IndexOf(':');
+            return colon > 0 && Guid.TryParse(raw[..colon], out var id) ? id : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>"3." / " 3.5 " -> "3" / "3.5"; null for anything that is not a dotted number.</summary>
     public static string? NormalizeNumber(string? raw)

@@ -104,6 +104,16 @@ public class NdRegulClauseContextAndEvalTests
     }
 
     [Fact]
+    public void Regulation_document_is_read_from_snapshot_point_id()
+    {
+        var docId = Guid.Parse("7bbad517-f1cf-432f-bcb6-5f0e4f7a96e3");
+        Assert.Equal(docId, NdRegulClauseContextService.RegulationDocumentIdFromSnapshot(
+            "{\"pointId\": \"7bbad517-f1cf-432f-bcb6-5f0e4f7a96e3:3.5\", \"pointNumber\": \"3.5\"}"));
+        Assert.Null(NdRegulClauseContextService.RegulationDocumentIdFromSnapshot("{\"pointId\": \"3.5\"}"));
+        Assert.Null(NdRegulClauseContextService.RegulationDocumentIdFromSnapshot("not json"));
+    }
+
+    [Fact]
     public void Mixed_version_sets_are_detected()
     {
         Assert.True(NdAnalysisEvalService.IsSingleVersionSet("system v8, user 1 v8, user 2 v8"));

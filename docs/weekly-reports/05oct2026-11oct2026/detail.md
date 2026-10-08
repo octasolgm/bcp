@@ -56,6 +56,8 @@ If the AI service returns an incomplete or unreadable answer, or is briefly unav
 
 Being worked on
 
+We reviewed why the money laundering definition clause produced a different set of gaps after the latest analysis changes. The overall verdict was the same in both runs; the difference came from how strictly the AI treated definitions and example lists in the regulation, and from a larger amount of policy text being sent for review. Improvements to make these results consistent are being prepared.
+
 We compared two AI models on the same clauses and documents. One gives more precise, better-evidenced results but takes longer; the other is several times faster but tends to flag background statements in the regulation as gaps. The choice of model for clause judgment is being finalised.
 
 Re-running a single clause no longer triggers an unnecessary document re-processing step in an external service, so clause re-runs are faster and avoid extra cost.

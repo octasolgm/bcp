@@ -42,6 +42,7 @@ Bug fixes
 - Kimi K3 output ceiling raised from 32,768 to 131,072 tokens (model limit on OpenRouter is ~943k) so long reasoning cannot cut the answer off; billing is per generated token, so no extra cost on normal clauses
 
 Investigated, follow up pending
+- Clause 3.5, v8 vs v9 gap difference (runs e5aff65b vs 0603b412): both AI verdicts were partial (v8 only shows compliant because its actions were resolved). Evidence was the same, including the crypto/property/precious-metal typologies (Annex 1 B.3, B.4, B.18); v8 accepted them for the asset-scope element, v9 required an express scope statement. Found: v9 supporting context never reached the AI on the V5 new analysis page (analysis points have no regulation point link), so that run was effectively v8; pipeline v2 also changed at the same time (context 148k -> 211k chars, 40 -> 55 sections, ~20k chars of duplicate Document.pdf / Implementation Manual text); the prompt has no rule for definitional/interpretive clauses or illustrative "such as" lists. Fixes proposed, awaiting decision
 - Model comparison on 3.5 + 3.6: Kimi K3 (high reasoning) more precise and follows the v8 rules better but varies between runs and takes 40-170 s per clause; Claude Sonnet 5 about 23 s per clause with schema-enforced output but flags contextual statements as gaps and cites less evidence. Decision on judgment model (and possibly testing Claude Opus 5) pending
 
 Tasks (continued)
