@@ -152,7 +152,9 @@ public static partial class NdRegulGapVerifier
         sb.AppendLine("--- END EXCERPTS ---");
         sb.AppendLine();
         sb.AppendLine("Respond with ONLY a JSON object (no markdown fences): {\"status\": \"covered\" | \"partial\" | \"not_covered\", \"evidence\": \"<excerpt id, e.g. E3, or empty>\", \"quote\": \"<the supporting text copied VERBATIM from that excerpt, or empty>\", \"reason\": \"<one sentence>\"}.");
-        sb.AppendLine("covered = the excerpt fully meets the missing requirement; partial = it meets part of it; not_covered = no excerpt addresses it.");
+        sb.AppendLine("covered = an excerpt fully meets the missing requirement.");
+        sb.AppendLine("partial = an excerpt deals with the same subject and goes part of the way without fully meeting it: it applies the requirement in practice, covers some of its elements, or states a narrower version of it (for example a limited period, a single case, a related procedure). Quote the most relevant one; the gap stays and the quote is shown with it.");
+        sb.AppendLine("not_covered = no excerpt deals with the subject of the missing requirement. For a missing definition: partial only when an excerpt states part of that definition; an excerpt that only uses the term is not_covered.");
         return sb.ToString();
     }
 

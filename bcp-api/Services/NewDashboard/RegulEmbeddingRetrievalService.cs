@@ -284,6 +284,7 @@ public sealed class RegulEmbeddingRetrievalService(
         // retrieval, so a bundled clause searched as one blended query can't wash out a section
         // that only matches one of its several obligations.
         var subObligations = SubObligationSplitter.Split(clauseText, pipelineVersion);
+        if (corpus.Vectors != null) await PrewarmQueryVectorsAsync(subObligations, pipelineVersion, ct);
         var hits = new QueryHits();
         foreach (var subText in subObligations)
         {
@@ -511,9 +512,12 @@ public sealed class RegulEmbeddingRetrievalService(
         try
         {
             var hits = new QueryHits();
-            foreach (var query in queries.Where(q => !string.IsNullOrWhiteSpace(q)))
-                foreach (var part in SubObligationSplitter.Split(query, session.PipelineVersion))
-                    await ScoreQueryAsync(corpus, part, null, hits, session.PipelineVersion, ct);
+            var parts = queries.Where(q => !string.IsNullOrWhiteSpace(q))
+                .SelectMany(q => SubObligationSplitter.Split(q, session.PipelineVersion))
+                .ToList();
+            if (corpus.Vectors != null) await PrewarmQueryVectorsAsync(parts, session.PipelineVersion, ct);
+            foreach (var part in parts)
+                await ScoreQueryAsync(corpus, part, null, hits, session.PipelineVersion, ct);
 
             return SelectFused(hits, session.PipelineVersion)
                 .Select(m => new EvidenceSection(
@@ -666,6 +670,94 @@ public sealed class RegulEmbeddingRetrievalService(
         return texts;
     }
 
+    // Step 1 per query text, once per job (the same part is expanded for the vector pre-pass and for the search).
+    private readonly Dictionary<(string Text, int Version), DictionaryExpansionService.QueryExpansionResult> _expansions = new();
+
+    private async Task<DictionaryExpansionService.QueryExpansionResult> ExpandAsync(string subText, int pipelineVersion, CancellationToken ct)
+    {
+        if (_expansions.TryGetValue((subText, pipelineVersion), out var cached)) return cached;
+        var expanded = await dictionary.ExpandQueryDetailedAsync(subText, ct);
+        // v4+: an acronym whose letters do not match the initials of its full form ("GPML" for "Money Laundering")
+        // would search nonsense wording; it is left out. v1-v3 unchanged.
+        if (pipelineVersion >= NdRegulPipelineVersions.V4Passages)
+            expanded = new DictionaryExpansionService.QueryExpansionResult(
+                expanded.AcronymMatches.Where(m => IsPlausibleAcronymPair(m.TermA, m.TermB)).ToList(),
+                expanded.SynonymMatches);
+        _expansions[(subText, pipelineVersion)] = expanded;
+        return expanded;
+    }
+
+    /// <summary>The texts Steps 3-4 search for one part: the part with its counterpart terms appended, then (v2+)
+    /// the part reworded with each counterpart.</summary>
+    private static (string QueryText, IReadOnlyList<string> Variants) SearchTexts(
+        string subText, DictionaryExpansionService.QueryExpansionResult expanded, int pipelineVersion)
+    {
+        var queryText = expanded.AllTerms.Count == 0
+            ? subText
+            : subText + " " + string.Join(" ", expanded.AllTerms);
+        // v2: the clause may say "CDD" while the policy says "customer due diligence" (or the reverse, or a
+        // synonym). Appending the counterpart to a long clause barely moves its BM25 score or its embedding,
+        // so search the sub-obligation again with every matched term swapped for its counterpart: sections
+        // written in the other form then score like the clause itself on both sides.
+        // v4: a term with several equivalents (timeframe / time period / period of time / duration) is searched
+        // once with each of them, not only with the first.
+        IReadOnlyList<string> variants = pipelineVersion < NdRegulPipelineVersions.V2ExpandedWording
+            ? []
+            : pipelineVersion >= NdRegulPipelineVersions.V4Passages
+                ? BuildExpandedWordingVariants(subText, expanded)
+                : BuildExpandedWording(subText, expanded) is { } single ? [single] : [];
+        return (queryText, variants);
+    }
+
+    /// <summary>
+    /// v4+: embeds every text the parts will search in a few batched calls before searching, instead of one call per
+    /// text (with Azure OpenAI one call per text made Steps 1-6 take ~30 s for a long clause).
+    /// </summary>
+    private async Task PrewarmQueryVectorsAsync(IEnumerable<string> subTexts, int pipelineVersion, CancellationToken ct)
+    {
+        if (pipelineVersion < NdRegulPipelineVersions.V4Passages) return;
+        var texts = new List<string>();
+        foreach (var subText in subTexts)
+        {
+            var (queryText, variants) = SearchTexts(subText, await ExpandAsync(subText, pipelineVersion, ct), pipelineVersion);
+            texts.Add(queryText);
+            texts.AddRange(variants);
+        }
+
+        var missing = texts.Distinct(StringComparer.Ordinal).Where(t => !_queryVectors.ContainsKey(t)).ToList();
+        if (missing.Count == 0) return;
+        var vectors = await passageEmbeddings.EmbedManyAsync(missing, ct);
+        for (var i = 0; i < missing.Count; i++) _queryVectors[missing[i]] = vectors[i];
+    }
+
+    /// <summary>
+    /// True when an acronym pair is plausible: the acronym's letters equal the initials of its full form, skipping
+    /// small words (of, the, and, ...) or not, with hyphenated parts as words and an all-capitals word giving all its
+    /// letters ("CBUAE" = "Central Bank of the UAE"). Pairs that are not acronyms (both sides several words) pass.
+    /// </summary>
+    public static bool IsPlausibleAcronymPair(string termA, string termB)
+    {
+        static bool IsAcronym(string t) => !string.IsNullOrWhiteSpace(t) && !t.Trim().Contains(' ')
+            && t.Count(char.IsLetter) >= 2 && t.Count(char.IsUpper) >= 2;
+        var a = (termA ?? "").Trim();
+        var b = (termB ?? "").Trim();
+        string acronym, full;
+        if (IsAcronym(a) && !IsAcronym(b)) (acronym, full) = (a, b);
+        else if (IsAcronym(b) && !IsAcronym(a)) (acronym, full) = (b, a);
+        else return true;
+
+        var letters = new string(acronym.Where(char.IsLetter).Select(char.ToUpperInvariant).ToArray());
+        var words = Regex.Split(full, @"[\s\-/]+").Where(w => w.Any(char.IsLetter)).ToList();
+        string Initials(IEnumerable<string> ws) => string.Concat(ws.Select(w =>
+        {
+            var clean = new string(w.Where(char.IsLetter).ToArray());
+            return clean.Length > 1 && clean.All(char.IsUpper) ? clean : clean[..1].ToUpperInvariant();
+        }));
+        if (Initials(words) == letters) return true;
+        var small = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "of", "the", "and", "for", "to", "in", "on", "a", "an", "&" };
+        return Initials(words.Where(w => !small.Contains(w))) == letters;
+    }
+
     /// <summary>Steps 1, 3 and 4 for one query text, merged into <paramref name="hits"/> keeping each
     /// section's best score. Pipeline v2 also searches the expanded wording (see <see cref="BuildExpandedWording"/>).</summary>
     private async Task ScoreQueryAsync(
@@ -676,25 +768,11 @@ public sealed class RegulEmbeddingRetrievalService(
         int pipelineVersion,
         CancellationToken ct)
     {
-        var expanded = await dictionary.ExpandQueryDetailedAsync(subText, ct);
+        var expanded = await ExpandAsync(subText, pipelineVersion, ct);
         foreach (var m in expanded.AcronymMatches) hits.Acronyms[$"{m.EntryId}:{m.MatchedText}"] = m;
         foreach (var m in expanded.SynonymMatches) hits.Synonyms[$"{m.EntryId}:{m.MatchedText}"] = m;
-        var queryText = expanded.AllTerms.Count == 0
-            ? subText
-            : subText + " " + string.Join(" ", expanded.AllTerms);
+        var (queryText, variants) = SearchTexts(subText, expanded, pipelineVersion);
         await SearchAsync(corpus, queryText, subObligationLabel, null, hits, pipelineVersion, ct);
-
-        // v2: the clause may say "CDD" while the policy says "customer due diligence" (or the reverse, or a
-        // synonym). Appending the counterpart to a long clause barely moves its BM25 score or its embedding,
-        // so search the sub-obligation again with every matched term swapped for its counterpart: sections
-        // written in the other form then score like the clause itself on both sides.
-        if (pipelineVersion < NdRegulPipelineVersions.V2ExpandedWording) return;
-
-        // v4: a term with several equivalents (timeframe / time period / period of time / duration) is searched
-        // once with each of them, not only with the first.
-        var variants = pipelineVersion >= NdRegulPipelineVersions.V4Passages
-            ? BuildExpandedWordingVariants(subText, expanded)
-            : BuildExpandedWording(subText, expanded) is { } single ? [single] : [];
         foreach (var reworded in variants)
         {
             hits.ExpandedQueries.Add(reworded);

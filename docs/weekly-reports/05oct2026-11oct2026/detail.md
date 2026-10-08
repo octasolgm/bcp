@@ -155,3 +155,5 @@ The stronger search model is now the default for the policy passage search. Docu
 
 The latest test of the money laundering clause gave the expected result: partially compliant, with three low-risk gaps (the definitions of "funds" and "proceeds", and a statement that the timing of a transaction does not affect reporting), each with its own drafted action and a low-risk due date. The detailed step-by-step report of an analysis can now be downloaded as a text file from the progress panel.
 
+The step-by-step report of the latest test showed three further improvements, now made: when policy text partly addresses a gap (for example the guidance on reviewing a longer period of transactions for the timeframe point), the gap now shows that text instead of ignoring it; the search is faster with the stronger search model; and two incorrect abbreviation entries no longer distort the search.
+

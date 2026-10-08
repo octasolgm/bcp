@@ -59,6 +59,9 @@ or document, no code.
 | T25 | Stronger embedding model: Admin switch, Azure default | Feature | Done | To confirm (model now in the report) | c332a6d, d0fd31e, f16abf5 |
 | T26 | Timeframe on 3.5: AI or audit right? | Analysis | Done (decision pending) | - | c332a6d |
 | T27 | Plan V1 task format and this work log | Analysis | Done | - | d4225f3 and later |
+| T28 | Gap check said "not covered" for evidence that partly addresses a gap | Bug | Done | To confirm on the next run | this commit |
+| T29 | Steps 1-6 took 33 s with Azure (one call per search text) | Bug | Done | To confirm | this commit |
+| T30 | Wrong acronym pairs produced nonsense search wording | Bug | Done (v4 / v5) | To confirm | this commit |
 
 ---
 
@@ -379,6 +382,49 @@ or document, no code.
   test, status), embeddings and pgvector explained; this log, rewritten task by task.
 - **Status:** done; kept up to date.
 
+### T28 - Gap check said "not covered" for partial evidence (Bug, this commit)
+
+- **Problem:** on 3.5 the timeframe gap had no "partly addressed" note although Implementation Manual p.22 ("describe
+  the duration of the activity") and p.24 ("expanding the time period for reviewing alerted transactions ... from 30
+  days to 90 days") deal with it.
+- **Cause (from the downloaded report):** the search was fine: the gap check searched 52 passages including p.22 and
+  p.24. The AI answered "not_covered" because they are "STR narrative details" and "review periods". The prompt defined
+  partial only as "meets part of it", which the AI read narrowly.
+- **Fix:** the gap check now defines the three answers precisely: covered = fully meets it; **partial = deals with the
+  same subject and goes part of the way** (applies it in practice, covers some elements, or states a narrower version
+  such as a limited period); not_covered = nothing on the subject. For a missing definition, partial only when part of
+  the definition is stated; using the term stays not_covered. A partial answer keeps the gap and shows the quote with
+  it ("Partly addressed: [page] "quote""); it never removes a gap.
+- **Checked against the expected results before your run:** 3.3 compliant, no gaps, not affected; 3.5 "funds" /
+  "proceeds" stay not covered (documents only use the terms), timeframe becomes partly addressed with p.22 / p.24;
+  3.6 predicate offence definition gets CandNM p.2 ("inside or outside the UAE") as partial, as Plan V1 expects.
+- **Where:** `NdRegulGapVerifier.BuildPrompt`.
+- **Status:** done; this is option 1 for the timeframe. Option 2 (count it as covered) is still your decision (A6).
+
+### T29 - Steps 1-6 took 33 s with Azure (Bug, this commit)
+
+- **Problem:** Steps 1-6 for 3.5 took 33 s in the downloaded report, against ~8 s on the local model.
+- **Cause:** every search text (15 parts + 37 reworded variants) was embedded with its own Azure call, one after the
+  other.
+- **Fix:** before searching, every text a clause (or a gap check) will search is embedded in a few batched calls
+  (16 per call, 4 at a time); Step 1 expansions are cached per job. Results are identical; only the calls are grouped.
+- **Where:** `RegulEmbeddingRetrievalService.PrewarmQueryVectorsAsync`, `ExpandAsync`, `SearchTexts`.
+- **Status:** done; expected a few seconds for Steps 1-6.
+
+### T30 - Wrong acronym pairs produced nonsense search wording (Bug, this commit)
+
+- **Problem:** the report shows the dictionary pairs "Money Laundering -> GPML" and "AML -> Anti-Money Laundering,
+  Counter-Terrorist Financing and Sanctions Module"; 3.5 was also searched as "in order to be considered GPML, ...".
+- **Cause:** acronym entries whose letters do not match their full form (harvested from documents before T7 made new
+  ones inactive, or approved by mistake).
+- **Fix:** on pipelines v4 / v5 an acronym is used only when its letters equal the initials of its full form (small
+  words optional, hyphenated parts count, an all-capitals word gives all its letters: AML = Anti-Money Laundering,
+  CFT = Combating the Financing of Terrorism, CBUAE = Central Bank of the UAE pass; GPML = Money Laundering fails).
+  Synonyms are not affected; v1-v3 unchanged.
+- **Where:** `RegulEmbeddingRetrievalService.IsPlausibleAcronymPair`, used in `ExpandAsync`.
+- **Also for you (A7):** deactivate those two entries on the dictionary page so other screens stop showing them.
+- **Status:** done.
+
 ---
 
 ## 3. Test runs
@@ -389,6 +435,7 @@ or document, no code.
 | 3.5 | v5, prompt v10, local | **Compliant** (wrong) | v10 rules let typologies cover definitions and one amount quote cover three conditions | T18 |
 | 3.5 | v5, prompt v11, local | Partial 72%, 2 gaps | Definitions gap right; actions on the wrong gap; risk Medium; whole paragraph quoted in a gap | T21, T22, T23, T26 |
 | 3.5 (latest) | v5, prompt v11 | Partial 70%, 3 low gaps ("funds", "proceeds", timeframe), each with its own action, Low / 45 days | All covered points right against the PDFs; judgment 50 s, gap checks 4-8 s; timeframe note missing (T26) | T17, T18, T21-T23 |
+| 3.5 (latest), downloaded report | same run | 120 passages selected (114 keyword, 22 meaning matches); p.22 selected; p.24 not selected by the main search but found by the gap check; gap check answered not_covered for all 3 gaps | Steps 1-6 33 s (Azure calls one by one, T29); timeframe classed not covered although p.22 / p.24 deal with it (T28); "GPML" and long-form "AML" acronyms in the search wording (T30) | T28-T30 |
 
 ---
 
@@ -428,13 +475,14 @@ failures as before this work.
 | A3 | Old runs | Runs before T21-T23 keep their old actions and Medium risk; delete or run the clause again |
 | A4 | Azure DI price | Set `AzureDocumentIntelligence:UsdPerPage` once the Layout rate on the invoice is confirmed (T9) |
 | A5 | Optional re-extract | Removes repeated page headers from documents extracted before T6 (free, no re-parse) |
-| A6 | Timeframe decision | Option 1 (partly addressed + low gap, recommended) or option 2 (covered) (T26) |
+| A6 | Timeframe decision | Option 1 (partly addressed + low gap) is now built (T28); say if you want option 2 (counted as covered) |
+| A7 | Dictionary clean-up | Deactivate "GPML = Money Laundering" and "AML = Anti-Money Laundering, Counter-Terrorist Financing and Sanctions Module" on the dictionary page (T30 already ignores them on v4 / v5) |
 
 ### B. After the A1 report
 
 | # | Task | Detail |
 |---|---|---|
-| B1 | Timeframe "partly addressed" note | Fix the search or the gap check, whichever dropped p.22 / p.24, per the A6 decision; checked against 3.3 / 3.5 / 3.6 first |
+| B1 | Timeframe "partly addressed" note | Built (T28): the gap check dropped it, not the search; confirm on the next run |
 | B2 | Relevance gate | Re-tune the 2.5 standard-deviation gate if the report shows too many or too few passages |
 | B3 | Embedding comparison | Selected passages with Azure vs the earlier local run; record here |
 

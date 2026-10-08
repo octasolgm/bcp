@@ -144,6 +144,20 @@ public class NdRegulPipelineV4Tests
     }
 
     [Theory]
+    [InlineData("AML", "Anti-Money Laundering", true)]
+    [InlineData("CFT", "Combating the Financing of Terrorism", true)]
+    [InlineData("STR", "suspicious transaction report", true)]
+    [InlineData("CBUAE", "Central Bank of the UAE", true)]
+    [InlineData("DNFBP", "Designated Non-Financial Businesses and Professions", true)]
+    [InlineData("NRA", "National Risk Assessment", true)]
+    [InlineData("National Risk Assessment", "NRA", true)]
+    [InlineData("GPML", "Money Laundering", false)]
+    [InlineData("AML", "Anti-Money Laundering, Counter-Terrorist Financing and Sanctions Module", false)]
+    [InlineData("predicate offence", "original offence", true)]
+    public void An_acronym_is_used_only_when_its_letters_match_the_full_form(string a, string b, bool expected) =>
+        Assert.Equal(expected, RegulEmbeddingRetrievalService.IsPlausibleAcronymPair(a, b));
+
+    [Theory]
     [InlineData("local", "local")]
     [InlineData(" Azure-OpenAI ", "azure-openai")]
     [InlineData("\"azure-openai\"", "azure-openai")]

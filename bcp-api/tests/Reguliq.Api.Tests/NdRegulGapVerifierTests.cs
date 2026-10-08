@@ -251,5 +251,7 @@ public class NdRegulPromptV11Tests
         var gap = NdRegulGapVerifier.ParseGaps("[1] Definitions of the defined terms (clause: \"define\") - Missing: no definition - Materiality: low")[0];
         var prompt = NdRegulGapVerifier.BuildPrompt("3.5", "clause text", gap, [new NdRegulGapVerifier.Excerpt("E1", "Doc p.1", "text")]);
         Assert.Contains("uses of the term, examples, typologies or red flags do not", prompt);
+        Assert.Contains("partial = an excerpt deals with the same subject and goes part of the way", prompt);
+        Assert.Contains("an excerpt that only uses the term is not_covered", prompt);
     }
 }
