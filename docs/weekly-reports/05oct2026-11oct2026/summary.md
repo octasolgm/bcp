@@ -99,3 +99,16 @@ Investigated, follow up pending
 - Traced the full real-account compliance analysis path (create run, confirm clauses, hybrid retrieval, one judgment call per clause, post-processing, saved status/confidence/gaps/actions) so later changes start from a written map of the current workflow
 
 
+
+08 Oct 2026
+
+Tasks
+- Full review of the V5 analysis pipeline (parse, extract, index, Steps 1-9, finalize/embed) written to docs/pipeline/REGUL-V5-PIPELINE-REVIEW.md: per step how it works, verdict (OK / partly / wrong / new) and fix, target pipeline, prompt changes, eval metrics, phased plan (P0-P3)
+
+Bug fixes
+- None (analysis only, no code changed)
+
+Investigated, follow up pending
+- False gaps on 3.3 / 3.5 traced to four causes: (1) Step 2 splitter keeps only 8 parts, so on 3.5 the "size / timeframe / nature of funds irrelevant", "independent offence" and "no proof of predicate offence" paragraph is never searched (verified by simulating the splitter on the clause text); (2) weak retrieval: bge-micro-v2 embeddings, sections cut at 512 tokens, whole clause as query, no stemming, wrong seed synonyms, harvested acronyms live without review; (3) up to 60 whole sections (150k-210k chars) in score order instead of evidence per requirement; (4) the judge re-decomposes the clause every run and nothing checks gaps against the clause text or the full corpus
+- The 3.3 action text "define the escalation path and reporting deadline, and evidence the first reporting cycle" / "handled within the stated deadline" is the demo template from action-plan-seed.ts, seeded on that run before the 05 Oct switch to AI actions; real-account draft action plans with template text need reseeding
+- Proposed: clause profile step (requirements with verbatim clause anchors, cached per regulation clause), passage-level index with a stronger embedding model, per-requirement evidence packs, structured judgment with verdict computed in code, gap verification pass over the whole corpus, closed-loop re-index of finalized copies. Awaiting decisions on embedding model, profile caching, gap verification variant and starting P0
