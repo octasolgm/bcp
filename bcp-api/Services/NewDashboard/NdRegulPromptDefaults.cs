@@ -326,6 +326,11 @@ suggested_action: "N/A" when compliant; otherwise lines keyed to the gaps: [n] A
         BuildJudgmentQueryTextV10("{clause_no}", "{clause_text}", "{clause_context}");
 
     public const string JudgmentSemanticV11Label =
+        "v11 - v10 + a defined term needs its definition stated or adopted; every distinct condition needs its own quoted evidence";
+
+    /// <summary>Label of the first v11 seed (08 Oct, before the illustrative-list exception). A stored v11 row that
+    /// still has it is refreshed to the current v11 text at startup.</summary>
+    public const string JudgmentSemanticV11FirstSeedLabel =
         "v11 - v10 + a defined term needs its definition stated or adopted; every element of a multi-part requirement needs its own evidence";
 
     /// <summary>
@@ -369,7 +374,7 @@ STEP 3 - EVIDENCE. Search ALL excerpts for each requirement. Compare by meaning 
 STEP 4 - VERDICT AND GAPS.
 - overall_status: compliant when every requirement is covered; partial when some are; non_compliant when none are. Search all excerpts before concluding non_compliant. If the excerpts are thin for a topic, prefer partial with low confidence over non_compliant.
 - Every requirement appears exactly once: in covered_elements (with the [bracket label] of its evidence) or in gap_description.
-- A requirement that names several elements (for example size, timeframe and nature; source and destination; identification and verification) is covered only when EVERY element has its own evidence. Evidence for one element never covers the others. When only some elements are evidenced, list the evidenced part in covered_elements and the rest as a gap naming exactly the missing elements.
+- A requirement that names several elements (for example size, timeframe and nature; source and destination; identification and verification) is covered only when EVERY element has its own evidence. Evidence for one element never covers the others. When only some elements are evidenced, list the evidenced part in covered_elements and the rest as a gap naming exactly the missing elements. This rule is for distinct conditions the clause states; it never applies to an illustrative list ("such as", "including", "not limited to") or to parties named alongside the institution, which STEP 2 treats as one requirement.
 - A requirement is covered only when policy_extract holds a quote that supports it; covered_elements cites the [bracket label] of every excerpt it relies on.
 - One gap per missing CONCEPT. Points that overlap (for example a missing definition and a missing statement of the same scope) are merged into one gap. Never split one concept into several gaps. A formally defined term is its own requirement: never fold it into a scope requirement that is covered by practice.
 - Each gap names the clause words it comes from and a materiality: high (a core obligation or prohibition is missing), medium (an obligation is only partly covered), low (definitional, interpretive or wording improvement).
@@ -404,7 +409,7 @@ Judge this clause against the excerpts above, following the four steps in the sy
 1. Clause type first (obligation, prohibition, definition / interpretation, statutory protection, penalty, summary, or regulator-facing / context-only).
 2. Requirements stated in the clause text only. An illustrative list ("such as", "including", "not limited to") is one requirement. Parties named alongside the institution are not separate requirements unless the clause requires separate treatment.
 3. Evidence for each requirement from ALL excerpts, by meaning and outcome; for definition / interpretation clauses, the scope applied in practice (typologies, red flags, risk factors, procedures) counts as coverage, but a term the clause formally defines is covered only when the documents state that definition or adopt the law's definition by reference.
-4. One gap per missing concept, overlapping points merged, each with the clause words it comes from and a materiality; status and gaps must agree. A requirement naming several elements is covered only when every element has its own quoted evidence; the unevidenced elements are a gap.
+4. One gap per missing concept, overlapping points merged, each with the clause words it comes from and a materiality; status and gaps must agree. A requirement naming several distinct conditions is covered only when every condition has its own quoted evidence; the unevidenced ones are a gap (illustrative lists and named parties stay one requirement).
 
 covered_elements: one line per covered requirement: [n] <requirement> - Covered: <exact [bracket label]>, or "None".
 gap_description: "N/A" when compliant; otherwise one line per gap: [n] <missing concept> (clause: "<clause words>") - Missing: <what the documents lack> - Materiality: <high|medium|low>.

@@ -37,6 +37,7 @@ type Retrieval = {
   bm25Matches?: AnyMatch[];
   matches?: AnyMatch[];
   fusedMatches?: AnyMatch[];
+  elapsedMs?: number | null;
 };
 
 function matchRows(list: AnyMatch[] | undefined, scoreKey: keyof AnyMatch) {
@@ -55,8 +56,10 @@ function matchRows(list: AnyMatch[] | undefined, scoreKey: keyof AnyMatch) {
 /** Steps 1-6 for one clause, as saved on the clause's retrieval record. */
 export function logClauseRetrieval(clauseNo: string, raw: unknown): void {
   const r = (raw ?? {}) as Retrieval;
+  reportRetrieval.set(clauseNo, r);
+  showReportHint();
   console.groupCollapsed(
-    `%c[Pipeline] Clause ${clauseNo} — Steps 1-6 (retrieval, pipeline v${r.pipelineVersion ?? 1}): ${r.fusedMatches?.length ?? 0} chunk(s) selected for the AI`,
+    `%c[Pipeline] Clause ${clauseNo} — Steps 1-6 (retrieval, pipeline v${r.pipelineVersion ?? 1}${r.elapsedMs != null ? `, ${r.elapsedMs} ms` : ''}): ${r.fusedMatches?.length ?? 0} chunk(s) selected for the AI`,
     STYLE_HEAD,
   );
 
@@ -96,6 +99,10 @@ export function logClauseRetrieval(clauseNo: string, raw: unknown): void {
 /** Step 7 context, every Step 8 AI call (request + raw response) and the saved result for one clause. */
 export function logClauseTraces(clauseNo: string, traces: NdClauseTrace[]): void {
   if (traces.length === 0) return;
+  const known = reportTraces.get(clauseNo) ?? new Map<string, NdClauseTrace>();
+  traces.forEach((t) => known.set(t.id, t));
+  reportTraces.set(clauseNo, known);
+  showReportHint();
   const calls = traces.filter((t) => t.step === 'llm_call' || t.step === 'evidence_check' || t.step === 'gap_verify');
   const failed = calls.some((t) => !!t.error);
   const sources = [...new Set(traces.map((t) => SOURCE_LABELS[t.source] ?? t.source))].join(', ');
@@ -167,4 +174,158 @@ export function logClauseTraces(clauseNo: string, traces: NdClauseTrace[]): void
     }
   }
   console.groupEnd();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Copyable report: everything the console groups above show for a clause, as one plain text block,
+// so it can be pasted into a chat or a ticket. In the browser console:
+//   copy(bcpReport('3.5'))         compact: steps, selected passages, AI answers, gap checks, result
+//   copy(bcpReport('3.5', true))   also the full context, system prompt and every request
+//   copy(bcpReport())              every clause logged on this page
+// ---------------------------------------------------------------------------------------------
+
+const reportRetrieval = new Map<string, Retrieval>();
+const reportTraces = new Map<string, Map<string, NdClauseTrace>>();
+let reportHintShown = false;
+
+const STEP_NAMES: Record<string, string> = {
+  context: 'Step 7 - context sent to the AI',
+  llm_call: 'Step 8 - AI judgment call',
+  gap_verify: 'Gap check AI call (pipeline v5)',
+  evidence_check: 'Evidence check AI call',
+  postprocess: 'Saved result',
+};
+
+function showReportHint(): void {
+  installReportCommand();
+  if (reportHintShown) return;
+  reportHintShown = true;
+  console.log(
+    "%c[Pipeline] To copy everything for a clause, type in this console: copy(bcpReport('3.5'))  - add , true for the full prompts and context. Then paste it in the chat.",
+    STYLE_HEAD,
+  );
+}
+
+function matchLines(title: string, list: AnyMatch[] | undefined, scoreKey: keyof AnyMatch, full: boolean): string[] {
+  const rows = list ?? [];
+  const out = [`${title} (${rows.length}):`];
+  rows.forEach((m, i) => {
+    const score = m[scoreKey];
+    const parts = [
+      m.sourceDocumentName ?? 'document',
+      m.clauseNo ? `section ${m.clauseNo}` : '',
+      m.sourcePage != null ? `p.${m.sourcePage}` : '',
+      score != null && score !== '' ? `score ${typeof score === 'number' ? score.toFixed(4) : score}` : '',
+      m.matchedVia === 'expanded' ? 'via expanded wording' : '',
+    ].filter((x) => x);
+    out.push(`  ${i + 1}. ${parts.join(' | ')}`);
+    if (m.matchedSubObligation) out.push(`     part: ${m.matchedSubObligation.slice(0, full ? 400 : 120)}`);
+    const preview = (m.textPreview ?? '').replace(/\s+/g, ' ').trim();
+    if (preview) out.push(`     text: ${full ? preview : preview.slice(0, 300)}`);
+  });
+  return out;
+}
+
+function retrievalLines(r: Retrieval, full: boolean): string[] {
+  const out = [
+    `--- Steps 1-6: retrieval (pipeline v${r.pipelineVersion ?? 1}${r.elapsedMs != null ? `, ${r.elapsedMs} ms` : ''}) ---`,
+  ];
+  const acr = (r.acronymMatches ?? []).map((m) => `${m.matchedText} -> ${m.addedText}`);
+  const syn = (r.synonymMatches ?? []).map((m) => `${m.matchedText} -> ${m.addedText}`);
+  out.push(`Step 1 acronyms (${acr.length}): ${acr.join('; ') || 'none'}`);
+  out.push(`Step 1 synonyms (${syn.length}): ${syn.join('; ') || 'none'}`);
+  out.push(`Step 1 expanded wording searched (${r.expandedQueries?.length ?? 0}):`);
+  (r.expandedQueries ?? []).forEach((q, i) => out.push(`  ${i + 1}. ${q}`));
+  out.push(`Step 2 parts searched (${r.subObligations?.length ?? 0}):`);
+  (r.subObligations ?? []).forEach((q, i) => out.push(`  ${i + 1}. ${q}`));
+  out.push(...matchLines('Step 3 keyword (BM25) matches', r.bm25Matches, 'score', full));
+  out.push(...matchLines('Step 4 meaning (embedding) matches', r.matches, 'similarity', full));
+  out.push(...matchLines('Step 5+6 SELECTED for the AI', r.fusedMatches, 'fusedScore', full));
+  return out;
+}
+
+/** Gap check requests carry every passage; the compact report keeps the gap and the passage labels only. */
+function gapCheckSummary(query: string): string[] {
+  const gap = /GAP TO CHECK:\s*([\s\S]*?)\n\s*\n/.exec(query)?.[1]?.trim();
+  const labels = [...query.matchAll(/^\[(E\d+)\]\s*(.+)$/gm)].map((m) => `  [${m[1]}] ${m[2]}`);
+  return [`  Gap checked: ${gap ?? '(not found in request)'}`, `  Passages searched (${labels.length}):`, ...labels];
+}
+
+function traceLines(traces: NdClauseTrace[], full: boolean): string[] {
+  const out: string[] = [];
+  traces
+    .slice()
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .forEach((t, i) => {
+      const when = new Date(t.createdAt).toISOString();
+      const source = SOURCE_LABELS[t.source] ?? t.source;
+      out.push('');
+      out.push(`--- [${i + 1}] ${STEP_NAMES[t.step] ?? t.step} (${source}) ${when} ---`);
+      if (t.step === 'context') {
+        if (t.notes) out.push(`Notes: ${t.notes}`);
+        try {
+          const chunks = JSON.parse(t.chunksJson ?? '[]') as Array<{ label?: string; chars?: number }>;
+          out.push(`Passages sent (${chunks.length}):`);
+          chunks.forEach((c, n) => out.push(`  ${n + 1}. ${c.label ?? ''} (${c.chars ?? '?'} chars)`));
+        } catch {
+          /* chunk list is informational only */
+        }
+        if (full) {
+          if (t.clauseContext) out.push('Supporting regulatory context:', t.clauseContext);
+          out.push('Context text:', t.contextText ?? '');
+        }
+        return;
+      }
+      if (t.step === 'postprocess') {
+        if (t.notes) out.push(`Notes: ${t.notes}`);
+        try {
+          out.push(JSON.stringify(JSON.parse(t.resultJson ?? '{}'), null, 2));
+        } catch {
+          out.push(t.resultJson ?? '');
+        }
+        return;
+      }
+      out.push(
+        `Attempt ${t.attempt} | ${t.provider ?? '?'}/${t.model ?? '?'} | ${t.durationMs ?? '?'} ms | sent ${t.charsSent ?? '?'} chars | received ${t.responseText?.length ?? 0} chars`,
+      );
+      if (t.notes) out.push(`Post-processing: ${t.notes}`);
+      if (t.error) out.push(`ERROR: ${t.error}`);
+      if (full && t.systemPrompt) out.push('System prompt:', t.systemPrompt);
+      if (full) out.push('Request:', t.queryText ?? '');
+      else if (t.step === 'gap_verify') out.push(...gapCheckSummary(t.queryText ?? ''));
+      out.push('AI response:', t.responseText ?? '(no response)');
+    });
+  return out;
+}
+
+/** Plain-text report for one clause (or every logged clause when clauseNo is omitted). */
+export function buildClauseReport(clauseNo?: string, full = false): string {
+  const clauses = clauseNo
+    ? [clauseNo]
+    : [...new Set([...reportRetrieval.keys(), ...reportTraces.keys()])].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true }),
+      );
+  const out: string[] = [];
+  for (const c of clauses) {
+    const r = reportRetrieval.get(c);
+    const traces = [...(reportTraces.get(c)?.values() ?? [])];
+    out.push(`=== Pipeline report: clause ${c} (${full ? 'full' : 'compact'}) - ${new Date().toISOString()} ===`);
+    if (typeof location !== 'undefined') out.push(`Page: ${location.pathname}`);
+    if (!r && traces.length === 0) {
+      out.push('Nothing logged for this clause on this page yet. Open the clause result (or wait for the run) and try again.');
+      continue;
+    }
+    if (r) out.push(...retrievalLines(r, full));
+    else out.push('Steps 1-6: not loaded on this page.');
+    if (traces.length) out.push(...traceLines(traces, full));
+    else out.push('', 'Steps 7-8: no AI traces loaded yet.');
+    out.push('', `=== End of report for clause ${c} ===`, '');
+  }
+  return out.join('\n');
+}
+
+function installReportCommand(): void {
+  const w = window as unknown as { bcpReport?: (clauseNo?: string, full?: boolean) => string };
+  if (w.bcpReport) return;
+  w.bcpReport = (clauseNo?: string, full = false) => buildClauseReport(clauseNo, full);
 }

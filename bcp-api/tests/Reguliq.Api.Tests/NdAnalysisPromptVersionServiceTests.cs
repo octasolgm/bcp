@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
+using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Services.NewDashboard;
 using Xunit;
@@ -13,7 +14,18 @@ public class NdAnalysisPromptVersionServiceTests
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
-        return new AppDbContext(options);
+        return new InMemoryAppDbContext(options);
+    }
+
+    // The in-memory provider cannot map pgvector columns.
+    private sealed class InMemoryAppDbContext(DbContextOptions<AppDbContext> options) : AppDbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<NdLocalDocumentExtractionSection>().Ignore(s => s.Embedding);
+            modelBuilder.Entity<NdLocalDocumentPassage>().Ignore(p => p.Embedding);
+        }
     }
 
     [Fact]
@@ -214,5 +226,43 @@ public class NdAnalysisPromptVersionServiceTests
         Assert.Contains("END EXCERPTS", v3ContextBuilt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("no page limit", v3ContextBuilt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("excerpt text", v3ContextBuilt);
+    }
+
+    [Fact]
+    public async Task First_seed_v11_is_refreshed_but_an_admin_v11_and_the_current_flag_are_left_alone()
+    {
+        await using var db = CreateDb();
+        var service = new NdAnalysisPromptVersionService(db);
+        db.NdAnalysisPromptVersions.AddRange(
+            new NdAnalysisPromptVersion
+            {
+                PromptKey = NdAnalysisPromptVersionService.JudgmentSystemKey,
+                VersionNumber = NdAnalysisPromptVersionService.JudgmentSemanticV11VersionNumber,
+                Label = NdRegulPromptDefaults.JudgmentSemanticV11FirstSeedLabel,
+                PromptText = "OLD V11 SYSTEM",
+                IsCurrent = true,
+            },
+            new NdAnalysisPromptVersion
+            {
+                PromptKey = NdAnalysisPromptVersionService.JudgmentUserQueryKey,
+                VersionNumber = NdAnalysisPromptVersionService.JudgmentSemanticV11VersionNumber,
+                Label = "my own v11",
+                PromptText = "ADMIN {clause_no} {clause_text}",
+                IsCurrent = false,
+            });
+        await db.SaveChangesAsync();
+
+        await service.EnsureJudgmentSemanticV11Async(CancellationToken.None);
+
+        var rows = await db.NdAnalysisPromptVersions.AsNoTracking()
+            .Where(v => v.VersionNumber == NdAnalysisPromptVersionService.JudgmentSemanticV11VersionNumber)
+            .ToListAsync();
+        var system = rows.Single(v => v.PromptKey == NdAnalysisPromptVersionService.JudgmentSystemKey);
+        Assert.Equal(NdRegulPromptDefaults.JudgmentSystemPromptV11.Trim(), system.PromptText);
+        Assert.Equal(NdRegulPromptDefaults.JudgmentSemanticV11Label, system.Label);
+        Assert.True(system.IsCurrent);
+        var admin = rows.Single(v => v.PromptKey == NdAnalysisPromptVersionService.JudgmentUserQueryKey);
+        Assert.Equal("ADMIN {clause_no} {clause_text}", admin.PromptText);
+        Assert.Single(rows, v => v.PromptKey == NdAnalysisPromptVersionService.JudgmentUserContextKey);
     }
 }

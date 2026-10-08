@@ -136,3 +136,7 @@ The first test of the new review settings on the money laundering definition cla
 Faster first analysis on existing documents
 
 The improved search reads documents in short passages. For documents uploaded before this change, those passages are now prepared automatically in the background, so an analysis no longer has to wait for them. When an analysis does need to prepare them, the progress panel now says so instead of showing every step at 0%.
+
+Easier troubleshooting of an analysis
+
+Administrators can now copy a complete plain-text report of how a clause was analysed, straight from the browser: which parts of the clause were searched, which policy passages were found and sent to the AI, which review instructions were used, what the AI answered, and how each reported gap was double-checked. This makes it quick to share exactly what happened on a run when a result needs to be questioned. The corrected review instructions were also checked against the expected result of every test clause before the next test run, and one conflict that could have caused a new false gap on the reporting protection clause was removed.

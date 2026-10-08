@@ -183,6 +183,7 @@ public class NdRegulPromptV11Tests
         Assert.Contains("TERM THE CLAUSE FORMALLY DEFINES", NdRegulPromptDefaults.JudgmentSystemPromptV11);
         Assert.Contains("never fold it into a scope requirement", NdRegulPromptDefaults.JudgmentSystemPromptV11);
         Assert.Contains("covered only when EVERY element has its own evidence", NdRegulPromptDefaults.JudgmentSystemPromptV11);
+        Assert.Contains("never applies to an illustrative list", NdRegulPromptDefaults.JudgmentSystemPromptV11);
     }
 
     [Fact]

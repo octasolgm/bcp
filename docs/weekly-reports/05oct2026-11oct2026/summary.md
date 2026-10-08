@@ -120,6 +120,8 @@ Tasks
 - Search passages are now built in the background for documents indexed before passages existed (every 10 minutes while the pipeline is v4 or v5), and a run that still has to build them shows "Preparing search passages (one-time per document)" instead of all steps at 0%
 - 3 new API unit tests (v11 rules, gap check definition rule, one extraction per document); full suite 308 pass with the same 24 old failures; web build passes
 
+- Browser console report for the V5 analysis page: copy(bcpReport('3.5')) gives one plain-text report of every step for a clause (retrieval time, parts searched, passages selected, prompt versions, AI answers, gap checks, saved result); add , true for full prompts and context
+- Prompt v11 checked rule by rule against the expected results for 3.3, 3.5 and 3.6 before any paid run; found and fixed a conflict that would have required evidence per named party on 3.3; a v11 row from the first push is refreshed at startup unless an admin edited it
 Bug fixes
 - Clause split (v3): clause 3.5 lost its last 2 parts (incl. "size / timeframe / nature of funds irrelevant", "independent offence", "no proof of predicate offence") and repeated its intro; now 15 parts, nothing dropped
 - Step 5/6 (v3): sections found only by keyword search were almost always dropped by the 0.4/0.6 fusion maths; now kept

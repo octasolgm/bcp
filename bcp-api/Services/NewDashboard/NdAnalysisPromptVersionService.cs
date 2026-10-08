@@ -419,8 +419,30 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
             makeCurrent: false);
 
     /// <summary>v11: v10 + a term the clause formally defines is covered only by its definition stated or adopted
-    /// by reference (practice still covers the scope). Insert-only and NOT made current, like v10.</summary>
-    public Task EnsureJudgmentSemanticV11Async(CancellationToken ct = default) =>
+    /// by reference (practice still covers the scope). Insert-only and NOT made current, like v10. A row still
+    /// carrying the first v11 seed label (never edited by an admin) is refreshed to the current v11 text.</summary>
+    public async Task EnsureJudgmentSemanticV11Async(CancellationToken ct = default)
+    {
+        var firstSeed = await db.NdAnalysisPromptVersions
+            .Where(v => v.VersionNumber == JudgmentSemanticV11VersionNumber
+                && v.Label == NdRegulPromptDefaults.JudgmentSemanticV11FirstSeedLabel)
+            .ToListAsync(ct);
+        foreach (var row in firstSeed)
+        {
+            row.Label = NdRegulPromptDefaults.JudgmentSemanticV11Label;
+            row.PromptText = row.PromptKey switch
+            {
+                JudgmentSystemKey => NdRegulPromptDefaults.JudgmentSystemPromptV11.Trim(),
+                JudgmentUserQueryKey => NdRegulPromptDefaults.JudgmentUserQueryTemplateV11.Trim(),
+                _ => row.PromptText,
+            };
+        }
+
+        if (firstSeed.Count > 0) await db.SaveChangesAsync(ct);
+        await EnsureJudgmentSemanticV11InsertAsync(ct);
+    }
+
+    private Task EnsureJudgmentSemanticV11InsertAsync(CancellationToken ct) =>
         EnsureJudgmentSemanticVersionAsync(
             JudgmentSemanticV11VersionNumber,
             NdRegulPromptDefaults.JudgmentSemanticV11Label,

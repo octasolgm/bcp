@@ -829,6 +829,7 @@ public class NdRegulAnalysisProcessor(
 
         if (isHybridEngine)
             prep.GapCheck = await GetGapCheckSessionAsync(finding.AnalysisRunId, corpusDocIds, ct);
+        var promptsInUse = await promptVersions.GetJudgmentPromptVersionsAsync(workflowEngine, ct);
 
         // Step 7 — exactly what the judgment call will be given as policy context.
         prep.Traces.Add(new NdRegulClauseTrace
@@ -848,6 +849,7 @@ public class NdRegulAnalysisProcessor(
             CharsSent = contextBlock.Length,
             Notes = $"{contextChunks.Count} chunk(s) from the clause's Step 6 selection, {contextBlock.Length} chars; "
                 + DescribeClauseContext(clauseContext, clauseContextSent)
+                + "; prompts: " + string.Join(", ", promptsInUse.Select(v => $"{v.PromptKey}=v{v.VersionNumber}"))
                 + (contextBlock.Length > LargeContextWarningChars
                     ? $"; WARNING: context is over {LargeContextWarningChars / 4000}k tokens (pipeline v3 has no section limit), the AI call may be slow or exceed the model's input limit"
                     : ""),

@@ -155,6 +155,47 @@ way the result now shows a quote for every covered part.
   failures; web build passes.
 - **Status:** built; waiting for your 3.5 run on v5 + **v11**.
 
+### 10. Copyable pipeline report in the browser console; v11 checked against the expected results - this commit
+
+- **What:** on the V5 analysis page, type in the browser console (F12 > Console):
+  - `copy(bcpReport('3.5'))` - one plain-text report for the clause, ready to paste in the chat: Steps 1-6 time,
+    term expansions, every part searched, keyword / meaning matches and the passages SELECTED for the AI (document,
+    section, page, score, text), Step 7 passages sent with the prompt versions used, every AI call (model, time,
+    size, raw answer), every gap check (the gap, the passages searched, the answer) and the saved result.
+  - `copy(bcpReport('3.5', true))` - the same plus the full context, system prompt and every request (large).
+  - `copy(bcpReport())` - every clause logged on the page.
+  - Only shows what the page has loaded: open the run's result (AI traces load when a clause finishes; platform super
+    admins only, as before).
+- **Backend:** each clause's retrieval record now stores the Steps 1-6 time; the Step 7 trace notes the prompt
+  version of each judgment prompt key.
+- **Why:** you could not hand me the exact retrieval, prompt and AI answer of a run; the existing console groups do
+  not copy well.
+
+**Why prompt v10 produced a wrong 3.5 (my mistake, not a missing input):** you gave me everything needed, and
+Plan V1 section 4 already had the right expected result (partial, definitions gap). I then wrote prompt v10 with a
+rule that contradicts it ("definition covered when the concept is applied in practice" plus "merge a missing
+definition into the scope point"), and I had no rule that every part of a multi-part requirement needs its own
+evidence, although my own audit separated amount (covered) from timeframe / nature. I tested that the prompt was
+valid and generic, but I did not check each rule against each expected result before you paid for the run.
+
+**Check done now (v11 against Plan V1 section 4, rule by rule):**
+
+| Clause | Expected | v11 rules that decide it | Agrees? |
+|---|---|---|---|
+| 3.3 | Compliant (p.42, p.14) | statutory protection; named parties are one requirement | Yes, after a fix: the new every-element rule could have required evidence per named party (board, employees, representatives). Fixed: the rule now excludes illustrative lists and named parties |
+| 3.5 | Partial, definitions of funds / proceeds gap (low) | defined term needs its definition stated or adopted; scope covered by typologies; each condition (size, timeframe, nature) needs its own quote | Yes. Timeframe / nature: covered only if p.22 / p.24 are quoted, else a gap the gap check re-searches |
+| 3.6 | Partial, predicate offence definition gap (low) | defined term rule | Yes |
+
+- v11 had already been pushed (commit 4148904) with the first wording; if your API already added it, startup now
+  refreshes that row to the corrected text (only rows still carrying the first v11 label, so an admin's own v11 is
+  never overwritten).
+- **Process from now on:** before any paid run, I check every prompt rule against every expected result in the plan
+  and write the table above into this log.
+- Tests: 1 new (v11 refresh); the prompt version test class now runs on the in-memory database (vector columns
+  ignored), so 3 of its old tests moved from "cannot start" to "assertion fails" (pre-existing, unrelated to v11);
+  suite 312 pass, 21 old failures; web build passes.
+- **Status:** built; waiting for your 3.5 run on v5 + v11, with `copy(bcpReport('3.5'))` pasted back.
+
 ---
 
 ## Open items
