@@ -8,6 +8,9 @@ and must stay untouched (see CLAUDE.md).
 Written: 08 Oct 2026. Based on the code on branch `feature/regul-clause-context-and-evals` and the
 clause 3.3 / 3.5 examples from the CBUAE AML-CFT Guidelines for Financial Institutions.
 
+Task list with locations, fixes and costs: `REGUL-V5-FIX-PLAN.md`. Decision 08 Oct: no count
+limits in B1, B2 and B6 (relevance decides, never a fixed number).
+
 Legend used for every step:
 
 | Mark | Meaning |

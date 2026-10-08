@@ -105,6 +105,8 @@ Investigated, follow up pending
 Tasks
 - Full review of the V5 analysis pipeline (parse, extract, index, Steps 1-9, finalize/embed) written to docs/pipeline/REGUL-V5-PIPELINE-REVIEW.md: per step how it works, verdict (OK / partly / wrong / new) and fix, target pipeline, prompt changes, eval metrics, phased plan (P0-P3)
 - Step, version and cost sheet for V5 written to docs/pipeline/REGUL-V5-STEPS-VERSIONS-COSTS.md: every step from upload to finalize with engine/version in use (pipeline v2, prompt v9, bge-micro-v2, Azure DI layout), free vs paid, measured context size (40-55k input tokens per clause) and cost per clause today vs suggested
+- Fix plan written to docs/pipeline/REGUL-V5-FIX-PLAN.md: 22 points (P0 bugs and no-limit, P1 retrieval, P2 clause profile / structured judgment / gap verification, P3 finalize loop), each with file and line, current behaviour, change, what it resolves, cost before and after
+- Decision recorded: no count limits in query expansion, sub-obligation split and section selection (B1, B2, B6); relevance decides, oversized evidence is split across calls instead of dropped; steps sheet and review updated
 
 Bug fixes
 - None (analysis only, no code changed)
@@ -114,3 +116,4 @@ Investigated, follow up pending
 - The 3.3 action text "define the escalation path and reporting deadline, and evidence the first reporting cycle" / "handled within the stated deadline" is the demo template from action-plan-seed.ts, seeded on that run before the 05 Oct switch to AI actions; real-account draft action plans with template text need reseeding
 - Proposed: clause profile step (requirements with verbatim clause anchors, cached per regulation clause), passage-level index with a stronger embedding model, per-requirement evidence packs, structured judgment with verdict computed in code, gap verification pass over the whole corpus, closed-loop re-index of finalized copies. Awaiting decisions on embedding model, profile caching, gap verification variant and starting P0
 - Azure DI parse cost is recorded at $0.0015/page (Read model price); V5 uses the Layout model, list price about $0.01/page, so the usage log likely understates parse cost 6-7x; to confirm against the Azure invoice before changing the constant
+- Found while planning the no-limit change: Step 5/6 fusion maths drops almost every section found only by keyword search (max score 0.4 against a 0.3-0.5 cutoff) while every embedding hit passes, so the 60-section cap is what bounds the context today; removing the cap alone would send ~120-300 sections per clause, so it is planned together with a relevance cutoff for embeddings (fix plan points 2 and 3)

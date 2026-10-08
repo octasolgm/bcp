@@ -4,7 +4,8 @@ Scope: real accounts on `/nd/analyse-regul-full-v2` (workflow engine `regul_pipe
 Demo accounts run none of this: no parsing, no AI, no cost.
 
 Written 08 Oct 2026 from the code on `feature/regul-clause-context-and-evals`. For the detailed
-problem analysis behind the suggestions see `REGUL-V5-PIPELINE-REVIEW.md` in this folder.
+problem analysis behind the suggestions see `REGUL-V5-PIPELINE-REVIEW.md`, and for the task list
+`REGUL-V5-FIX-PLAN.md`, both in this folder.
 
 How to read the cost column:
 - **Free** = runs on our own server (CPU only), no outside service, no per-call charge.
@@ -27,13 +28,13 @@ How to read the cost column:
 | A5 | Dictionary harvest | Finds acronyms and synonym candidates | once per document | `AcronymHarvester` regex + local embeddings | Free |
 | A6 | Regulation points | Regulation sections -> selectable clause list | once per regulation | from A3 | Free |
 | B0 | Index check | Parses/indexes any selected internal doc not yet ready | each run | A2-A4 | Paid only if a doc was never parsed |
-| B1 | Query expansion | Adds acronym/synonym counterparts to the search | per clause | dictionary (20 seed acronyms, 10 seed synonyms + harvested) | Free |
-| B2 | Sub-obligation split | Splits the clause into parts to search | per clause | `SubObligationSplitter` regex, max 8 parts | Free |
+| B1 | Query expansion | Adds acronym/synonym counterparts to the search | per clause | dictionary (20 seed acronyms, 10 seed synonyms + harvested); no count limit | Free |
+| B2 | Sub-obligation split | Splits the clause into parts to search | per clause | `SubObligationSplitter` regex, max 8 parts (to be removed: no limit) | Free |
 | B3 | BM25 search | Keyword search over all sections | per part | in-memory BM25 (k1 1.5, b 0.75) | Free |
 | B4 | Embedding search | Meaning search over all sections | per part | pgvector cosine on A4 vectors | Free |
 | B3b/B4b | Expanded-wording search | Same two searches with acronyms/synonyms swapped | per part | **Pipeline v2** (current default) | Free |
 | B5 | Fusion | Merges both result lists | per clause | 0.4 x BM25 + 0.6 x embedding | Free |
-| B6 | Select | Keeps the strongest sections | per clause | >= 50% of best, min 5, max 60 sections | Free |
+| B6 | Select | Keeps the strongest sections | per clause | >= 50% of best, min 5, max 60 sections (to be removed: no limit) | Free |
 | B7 | Build context | Full text of selected sections + clause outline | per clause | prompt user block 1 + clause outline (v9) | Free |
 | B8 | AI judgment | Verdict, evidence, gaps, actions | per clause | **Prompt v9**, model chosen in admin settings | **Paid, per token** |
 | B9 | Post-process + save | Checks quotes, references, gap/status consistency | per clause | `NdRegulJudgmentPostProcessor` | Free |
@@ -201,8 +202,12 @@ Suggestion: keep.
 ### B1. Query expansion - free
 How it works: finds dictionary terms in the clause. Pipeline v2 searches a second copy of the
 clause with the terms swapped (CDD <-> customer due diligence).
-Suggestion: keep. It works better once applied to short per-requirement queries (B2 suggestion)
-and a cleaned dictionary.
+Limit: none on expansion itself (every matched dictionary entry is used). What limits it is the
+dictionary: unreviewed harvested acronyms, wrong seed synonyms, substring matching, and harvest
+caps (150 sections / 15 suggestions per document).
+Decision (08 Oct): no limits. Suggestion: keep expansion uncapped, remove the harvest caps (they
+only create review suggestions), fix the dictionary quality (fix plan point 5), apply expansion to
+short per-requirement queries.
 
 ### B2. Sub-obligation split - free
 How it works: splits at bullets / (a)(b) items or at sentences with must/shall/should, puts the
@@ -210,7 +215,8 @@ intro sentence in front of each part, and **keeps at most 8 parts**.
 Assessment: **bug**. On clause 3.5 it makes 10 parts and drops the last 2. These include the
 "size / timeframe / form of funds irrelevant" sentence, which is why that requirement came back as a
 false gap.
-Suggestion: now, never drop text. Next, replace it with an AI "clause profile": one call per
+Decision (08 Oct): no limit. Suggestion: now, remove the 8-part cap and never drop a short piece
+(fix plan point 1). Next, replace it with an AI "clause profile": one call per
 regulation clause, saved and reused by every run and every bank. It lists the exact requirements,
 each tied to a verbatim quote from the clause. Cost about $0.02-0.05 per clause, **once**.
 
@@ -223,8 +229,9 @@ passages. Free.
 ### B4. Embedding search - free
 How it works: pgvector nearest sections. Keeps everything within 85% of the best similarity (up
 to 300).
-Suggestion: new model (A4). Fixed top 30 per query instead of the 85% rule, which keeps far too
-much with a small model. Free, or a fraction of a cent with Azure.
+Suggestion (no limit): new model (A4); remove the 300 cap; replace the 85% rule, which keeps far
+too much with a small model, by a score-gap cutoff per query (keep everything above the largest
+drop in similarity, no fixed count). Free, or a fraction of a cent with Azure (fix plan point 3).
 
 ### B5. Fusion - free
 How it works: each list is divided by its own best score, then weighted 0.4 / 0.6.
@@ -232,10 +239,15 @@ Suggestion: Reciprocal Rank Fusion (standard, no tuning), done per requirement. 
 
 ### B6. Select - free
 How it works: keeps sections scoring at least half of the best, 5 to 60, for the whole clause.
-Assessment: too much text (150-210k characters), and nothing guarantees each requirement its own
-evidence.
-Suggestion: top 5-8 passages **per requirement**, plus their parent section when needed. Context
-drops to ~25-40k characters. This also cuts B8 cost about 4 times on the input side.
+Assessment: **bug**. The fusion maths means a section found only by keyword search scores at most
+0.4 against a cutoff of 0.3-0.5, so it is almost always dropped, while every embedding hit passes;
+the 60 cap then cuts at random by score (fix plan point 2). Too much text (150-210k characters), and
+nothing guarantees each requirement its own evidence.
+Decision (08 Oct): no count limit. Suggestion: rank-based fusion (RRF); keep every passage that
+passes the relevance gates for at least one requirement, with no minimum or maximum count; if the
+total is larger than one AI call can take, split the judgment into several calls instead of dropping
+anything. Because selection is per requirement and relevance-based, the expected context is
+~25-50k characters instead of 150-210k, which also cuts B8 input cost about 4 times.
 
 ### B7. Build context - free
 How it works: full text of the selected sections, labelled "[Doc - 7.7 p.37]", in score order,
