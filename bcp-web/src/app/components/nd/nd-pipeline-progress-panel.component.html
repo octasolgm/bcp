@@ -100,7 +100,19 @@
         </ul>
       </section>
 
-      <h4 class="section-title">Pipeline steps</h4>
+      <div class="steps-heading">
+        <h4 class="section-title">Pipeline steps</h4>
+        @if (panelRunActive()) {
+          <span class="report-actions">
+            <button type="button" class="report-btn" (click)="downloadReport(false)" title="Save every step of every clause on this page as a text file">
+              Download report
+            </button>
+            <button type="button" class="report-btn" (click)="downloadReport(true)" title="Same, plus the full context, system prompt and every AI request (large)">
+              Full
+            </button>
+          </span>
+        }
+      </div>
       @if (preparingPassages()) {
         <p class="passages-note">
           Preparing search passages (one-time per document). Steps 1-6 start when this is done.

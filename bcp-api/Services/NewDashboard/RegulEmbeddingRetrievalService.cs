@@ -101,7 +101,9 @@ public sealed class RegulEmbeddingRetrievalService(
         // Pipeline v2: the reworded sub-obligation texts (acronyms/synonyms swapped) that were also searched.
         IReadOnlyList<string>? ExpandedQueries = null,
         // Time Steps 1-6 took for this clause (not set on records saved before it was added).
-        long? ElapsedMs = null);
+        long? ElapsedMs = null,
+        // v4+: the embedding model of the passages and queries ("local:bge-micro-v2", "azure-openai:<deployment>").
+        string? EmbeddingModel = null);
 
     /// <summary>Same JSON shape as the clause's RetrievalJson, which the pipeline panel reads.</summary>
     public static string SerializePreview(RetrievalPreview preview) =>
@@ -149,6 +151,9 @@ public sealed class RegulEmbeddingRetrievalService(
             logger.LogInformation("Regul retrieval for run {RunId} uses pipeline {Version}", run.Id,
                 NdRegulPipelineVersions.Label(pipelineVersion));
 
+            var embeddingModel = pipelineVersion >= NdRegulPipelineVersions.V4Passages
+                ? await passageEmbeddings.ModelNameAsync(ct)
+                : null;
             var processed = 0;
             foreach (var finding in findings)
             {
@@ -157,7 +162,7 @@ public sealed class RegulEmbeddingRetrievalService(
 
                 var clauseTimer = System.Diagnostics.Stopwatch.StartNew();
                 var preview = await BuildPreviewAsync(corpus, finding.ClauseText, pipelineVersion, ct);
-                preview = preview with { ElapsedMs = clauseTimer.ElapsedMilliseconds };
+                preview = preview with { ElapsedMs = clauseTimer.ElapsedMilliseconds, EmbeddingModel = embeddingModel };
                 finding.RetrievalJson = JsonSerializer.Serialize(preview, RetrievalJsonOptions);
                 logger.LogInformation(
                     "Regul Steps 1-6 ({Pipeline}) for clause {ClauseNo} in {Ms} ms: step1 acronyms={Acronyms} synonyms={Synonyms} expanded queries={Expanded}; step2 sub-obligations={Subs}; " +
@@ -255,7 +260,11 @@ public sealed class RegulEmbeddingRetrievalService(
         }
 
         var preview = await BuildPreviewAsync(corpus, finding.ClauseText, pipelineVersion, ct);
-        preview = preview with { ElapsedMs = timer.ElapsedMilliseconds };
+        preview = preview with
+        {
+            ElapsedMs = timer.ElapsedMilliseconds,
+            EmbeddingModel = pipelineVersion >= NdRegulPipelineVersions.V4Passages ? await passageEmbeddings.ModelNameAsync(ct) : null,
+        };
         finding.RetrievalJson = JsonSerializer.Serialize(preview, RetrievalJsonOptions);
         finding.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);

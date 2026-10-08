@@ -152,3 +152,6 @@ Administrators can now choose the model behind the meaning-based search of polic
 We also re-checked the remaining money laundering gap about the timeframe of transactions against the policy text. No policy document states that the timeframe does not matter for suspicion, so the gap is correct; the transaction reporting guidance only partly touches on it.
 
 The stronger search model is now the default for the policy passage search. Documents do not need to be read or processed again: only the search index is refreshed in the background, and how documents are divided into sections and passages stays exactly as before.
+
+The latest test of the money laundering clause gave the expected result: partially compliant, with three low-risk gaps (the definitions of "funds" and "proceeds", and a statement that the timing of a transaction does not affect reporting), each with its own drafted action and a low-risk due date. The detailed step-by-step report of an analysis can now be downloaded as a text file from the progress panel.
+

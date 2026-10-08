@@ -81,6 +81,37 @@
   color: var(--text-secondary);
 }
 
+.steps-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+
+  .section-title {
+    margin-bottom: 0.4rem;
+  }
+}
+
+.report-actions {
+  display: inline-flex;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.report-btn {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+}
+
 .passages-note {
   margin: 0 0 0.5rem;
   font-size: 0.75rem;

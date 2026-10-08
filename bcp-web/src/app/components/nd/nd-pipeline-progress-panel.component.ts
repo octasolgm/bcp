@@ -8,6 +8,7 @@ import {
 } from '../../services/nd/nd-pipeline-panel.service';
 import { NdApiService, type NdClauseTrace, type NdOcrEngine } from '../../services/nd/nd-api.service';
 import { sortByPointRef } from '../../../lib/nd/list-utils';
+import { downloadClauseReport } from '../../../lib/nd/pipeline-console-log';
 
 type ExpansionMatchKind = 'acronym' | 'synonym';
 
@@ -158,6 +159,12 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
       row?.scrollIntoView({ block: key === 'step1' ? 'start' : 'nearest', behavior: 'smooth' });
     }, 0);
   });
+
+  readonly panelRunActive = computed(() => this.panel.runActive());
+
+  downloadReport(full: boolean): void {
+    downloadClauseReport(undefined, full);
+  }
 
   /** Pipeline v4+: the run is building search passages for documents indexed before passages existed. */
   readonly preparingPassages = computed(

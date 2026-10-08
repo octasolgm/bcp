@@ -356,6 +356,43 @@ Nothing in this session changed extraction, chunking, demo accounts or the v1-v3
 It runs only on **pipeline v5** (Admin > Analysis prompts > Retrieval pipeline version). In `bcpReport` each check is a
 "Gap check AI call" with the gap, the passages searched and the answer.
 
+### 14. 3.5 on the latest code (v5 + v11): review, report download - this commit
+
+**Run (08 Oct, 8:39 PM):** Step 7 context 155,890 chars; Step 8 judgment 49.5 s; 3 gap checks 7.1 s, 4.5 s, 7.5 s;
+saved 8:41 PM. Step 8 in total about 1 min 16 s (the 5+ minute run before was on code from before the pull).
+
+| Item | Result | Check against the PDFs | Right? |
+|---|---|---|---|
+| ML acts with knowledge | Covered, AML Manual p.6 Article (2) | Matches | Yes |
+| Independent offence | Covered, AML p.6, CandNM p.2 | Matches | Yes |
+| No proof of predicate / inferred from indicators | Covered, AML p.6, Implementation p.3-4 | Matches | Yes |
+| Asset scope (any tangible / intangible asset) | Covered by typologies (Implementation 2.2 p.45 / p.50) | Matches | Yes |
+| Amount and nature of funds irrelevant | Covered, "regardless of the amount" (p.4) + asset typologies (AML 7.11 p.46) | Matches | Yes |
+| NRA 2018 sentence | Not a gap (context only) | - | Yes |
+| Gap 1 "funds" definition, low | Gap | No document defines it | Yes |
+| Gap 2 "proceeds" definition, low | Gap | No document defines it | Yes (v11 allows one gap per defined term) |
+| Gap 3 timeframe irrelevant, low | Gap | No document states it; Implementation p.22 / p.24 partly address it | Yes, but no "partly addressed" note (decision pending: option 1 / 2, entry 12.3 and chat) |
+
+Verdict partial, 70%: matches the corrected expectation (Plan V1 section 4). **Fixes confirmed on a real run:** gaps
+numbered 1-3 with their own actions; risk Low / 45 days from the AI's "Materiality: low"; long clause quotes cut;
+asset typologies now found (they were missed in the v3 run).
+
+**Seen, not changed (decided earlier):** some policy extracts carry the page of a neighbouring passage (for example the
+crypto typology shown under Implementation "section 32, p.3"); citations stay as they are by decision (V1 Task 8).
+
+**Not yet known:** whether this run used Azure embeddings, and whether the timeframe gap check saw p.22 / p.24 (DevTools
+hung on `copy(bcpReport('3.5'))`).
+
+**Changes:**
+- **Download report** (and **Full**) buttons in the pipeline panel save the report as a .txt file; `bcpDownload('3.5')`
+  does the same from the console. No DevTools copy needed.
+- Each clause's retrieval record and the report show the **embedding model** used (`azure-openai:...` or
+  `local:bge-micro-v2`).
+- The Admin "Search embedding model" card shows a load error instead of disappearing when the API does not answer
+  (for example an API not rebuilt after a pull), and is shown on every prompt tab.
+- Gap checks stay sequential: 4-8 s each on this run, no need for parallel calls.
+- Tests: suite 322 pass, same 21 old failures; web build passes.
+
 ---
 
 ## Pending tasks (kept up to date)
@@ -364,7 +401,7 @@ It runs only on **pipeline v5** (Admin > Analysis prompts > Retrieval pipeline v
 
 | # | Task | Detail | Why |
 |---|---|---|---|
-| A1 | Run 3.5 on the latest code | Pull (entry 13 commit), restart the API (adds prompt v11, starts Azure passage vectors), Admin: pipeline **v5**, prompt **v11** current for all 3 judgment prompts; new analysis with only 3.5; then `copy(bcpReport('3.5'))` in the browser console and paste it | Confirms Azure vectors, whether Implementation Manual p.22 / p.24 reach the AI and the gap check, gap numbering and Low risk on the new run |
+| A1 | Run 3.5 on the latest code (done once, entry 14; repeat after this pull with the Download report button) | Pull (entry 13 commit), restart the API (adds prompt v11, starts Azure passage vectors), Admin: pipeline **v5**, prompt **v11** current for all 3 judgment prompts; new analysis with only 3.5; then `copy(bcpReport('3.5'))` in the browser console and paste it | Confirms Azure vectors, whether Implementation Manual p.22 / p.24 reach the AI and the gap check, gap numbering and Low risk on the new run |
 | A2 | Checkpoint B on 3.3 and 3.6 | Same settings; compare with Plan V1 section 4 (3.3 compliant with AML p.42 / p.14; 3.6 partial, predicate offence definition gap, CandNM p.2) | v11 checked on paper against these; needs a real run |
 | A3 | Old runs | Runs before entry 11 keep their mis-numbered draft actions and Medium risk; delete them or run the clause again | Saved data is not rewritten |
 | A4 | Azure DI price | Set `AzureDocumentIntelligence:UsdPerPage` once the Layout rate on the invoice is confirmed | Log-only cost figure |

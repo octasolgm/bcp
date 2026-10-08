@@ -38,6 +38,7 @@ type Retrieval = {
   matches?: AnyMatch[];
   fusedMatches?: AnyMatch[];
   elapsedMs?: number | null;
+  embeddingModel?: string | null;
 };
 
 function matchRows(list: AnyMatch[] | undefined, scoreKey: keyof AnyMatch) {
@@ -201,7 +202,7 @@ function showReportHint(): void {
   if (reportHintShown) return;
   reportHintShown = true;
   console.log(
-    "%c[Pipeline] To copy everything for a clause, type in this console: copy(bcpReport('3.5'))  - add , true for the full prompts and context. Then paste it in the chat.",
+    "%c[Pipeline] Report for the chat: use 'Download report' in the pipeline panel, or type bcpDownload('3.5') here (saves a .txt file). copy(bcpReport('3.5')) copies it instead; add , true for the full prompts and context.",
     STYLE_HEAD,
   );
 }
@@ -230,6 +231,7 @@ function retrievalLines(r: Retrieval, full: boolean): string[] {
   const out = [
     `--- Steps 1-6: retrieval (pipeline v${r.pipelineVersion ?? 1}${r.elapsedMs != null ? `, ${r.elapsedMs} ms` : ''}) ---`,
   ];
+  if (r.embeddingModel) out.push(`Embedding model: ${r.embeddingModel}`);
   const acr = (r.acronymMatches ?? []).map((m) => `${m.matchedText} -> ${m.addedText}`);
   const syn = (r.synonymMatches ?? []).map((m) => `${m.matchedText} -> ${m.addedText}`);
   out.push(`Step 1 acronyms (${acr.length}): ${acr.join('; ') || 'none'}`);
@@ -324,8 +326,32 @@ export function buildClauseReport(clauseNo?: string, full = false): string {
   return out.join('\n');
 }
 
+/** True once anything has been logged for a clause on this page (the panel's download button uses it). */
+export function hasClauseReport(): boolean {
+  return reportRetrieval.size > 0 || reportTraces.size > 0;
+}
+
+/** Saves the report as a .txt file: no DevTools needed, and large reports do not slow the console down. */
+export function downloadClauseReport(clauseNo?: string, full = false): void {
+  const text = buildClauseReport(clauseNo, full);
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  a.href = url;
+  a.download = `pipeline-report-${clauseNo ? clauseNo.replace(/[^\w.-]+/g, '_') : 'all'}${full ? '-full' : ''}-${stamp}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function installReportCommand(): void {
-  const w = window as unknown as { bcpReport?: (clauseNo?: string, full?: boolean) => string };
+  const w = window as unknown as {
+    bcpReport?: (clauseNo?: string, full?: boolean) => string;
+    bcpDownload?: (clauseNo?: string, full?: boolean) => void;
+  };
   if (w.bcpReport) return;
   w.bcpReport = (clauseNo?: string, full = false) => buildClauseReport(clauseNo, full);
+  w.bcpDownload = (clauseNo?: string, full = false) => downloadClauseReport(clauseNo, full);
 }

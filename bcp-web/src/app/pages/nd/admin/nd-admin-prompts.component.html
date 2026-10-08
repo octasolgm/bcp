@@ -357,7 +357,15 @@
               </div>
             </section>
           }
-          @if (pipelineSetting && embeddingSetting) {
+          @if (embeddingLoadError && !embeddingSetting) {
+            <section class="nd-card cache-card">
+              <div class="cache-card-text">
+                <h2>Search embedding model (Analysis V5, pipeline v4 and v5)</h2>
+                <p class="nd-error">{{ embeddingLoadError }}</p>
+              </div>
+            </section>
+          }
+          @if (embeddingSetting) {
             <section class="nd-card cache-card">
               <div class="cache-card-text">
                 <h2>Search embedding model (Analysis V5, pipeline v4 and v5)</h2>

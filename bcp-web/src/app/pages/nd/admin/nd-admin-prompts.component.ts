@@ -97,12 +97,16 @@ export class NdAdminPromptsComponent implements OnInit {
   embeddingSaving = false;
   embeddingError = '';
   embeddingMessage = '';
+  embeddingLoadError = '';
 
   async loadEmbeddingProvider(): Promise<void> {
     const res = await this.api.getRegulEmbeddingProvider();
     if (res.success && res.data) {
       this.embeddingSetting = res.data;
       this.embeddingSelected = res.data.current;
+      this.embeddingLoadError = '';
+    } else {
+      this.embeddingLoadError = res.message ?? 'Could not load the search embedding setting (is the API up to date?).';
     }
   }
 

@@ -128,6 +128,8 @@ Tasks
 - Every task of the main plan and Plan V1 re-checked with its status in the work log (entry 12); timeframe evidence for 3.5 re-checked: the AI's low gap is right, the earlier audit overstated Implementation Manual p.22 / p.24
 - Search passages now use Azure OpenAI text-embedding-3-small by default (local model when Azure OpenAI is not configured); passages and extraction unchanged, only their vectors are recomputed in the background
 - Work log: detailed pending task list (your tests, follow-ups that depend on the next run, remaining main plan points, housekeeping, decided not to do)
+- 3.5 run on v5 + prompt v11: partial 70%, gaps "funds" definition, "proceeds" definition and timeframe (all low, all correct against the documents); gap numbering, Low risk and short clause quotes confirmed on a real run; AI judgment 50 s, three gap checks 4-8 s each
+- Pipeline panel "Download report" saves the step-by-step report as a text file (DevTools copy hung on a large report); the report shows the embedding model used
 Bug fixes
 - Clause split (v3): clause 3.5 lost its last 2 parts (incl. "size / timeframe / nature of funds irrelevant", "independent offence", "no proof of predicate offence") and repeated its intro; now 15 parts, nothing dropped
 - Step 5/6 (v3): sections found only by keyword search were almost always dropped by the 0.4/0.6 fusion maths; now kept
