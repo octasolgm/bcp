@@ -77,6 +77,8 @@ export class NdActionPlansSectionComponent implements OnChanges {
   @Input() inheritedPriority: ActionPlanPriority = 'medium';
   /** Action id from an inbox deep link — expanded and scrolled into view once it loads. */
   @Input() focusPlanId: string | null = null;
+  /** Expand / collapse every action at once (the parent's "Expand all" button). A new object each click. */
+  @Input() expandAllCommand: { expanded: boolean; seq: number } | null = null;
 
   @Output() plansChanged = new EventEmitter<ActionPlanEntry | undefined>();
   @Output() viewReviews = new EventEmitter<ActionPlanEntry>();
@@ -119,6 +121,9 @@ export class NdActionPlansSectionComponent implements OnChanges {
       this.historyPlanId = null;
     }
     if (!this.optionsLoaded && (this.canEdit || this.canReview)) void this.loadOptions();
+    if (changes['expandAllCommand'] && this.expandAllCommand) {
+      this.expandedIds = this.expandAllCommand.expanded ? new Set(this.plans.map((p) => p.id)) : new Set();
+    }
     this.applyFocusPlan();
   }
 

@@ -112,6 +112,8 @@ Tasks
 - Gap analysis page: "Replace N sample action(s)" for workspace admins on real accounts removes unresolved draft actions that still carry demo template wording and seeds the AI's own action instead
 - Azure Document Intelligence price per page is now a setting (AzureDocumentIntelligence:UsdPerPage), value unchanged until the invoice rate is confirmed
 - Clause outline sent with each clause lists every sibling and sub-clause heading (80-line caps removed)
+- Gap report clause card: heading shows the clause title as well as its number for clauses picked on the new analysis page (title taken from the clause's first line; demo rendering unchanged); Corrective Action Plan toolbar has Expand all / Collapse all for every gap and action
+- First v3 run (3.3, 3.5, 3.6, prompt v9, Kimi K3): 3.3 compliant with the AML Policy p.42 good-faith evidence (it was already compliant before v3); 3.5 now covers independent offence, no proof of predicate offence, indicators and amount, gaps left: funds and proceeds definitions, asset scope, timeframe/nature of funds (being checked against the internal text); 3.6 one gap (predicate offence definition); retrieval took ~6 minutes for 3 clauses, speed fix pending
 - 20 new API unit tests (v3 split on clause 3.5 / 3.3 / 3.10 text, fusion and relevance gate, running headers, whole-word dictionary matching); full API suite 286 pass, the 24 failures are the same as before this change; web build passes
 
 Bug fixes

@@ -193,6 +193,17 @@
           <span class="ai-tag">{{ capSourceLabel }} — review &amp; edit</span>
         </p>
         <div class="cap-toolbar-actions">
+          @if (capGaps.length && !showHistoryPanel) {
+            <button
+              type="button"
+              class="toolbar-btn"
+              [attr.aria-expanded]="actionsAllExpanded"
+              [title]="actionsAllExpanded ? 'Collapse every gap and action' : 'Expand every gap and show every action in full'"
+              (click)="toggleAllActions()"
+            >
+              {{ actionsAllExpanded ? 'Collapse all' : 'Expand all' }}
+            </button>
+          }
           @if (showHistoryPanel) {
             <button type="button" class="toolbar-btn" (click)="onCloseHistory()">Close history</button>
           } @else if (canEdit && !editing) {
@@ -432,6 +443,7 @@
                       [gapIndex]="gap.index"
                       [inheritedPriority]="gapRisk(gap)"
                       [focusPlanId]="focusPlanIdForGap(gap.index)"
+                      [expandAllCommand]="actionsExpandCommand"
                       [plans]="actionPlansForGapIndex(gap.index)"
                       [canEdit]="effectiveCanEditActionPlans"
                       [canReview]="effectiveCanReviewActionPlans"

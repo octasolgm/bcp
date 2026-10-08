@@ -434,6 +434,8 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
       this.lastPointId = this.point?.id ?? null;
       this.collapsedActionsInit = false;
       this.collapsedActionIndexes = new Set();
+      this.actionsAllExpanded = false;
+      this.actionsExpandCommand = null;
     }
 
     const snap = this.snapshot;
@@ -444,6 +446,11 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
     let title = snap?.pointTitle?.trim() || '';
     if (title && isUuidLike(title.split(/\s+/)[0]?.replace(/^§/, ''))) {
       title = title.replace(/^§?\s*[0-9a-f-]{36}\s*[—–\-]\s*/i, '').trim();
+    }
+    // Clauses picked on the new analysis page carry no stored title; their heading is the clause's first line
+    // ("3.3 Protection against Liability for Reporting Persons"). Real accounts only: demo rendering is unchanged.
+    if (!title && displayNum && !this.auth.isDemoViewer()) {
+      title = headingFromClauseText(snap?.pointContent, displayNum);
     }
     this.pointHeading = displayNum
       ? title
@@ -688,6 +695,18 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
       this.departments = (res.data as Department[]).filter((d) => d.isActive !== false);
     }
     this.departmentsLoaded = true;
+    this.cdr.markForCheck();
+  }
+
+  /** Toolbar "Expand all / Collapse all": every gap and every action inside it. */
+  actionsAllExpanded = false;
+  actionsExpandCommand: { expanded: boolean; seq: number } | null = null;
+
+  toggleAllActions(): void {
+    const expand = !this.actionsAllExpanded;
+    this.actionsAllExpanded = expand;
+    this.collapsedActionIndexes = expand ? new Set() : new Set(this.capGaps.map((g) => g.index));
+    this.actionsExpandCommand = { expanded: expand, seq: (this.actionsExpandCommand?.seq ?? 0) + 1 };
     this.cdr.markForCheck();
   }
 
@@ -1376,4 +1395,13 @@ function formatAttachmentSize(bytes?: number | null): string {
   if (bytes < 1024) return `${Math.round(bytes)} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Title from a clause's first line when that line is "<number> <title>"; '' otherwise. */
+export function headingFromClauseText(content: string | null | undefined, clauseNo: string): string {
+  const firstLine = (content ?? '').split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0) ?? '';
+  const escaped = clauseNo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = firstLine.match(new RegExp(`^§?\\s*${escaped}\\.?\\s+(.{2,160})$`));
+  const title = m?.[1]?.trim() ?? '';
+  return /[.;:]$/.test(title) ? '' : title;
 }
