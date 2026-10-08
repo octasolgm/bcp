@@ -63,7 +63,7 @@ Only **4 sections** were selected for this clause; the best evidence (p.14) sits
 | **Gap 1** no definition of "funds" | Correct, low risk | No document defines "funds" |
 | **Gap 2** no definition of "proceeds" | Correct, low risk | No document defines "proceeds" |
 | **Gap 3** ML not stated to cover non-money assets | **Wrong** | AML Manual **p.5** "real estate purchases ... investments in securities, artwork", "financial assets or stocks, precious commodities, or real estate"; **p.31** "Involvement in virtual assets", "cryptocurrencies or prepaid cards"; **p.36** no appetite to "accept assets known or suspected to be the proceeds of criminal activity"; Annex 1 **B.3 p.58** precious metals / gems, **B.4 p.59** property / vehicles, **B.18 p.62** "virtual currencies/cryptocurrencies" |
-| **Gap 4** timeframe and nature of funds | **Wrong** (amount already covered) | Implementation Manual **p.22** "If the activity takes place over a period of time ... describe the duration of the activity"; **p.24** "expanding the time period for reviewing alerted transactions (e.g., from 30 days to 90 days)"; **p.22** instruments covered: "wire transfers, foreign currency, WPS, letters of credit ... money orders, credit/debit cards" |
+| **Gap 4** timeframe and nature of funds | **Partly wrong** (amount covered; nature covered by asset typologies). Corrected 08 Oct: the **timeframe** part is a real low gap, no document states it is irrelevant; p.22 / p.24 below only partly address it (see work log entry 12.3) | Implementation Manual **p.22** "If the activity takes place over a period of time ... describe the duration of the activity"; **p.24** "expanding the time period for reviewing alerted transactions (e.g., from 30 days to 90 days)"; **p.22** instruments covered: "wire transfers, foreign currency, WPS, letters of credit ... money orders, credit/debit cards" |
 | Gaps 1, 2, 3 together | Overstated | One concept ("funds = assets in any form") reported three times |
 | Actions 3, 4 | **Not needed** | Would insert text the policy already covers |
 | 2 quotes | Cited under the other document | "independent crime ..." is in CandNM p.2 (shown under AML Manual 7.7); "no minimum reporting threshold" is in the Implementation Manual p.4 (shown under CandNM). Left as is by decision |
@@ -116,12 +116,12 @@ Where the missed evidence sat (RC1):
 | 1 | Free retrieval check | testing cost | **Built** | always available | $0 |
 | 2 | Search passages with heading path | RC1, RC3 | **Built** | pipeline **v4** / v5 | $0 |
 | 3 | Equivalent-term groups | RC2 | **Built** | seeds at API start; used by v4+ | $0 |
-| 4 | Embedding model option | RC2 | **Built (setting, default unchanged)** | appsettings | $0 local; under $0.01 per document set on Azure |
+| 4 | Embedding model option | RC2 | **Built, admin switch** (work log entry 12) | Admin > Analysis prompts | $0 local; under $0.01 per document set on Azure |
 | 5 | Retrieval speed | slow v3 run | **Built** | v4+ | $0 |
 | 6 | Selection on passages | RC3 | **Built** (same no-limit relevance gate) | v4+ | $0 |
 | 7 | Duplicate-document detection | RC7 | **Not done** - decided: evidence from every file is fine | - | - |
 | 8 | Per-document citation check | RC6 | **Not done** - decided: citations stay as they are | - | - |
-| 9 | Judgment prompt v10 | RC4 | **Built, not current** | Admin > Analysis prompts | same as today |
+| 9 | Judgment prompt v10, replaced by **v11** | RC4 | **Built, not current** | Admin > Analysis prompts | same as today |
 | 10 | Gap check before a gap is saved | RC5, RC3 | **Built** | pipeline **v5** | ~$0.05-0.10 per gap |
 
 ### Task 1 - Free retrieval check
@@ -305,7 +305,7 @@ Expected at Checkpoint B:
 | Clause | Expected result |
 |---|---|
 | 3.3 | Compliant; evidence AML Manual p.42 and p.14 |
-| 3.5 | Partial, one low-risk gap: adopt the AML-CFT Law definitions of funds and proceeds; asset scope and nature of funds covered (p.5, p.31, p.58-62). Timeframe (corrected 08 Oct after the first v11 run): no document states it is irrelevant, so either covered by practice with a quote from Implementation Manual p.22 / p.24, or a low gap that cites p.22 as partly addressed |
+| 3.5 | Partial, one low-risk gap: adopt the AML-CFT Law definitions of funds and proceeds; asset scope and nature of funds covered (p.5, p.31, p.58-62). Timeframe (corrected 08 Oct): a second low gap, no document states the timeframe is irrelevant; best output notes Implementation Manual p.22 / p.24 as partly addressed |
 | 3.6 | Partial, one low-risk gap: define predicate offence (felony / misdemeanour, dual criminality); CandNM p.2 cited for inside / outside the UAE |
 
 ---

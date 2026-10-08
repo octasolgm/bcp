@@ -4087,6 +4087,7 @@ ${this.findingsPreview
       if (payload.run.workflowEngine) this.ndWorkflowEngine = payload.run.workflowEngine;
       if (payload.run.regulPipelinePhase != null) {
         this.ndRegulPipelinePhase = payload.run.regulPipelinePhase;
+        this.onNdServerPipelinePhase(payload.run.regulPipelinePhase);
       }
       this.ndRunDualVerifyFailedCount = detail.run.dualVerifyFailedCount ?? 0;
       this.ndRunSelectedSnapshot = detail.run.selectedPointsSnapshot ?? '';
@@ -4395,6 +4396,11 @@ ${this.findingsPreview
     _preview: Array<{ clauseNo: string; retrieval: unknown }>,
   ): void {}
 
+  /** V5 hook: the pipeline phase as the server reported it (status poll or run detail). The page sets a
+   * local "forward" when it launches a run, before the server has reported anything; V5's pipeline
+   * panel waits for this instead. No-op for every other page. */
+  protected onNdServerPipelinePhase(_phase: string): void {}
+
   /**
    * ND shell only — starts NdAnalysisProcessor and polls DB status.
    * Legacy {@link runAnalysis} (dual-verify-kafka jobs) is unchanged for /old/*.
@@ -4610,6 +4616,7 @@ ${this.findingsPreview
     const phaseFromPoll = status?.regulPipelinePhase ?? run.regulPipelinePhase;
     if (phaseFromPoll !== undefined && phaseFromPoll !== null) {
       this.ndRegulPipelinePhase = phaseFromPoll;
+      this.onNdServerPipelinePhase(phaseFromPoll);
     }
     const pollData = status ?? run;
     if (pollData.regulReverseSectionTotal != null) {
@@ -4633,6 +4640,7 @@ ${this.findingsPreview
       const phaseFromPoll = status?.regulPipelinePhase ?? run.regulPipelinePhase;
       if (phaseFromPoll !== undefined && phaseFromPoll !== null) {
         this.ndRegulPipelinePhase = phaseFromPoll;
+        this.onNdServerPipelinePhase(phaseFromPoll);
       }
       const pollData = status ?? run;
       if (pollData.regulReverseSectionTotal != null) {

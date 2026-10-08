@@ -144,6 +144,23 @@ public class NdRegulPipelineV4Tests
     }
 
     [Theory]
+    [InlineData("local", "local")]
+    [InlineData(" Azure-OpenAI ", "azure-openai")]
+    [InlineData("\"azure-openai\"", "azure-openai")]
+    [InlineData("openai", null)]
+    [InlineData(null, null)]
+    public void Embedding_provider_values_are_normalised(string? raw, string? expected) =>
+        Assert.Equal(expected, Reguliq.Api.Services.Llm.RegulWorkflowLlmSettingsService.NormalizeEmbeddingProvider(raw));
+
+    [Fact]
+    public void Azure_counts_as_configured_only_with_endpoint_key_and_deployment()
+    {
+        Assert.False(PassageEmbeddingService.IsAzureConfigured(new AzureOpenAIOptions()));
+        Assert.False(PassageEmbeddingService.IsAzureConfigured(new AzureOpenAIOptions { Endpoint = "https://x", ApiKey = "" }));
+        Assert.True(PassageEmbeddingService.IsAzureConfigured(new AzureOpenAIOptions { Endpoint = "https://x", ApiKey = "k" }));
+    }
+
+    [Theory]
     [InlineData("Submit a SAR within a reasonable timeframe of identifying the suspicious activity;", "reasonable timeframe of identifying", true)]
     [InlineData("If the activity takes place over a period\nof time, describe the duration of the\nactivity.", "describe the duration of the activity", true)]
     [InlineData("expanding the time period for reviewing alerted transactions (e.g., from 30 days to 90 days)", "from 30 days to 90 days", true)]

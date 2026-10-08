@@ -142,6 +142,14 @@ export class NdPipelinePanelService {
     this._judgedClauses.set(0);
   }
 
+  /** A new run is shown: forget the previous run's per-clause Steps 1-6 data and counters. */
+  clearRunData(): void {
+    this._clauses.set([]);
+    this._judgmentFailures.set(0);
+    this._totalClauses.set(0);
+    this._judgedClauses.set(0);
+  }
+
   setJudgmentFailures(count: number): void {
     const n = Math.max(0, count);
     if (n !== this._judgmentFailures()) this._judgmentFailures.set(n);

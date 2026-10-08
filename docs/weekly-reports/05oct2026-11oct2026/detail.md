@@ -144,3 +144,9 @@ Administrators can now copy a complete plain-text report of how a clause was ana
 Corrective action plan matches each gap again
 
 On the latest test, the money laundering clause was correctly reported as partially compliant, with the missing definitions of "funds" and "proceeds" as the main gap. Two display problems were found and fixed: when the review numbered its gaps by requirement, the drafted actions could end up under the wrong gap, and gaps the review rated as low risk were shown as medium risk with a 30-day due date. Each gap now carries its own drafted action and the risk level the review assigned, and very long quotations of the regulation inside a gap are shortened so the gap reads as a clear statement.
+
+Choice of search model and a clearer progress panel
+
+Administrators can now choose the model behind the meaning-based search of policy passages: the free model that runs on our platform, or a stronger Azure OpenAI model at a cost of well under one cent per document. Switching takes effect without re-reading or re-processing any document; passages are refreshed in the background. How documents are read and divided into sections is unchanged. On the analysis page, the progress panel no longer shows the search steps as finished for a moment when a new analysis starts, and it now follows the analysis, bringing the step in progress into view.
+
+We also re-checked the remaining money laundering gap about the timeframe of transactions against the policy text. No policy document states that the timeframe does not matter for suspicion, so the gap is correct; the transaction reporting guidance only partly touches on it.

@@ -357,6 +357,46 @@
               </div>
             </section>
           }
+          @if (pipelineSetting && embeddingSetting) {
+            <section class="nd-card cache-card">
+              <div class="cache-card-text">
+                <h2>Search embedding model (Analysis V5, pipeline v4 and v5)</h2>
+                <p class="nd-muted">
+                  The model that turns document passages and clause wording into vectors for the meaning search.
+                  Local runs on this server at no cost. Azure OpenAI ({{ embeddingSetting.azureDeployment }}) is a
+                  stronger model, about $0.002 per 100-page document plus a fraction of a cent per analysis; document
+                  text is sent to your Azure OpenAI resource. Switching never needs a re-parse or re-extract: passages
+                  are re-embedded with the new model in the background, or before the next search at the latest.
+                  Extraction and section splitting are not affected.
+                </p>
+                @if (!embeddingSetting.azureConfigured) {
+                  <p class="nd-muted">Azure OpenAI is not configured on this server (AzureOpenAI:Endpoint, ApiKey, EmbeddingDeployment).</p>
+                }
+                @if (embeddingError) {
+                  <p class="nd-error">{{ embeddingError }}</p>
+                }
+                @if (embeddingMessage) {
+                  <p class="nd-success">{{ embeddingMessage }}</p>
+                }
+              </div>
+              <div class="cache-card-actions">
+                <select class="nd-input pipeline-select" [(ngModel)]="embeddingSelected" aria-label="Search embedding model">
+                  <option value="local">Local bge-micro-v2 (free){{ embeddingSetting.current === 'local' ? ' (current)' : '' }}</option>
+                  <option value="azure-openai" [disabled]="!embeddingSetting.azureConfigured">
+                    Azure OpenAI {{ embeddingSetting.azureDeployment }}{{ embeddingSetting.current === 'azure-openai' ? ' (current)' : '' }}
+                  </option>
+                </select>
+                <button
+                  type="button"
+                  class="nd-btn-primary"
+                  [disabled]="embeddingSaving || embeddingSelected === embeddingSetting.current"
+                  (click)="saveEmbeddingProvider()"
+                >
+                  {{ embeddingSaving ? 'Saving...' : 'Set as current' }}
+                </button>
+              </div>
+            </section>
+          }
           @if (showRetrievalCacheCard) {
             <section class="nd-card cache-card">
               <div class="cache-card-text">

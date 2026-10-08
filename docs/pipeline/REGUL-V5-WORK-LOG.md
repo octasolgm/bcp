@@ -19,7 +19,7 @@ Version switches (Admin > Analysis prompts):
 |---|---|---|
 | Retrieval pipeline | v1 original, v2 expanded wording, **v3** whole clause + no limits, **v4** passages + equivalent terms + in-memory, **v5** v4 + gap check | stored admin choice (v2 unless changed) |
 | Judgment prompt | ... v8, **v9** (current), **v10**, **v11** (seeded, not current; use v11) | v9 |
-| Embedding model | `RegulRetrieval:EmbeddingProvider`: `local` / `azure-openai` | local |
+| Embedding model (search passages) | Admin > Analysis prompts > "Search embedding model": local bge-micro-v2 / Azure OpenAI (config `RegulRetrieval:EmbeddingProvider` is only the default) | local |
 
 ---
 
@@ -228,6 +228,109 @@ either covered by practice with a p.22 quote, or a low gap that cites p.22 as pa
   21 old failures; web build passes.
 - **Status:** built; waiting for the 3.5 rerun and `copy(bcpReport('3.5'))` to settle gap 2.
 
+### 12. Pipeline panel, embedding switch in Admin, timeframe re-checked, every plan task re-checked - this commit
+
+#### 12.1 Pipeline panel (page `/nd/analyse-regul-full-v2`)
+
+| Bug | Cause | Fix |
+|---|---|---|
+| On "Run", Steps 1-7 showed **done** for a moment, then **processing** | The page sets a local phase "forward" when it launches a run, before the server reports anything; the panel read "forward" as "retrieval finished". The previous run's clause data also stayed in the panel | The V5 page shows the run as queued until this run's own phase arrives from the server (new no-op hook `onNdServerPipelinePhase` in the shared page code, used only by V5), and clears the previous run's Steps 1-6 data when a different run is shown. Demo and other pages unchanged |
+| Panel did not follow the run | - | The panel scrolls to Step 1 when a run starts and to Step 8 when the AI judgment starts |
+
+#### 12.2 Embedding model: admin switch (no re-parse, no re-extract)
+
+- Admin > Analysis prompts > **Search embedding model**: Local bge-micro-v2 (free) or Azure OpenAI
+  (`AzureOpenAI:EmbeddingDeployment`, e.g. text-embedding-3-small). The Azure option is disabled when
+  `AzureOpenAI:Endpoint / ApiKey / EmbeddingDeployment` are not configured; if the setting says Azure but the keys are
+  missing, the local model is used and the log says so (nothing breaks).
+- The model is fixed once per job (one analysis, one indexing job), so a switch never mixes models inside a run.
+- Azure calls for passages go in batches of 16 with retry on 429 / 5xx (Retry-After respected). The existing
+  single-text Azure call used by semantic extraction is **unchanged**.
+- **Extraction and chunking are not changed.** Structural extraction (sections) stays exactly as it is; no semantic
+  chunking is used anywhere in this work. Passages are a search index cut inside each structural section.
+
+**Where embedding happens (the whole picture):**
+
+| When | What is embedded | Model | Stored in | Used by |
+|---|---|---|---|---|
+| Indexing (after Extract, automatic) | each structural section | local bge-micro-v2 (fixed) | `nd_local_document_extraction_sections.embedding` | pipelines v1-v3 |
+| Indexing, right after the sections | each search passage (~150-300 words inside a section, with its heading path) | the admin choice | `nd_local_document_passages.embedding` (+ model name) | pipelines v4 / v5 |
+| Background, every 10 min (v4 / v5 only) | passages of documents that have none for the chosen model (older documents, or after a model switch) | the admin choice | same table | v4 / v5 |
+| Each analysis, Steps 3-4 | every searched wording of every clause part (cached per job) | the same model as the passages | memory only | meaning search: compared with every passage vector |
+| Gap check (v5) | the gap's requirement and clause words | same | memory only | wider search per gap |
+
+Switching the model: set it in Admin, and passages are re-embedded in the background (or before the next search at
+the latest). Old vectors of the other model are replaced, never compared. Cost on Azure: ~60k tokens for a
+114-page document, about $0.0012 once, plus a fraction of a cent per analysis for the clause wording.
+
+**Will Azure give better results?** It is a much stronger model (bge-micro-v2 is a 384-dimension micro model that reads
+~380 words; text-embedding-3-small has 1,536 dimensions and reads ~6,000 words). It helps only where the policy uses
+different words for the same idea and no equivalent-term pair exists (in the audit: p.36 "accept assets ... proceeds of
+criminal activity", p.24 "30 days to 90 days"). It does not change the timeframe question below, which is a judgment
+question, not a search miss. Recommendation: switch to Azure (cost is negligible, your documents already go to Azure
+Document Intelligence), then compare one 3.5 run with `bcpReport` before and after.
+
+#### 12.3 Timeframe (3.5): the AI or my earlier audit?
+
+The clause: "the size ..., the **timeframe** during which it took place, and the nature of the funds ... are
+**irrelevant** to the suspicion and reporting of a suspicious transaction."
+
+| Passage | What it says | Does it cover "timeframe is irrelevant"? |
+|---|---|---|
+| Implementation Manual p.22 (STR drafting) | "If the activity takes place over a period of time, provide the date when the suspicious activity ... was first observed and describe the duration of the activity" | **Partly**: activity over any period is reported, with its duration; it does not say the timeframe is irrelevant to suspicion |
+| Implementation Manual p.24 | "expanding the time period for reviewing alerted transactions (e.g., from 30 days to 90 days) ... to make the determination that an STR or SAR is required" | **Partly**: older activity is looked at before deciding; it is an alert-review practice, not a statement |
+| AML Manual p.41 | "Submit a SAR within a reasonable timeframe of identifying the suspicious activity" | **No**: a filing deadline, another subject |
+| Red flags (AML p.59, Impl p.48) | "transactions made over a short period of time" | **No**: timing used as an indicator |
+
+**Verdict:** no document states that the timeframe is irrelevant, so the AI's **low gap is correct**. My audit of 08 Oct
+called that gap "wrong" because of p.22 / p.24: that was overstated (I counted practice that only touches the subject).
+The most accurate result is the AI's gap **plus** a "partly addressed: Implementation Manual p.22 / p.24" note, which
+the gap check adds when it sees those passages and quotes them. Corrected in Plan V1 (sections 1.3 and 4). Whether the
+gap check saw p.22 / p.24 on this run is in `copy(bcpReport('3.5'))` (gap check section); no prompt change before that.
+
+#### 12.4 Every plan task re-checked
+
+**Plan V1 (accuracy plan):**
+
+| # | Task | Status | Verified on a real run |
+|---|---|---|---|
+| 1 | Free retrieval check | Done | Not used yet (optional) |
+| 2 | Search passages with heading path (v4) | Done | Yes: 3.5 now cites AML p.5, p.59, p.62 typologies that the v3 run never saw |
+| 3 | Equivalent-term groups | Done | Partly (timeframe / duration pair present; effect visible in `bcpReport`) |
+| 4 | Embedding model option | Done, now an **admin switch** (12.2) | Not yet on Azure |
+| 5 | Retrieval speed | Done + passages built ahead (entry 9) | First v5 run: wait was the one-time passage build |
+| 6 | Selection on passages (no-limit relevance gate) | Done | Yes (3.5 context) |
+| 7 | Duplicate documents | Not done by decision (evidence from every file is fine) | - |
+| 8 | Per-document citation check | Not done by decision | - |
+| 9 | Judgment prompt | v10 replaced by **v11** (entries 9-10) | Yes: 3.5 partial with the definitions gap |
+| 10 | Gap check (v5) | Done | Ran on 3.5; outcome per gap visible in `bcpReport` |
+
+**Main plan (22 points):**
+
+| # | Point | Status |
+|---|---|---|
+| 1-9 | P0 bugs and no-limit (split, fusion, caps, running headers, dictionary, demo template text, Azure DI price setting, regulation docs, outline caps) | **Done** (v3, commit 63c014d). Point 4 applies to documents extracted after it; existing documents keep their text unless re-extracted (your choice, not required) |
+| 10 | Search passages with heading path | **Done** (= V1 task 2) |
+| 11 | Stronger embedding model | **Done as an option** (12.2); your switch |
+| 12 | BM25 stemming, stop words, heading field | **Partly**: heading path is now in every passage's searched text; stemming not done |
+| 13 | Concept groups + workspace self-names | **Partly**: 27 equivalent-term pairs; self-names (the bank's own name for itself) not done, prompt v10/v11 rule covers it meanwhile |
+| 14 | Clause profile (requirement list, cached) | Not started |
+| 15 | Evidence per requirement | Not started |
+| 16 | Structured judgment, verdict in code | **Partly**: prompts v10/v11 (clause types, materiality); verdict still from the AI |
+| 17 | Gap verification over all documents | **Done** (v5) |
+| 18 | Eval labels + retrieval recall | **Partly**: retrieval check with expected snippets; no recall dashboard |
+| 19-22 | Finalize loop (writer context, placement, inline DOCX, re-index corrected copy) | Not started |
+
+**Flaws found in this session and their state:** all fixed except (a) the timeframe "partly addressed" note depends
+on the gap check seeing p.22 / p.24 (check with `bcpReport`), (b) a context over ~150k tokens is flagged, not split
+(point 16), (c) 3 old prompt-version unit tests fail on their own outdated assertions (pre-existing, unrelated).
+Nothing in this session changed extraction, chunking, demo accounts or the v1-v3 pipelines.
+
+- Tests: 6 new (embedding setting values, Azure configured check); suite 322 pass, same 21 old failures; web build
+  passes.
+- **Status:** built; next: pull, restart, (optional) switch the embedding model to Azure, run 3.5, send
+  `copy(bcpReport('3.5'))`.
+
 ---
 
 ## Open items
@@ -239,5 +342,5 @@ either covered by practice with a p.22 quote, or a low gap that cites p.22 as pa
 | Checkpoint B (v5 + prompt **v11**) | 3.5 first (v10 run judged wrong, see 9), then 3.3 and 3.6; compare with Plan V1 section 4 | You |
 | Re-tune the relevance gate if needed | Based on the retrieval check results | Claude |
 | Azure DI price setting | Set `AzureDocumentIntelligence:UsdPerPage` once the Layout rate is confirmed (log only) | You |
-| Stronger embedding model | Only if the retrieval check shows meaning-based misses | Decision |
+| Stronger embedding model | Admin switch built (entry 12); recommended: Azure, then compare one 3.5 run with bcpReport | You |
 | Main plan, after Checkpoint B | Workspace self-names (13), clause profile (14), structured judgment (16), finalize points (19-22) | Claude |

@@ -1,7 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { NdApiService, NdPipelineVersionSetting } from '../../../services/nd/nd-api.service';
+import { NdApiService, NdEmbeddingProviderSetting, NdPipelineVersionSetting } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { startPanelResize } from '../../shared/panel-resize';
 import type {
@@ -92,6 +92,35 @@ export class NdAdminPromptsComponent implements OnInit {
     this.pipelineMessage = `New analyses and re-runs now use pipeline v${res.data.current}.`;
   }
 
+  embeddingSetting: NdEmbeddingProviderSetting | null = null;
+  embeddingSelected = 'local';
+  embeddingSaving = false;
+  embeddingError = '';
+  embeddingMessage = '';
+
+  async loadEmbeddingProvider(): Promise<void> {
+    const res = await this.api.getRegulEmbeddingProvider();
+    if (res.success && res.data) {
+      this.embeddingSetting = res.data;
+      this.embeddingSelected = res.data.current;
+    }
+  }
+
+  async saveEmbeddingProvider(): Promise<void> {
+    this.embeddingSaving = true;
+    this.embeddingError = '';
+    this.embeddingMessage = '';
+    const res = await this.api.updateRegulEmbeddingProvider(this.embeddingSelected);
+    this.embeddingSaving = false;
+    if (!res.success || !res.data) {
+      this.embeddingError = res.message ?? 'Could not save the embedding model. Please try again.';
+      return;
+    }
+    this.embeddingSetting = res.data;
+    this.embeddingSelected = res.data.current;
+    this.embeddingMessage = res.message ?? 'Saved.';
+  }
+
   get selectedPipelineInfo() {
     return this.pipelineSetting?.versions.find((v) => v.version === Number(this.pipelineSelected)) ?? null;
   }
@@ -124,7 +153,7 @@ export class NdAdminPromptsComponent implements OnInit {
       if (!Number.isNaN(n)) this.versionsPanelPct = Math.min(45, Math.max(18, n));
     }
     await this.auth.refreshProfile();
-    await Promise.all([this.load(), this.loadLlmProviders(), this.loadRetrievalCache(), this.loadPipelineVersion()]);
+    await Promise.all([this.load(), this.loadLlmProviders(), this.loadRetrievalCache(), this.loadPipelineVersion(), this.loadEmbeddingProvider()]);
   }
 
   async loadLlmProviders(): Promise<void> {

@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -79,6 +79,7 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
   private readonly panel = inject(NdPipelinePanelService);
   private readonly ndApi = inject(NdApiService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly host = inject(ElementRef<HTMLElement>);
 
   readonly steps = STEPS;
   readonly collapsed = this.panel.collapsed;
@@ -132,6 +133,30 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
     if (this.panel.clauses().length > 0) return 'done';
     if (PHASES_PAST_RETRIEVAL.has(phase)) return 'done';
     return 'pending';
+  });
+
+  /** The step a running analysis is on: Step 1 from the start of the run until retrieval is done, then Step 8.
+   * The panel scrolls to it each time it changes, so the step in progress is always in view. */
+  readonly currentStepKey = computed<string | null>(() => {
+    if (!this.panel.runActive()) return null;
+    const phase = (this.panel.phase() ?? '').toLowerCase();
+    if (['queued', 'parsing', 'passages', 'retrieval'].includes(phase)) return 'step1';
+    if (this.judgmentStatus() === 'running') return 'step8';
+    return null;
+  });
+
+  private lastScrolledStep: string | null = null;
+  private readonly followCurrentStep = effect(() => {
+    const key = this.currentStepKey();
+    const runId = this.panel.runId();
+    const marker = key ? `${runId}:${key}` : null;
+    if (!marker || marker === this.lastScrolledStep) return;
+    this.lastScrolledStep = marker;
+    // After this change-detection pass has rendered the row.
+    setTimeout(() => {
+      const row = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>(`[data-step="${key}"]`);
+      row?.scrollIntoView({ block: key === 'step1' ? 'start' : 'nearest', behavior: 'smooth' });
+    }, 0);
   });
 
   /** Pipeline v4+: the run is building search passages for documents indexed before passages existed. */

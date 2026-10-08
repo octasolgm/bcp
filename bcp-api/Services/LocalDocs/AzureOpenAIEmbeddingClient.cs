@@ -53,4 +53,57 @@ public sealed class AzureOpenAIEmbeddingClient(HttpClient http, Microsoft.Extens
             vector[i++] = v.GetSingle();
         return vector;
     }
+
+    private const int MaxBatchAttempts = 5;
+
+    /// <summary>
+    /// Search passages (pipeline v4+) only: several inputs in one request, retried on throttling (429) and server
+    /// errors with backoff (Retry-After when given). <see cref="EmbedAsync"/> above is left exactly as semantic
+    /// extraction uses it.
+    /// </summary>
+    public async Task<float[][]> EmbedBatchAsync(IReadOnlyList<string> inputs, CancellationToken ct)
+    {
+        var opts = options.Value;
+        if (string.IsNullOrWhiteSpace(opts.Endpoint) || string.IsNullOrWhiteSpace(opts.ApiKey))
+            throw new InvalidOperationException(
+                "Azure OpenAI is not configured (AzureOpenAI:Endpoint / ApiKey).");
+        if (inputs.Count == 0) return [];
+
+        var url = $"openai/deployments/{opts.EmbeddingDeployment}/embeddings?api-version={ApiVersion}";
+        var payload = JsonSerializer.Serialize(new { input = inputs.Select(t => string.IsNullOrWhiteSpace(t) ? " " : t).ToArray() });
+        for (var attempt = 1; ; attempt++)
+        {
+            using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+            using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+            request.Headers.Add("api-key", opts.ApiKey);
+
+            using var response = await http.SendAsync(request, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            var status = (int)response.StatusCode;
+            if (response.IsSuccessStatusCode)
+            {
+                using var doc = JsonDocument.Parse(body);
+                var result = new float[inputs.Count][];
+                foreach (var item in doc.RootElement.GetProperty("data").EnumerateArray())
+                {
+                    var index = item.GetProperty("index").GetInt32();
+                    var embedding = item.GetProperty("embedding");
+                    var vector = new float[embedding.GetArrayLength()];
+                    var i = 0;
+                    foreach (var v in embedding.EnumerateArray()) vector[i++] = v.GetSingle();
+                    result[index] = vector;
+                }
+
+                if (result.Any(r => r == null))
+                    throw new InvalidOperationException("Azure OpenAI embeddings returned fewer vectors than inputs.");
+                return result;
+            }
+
+            var retryable = status == 429 || status >= 500;
+            if (!retryable || attempt >= MaxBatchAttempts)
+                throw new InvalidOperationException($"Azure OpenAI embeddings returned {status}: {body}");
+            var wait = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(Math.Pow(2, attempt));
+            await Task.Delay(wait > TimeSpan.FromSeconds(60) ? TimeSpan.FromSeconds(60) : wait, ct);
+        }
+    }
 }

@@ -36,7 +36,7 @@ public sealed class NdPassageIndexService(
     /// written twice by an earlier overlapping build does not count).</summary>
     public async Task<bool> HasCurrentPassagesAsync(Guid extractionId, CancellationToken ct)
     {
-        var model = embeddings.ModelName;
+        var model = await embeddings.ModelNameAsync(ct);
         var passages = db.NdLocalDocumentPassages.AsNoTracking().Where(p => p.ExtractionId == extractionId);
         if (!await passages.AnyAsync(p => p.EmbeddingModel == model && p.Embedding != null, ct)) return false;
         var duplicated = await passages
@@ -111,7 +111,7 @@ public sealed class NdPassageIndexService(
 
         var existing = await db.NdLocalDocumentPassages.Where(p => p.ExtractionId == extractionId).ToListAsync(ct);
         db.NdLocalDocumentPassages.RemoveRange(existing);
-        var model = embeddings.ModelName;
+        var model = await embeddings.ModelNameAsync(ct);
         var rows = new List<NdLocalDocumentPassage>(passages.Count);
         for (var i = 0; i < passages.Count; i++)
         {

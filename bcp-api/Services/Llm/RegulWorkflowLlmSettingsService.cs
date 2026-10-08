@@ -91,6 +91,61 @@ public class RegulWorkflowLlmSettingsService(
         return enabled;
     }
 
+    private const string EmbeddingProviderSettingKey = "regul_embedding_provider";
+    private const string EmbeddingProviderMemoKey = "regul_embedding_provider_current";
+    public const string EmbeddingProviderLocal = "local";
+    public const string EmbeddingProviderAzureOpenAi = "azure-openai";
+
+    /// <summary>
+    /// Embedding model for the search passages of pipeline v4+: the admin choice (Admin > Analysis prompts), else
+    /// the RegulRetrieval:EmbeddingProvider config value, else local. Always "local" or "azure-openai".
+    /// </summary>
+    public async Task<string> GetEmbeddingProviderAsync(CancellationToken ct = default)
+    {
+        if (cache.TryGetValue(EmbeddingProviderMemoKey, out string? cached) && cached != null) return cached;
+        var row = await db.NdSystemSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == EmbeddingProviderSettingKey, ct);
+        var provider = NormalizeEmbeddingProvider(row?.ValueJson)
+            ?? NormalizeEmbeddingProvider(config["RegulRetrieval:EmbeddingProvider"])
+            ?? EmbeddingProviderLocal;
+        cache.Set(EmbeddingProviderMemoKey, provider, CacheTtl);
+        return provider;
+    }
+
+    public async Task<string> SetEmbeddingProviderAsync(string provider, Guid updatedBy, CancellationToken ct = default)
+    {
+        var value = NormalizeEmbeddingProvider(provider)
+            ?? throw new InvalidOperationException($"Unknown embedding provider '{provider}'.");
+        var row = await db.NdSystemSettings.FirstOrDefaultAsync(s => s.Key == EmbeddingProviderSettingKey, ct);
+        if (row == null)
+        {
+            db.NdSystemSettings.Add(new NdSystemSetting
+            {
+                Key = EmbeddingProviderSettingKey,
+                ValueJson = value,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                UpdatedBy = updatedBy,
+            });
+        }
+        else
+        {
+            row.ValueJson = value;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+            row.UpdatedBy = updatedBy;
+        }
+        await db.SaveChangesAsync(ct);
+        cache.Remove(EmbeddingProviderMemoKey);
+        return value;
+    }
+
+    public static string? NormalizeEmbeddingProvider(string? value) =>
+        (value ?? "").Trim().Trim('"').ToLowerInvariant() switch
+        {
+            EmbeddingProviderLocal => EmbeddingProviderLocal,
+            EmbeddingProviderAzureOpenAi => EmbeddingProviderAzureOpenAi,
+            _ => null,
+        };
+
     private const string PipelineVersionSettingKey = "regul_pipeline_version";
     private const string PipelineVersionMemoKey = "regul_pipeline_version_current";
 

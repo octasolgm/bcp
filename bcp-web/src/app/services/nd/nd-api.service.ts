@@ -160,6 +160,9 @@ export type NdPipelineVersionInfo = { version: number; label: string; descriptio
 
 export type NdPipelineVersionSetting = { current: number; versions: NdPipelineVersionInfo[] };
 
+/** Embedding model for the search passages of pipeline v4+. */
+export type NdEmbeddingProviderSetting = { current: string; azureConfigured: boolean; azureDeployment: string };
+
 export type NdEvalPromptVersionRef = { promptKey: string; versionNumber: number; label: string };
 
 export type NdEvalPromptVersion = NdEvalPromptVersionRef & { promptText: string };
@@ -1114,6 +1117,14 @@ export class NdApiService {
 
   updateRegulPipelineVersion(version: number) {
     return this.request<NdPipelineVersionSetting>('PUT', '/nd/admin/settings/regul-pipeline-version', { version });
+  }
+
+  getRegulEmbeddingProvider() {
+    return this.request<NdEmbeddingProviderSetting>('GET', '/nd/admin/settings/regul-embedding-provider');
+  }
+
+  updateRegulEmbeddingProvider(provider: string) {
+    return this.request<NdEmbeddingProviderSetting>('PUT', '/nd/admin/settings/regul-embedding-provider', { provider });
   }
 
   updateRegulRetrievalPromptCache(enabled: boolean) {

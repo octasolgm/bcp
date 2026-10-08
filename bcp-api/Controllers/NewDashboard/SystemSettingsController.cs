@@ -12,7 +12,8 @@ public class SystemSettingsController(
     SupabaseJwtValidator jwt,
     DualVerifyLlmSettingsService llmSettings,
     RegulWorkflowLlmSettingsService regulLlmSettings,
-    FinalizeEmbedLlmSettingsService finalizeEmbedLlmSettings) : NdControllerBase
+    FinalizeEmbedLlmSettingsService finalizeEmbedLlmSettings,
+    Microsoft.Extensions.Options.IOptions<Services.LocalDocs.AzureOpenAIOptions> azureOpenAiOptions) : NdControllerBase
 {
     public record DualVerifyLlmUpdateRequest(string Provider, string Model);
 
@@ -121,6 +122,50 @@ public class SystemSettingsController(
     }
 
     public sealed record PipelineVersionRequest(int Version);
+
+    public sealed record EmbeddingProviderRequest(string Provider);
+
+    private async Task<object> EmbeddingProviderViewAsync(CancellationToken ct)
+    {
+        var azure = azureOpenAiOptions.Value;
+        return new
+        {
+            current = await regulLlmSettings.GetEmbeddingProviderAsync(ct),
+            azureConfigured = Services.LocalDocs.PassageEmbeddingService.IsAzureConfigured(azure),
+            azureDeployment = azure.EmbeddingDeployment,
+        };
+    }
+
+    /// <summary>Embedding model for the search passages of pipeline v4+ (local bge-micro-v2 or Azure OpenAI).</summary>
+    [HttpGet("regul-embedding-provider")]
+    public async Task<IActionResult> GetRegulEmbeddingProvider(CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+        return Ok(new { success = true, data = await EmbeddingProviderViewAsync(ct) });
+    }
+
+    [HttpPut("regul-embedding-provider")]
+    public async Task<IActionResult> UpdateRegulEmbeddingProvider([FromBody] EmbeddingProviderRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+        var provider = RegulWorkflowLlmSettingsService.NormalizeEmbeddingProvider(body.Provider);
+        if (provider == null)
+            return BadRequest(new { success = false, message = $"Unknown embedding provider '{body.Provider}'." });
+        if (provider == RegulWorkflowLlmSettingsService.EmbeddingProviderAzureOpenAi
+            && !Services.LocalDocs.PassageEmbeddingService.IsAzureConfigured(azureOpenAiOptions.Value))
+            return BadRequest(new { success = false, message = "Azure OpenAI is not configured on this server (AzureOpenAI:Endpoint, ApiKey, EmbeddingDeployment)." });
+        await regulLlmSettings.SetEmbeddingProviderAsync(provider, profile.Id, ct);
+        return Ok(new
+        {
+            success = true,
+            data = await EmbeddingProviderViewAsync(ct),
+            message = provider == RegulWorkflowLlmSettingsService.EmbeddingProviderAzureOpenAi
+                ? "Search passages now use Azure OpenAI embeddings. Existing documents are re-embedded in the background (no re-parse or re-extract)."
+                : "Search passages now use the local model. Existing documents are re-embedded in the background (no re-parse or re-extract).",
+        });
+    }
 
     [HttpPut("regul-workflow-llm")]
     public async Task<IActionResult> UpdateRegulWorkflowLlm(

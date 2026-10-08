@@ -605,7 +605,7 @@ public sealed class RegulEmbeddingRetrievalService(
         foreach (var extractionId in extractionIds)
             await passageIndex.EnsureCurrentAsync(extractionId, ct);
 
-        var model = passageEmbeddings.ModelName;
+        var model = await passageEmbeddings.ModelNameAsync(ct);
         var passages = await db.NdLocalDocumentPassages
             .AsNoTracking()
             .Where(p => extractionIds.Contains(p.ExtractionId) && p.EmbeddingModel == model)

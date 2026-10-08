@@ -266,7 +266,14 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       this.stepTracker.setSteps(this.computeTrackerSteps());
       if (this.showEnginePipelinePanel) {
         this.pipelinePanel.setRunActive(!!this.ndRunId);
-        this.pipelinePanel.setRunId(this.ndRunId ?? this.activeNdRunId ?? null);
+        const panelRunId = this.ndRunId ?? this.activeNdRunId ?? null;
+        if (panelRunId !== this.panelRunId) {
+          // A different run: drop the previous run's Steps 1-6 data and wait for this run's own phase.
+          this.panelRunId = panelRunId;
+          this.panelAwaitingServerPhase = !!panelRunId;
+          this.pipelinePanel.clearRunData();
+        }
+        this.pipelinePanel.setRunId(panelRunId);
         this.pipelinePanel.setJudgmentFailures(
           this.analysingListRows.filter((r) => r.status === 'failed').length,
         );
@@ -274,7 +281,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
           this.analysingListRows.length,
           this.analysingListRows.filter((r) => r.status === 'completed' || r.status === 'failed').length,
         );
-        this.pipelinePanel.setPhase(this.ndRegulPipelinePhase);
+        this.pipelinePanel.setPhase(this.panelPhase());
       }
       this.syncPageHeaderMarquee();
     }, 400);
@@ -545,9 +552,25 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     preview: Array<{ clauseNo: string; retrieval: unknown }>,
   ): void {
     if (!this.showEnginePipelinePanel) return;
-    this.pipelinePanel.setPhase(this.ndRegulPipelinePhase);
+    this.pipelinePanel.setPhase(this.panelPhase());
     this.pipelinePanel.setRetrievalPreview(preview);
     this.logRetrievalToConsole(preview);
+  }
+
+  // ---- Pipeline panel phase. Launching a run sets a local "forward" before the server has reported
+  // anything, which showed Steps 1-7 as done and then as processing. Until this run's server phase
+  // arrives, the panel shows the run as queued.
+  private panelRunId: string | null = null;
+  private panelAwaitingServerPhase = false;
+
+  protected override onNdServerPipelinePhase(_phase: string): void {
+    this.panelAwaitingServerPhase = false;
+  }
+
+  private panelPhase(): string | null {
+    // Only while the run is in flight: an old run whose record has no phase must not stay "queued".
+    const inFlight = ['running', 'processing', 'queued', 'draft'].includes((this.ndRunWorkflowStatus || '').toLowerCase());
+    return this.panelAwaitingServerPhase && inFlight ? 'queued' : this.ndRegulPipelinePhase;
   }
 
   // ---- DevTools console log of each clause's pipeline (Steps 1-6) and AI judgment (Steps 7-8).

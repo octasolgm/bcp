@@ -108,7 +108,7 @@
       }
       <ol class="step-list">
         @for (step of steps; track step.key) {
-          <li class="step-row" [class]="'status-' + statusFor(step)">
+          <li class="step-row" [class]="'status-' + statusFor(step)" [attr.data-step]="step.key">
             <div class="step-row-main">
               <span class="step-icon" [attr.aria-hidden]="true">
                 @switch (statusFor(step)) {
