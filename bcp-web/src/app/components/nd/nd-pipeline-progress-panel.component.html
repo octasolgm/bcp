@@ -104,8 +104,8 @@
         <h4 class="section-title">Pipeline steps</h4>
         @if (panelRunActive()) {
           <span class="report-actions">
-            <button type="button" class="report-btn" (click)="downloadReport(false)" title="Save every step of every clause on this page as a text file">
-              Download report
+            <button type="button" class="report-btn" [disabled]="reportDownloading" (click)="downloadReport(false)" title="Save every step of every clause of this run as a text file">
+              {{ reportDownloading ? 'Preparing...' : 'Download report' }}
             </button>
             <button type="button" class="report-btn" (click)="downloadReport(true)" title="Same, plus the full context, system prompt and every AI request (large)">
               Full

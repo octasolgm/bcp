@@ -300,17 +300,49 @@ function traceLines(traces: NdClauseTrace[], full: boolean): string[] {
   return out;
 }
 
-/** Plain-text report for one clause (or every logged clause when clauseNo is omitted). */
-export function buildClauseReport(clauseNo?: string, full = false): string {
+type ReportSource = {
+  retrieval: Map<string, Retrieval>;
+  traces: Map<string, Map<string, NdClauseTrace>>;
+};
+
+/** Report data straight from the server (run status + clause traces), so the report never depends on what this
+ * page happened to log (a reloaded page or a finished run logs nothing until it polls). */
+export function reportSourceFromServer(
+  retrievalPreview: Array<{ clauseNo: string; retrieval: unknown }>,
+  traces: NdClauseTrace[],
+): ReportSource {
+  const retrieval = new Map<string, Retrieval>();
+  retrievalPreview.forEach((p) => retrieval.set(p.clauseNo, (p.retrieval ?? {}) as Retrieval));
+  const byClause = new Map<string, Map<string, NdClauseTrace>>();
+  traces.forEach((t) => {
+    const m = byClause.get(t.clauseNo) ?? new Map<string, NdClauseTrace>();
+    m.set(t.id, t);
+    byClause.set(t.clauseNo, m);
+  });
+  return { retrieval, traces: byClause };
+}
+
+/** Plain-text report for one clause (or every clause when clauseNo is omitted): from the server data when given,
+ * else from what this page has logged. */
+export function buildClauseReport(clauseNo?: string, full = false, source?: ReportSource): string {
+  const retrievalMap = source?.retrieval ?? reportRetrieval;
+  const tracesMap = source?.traces ?? reportTraces;
   const clauses = clauseNo
     ? [clauseNo]
-    : [...new Set([...reportRetrieval.keys(), ...reportTraces.keys()])].sort((a, b) =>
+    : [...new Set([...retrievalMap.keys(), ...tracesMap.keys()])].sort((a, b) =>
         a.localeCompare(b, undefined, { numeric: true }),
       );
   const out: string[] = [];
+  if (clauses.length === 0) {
+    out.push(
+      `=== Pipeline report - ${new Date().toISOString()} ===`,
+      'Nothing to report: no clause of this run has retrieval data or AI traces yet (or the run could not be loaded).',
+      'Open the run on the V5 analysis page and wait until at least one clause has finished Steps 1-6.',
+    );
+  }
   for (const c of clauses) {
-    const r = reportRetrieval.get(c);
-    const traces = [...(reportTraces.get(c)?.values() ?? [])];
+    const r = retrievalMap.get(c);
+    const traces = [...(tracesMap.get(c)?.values() ?? [])];
     out.push(`=== Pipeline report: clause ${c} (${full ? 'full' : 'compact'}) - ${new Date().toISOString()} ===`);
     if (typeof location !== 'undefined') out.push(`Page: ${location.pathname}`);
     if (!r && traces.length === 0) {
@@ -332,8 +364,8 @@ export function hasClauseReport(): boolean {
 }
 
 /** Saves the report as a .txt file: no DevTools needed, and large reports do not slow the console down. */
-export function downloadClauseReport(clauseNo?: string, full = false): void {
-  const text = buildClauseReport(clauseNo, full);
+export function downloadClauseReport(clauseNo?: string, full = false, source?: ReportSource): void {
+  const text = buildClauseReport(clauseNo, full, source);
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

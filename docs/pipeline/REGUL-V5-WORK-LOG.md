@@ -51,7 +51,7 @@ or document, no code.
 | T17 | False gaps went straight to the report: gap check (v5) | Feature | Done | Yes (3 checks on 3.5) | d6ef0ec |
 | T18 | Judgment rules: prompt v10, replaced by v11 | Bug | Done (v11) | Yes (3.5 correct on v11) | d6ef0ec, 4148904, 6d11a2c |
 | T19 | Long wait before Steps 1-6 and doubled passages | Bug | Done | Yes | 4148904 |
-| T20 | No way to see what the AI was given and answered: pipeline report | Feature | Done | Console hung, download added | 6d11a2c, f16abf5 |
+| T20 | No way to see what the AI was given and answered: pipeline report | Feature | Done | Console hung, download added; empty download fixed | 6d11a2c, f16abf5, this commit |
 | T21 | Actions attached to the wrong gap | Bug | Done | Yes | 99282ad |
 | T22 | Gap risk always Medium | Bug | Done | Yes (Low / 45 days) | 99282ad |
 | T23 | Gap lines quoting the whole clause paragraph | Bug | Done | Yes | 99282ad |
@@ -278,6 +278,10 @@ or document, no code.
     hence the download).
 - **Where:** `pipeline-console-log.ts`, pipeline panel; retrieval record stores the Steps 1-6 time and embedding model;
   the Step 7 trace notes the prompt versions.
+- **Bug found on first use:** the first download was an empty file. The report only held what the page had logged
+  while polling, and a reloaded page with a finished run logs nothing. **Fix:** Download report now fetches the run's
+  retrieval records (run status) and all AI traces (clause traces) from the server; if there is still nothing, the
+  file says so instead of being empty. Works on any existing run, no new analysis needed.
 - **Status:** done; first download pending (A1).
 
 ### T21 - Actions attached to the wrong gap (Bug, commit 99282ad)
@@ -419,7 +423,7 @@ failures as before this work.
 
 | # | Task | Detail |
 |---|---|---|
-| A1 | Run 3.5 on the latest code and send the report | Pull, rebuild and restart API and web; Admin: pipeline v5, prompt v11 on all three, embedding "Azure OpenAI (current)"; new analysis with only 3.5; **Download report** in the pipeline panel; send the file |
+| A1 | Run 3.5 on the latest code and send the report | Pull, rebuild and restart API and web; Admin: pipeline v5, prompt v11 on all three, embedding "Azure OpenAI (current)"; new analysis with only 3.5 (or open the last 3.5 run); **Download report** in the pipeline panel; send the file |
 | A2 | Run 3.3 and 3.6 | Same settings; compare with Plan V1 section 4 (3.3 compliant with AML p.42 / p.14; 3.6 partial, predicate offence definition gap) |
 | A3 | Old runs | Runs before T21-T23 keep their old actions and Medium risk; delete or run the clause again |
 | A4 | Azure DI price | Set `AzureDocumentIntelligence:UsdPerPage` once the Layout rate on the invoice is confirmed (T9) |

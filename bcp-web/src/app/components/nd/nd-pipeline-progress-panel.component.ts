@@ -8,7 +8,7 @@ import {
 } from '../../services/nd/nd-pipeline-panel.service';
 import { NdApiService, type NdClauseTrace, type NdOcrEngine } from '../../services/nd/nd-api.service';
 import { sortByPointRef } from '../../../lib/nd/list-utils';
-import { downloadClauseReport } from '../../../lib/nd/pipeline-console-log';
+import { downloadClauseReport, reportSourceFromServer } from '../../../lib/nd/pipeline-console-log';
 
 type ExpansionMatchKind = 'acronym' | 'synonym';
 
@@ -162,8 +162,37 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
 
   readonly panelRunActive = computed(() => this.panel.runActive());
 
-  downloadReport(full: boolean): void {
-    downloadClauseReport(undefined, full);
+  reportDownloading = false;
+
+  /** Fetches the run's retrieval records and AI traces from the server and saves the report as a .txt file. Falls
+   * back to what the page has logged when there is no run id or the server cannot be reached. */
+  async downloadReport(full: boolean): Promise<void> {
+    if (this.reportDownloading) return;
+    const runId = this.panel.runId();
+    if (!runId) {
+      downloadClauseReport(undefined, full);
+      return;
+    }
+    this.reportDownloading = true;
+    try {
+      const [status, traces] = await Promise.all([
+        this.ndApi.getAnalysisRunStatus(runId),
+        this.ndApi.getClauseTraces(runId),
+      ]);
+      const data = (status.success ? status.data : null) as {
+        regulRetrievalPreview?: Array<{ clauseNo: string; retrieval: unknown }> | null;
+      } | null;
+      const preview = data?.regulRetrievalPreview ?? [];
+      const traceRows = traces.success && traces.data ? traces.data : [];
+      if (preview.length === 0 && traceRows.length === 0) {
+        downloadClauseReport(undefined, full);
+      } else {
+        downloadClauseReport(undefined, full, reportSourceFromServer(preview, traceRows));
+      }
+    } finally {
+      this.reportDownloading = false;
+      this.cdr.markForCheck();
+    }
   }
 
   /** Pipeline v4+: the run is building search passages for documents indexed before passages existed. */
