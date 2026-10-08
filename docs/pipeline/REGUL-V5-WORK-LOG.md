@@ -18,7 +18,7 @@ Version switches (Admin > Analysis prompts):
 | Switch | Versions | Default |
 |---|---|---|
 | Retrieval pipeline | v1 original, v2 expanded wording, **v3** whole clause + no limits, **v4** passages + equivalent terms + in-memory, **v5** v4 + gap check | stored admin choice (v2 unless changed) |
-| Judgment prompt | ... v8, **v9** (current), **v10** (seeded, not current) | v9 |
+| Judgment prompt | ... v8, **v9** (current), **v10**, **v11** (seeded, not current; use v11) | v9 |
 | Embedding model | `RegulRetrieval:EmbeddingProvider`: `local` / `azure-openai` | local |
 
 ---
@@ -105,6 +105,56 @@ Version switches (Admin > Analysis prompts):
   how it works, test, status); this log created; section 6 of the V1 plan explains embeddings and pgvector.
 - **Status:** done.
 
+### 9. First v5 + v10 run on 3.5, prompt v11, passage build fixes - this commit
+
+**Your test (3.5 only, pipeline v5, prompt v10):** status **compliant**, 80%, 4 covered points, no gaps. Wrong:
+
+| Covered point in the result | Evidence cited | Check against the PDFs | Right? |
+|---|---|---|---|
+| [1] ML definition (4 acts) | AML Manual p.6 | Article (2) lists the same 4 acts | Yes |
+| [2] Broad meaning of "funds" and "proceeds" | Document.pdf p.45, AML Manual p.59 / p.62 (typologies: commodities, assets, crypto) | Typologies show the asset scope in practice, but no document defines "funds" or "proceeds" or refers to the law's definitions | Scope yes, **definitions no** |
+| [3] Size, timeframe and nature irrelevant | Document.pdf p.4 "regardless of the amount" | The quote covers the **amount only**; nothing quoted for timeframe or nature | **No** (only 1 of 3 parts) |
+| [4] Independent offence, no proof of predicate | CandNM p.2 | Matches | Yes |
+
+**Why (my prompt v10, not the search):**
+- v10 said a definition clause is covered when the documents "state the definition ... OR apply the concept in
+  practice", and told the AI to merge "a missing definition and a missing statement of the same scope" into one
+  point. So the typologies covered the scope and the definitions went with it.
+- v10 had no rule that a requirement with several parts needs evidence for each part, so one quote on the amount
+  covered "size, timeframe and nature".
+- The gap check never ran: the AI reported no gaps, so there was nothing to check.
+
+**Fix - prompt v11** (`JudgmentSystemPromptV11`, `JudgmentUserQueryTemplateV11`, seeded **not current**):
+- A term the clause formally defines ("X means / is defined as / the law defines X as ...") is its own requirement.
+  It is covered only when the documents state that definition (any wording, same meaning) or adopt the law's
+  definition by reference. Uses of the term, examples, typologies, red flags do not cover it. Missing = low gap.
+  Never folded into a scope point.
+- The scope a definition clause states (which assets, what is irrelevant, what need not be proven) is still covered
+  by practice (typologies, red flags, procedures), as in v10.
+- A requirement naming several elements is covered only when every element has its own quoted evidence; the rest is
+  a gap naming exactly the missing elements. A requirement is covered only when policy_extract holds a quote for it.
+- Gap check prompt (code, applies to v5 at once): a missing definition is covered only by an excerpt that states or
+  adopts it.
+- Dynamic: no clause, bank or document names in the rules; the examples in the rule are generic ("X means").
+
+**Expected 3.5 on v5 + v11:** partial; covered: ML acts, asset scope (typologies), amount irrelevant, independent
+offence; gaps: definitions of funds and proceeds (low); timeframe and nature irrelevant (low/medium) unless the gap
+check finds and quotes it (Implementation Manual p.22 "describe the duration of the activity" is the candidate). Either
+way the result now shows a quote for every covered part.
+
+**Passage build (the long wait before Steps 1-6):**
+- The first v4/v5 run built the passages of every document that had none, one passage at a time on the CPU, while the
+  panel showed all steps at 0%. Now: a background job builds them for already-indexed documents (1 minute after
+  start, then every 10 minutes, only while the pipeline version is v4 or v5); a run that still has to build them sets
+  phase "passages" and the panel says "Preparing search passages (one-time per document)"; the log shows document
+  i of n and the build time.
+- Two runs started together could both build the same document's passages and double them. Builds are now one at a
+  time per document, a doubled set is detected and rebuilt, and the build no longer keeps thousands of vectors
+  tracked in the run's database context.
+- Tests: 3 new (v11 rules, gap check definition rule, one extraction per document); suite 308 pass, same 24 old
+  failures; web build passes.
+- **Status:** built; waiting for your 3.5 run on v5 + **v11**.
+
 ---
 
 ## Open items
@@ -113,7 +163,7 @@ Version switches (Admin > Analysis prompts):
 |---|---|---|
 | Retrieval check on run f8a76442 (pipeline v4) | Paste the snippets from Plan V1 section 4, Run, send the result | You |
 | Checkpoint A (v4 + prompt v9) | Run 3.3, 3.5, 3.6 after the retrieval check looks right | You |
-| Checkpoint B (v5 + prompt v10) | Run 3.3, 3.5, 3.6; compare with the expected results in Plan V1 section 4 | You |
+| Checkpoint B (v5 + prompt **v11**) | 3.5 first (v10 run judged wrong, see 9), then 3.3 and 3.6; compare with Plan V1 section 4 | You |
 | Re-tune the relevance gate if needed | Based on the retrieval check results | Claude |
 | Azure DI price setting | Set `AzureDocumentIntelligence:UsdPerPage` once the Layout rate is confirmed (log only) | You |
 | Stronger embedding model | Only if the retrieval check shows meaning-based misses | Decision |

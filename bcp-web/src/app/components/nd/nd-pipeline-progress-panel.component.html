@@ -101,6 +101,11 @@
       </section>
 
       <h4 class="section-title">Pipeline steps</h4>
+      @if (preparingPassages()) {
+        <p class="passages-note">
+          Preparing search passages (one-time per document). Steps 1-6 start when this is done.
+        </p>
+      }
       <ol class="step-list">
         @for (step of steps; track step.key) {
           <li class="step-row" [class]="'status-' + statusFor(step)">

@@ -207,6 +207,7 @@ builder.Services.AddScoped<Reguliq.Api.Services.LocalDocs.PassageEmbeddingServic
 builder.Services.AddScoped<Reguliq.Api.Services.LocalDocs.NdPassageIndexService>();
 builder.Services.AddSingleton<Reguliq.Api.Workers.IndexingJobQueue>();
 builder.Services.AddHostedService<Reguliq.Api.Workers.IndexingWorkerHosted>();
+builder.Services.AddHostedService<Reguliq.Api.Workers.PassageBackfillHosted>();
 
 // Query expansion — hybrid pipeline Step 1 (see docs/roadmap/QUERY-EXPANSION-PLAN.md). Runs
 // synchronously inline in Extract (no background queue — a regex pass over in-memory text,

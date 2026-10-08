@@ -239,6 +239,12 @@ Where the missed evidence sat (RC1):
   - Domain-neutral; no examples from any client's documents.
 - **Test:** unit test (valid placeholders, no document-specific names). Checkpoint B on the real clauses.
 
+- **Result of the first test (08 Oct, 3.5 on v5 + v10): wrong, compliant.** v10 let typologies cover the
+  "funds" / "proceeds" definitions and merged them into the scope point, and covered "size, timeframe and nature
+  irrelevant" on a quote for the amount only. **Replaced by prompt v11** (seeded, not current): a formally defined
+  term is covered only when its definition is stated or adopted by reference; every element of a multi-part
+  requirement needs its own quoted evidence. Details in `REGUL-V5-WORK-LOG.md` entry 9. Test with **v11**, not v10.
+
 ### Task 10 - Gap check before a gap is saved (pipeline v5)
 
 - **What was wrong (RC5):** a gap went straight from the AI's first answer to the report.
@@ -267,7 +273,7 @@ Where the missed evidence sat (RC1):
 3. Open the v3 analysis report (run f8a76442) > **Retrieval check**, paste the snippets below, Save, Run.
    The first run builds the passages (a minute or two). Free.
 4. If the snippets show Selected: **Checkpoint A** - run 3.3, 3.5, 3.6 on v4 / prompt v9 (~$1).
-5. **Checkpoint B** - pipeline **v5**, prompt **v10**; run 3.3, 3.5, 3.6 again (~$1-2).
+5. **Checkpoint B** - pipeline **v5**, prompt **v11** (v10 replaced, see Task 9); run 3.3, 3.5, 3.6 again (~$1-2).
 
 Snippets for the retrieval check:
 

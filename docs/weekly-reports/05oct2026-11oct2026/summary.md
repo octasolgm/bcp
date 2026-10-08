@@ -115,6 +115,10 @@ Tasks
 - Gap report clause card: heading shows the clause title as well as its number for clauses picked on the new analysis page (title taken from the clause's first line; demo rendering unchanged); Corrective Action Plan toolbar has Expand all / Collapse all for every gap and action
 - First v3 run (3.3, 3.5, 3.6, prompt v9, Kimi K3): 3.3 compliant with the AML Policy p.42 good-faith evidence (it was already compliant before v3); 3.5 now covers independent offence, no proof of predicate offence, indicators and amount, gaps left: funds and proceeds definitions, asset scope, timeframe/nature of funds (being checked against the internal text); 3.6 one gap (predicate offence definition); retrieval took ~6 minutes for 3 clauses, speed fix pending
 - 20 new API unit tests (v3 split on clause 3.5 / 3.3 / 3.10 text, fusion and relevance gate, running headers, whole-word dictionary matching); full API suite 286 pass, the 24 failures are the same as before this change; web build passes
+- First v5 + prompt v10 run (3.5 only): status compliant, 4 covered points; judged wrong (see bug fixes), prompt v11 added
+- Prompt v11 seeded, not current: a term the clause formally defines is covered only when the documents state or adopt that definition (practice still covers scope); every element of a multi-part requirement needs its own quoted evidence; gap check uses the same definition rule
+- Search passages are now built in the background for documents indexed before passages existed (every 10 minutes while the pipeline is v4 or v5), and a run that still has to build them shows "Preparing search passages (one-time per document)" instead of all steps at 0%
+- 3 new API unit tests (v11 rules, gap check definition rule, one extraction per document); full suite 308 pass with the same 24 old failures; web build passes
 
 Bug fixes
 - Clause split (v3): clause 3.5 lost its last 2 parts (incl. "size / timeframe / nature of funds irrelevant", "independent offence", "no proof of predicate offence") and repeated its intro; now 15 parts, nothing dropped
@@ -125,6 +129,8 @@ Bug fixes
 - Full forms and synonyms matched inside longer words ("policy" in "policyholder"); now whole words only
 - API build failed on .NET 8.0.1xx SDKs with an ambiguous string.Split call in the synonym harvest; fixed
 - Correction to the review: regulation documents were already not being embedded, no change needed
+- Prompt v10 judged clause 3.5 compliant: it let typologies cover the "funds" and "proceeds" definitions (no internal document defines them) and marked "size, timeframe and nature of funds irrelevant" covered on evidence for the amount only; fixed in prompt v11
+- Two analyses reaching the same document at once could both write its search passages, doubling them; builds are now one at a time per document and a doubled set is rebuilt automatically
 
 Investigated, follow up pending
 - False gaps on 3.3 / 3.5 traced to four causes: (1) Step 2 splitter keeps only 8 parts, so on 3.5 the "size / timeframe / nature of funds irrelevant", "independent offence" and "no proof of predicate offence" paragraph is never searched (verified by simulating the splitter on the clause text); (2) weak retrieval: bge-micro-v2 embeddings, sections cut at 512 tokens, whole clause as query, no stemming, wrong seed synonyms, harvested acronyms live without review; (3) up to 60 whole sections (150k-210k chars) in score order instead of evidence per requirement; (4) the judge re-decomposes the clause every run and nothing checks gaps against the clause text or the full corpus

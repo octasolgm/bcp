@@ -165,3 +165,31 @@ public class NdRegulPromptV10Tests
         Assert.Contains("such as", NdRegulPromptDefaults.JudgmentSystemPromptV10);
     }
 }
+
+public class NdRegulPromptV11Tests
+{
+    [Fact]
+    public void Prompt_v11_is_valid_and_keeps_a_formally_defined_term_as_its_own_requirement()
+    {
+        NdAnalysisPromptVersionService.ValidatePromptText(
+            NdAnalysisPromptVersionService.JudgmentUserQueryKey, NdRegulPromptDefaults.JudgmentUserQueryTemplateV11);
+        Assert.Contains("{clause_context}", NdRegulPromptDefaults.JudgmentUserQueryTemplateV11);
+        foreach (var text in new[] { NdRegulPromptDefaults.JudgmentSystemPromptV11, NdRegulPromptDefaults.JudgmentUserQueryTemplateV11 })
+        {
+            Assert.DoesNotContain("DIFC", text);
+            Assert.DoesNotContain("funds", text);
+            Assert.Contains("adopt", text);
+        }
+        Assert.Contains("TERM THE CLAUSE FORMALLY DEFINES", NdRegulPromptDefaults.JudgmentSystemPromptV11);
+        Assert.Contains("never fold it into a scope requirement", NdRegulPromptDefaults.JudgmentSystemPromptV11);
+        Assert.Contains("covered only when EVERY element has its own evidence", NdRegulPromptDefaults.JudgmentSystemPromptV11);
+    }
+
+    [Fact]
+    public void Gap_check_does_not_accept_typologies_as_a_missing_definition()
+    {
+        var gap = NdRegulGapVerifier.ParseGaps("[1] Definitions of the defined terms (clause: \"define\") - Missing: no definition - Materiality: low")[0];
+        var prompt = NdRegulGapVerifier.BuildPrompt("3.5", "clause text", gap, [new NdRegulGapVerifier.Excerpt("E1", "Doc p.1", "text")]);
+        Assert.Contains("uses of the term, examples, typologies or red flags do not", prompt);
+    }
+}

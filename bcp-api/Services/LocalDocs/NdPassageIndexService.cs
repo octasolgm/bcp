@@ -14,17 +14,71 @@ public sealed class NdPassageIndexService(
     PassageEmbeddingService embeddings,
     ILogger<NdPassageIndexService> logger)
 {
-    /// <summary>True when the extraction already has passages embedded with the configured model.</summary>
-    public Task<bool> HasCurrentPassagesAsync(Guid extractionId, CancellationToken ct)
+    // One build at a time per extraction in this process: two analyses (or an analysis and the indexing job)
+    // reaching the same document together would otherwise both write a full set of passages.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, SemaphoreSlim> BuildLocks = new();
+
+    /// <summary>
+    /// The extraction each document is searched with: one per document, Azure Document Intelligence first, then
+    /// the most recently indexed. A file indexed under several OCR engines would otherwise put the same text into
+    /// the search more than once.
+    /// </summary>
+    public static List<NdLocalDocumentExtraction> PickSearchExtractions(IEnumerable<NdLocalDocumentExtraction> indexed) =>
+        indexed
+            .GroupBy(e => e.StoredDocumentId)
+            .Select(g => g
+                .OrderByDescending(e => OcrEngineNames.IsAzureDocIntelligence(e.Engine))
+                .ThenByDescending(e => e.IndexedAt ?? DateTimeOffset.MinValue)
+                .First())
+            .ToList();
+
+    /// <summary>True when the extraction has one set of passages embedded with the configured model (a set
+    /// written twice by an earlier overlapping build does not count).</summary>
+    public async Task<bool> HasCurrentPassagesAsync(Guid extractionId, CancellationToken ct)
     {
         var model = embeddings.ModelName;
-        return db.NdLocalDocumentPassages.AsNoTracking()
-            .AnyAsync(p => p.ExtractionId == extractionId && p.EmbeddingModel == model && p.Embedding != null, ct);
+        var passages = db.NdLocalDocumentPassages.AsNoTracking().Where(p => p.ExtractionId == extractionId);
+        if (!await passages.AnyAsync(p => p.EmbeddingModel == model && p.Embedding != null, ct)) return false;
+        var duplicated = await passages
+            .GroupBy(p => new { p.SectionIndex, p.PassageIndex })
+            .AnyAsync(g => g.Count() > 1, ct);
+        return !duplicated;
+    }
+
+    /// <summary>Builds the extraction's passages unless it already has a current set. True when it built them.</summary>
+    public async Task<bool> EnsureCurrentAsync(Guid extractionId, CancellationToken ct)
+    {
+        var gate = BuildLocks.GetOrAdd(extractionId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            if (await HasCurrentPassagesAsync(extractionId, ct)) return false;
+            await RebuildCoreAsync(extractionId, ct);
+            return true;
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     /// <summary>Replaces the extraction's passages: cut from its stored section rows, embedded with the configured
     /// model. Returns the number of passages written.</summary>
     public async Task<int> RebuildAsync(Guid extractionId, CancellationToken ct)
+    {
+        var gate = BuildLocks.GetOrAdd(extractionId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            return await RebuildCoreAsync(extractionId, ct);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<int> RebuildCoreAsync(Guid extractionId, CancellationToken ct)
     {
         var extraction = await db.NdLocalDocumentExtractions.AsNoTracking()
             .Where(e => e.Id == extractionId)
@@ -51,16 +105,18 @@ public sealed class NdPassageIndexService(
             .ToList();
         var passages = LocalPassageSplitter.Split(title, sections);
 
+        var timer = System.Diagnostics.Stopwatch.StartNew();
         var vectors = await embeddings.EmbedManyAsync(
             passages.Select(p => string.IsNullOrWhiteSpace(p.HeadingPath) ? p.Text : $"{p.HeadingPath}\n{p.Text}").ToList(), ct);
 
         var existing = await db.NdLocalDocumentPassages.Where(p => p.ExtractionId == extractionId).ToListAsync(ct);
         db.NdLocalDocumentPassages.RemoveRange(existing);
         var model = embeddings.ModelName;
+        var rows = new List<NdLocalDocumentPassage>(passages.Count);
         for (var i = 0; i < passages.Count; i++)
         {
             var p = passages[i];
-            db.NdLocalDocumentPassages.Add(new NdLocalDocumentPassage
+            rows.Add(new NdLocalDocumentPassage
             {
                 Id = Guid.NewGuid(),
                 ExtractionId = extractionId,
@@ -76,10 +132,13 @@ public sealed class NdPassageIndexService(
             });
         }
 
+        db.NdLocalDocumentPassages.AddRange(rows);
         await db.SaveChangesAsync(ct);
+        // The context may be an analysis run's: do not keep thousands of vectors tracked for the rest of the run.
+        foreach (var row in rows) db.Entry(row).State = EntityState.Detached;
         logger.LogInformation(
-            "Passages for extraction {ExtractionId}: {Passages} passage(s) from {Sections} section(s), model {Model}",
-            extractionId, passages.Count, sectionRows.Count, model);
+            "Passages for extraction {ExtractionId}: {Passages} passage(s) from {Sections} section(s), model {Model}, built in {Ms} ms",
+            extractionId, passages.Count, sectionRows.Count, model, timer.ElapsedMilliseconds);
         return passages.Count;
     }
 

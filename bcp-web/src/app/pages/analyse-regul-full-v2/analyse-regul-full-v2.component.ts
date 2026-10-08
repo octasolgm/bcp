@@ -843,6 +843,8 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     switch ((this.ndRegulPipelinePhase || '').toLowerCase()) {
       case 'parsing':
         return 'Preparing documents';
+      case 'passages':
+        return 'Preparing search passages (one-time per document)';
       case 'retrieval':
         return 'Retrieving relevant policy sections';
       case 'forward':
@@ -906,7 +908,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       // One past the last index — every step (including "Complete" itself) renders as done
       // rather than leaving "Complete" stuck on its unfilled "active" ring forever.
       current = defs.length;
-    } else if (phase === 'retrieval') {
+    } else if (phase === 'retrieval' || phase === 'passages') {
       current = 3;
     } else if (phase === 'forward') {
       current = 4;

@@ -82,7 +82,7 @@ public static partial class NdRegulGapVerifier
     {
         var sb = new StringBuilder();
         sb.AppendLine("You are a senior regulatory compliance analyst double-checking ONE gap found in an analysis of a regulatory clause against a financial institution's internal documents.");
-        sb.AppendLine("Decide whether any excerpt below already covers the missing requirement. Judge by meaning and legal outcome, not by keywords: any wording, section or document counts; equivalent terms count (abbreviations, synonyms, the institution's own name for itself); for a definition or interpretation, the concept applied in practice (typologies, red flags, risk factors, procedures) counts. Do not require anything the clause does not state.");
+        sb.AppendLine("Decide whether any excerpt below already covers the missing requirement. Judge by meaning and legal outcome, not by keywords: any wording, section or document counts; equivalent terms count (abbreviations, synonyms, the institution's own name for itself); for the scope or interpretation a clause states, the concept applied in practice (typologies, red flags, risk factors, procedures) counts. Exception: when the gap is that a term's definition is missing, only an excerpt that states that definition (any wording, same meaning) or adopts the law's definition by reference covers it; uses of the term, examples, typologies or red flags do not. Do not require anything the clause does not state.");
         sb.AppendLine();
         sb.AppendLine($"REGULATORY CLAUSE {clauseNo}:");
         sb.AppendLine(clauseText.Trim());

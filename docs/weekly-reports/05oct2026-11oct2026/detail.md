@@ -128,3 +128,11 @@ We checked every result of the first test analysis line by line against the orig
 Accuracy improvements ready for testing
 
 Policy documents are now searched in short passages, each labelled with the headings it sits under, instead of whole chapters, so text in the middle of a long chapter or annex (for example a typology on virtual currencies) is found. Different words for the same idea, such as "timeframe" and "duration of the activity", are now linked. An optional second check looks for every reported gap again across all documents and asks the AI whether any passage already covers it, removing gaps the documents do address. Updated review instructions help the AI recognise definition clauses that a policy applies in practice and avoid reporting one missing idea as several gaps. Administrators also have a free retrieval check that shows, before any paid AI review, whether the right policy text is found for each clause.
+
+Stricter review of definition clauses
+
+The first test of the new review settings on the money laundering definition clause returned "compliant", which was too generous. The regulation gives the legal meaning of "funds" and "proceeds", and none of the internal documents state or refer to those definitions; the review accepted examples of laundering through goods and assets as if they were the definitions. It also accepted "the amount, timeframe and form of the funds do not matter" as covered when the quoted policy text only addresses the amount. A corrected set of review instructions is ready for testing: a term the regulation formally defines now counts as covered only when the policies state that definition or adopt the law's definition, and a requirement with several parts counts as covered only when each part is supported by quoted policy text. The second check of reported gaps follows the same rule.
+
+Faster first analysis on existing documents
+
+The improved search reads documents in short passages. For documents uploaded before this change, those passages are now prepared automatically in the background, so an analysis no longer has to wait for them. When an analysis does need to prepare them, the progress panel now says so instead of showing every step at 0%.

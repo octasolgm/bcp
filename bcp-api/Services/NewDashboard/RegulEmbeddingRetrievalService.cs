@@ -124,6 +124,8 @@ public sealed class RegulEmbeddingRetrievalService(
             }
 
             var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
+            if (pipelineVersion >= NdRegulPipelineVersions.V4Passages)
+                await PrepareSearchPassagesAsync(run, corpusDocIds, ct);
 
             // Step 3's corpus — full section text (v4+: passages and their vectors), loaded once per run (not per
             // clause). Everything downstream just re-scores the same corpus per clause.
@@ -190,6 +192,41 @@ public sealed class RegulEmbeddingRetrievalService(
             logger.LogError(ex, "Retrieval failed for run {RunId}", run.Id);
             throw new InvalidOperationException($"Retrieval (Steps 1-6) failed: {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// v4+: builds the search passages of any run document that has none yet (indexed before passages existed,
+    /// or embedded with another model). One-time per document; the run shows phase "passages" meanwhile so the
+    /// pipeline panel can say why Steps 1-6 have not started.
+    /// </summary>
+    private async Task PrepareSearchPassagesAsync(NdAnalysisRun run, IReadOnlyCollection<Guid> corpusDocIds, CancellationToken ct)
+    {
+        var docIds = corpusDocIds.ToList();
+        var indexed = await db.NdLocalDocumentExtractions.AsNoTracking()
+            .Where(e => docIds.Contains(e.StoredDocumentId) && e.IndexStatus == "indexed")
+            .ToListAsync(ct);
+        var missing = new List<Guid>();
+        foreach (var e in NdPassageIndexService.PickSearchExtractions(indexed))
+            if (!await passageIndex.HasCurrentPassagesAsync(e.Id, ct)) missing.Add(e.Id);
+        if (missing.Count == 0) return;
+
+        var phase = run.RegulPipelinePhase;
+        run.RegulPipelinePhase = "passages";
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        for (var i = 0; i < missing.Count; i++)
+        {
+            logger.LogInformation(
+                "Preparing search passages (one-time) for run {RunId}: document {Index} of {Count}, extraction {ExtractionId}",
+                run.Id, i + 1, missing.Count, missing[i]);
+            await passageIndex.EnsureCurrentAsync(missing[i], ct);
+        }
+
+        logger.LogInformation("Search passages ready for run {RunId}: {Count} document(s) in {Ms} ms", run.Id, missing.Count, timer.ElapsedMilliseconds);
+        run.RegulPipelinePhase = phase;
+        run.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>Steps 1-6 again for one clause of a run (clause rerun), against the run's internal documents.
@@ -522,13 +559,7 @@ public sealed class RegulEmbeddingRetrievalService(
             .ToListAsync(ct);
         // One index per document: a file indexed under several OCR engines would otherwise put the same
         // policy text into the corpus (and the judgment context) more than once.
-        var extractions = indexed
-            .GroupBy(e => e.StoredDocumentId)
-            .Select(g => g
-                .OrderByDescending(e => OcrEngineNames.IsAzureDocIntelligence(e.Engine))
-                .ThenByDescending(e => e.IndexedAt ?? DateTimeOffset.MinValue)
-                .First())
-            .ToList();
+        var extractions = NdPassageIndexService.PickSearchExtractions(indexed);
         if (extractions.Count == 0) return null;
 
         var extractionIds = extractions.Select(e => e.Id).ToList();
@@ -567,11 +598,7 @@ public sealed class RegulEmbeddingRetrievalService(
         CancellationToken ct)
     {
         foreach (var extractionId in extractionIds)
-        {
-            if (await passageIndex.HasCurrentPassagesAsync(extractionId, ct)) continue;
-            logger.LogInformation("Building search passages for extraction {ExtractionId} before retrieval", extractionId);
-            await passageIndex.RebuildAsync(extractionId, ct);
-        }
+            await passageIndex.EnsureCurrentAsync(extractionId, ct);
 
         var model = passageEmbeddings.ModelName;
         var passages = await db.NdLocalDocumentPassages

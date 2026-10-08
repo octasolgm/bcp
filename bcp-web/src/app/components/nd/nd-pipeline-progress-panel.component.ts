@@ -128,11 +128,16 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
   readonly retrievalStatus = computed<StepStatus>(() => {
     if (!this.panel.runActive()) return 'not_started';
     const phase = (this.panel.phase() ?? '').toLowerCase();
-    if (phase === 'retrieval') return 'running';
+    if (phase === 'retrieval' || phase === 'passages') return 'running';
     if (this.panel.clauses().length > 0) return 'done';
     if (PHASES_PAST_RETRIEVAL.has(phase)) return 'done';
     return 'pending';
   });
+
+  /** Pipeline v4+: the run is building search passages for documents indexed before passages existed. */
+  readonly preparingPassages = computed(
+    () => this.panel.runActive() && (this.panel.phase() ?? '').toLowerCase() === 'passages',
+  );
 
   /** Step 8 — LLM judgment — only starts once retrieval has actually finished. */
   readonly judgmentStatus = computed<StepStatus>(() => {

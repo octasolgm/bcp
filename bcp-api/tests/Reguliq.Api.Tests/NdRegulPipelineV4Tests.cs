@@ -1,3 +1,4 @@
+using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Services.LocalDocs;
 using Reguliq.Api.Services.NewDashboard;
 using Xunit;
@@ -120,6 +121,26 @@ public class NdRegulPipelineV4Tests
             "Heading: AML Manual > 6. Roles\nThe employee who reports an STR will not be held liable.",
             RegulEmbeddingRetrievalService.PassageContextText("AML Manual > 6. Roles", "The employee who reports an STR will not be held liable."));
         Assert.Equal("text", RegulEmbeddingRetrievalService.PassageContextText("", "text"));
+    }
+
+    [Fact]
+    public void Each_document_is_searched_with_one_extraction_azure_first_then_the_latest()
+    {
+        var docA = Guid.NewGuid();
+        var docB = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        NdLocalDocumentExtraction E(Guid doc, string engine, int minutesAgo) =>
+            new() { Id = Guid.NewGuid(), StoredDocumentId = doc, Engine = engine, IndexedAt = now.AddMinutes(-minutesAgo) };
+        var azureOld = E(docA, OcrEngineNames.AzureDocIntelligence, 60);
+        var tesseractNew = E(docA, OcrEngineNames.Tesseract, 1);
+        var rapidOld = E(docB, OcrEngineNames.RapidOcr, 30);
+        var doclingNew = E(docB, OcrEngineNames.DoclingLight, 5);
+
+        var picked = NdPassageIndexService.PickSearchExtractions([azureOld, tesseractNew, rapidOld, doclingNew]);
+
+        Assert.Equal(2, picked.Count);
+        Assert.Contains(azureOld, picked);
+        Assert.Contains(doclingNew, picked);
     }
 
     [Theory]

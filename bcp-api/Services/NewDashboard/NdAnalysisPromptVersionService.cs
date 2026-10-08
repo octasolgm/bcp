@@ -21,6 +21,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
     public const int JudgmentSemanticV8VersionNumber = 8;
     public const int JudgmentSemanticV9VersionNumber = 9;
     public const int JudgmentSemanticV10VersionNumber = 10;
+    public const int JudgmentSemanticV11VersionNumber = 11;
     public const int JudgmentFullMarkdownV2VersionNumber = 2;
 
     private static readonly string[] JudgmentPromptKeys =
@@ -121,6 +122,7 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
         await EnsureJudgmentSemanticV8Async(ct);
         await EnsureJudgmentSemanticV9Async(ct);
         await EnsureJudgmentSemanticV10Async(ct);
+        await EnsureJudgmentSemanticV11Async(ct);
         await EnsureJudgmentFullMarkdownV1Async(ct);
         await EnsureJudgmentFullMarkdownV2Async(ct);
     }
@@ -412,6 +414,21 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
                 [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV10.Trim(),
                 [JudgmentUserContextKey] = NdRegulPromptDefaults.JudgmentUserContextTemplateV5.Trim(),
                 [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV10.Trim(),
+            },
+            ct,
+            makeCurrent: false);
+
+    /// <summary>v11: v10 + a term the clause formally defines is covered only by its definition stated or adopted
+    /// by reference (practice still covers the scope). Insert-only and NOT made current, like v10.</summary>
+    public Task EnsureJudgmentSemanticV11Async(CancellationToken ct = default) =>
+        EnsureJudgmentSemanticVersionAsync(
+            JudgmentSemanticV11VersionNumber,
+            NdRegulPromptDefaults.JudgmentSemanticV11Label,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [JudgmentSystemKey] = NdRegulPromptDefaults.JudgmentSystemPromptV11.Trim(),
+                [JudgmentUserContextKey] = NdRegulPromptDefaults.JudgmentUserContextTemplateV5.Trim(),
+                [JudgmentUserQueryKey] = NdRegulPromptDefaults.JudgmentUserQueryTemplateV11.Trim(),
             },
             ct,
             makeCurrent: false);
