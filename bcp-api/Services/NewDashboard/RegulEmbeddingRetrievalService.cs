@@ -228,7 +228,7 @@ public sealed class RegulEmbeddingRetrievalService(
         // SubObligationSplitter). Each sub-obligation gets its own Step 1 expansion and Step 3/4
         // retrieval, so a bundled clause searched as one blended query can't wash out a section
         // that only matches one of its several obligations.
-        var subObligations = SubObligationSplitter.Split(clauseText);
+        var subObligations = SubObligationSplitter.Split(clauseText, pipelineVersion);
         var hits = new QueryHits();
         foreach (var subText in subObligations)
         {
@@ -241,17 +241,17 @@ public sealed class RegulEmbeddingRetrievalService(
                 ct);
         }
 
-        // Step 5 — fuse the two lists into one ranked list (0.4 BM25 + 0.6 embedding, each
-        // normalized against this clause's own best score on that side); Step 6 — trim it with the
-        // same dynamic-cutoff principle as Steps 3/4, not a fixed count.
-        var fused = HybridFusionSelector.Fuse(hits.Bm25BySection.Values.ToList(), hits.EmbeddingBySection.Values.ToList());
+        // Step 5 + 6. v1/v2: 0.4 BM25 + 0.6 embedding (each normalized against this clause's best), trimmed
+        // to >= 50% of the best, 5..60 sections. v3: combined by rank over every part's own relevant matches,
+        // every selected section kept (no count limit).
+        var selected = SelectFused(hits, pipelineVersion);
         return new RetrievalPreview(
             hits.Acronyms.Values.ToList(),
             hits.Synonyms.Values.ToList(),
             hits.Bm25BySection.Values.ToList(),
             hits.EmbeddingBySection.Values.ToList(),
             subObligations,
-            HybridFusionSelector.SelectDynamic(fused),
+            selected,
             pipelineVersion,
             pipelineVersion >= NdRegulPipelineVersions.V2ExpandedWording ? hits.ExpandedQueries : null);
     }
@@ -299,12 +299,11 @@ public sealed class RegulEmbeddingRetrievalService(
         var pipelineVersion = await settings.GetPipelineVersionAsync(ct);
         foreach (var query in queryTexts.Where(q => !string.IsNullOrWhiteSpace(q)))
         {
-            foreach (var subText in SubObligationSplitter.Split(query))
+            foreach (var subText in SubObligationSplitter.Split(query, pipelineVersion))
                 await ScoreQueryAsync(corpus, subText, null, hits, pipelineVersion, ct);
         }
 
-        var fused = HybridFusionSelector.SelectDynamic(
-            HybridFusionSelector.Fuse(hits.Bm25BySection.Values.ToList(), hits.EmbeddingBySection.Values.ToList()));
+        var fused = SelectFused(hits, pipelineVersion);
 
         return fused
             .Take(maxSections)
@@ -335,7 +334,16 @@ public sealed class RegulEmbeddingRetrievalService(
         public Dictionary<Guid, Bm25Match> Bm25BySection { get; } = new();
         public Dictionary<Guid, RetrievalMatch> EmbeddingBySection { get; } = new();
         public List<string> ExpandedQueries { get; } = [];
+        /// <summary>v3: reciprocal-rank score per section, summed over every query's BM25 and embedding list.</summary>
+        public Dictionary<Guid, double> RankScoreBySection { get; } = new();
     }
+
+    private static List<HybridFusionSelector.FusedMatch> SelectFused(QueryHits hits, int pipelineVersion) =>
+        pipelineVersion >= NdRegulPipelineVersions.V3RelevanceSelection
+            ? HybridFusionSelector.FuseByRank(
+                hits.Bm25BySection.Values.ToList(), hits.EmbeddingBySection.Values.ToList(), hits.RankScoreBySection)
+            : HybridFusionSelector.SelectDynamic(
+                HybridFusionSelector.Fuse(hits.Bm25BySection.Values.ToList(), hits.EmbeddingBySection.Values.ToList()));
 
     public const string ExpandedVia = "expanded";
 
@@ -395,7 +403,7 @@ public sealed class RegulEmbeddingRetrievalService(
         var queryText = expanded.AllTerms.Count == 0
             ? subText
             : subText + " " + string.Join(" ", expanded.AllTerms);
-        await SearchAsync(corpus, queryText, subObligationLabel, null, hits, ct);
+        await SearchAsync(corpus, queryText, subObligationLabel, null, hits, pipelineVersion, ct);
 
         // v2: the clause may say "CDD" while the policy says "customer due diligence" (or the reverse, or a
         // synonym). Appending the counterpart to a long clause barely moves its BM25 score or its embedding,
@@ -405,7 +413,7 @@ public sealed class RegulEmbeddingRetrievalService(
         var reworded = BuildExpandedWording(subText, expanded);
         if (reworded == null) return;
         hits.ExpandedQueries.Add(reworded);
-        await SearchAsync(corpus, reworded, subObligationLabel, ExpandedVia, hits, ct);
+        await SearchAsync(corpus, reworded, subObligationLabel, ExpandedVia, hits, pipelineVersion, ct);
     }
 
     /// <summary>Step 3 (BM25) and Step 4 (embedding) for one query text.</summary>
@@ -415,8 +423,15 @@ public sealed class RegulEmbeddingRetrievalService(
         string? subObligationLabel,
         string? via,
         QueryHits hits,
+        int pipelineVersion,
         CancellationToken ct)
     {
+        if (pipelineVersion >= NdRegulPipelineVersions.V3RelevanceSelection)
+        {
+            await SearchRelevantAsync(corpus, queryText, subObligationLabel, via, hits, ct);
+            return;
+        }
+
         // Step 3 — BM25, dynamic cutoff (see Bm25Scorer.SelectDynamic doc comment): not a fixed
         // count, only however many sections actually clear the relevance bar for this query.
         var bm25Selected = Bm25Scorer.SelectDynamic(Bm25Scorer.Score(corpus.Bm25Corpus, queryText));
@@ -474,6 +489,75 @@ public sealed class RegulEmbeddingRetrievalService(
     }
 
     /// <summary>
+    /// Pipeline v3 Steps 3 and 4 for one query text. Every section is scored on both sides (no candidate limit),
+    /// and a section is kept when it stands clearly above the rest of the documents for this query
+    /// (<see cref="HybridFusionSelector.SelectRelevant"/>), so the number kept follows the scores, not a count.
+    /// Each kept section's rank on each side adds to its reciprocal-rank score for Step 5.
+    /// </summary>
+    private async Task SearchRelevantAsync(
+        LoadedCorpus corpus,
+        string queryText,
+        string? subObligationLabel,
+        string? via,
+        QueryHits hits,
+        CancellationToken ct)
+    {
+        var bm25Relevant = HybridFusionSelector.SelectRelevant(
+            Bm25Scorer.Score(corpus.Bm25Corpus, queryText), corpus.Bm25Corpus.Docs.Count);
+        for (var i = 0; i < bm25Relevant.Count; i++)
+        {
+            var (sectionId, score) = bm25Relevant[i];
+            AddRankScore(hits, sectionId, i);
+            var s = corpus.SectionById[sectionId];
+            if (hits.Bm25BySection.TryGetValue(s.Id, out var existing) && existing.Score >= score) continue;
+            var storedDocId = corpus.StoredDocIdByExtractionId.GetValueOrDefault(s.ExtractionId);
+            hits.Bm25BySection[s.Id] = new Bm25Match(
+                s.Id,
+                s.ClauseNo,
+                Truncate(s.ClauseText, PreviewLength),
+                storedDocId,
+                corpus.DocNameById.GetValueOrDefault(storedDocId),
+                s.SourcePage,
+                Math.Round(score, 4),
+                subObligationLabel,
+                via);
+        }
+
+        var queryVector = new Vector(embedder.Embed(queryText));
+        var extractionIds = corpus.ExtractionIds;
+        var distances = await db.NdLocalDocumentExtractionSections
+            .AsNoTracking()
+            .Where(s => extractionIds.Contains(s.ExtractionId) && s.Embedding != null)
+            .OrderBy(s => s.Embedding!.CosineDistance(queryVector))
+            .Select(s => new { s.Id, Distance = s.Embedding!.CosineDistance(queryVector) })
+            .ToListAsync(ct);
+        var embeddingRelevant = HybridFusionSelector.SelectRelevant(
+            distances.Select(d => (d.Id, 1 - d.Distance)).ToList(), distances.Count);
+        for (var i = 0; i < embeddingRelevant.Count; i++)
+        {
+            var (sectionId, similarity) = embeddingRelevant[i];
+            if (!corpus.SectionById.TryGetValue(sectionId, out var section)) continue;
+            AddRankScore(hits, sectionId, i);
+            if (hits.EmbeddingBySection.TryGetValue(sectionId, out var existing) && existing.Similarity >= similarity) continue;
+            var storedDocId = corpus.StoredDocIdByExtractionId.GetValueOrDefault(section.ExtractionId);
+            hits.EmbeddingBySection[sectionId] = new RetrievalMatch(
+                sectionId,
+                section.ClauseNo,
+                Truncate(section.ClauseText, PreviewLength),
+                storedDocId,
+                corpus.DocNameById.GetValueOrDefault(storedDocId),
+                section.SourcePage,
+                Math.Round(similarity, 4),
+                subObligationLabel,
+                via);
+        }
+    }
+
+    private static void AddRankScore(QueryHits hits, Guid sectionId, int zeroBasedRank) =>
+        hits.RankScoreBySection[sectionId] =
+            hits.RankScoreBySection.GetValueOrDefault(sectionId) + HybridFusionSelector.RankScore(zeroBasedRank);
+
+    /// <summary>
     /// The sub-obligation with every query-expansion match swapped for its counterpart ("CDD" -> "customer due
     /// diligence", "customer due diligence" -> "CDD", synonym A -> synonym B). Longest match first, and a
     /// replaced span is never rewritten again by a shorter swap. Null when nothing matched.
@@ -496,8 +580,8 @@ public sealed class RegulEmbeddingRetrievalService(
         foreach (var (matched, added, isAcronym) in swaps)
         {
             // Acronyms match case-sensitively on word boundaries, as Step 1 found them; full forms and
-            // synonyms case-insensitively.
-            var pattern = isAcronym ? $@"\b{Regex.Escape(matched)}\b" : Regex.Escape(matched);
+            // synonyms case-insensitively, also on word boundaries ("policy" never rewrites "policyholder").
+            var pattern = isAcronym ? $@"\b{Regex.Escape(matched)}\b" : DictionaryExpansionService.WholePhrasePattern(matched);
             var options = isAcronym ? RegexOptions.None : RegexOptions.IgnoreCase;
             var token = $"{Mark}{replacements.Count}{Mark}";
             var next = Regex.Replace(result, pattern, token, options);

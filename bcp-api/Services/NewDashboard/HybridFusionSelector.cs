@@ -103,4 +103,78 @@ public static class HybridFusionSelector
         if (selected.Count > MaxKeep) selected = selected.Take(MaxKeep).ToList();
         return selected;
     }
+
+    // ---------------------------------------------------------------- pipeline v3
+
+    /// <summary>Standard reciprocal-rank-fusion constant: rank 1 adds 1/61, rank 10 adds 1/70.</summary>
+    private const double RankConstant = 60;
+
+    /// <summary>How far above the documents' average a section must score for one query to count as relevant,
+    /// in standard deviations of that query's scores over every section. A statistical cut, not a count:
+    /// it follows each query's own score spread, which also makes it work for any embedding model.</summary>
+    public const double RelevanceZ = 2.5;
+
+    public static double RankScore(int zeroBasedRank) => 1.0 / (RankConstant + zeroBasedRank + 1);
+
+    /// <summary>
+    /// v3 relevance gate for one query's scores (BM25 or embedding similarity), best first. A section is kept
+    /// when its score is at least <see cref="RelevanceZ"/> standard deviations above the mean score of all
+    /// <paramref name="populationSize"/> sections (sections missing from <paramref name="ranked"/> scored 0).
+    /// The best section is always kept when it scored anything. No minimum or maximum count.
+    /// </summary>
+    public static List<(Guid SectionId, double Score)> SelectRelevant(
+        IReadOnlyList<(Guid SectionId, double Score)> ranked, int populationSize)
+    {
+        var ordered = ranked.Where(r => r.Score > 0).OrderByDescending(r => r.Score).ToList();
+        if (ordered.Count == 0) return [];
+
+        var n = Math.Max(populationSize, ordered.Count);
+        var mean = ordered.Sum(r => r.Score) / n;
+        var variance = (ordered.Sum(r => (r.Score - mean) * (r.Score - mean))
+            + (n - ordered.Count) * mean * mean) / n;
+        var std = Math.Sqrt(variance);
+        if (std <= 0) return [ordered[0]];
+
+        var cutoff = mean + RelevanceZ * std;
+        var selected = ordered.Where(r => r.Score >= cutoff).ToList();
+        return selected.Count > 0 ? selected : [ordered[0]];
+    }
+
+    /// <summary>
+    /// v3 Steps 5 + 6: every section that passed the relevance gate for at least one query, ordered by its
+    /// summed reciprocal-rank score (<paramref name="rankScores"/>), so a section found only by keywords or only
+    /// by meaning is never dropped for lacking the other side. FusedScore is the rank score scaled so the
+    /// best section is 1.0. Nothing is trimmed.
+    /// </summary>
+    public static List<FusedMatch> FuseByRank(
+        IReadOnlyList<RegulEmbeddingRetrievalService.Bm25Match> bm25Matches,
+        IReadOnlyList<RegulEmbeddingRetrievalService.RetrievalMatch> embeddingMatches,
+        IReadOnlyDictionary<Guid, double> rankScores)
+    {
+        var bm25ById = bm25Matches.ToDictionary(m => m.SectionId);
+        var embeddingById = embeddingMatches.ToDictionary(m => m.SectionId);
+        var best = rankScores.Count == 0 ? 0 : rankScores.Values.Max();
+
+        var fused = new List<FusedMatch>();
+        foreach (var id in bm25ById.Keys.Union(embeddingById.Keys))
+        {
+            bm25ById.TryGetValue(id, out var bm25);
+            embeddingById.TryGetValue(id, out var embedding);
+            var score = best > 0 ? rankScores.GetValueOrDefault(id) / best : 0;
+            fused.Add(new FusedMatch(
+                id,
+                bm25?.ClauseNo ?? embedding!.ClauseNo,
+                bm25?.TextPreview ?? embedding!.TextPreview,
+                bm25?.SourceDocumentId ?? embedding!.SourceDocumentId,
+                bm25?.SourceDocumentName ?? embedding!.SourceDocumentName,
+                bm25?.SourcePage ?? embedding!.SourcePage,
+                Math.Round(score, 4),
+                bm25?.Score,
+                embedding?.Similarity,
+                bm25?.MatchedSubObligation ?? embedding?.MatchedSubObligation));
+        }
+
+        fused.Sort((a, b) => b.FusedScore.CompareTo(a.FusedScore));
+        return fused;
+    }
 }

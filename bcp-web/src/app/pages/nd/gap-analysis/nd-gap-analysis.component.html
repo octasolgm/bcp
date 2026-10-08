@@ -37,6 +37,17 @@
     }
   </div>
   <div class="header-actions">
+    @if (templateDraftActionPlans.length; as templateCount) {
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="replacingTemplateDrafts"
+        title="Draft action plans that still carry sample template wording (from before the AI's own actions were used). Replaces them with the AI's corrective action; resolved actions are not touched."
+        (click)="replaceTemplateDraftActionPlans()"
+      >
+        {{ replacingTemplateDrafts ? 'Replacing...' : 'Replace ' + templateCount + ' sample action(s)' }}
+      </button>
+    }
     @if (canUseEvals) {
       <button type="button" class="btn-secondary" title="Compare this analysis's clauses with the current clause evals (local comparison, no AI)" (click)="openEvalDrawer('compare')">
         Compare with evals

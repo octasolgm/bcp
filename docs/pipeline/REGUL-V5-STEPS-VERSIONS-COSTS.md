@@ -24,7 +24,7 @@ How to read the cost column:
 | A1 | Upload | Stores the file | once per document | storage | Free |
 | A2 | Parse | File -> text with page numbers | once per document | Azure Document Intelligence, `prebuilt-layout`, API 2024-11-30, markdown output | **Paid, per page** |
 | A3 | Extract | Text -> numbered sections / clauses | once per document | `LocalSectionSplitter` (regex rules) | Free |
-| A4 | Index (embed) | Each section -> meaning vector | once per document | `bge-micro-v2` (384-d, local ONNX, SmartComponents.LocalEmbeddings 0.1.0-preview) | Free |
+| A4 | Index (embed) | Each internal-document section -> meaning vector | once per internal document | `bge-micro-v2` (384-d, local ONNX, SmartComponents.LocalEmbeddings 0.1.0-preview) | Free |
 | A5 | Dictionary harvest | Finds acronyms and synonym candidates | once per document | `AcronymHarvester` regex + local embeddings | Free |
 | A6 | Regulation points | Regulation sections -> selectable clause list | once per regulation | from A3 | Free |
 | B0 | Index check | Parses/indexes any selected internal doc not yet ready | each run | A2-A4 | Paid only if a doc was never parsed |
@@ -65,6 +65,10 @@ assessment, Azure OpenAI semantic chunking (a separate test page only).
 | Parse engine | Azure DI `prebuilt-layout`, API 2024-11-30 | appsettings |
 | Embedding model | bge-micro-v2, 384 dimensions | code (fixed) |
 
+**Pipeline v3** (built 08 Oct, select it in Admin > Analysis prompts to test): every paragraph and list item of the
+clause is searched, every section is scored, selection is by relevance with no count limits, keyword-only matches
+are kept. See `REGUL-V5-FIX-PLAN.md`, Status.
+
 Every run records its pipeline version, prompt versions and model; the analysis list shows them in
 the "AI setup" column, and saved clause evals keep them too.
 
@@ -89,8 +93,7 @@ the "AI setup" column, and saved clause evals keep them too.
 Local code and local model on our server. The only cost is server CPU/RAM. Indexing a few hundred
 sections with bge-micro takes seconds.
 
-Small waste: the extract endpoint also queues the **regulation** document for embedding, but V5
-never searches regulation vectors. It costs no money, only CPU time.
+Regulation documents are not embedded: Extract queues indexing for internal documents only.
 
 ### B8. AI judgment - paid, the main running cost
 

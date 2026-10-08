@@ -436,6 +436,7 @@ file static class StartupBootstrap
                         .GetRequiredService<Reguliq.Api.Services.LocalDocs.DictionaryExpansionService>();
                     await dictionaryService.LoadSeedAsync(CancellationToken.None);
                     await dictionaryService.LoadSynonymSeedAsync(CancellationToken.None);
+                    await dictionaryService.RetireWrongSeedSynonymsAsync(CancellationToken.None);
                 }
                 catch (Exception seedEx)
                 {

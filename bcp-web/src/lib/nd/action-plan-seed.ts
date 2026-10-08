@@ -129,6 +129,33 @@ export const ACTION_PLAN_SEED_FALLBACK: Omit<ActionPlanSeedRule, 'match'> = {
   },
 };
 
+const SEED_TEMPLATE_PATTERNS: RegExp[] = [
+  ...ACTION_PLAN_SEED_RULES.flatMap((r) => [r.template, r.followUp?.template]),
+  ACTION_PLAN_SEED_FALLBACK.template,
+  ACTION_PLAN_SEED_FALLBACK.followUp?.template,
+]
+  .filter((t): t is string => !!t)
+  .map(
+    (t) =>
+      new RegExp(
+        `^${t
+          .split('{gap}')
+          .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+          .join('[\\s\\S]+')}$`,
+      ),
+  );
+
+/**
+ * True when an action plan's text is still exactly one of the catalog templates above (with any gap
+ * text filled in), i.e. a demo-style first draft nobody has rewritten. Real-account runs seeded before
+ * real accounts switched to the AI's own action can still carry these; they are removed so the AI
+ * action is seeded instead.
+ */
+export function isSeedTemplateActionText(text: string | null | undefined): boolean {
+  const t = (text ?? '').trim();
+  return !!t && SEED_TEMPLATE_PATTERNS.some((re) => re.test(t));
+}
+
 export type SeededActionPlan = {
   analysisPointId: string;
   gapIndex: number;

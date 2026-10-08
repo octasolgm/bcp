@@ -108,8 +108,21 @@ Tasks
 - Fix plan written to docs/pipeline/REGUL-V5-FIX-PLAN.md: 22 points (P0 bugs and no-limit, P1 retrieval, P2 clause profile / structured judgment / gap verification, P3 finalize loop), each with file and line, current behaviour, change, what it resolves, cost before and after
 - Decision recorded: no count limits in query expansion, sub-obligation split and section selection (B1, B2, B6); relevance decides, oversized evidence is split across calls instead of dropped; steps sheet and review updated
 
+- Pipeline v3 (fix plan P0, points 1-9), selectable in Admin > Analysis prompts, v1/v2 unchanged: every paragraph and list item of a clause is searched (no 8-part limit, nothing dropped, OCR "." bullets and inline (a)(b) items, list lead-in once per item); every section scored on keywords and meaning (no 300-candidate limit); a section is selected when it scores at least 2.5 standard deviations above the documents' average for any part of the clause; results combined by rank, no minimum or maximum count; Step 7 flags a context over ~150k tokens
+- Gap analysis page: "Replace N sample action(s)" for workspace admins on real accounts removes unresolved draft actions that still carry demo template wording and seeds the AI's own action instead
+- Azure Document Intelligence price per page is now a setting (AzureDocumentIntelligence:UsdPerPage), value unchanged until the invoice rate is confirmed
+- Clause outline sent with each clause lists every sibling and sub-clause heading (80-line caps removed)
+- 20 new API unit tests (v3 split on clause 3.5 / 3.3 / 3.10 text, fusion and relevance gate, running headers, whole-word dictionary matching); full API suite 286 pass, the 24 failures are the same as before this change; web build passes
+
 Bug fixes
-- None (analysis only, no code changed)
+- Clause split (v3): clause 3.5 lost its last 2 parts (incl. "size / timeframe / nature of funds irrelevant", "independent offence", "no proof of predicate offence") and repeated its intro; now 15 parts, nothing dropped
+- Step 5/6 (v3): sections found only by keyword search were almost always dropped by the 0.4/0.6 fusion maths; now kept
+- Running page headers ("Anti-Money Laundering ... Guidelines for Financial Institutions") removed from clause and section text (lines repeated at the top/bottom of 3+ pages; applies on re-extract)
+- Harvested acronyms were active immediately in every workspace; now inactive until approved on the dictionary page
+- Wrong seed synonyms (PEP = high-risk customer, money laundering = financial crime, policy = manual) deactivated once and removed from the seed file
+- Full forms and synonyms matched inside longer words ("policy" in "policyholder"); now whole words only
+- API build failed on .NET 8.0.1xx SDKs with an ambiguous string.Split call in the synonym harvest; fixed
+- Correction to the review: regulation documents were already not being embedded, no change needed
 
 Investigated, follow up pending
 - False gaps on 3.3 / 3.5 traced to four causes: (1) Step 2 splitter keeps only 8 parts, so on 3.5 the "size / timeframe / nature of funds irrelevant", "independent offence" and "no proof of predicate offence" paragraph is never searched (verified by simulating the splitter on the clause text); (2) weak retrieval: bge-micro-v2 embeddings, sections cut at 512 tokens, whole clause as query, no stemming, wrong seed synonyms, harvested acronyms live without review; (3) up to 60 whole sections (150k-210k chars) in score order instead of evidence per requirement; (4) the judge re-decomposes the clause every run and nothing checks gaps against the clause text or the full corpus

@@ -6,6 +6,12 @@ public sealed class AzureDocumentIntelligenceOptions
 {
     public string Endpoint { get; set; } = "";
     public string ApiKey { get; set; } = "";
+
+    /// <summary>USD per analysed page, used only to record parse cost in the AI usage log (Azure bills directly).
+    /// The default is Azure's Read-model list price; this client calls prebuilt-layout, whose list price is
+    /// higher (about $10 per 1,000 pages). Set the contracted Layout rate here
+    /// (AzureDocumentIntelligence:UsdPerPage) once confirmed against the Azure invoice.</summary>
+    public decimal UsdPerPage { get; set; } = 0.0015m;
 }
 
 public sealed record AzureDocIntelligenceResult(

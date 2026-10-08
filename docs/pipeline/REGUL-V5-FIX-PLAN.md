@@ -50,6 +50,36 @@ Phases: **P0 = points 1-9** (bugs and no-limit, ~4.5 days), **P1 = 10-13** (retr
 
 ---
 
+## Status - P0 built 08 Oct 2026 (pipeline v3), waiting for your test
+
+Points 1-9 are in the code. Retrieval changes (points 1, 2, 3) only apply when **pipeline v3** is selected in
+Admin > Analysis prompts; v1 and v2 behave exactly as before, so earlier runs stay comparable. Points 4, 5, 6, 7
+and 9 apply to everything.
+
+| # | Built as | Differs from the plan |
+|---|---|---|
+| 1 | `SubObligationSplitter.SplitComplete` (v3): paragraphs and list items, lead-in once per item without heading/citation, short pieces merged, OCR "." bullets and inline (a)(b) items. 3.5 now gives 15 pieces, nothing dropped | - |
+| 2 | `HybridFusionSelector.FuseByRank` (v3): reciprocal rank fusion over every query, no minimum / maximum | Splitting an oversized context into several AI calls is **not built yet**: merging two free-text judgments is unreliable, so it comes with the structured judgment (point 16). Until then a context over ~150k tokens is flagged on the clause's Step 7 trace and in the log; nothing is cut |
+| 3 | `HybridFusionSelector.SelectRelevant` (v3): every section scored on both sides, no 300 cap | The relevance gate is statistical (score at least 2.5 standard deviations above the documents' average for that query, best match always kept) instead of an "elbow" cut: same intent, more stable on flat score curves |
+| 4 | `LocalSectionSplitter`: lines repeated in the first/last 3 lines of 3+ pages are removed from section text (table rows with " \| " kept) | Takes effect when a document is **re-extracted** (free, no re-parse) |
+| 5 | Harvested acronyms inactive; 3 wrong seed synonyms deactivated once at startup and removed from the seed file; whole-word matching | The synonym-suggestion caps (150 sections / 400 chars / 15 suggestions) are **kept**: suggestions are pairs of whole short sections, so without the caps the review page would fill with hundreds of non-synonyms. They never limit expansion itself, which has no limit |
+| 6 | Gap analysis page: "Replace N sample action(s)" button (workspace admins, real accounts only) deletes unresolved drafts whose text is still a template, then seeds the AI's own action | Front end only (the template list lives there) |
+| 7 | `AzureDocumentIntelligence:UsdPerPage` setting, default unchanged ($0.0015) | appsettings value, not an admin page; set it once the invoice rate is confirmed |
+| 8 | **No change needed**: Extract already skips indexing for regulation documents (`LocalDocumentsController`). The earlier review was wrong on this | - |
+| 9 | Outline lists every sibling and sub-clause heading | The 160-character cut on one heading's title stays (a title, not a list) |
+
+How to test (one batch):
+1. Admin > Analysis prompts: set the pipeline to **v3**.
+2. Internal Documents and the regulation: **Extract** again (no re-parse, free) so running headers are removed and
+   indexes rebuild.
+3. Run 3.3, 3.5 and 3.6 once on v3, then "Compare with evals" against the saved v2 results. In the pipeline panel
+   check, per clause: number of parts searched, sections selected, context size (Step 7), and whether the known
+   evidence (AML Policy p.42 for 3.3; the transaction-period text for 3.5) is in the selected sections.
+4. Expected cost: one judgment per clause, ~$0.15-0.32 each on Kimi K3, about $1 for the three. If Step 7 shows a
+   context much larger than today's 150-210k characters, tell me before running more clauses.
+
+---
+
 ## P0 - bugs and the no-limit decision
 
 ### Point 1 - B2 sub-obligation split drops clause text
@@ -184,7 +214,7 @@ Phases: **P0 = points 1-9** (bugs and no-limit, ~4.5 days), **P1 = 10-13** (retr
   quality is limited by what is in the dictionary and how it is matched.
 - **Change:**
   1. Harvested acronyms are inserted inactive (pending review), like synonym candidates.
-  2. One-off startup fix: deactivate the 4 wrong seed pairs (and remove them from the seed file;
+  2. One-off startup fix: deactivate the 3 wrong seed pairs (and remove them from the seed file;
      the seed loader is insert-only, so the file change alone does nothing).
   3. Whole-word, case-insensitive matching for full forms and synonyms.
   4. No-limit harvest: drop the 150 / 15 caps and the 400-character cut (suggestions are
@@ -222,7 +252,10 @@ Phases: **P0 = points 1-9** (bugs and no-limit, ~4.5 days), **P1 = 10-13** (retr
 - **Resolves:** the usage log and credits show the real parse cost.
 - **Cost:** no change in what Azure charges; reported parse cost goes up ~6-7x to the real figure.
 
-### Point 8 - Regulation documents embedded for nothing
+### Point 8 - Regulation documents embedded for nothing (already handled, no change)
+
+Checked while building P0: `LocalDocumentsController` Extract and Reindex already skip indexing for regulation
+documents. The text below was based on a wrong reading and is kept only for the record.
 
 - **Where:** `bcp-api/Controllers/NewDashboard/LocalDocumentsController.cs` lines 270 and 331
   queue indexing for every extracted document.

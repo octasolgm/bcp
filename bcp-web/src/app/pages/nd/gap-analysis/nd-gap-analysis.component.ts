@@ -44,6 +44,7 @@ import { NdEvidenceHistoryDrawerComponent } from '../../../components/nd/nd-evid
 import { NdEvalCompareDrawerComponent, NdEvalDrawerMode } from '../../../components/nd/nd-eval-compare-drawer.component';
 import {
   buildSeededActionPlansForGap,
+  isSeedTemplateActionText,
   type SeededActionPlan,
 } from '../../../../lib/nd/action-plan-seed';
 import { capGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
@@ -381,6 +382,55 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   openEvalDrawer(mode: NdEvalDrawerMode): void {
     this.evalDrawerMode = mode;
+  }
+
+  /**
+   * Unresolved action plans on a real-account Regul run whose text is still a sample template from the
+   * demo catalog (seeded before real accounts switched to the AI's own action). Never shown to demo
+   * accounts: their template actions are the intended demo content.
+   */
+  get templateDraftActionPlans(): ActionPlanEntry[] {
+    if (this.embedMode || !this.ndRunId || !this.isNdRegulWorkflow || this.auth.isDemoViewer()) return [];
+    if (this.auth.getRole() !== 'super_admin') return [];
+    return (this.ndRunData?.actionPlans ?? []).filter(
+      (p) => p.status !== 'resolved' && isSeedTemplateActionText(p.actionPlan),
+    );
+  }
+
+  replacingTemplateDrafts = false;
+
+  /** Deletes the sample-template drafts, then seeds the AI's own action for every gap left without one. */
+  async replaceTemplateDraftActionPlans(): Promise<void> {
+    const plans = this.templateDraftActionPlans;
+    if (!this.ndRunId || !plans.length || this.replacingTemplateDrafts) return;
+    const ok = window.confirm(
+      `Replace ${plans.length} draft action plan(s) that still carry sample template text with the AI's own corrective action? Resolved actions are not touched.`,
+    );
+    if (!ok) return;
+
+    this.replacingTemplateDrafts = true;
+    this.cdr.markForCheck();
+    try {
+      let failed = 0;
+      for (const plan of plans) {
+        const res = await this.ndApi.deleteActionPlan(this.ndRunId, plan.id);
+        if (!res.success) failed++;
+      }
+      await this.reloadActionPlans();
+      if (this.ndRunData) {
+        this.actionPlanSeedAttempted = false;
+        await this.seedDefaultActionPlans(this.ndRunData);
+      }
+      this.toast.show(
+        failed
+          ? `Replaced ${plans.length - failed} of ${plans.length} sample action plan(s); ${failed} could not be removed.`
+          : `Replaced ${plans.length} sample action plan(s) with the AI's own actions.`,
+        failed ? 'error' : 'success',
+      );
+    } finally {
+      this.replacingTemplateDrafts = false;
+      this.cdr.markForCheck();
+    }
   }
 
   /** Prompt versions, pipeline version(s) and model actually used by this analysis's clauses (read from

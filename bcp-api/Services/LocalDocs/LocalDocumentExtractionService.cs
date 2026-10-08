@@ -36,15 +36,9 @@ public sealed class LocalDocumentExtractionService(
     AzureDocumentIntelligenceClient azureDocIntelligence,
     AzureOpenAIEmbeddingClient azureOpenAI,
     NdAiUsageRecorder aiUsage,
+    Microsoft.Extensions.Options.IOptions<AzureDocumentIntelligenceOptions> azureDocIntelligenceOptions,
     ILogger<LocalDocumentExtractionService> logger)
 {
-    /// <summary>
-    /// Azure Document Intelligence's own published rate for prebuilt-layout (the model this client uses):
-    /// ~$1.50 per 1,000 pages as of writing. A constant, not a discovered/negotiated rate — re-verify
-    /// against the current Azure AI Document Intelligence pricing page before relying on it for billing
-    /// reconciliation, and replace with an actual contracted rate if one exists.
-    /// </summary>
-    private const decimal AzureDocIntelligenceUsdPerPage = 0.0015m;
     /// <summary>Consecutive sentences whose embedding cosine similarity falls below this cut a new
     /// chunk. Not empirically tuned yet — a starting point, expected to need adjustment once compared
     /// against real documents (that comparison is the whole point of this feature). See
@@ -106,7 +100,7 @@ public sealed class LocalDocumentExtractionService(
         await aiUsage.RecordNonLlmCostAsync(
             "azure-document-intelligence",
             $"{billedPages} page(s)",
-            billedPages * AzureDocIntelligenceUsdPerPage,
+            billedPages * azureDocIntelligenceOptions.Value.UsdPerPage,
             ct);
 
         return new LocalParseResult(fileName, billedPages, billedPages, markdown, warnings);

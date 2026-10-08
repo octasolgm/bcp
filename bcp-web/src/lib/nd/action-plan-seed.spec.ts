@@ -1,4 +1,10 @@
-import { aiActionsForGap, buildSeededActionPlan, buildSeededActionPlansForGap, summarizeGapForAction } from './action-plan-seed';
+import {
+  aiActionsForGap,
+  buildSeededActionPlan,
+  buildSeededActionPlansForGap,
+  isSeedTemplateActionText,
+  summarizeGapForAction,
+} from './action-plan-seed';
 import { parseRegulElementCapSegments } from './regul-fields';
 
 describe('action plan seed', () => {
@@ -61,5 +67,30 @@ describe('action plan seed', () => {
     expect(forRisk('higher')).toBe('2026-01-16');
     expect(forRisk('medium')).toBe('2026-01-31');
     expect(forRisk('low')).toBe('2026-02-15');
+  });
+
+  it('recognises untouched sample template actions and nothing else', () => {
+    expect(
+      isSeedTemplateActionText(
+        'Extend the suspicious transaction reporting procedure to address the good-faith protection. Define the escalation path and reporting deadline, and evidence the first reporting cycle.',
+      ),
+    ).toBeTrue();
+    expect(
+      isSeedTemplateActionText(
+        'Review a sample of reports raised after the change to confirm the good-faith protection is being handled within the stated deadline.',
+      ),
+    ).toBeTrue();
+    expect(
+      isSeedTemplateActionText(
+        'Amend Section 7.3 to include: "Staff who report a suspicion in good faith are protected from liability."',
+      ),
+    ).toBeFalse();
+    // A template the maker has edited is left alone.
+    expect(
+      isSeedTemplateActionText(
+        'Extend the suspicious transaction reporting procedure to address the good-faith protection.',
+      ),
+    ).toBeFalse();
+    expect(isSeedTemplateActionText('')).toBeFalse();
   });
 });

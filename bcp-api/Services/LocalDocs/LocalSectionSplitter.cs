@@ -154,11 +154,15 @@ public static partial class LocalSectionSplitter
             blockText.Clear();
         }
 
+        var runningHeaders = PageEdgeRunningLines(pages);
+
         foreach (var page in pages)
         {
             if (string.IsNullOrWhiteSpace(page.Text)) continue;
 
-            var pageLines = FilterContentsPointerLines(ContentLines(page.Text));
+            var pageLines = FilterContentsPointerLines(ContentLines(page.Text))
+                .Where(l => !runningHeaders.Contains(l) || TryMatchHeading(l) != null)
+                .ToList();
 
             for (var lineIndex = 0; lineIndex < pageLines.Count; lineIndex++)
             {
@@ -400,6 +404,31 @@ public static partial class LocalSectionSplitter
     private static HashSet<string> RunningLines(IReadOnlyList<LocalPageResult> pages) =>
         pages
             .SelectMany(p => ContentLines(p.Text ?? "").Where(l => l.Length >= 12).Distinct().Select(l => (Line: l, p.PageNumber)))
+            .GroupBy(x => x.Line)
+            .Where(g => g.Select(x => x.PageNumber).Distinct().Count() >= RunningLineMinPages)
+            .Select(g => g.Key)
+            .ToHashSet();
+
+    // Running page header / footer ("Anti-Money Laundering and Combating the Financing of Terrorism and Illegal
+    // Organisations Guidelines for Financial Institutions") that the parser did not tag as a header: a line
+    // repeated within the first or last few lines of 3+ pages. Left in, it lands in the middle of whichever
+    // clause crosses the page break (clause 3.5 carried it as if it were clause text), and its words are added
+    // to every search query and section. Removed from section text only; the parsed markdown keeps it, so page
+    // grounding and quote checks are unchanged. Flattened table rows (" | ") are never treated as headers, so
+    // a table header repeated on each page stays.
+    private const int PageEdgeLineCount = 3;
+
+    private static HashSet<string> PageEdgeRunningLines(IReadOnlyList<LocalPageResult> pages) =>
+        pages
+            .SelectMany(p =>
+            {
+                var lines = ContentLines(p.Text ?? "");
+                return lines.Take(PageEdgeLineCount)
+                    .Concat(lines.Skip(Math.Max(PageEdgeLineCount, lines.Count - PageEdgeLineCount)))
+                    .Where(l => l.Length >= 12 && !l.Contains(" | ", StringComparison.Ordinal))
+                    .Distinct()
+                    .Select(l => (Line: l, p.PageNumber));
+            })
             .GroupBy(x => x.Line)
             .Where(g => g.Select(x => x.PageNumber).Distinct().Count() >= RunningLineMinPages)
             .Select(g => g.Key)

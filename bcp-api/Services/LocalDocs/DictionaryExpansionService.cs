@@ -132,6 +132,46 @@ public sealed class DictionaryExpansionService(
         logger.LogInformation("Synonym seed load complete ({Count} entries checked)", entries.Count);
     }
 
+    /// <summary>Seed synonym pairs that were removed from synonym-seed.json because they pull wrong sections
+    /// into retrieval: a PEP is one kind of high-risk customer, not a synonym; "financial crime" is much
+    /// broader than money laundering; "policy" / "manual" fires on nearly every clause.</summary>
+    internal static readonly (string TermA, string TermB)[] RetiredSeedSynonyms =
+    [
+        ("politically exposed person", "high-risk customer"),
+        ("money laundering", "financial crime"),
+        ("policy", "manual"),
+    ];
+
+    private const string RetiredSeedSynonymsMarkerKey = "dictionary_retired_seed_synonyms_2026_10_08";
+
+    /// <summary>Deactivates <see cref="RetiredSeedSynonyms"/> once (the seed loader only inserts, so removing them
+    /// from the file alone leaves the existing rows active). A marker setting makes it run a single time, so an
+    /// admin who switches one back on later keeps that choice.</summary>
+    public async Task RetireWrongSeedSynonymsAsync(CancellationToken ct = default)
+    {
+        if (await db.NdSystemSettings.AsNoTracking().AnyAsync(x => x.Key == RetiredSeedSynonymsMarkerKey, ct)) return;
+
+        var retired = 0;
+        foreach (var (termA, termB) in RetiredSeedSynonyms)
+        {
+            retired += await db.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE nd_synonym_entries SET is_active = false
+                WHERE source = 'manual' AND is_active = true
+                  AND ((lower(term_a) = lower({termA}) AND lower(term_b) = lower({termB}))
+                    OR (lower(term_a) = lower({termB}) AND lower(term_b) = lower({termA})))", ct);
+        }
+
+        db.NdSystemSettings.Add(new Data.NewDashboard.Entities.NdSystemSetting
+        {
+            Key = RetiredSeedSynonymsMarkerKey,
+            ValueJson = $"{{\"deactivated\":{retired}}}",
+            UpdatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync(ct);
+        _activeSynonyms = null;
+        logger.LogInformation("Retired {Count} wrong seed synonym pair(s)", retired);
+    }
+
     /// <summary>Suggests synonym candidates from one document's already-extracted sections, using
     /// embedding similarity instead of a text shape (see <see cref="NdSynonymEntry"/>'s doc
     /// comment for why acronym-style regex harvesting can't work for synonyms). Compares every
@@ -158,7 +198,7 @@ public sealed class DictionaryExpansionService(
             vectors[i] = embedder.Embed(pool[i].ClauseText);
             wordSets[i] = new HashSet<string>(
                 pool[i].ClauseText.ToLowerInvariant().Split(
-                    [' ', '\t', '\n', '\r', ',', '.', ';', ':', '(', ')'],
+                    new[] { ' ', '\t', '\n', '\r', ',', '.', ';', ':', '(', ')' },
                     StringSplitOptions.RemoveEmptyEntries),
                 StringComparer.Ordinal);
         }
@@ -240,7 +280,11 @@ public sealed class DictionaryExpansionService(
 
     /// <summary>An empty <paramref name="definition"/> is a deliberate, valid value — it marks an
     /// "unresolved" placeholder row (a short form seen in a document with no known full form
-    /// yet), not a data-quality problem. Only a missing/blank acronym is rejected.</summary>
+    /// yet), not a data-quality problem. Only a missing/blank acronym is rejected.
+    /// Harvested ("auto") entries are stored inactive, pending admin review on the dictionary page, like
+    /// harvested synonym candidates: the dictionary is platform-wide, so an acronym read from one bank's
+    /// manual must not change every workspace's searches until someone has approved it. Seeded ("manual")
+    /// entries are active.</summary>
     private async Task UpsertAsync(
         string acronym, string definition, string source, Guid? sourceDocumentId, int? sourcePage, CancellationToken ct)
     {
@@ -252,7 +296,7 @@ public sealed class DictionaryExpansionService(
             INSERT INTO nd_dictionary_entries
                 (id, acronym, definition, source, source_document_id, source_page, is_active, created_at)
             VALUES
-                ({Guid.NewGuid()}, {acronym}, {definition}, {source}, {sourceDocumentId}, {sourcePage}, true, now())
+                ({Guid.NewGuid()}, {acronym}, {definition}, {source}, {sourceDocumentId}, {sourcePage}, {source != "auto"}, now())
             ON CONFLICT (lower(acronym), lower(definition)) DO NOTHING", ct);
     }
 
@@ -308,7 +352,7 @@ public sealed class DictionaryExpansionService(
             if (string.IsNullOrWhiteSpace(e.Acronym) || string.IsNullOrWhiteSpace(e.Definition)) continue;
             if (Regex.IsMatch(clauseText, $@"\b{Regex.Escape(e.Acronym)}\b"))
                 acronymMatches.Add(new ExpansionMatch(e.Id, e.Acronym, e.Definition, e.Acronym, e.Definition));
-            if (clauseText.Contains(e.Definition, StringComparison.OrdinalIgnoreCase))
+            if (ContainsWholePhrase(clauseText, e.Definition))
                 acronymMatches.Add(new ExpansionMatch(e.Id, e.Acronym, e.Definition, e.Definition, e.Acronym));
         }
 
@@ -320,14 +364,23 @@ public sealed class DictionaryExpansionService(
         foreach (var s in synonyms)
         {
             if (string.IsNullOrWhiteSpace(s.TermA) || string.IsNullOrWhiteSpace(s.TermB)) continue;
-            if (clauseText.Contains(s.TermA, StringComparison.OrdinalIgnoreCase))
+            if (ContainsWholePhrase(clauseText, s.TermA))
                 synonymMatches.Add(new ExpansionMatch(s.Id, s.TermA, s.TermB, s.TermA, s.TermB));
-            if (clauseText.Contains(s.TermB, StringComparison.OrdinalIgnoreCase))
+            if (ContainsWholePhrase(clauseText, s.TermB))
                 synonymMatches.Add(new ExpansionMatch(s.Id, s.TermA, s.TermB, s.TermB, s.TermA));
         }
 
         return new QueryExpansionResult(acronymMatches, synonymMatches);
     }
+
+    /// <summary>Case-insensitive match on word boundaries: "policy" matches "the policy" but not
+    /// "policyholder", "risk assessment" matches "Risk Assessment" but not "risk assessments-based".</summary>
+    public static bool ContainsWholePhrase(string text, string phrase) =>
+        !string.IsNullOrWhiteSpace(phrase)
+        && Regex.IsMatch(text, WholePhrasePattern(phrase), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    public static string WholePhrasePattern(string phrase) =>
+        $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(phrase.Trim())}(?![\p{{L}}\p{{N}}])";
 
     /// <summary>Flattened form of <see cref="ExpandQueryDetailedAsync"/> — the list of added
     /// terms only, for a caller that just needs text to embed and doesn't need per-match

@@ -274,4 +274,44 @@ public class LocalSectionSplitterTests
 
         Assert.Equal(["4", "5"], sections.Select(s => s.ClauseNo).ToArray());
     }
+
+    private const string PageHeaderLine =
+        "Anti-Money Laundering and Combating the Financing of Terrorism and Illegal Organisations Guidelines for Financial Institutions";
+
+    [Fact]
+    public void Running_page_header_is_removed_from_a_clause_that_crosses_the_page_break()
+    {
+        var pages = new List<LocalPageResult>
+        {
+            new(15, string.Join('\n', PageHeaderLine, "3.4 Statutory Prohibitions", "Financial Institutions are prohibited from the following."), PageExtractionMethod.Native),
+            new(16, string.Join('\n', PageHeaderLine, "3.5 Money Laundering", "The AML-CFT Law defines money laundering as follows:",
+                "· Acquiring, possessing or using proceeds upon receipt;"), PageExtractionMethod.Native),
+            new(17, string.Join('\n', PageHeaderLine, "Therefore, in order to be considered money laundering, any asset counts."), PageExtractionMethod.Native),
+            new(18, string.Join('\n', PageHeaderLine, "3.6 Predicate Offences", "A predicate offence is any crime."), PageExtractionMethod.Native),
+        };
+
+        var sections = LocalSectionSplitter.Split(pages);
+
+        var clause = Assert.Single(sections, s => s.ClauseNo == "3.5");
+        Assert.Contains("Therefore, in order to be considered money laundering", clause.ClauseText);
+        Assert.DoesNotContain("Guidelines for Financial Institutions", clause.ClauseText);
+        Assert.All(sections, s => Assert.DoesNotContain(PageHeaderLine, s.ClauseText));
+    }
+
+    [Fact]
+    public void A_line_repeated_on_only_two_pages_or_a_repeated_table_header_is_kept()
+    {
+        const string twice = "This sentence appears at the top of two pages only.";
+        const string tableHeader = "Risk factor | Low | Medium | High";
+        var pages = new List<LocalPageResult>
+        {
+            new(1, string.Join('\n', "1. Scope", twice, tableHeader, "Customers | 1 | 2 | 3"), PageExtractionMethod.Native),
+            new(2, string.Join('\n', twice, tableHeader, "Products | 1 | 2 | 3"), PageExtractionMethod.Native),
+            new(3, string.Join('\n', tableHeader, "Channels | 1 | 2 | 3"), PageExtractionMethod.Native),
+        };
+
+        var text = string.Join("\n", LocalSectionSplitter.Split(pages).Select(s => s.ClauseText));
+        Assert.Contains(twice, text);
+        Assert.Equal(3, text.Split('\n').Count(l => l.Trim() == tableHeader));
+    }
 }

@@ -846,11 +846,18 @@ public class NdRegulAnalysisProcessor(
             })),
             CharsSent = contextBlock.Length,
             Notes = $"{contextChunks.Count} chunk(s) from the clause's Step 6 selection, {contextBlock.Length} chars; "
-                + DescribeClauseContext(clauseContext, clauseContextSent),
+                + DescribeClauseContext(clauseContext, clauseContextSent)
+                + (contextBlock.Length > LargeContextWarningChars
+                    ? $"; WARNING: context is over {LargeContextWarningChars / 4000}k tokens (pipeline v3 has no section limit), the AI call may be slow or exceed the model's input limit"
+                    : ""),
             ClauseContext = clauseContext?.Text,
             ClauseContextSent = clauseContextSent,
             TenantId = finding.TenantId,
         });
+        if (contextBlock.Length > LargeContextWarningChars)
+            logger.LogWarning(
+                "Regul Step 7 for clause {ClauseNo}: context is {Chars} chars (~{Tokens} tokens), above the {Limit} char warning level",
+                clauseNo, contextBlock.Length, contextBlock.Length / 4, LargeContextWarningChars);
         logger.LogInformation(
             "Regul Step 7 supporting regulatory context for clause {ClauseNo}: {Description}{NewLine}{ClauseContext}",
             clauseNo, DescribeClauseContext(clauseContext, clauseContextSent), Environment.NewLine,
@@ -867,6 +874,10 @@ public class NdRegulAnalysisProcessor(
     /// gap-description retry loop CallForwardJudgmentAsync used to run — everything here is either a pure
     /// network call or in-memory post-processing, so it's safe to run for several clauses at once (see
     /// RunForwardPhaseAsync's bounded-concurrency phase 2, which is the whole point of this split).</summary>
+    /// <summary>Step 7 context above this (~150k tokens) is flagged on the clause trace and in the log. Pipeline v3
+    /// selects sections by relevance with no count limit, so an unusually broad clause can grow large; nothing is cut.</summary>
+    private const int LargeContextWarningChars = 600_000;
+
     /// <summary>How many times one judgment request is sent before the clause is marked failed.</summary>
     private const int MaxDeliveryAttempts = 3;
 

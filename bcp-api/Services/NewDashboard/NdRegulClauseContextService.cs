@@ -16,8 +16,6 @@ namespace Reguliq.Api.Services.NewDashboard;
 public class NdRegulClauseContextService(AppDbContext db)
 {
     private const int MaxHeadingChars = 160;
-    private const int MaxSiblingLines = 80;
-    private const int MaxChildLines = 80;
 
     private static readonly Regex DottedNumber = new(@"^\d+(\.\d+)*$", RegexOptions.Compiled);
 
@@ -135,14 +133,14 @@ public class NdRegulClauseContextService(AppDbContext db)
         sb.AppendLine(parentPrefix == null
             ? "Clauses at the same level (top-level chapters):"
             : $"Clauses at the same level under {parentPrefix}:");
-        foreach (var s in siblings.Take(MaxSiblingLines))
+        // Every sibling and sub-clause heading is listed (no line limit): headings are short, and a cut list
+        // would hide exactly the neighbouring subjects this block exists to show.
+        foreach (var s in siblings)
             sb.AppendLine(s.Number == clauseNumber ? $"  {Line(s)}   <-- THIS CLAUSE (the one being judged)" : $"  {Line(s)}");
-        if (siblings.Count > MaxSiblingLines) sb.AppendLine($"  ... {siblings.Count - MaxSiblingLines} more");
 
         sb.AppendLine($"Sub-clauses of {clauseNumber}:");
         if (children.Count == 0) sb.AppendLine("  (none)");
-        foreach (var c in children.Take(MaxChildLines)) sb.AppendLine($"  {Line(c)}");
-        if (children.Count > MaxChildLines) sb.AppendLine($"  ... {children.Count - MaxChildLines} more");
+        foreach (var c in children) sb.AppendLine($"  {Line(c)}");
 
         return sb.ToString().TrimEnd();
     }
