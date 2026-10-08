@@ -7,8 +7,10 @@ public sealed class RegulRetrievalOptions
 {
     /// <summary>Default embedding model for search passages (pipeline v4+) when the admin has not chosen one in
     /// Admin > Analysis prompts: "local" (bge-micro-v2 on this server, free) or "azure-openai" (the
-    /// AzureOpenAI:EmbeddingDeployment model, e.g. text-embedding-3-small). Passages embedded with another model are
-    /// rebuilt in the background or before the next search; nothing needs re-parsing or re-extracting.</summary>
+    /// AzureOpenAI:EmbeddingDeployment model, text-embedding-3-small; appsettings.json sets this since 08 Oct, and
+    /// it falls back to local when Azure OpenAI is not configured). Passages embedded with another model are
+    /// re-embedded in the background or before the next search; the passage split itself never changes, and nothing
+    /// needs re-parsing or re-extracting.</summary>
     public string EmbeddingProvider { get; set; } = "local";
 }
 

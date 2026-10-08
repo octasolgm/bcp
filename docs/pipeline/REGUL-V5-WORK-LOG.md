@@ -19,7 +19,7 @@ Version switches (Admin > Analysis prompts):
 |---|---|---|
 | Retrieval pipeline | v1 original, v2 expanded wording, **v3** whole clause + no limits, **v4** passages + equivalent terms + in-memory, **v5** v4 + gap check | stored admin choice (v2 unless changed) |
 | Judgment prompt | ... v8, **v9** (current), **v10**, **v11** (seeded, not current; use v11) | v9 |
-| Embedding model (search passages) | Admin > Analysis prompts > "Search embedding model": local bge-micro-v2 / Azure OpenAI (config `RegulRetrieval:EmbeddingProvider` is only the default) | local |
+| Embedding model (search passages) | Admin > Analysis prompts > "Search embedding model": local bge-micro-v2 / Azure OpenAI text-embedding-3-small (config `RegulRetrieval:EmbeddingProvider` is the default when Admin has no choice) | **Azure OpenAI** since entry 13 (local when Azure is not configured) |
 
 ---
 
@@ -333,14 +333,76 @@ Nothing in this session changed extraction, chunking, demo accounts or the v1-v3
 
 ---
 
-## Open items
+### 13. Azure text-embedding-3-small is the default for search passages - this commit
 
-| Item | Next step | Owner |
+- `appsettings.json` `RegulRetrieval:EmbeddingProvider` = `azure-openai`: after pull + restart, search passages use
+  Azure OpenAI `AzureOpenAI:EmbeddingDeployment` (text-embedding-3-small) unless Admin > Analysis prompts says
+  otherwise. If `AzureOpenAI:Endpoint / ApiKey` are not set on the server, the local model is used and the log says so.
+- **Chunking is not changed.** The passages are cut exactly as before (same splitter, same passages); only their
+  vectors are recomputed with the new model, in the background (1 minute after start, then every 10 minutes while the
+  pipeline is v4 / v5) or before the next search. Extraction (structural sections) is not touched. Section vectors used
+  by pipelines v1-v3 stay on the local model.
+- Cost: about $0.001 once per 114-page document, plus a fraction of a cent per analysis for the clause wording.
+
+**Gap re-verification (asked again): yes, built in pipeline v5** (V1 Task 10, `NdRegulGapVerifier` +
+`NdRegulAnalysisProcessor.VerifyGapsAsync`). After the AI's judgment of a clause, for every gap it reports:
+1. the gap's missing requirement and the clause words it comes from are searched again over **every passage of every
+   selected document** (with equivalent terms, no count limit), not only the passages the first judgment saw;
+2. one short AI question per gap: "does any of these passages cover this gap? quote it";
+3. the answer counts only if its quote is word for word in the passage it names (invented quotes are rejected);
+4. covered: the gap is removed, becomes a covered point with that quote and page, its action is removed, the rest
+   renumbered; partly covered: the gap stays with "Partly addressed: [document page] "quote""; not covered: unchanged;
+   no gap left: the clause becomes compliant. A failed check never changes the result.
+It runs only on **pipeline v5** (Admin > Analysis prompts > Retrieval pipeline version). In `bcpReport` each check is a
+"Gap check AI call" with the gap, the passages searched and the answer.
+
+---
+
+## Pending tasks (kept up to date)
+
+### A. Your tests (no code)
+
+| # | Task | Detail | Why |
+|---|---|---|---|
+| A1 | Run 3.5 on the latest code | Pull (entry 13 commit), restart the API (adds prompt v11, starts Azure passage vectors), Admin: pipeline **v5**, prompt **v11** current for all 3 judgment prompts; new analysis with only 3.5; then `copy(bcpReport('3.5'))` in the browser console and paste it | Confirms Azure vectors, whether Implementation Manual p.22 / p.24 reach the AI and the gap check, gap numbering and Low risk on the new run |
+| A2 | Checkpoint B on 3.3 and 3.6 | Same settings; compare with Plan V1 section 4 (3.3 compliant with AML p.42 / p.14; 3.6 partial, predicate offence definition gap, CandNM p.2) | v11 checked on paper against these; needs a real run |
+| A3 | Old runs | Runs before entry 11 keep their mis-numbered draft actions and Medium risk; delete them or run the clause again | Saved data is not rewritten |
+| A4 | Azure DI price | Set `AzureDocumentIntelligence:UsdPerPage` once the Layout rate on the invoice is confirmed | Log-only cost figure |
+| A5 | Optional re-extract | Documents extracted before 08 Oct keep repeated page headers in their section text; re-extract (free, no re-parse) if you want them removed | Point 4; extraction logic itself unchanged |
+
+### B. Depends on the A1 report
+
+| # | Task | Detail |
 |---|---|---|
-| Retrieval check on run f8a76442 (pipeline v4) | Paste the snippets from Plan V1 section 4, Run, send the result | You |
-| Checkpoint A (v4 + prompt v9) | Run 3.3, 3.5, 3.6 after the retrieval check looks right | You |
-| Checkpoint B (v5 + prompt **v11**) | 3.5 first (v10 run judged wrong, see 9), then 3.3 and 3.6; compare with Plan V1 section 4 | You |
-| Re-tune the relevance gate if needed | Based on the retrieval check results | Claude |
-| Azure DI price setting | Set `AzureDocumentIntelligence:UsdPerPage` once the Layout rate is confirmed (log only) | You |
-| Stronger embedding model | Admin switch built (entry 12); recommended: Azure, then compare one 3.5 run with bcpReport | You |
-| Main plan, after Checkpoint B | Workspace self-names (13), clause profile (14), structured judgment (16), finalize points (19-22) | Claude |
+| B1 | Timeframe "partly addressed" | If p.22 / p.24 reached the gap check but no "Partly addressed" note was added, fix the gap check's partial handling (checked first against 3.3 / 3.5 / 3.6 expectations) |
+| B2 | Relevance gate | If too many or too few passages are selected (Step 5+6 list in the report), re-tune the 2.5 standard-deviation gate on passages |
+| B3 | Embedding comparison | Compare the selected passages with the earlier local-model run; record in this log |
+
+### C. Main plan, not started or partly done
+
+| # | Point | What is left | Why it matters |
+|---|---|---|---|
+| C1 | 12 BM25 | Word stemming (report / reported / reporting), stop words per domain; heading already searched | Keyword search misses inflected words |
+| C2 | 13 Self-names | Learn each workspace's own name for itself (e.g. "DIFC", "UAE" used as the institution's name in its policies) and treat it as "the institution" | Prompt rule covers it today; making it data is more reliable |
+| C3 | 14 Clause profile | One AI pass per regulation clause that lists its requirements (with clause words, type: obligation / definition / scope / context), cached and reused by every run | Same requirement list every run: stable numbering, no re-decomposition, cheaper |
+| C4 | 15 Evidence per requirement | Search per requirement of the profile, evidence pack with ids per requirement | AI sees the right evidence next to each requirement; smaller context |
+| C5 | 16 Structured judgment | Per-requirement verdict in JSON, overall status computed in code; split an oversized context into several calls (today only flagged above ~150k tokens) | Status always consistent with the gaps; no silent context limits |
+| C6 | 18 Evals | Expected result labels per clause and a retrieval recall figure per run | Measures every change before it reaches you |
+| C7 | 19 Finalize writer | Give the writer the document's own section text and terms | Inserted wording matches the policy's style |
+| C8 | 20 Placement | Place the note from the requirement's passage, not a guess | Text lands in the right section |
+| C9 | 21 Inline DOCX | Corrected copy as DOCX for PDF sources | Usable corrected document |
+| C10 | 22 Re-index and re-check | Index the corrected copy as the current version and re-check the finalized clauses | Closes the loop: fixed gaps disappear |
+
+### D. Housekeeping
+
+| # | Task | Detail |
+|---|---|---|
+| D1 | Prompt v11 as default | After A1 / A2 pass, make v11 the current version for everyone (today an admin switch) |
+| D2 | 3 old prompt-version unit tests | Their assertions predate automatic seeding of newer versions; update them (pre-existing failures, unrelated to this work) |
+| D3 | 18 other old test failures | Pre-existing (query translation and others); not caused by this work, to be fixed separately |
+
+### Decided not to do
+
+- Duplicate-document detection (V1 Task 7): evidence from every file is shown.
+- Per-document citation check (V1 Task 8): citations stay as they are.
+- Any change to extraction or chunking, semantic chunking, demo accounts or pipelines v1-v3.

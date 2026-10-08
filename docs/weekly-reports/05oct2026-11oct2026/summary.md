@@ -126,6 +126,8 @@ Tasks
 - Search embedding model is now an admin switch (Admin > Analysis prompts): local bge-micro-v2 or Azure OpenAI; no re-parse or re-extract, passages are re-embedded in the background; Azure calls batched with retry; extraction and chunking unchanged
 - Pipeline panel scrolls to the step in progress (Step 1 when a run starts, Step 8 when the AI judgment starts)
 - Every task of the main plan and Plan V1 re-checked with its status in the work log (entry 12); timeframe evidence for 3.5 re-checked: the AI's low gap is right, the earlier audit overstated Implementation Manual p.22 / p.24
+- Search passages now use Azure OpenAI text-embedding-3-small by default (local model when Azure OpenAI is not configured); passages and extraction unchanged, only their vectors are recomputed in the background
+- Work log: detailed pending task list (your tests, follow-ups that depend on the next run, remaining main plan points, housekeeping, decided not to do)
 Bug fixes
 - Clause split (v3): clause 3.5 lost its last 2 parts (incl. "size / timeframe / nature of funds irrelevant", "independent offence", "no proof of predicate offence") and repeated its intro; now 15 parts, nothing dropped
 - Step 5/6 (v3): sections found only by keyword search were almost always dropped by the 0.4/0.6 fusion maths; now kept
