@@ -147,6 +147,65 @@ public class NdRegulGapVerifierTests
     }
 }
 
+public class NdRegulGapNumberingTests
+{
+    private static RegulJudgmentResult Judgment(string gaps, string actions) => new()
+    {
+        OverallStatus = "partial",
+        GapDescription = gaps,
+        SuggestedAction = actions,
+    };
+
+    [Fact]
+    public void Gaps_keyed_by_requirement_number_are_renumbered_and_their_actions_follow()
+    {
+        // 08 Oct, clause 3.5 on prompt v11: gaps keyed [2] and [4] (the requirement numbers), so the page showed
+        // gap 1 with no action and gap 2 with gap 1's action.
+        var j = NdRegulGapVerifier.NormalizeGapNumbering(Judgment(
+            "[2] Defined terms not stated (clause: \"define funds\") - Missing: no definition - Materiality: low\n" +
+            "[4] Timeframe irrelevant (clause: \"the timeframe during which it took place\") - Missing: not stated - Materiality: low",
+            "[2] Amend the Definitions section to include: \"Funds means ...\"\n[4] Amend Section 7 to include: \"The timeframe ...\""));
+
+        var gaps = NdRegulGapVerifier.NumberedLines(j.GapDescription);
+        var actions = NdRegulGapVerifier.NumberedLines(j.SuggestedAction);
+        Assert.Equal([1, 2], gaps.Select(g => g.Number));
+        Assert.StartsWith("Defined terms", gaps[0].Text);
+        Assert.Equal(1, actions.Single(a => a.Text.Contains("Funds means")).Number);
+        Assert.Equal(2, actions.Single(a => a.Text.Contains("The timeframe")).Number);
+    }
+
+    [Fact]
+    public void Actions_keyed_differently_from_the_gaps_follow_the_order_when_there_is_one_key_per_gap()
+    {
+        var j = NdRegulGapVerifier.NormalizeGapNumbering(Judgment(
+            "[3] Gap A - Missing: a - Materiality: low\n[5] Gap B - Missing: b - Materiality: medium",
+            "[1] Fix A\n[2] Fix B\n[2] Fix B second place"));
+
+        var actions = NdRegulGapVerifier.NumberedLines(j.SuggestedAction);
+        Assert.Equal([1, 2, 2], actions.Select(a => a.Number));
+    }
+
+    [Fact]
+    public void Already_sequential_numbering_is_left_alone_and_long_clause_quotes_are_shortened()
+    {
+        var longQuote = string.Join(' ', Enumerable.Range(1, 40).Select(i => $"w{i}"));
+        var j = NdRegulGapVerifier.NormalizeGapNumbering(Judgment(
+            $"[1] Defined terms not stated (clause: \"{longQuote}\") - Missing: no definition - Materiality: low",
+            "[1] Amend X"));
+
+        Assert.Equal("[1] Defined terms not stated (clause: \"w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 ...\") - Missing: no definition - Materiality: low", j.GapDescription);
+        Assert.Equal("[1] Amend X", j.SuggestedAction);
+        Assert.Equal("w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 ...", NdRegulGapVerifier.ParseGaps(j.GapDescription)[0].ClauseWords);
+    }
+
+    [Fact]
+    public void A_clause_quote_with_brackets_inside_is_kept_whole_when_short()
+    {
+        const string gap = "[1] Nature irrelevant (clause: \"the nature of the funds (whether in liquid funds or some other asset)\") - Missing: x - Materiality: low";
+        Assert.Equal(gap, NdRegulGapVerifier.NormalizeGapNumbering(Judgment(gap, "[1] Fix")).GapDescription);
+    }
+}
+
 public class NdRegulPromptV10Tests
 {
     [Fact]

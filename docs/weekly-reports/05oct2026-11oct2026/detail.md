@@ -140,3 +140,7 @@ The improved search reads documents in short passages. For documents uploaded be
 Easier troubleshooting of an analysis
 
 Administrators can now copy a complete plain-text report of how a clause was analysed, straight from the browser: which parts of the clause were searched, which policy passages were found and sent to the AI, which review instructions were used, what the AI answered, and how each reported gap was double-checked. This makes it quick to share exactly what happened on a run when a result needs to be questioned. The corrected review instructions were also checked against the expected result of every test clause before the next test run, and one conflict that could have caused a new false gap on the reporting protection clause was removed.
+
+Corrective action plan matches each gap again
+
+On the latest test, the money laundering clause was correctly reported as partially compliant, with the missing definitions of "funds" and "proceeds" as the main gap. Two display problems were found and fixed: when the review numbered its gaps by requirement, the drafted actions could end up under the wrong gap, and gaps the review rated as low risk were shown as medium risk with a 30-day due date. Each gap now carries its own drafted action and the risk level the review assigned, and very long quotations of the regulation inside a gap are shortened so the gap reads as a clear statement.

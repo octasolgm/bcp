@@ -152,6 +152,9 @@ export function parseRegulElementCapGaps(gapText: string): CapGap[] {
 
 function capPriorityForRegulCapSegment(segment: string): string {
   const s = segment.trim();
+  // Prompt v10+ gap lines end with "- Materiality: high|medium|low": the AI's own rating sets the gap risk.
+  const materiality = /\bMateriality:\s*(high|medium|low)\b/i.exec(s)?.[1]?.toLowerCase();
+  if (materiality) return materiality === 'high' ? 'higher' : materiality;
   if (/^The regulator/i.test(s)) return '';
   if (/\bNOT\s+covered\b/i.test(s) || /\bno provision found\b/i.test(s)) return 'higher';
   if (/\bpartially\s+covered\b/i.test(s) || /\bnot clearly covered\b/i.test(s)) return 'medium';

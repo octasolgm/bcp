@@ -196,6 +196,38 @@ valid and generic, but I did not check each rule against each expected result be
   suite 312 pass, 21 old failures; web build passes.
 - **Status:** built; waiting for your 3.5 run on v5 + v11, with `copy(bcpReport('3.5'))` pasted back.
 
+### 11. First 3.5 run on v5 + v11: review against the PDFs, action / risk fixes - this commit
+
+**Result:** partial, 72%, 6 covered points, 2 gaps.
+
+| Item | Result | Check against the PDFs | Right? |
+|---|---|---|---|
+| ML acts (4 acts, knowledge) | Covered, AML Manual p.6 | Article (2) | Yes |
+| Asset scope (any tangible / intangible asset) | Covered by typologies (AML p.5, p.59, p.62; Document p.50-51) | Real estate, securities, artwork, property, vehicles, crypto | Yes |
+| Amount irrelevant | Covered, Document p.4 | "regardless of the amount" | Yes |
+| Nature of funds irrelevant | Covered by asset typologies | Applied in practice (v11 scope rule) | Yes |
+| Independent offence / no proof of predicate / indicators | Covered, AML p.6, CandNM p.2 | Matches | Yes |
+| NRA 2018 sentence | Not a gap | Context only | Yes |
+| **Gap 1** funds / proceeds definitions, low | Gap | No document defines or adopts them | **Yes** (the expected gap) |
+| **Gap 2** timeframe irrelevant, low | Gap | No document says the timeframe is irrelevant. In practice: Implementation Manual p.22 "If the activity takes place over a period of time ... describe the duration of the activity", p.24 review period "from 30 days to 90 days", red flags "over a short period of time" | **Borderline**: a low gap is defensible (nothing states it), but the answer should at least say "partly addressed: p.22", as it accepted practice for the nature of funds. Need `bcpReport('3.5')` to see whether p.22 reached the AI or the gap check |
+
+Verdict: right (partial). Gaps: 1 right, 1 borderline. Plan V1 expected "timeframe covered"; corrected expectation: timeframe
+either covered by practice with a p.22 quote, or a low gap that cites p.22 as partly addressed.
+
+**Bugs on the gap report (not the judgment):**
+
+| Bug | Cause | Fix |
+|---|---|---|
+| Gap 1 got a generic "Update the internal policy to address: ..." action; Gap 2 got Gap 1's definitions action; the timeframe action was lost | The AI keyed gaps and actions by requirement number ([2], [4]); the page lists gaps as 1, 2 and matched action [1] / [2] | `NdRegulGapVerifier.NormalizeGapNumbering` (V5 runs, before the gap check): gaps renumbered 1..n in order, each action follows its gap (or, when keys match no gap but there is one key per gap, the order) |
+| Both gaps shown as Medium risk / 30 days although the AI said "Materiality: low" | The page's regul gap parser ignored the materiality and defaulted to medium | `capPriorityForRegulCapSegment` reads "Materiality: high / medium / low" first (demo gap text never contains it, so demo is unchanged) |
+| Gap 1 text carried the whole definitions paragraph as its clause quote | Prompt asks for the clause words; the AI quoted ~90 words | Same normalisation: a clause quote over 25 words is cut to its first 15 words + "..." |
+
+- The run already saved stays as it is: its draft actions were created with the old numbering. Run 3.5 again (new
+  analysis) after pulling to see the fixed actions and risk.
+- Tests: 4 new (renumbering from your run, order fallback, long quote, brackets inside a quote); suite 316 pass, same
+  21 old failures; web build passes.
+- **Status:** built; waiting for the 3.5 rerun and `copy(bcpReport('3.5'))` to settle gap 2.
+
 ---
 
 ## Open items

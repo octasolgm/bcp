@@ -74,6 +74,57 @@ public static partial class NdRegulGapVerifier
         }).ToList();
     }
 
+    [GeneratedRegex(@"\(clause:\s*[""“](?<words>.*?)[""”]\)(?=\s*[-–—]\s*Missing:)", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex QuotedClauseWords();
+
+    /// <summary>Clause words quoted in a gap line longer than this are shortened to their first words.</summary>
+    public const int MaxClauseWordsInGap = 25;
+
+    /// <summary>
+    /// Gap and action lines keyed 1..n in the order the gaps are listed. The AI sometimes keys gaps by requirement
+    /// number ([2], [4]) while every screen lists gaps as 1, 2, ...; the actions then attach to the wrong gap.
+    /// Actions follow their gap's new number (or, when their keys match no gap but there is one key per gap, the
+    /// order of first appearance). A clause quote longer than <see cref="MaxClauseWordsInGap"/> words inside a gap
+    /// line is cut to its first words, so the gap reads as a statement and not as a copy of the clause.
+    /// </summary>
+    public static RegulJudgmentResult NormalizeGapNumbering(RegulJudgmentResult judgment)
+    {
+        var gaps = NumberedLines(judgment.GapDescription);
+        if (gaps.Count == 0) return judgment;
+
+        var newByOld = new Dictionary<int, int>();
+        for (var i = 0; i < gaps.Count; i++) newByOld.TryAdd(gaps[i].Number, i + 1);
+        judgment.GapDescription = string.Join("\n", gaps.Select((g, i) => $"[{i + 1}] {ShortenClauseWords(g.Text)}"));
+
+        var sequential = gaps.Select((g, i) => g.Number == i + 1).All(x => x);
+        var actions = NumberedLines(judgment.SuggestedAction);
+        if (sequential || actions.Count == 0) return judgment;
+
+        Dictionary<int, int>? actionMap = null;
+        if (actions.All(a => newByOld.ContainsKey(a.Number)))
+        {
+            actionMap = newByOld;
+        }
+        else
+        {
+            var keys = actions.Select(a => a.Number).Distinct().ToList();
+            if (keys.Count == gaps.Count)
+                actionMap = keys.Select((k, i) => (k, i + 1)).ToDictionary(x => x.k, x => x.Item2);
+        }
+
+        if (actionMap != null)
+            judgment.SuggestedAction = string.Join("\n", actions.Select(a => $"[{actionMap[a.Number]}] {a.Text}"));
+        return judgment;
+    }
+
+    private static string ShortenClauseWords(string gapLine) =>
+        QuotedClauseWords().Replace(gapLine, m =>
+        {
+            var words = m.Groups["words"].Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length <= MaxClauseWordsInGap) return m.Value;
+            return $"(clause: \"{string.Join(' ', words.Take(15)).TrimEnd(',', ';', '.')} ...\")";
+        });
+
     /// <summary>Search queries for one gap: the missing requirement and the clause words it comes from.</summary>
     public static IReadOnlyList<string> QueriesFor(Gap gap) =>
         new[] { gap.Requirement, gap.ClauseWords }.Where(q => !string.IsNullOrWhiteSpace(q)).Select(q => q!).Distinct().ToList();

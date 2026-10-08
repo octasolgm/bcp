@@ -122,6 +122,7 @@ Tasks
 
 - Browser console report for the V5 analysis page: copy(bcpReport('3.5')) gives one plain-text report of every step for a clause (retrieval time, parts searched, passages selected, prompt versions, AI answers, gap checks, saved result); add , true for full prompts and context
 - Prompt v11 checked rule by rule against the expected results for 3.3, 3.5 and 3.6 before any paid run; found and fixed a conflict that would have required evidence per named party on 3.3; a v11 row from the first push is refreshed at startup unless an admin edited it
+- First 3.5 run on v5 + prompt v11: partial, 72%; definitions of funds and proceeds gap correct; timeframe gap borderline (no document states it, Implementation Manual p.22 / p.24 apply it in practice), waiting for the console report
 Bug fixes
 - Clause split (v3): clause 3.5 lost its last 2 parts (incl. "size / timeframe / nature of funds irrelevant", "independent offence", "no proof of predicate offence") and repeated its intro; now 15 parts, nothing dropped
 - Step 5/6 (v3): sections found only by keyword search were almost always dropped by the 0.4/0.6 fusion maths; now kept
@@ -134,6 +135,9 @@ Bug fixes
 - Prompt v10 judged clause 3.5 compliant: it let typologies cover the "funds" and "proceeds" definitions (no internal document defines them) and marked "size, timeframe and nature of funds irrelevant" covered on evidence for the amount only; fixed in prompt v11
 - Two analyses reaching the same document at once could both write its search passages, doubling them; builds are now one at a time per document and a doubled set is rebuilt automatically
 
+- Gap report: when the AI numbered gaps by requirement ([2], [4]) the actions attached to the wrong gap (gap 1 got a generic action, gap 2 got gap 1's action, one action lost); gaps and actions are now renumbered together on V5 runs
+- Gap report: gaps rated "Materiality: low" by the AI showed as Medium risk; the AI's rating now sets the gap risk
+- Gap lines quoting a long passage of the clause are cut to the first 15 words
 Investigated, follow up pending
 - False gaps on 3.3 / 3.5 traced to four causes: (1) Step 2 splitter keeps only 8 parts, so on 3.5 the "size / timeframe / nature of funds irrelevant", "independent offence" and "no proof of predicate offence" paragraph is never searched (verified by simulating the splitter on the clause text); (2) weak retrieval: bge-micro-v2 embeddings, sections cut at 512 tokens, whole clause as query, no stemming, wrong seed synonyms, harvested acronyms live without review; (3) up to 60 whole sections (150k-210k chars) in score order instead of evidence per requirement; (4) the judge re-decomposes the clause every run and nothing checks gaps against the clause text or the full corpus
 - The 3.3 action text "define the escalation path and reporting deadline, and evidence the first reporting cycle" / "handled within the stated deadline" is the demo template from action-plan-seed.ts, seeded on that run before the 05 Oct switch to AI actions; real-account draft action plans with template text need reseeding

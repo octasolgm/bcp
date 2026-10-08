@@ -887,6 +887,7 @@ public class NdRegulAnalysisProcessor(
     private async Task<RegulJudgmentResult> ExecuteForwardJudgmentAsync(ForwardJudgmentPrep prep, CancellationToken ct)
     {
         var judgment = await ExecuteForwardJudgmentCoreAsync(prep, ct);
+        if (prep.IsHybridEngine) judgment = NdRegulGapVerifier.NormalizeGapNumbering(judgment);
         return prep.GapCheck == null || !NdRegulJudgmentPostProcessor.IsGapStatus(judgment.OverallStatus)
             ? judgment
             : await VerifyGapsAsync(prep, prep.GapCheck, judgment, ct);

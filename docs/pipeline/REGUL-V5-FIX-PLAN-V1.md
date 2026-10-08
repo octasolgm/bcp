@@ -305,7 +305,7 @@ Expected at Checkpoint B:
 | Clause | Expected result |
 |---|---|
 | 3.3 | Compliant; evidence AML Manual p.42 and p.14 |
-| 3.5 | Partial, one low-risk gap: adopt the AML-CFT Law definitions of funds and proceeds; asset scope, timeframe and nature of funds covered (p.5, p.22, p.24, p.31, p.58-62) |
+| 3.5 | Partial, one low-risk gap: adopt the AML-CFT Law definitions of funds and proceeds; asset scope and nature of funds covered (p.5, p.31, p.58-62). Timeframe (corrected 08 Oct after the first v11 run): no document states it is irrelevant, so either covered by practice with a quote from Implementation Manual p.22 / p.24, or a low gap that cites p.22 as partly addressed |
 | 3.6 | Partial, one low-risk gap: define predicate offence (felony / misdemeanour, dual criminality); CandNM p.2 cited for inside / outside the UAE |
 
 ---
