@@ -14,6 +14,7 @@ Related documents (all in `docs/pipeline/`):
 | `REGUL-V5-STEPS-VERSIONS-COSTS.md` | Every step from upload to finalize: what it does, version in use, free or paid, cost |
 | `REGUL-V5-FIX-PLAN.md` | Main fix plan (22 points, phases P0-P3) |
 | `REGUL-V5-FIX-PLAN-V1.md` | Accuracy plan from the audit of the first v3 run |
+| `REGUL-V5-PLAN-V2.md` | Next tasks (1-12) after the 3.5 runs: page references, search, answer keys, requirement-based judgment (pipeline v6 / prompt v12), finalize |
 
 Settings that decide how an analysis runs (Admin > Analysis prompts, `/nd/admin/prompts`):
 
@@ -465,6 +466,11 @@ failures as before this work.
 ---
 
 ## 5. Pending tasks
+
+The next development tasks are planned in `REGUL-V5-PLAN-V2.md` (tasks 1-12, with your answers). Recorded decisions
+(09 Oct): page references fix, keyword word forms and bank self-names approved; the duplicate document is not handled
+in code (the same file was selected twice under two names; select it once); the regulation clause is never summarised
+or reworded anywhere; tasks 4-6 and 8-11 wait for your OK after the explanations in Plan V2.
 
 ### A. Your tests (no code)
 

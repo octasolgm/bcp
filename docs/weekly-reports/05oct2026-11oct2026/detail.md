@@ -157,3 +157,7 @@ The latest test of the money laundering clause gave the expected result: partial
 
 The step-by-step report of the latest test showed three further improvements, now made: when policy text partly addresses a gap (for example the guidance on reviewing a longer period of transactions for the timeframe point), the gap now shows that text instead of ignoring it; the search is faster with the stronger search model; and two incorrect abbreviation entries no longer distort the search.
 
+Next round of improvements planned
+
+The latest money laundering result was checked line by line against the policy documents: the verdict, the covered points and the three gaps are correct. One display issue was found: some quotes in the policy extract showed the page of the next quote, and the last quote showed no page. A plan for the next round is ready and partly approved. It fixes the page shown next to each quote, makes the search recognise different forms of the same word and the bank's own name for itself, adds saved answer keys so every change is scored automatically on test clauses before it reaches you, and moves the review to a fixed list of each clause's requirements, written in the regulation's own words, with the evidence for each requirement shown next to it. The regulation text itself is never summarised or reworded.
+

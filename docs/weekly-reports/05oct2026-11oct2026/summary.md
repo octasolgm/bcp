@@ -162,3 +162,13 @@ Investigated, follow up pending
 - Measured offline on the 5 PDFs: passages max 271 words, nothing lost; keyword search alone now selects 7 of the 9 previously missed passages (AML p.5, p.14, p.31, p.62, Implementation p.22, CandNM p.2, AML p.42); new tables and vector column tested on PostgreSQL 16 + pgvector; 19 new API unit tests, full suite 305 pass with the same 24 old failures; web build passes
 - Azure DI parse cost is recorded at $0.0015/page (Read model price); V5 uses the Layout model, list price about $0.01/page, so the usage log likely understates parse cost 6-7x; to confirm against the Azure invoice before changing the constant
 - Found while planning the no-limit change: Step 5/6 fusion maths drops almost every section found only by keyword search (max score 0.4 against a 0.3-0.5 cutoff) while every embedding hit passes, so the 60-section cap is what bounds the context today; removing the cap alone would send ~120-300 sections per clause, so it is planned together with a relevance cutoff for embeddings (fix plan points 2 and 3)
+
+09 Oct 2026
+
+Tasks
+- Review of the latest 3.5 result against the PDFs: status, covered points and gaps right; page references shifted next to the wrong quote found (cause: repeated pages removed from the list, then paired by position)
+- Plan V2 written (docs/pipeline/REGUL-V5-PLAN-V2.md): 12 tasks with problem, change, place, cost and effort; page reference fix, keyword word forms and bank self-names approved; answer keys, saved requirement list per clause, evidence per requirement, per-requirement judgment as pipeline v6 / prompt v12, finalize tasks explained and waiting for approval
+- Decisions: the duplicate manual (same file under two names) is selected once instead of handled in code; the regulation clause is never summarised or reworded
+
+Bug fixes
+- None today (plan only)
