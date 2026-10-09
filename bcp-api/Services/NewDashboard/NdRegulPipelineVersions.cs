@@ -15,6 +15,7 @@ public static class NdRegulPipelineVersions
     public const int V3RelevanceSelection = 3;
     public const int V4Passages = 4;
     public const int V5GapVerification = 5;
+    public const int V6RequirementJudgment = 6;
 
     /// <summary>Used when no admin choice is stored.</summary>
     public const int Default = V2ExpandedWording;
@@ -40,6 +41,10 @@ public static class NdRegulPipelineVersions
             "v4, plus: before a gap is saved, its requirement is searched again across every passage of every selected "
             + "document and the AI is asked one short question - does any of these passages cover it? A gap with verified "
             + "covering text is turned into a covered element with that evidence (one small AI call per gap)."),
+        new(V6RequirementJudgment, "v6 - v5 plus word roots and institution names (in progress)",
+            "v5, plus: keyword search matches word forms (report / reported / reporting) and ignores words found in most "
+            + "passages; being extended (Plan V2) with the bank's own name for itself, a saved requirement list per clause, "
+            + "evidence per requirement and a per-requirement judgment."),
     ];
 
     public static bool IsKnown(int version) => All.Any(v => v.Version == version);

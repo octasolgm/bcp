@@ -144,6 +144,43 @@ public class NdRegulPipelineV4Tests
     }
 
     [Theory]
+    [InlineData("report", "reported", "reporting", "reports")]
+    [InlineData("suspicion", "suspicious", "suspicions", "suspicion")]
+    [InlineData("transaction", "transactions", "transaction", "transactions")]
+    [InlineData("proceeds", "proceed", "proceeded", "proceeding")]
+    [InlineData("policy", "policies", "policy", "policies")]
+    [InlineData("business", "businesses", "business", "businesses")]
+    [InlineData("process", "processes", "processing", "processed")]
+    [InlineData("commit", "committed", "committing", "commits")]
+    public void Word_forms_share_one_root(string a, string b, string c, string d)
+    {
+        var root = EnglishStemmer.Stem(a);
+        Assert.All(new[] { b, c, d }, w => Assert.Equal(root, EnglishStemmer.Stem(w)));
+    }
+
+    [Theory]
+    [InlineData("str")]
+    [InlineData("aml")]
+    [InlineData("uae")]
+    [InlineData("need")]
+    public void Short_words_and_non_suffixes_stay(string w) => Assert.Equal(w, EnglishStemmer.Stem(w));
+
+    [Fact]
+    public void Stemmed_keyword_search_matches_other_word_forms_and_v5_does_not()
+    {
+        var id = Guid.NewGuid();
+        var docs = new List<(Guid, string)>
+        {
+            (id, "All suspicious transactions shall be reported to the FIU."),
+            (Guid.NewGuid(), "Customer due diligence measures apply at onboarding."),
+            (Guid.NewGuid(), "Records are kept for five years."),
+        };
+        const string query = "report suspicion of a transaction";
+        Assert.Contains(Bm25Scorer.Score(Bm25Scorer.BuildCorpus(docs, stem: true), query), r => r.SectionId == id);
+        Assert.DoesNotContain(Bm25Scorer.Score(Bm25Scorer.BuildCorpus(docs), query), r => r.SectionId == id);
+    }
+
+    [Theory]
     [InlineData("AML", "Anti-Money Laundering", true)]
     [InlineData("CFT", "Combating the Financing of Terrorism", true)]
     [InlineData("STR", "suspicious transaction report", true)]

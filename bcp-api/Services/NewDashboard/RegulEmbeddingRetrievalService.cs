@@ -587,7 +587,8 @@ public sealed class RegulEmbeddingRetrievalService(
             .ToDictionaryAsync(d => d.Id, d => (string?)(d.Title ?? d.OriginalFileName), ct);
 
         if (pipelineVersion >= NdRegulPipelineVersions.V4Passages)
-            return await LoadPassageCorpusAsync(extractionIds, docNameById, extractions.ToDictionary(e => e.Id, e => e.StoredDocumentId), ct);
+            return await LoadPassageCorpusAsync(extractionIds, docNameById, extractions.ToDictionary(e => e.Id, e => e.StoredDocumentId), ct,
+                stemKeywords: pipelineVersion >= NdRegulPipelineVersions.V6RequirementJudgment);
 
         var sections = await db.NdLocalDocumentExtractionSections
             .AsNoTracking()
@@ -613,7 +614,8 @@ public sealed class RegulEmbeddingRetrievalService(
         List<Guid> extractionIds,
         Dictionary<Guid, string?> docNameById,
         Dictionary<Guid, Guid> storedDocIdByExtractionId,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool stemKeywords = false)
     {
         foreach (var extractionId in extractionIds)
             await passageIndex.EnsureCurrentAsync(extractionId, ct);
@@ -640,7 +642,7 @@ public sealed class RegulEmbeddingRetrievalService(
         return new LoadedCorpus(
             extractionIds,
             units,
-            Bm25Scorer.BuildCorpus(units.Values.Select(u => (u.Id, u.ClauseText)).ToList()),
+            Bm25Scorer.BuildCorpus(units.Values.Select(u => (u.Id, u.ClauseText)).ToList(), stemKeywords),
             docNameById,
             storedDocIdByExtractionId,
             vectors);

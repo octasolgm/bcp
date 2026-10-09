@@ -65,6 +65,7 @@ or document, no code.
 | T29 | Steps 1-6 took 33 s with Azure (one call per search text) | Bug | Done | To confirm | this commit |
 | T30 | Wrong acronym pairs produced nonsense search wording | Bug | Done (v4 / v5) | To confirm | this commit |
 | T31 | Plan V2 task 1: page reference next to the wrong quote | Bug | Done (all pipelines) | To confirm on the next run | branch feature/regul-plan-v2 |
+| T32 | Plan V2 task 2: keyword search understands word forms; pipeline v6 added | Bug | Done (v6 only) | To confirm on a v6 run | branch feature/regul-plan-v2 |
 
 ---
 
@@ -441,6 +442,21 @@ or document, no code.
   `SplitReferenceLines`; `NdRegulGapVerifier.Apply`.
 - **Verified:** 2 unit tests (repeats + missing page; gap check alignment); suite 334 pass, same 21 old failures.
 - **Status:** done; applies to new results on every pipeline (display bug).
+
+### T32 - Keyword search understands word forms; pipeline v6 (Plan V2 task 2, Bug)
+
+- **Problem:** keyword search compared exact words: "report" did not match "reported" / "reporting", "suspicion" did
+  not match "suspicious".
+- **Fix:** new **pipeline v6** (Admin > Analysis prompts, "v6 - v5 plus word roots and institution names (in
+  progress)"); on v6 both the policy passages and the clause wording are reduced to word roots before keyword scoring
+  (one suffix per word, roots of at least 3 letters, words of 3 letters or fewer such as STR / AML unchanged), and a
+  query word found in more than 60% of the passages is ignored. v1-v5 unchanged.
+- **Where:** `EnglishStemmer` (new), `Bm25Scorer` (stemmed mode, `Corpus.Stemmed`), `RegulEmbeddingRetrievalService`
+  (`LoadPassageCorpusAsync` stems on v6), `NdRegulPipelineVersions.V6RequirementJudgment`.
+- **Verified:** 13 unit tests (report / reported / reporting / reports, suspicion / suspicious, proceeds / proceeded,
+  policies / policy, business / businesses, committed / commit, short words unchanged; stemmed search finds "shall be
+  reported" for "report", v5 does not); suite 347 pass, same 21 old failures.
+- **Status:** done; v6 = v5 + this for now (tasks 3, 5-7 extend it).
 
 ---
 

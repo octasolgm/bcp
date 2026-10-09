@@ -22,11 +22,17 @@ public static partial class Bm25Scorer
 
     public sealed record CorpusDoc(Guid SectionId, IReadOnlyDictionary<string, int> TermFreq, int Length);
 
-    public sealed record Corpus(IReadOnlyList<CorpusDoc> Docs, IReadOnlyDictionary<string, int> DocFreq, double AvgDocLength);
+    /// <summary><paramref name="Stemmed"/> (pipeline v6): words reduced to their root on both sides (see
+    /// <see cref="EnglishStemmer"/>), and query words found in more than <see cref="CommonWordShare"/> of the documents
+    /// are ignored.</summary>
+    public sealed record Corpus(IReadOnlyList<CorpusDoc> Docs, IReadOnlyDictionary<string, int> DocFreq, double AvgDocLength, bool Stemmed = false);
+
+    /// <summary>Stemmed mode only: a query word present in more than this share of the documents carries no signal.</summary>
+    public const double CommonWordShare = 0.6;
 
     /// <summary>Builds the term-frequency corpus once per run — reused across every clause's
     /// query in that run instead of re-tokenizing the same sections per clause.</summary>
-    public static Corpus BuildCorpus(IReadOnlyList<(Guid SectionId, string Text)> sections)
+    public static Corpus BuildCorpus(IReadOnlyList<(Guid SectionId, string Text)> sections, bool stem = false)
     {
         var docs = new List<CorpusDoc>();
         var docFreq = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -34,7 +40,7 @@ public static partial class Bm25Scorer
 
         foreach (var (id, text) in sections)
         {
-            var tokens = Tokenize(text);
+            var tokens = Tokenize(text, stem);
             if (tokens.Count == 0) continue;
 
             var tf = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -48,17 +54,19 @@ public static partial class Bm25Scorer
         }
 
         var avgLen = docs.Count == 0 ? 0 : (double)totalLength / docs.Count;
-        return new Corpus(docs, docFreq, avgLen);
+        return new Corpus(docs, docFreq, avgLen, stem);
     }
 
     /// <summary>Scores every corpus section against a query, BM25-ranked descending. Sections
     /// scoring 0 (no query term present at all) are dropped — a non-match, not a weak match.</summary>
     public static IReadOnlyList<(Guid SectionId, double Score)> Score(Corpus corpus, string query)
     {
-        var queryTerms = Tokenize(query).Distinct(StringComparer.Ordinal).ToList();
+        var queryTerms = Tokenize(query, corpus.Stemmed).Distinct(StringComparer.Ordinal).ToList();
         if (queryTerms.Count == 0 || corpus.Docs.Count == 0) return [];
 
         var n = corpus.Docs.Count;
+        if (corpus.Stemmed)
+            queryTerms = queryTerms.Where(t => corpus.DocFreq.GetValueOrDefault(t) <= n * CommonWordShare).ToList();
         var results = new List<(Guid, double)>();
         foreach (var doc in corpus.Docs)
         {
@@ -103,9 +111,10 @@ public static partial class Bm25Scorer
     [GeneratedRegex(@"[a-z0-9]{2,}")]
     private static partial Regex Token();
 
-    private static List<string> Tokenize(string text) =>
+    private static List<string> Tokenize(string text, bool stem = false) =>
         Token().Matches(text.ToLowerInvariant())
             .Select(m => m.Value)
             .Where(t => !StopWords.Contains(t))
+            .Select(t => stem ? EnglishStemmer.Stem(t) : t)
             .ToList();
 }
