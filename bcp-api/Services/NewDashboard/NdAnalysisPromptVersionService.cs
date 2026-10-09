@@ -705,14 +705,35 @@ public class NdAnalysisPromptVersionService(AppDbContext db)
 
         ValidatePromptText(row.PromptKey, row.PromptText);
 
-        var siblings = await db.NdAnalysisPromptVersions
-            .Where(v => v.PromptKey == row.PromptKey)
-            .ToListAsync(ct);
-
-        foreach (var sibling in siblings)
-            sibling.IsCurrent = sibling.Id == versionId;
-
-        await db.SaveChangesAsync(ct);
+        await SwitchCurrentAsync(
+            db.NdAnalysisPromptVersions.Where(v => v.PromptKey == row.PromptKey), row, ct);
         return row;
+    }
+
+    /// <summary>
+    /// Makes <paramref name="row"/> the current version among <paramref name="siblings"/>. The old current
+    /// flag is cleared before the new one is set, in one transaction, because the partial unique index
+    /// idx_nd_prompt_versions_current is checked per row and a single batched save can set the new flag first.
+    /// </summary>
+    public async Task SwitchCurrentAsync(
+        IQueryable<NdAnalysisPromptVersion> siblings,
+        NdAnalysisPromptVersion row,
+        CancellationToken ct = default)
+    {
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await siblings
+                .Where(v => v.IsCurrent && v.Id != row.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.IsCurrent, false), ct);
+            await db.NdAnalysisPromptVersions
+                .Where(v => v.Id == row.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.IsCurrent, true), ct);
+            await tx.CommitAsync(ct);
+        });
+
+        row.IsCurrent = true;
+        db.Entry(row).Property(v => v.IsCurrent).IsModified = false;
     }
 }

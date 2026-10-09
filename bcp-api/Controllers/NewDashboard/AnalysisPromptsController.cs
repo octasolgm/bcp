@@ -262,12 +262,11 @@ public class AnalysisPromptsController(
             if (demoCtx.Enabled)
             {
                 NdAnalysisPromptVersionService.ValidatePromptText(row.PromptKey, row.PromptText);
-                var siblings = await NdDemoDataFilters.ApplyToPromptVersions(
-                        db.NdAnalysisPromptVersions.Where(v => v.PromptKey == row.PromptKey), demoCtx)
-                    .ToListAsync(ct);
-                foreach (var sibling in siblings)
-                    sibling.IsCurrent = sibling.Id == versionId;
-                await db.SaveChangesAsync(ct);
+                await promptVersions.SwitchCurrentAsync(
+                    NdDemoDataFilters.ApplyToPromptVersions(
+                        db.NdAnalysisPromptVersions.Where(v => v.PromptKey == row.PromptKey), demoCtx),
+                    row,
+                    ct);
             }
             else
             {
