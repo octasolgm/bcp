@@ -170,5 +170,6 @@ Tasks
 - Plan V2 written (docs/pipeline/REGUL-V5-PLAN-V2.md): 12 tasks with problem, change, place, cost and effort; page reference fix, keyword word forms and bank self-names approved; answer keys, saved requirement list per clause, evidence per requirement, per-requirement judgment as pipeline v6 / prompt v12, finalize tasks explained and waiting for approval
 - Decisions: the duplicate manual (same file under two names) is selected once instead of handled in code; the regulation clause is never summarised or reworded
 
+- Plan V2 implementation guide (docs/pipeline/REGUL-V5-PLAN-V2-IMPLEMENTATION.md): ground rules, build and test commands with the 21-test baseline, code map, and one ready-to-use prompt per task for the next development session
 Bug fixes
 - None today (plan only)

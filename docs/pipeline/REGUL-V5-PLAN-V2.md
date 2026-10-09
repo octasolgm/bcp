@@ -2,6 +2,8 @@
 
 The next tasks for the V5 analysis (`/nd/analyse-regul-full-v2`), in simple words: what is wrong today, what changes,
 where it changes, and which problem it solves. Work already done is in `REGUL-V5-WORK-LOG.md` (tasks T1-T30).
+How to build it (commands, code map, copy-paste prompts per task for a new Claude session):
+`REGUL-V5-PLAN-V2-IMPLEMENTATION.md`.
 
 ---
 

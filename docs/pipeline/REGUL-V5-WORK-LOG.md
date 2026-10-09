@@ -15,6 +15,7 @@ Related documents (all in `docs/pipeline/`):
 | `REGUL-V5-FIX-PLAN.md` | Main fix plan (22 points, phases P0-P3) |
 | `REGUL-V5-FIX-PLAN-V1.md` | Accuracy plan from the audit of the first v3 run |
 | `REGUL-V5-PLAN-V2.md` | Next tasks (1-12) after the 3.5 runs: page references, search, answer keys, requirement-based judgment (pipeline v6 / prompt v12), finalize |
+| `REGUL-V5-PLAN-V2-IMPLEMENTATION.md` | How to build Plan V2 in a new session: rules, commands, test baseline, code map, one copy-paste prompt per task |
 
 Settings that decide how an analysis runs (Admin > Analysis prompts, `/nd/admin/prompts`):
 
