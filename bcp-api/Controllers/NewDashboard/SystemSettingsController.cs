@@ -89,6 +89,31 @@ public class SystemSettingsController(
 
     public sealed record RetrievalPromptCacheRequest(bool Enabled);
 
+    /// <summary>Pipeline v5+: skip the gap re-check for low-materiality gaps (on by default).</summary>
+    [HttpGet("regul-gap-check-skip-low")]
+    public async Task<IActionResult> GetRegulGapCheckSkipLow(CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+        return Ok(new { success = true, data = new { enabled = await regulLlmSettings.IsGapCheckSkipLowEnabledAsync(ct) } });
+    }
+
+    [HttpPut("regul-gap-check-skip-low")]
+    public async Task<IActionResult> UpdateRegulGapCheckSkipLow([FromBody] RetrievalPromptCacheRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+        var enabled = await regulLlmSettings.SetGapCheckSkipLowAsync(body.Enabled, profile.Id, ct);
+        return Ok(new
+        {
+            success = true,
+            data = new { enabled },
+            message = enabled
+                ? "Low-risk gaps are no longer re-checked (saves one AI call per low gap)."
+                : "Every gap is re-checked again.",
+        });
+    }
+
     [HttpGet("regul-pipeline-version")]
     public async Task<IActionResult> GetRegulPipelineVersion(CancellationToken ct)
     {

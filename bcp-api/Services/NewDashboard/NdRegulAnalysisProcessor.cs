@@ -1058,8 +1058,25 @@ public class NdRegulAnalysisProcessor(
         if (gaps.Count == 0) return judgment;
 
         var outcomes = new List<NdRegulGapVerifier.Outcome>();
+        var toCheck = NdRegulGapVerifier.GapsToCheck(gaps, await llmSettings.IsGapCheckSkipLowEnabledAsync(ct));
         foreach (var gap in gaps)
         {
+            if (!toCheck.Contains(gap))
+            {
+                // Admin setting "skip low gaps": no AI call; the gap stays as the judgment reported it.
+                prep.Traces.Add(new NdRegulClauseTrace
+                {
+                    AnalysisRunId = prep.Finding.AnalysisRunId,
+                    FindingId = prep.Finding.Id,
+                    ClauseNo = prep.Finding.ClauseNo,
+                    Step = RegulClauseTraceSteps.GapVerify,
+                    Notes = $"gap [{gap.Number}]: low materiality, re-check skipped (Admin setting); gap kept",
+                    TenantId = prep.Finding.TenantId,
+                });
+                outcomes.Add(new NdRegulGapVerifier.Outcome(gap, "not_covered", null, "", "re-check skipped (low materiality)"));
+                continue;
+            }
+
             var evidence = await embeddingRetrieval.SearchEvidenceAsync(session, NdRegulGapVerifier.QueriesFor(gap), ct);
             var excerpts = evidence
                 .Select((e, i) => new NdRegulGapVerifier.Excerpt(

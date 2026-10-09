@@ -146,6 +146,46 @@ public class RegulWorkflowLlmSettingsService(
             _ => null,
         };
 
+    private const string GapCheckSkipLowSettingKey = "regul_gap_check_skip_low";
+    private const string GapCheckSkipLowMemoKey = "regul_gap_check_skip_low_enabled";
+
+    /// <summary>Pipeline v5+: skip the gap re-check (one AI call per gap) for gaps the judgment rated "Materiality:
+    /// low". On by default (no stored row = on); off = every gap is re-checked, as before.</summary>
+    public async Task<bool> IsGapCheckSkipLowEnabledAsync(CancellationToken ct = default)
+    {
+        if (cache.TryGetValue(GapCheckSkipLowMemoKey, out bool cached)) return cached;
+        var row = await db.NdSystemSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == GapCheckSkipLowSettingKey, ct);
+        var enabled = row == null || !bool.TryParse(row.ValueJson, out var v) || v;
+        cache.Set(GapCheckSkipLowMemoKey, enabled, CacheTtl);
+        return enabled;
+    }
+
+    public async Task<bool> SetGapCheckSkipLowAsync(bool enabled, Guid updatedBy, CancellationToken ct = default)
+    {
+        var row = await db.NdSystemSettings.FirstOrDefaultAsync(s => s.Key == GapCheckSkipLowSettingKey, ct);
+        var json = enabled ? "true" : "false";
+        if (row == null)
+        {
+            db.NdSystemSettings.Add(new NdSystemSetting
+            {
+                Key = GapCheckSkipLowSettingKey,
+                ValueJson = json,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                UpdatedBy = updatedBy,
+            });
+        }
+        else
+        {
+            row.ValueJson = json;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+            row.UpdatedBy = updatedBy;
+        }
+        await db.SaveChangesAsync(ct);
+        cache.Remove(GapCheckSkipLowMemoKey);
+        return enabled;
+    }
+
     private const string PipelineVersionSettingKey = "regul_pipeline_version";
     private const string PipelineVersionMemoKey = "regul_pipeline_version_current";
 

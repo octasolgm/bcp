@@ -206,6 +206,29 @@ public class NdRegulGapNumberingTests
     }
 }
 
+public class NdRegulGapCheckSkipLowTests
+{
+    private const string Gaps =
+        "[1] Definition of funds - Missing: no definition - Materiality: low\n" +
+        "[2] Report to the FIU - Missing: no reporting duty - Materiality: high\n" +
+        "[3] Timeframe irrelevant - Missing: not stated - Materiality: Low\n" +
+        "[4] Training - Missing: partly - Materiality: medium";
+
+    [Fact]
+    public void Setting_on_checks_only_medium_and_high_gaps()
+    {
+        var checkedGaps = NdRegulGapVerifier.GapsToCheck(NdRegulGapVerifier.ParseGaps(Gaps), skipLow: true);
+        Assert.Equal([2, 4], checkedGaps.Select(g => g.Number));
+    }
+
+    [Fact]
+    public void Setting_off_checks_every_gap_as_before()
+    {
+        var gaps = NdRegulGapVerifier.ParseGaps(Gaps);
+        Assert.Equal([1, 2, 3, 4], NdRegulGapVerifier.GapsToCheck(gaps, skipLow: false).Select(g => g.Number));
+    }
+}
+
 public class NdRegulReferencePerQuoteTests
 {
     [Fact]

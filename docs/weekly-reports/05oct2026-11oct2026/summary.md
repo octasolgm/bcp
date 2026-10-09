@@ -172,6 +172,7 @@ Tasks
 
 - Plan V2 implementation guide (docs/pipeline/REGUL-V5-PLAN-V2-IMPLEMENTATION.md): ground rules, build and test commands with the 21-test baseline, code map, and one ready-to-use prompt per task for the next development session
 - Plan V2 tasks 1-3 built on branch feature/regul-plan-v2: pipeline v6 added (v5 plus word roots in keyword search and the bank's own name for itself); 15 new unit tests, suite 349 pass with the same 21 old failures; tasks 4-12 next (implementation guide updated with progress)
+- Admin setting "Gap re-check: skip low-risk gaps" (on by default): low-risk gaps keep their result without an extra AI call, medium and high gaps are re-checked as before; 3.5 cost per clause about $0.15 to $0.08; off = every gap re-checked
 Bug fixes
 - Page references next to the wrong quote in the policy extract (repeated pages removed and unfound pages skipped, then paired by position); now one page per quote, "page not found" when unknown
 - Keyword search treated report / reported / reporting as different words (fixed on pipeline v6)

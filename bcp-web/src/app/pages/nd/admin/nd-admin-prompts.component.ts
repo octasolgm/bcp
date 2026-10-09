@@ -92,6 +92,28 @@ export class NdAdminPromptsComponent implements OnInit {
     this.pipelineMessage = `New analyses and re-runs now use pipeline v${res.data.current}.`;
   }
 
+  gapSkipLowEnabled: boolean | null = null;
+  gapSkipLowSaving = false;
+  gapSkipLowMessage = '';
+
+  async loadGapSkipLow(): Promise<void> {
+    const res = await this.api.getRegulGapCheckSkipLow();
+    if (res.success && res.data) this.gapSkipLowEnabled = res.data.enabled;
+  }
+
+  async saveGapSkipLow(enabled: boolean): Promise<void> {
+    this.gapSkipLowSaving = true;
+    this.gapSkipLowMessage = '';
+    const res = await this.api.updateRegulGapCheckSkipLow(enabled);
+    this.gapSkipLowSaving = false;
+    if (!res.success || !res.data) {
+      this.gapSkipLowMessage = res.message ?? 'Could not save the setting. Please try again.';
+      return;
+    }
+    this.gapSkipLowEnabled = res.data.enabled;
+    this.gapSkipLowMessage = res.message ?? 'Saved.';
+  }
+
   embeddingSetting: NdEmbeddingProviderSetting | null = null;
   embeddingSelected = 'local';
   embeddingSaving = false;
@@ -157,7 +179,7 @@ export class NdAdminPromptsComponent implements OnInit {
       if (!Number.isNaN(n)) this.versionsPanelPct = Math.min(45, Math.max(18, n));
     }
     await this.auth.refreshProfile();
-    await Promise.all([this.load(), this.loadLlmProviders(), this.loadRetrievalCache(), this.loadPipelineVersion(), this.loadEmbeddingProvider()]);
+    await Promise.all([this.load(), this.loadLlmProviders(), this.loadRetrievalCache(), this.loadPipelineVersion(), this.loadEmbeddingProvider(), this.loadGapSkipLow()]);
   }
 
   async loadLlmProviders(): Promise<void> {

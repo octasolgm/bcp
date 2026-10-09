@@ -105,7 +105,9 @@ export function logClauseTraces(clauseNo: string, traces: NdClauseTrace[]): void
   traces.forEach((t) => known.set(t.id, t));
   reportTraces.set(clauseNo, known);
   showReportHint();
-  const calls = traces.filter((t) => t.step === 'llm_call' || t.step === 'evidence_check' || t.step === 'gap_verify');
+  const calls = traces.filter(
+    (t) => t.step === 'llm_call' || t.step === 'evidence_check' || (t.step === 'gap_verify' && !!t.queryText),
+  );
   const failed = calls.some((t) => !!t.error);
   const sources = [...new Set(traces.map((t) => SOURCE_LABELS[t.source] ?? t.source))].join(', ');
   console.groupCollapsed(
@@ -278,6 +280,10 @@ function traceLines(traces: NdClauseTrace[], full: boolean): string[] {
           if (t.clauseContext) out.push('Supporting regulatory context:', t.clauseContext);
           out.push('Context text:', t.contextText ?? '');
         }
+        return;
+      }
+      if (t.step === 'gap_verify' && !t.queryText) {
+        out.push(`Gap check not run: ${t.notes ?? ''}`);
         return;
       }
       if (t.step === 'postprocess') {

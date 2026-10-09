@@ -165,3 +165,7 @@ First improvements of the new plan are built
 
 Each quote in the policy extract now shows its own page; previously, when two quotes came from the same page, the pages of the following quotes could shift by one. A new analysis setting (version 6) adds two search improvements: different forms of the same word (report, reported, reporting) now match, and when the regulation speaks of "financial institutions", the search also uses the name the bank uses for itself in its own policies. The remaining steps of the plan, including saved answer keys for automatic scoring and a fixed list of each clause's requirements, are next.
 
+Lower cost per clause
+
+The second check that every reported gap goes through now applies to medium and high risk gaps only, by default. Low-risk gaps, such as a missing definition, keep their result without the extra check, which roughly halves the cost of a clause like the money laundering definition. Administrators can switch the full re-check back on at any time.
+

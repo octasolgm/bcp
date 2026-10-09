@@ -125,6 +125,16 @@ public static partial class NdRegulGapVerifier
             return $"(clause: \"{string.Join(' ', words.Take(15)).TrimEnd(',', ';', '.')} ...\")";
         });
 
+    [GeneratedRegex(@"\bMateriality:\s*low\b", RegexOptions.IgnoreCase)]
+    private static partial Regex LowMateriality();
+
+    /// <summary>True when the judgment rated the gap "Materiality: low" (definitional or wording points).</summary>
+    public static bool IsLowMateriality(Gap gap) => LowMateriality().IsMatch(gap.Line);
+
+    /// <summary>The gaps the re-check sends to the AI: all of them, or (setting on) only medium / high ones.</summary>
+    public static IReadOnlyList<Gap> GapsToCheck(IReadOnlyList<Gap> gaps, bool skipLow) =>
+        skipLow ? gaps.Where(g => !IsLowMateriality(g)).ToList() : gaps;
+
     /// <summary>Search queries for one gap: the missing requirement and the clause words it comes from.</summary>
     public static IReadOnlyList<string> QueriesFor(Gap gap) =>
         new[] { gap.Requirement, gap.ClauseWords }.Where(q => !string.IsNullOrWhiteSpace(q)).Select(q => q!).Distinct().ToList();

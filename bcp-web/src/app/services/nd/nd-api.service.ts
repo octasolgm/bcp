@@ -1127,6 +1127,14 @@ export class NdApiService {
     return this.request<NdEmbeddingProviderSetting>('PUT', '/nd/admin/settings/regul-embedding-provider', { provider });
   }
 
+  getRegulGapCheckSkipLow() {
+    return this.request<{ enabled: boolean }>('GET', '/nd/admin/settings/regul-gap-check-skip-low');
+  }
+
+  updateRegulGapCheckSkipLow(enabled: boolean) {
+    return this.request<{ enabled: boolean }>('PUT', '/nd/admin/settings/regul-gap-check-skip-low', { enabled });
+  }
+
   updateRegulRetrievalPromptCache(enabled: boolean) {
     return this.request<{ enabled: boolean }>('PUT', '/nd/admin/settings/regul-retrieval-prompt-cache', { enabled });
   }

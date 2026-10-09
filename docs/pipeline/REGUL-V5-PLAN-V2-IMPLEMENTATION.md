@@ -18,6 +18,7 @@ Branch: **`feature/regul-plan-v2`** (created from `feature/regul-clause-context-
 | 1 Page reference per quote | **Done** | T31 | All pipelines; new results only |
 | 2 Word roots in keyword search | **Done** | T32 | Adds **pipeline v6** (= v5 + Plan V2 changes) |
 | 3 Bank's own name | **Done** | T33 | **Design changed:** names detected automatically per run from the run's documents (`InstitutionNames`), no table and no admin card; the Task 3 prompt below is superseded |
+| Extra: skip gap re-check for low-risk gaps | **Done** | T34 | Admin setting, on by default; off = as before |
 | 4 Answer keys and scoring | **Next** - confirm with the user first | - | Use the prompt below |
 | 5 Requirement list | To do | - | Prompt below |
 | 6 Evidence per requirement | To do | - | Prompt below |
@@ -25,7 +26,7 @@ Branch: **`feature/regul-plan-v2`** (created from `feature/regul-clause-context-
 | 8-11 Finalize | Waiting for the user's OK | - | Prompts below |
 | 12 Housekeeping | To do | - | Prompt below |
 
-Test baseline after task 3: **370 tests, 349 pass, the same 21 old failures** listed in section 2.
+Test baseline after T34: **372 tests, 351 pass, the same 21 old failures** listed in section 2.
 
 ---
 

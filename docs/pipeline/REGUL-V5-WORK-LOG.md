@@ -67,6 +67,7 @@ or document, no code.
 | T31 | Plan V2 task 1: page reference next to the wrong quote | Bug | Done (all pipelines) | To confirm on the next run | branch feature/regul-plan-v2 |
 | T32 | Plan V2 task 2: keyword search understands word forms; pipeline v6 added | Bug | Done (v6 only) | To confirm on a v6 run | branch feature/regul-plan-v2 |
 | T33 | Plan V2 task 3: the bank's own name for itself | Bug | Done (v6, automatic detection) | To confirm on a v6 run of 3.3 | branch feature/regul-plan-v2 |
+| T34 | Gap re-check costs one AI call per gap: setting to skip low-risk gaps | Feature | Done (on by default) | To confirm | branch feature/regul-plan-v2 |
 
 ---
 
@@ -476,6 +477,22 @@ or document, no code.
 - **Verified:** 2 unit tests (DIFC and UAE found, FIU / CBUAE / Employees not; variants built only for institution
   terms); suite 349 pass, same 21 old failures; web build passes.
 - **Status:** done; confirm with a v6 run of 3.3 (report line "Bank's own names searched ...").
+
+### T34 - Skip the gap re-check for low-risk gaps (Feature)
+
+- **Problem:** on 3.5 the gap re-check made 3 extra AI calls (~$0.07 of ~$0.15 for the clause) and changed nothing:
+  all 3 gaps were low risk and correct.
+- **Fix:** Admin > Analysis prompts > "Gap re-check: skip low-risk gaps" (on by default). On: gaps the judgment rated
+  "Materiality: low" keep their result without the extra AI call; medium and high gaps are re-checked as before. Off:
+  every gap is re-checked exactly as before. Skipped checks show in the report as "Gap check not run: ... skipped"
+  and are not counted as AI calls.
+- **Trade-off:** a false low-risk gap (definition or wording) is not removed automatically; a reviewer dismisses it.
+- **Where:** `RegulWorkflowLlmSettingsService` (`IsGapCheckSkipLowEnabledAsync`, `SetGapCheckSkipLowAsync`),
+  `NdRegulGapVerifier` (`IsLowMateriality`, `GapsToCheck`), `NdRegulAnalysisProcessor.VerifyGapsAsync`,
+  `SystemSettingsController` (`regul-gap-check-skip-low`), admin prompts page, `pipeline-console-log.ts`.
+- **Verified:** 2 unit tests (on: only medium / high checked; off: every gap checked); suite 351 pass, same 21 old
+  failures; web build passes.
+- **Cost:** 3.5 drops from ~$0.15 to ~$0.08 per clause.
 
 ---
 

@@ -357,6 +357,29 @@
               </div>
             </section>
           }
+          @if (gapSkipLowEnabled !== null) {
+            <section class="nd-card cache-card">
+              <div class="cache-card-text">
+                <h2>Gap re-check: skip low-risk gaps (pipeline v5 and v6)</h2>
+                <p class="nd-muted">
+                  On by default. After the judgment, every gap rated medium or high is searched again across all
+                  documents and re-checked by the AI (one small AI call per gap). Low-risk gaps (definitions, wording)
+                  are kept as reported without that extra call. Turn it off to re-check every gap, as before.
+                </p>
+                @if (gapSkipLowMessage) {
+                  <p class="nd-success">{{ gapSkipLowMessage }}</p>
+                }
+              </div>
+              <div class="cache-card-actions">
+                <span class="cache-state" [class.cache-state-on]="gapSkipLowEnabled">
+                  {{ gapSkipLowEnabled ? 'On' : 'Off' }}
+                </span>
+                <button type="button" class="nd-btn-primary" [disabled]="gapSkipLowSaving" (click)="saveGapSkipLow(!gapSkipLowEnabled)">
+                  {{ gapSkipLowSaving ? 'Saving...' : gapSkipLowEnabled ? 'Re-check every gap' : 'Skip low-risk gaps' }}
+                </button>
+              </div>
+            </section>
+          }
           @if (embeddingLoadError && !embeddingSetting) {
             <section class="nd-card cache-card">
               <div class="cache-card-text">
