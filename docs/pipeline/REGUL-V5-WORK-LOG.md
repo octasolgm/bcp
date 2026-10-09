@@ -64,6 +64,7 @@ or document, no code.
 | T28 | Gap check said "not covered" for evidence that partly addresses a gap | Bug | Done | To confirm on the next run | this commit |
 | T29 | Steps 1-6 took 33 s with Azure (one call per search text) | Bug | Done | To confirm | this commit |
 | T30 | Wrong acronym pairs produced nonsense search wording | Bug | Done (v4 / v5) | To confirm | this commit |
+| T31 | Plan V2 task 1: page reference next to the wrong quote | Bug | Done (all pipelines) | To confirm on the next run | branch feature/regul-plan-v2 |
 
 ---
 
@@ -426,6 +427,20 @@ or document, no code.
 - **Where:** `RegulEmbeddingRetrievalService.IsPlausibleAcronymPair`, used in `ExpandAsync`.
 - **Also for you (A7):** deactivate those two entries on the dictionary page so other screens stop showing them.
 - **Status:** done.
+
+### T31 - Page reference next to the wrong quote (Plan V2 task 1, Bug)
+
+- **Problem:** on 3.5 "Purchase of valuable commodities" showed AML p.62 (it is p.58-59), the crypto typology
+  "Implementation section 32, p.3", the last quote no page.
+- **Cause:** the gap report pairs reference line i with quote i; the back end removed repeated pages (`Distinct`) and
+  skipped quotes it could not ground, so later pages moved onto the wrong quotes. The gap check also split references
+  on ";" while the post-processor wrote one per line.
+- **Fix:** exactly one reference line per quote, in quote order, repeats kept, "page not found" for an ungrounded quote;
+  the gap check adds each new quote together with its own page and keeps the lines aligned (newline separated).
+- **Where:** `NdRegulJudgmentPostProcessor.ApplyGroundedDocumentReference`, `JoinReferencesPerQuote`,
+  `SplitReferenceLines`; `NdRegulGapVerifier.Apply`.
+- **Verified:** 2 unit tests (repeats + missing page; gap check alignment); suite 334 pass, same 21 old failures.
+- **Status:** done; applies to new results on every pipeline (display bug).
 
 ---
 

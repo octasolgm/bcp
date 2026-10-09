@@ -206,6 +206,44 @@ public class NdRegulGapNumberingTests
     }
 }
 
+public class NdRegulReferencePerQuoteTests
+{
+    [Fact]
+    public void Each_quote_keeps_its_own_page_line_with_repeats_and_missing_pages()
+    {
+        // 3.5, 08 Oct: two quotes on p.59 were de-duplicated and an ungrounded quote skipped, so the later pages
+        // moved onto the wrong quotes.
+        var text = NdRegulJudgmentPostProcessor.JoinReferencesPerQuote(
+            ["AML Manual, p.59", "AML Manual, p.59", null, "AML Manual, p.62"]);
+        Assert.Equal(
+            ["AML Manual, p.59", "AML Manual, p.59", NdRegulJudgmentPostProcessor.PageNotFoundReference, "AML Manual, p.62"],
+            NdRegulJudgmentPostProcessor.SplitReferenceLines(text));
+        Assert.Equal(["A p.1", "B p.2"], NdRegulJudgmentPostProcessor.SplitReferenceLines("A p.1; B p.2"));
+    }
+
+    [Fact]
+    public void Gap_check_adds_each_new_quote_together_with_its_page()
+    {
+        var gaps = NdRegulGapVerifier.ParseGaps("[1] Gap A - Missing: a - Materiality: low\n[2] Gap B - Missing: b - Materiality: low");
+        var judgment = new RegulJudgmentResult
+        {
+            OverallStatus = "partial",
+            CoveredElements = "[1] X - Covered: [Doc p.1]",
+            PolicyExtract = ["quote one", "quote two"],
+            DocumentReference = "Doc, p.1",
+            GapDescription = "[1] Gap A - Missing: a - Materiality: low\n[2] Gap B - Missing: b - Materiality: low",
+            SuggestedAction = "[1] Fix A\n[2] Fix B",
+        };
+        var e = new NdRegulGapVerifier.Excerpt("E1", "Impl, p.24", "expanding the time period for reviewing alerted transactions");
+
+        var result = NdRegulGapVerifier.Apply(judgment, [new NdRegulGapVerifier.Outcome(gaps[1], "partial", e, "expanding the time period", "")]);
+
+        Assert.Equal(["quote one", "quote two", "expanding the time period"], result.PolicyExtract);
+        Assert.Equal(["Doc, p.1", NdRegulJudgmentPostProcessor.PageNotFoundReference, "Impl, p.24"],
+            NdRegulJudgmentPostProcessor.SplitReferenceLines(result.DocumentReference));
+    }
+}
+
 public class NdRegulPromptV10Tests
 {
     [Fact]

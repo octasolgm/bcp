@@ -158,21 +158,36 @@ public static class NdRegulJudgmentPostProcessor
         if (judgment.PolicyExtract.Count == 0)
             return judgment;
 
-        var refs = new List<string>();
-        foreach (var quote in judgment.PolicyExtract.Where(q => !string.IsNullOrWhiteSpace(q)))
-        {
-            var grounded = GroundQuoteReference(quote, contextChunks, markdownByFile);
-            if (!string.IsNullOrWhiteSpace(grounded))
-                refs.Add(grounded);
-        }
-
-        if (refs.Count == 0)
+        var grounded = judgment.PolicyExtract
+            .Where(q => !string.IsNullOrWhiteSpace(q))
+            .Select(q => GroundQuoteReference(q, contextChunks, markdownByFile))
+            .ToList();
+        if (grounded.All(string.IsNullOrWhiteSpace))
             return judgment;
 
-        judgment.DocumentReference = string.Join(
-            "\n",
-            refs.Distinct(StringComparer.OrdinalIgnoreCase));
+        judgment.DocumentReference = JoinReferencesPerQuote(grounded);
         return judgment;
+    }
+
+    /// <summary>Shown for a quote whose page or section could not be found, so the next quotes keep their own page.</summary>
+    public const string PageNotFoundReference = "page not found";
+
+    /// <summary>
+    /// One reference line per policy_extract quote, in quote order: the gap report pairs line i with quote i. Repeated
+    /// pages are kept (two quotes on p.59 give two "p.59" lines) and an ungrounded quote gets
+    /// <see cref="PageNotFoundReference"/>; removing either shifted every later page onto the wrong quote.
+    /// </summary>
+    public static string JoinReferencesPerQuote(IEnumerable<string?> referencePerQuote) =>
+        string.Join("\n", referencePerQuote.Select(r => string.IsNullOrWhiteSpace(r) ? PageNotFoundReference : r.Trim()));
+
+    /// <summary>Reference lines of a saved result: newline separated (one per quote); an older single line written
+    /// with "; " is split on ';'.</summary>
+    public static List<string> SplitReferenceLines(string? documentReference)
+    {
+        var text = (documentReference ?? "").Replace("\r\n", "\n").Trim();
+        if (text.Length == 0) return [];
+        var lines = text.Contains('\n') ? text.Split('\n') : text.Split(';');
+        return lines.Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
     }
 
     private static string GroundQuoteReference(

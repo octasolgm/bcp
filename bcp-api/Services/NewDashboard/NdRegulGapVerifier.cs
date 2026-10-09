@@ -223,21 +223,24 @@ public static partial class NdRegulGapVerifier
         foreach (var c in covered.Values.OrderBy(c => c.Gap.Number))
             coveredLines.Add($"{c.Gap.Requirement} - Covered: [{c.Evidence!.Label}] (confirmed by the gap check)");
 
-        var references = judgment.DocumentReference
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
-        var quotes = judgment.PolicyExtract.ToList();
+        // Quotes and reference lines stay aligned (line i = page of quote i, see
+        // NdRegulJudgmentPostProcessor.JoinReferencesPerQuote): a new quote is added together with its own page.
+        var quotes = judgment.PolicyExtract.Where(q => !string.IsNullOrWhiteSpace(q)).ToList();
+        var references = NdRegulJudgmentPostProcessor.SplitReferenceLines(judgment.DocumentReference);
+        if (references.Count > quotes.Count) references = references.Take(quotes.Count).ToList();
+        while (references.Count < quotes.Count) references.Add(NdRegulJudgmentPostProcessor.PageNotFoundReference);
         foreach (var o in covered.Values.Concat(partial.Values))
         {
-            if (!references.Contains(o.Evidence!.Label, StringComparer.OrdinalIgnoreCase)) references.Add(o.Evidence.Label);
-            if (!quotes.Contains(o.Quote, StringComparer.Ordinal)) quotes.Add(o.Quote);
+            if (quotes.Contains(o.Quote, StringComparer.Ordinal)) continue;
+            quotes.Add(o.Quote);
+            references.Add(o.Evidence!.Label);
         }
 
         judgment.CoveredElements = coveredLines.Count == 0
             ? "None"
             : string.Join("\n", coveredLines.Select((l, i) => $"[{i + 1}] {l}"));
         judgment.PolicyExtract = quotes;
-        judgment.DocumentReference = string.Join("; ", references);
+        judgment.DocumentReference = string.Join("\n", references);
         judgment.Interpretation = (judgment.Interpretation ?? "").TrimEnd()
             + $"\nGap check: {covered.Count} gap(s) found covered and {partial.Count} partly addressed in the documents after a wider search.";
 
