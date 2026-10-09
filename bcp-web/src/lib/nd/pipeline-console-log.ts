@@ -39,6 +39,7 @@ type Retrieval = {
   fusedMatches?: AnyMatch[];
   elapsedMs?: number | null;
   embeddingModel?: string | null;
+  institutionNames?: string[] | null;
 };
 
 function matchRows(list: AnyMatch[] | undefined, scoreKey: keyof AnyMatch) {
@@ -232,6 +233,7 @@ function retrievalLines(r: Retrieval, full: boolean): string[] {
     `--- Steps 1-6: retrieval (pipeline v${r.pipelineVersion ?? 1}${r.elapsedMs != null ? `, ${r.elapsedMs} ms` : ''}) ---`,
   ];
   if (r.embeddingModel) out.push(`Embedding model: ${r.embeddingModel}`);
+  if (r.institutionNames?.length) out.push(`Bank's own names searched for "financial institution": ${r.institutionNames.join(', ')}`);
   const acr = (r.acronymMatches ?? []).map((m) => `${m.matchedText} -> ${m.addedText}`);
   const syn = (r.synonymMatches ?? []).map((m) => `${m.matchedText} -> ${m.addedText}`);
   out.push(`Step 1 acronyms (${acr.length}): ${acr.join('; ') || 'none'}`);

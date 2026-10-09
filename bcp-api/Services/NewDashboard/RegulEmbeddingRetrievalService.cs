@@ -103,7 +103,9 @@ public sealed class RegulEmbeddingRetrievalService(
         // Time Steps 1-6 took for this clause (not set on records saved before it was added).
         long? ElapsedMs = null,
         // v4+: the embedding model of the passages and queries ("local:bge-micro-v2", "azure-openai:<deployment>").
-        string? EmbeddingModel = null);
+        string? EmbeddingModel = null,
+        // v6: the bank's own names for itself found in the documents and searched in place of "financial institution".
+        IReadOnlyList<string>? InstitutionNames = null);
 
     /// <summary>Same JSON shape as the clause's RetrievalJson, which the pipeline panel reads.</summary>
     public static string SerializePreview(RetrievalPreview preview) =>
@@ -162,7 +164,7 @@ public sealed class RegulEmbeddingRetrievalService(
 
                 var clauseTimer = System.Diagnostics.Stopwatch.StartNew();
                 var preview = await BuildPreviewAsync(corpus, finding.ClauseText, pipelineVersion, ct);
-                preview = preview with { ElapsedMs = clauseTimer.ElapsedMilliseconds, EmbeddingModel = embeddingModel };
+                preview = preview with { ElapsedMs = clauseTimer.ElapsedMilliseconds, EmbeddingModel = embeddingModel, InstitutionNames = corpus.SelfNames };
                 finding.RetrievalJson = JsonSerializer.Serialize(preview, RetrievalJsonOptions);
                 logger.LogInformation(
                     "Regul Steps 1-6 ({Pipeline}) for clause {ClauseNo} in {Ms} ms: step1 acronyms={Acronyms} synonyms={Synonyms} expanded queries={Expanded}; step2 sub-obligations={Subs}; " +
@@ -264,6 +266,7 @@ public sealed class RegulEmbeddingRetrievalService(
         {
             ElapsedMs = timer.ElapsedMilliseconds,
             EmbeddingModel = pipelineVersion >= NdRegulPipelineVersions.V4Passages ? await passageEmbeddings.ModelNameAsync(ct) : null,
+            InstitutionNames = corpus.SelfNames,
         };
         finding.RetrievalJson = JsonSerializer.Serialize(preview, RetrievalJsonOptions);
         finding.UpdatedAt = DateTimeOffset.UtcNow;
@@ -284,7 +287,7 @@ public sealed class RegulEmbeddingRetrievalService(
         // retrieval, so a bundled clause searched as one blended query can't wash out a section
         // that only matches one of its several obligations.
         var subObligations = SubObligationSplitter.Split(clauseText, pipelineVersion);
-        if (corpus.Vectors != null) await PrewarmQueryVectorsAsync(subObligations, pipelineVersion, ct);
+        if (corpus.Vectors != null) await PrewarmQueryVectorsAsync(subObligations, pipelineVersion, ct, corpus.SelfNames);
         var hits = new QueryHits();
         foreach (var subText in subObligations)
         {
@@ -515,7 +518,7 @@ public sealed class RegulEmbeddingRetrievalService(
             var parts = queries.Where(q => !string.IsNullOrWhiteSpace(q))
                 .SelectMany(q => SubObligationSplitter.Split(q, session.PipelineVersion))
                 .ToList();
-            if (corpus.Vectors != null) await PrewarmQueryVectorsAsync(parts, session.PipelineVersion, ct);
+            if (corpus.Vectors != null) await PrewarmQueryVectorsAsync(parts, session.PipelineVersion, ct, corpus.SelfNames);
             foreach (var part in parts)
                 await ScoreQueryAsync(corpus, part, null, hits, session.PipelineVersion, ct);
 
@@ -546,7 +549,9 @@ public sealed class RegulEmbeddingRetrievalService(
         Bm25Scorer.Corpus Bm25Corpus,
         Dictionary<Guid, string?> DocNameById,
         Dictionary<Guid, Guid> StoredDocIdByExtractionId,
-        IReadOnlyList<(Guid Id, float[] Vector, double Norm)>? Vectors = null);
+        IReadOnlyList<(Guid Id, float[] Vector, double Norm)>? Vectors = null,
+        // v6: the bank's own names for itself, detected in these documents (InstitutionNames).
+        IReadOnlyList<string>? SelfNames = null);
 
     private sealed class QueryHits
     {
@@ -645,7 +650,8 @@ public sealed class RegulEmbeddingRetrievalService(
             Bm25Scorer.BuildCorpus(units.Values.Select(u => (u.Id, u.ClauseText)).ToList(), stemKeywords),
             docNameById,
             storedDocIdByExtractionId,
-            vectors);
+            vectors,
+            stemKeywords ? InstitutionNames.Detect(passages.Select(p => p.PassageText)) : null);
     }
 
     /// <summary>What the search scores and the AI reads for a passage: its heading path, then its text. Not in square
@@ -692,7 +698,8 @@ public sealed class RegulEmbeddingRetrievalService(
     /// <summary>The texts Steps 3-4 search for one part: the part with its counterpart terms appended, then (v2+)
     /// the part reworded with each counterpart.</summary>
     private static (string QueryText, IReadOnlyList<string> Variants) SearchTexts(
-        string subText, DictionaryExpansionService.QueryExpansionResult expanded, int pipelineVersion)
+        string subText, DictionaryExpansionService.QueryExpansionResult expanded, int pipelineVersion,
+        IReadOnlyList<string>? selfNames = null)
     {
         var queryText = expanded.AllTerms.Count == 0
             ? subText
@@ -708,6 +715,9 @@ public sealed class RegulEmbeddingRetrievalService(
             : pipelineVersion >= NdRegulPipelineVersions.V4Passages
                 ? BuildExpandedWordingVariants(subText, expanded)
                 : BuildExpandedWording(subText, expanded) is { } single ? [single] : [];
+        // v6: "financial institutions" / "the institution" also searched as the bank's own name ("DIFC", "UAE").
+        if (pipelineVersion >= NdRegulPipelineVersions.V6RequirementJudgment && selfNames is { Count: > 0 })
+            variants = variants.Concat(InstitutionNames.Variants(subText, selfNames)).Distinct(StringComparer.Ordinal).ToList();
         return (queryText, variants);
     }
 
@@ -715,13 +725,14 @@ public sealed class RegulEmbeddingRetrievalService(
     /// v4+: embeds every text the parts will search in a few batched calls before searching, instead of one call per
     /// text (with Azure OpenAI one call per text made Steps 1-6 take ~30 s for a long clause).
     /// </summary>
-    private async Task PrewarmQueryVectorsAsync(IEnumerable<string> subTexts, int pipelineVersion, CancellationToken ct)
+    private async Task PrewarmQueryVectorsAsync(
+        IEnumerable<string> subTexts, int pipelineVersion, CancellationToken ct, IReadOnlyList<string>? selfNames = null)
     {
         if (pipelineVersion < NdRegulPipelineVersions.V4Passages) return;
         var texts = new List<string>();
         foreach (var subText in subTexts)
         {
-            var (queryText, variants) = SearchTexts(subText, await ExpandAsync(subText, pipelineVersion, ct), pipelineVersion);
+            var (queryText, variants) = SearchTexts(subText, await ExpandAsync(subText, pipelineVersion, ct), pipelineVersion, selfNames);
             texts.Add(queryText);
             texts.AddRange(variants);
         }
@@ -773,7 +784,7 @@ public sealed class RegulEmbeddingRetrievalService(
         var expanded = await ExpandAsync(subText, pipelineVersion, ct);
         foreach (var m in expanded.AcronymMatches) hits.Acronyms[$"{m.EntryId}:{m.MatchedText}"] = m;
         foreach (var m in expanded.SynonymMatches) hits.Synonyms[$"{m.EntryId}:{m.MatchedText}"] = m;
-        var (queryText, variants) = SearchTexts(subText, expanded, pipelineVersion);
+        var (queryText, variants) = SearchTexts(subText, expanded, pipelineVersion, corpus.SelfNames);
         await SearchAsync(corpus, queryText, subObligationLabel, null, hits, pipelineVersion, ct);
         foreach (var reworded in variants)
         {

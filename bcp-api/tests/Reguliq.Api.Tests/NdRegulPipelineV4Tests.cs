@@ -143,6 +143,36 @@ public class NdRegulPipelineV4Tests
         Assert.Contains(doclingNew, picked);
     }
 
+    [Fact]
+    public void The_banks_own_name_is_found_as_the_subject_of_duties_and_regulators_are_not()
+    {
+        var texts = new List<string>();
+        for (var i = 0; i < 6; i++)
+        {
+            texts.Add("DIFC is protected from any criminal, civil or administrative liability. UAE is obliged to report to the FIU.");
+            texts.Add("UAE shall maintain records. The FIU will review the report. Employees must report promptly.");
+        }
+        texts.Add("CBUAE shall issue guidance.");
+
+        var names = InstitutionNames.Detect(texts);
+
+        Assert.Contains("UAE", names);
+        Assert.Contains("DIFC", names);
+        Assert.DoesNotContain("FIU", names);
+        Assert.DoesNotContain("Employees", names);
+        Assert.DoesNotContain("CBUAE", names);
+    }
+
+    [Fact]
+    public void Institution_terms_are_searched_with_each_own_name()
+    {
+        Assert.Equal(
+            ["DIFC shall be protected from liability.", "UAE shall be protected from liability."],
+            InstitutionNames.Variants("Financial institutions shall be protected from liability.", ["DIFC", "UAE"]));
+        Assert.Empty(InstitutionNames.Variants("Employees shall report.", ["DIFC"]));
+        Assert.Empty(InstitutionNames.Variants("Financial institutions shall report.", []));
+    }
+
     [Theory]
     [InlineData("report", "reported", "reporting", "reports")]
     [InlineData("suspicion", "suspicious", "suspicions", "suspicion")]

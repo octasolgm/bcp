@@ -66,6 +66,7 @@ or document, no code.
 | T30 | Wrong acronym pairs produced nonsense search wording | Bug | Done (v4 / v5) | To confirm | this commit |
 | T31 | Plan V2 task 1: page reference next to the wrong quote | Bug | Done (all pipelines) | To confirm on the next run | branch feature/regul-plan-v2 |
 | T32 | Plan V2 task 2: keyword search understands word forms; pipeline v6 added | Bug | Done (v6 only) | To confirm on a v6 run | branch feature/regul-plan-v2 |
+| T33 | Plan V2 task 3: the bank's own name for itself | Bug | Done (v6, automatic detection) | To confirm on a v6 run of 3.3 | branch feature/regul-plan-v2 |
 
 ---
 
@@ -457,6 +458,24 @@ or document, no code.
   policies / policy, business / businesses, committed / commit, short words unchanged; stemmed search finds "shall be
   reported" for "report", v5 does not); suite 347 pass, same 21 old failures.
 - **Status:** done; v6 = v5 + this for now (tasks 3, 5-7 extend it).
+
+### T33 - The bank's own name for itself (Plan V2 task 3, Bug)
+
+- **Problem:** clauses say "financial institutions" / "the institution"; the policies say "DIFC is protected ...", "UAE
+  is obliged to report ...". Only a prompt rule bridged this.
+- **Fix (pipeline v6):** each run detects the bank's own names in its selected documents: a capitalised name used as
+  the subject of a duty ("X shall / must / will / is obliged / is required / is protected ...") at least 5 times; at most
+  the 3 most frequent; people, functions, documents, regulators and authorities excluded (Employees, MLRO, FIU, CBUAE,
+  DFSA, ...). A clause part with "financial institution(s)", "licensed financial institution(s)", "the institution",
+  "institutions", "FI(s)" or "LFI(s)" is also searched with each name. The names are shown in the downloaded report.
+- **Design change from Plan V2:** no stored list and no admin card. Names come only from the run's own documents, so
+  they stay inside the workspace, need no review step and no new table. An admin list can be added later if a wrong
+  name appears in a report.
+- **Where:** `InstitutionNames` (new), `RegulEmbeddingRetrievalService` (`LoadedCorpus.SelfNames`, `SearchTexts`,
+  `PrewarmQueryVectorsAsync`, `RetrievalPreview.InstitutionNames`), `pipeline-console-log.ts` (report line).
+- **Verified:** 2 unit tests (DIFC and UAE found, FIU / CBUAE / Employees not; variants built only for institution
+  terms); suite 349 pass, same 21 old failures; web build passes.
+- **Status:** done; confirm with a v6 run of 3.3 (report line "Bank's own names searched ...").
 
 ---
 
