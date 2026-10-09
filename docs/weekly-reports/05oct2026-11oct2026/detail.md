@@ -161,3 +161,7 @@ Next round of improvements planned
 
 The latest money laundering result was checked line by line against the policy documents: the verdict, the covered points and the three gaps are correct. One display issue was found: some quotes in the policy extract showed the page of the next quote, and the last quote showed no page. A plan for the next round is ready and partly approved. It fixes the page shown next to each quote, makes the search recognise different forms of the same word and the bank's own name for itself, adds saved answer keys so every change is scored automatically on test clauses before it reaches you, and moves the review to a fixed list of each clause's requirements, written in the regulation's own words, with the evidence for each requirement shown next to it. The regulation text itself is never summarised or reworded.
 
+First improvements of the new plan are built
+
+Each quote in the policy extract now shows its own page; previously, when two quotes came from the same page, the pages of the following quotes could shift by one. A new analysis setting (version 6) adds two search improvements: different forms of the same word (report, reported, reporting) now match, and when the regulation speaks of "financial institutions", the search also uses the name the bank uses for itself in its own policies. The remaining steps of the plan, including saved answer keys for automatic scoring and a fixed list of each clause's requirements, are next.
+

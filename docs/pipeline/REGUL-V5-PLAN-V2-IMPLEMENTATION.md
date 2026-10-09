@@ -9,11 +9,31 @@ Read with: `REGUL-V5-PLAN-V2.md` (what and why), `REGUL-V5-WORK-LOG.md` (what is
 
 ---
 
+## Progress (update after every task)
+
+Branch: **`feature/regul-plan-v2`** (created from `feature/regul-clause-context-and-evals`). Work on this branch.
+
+| Task | Status | Work log | Notes |
+|---|---|---|---|
+| 1 Page reference per quote | **Done** | T31 | All pipelines; new results only |
+| 2 Word roots in keyword search | **Done** | T32 | Adds **pipeline v6** (= v5 + Plan V2 changes) |
+| 3 Bank's own name | **Done** | T33 | **Design changed:** names detected automatically per run from the run's documents (`InstitutionNames`), no table and no admin card; the Task 3 prompt below is superseded |
+| 4 Answer keys and scoring | **Next** - confirm with the user first | - | Use the prompt below |
+| 5 Requirement list | To do | - | Prompt below |
+| 6 Evidence per requirement | To do | - | Prompt below |
+| 7 Per-requirement judgment | To do | - | Prompt below |
+| 8-11 Finalize | Waiting for the user's OK | - | Prompts below |
+| 12 Housekeeping | To do | - | Prompt below |
+
+Test baseline after task 3: **370 tests, 349 pass, the same 21 old failures** listed in section 2.
+
+---
+
 ## 0. Start prompt (paste this first in the new session)
 
 ```
 You are continuing work on the V5 regulatory analysis (/nd/analyse-regul-full-v2) in this repo, branch
-feature/regul-clause-context-and-evals. Before doing anything:
+feature/regul-plan-v2 (check out and pull it). Before doing anything:
 
 1. Read CLAUDE.md, docs/pipeline/REGUL-V5-PLAN-V2.md, docs/pipeline/REGUL-V5-PLAN-V2-IMPLEMENTATION.md (this
    guide) and docs/pipeline/REGUL-V5-WORK-LOG.md (sections 1, 2 for T14-T30, 5). Do not read the whole repo.
