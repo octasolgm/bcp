@@ -515,17 +515,17 @@ or document, no code.
   and never what is actually missing. The Actions sheet was right.
 - **Cause:** the export built the column from the clause's action plan text (the old engines keep their gaps there).
   On the new analysis page the gaps are stored separately, as one "[n] ..." line per gap in the "Gap analysis" field.
-- **Fix:** on the new analysis page (real accounts only), the column now lists "Gap n: <gap line>" with its own
-  "Action: ..." lines under it. Actions are matched to gaps the same way the Actions sheet seeds them (every "[n]"
-  action belongs to gap n, several per gap allowed); an action numbered for no gap is listed under "Other actions",
-  so no text is dropped. Compliant rows keep their note. Same change in the PDF export. Other pages, older engines
-  and demo accounts keep the previous text.
-- **Where:** `gap-analysis-export-rows.ts` (`regulHybridGapsCell`, option `regulHybridGaps`),
+- **Fix:** on the new analysis page (real accounts only), the column is built from the same sources as the gap
+  analysis page: the page's own gap list ("Gap n: <gap line>", or the user's edited gaps), and under each gap the run's
+  saved action plans for that gap (the actions shown, edited and added on the page). Only when the run has no saved
+  action plans yet are the AI's drafted actions used, matched by "[n]" like the Actions sheet seeds them. Actions
+  attached to no listed gap go under "Other actions", so no text is dropped. Compliant rows keep their note. Same
+  change in the PDF export. Other pages, older engines and demo accounts keep the previous text.
+- **Where:** `gap-analysis-export-rows.ts` (`regulHybridGapsCell`, options `regulHybridGaps` and `actionPlans`),
   `gap-analysis-export.ts`, `nd-gap-analysis.component.ts` (`exportRegulHybridGaps`),
-  `analyse-regul-full-v2.component.ts` (`gapAnalysisExportOptions`); `regulGapAnalysisTextFromPoint` exported from
-  `cap-gap-count.ts`.
-- **Verified:** 5 new unit tests (8 in the file pass); the real 3.8 result of the 10 Oct run renders as two gaps,
-  each with its own action; web type check clean.
+  `analyse-regul-full-v2.component.ts` (`gapAnalysisExportOptions`).
+- **Verified:** 7 new unit tests (10 in the file pass), including saved and user-added actions and user-edited gaps;
+  the real 3.8 result of the 10 Oct run renders as two gaps, each with its own action; web type check clean.
 - **Status:** done; confirm on the next export.
 
 ---

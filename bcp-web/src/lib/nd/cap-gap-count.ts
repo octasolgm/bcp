@@ -162,8 +162,7 @@ function capPriorityForRegulCapSegment(segment: string): string {
   return 'medium';
 }
 
-/** The "Gap analysis" field of a regul point's saved result (one "[n] ..." line per gap on pipeline v5+). */
-export function regulGapAnalysisTextFromPoint(p: AnalysisPoint): string {
+function regulGapAnalysisTextFromPoint(p: AnalysisPoint): string {
   const landing = extractAiMessage(p.landingAiResult);
   if (!landing.trim()) return '';
   const block = parseReferenceComplianceBlock(landing);

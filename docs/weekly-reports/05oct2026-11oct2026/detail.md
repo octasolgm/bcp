@@ -176,7 +176,7 @@ In the analysis prompt settings, choosing an older or newer version and clicking
 
 Clearer gap column in the exported report
 
-In the Excel and PDF gap analysis export, the "Identified Gaps" column showed only the drafted actions, grouped under a single gap, so the reader could not see what was actually missing. Each gap is now listed on its own, in the review's words, with its drafted action directly under it. The Actions sheet is unchanged.
+In the Excel and PDF gap analysis export, the "Identified Gaps" column showed only the drafted actions, grouped under a single gap, so the reader could not see what was actually missing. Each gap is now listed on its own, with its actions directly under it, exactly as shown on the gap analysis page, including any gaps or actions your team has edited or added. The Actions sheet is unchanged.
 
 Five-clause test
 

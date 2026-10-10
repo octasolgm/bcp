@@ -328,6 +328,7 @@ export async function exportRegulGapAnalysisExcelFromPoints(
   const rows = buildGapAnalysisExportRows(points, {
     compliantNote: options.compliantNote,
     regulHybridGaps: options.regulHybridGaps,
+    actionPlans: options.actionPlans,
   });
   if (!rows.length) return;
   const docName = options.regulationDocumentName ?? '';
@@ -368,6 +369,7 @@ export async function exportGapAnalysisExcelFromPoints(
   const rows = buildGapAnalysisExportRows(points, {
     compliantNote: options.compliantNote,
     regulHybridGaps: options.regulHybridGaps,
+    actionPlans: options.actionPlans,
   });
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
@@ -412,7 +414,10 @@ export async function exportGapAnalysisPdfFromPoints(
   points: AnalysisPoint[],
   meta: GapAnalysisExportMeta = {},
 ): Promise<void> {
-  const rows = buildGapAnalysisExportRows(points, { regulHybridGaps: meta.regulHybridGaps });
+  const rows = buildGapAnalysisExportRows(points, {
+    regulHybridGaps: meta.regulHybridGaps,
+    actionPlans: meta.actionPlans,
+  });
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
   const plansByClause = new Map<string, ActionPlanEntry[]>();
