@@ -169,3 +169,7 @@ Lower cost per clause
 
 The second check that every reported gap goes through now applies to medium and high risk gaps only, by default. Low-risk gaps, such as a missing definition, keep their result without the extra check, which roughly halves the cost of a clause like the money laundering definition. Administrators can switch the full re-check back on at any time.
 
+
+Switching prompt versions
+
+In the analysis prompt settings, choosing an older or newer version and clicking "Set as current" could fail with an error. Switching versions now works reliably for every prompt.

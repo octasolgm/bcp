@@ -141,6 +141,7 @@ Bug fixes
 - Correction to the review: regulation documents were already not being embedded, no change needed
 - Prompt v10 judged clause 3.5 compliant: it let typologies cover the "funds" and "proceeds" definitions (no internal document defines them) and marked "size, timeframe and nature of funds irrelevant" covered on evidence for the amount only; fixed in prompt v11
 - Two analyses reaching the same document at once could both write its search passages, doubling them; builds are now one at a time per document and a doubled set is rebuilt automatically
+- Admin > Analysis prompts: "Set as current" failed with a server error (e.g. Forward judgment user block 1, v10) because the old and new current flags were saved in one batch and the one-current-version-per-prompt index could see two current rows; the old flag is now cleared before the new one is set, in one transaction (demo admin path too)
 
 - Gap report: when the AI numbered gaps by requirement ([2], [4]) the actions attached to the wrong gap (gap 1 got a generic action, gap 2 got gap 1's action, one action lost); gaps and actions are now renumbered together on V5 runs
 - Gap report: gaps rated "Materiality: low" by the AI showed as Medium risk; the AI's rating now sets the gap risk
