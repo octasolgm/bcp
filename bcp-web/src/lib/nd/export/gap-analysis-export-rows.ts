@@ -11,8 +11,11 @@ import { analysisPointToReportItem } from '../analysis-point-mapper';
 import {
   isVerificationMetaCapText,
   meaningfulCapGaps,
+  regulGapAnalysisTextFromPoint,
   resolveAiCorrectiveActionForPoint,
 } from '../cap-gap-count';
+import { splitBracketNumberedLines } from '../regul-fields';
+import { aiActionsForGap } from '../action-plan-seed';
 import {
   complianceSeverityLabel,
   resolveAnalysisPointSeverity,
@@ -135,6 +138,32 @@ function gapsForPoint(
   return '';
 }
 
+/**
+ * Gaps cell for the new analysis page (regul hybrid pipeline): the AI's own gap lines from the "Gap analysis"
+ * field, each followed by its action(s). The action plan alone must not fill this column: it reads "Gap 1 - Missing:
+ * [1] Amend ..." and loses what is actually missing. Actions are matched to gaps the same way the Actions sheet
+ * seeds them (every "[n]" action line belongs to gap n); action lines numbered for no gap are listed after the
+ * gaps so no text is dropped. Empty when the point has no numbered gap lines, so the caller keeps the older text.
+ */
+function regulHybridGapsCell(point: AnalysisPoint): string {
+  const gaps = splitBracketNumberedLines(regulGapAnalysisTextFromPoint(point));
+  if (!gaps.length) return '';
+  const rawPlan =
+    point.finalActionPlan?.trim() ||
+    point.originalAiActionPlan?.trim() ||
+    resolveAiCorrectiveActionForPoint(point);
+  const plan = rawPlan && !isVerificationMetaCapText(rawPlan) ? rawPlan : '';
+  const blocks = gaps.map((missing, i) => {
+    const actions = aiActionsForGap({ index: i + 1, missing, fix: plan, priority: '' });
+    return [`Gap ${i + 1}: ${missing}`, ...actions.map((a) => `Action: ${a}`)].join('\n');
+  });
+  const orphanActions = [...plan.replace(/\r\n/g, '\n').matchAll(/(?:^|\n|\s)\[(\d+)\]\s*([^\n]*)/g)]
+    .filter((m) => Number(m[1]) > gaps.length && m[2].trim())
+    .map((m) => `[${m[1]}] ${m[2].trim()}`);
+  if (orphanActions.length) blocks.push(`Other actions:\n${orphanActions.join('\n')}`);
+  return normalizeMultiline(blocks.join('\n\n'));
+}
+
 function requirementCell(point: AnalysisPoint, landing: ReferenceComplianceBlock | null): string {
   const snap = parsePointSnapshot(point.pointSnapshot);
   const title = snap.pointTitle?.trim() || landing?.title?.trim() || '';
@@ -209,7 +238,12 @@ function resolveExportClauseNumber(
 /** Build client-style gap analysis Excel rows from ND analysis points. */
 export function buildGapAnalysisExportRows(
   points: AnalysisPoint[],
-  options: { /** Written in the gaps column of compliant rows (new analysis page only). */ compliantNote?: string } = {},
+  options: {
+    /** Written in the gaps column of compliant rows (new analysis page only). */
+    compliantNote?: string;
+    /** New analysis page (regul hybrid pipeline): gaps column lists the AI's gap lines with their actions. */
+    regulHybridGaps?: boolean;
+  } = {},
 ): GapAnalysisExcelRow[] {
   const keyed: { key: string; row: GapAnalysisExcelRow }[] = [];
   const seen = new Set<string>();
@@ -255,7 +289,9 @@ export function buildGapAnalysisExportRows(
       policyExtract: policyExtract ? normalizeMultiline(policyExtract) : '',
       status: exportStatusLabel(severity),
       complyYesNo: complyYesNoFromSeverity(severity),
-      gapsIdentified: gapsForPoint(point, structured, report.agreement, options.compliantNote),
+      gapsIdentified:
+        (options.regulHybridGaps && severity !== 'compliant' ? regulHybridGapsCell(point) : '') ||
+        gapsForPoint(point, structured, report.agreement, options.compliantNote),
       confidence: resolveDisplayConfidence(point),
     };
 

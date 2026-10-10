@@ -19,6 +19,8 @@ Branch: **`feature/regul-plan-v2`** (created from `feature/regul-clause-context-
 | 2 Word roots in keyword search | **Done** | T32 | Adds **pipeline v6** (= v5 + Plan V2 changes) |
 | 3 Bank's own name | **Done** | T33 | **Design changed:** names detected automatically per run from the run's documents (`InstitutionNames`), no table and no admin card; the Task 3 prompt below is superseded |
 | Extra: skip gap re-check for low-risk gaps | **Done** | T34 | Admin setting, on by default; off = as before |
+| Extra: "SAR" taken as the bank's name | **Done** | T35 | Report / AML abbreviations excluded from bank-name detection |
+| Extra: Excel / PDF gaps column | **Done** | T36 | New analysis page lists each gap with its action(s); demo unchanged |
 | 4 Answer keys and scoring | **Next** - confirm with the user first | - | Use the prompt below |
 | 5 Requirement list | To do | - | Prompt below |
 | 6 Evidence per requirement | To do | - | Prompt below |
@@ -306,7 +308,7 @@ NdRetrievalExpectation (the retrieval check already stores expected snippets per
    top of the downloaded pipeline report and in the pipeline panel when the run has keys.
 5. Seed the three answer keys in the guide table for the Default workspace only if absent (clause numbers 3.3,
    3.5, 3.6; match by clause number when the hash differs, and log it).
-6. Tests, build, baseline, work log T34, weekly report, commit, push, report. Then score my last 3.5 run.
+6. Tests, build, baseline, work log (next free T number; T36 is the last used), weekly report, commit, push, report. Then score my last 3.5 run.
 ```
 
 **Done when:** the last 3.5 run shows a score; the user can edit keys without code.
@@ -370,7 +372,7 @@ guide, ground rule 1 (never reword the clause) and CLAUDE.md (workspaces).
 5. Unit tests: verbatim validation (accepts copied text with different whitespace, rejects reworded text),
    coverage check, fallback; the 3.5 fixture list above passes validation against the real 3.5 clause text
    (copy the clause text from REGUL-V5-WORK-LOG.md or the run report).
-6. Build, baseline, work log T35, weekly report, commit, push, report. Show me the list generated for 3.5.
+6. Build, baseline, work log (next free T number; T36 is the last used), weekly report, commit, push, report. Show me the list generated for 3.5.
 ```
 
 **Done when:** a v6 run of 3.5 shows ~10 requirements, all verbatim, the same list on the next run.
@@ -409,7 +411,7 @@ implementation guide.
    Step 7 trace chunksJson and on the ForwardJudgmentPrep for task 7.
 3. Report and panel: list evidence per requirement.
 4. Unit tests for the context builder (ids stable, passage printed once, references for shared passages).
-5. Build, baseline, work log T36, weekly report, commit, push, report with the context size before (v5) and after
+5. Build, baseline, work log (next free T number; T36 is the last used), weekly report, commit, push, report with the context size before (v5) and after
    (v6) for 3.5.
 ```
 
@@ -470,7 +472,7 @@ implementation guide, NdRegulPromptDefaults (v11 rules), NdRegulGapVerifier and 
 3. NdRegulAnalysisProcessor: v6 path uses the new prompt keys and NdRegulRequirementJudgment; gap check per
    requirement; oversized-context split by requirement groups; traces for every call (report shows them).
 4. Admin > Analysis prompts lists the new keys; the pipeline v6 description says it uses them.
-5. Build, baseline, work log T37, weekly report, commit, push, report. Then I run 3.3, 3.5, 3.6 on v6 and you score
+5. Build, baseline, work log (next free T number; T36 is the last used), weekly report, commit, push, report. Then I run 3.3, 3.5, 3.6 on v6 and you score
    them with the answer keys (task 4) and compare with v5 / v11.
 ```
 

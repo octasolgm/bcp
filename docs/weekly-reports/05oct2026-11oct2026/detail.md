@@ -173,3 +173,11 @@ The second check that every reported gap goes through now applies to medium and 
 Switching prompt versions
 
 In the analysis prompt settings, choosing an older or newer version and clicking "Set as current" could fail with an error. Switching versions now works reliably for every prompt.
+
+Clearer gap column in the exported report
+
+In the Excel and PDF gap analysis export, the "Identified Gaps" column showed only the drafted actions, grouped under a single gap, so the reader could not see what was actually missing. Each gap is now listed on its own, in the review's words, with its drafted action directly under it. The Actions sheet is unchanged.
+
+Five-clause test
+
+A test of five money laundering and terrorist financing clauses was checked against the policy documents. The verdicts and gaps are correct, and a gap about missing definitions appears only in the clause where the regulation itself defines those terms, not in the other clauses that only use them. The search also no longer mistakes report abbreviations such as "SAR" for the bank's own name.

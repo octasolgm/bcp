@@ -276,6 +276,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     return v5CompliantScopeNote(names);
   }
 
+  /** Exports of the new analysis page list each gap with its action; demo accounts keep their export as is. */
+  get exportRegulHybridGaps(): boolean {
+    return isRegulPipelineHybridWorkflow(this.ndRunWorkflowEngine) && !this.auth.isDemoViewer();
+  }
+
   get isNdRegulWorkflow(): boolean {
     return isRegulWorkflow(this.ndRunWorkflowEngine);
   }
@@ -3258,6 +3263,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         ...this.exportOptions(),
         llmLabel: this.ndRunLlmLabel,
         compliantNote: this.ndCompliantNote,
+        regulHybridGaps: this.exportRegulHybridGaps,
         selection,
       };
       if (this.ndRunWorkflowEngine && isRegulWorkflow(this.ndRunWorkflowEngine)) {
@@ -3289,6 +3295,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         runName: this.sourceLabel || 'Gap Analysis Report',
         subtitle: this.subtitle,
         ...this.exportOptions(),
+        regulHybridGaps: this.exportRegulHybridGaps,
       });
       this.toast.show('Exported gap analysis PDF', 'success');
     } catch {

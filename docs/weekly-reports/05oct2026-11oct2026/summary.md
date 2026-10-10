@@ -178,3 +178,12 @@ Bug fixes
 - Page references next to the wrong quote in the policy extract (repeated pages removed and unfound pages skipped, then paired by position); now one page per quote, "page not found" when unknown
 - Keyword search treated report / reported / reporting as different words (fixed on pipeline v6)
 - Clauses about "financial institutions" did not find policy text written with the bank's own name ("DIFC", "UAE") (fixed on pipeline v6)
+
+10 Oct 2026
+
+Tasks
+- Review of the 5-clause run (3.4, 3.5, 3.7, 3.8, 3.9 on pipeline v6, prompt v11, Azure embeddings) against the internal documents: all verdicts and gaps right; the "funds / proceeds definition" gap appears only in 3.5, not in the other clauses that use those words; 3.8 NPO gap is partly addressed (charities in the high-risk list, unregistered charity transfers prohibited) and would read better as partial
+- 5 of 8 gap re-checks on that run failed on the OpenRouter credit limit; failed checks keep the gap, so the results stay valid
+Bug fixes
+- Report and AML abbreviations (SAR, STR, KYC, ...) were taken as the bank's own name in the v6 search wording
+- Excel / PDF export, new analysis page: the "Identified Gaps" column showed the drafted actions under one "Gap 1" instead of the gaps; it now lists each gap with its own action(s)

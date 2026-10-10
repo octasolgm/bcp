@@ -51,6 +51,8 @@ export type GapAnalysisExcelOptions = {
   llmLabel?: string;
   /** Written in the gaps column of compliant rows (new analysis page only). */
   compliantNote?: string;
+  /** New analysis page (regul hybrid pipeline, real accounts): gaps column lists gap lines with their actions. */
+  regulHybridGaps?: boolean;
   selection?: GapAnalysisExportSelection;
 };
 
@@ -323,7 +325,10 @@ export async function exportRegulGapAnalysisExcelFromPoints(
   requirementColumnHeader = REGULATORY_CLAUSE_HEADER,
   options: GapAnalysisExcelOptions = {},
 ): Promise<void> {
-  const rows = buildGapAnalysisExportRows(points, { compliantNote: options.compliantNote });
+  const rows = buildGapAnalysisExportRows(points, {
+    compliantNote: options.compliantNote,
+    regulHybridGaps: options.regulHybridGaps,
+  });
   if (!rows.length) return;
   const docName = options.regulationDocumentName ?? '';
   const llmLabel = options.llmLabel?.trim() ?? '';
@@ -360,7 +365,10 @@ export async function exportGapAnalysisExcelFromPoints(
   requirementColumnHeader = REGULATORY_CLAUSE_HEADER,
   options: GapAnalysisExcelOptions = {},
 ): Promise<void> {
-  const rows = buildGapAnalysisExportRows(points, { compliantNote: options.compliantNote });
+  const rows = buildGapAnalysisExportRows(points, {
+    compliantNote: options.compliantNote,
+    regulHybridGaps: options.regulHybridGaps,
+  });
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
   const colWidths = buildColWidths(includePhases);
@@ -396,13 +404,15 @@ export type GapAnalysisExportMeta = {
   regulationDocumentName?: string;
   actionPlans?: ActionPlanEntry[];
   clauseByPointId?: Map<string, string>;
+  /** New analysis page (regul hybrid pipeline, real accounts): gaps list gap lines with their actions. */
+  regulHybridGaps?: boolean;
 };
 
 export async function exportGapAnalysisPdfFromPoints(
   points: AnalysisPoint[],
   meta: GapAnalysisExportMeta = {},
 ): Promise<void> {
-  const rows = buildGapAnalysisExportRows(points);
+  const rows = buildGapAnalysisExportRows(points, { regulHybridGaps: meta.regulHybridGaps });
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
   const plansByClause = new Map<string, ActionPlanEntry[]>();

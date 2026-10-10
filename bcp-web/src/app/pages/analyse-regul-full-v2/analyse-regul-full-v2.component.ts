@@ -16,6 +16,7 @@ import type { NdGovPoint } from '../../../lib/regulation-catalog-utils';
 import { AnalyseRegulComponent } from '../analyse-regul/analyse-regul.component';
 import { AnalyseBase } from '../shared/analyse-base';
 import type { AnalysisPoint } from '../../../lib/nd/types';
+import type { GapAnalysisExcelOptions } from '../../../lib/nd/export/gap-analysis-export';
 import { NdPipelinePanelService } from '../../services/nd/nd-pipeline-panel.service';
 import { NdStepTrackerService, type NdStep } from '../../services/nd/nd-step-tracker.service';
 import { NdPageHeaderActionsService } from '../../services/nd/nd-page-header-actions.service';
@@ -447,6 +448,12 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * A regulation doc parsed+extracted via Azure DI has real clause/section text sitting right
    * there — no reason to depend on the separate, older Landing AI gov-point extraction that
    * this document may never have been run through. */
+  /** Excel / PDF gaps column lists each gap with its action (real accounts); demo exports stay as they are. */
+  protected override async gapAnalysisExportOptions(): Promise<GapAnalysisExcelOptions> {
+    const options = await super.gapAnalysisExportOptions();
+    return { ...options, regulHybridGaps: !this.ndAuth.isDemoViewer() };
+  }
+
   protected override async fetchNdRegulationPoints(id: string): Promise<{
     success: boolean;
     points: GovPoint[];

@@ -69,6 +69,7 @@ or document, no code.
 | T33 | Plan V2 task 3: the bank's own name for itself | Bug | Done (v6, automatic detection) | To confirm on a v6 run of 3.3 | branch feature/regul-plan-v2 |
 | T34 | Gap re-check costs one AI call per gap: setting to skip low-risk gaps | Feature | Done (on by default) | To confirm | branch feature/regul-plan-v2 |
 | T35 | "SAR" detected as one of the bank's own names | Bug | Done | To confirm | branch feature/regul-plan-v2 |
+| T36 | Excel / PDF "Identified Gaps" column showed the action text instead of the gaps | Bug | Done | To confirm on the next export | branch feature/regul-plan-v2 |
 
 ---
 
@@ -504,6 +505,28 @@ or document, no code.
   are never taken as the bank's name.
 - **Where:** `InstitutionNames.NotSelfNames`; test extended.
 - **Status:** done.
+
+---
+
+### T36 - Excel "Identified Gaps" column showed the action text (Bug)
+
+- **Problem:** in the 10 Oct export, the "Interpretation and expected action (Identified Gaps)" column read
+  "Gap 1 - Missing: [1] Amend ... [2] Amend ..." for every partial clause: the drafted actions, all under one "Gap 1",
+  and never what is actually missing. The Actions sheet was right.
+- **Cause:** the export built the column from the clause's action plan text (the old engines keep their gaps there).
+  On the new analysis page the gaps are stored separately, as one "[n] ..." line per gap in the "Gap analysis" field.
+- **Fix:** on the new analysis page (real accounts only), the column now lists "Gap n: <gap line>" with its own
+  "Action: ..." lines under it. Actions are matched to gaps the same way the Actions sheet seeds them (every "[n]"
+  action belongs to gap n, several per gap allowed); an action numbered for no gap is listed under "Other actions",
+  so no text is dropped. Compliant rows keep their note. Same change in the PDF export. Other pages, older engines
+  and demo accounts keep the previous text.
+- **Where:** `gap-analysis-export-rows.ts` (`regulHybridGapsCell`, option `regulHybridGaps`),
+  `gap-analysis-export.ts`, `nd-gap-analysis.component.ts` (`exportRegulHybridGaps`),
+  `analyse-regul-full-v2.component.ts` (`gapAnalysisExportOptions`); `regulGapAnalysisTextFromPoint` exported from
+  `cap-gap-count.ts`.
+- **Verified:** 5 new unit tests (8 in the file pass); the real 3.8 result of the 10 Oct run renders as two gaps,
+  each with its own action; web type check clean.
+- **Status:** done; confirm on the next export.
 
 ---
 
