@@ -16,13 +16,10 @@ import {
   meaningfulCapGaps,
   resolveAiCorrectiveActionForPoint,
 } from '../cap-gap-count';
-import { aiActionsForGap } from '../action-plan-seed';
 import {
   actionPlanPriorityLabel,
-  actionPlanStatusLabel,
   actionPlansForGap,
   actionPlansForPoint,
-  formatActionPlanDate,
   type ActionPlanEntry,
 } from '../action-plan';
 import { normalizeGapRisk } from '../doc-analysis-ready';
@@ -66,8 +63,6 @@ export type GapAnalysisExcelRow = {
   phase2?: GapAnalysisPhaseExport;
   /** New analysis page: "What this reference fulfills" lines, as shown on the page (PDF). */
   fulfilled?: string[];
-  /** New analysis page: the gaps text already lists this clause's saved actions, so the PDF does not repeat them. */
-  actionsInGaps?: boolean;
 };
 
 function extractMessage(raw?: string | null): string {
@@ -161,7 +156,7 @@ function gapsForPoint(
 
 /** Page state the gap analysis page shows next to the AI result: edits, resolutions, re-check results. */
 export type RegulExportPageState = {
-  /** The run's saved action plans (shown, edited, added and resolved on the page). */
+  /** The run's saved action plans: a gap is Resolved once all its actions are resolved. */
   actionPlans?: ActionPlanEntry[];
   /** Saved gap rows: risk and Pending / Resolved per gap. */
   gapStates?: Map<string, GapState>;
@@ -169,39 +164,23 @@ export type RegulExportPageState = {
   evidenceReviews?: GapEvidenceReview[];
 };
 
-function actionLine(plan: ActionPlanEntry): string {
-  const tags = [actionPlanStatusLabel(plan.status), `${actionPlanPriorityLabel(plan.priority)} priority`];
-  const due = formatActionPlanDate(plan.targetDate);
-  if (due && due !== '\u2014') tags.push(`due ${due}`);
-  if (plan.responsibilityName?.trim()) tags.push(plan.responsibilityName.trim());
-  return `Action (${tags.join(', ')}): ${plan.actionPlan.trim()}`;
-}
-
 /**
  * Gaps cell for the new analysis page (regul hybrid pipeline), built from the same sources as the gap analysis page:
- * the page's own gap list (the AI's "[n]" gap lines, or the user's edited gaps) with each gap's risk and Pending /
- * Resolved state (saved gap row, resolved once all its actions are resolved), the latest "Rerun this gap" result, and
- * under each gap the run's saved action plans for it with their status, priority, due date and owner. Only when the
- * run has no saved action plans yet are the AI's drafted actions used, matched by "[n]" as they are seeded. Actions
- * attached to no listed gap go under "Other actions", so none is dropped. Empty when the point has no gaps, so the
- * caller keeps the older text.
+ * the page's own gap list (the AI's "[n]" gap lines, or the user's edited gaps), each with its risk and Pending /
+ * Resolved state (risk saved on the page, else the AI's; resolved once all the gap's saved actions are resolved, or
+ * by hand) and the latest "Rerun this gap" result. Gaps only: the actions are on the Actions sheet, where the
+ * "Gap #" column links each action to its gap. Empty when the point has no gaps, so the caller keeps the older text.
  */
 function regulHybridGapsCell(point: AnalysisPoint, page: RegulExportPageState): string {
   const gaps = capGapsForAnalysisPoint(point, true).filter((g) => g.missing.trim());
   if (!gaps.length) return '';
-  const saved = page.actionPlans?.length ? actionPlansForPoint(page.actionPlans, point.id) : null;
+  const saved = page.actionPlans?.length ? actionPlansForPoint(page.actionPlans, point.id) : [];
   const reviews = evidenceReviewsForPoint(page.evidenceReviews, point.id);
-  const rawPlan =
-    point.finalActionPlan?.trim() || point.originalAiActionPlan?.trim() || resolveAiCorrectiveActionForPoint(point);
-  const aiPlan = rawPlan && !isVerificationMetaCapText(rawPlan) ? rawPlan : '';
-  const blocks: string[] = [];
-  const orphans: string[] = [];
-
-  for (const gap of gaps) {
+  const blocks = gaps.map((gap) => {
     const state = page.gapStates?.get(gapStateKey(point.id, gap.index)) ?? null;
-    const plans = saved ? actionPlansForGap(saved, gap.index) : [];
     const risk = actionPlanPriorityLabel(state?.risk ?? normalizeGapRisk(gap.priority));
-    const lines = [`Gap ${gap.index} (Risk ${risk}, ${gapStatusLabel(deriveGapStatus(plans, state))}): ${gap.missing.trim()}`];
+    const status = gapStatusLabel(deriveGapStatus(actionPlansForGap(saved, gap.index), state));
+    const lines = [`Gap ${gap.index} (Risk ${risk}, ${status}): ${gap.missing.trim()}`];
     const verdict = latestGapVerdict(reviews, gap.index);
     if (verdict) {
       const remaining = verdict.gap.remaining?.trim();
@@ -210,24 +189,8 @@ function regulHybridGapsCell(point: AnalysisPoint, page: RegulExportPageState): 
           (remaining && verdict.gap.outcome !== 'fulfilled' ? `; still missing: ${remaining}` : ''),
       );
     }
-    if (saved) lines.push(...plans.filter((p) => p.actionPlan.trim()).map(actionLine));
-    else lines.push(...aiActionsForGap({ ...gap, fix: gap.fix?.trim() || aiPlan }).map((a) => `Action: ${a}`));
-    blocks.push(lines.join('\n'));
-  }
-
-  const listed = new Set(gaps.map((g) => g.index));
-  if (saved) {
-    for (const plan of saved) {
-      if (!listed.has(plan.gapIndex || 1) && plan.actionPlan.trim()) orphans.push(actionLine(plan));
-    }
-  } else {
-    const maxIndex = Math.max(...listed);
-    for (const m of aiPlan.replace(/\r\n/g, '\n').matchAll(/(?:^|\n|\s)\[(\d+)\]\s*([^\n]*)/g)) {
-      if (Number(m[1]) > maxIndex && m[2].trim()) orphans.push(`[${m[1]}] ${m[2].trim()}`);
-    }
-  }
-
-  if (orphans.length) blocks.push(`Other actions:\n${orphans.join('\n')}`);
+    return lines.join('\n');
+  });
   return normalizeMultiline(blocks.join('\n\n'));
 }
 
@@ -370,7 +333,6 @@ export function buildGapAnalysisExportRows(
     if (options.regulHybridGaps) {
       const fulfilled = landingBlock?.fulfilledClauses ?? '';
       row.fulfilled = hasDisplayableFulfilledClauses(fulfilled) ? parseBulletLines(fulfilled) : [];
-      row.actionsInGaps = !!hybridCell && !!options.actionPlans?.length;
     }
 
     if (landingMsg.trim()) row.phase1 = phaseExport(landingBlock);

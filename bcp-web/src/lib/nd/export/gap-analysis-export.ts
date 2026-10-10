@@ -219,17 +219,33 @@ function sortByClause<T>(items: T[], clauseByPointId: Map<string, string>, point
   );
 }
 
-/** One row per action plan. Reviews live on their own sheet, not in a cell here. */
-function actionPlansSheet(
+const GAP_NO_HEADER = 'Gap #';
+
+/** Gap an action belongs to, numbered as on the gap analysis page (actions without one sit on gap 1 there). */
+function gapNumberOf(plan: ActionPlanEntry): number {
+  return plan.gapIndex || 1;
+}
+
+/**
+ * One row per action plan. Reviews live on their own sheet, not in a cell here. With `withGapNo` (new analysis
+ * page) a "Gap #" column after "Clause #" links each action to its gap in the gaps column, and actions are ordered
+ * by gap as on the page; the dialog's column choice never removes it.
+ */
+export function actionPlansSheet(
   plans: ActionPlanEntry[],
   clauseByPointId: Map<string, string>,
   regulationDocumentName: string,
   wanted: string[] | undefined,
   labels: Record<string, string> | undefined,
+  withGapNo = false,
 ): ExcelSheetSpec {
-  const rows = sortByClause(plans, clauseByPointId, (p) => p.analysisPointId).map((plan) => [
+  const ordered = withGapNo
+    ? [...plans].sort((a, b) => gapNumberOf(a) - gapNumberOf(b) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    : plans;
+  const rows = sortByClause(ordered, clauseByPointId, (p) => p.analysisPointId).map((plan) => [
     regulationDocumentName,
     clauseByPointId.get(plan.analysisPointId) ?? '',
+    ...(withGapNo ? [String(gapNumberOf(plan))] : []),
     plan.actionPlan ?? '',
     actionPlanStatusLabel(plan.status),
     actionPlanPriorityLabel(plan.priority),
@@ -239,12 +255,16 @@ function actionPlansSheet(
     plan.createdByName ?? '',
     formatActionPlanDate(plan.createdAt),
   ]);
-  const picked = pickColumns(ACTION_PLAN_EXPORT_COLUMNS, rows, wanted, labels);
+  const headers: string[] = withGapNo
+    ? [ACTION_PLAN_EXPORT_COLUMNS[0], ACTION_PLAN_EXPORT_COLUMNS[1], GAP_NO_HEADER, ...ACTION_PLAN_EXPORT_COLUMNS.slice(2)]
+    : [...ACTION_PLAN_EXPORT_COLUMNS];
+  const keep = withGapNo && wanted?.length ? [...wanted, GAP_NO_HEADER] : wanted;
+  const picked = pickColumns(headers, rows, keep, labels);
   return {
     sheetName: 'Actions',
     headers: picked.displayHeaders,
     rows: picked.rows,
-    colWidths: picked.headers.map((h) => ACTION_PLAN_COL_WIDTHS[h] ?? 20),
+    colWidths: picked.headers.map((h) => (h === GAP_NO_HEADER ? 8 : ACTION_PLAN_COL_WIDTHS[h] ?? 20)),
   };
 }
 
@@ -290,7 +310,14 @@ function extraSheets(options: GapAnalysisExcelOptions): ExcelSheetSpec[] {
 
   if (selection.includeActionPlans !== false) {
     sheets.push(
-      actionPlansSheet(plans, clauses, docName, selection.actionPlanColumns, selection.actionPlanColumnLabels),
+      actionPlansSheet(
+        plans,
+        clauses,
+        docName,
+        selection.actionPlanColumns,
+        selection.actionPlanColumnLabels,
+        !!options.regulHybridGaps,
+      ),
     );
   }
   if (selection.includeReviews !== false) {
@@ -435,7 +462,10 @@ export async function exportGapAnalysisPdfFromPoints(
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
   const plansByClause = new Map<string, ActionPlanEntry[]>();
-  for (const plan of meta.actionPlans ?? []) {
+  const pdfPlans = meta.regulHybridGaps
+    ? [...(meta.actionPlans ?? [])].sort((a, b) => gapNumberOf(a) - gapNumberOf(b) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    : meta.actionPlans ?? [];
+  for (const plan of pdfPlans) {
     const clause = meta.clauseByPointId?.get(plan.analysisPointId) ?? '';
     const list = plansByClause.get(clause);
     if (list) list.push(plan);
@@ -511,13 +541,14 @@ export async function exportGapAnalysisPdfFromPoints(
       write(`Phase 2: ${r.phase2.status} · ${r.phase2.confidence}`, 8);
       if (r.phase2.gapsIdentified?.trim()) write(r.phase2.gapsIdentified.trim(), 8);
     }
-    // New analysis page: the gaps text already lists each action under its gap.
-    const plans = r.actionsInGaps ? [] : plansByClause.get(r.pointNumber) ?? [];
+    const plans = plansByClause.get(r.pointNumber) ?? [];
     if (plans.length) {
       write(`Action plans (${plans.length}):`, 8, true);
       for (const plan of plans) {
+        // New analysis page: say which gap each action belongs to, as the Actions sheet does.
+        const gapNo = meta.regulHybridGaps ? `Gap ${gapNumberOf(plan)} · ` : '';
         write(
-          `• [${actionPlanPriorityLabel(plan.priority)} · ${actionPlanStatusLabel(plan.status)} · target ${formatActionPlanDate(plan.targetDate)} · ${plan.responsibilityName ?? 'Unassigned'}] ${plan.actionPlan}`,
+          `• [${gapNo}${actionPlanPriorityLabel(plan.priority)} · ${actionPlanStatusLabel(plan.status)} · target ${formatActionPlanDate(plan.targetDate)} · ${plan.responsibilityName ?? 'Unassigned'}] ${plan.actionPlan}`,
           8,
         );
         for (const review of plan.reviews ?? []) {

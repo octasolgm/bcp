@@ -3,6 +3,7 @@ import type { ActionPlanEntry } from '../action-plan';
 import type { GapState } from '../gap-state';
 import type { GapEvidenceReview } from '../gap-evidence-rerun';
 import { buildGapAnalysisExportRows } from './gap-analysis-export-rows';
+import { actionPlansSheet } from './gap-analysis-export';
 
 const NOTE = 'No gap identified at policy level. Detailed procedures are in other documents.';
 
@@ -84,63 +85,29 @@ describe('buildGapAnalysisExportRows - regul hybrid gaps column', () => {
   const gapState = (gapIndex: number, extra: Partial<GapState>) =>
     ({ id: `g${gapIndex}`, analysisRunId: 'r', analysisPointId: POINT_ID, gapIndex, risk: 'medium', riskScore: 50, status: 'pending', ...extra }) as GapState;
 
-  it('lists each gap line with its AI risk and its own action before any action is saved', () => {
-    const cell = buildGapAnalysisExportRows([point('partial_compliant', gaps, actions)], { regulHybridGaps: true })[0]
-      .gapsIdentified;
-    expect(cell).toContain('Gap 1 (Risk High, Pending): Issuing or dealing in bearer shares - Missing: no prohibition found');
-    expect(cell).toContain('Action: Amend 7.6 to include');
-    expect(cell).toContain('Gap 2 (Risk Low, Pending): Shell banks');
-    expect(cell.indexOf('Action: Amend 7.9 to include shell banks.')).toBeGreaterThan(cell.indexOf('Gap 2 ('));
-    expect(cell).not.toContain('Missing: [1] Amend');
-  });
-
-  it('keeps several AI actions numbered for the same gap under that gap', () => {
-    const ai = '[1] Amend 7.6 to add bearer shares.\n[1] Amend 7.9 to add bearer share warrants.\n[2] Amend 7.9 to include shell banks.';
-    const cell = buildGapAnalysisExportRows([point('partial_compliant', gaps, ai)], { regulHybridGaps: true })[0]
-      .gapsIdentified;
-    const gap2 = cell.indexOf('Gap 2 (');
-    expect(cell.indexOf('Action: Amend 7.6 to add bearer shares.')).toBeLessThan(gap2);
-    expect(cell.indexOf('Action: Amend 7.9 to add bearer share warrants.')).toBeLessThan(gap2);
-    expect(cell.indexOf('Action: Amend 7.9 to include shell banks.')).toBeGreaterThan(gap2);
-  });
-
-  it('never drops an AI action numbered for no gap', () => {
-    const ai = '[1] Amend 7.6.\n[2] Amend 7.9.\n[3] Train staff on the new prohibitions.';
-    const cell = buildGapAnalysisExportRows([point('partial_compliant', gaps, ai)], { regulHybridGaps: true })[0]
-      .gapsIdentified;
-    expect(cell).toContain('Other actions:\n[3] Train staff on the new prohibitions.');
-  });
-
-  it('uses the saved actions as shown on the page, with status, priority, due date and owner', () => {
-    const saved = [
-      plan(1, 'Edited on the page: add bearer shares to the prohibited list.', {
-        status: 'resolved',
-        priority: 'high',
-        responsibilityName: 'Compliance',
-      }),
-      plan(2, 'Edited: shell bank clause.'),
-      plan(2, 'Added by the user: train correspondent banking staff.', { sortOrder: 1, targetDate: '2026-11-15T00:00:00Z' }),
-      plan(4, 'Attached to a gap that is no longer listed.'),
-      { ...plan(1, 'Another clause action.'), analysisPointId: 'other-point' },
-    ];
-    const row = buildGapAnalysisExportRows([point('partial_compliant', gaps, actions)], {
+  it('lists only the gaps, with risk and state; actions stay on the Actions sheet', () => {
+    const cell = buildGapAnalysisExportRows([point('partial_compliant', gaps, actions)], {
       regulHybridGaps: true,
-      actionPlans: saved,
-    })[0];
-    const cell = row.gapsIdentified;
-    const gap2 = cell.indexOf('Gap 2 (');
-    expect(cell).toContain('Gap 1 (Risk High, Resolved): Issuing or dealing in bearer shares');
-    expect(cell).toContain('Action (Resolved, High priority, Compliance): Edited on the page: add bearer shares');
-    expect(cell).toContain('Gap 2 (Risk Low, Pending): Shell banks');
-    expect(cell.indexOf('Added by the user: train correspondent banking staff.')).toBeGreaterThan(gap2);
-    expect(cell).toContain('Action (Pending, Medium priority, due ');
-    expect(cell).toContain('Other actions:\nAction (Pending, Medium priority): Attached to a gap that is no longer listed.');
-    expect(cell).not.toContain('Amend 7.6');
-    expect(cell).not.toContain('Another clause action.');
-    expect(row.actionsInGaps).toBe(true);
+      actionPlans: [plan(1, 'Saved action one.'), plan(2, 'Saved action two.')],
+    })[0].gapsIdentified;
+    expect(cell).toBe(
+      'Gap 1 (Risk High, Pending): Issuing or dealing in bearer shares - Missing: no prohibition found - Materiality: high\n\n' +
+        'Gap 2 (Risk Low, Pending): Shell banks - Missing: correspondent accounts not covered - Materiality: low',
+    );
+    expect(cell).not.toContain('Action');
+    expect(cell).not.toContain('Amend');
   });
 
-  it('uses the saved gap risk and resolved state set on the page', () => {
+  it('marks a gap Resolved once all its saved actions are resolved, as the page does', () => {
+    const cell = buildGapAnalysisExportRows([point('partial_compliant', gaps, actions)], {
+      regulHybridGaps: true,
+      actionPlans: [plan(1, 'Done.', { status: 'resolved' }), plan(2, 'Done.', { status: 'resolved' }), plan(2, 'Open.')],
+    })[0].gapsIdentified;
+    expect(cell).toContain('Gap 1 (Risk High, Resolved)');
+    expect(cell).toContain('Gap 2 (Risk Low, Pending)');
+  });
+
+  it('uses the gap risk and resolved state saved on the page', () => {
     const states = new Map<string, GapState>([
       [`${POINT_ID}:1`, gapState(1, { risk: 'low', riskScore: 20 })],
       [`${POINT_ID}:2`, gapState(2, { risk: 'high', riskScore: 90, status: 'resolved' })],
@@ -176,7 +143,7 @@ describe('buildGapAnalysisExportRows - regul hybrid gaps column', () => {
     const p = point('partial_compliant', gaps, actions) as AnalysisPoint & Record<string, unknown>;
     p['finalStatus'] = 'compliant';
     p['finalStatusSource'] = 'auto';
-    const saved = [plan(1, 'Done: bearer shares added.', { status: 'resolved' }), plan(2, 'Done: shell banks.', { status: 'resolved' })];
+    const saved = [plan(1, 'Done.', { status: 'resolved' }), plan(2, 'Done.', { status: 'resolved' })];
     const row = buildGapAnalysisExportRows([p], { regulHybridGaps: true, actionPlans: saved, compliantNote: NOTE })[0];
     expect(row.status.toLowerCase()).toBe('compliant');
     expect(row.gapsIdentified).toContain('Gap 1 (Risk High, Resolved)');
@@ -190,17 +157,14 @@ describe('buildGapAnalysisExportRows - regul hybrid gaps column', () => {
     p['finalActionPlan'] = 'Gap(s):\n(1) Missing: Bearer share warrants not prohibited. Fix: Amend 7.6. Priority: High.';
     const cell = buildGapAnalysisExportRows([p], { regulHybridGaps: true })[0].gapsIdentified;
     expect(cell).toContain('Pending): Bearer share warrants not prohibited');
-    expect(cell).toContain('Action: Amend 7.6');
-    expect(cell).not.toContain('Action: Gap(s)');
     expect(cell).not.toContain('Shell banks');
+    expect(cell).not.toContain('Amend 7.6');
   });
 
-  it('keeps the older action plan text when the option is off (other pages, demo accounts)', () => {
-    const row = buildGapAnalysisExportRows([point('partial_compliant', gaps, actions)], {
-      actionPlans: [plan(1, 'Saved action.')],
-    })[0];
+  it('keeps the older text when the option is off (other pages, demo accounts)', () => {
+    const row = buildGapAnalysisExportRows([point('partial_compliant', gaps, actions)])[0];
     expect(row.gapsIdentified).not.toContain('Gap 1 (Risk');
-    expect(row.actionsInGaps).toBe(undefined);
+    expect(row.fulfilled).toBe(undefined);
   });
 
   it('keeps the compliant note on compliant rows', () => {
@@ -209,5 +173,31 @@ describe('buildGapAnalysisExportRows - regul hybrid gaps column', () => {
       compliantNote: NOTE,
     });
     expect(rows[0].gapsIdentified).toBe(NOTE);
+  });
+});
+
+describe('actionPlansSheet - Gap # column', () => {
+  const clauses = new Map([['p1', '3.4']]);
+  const plans = [
+    { id: 'b', analysisPointId: 'p1', gapIndex: 2, actionPlan: 'Second gap action', status: 'pending', priority: 'low', sortOrder: 0 },
+    { id: 'a', analysisPointId: 'p1', gapIndex: 1, actionPlan: 'First gap action', status: 'resolved', priority: 'high', sortOrder: 0 },
+  ] as unknown as ActionPlanEntry[];
+
+  it('adds Gap # after Clause # and orders actions by gap on the new analysis page', () => {
+    const sheet = actionPlansSheet(plans, clauses, 'CBUAE', undefined, undefined, true);
+    expect(sheet.headers.slice(0, 4).join('|')).toBe('Name of Regulatory Document|Clause #|Gap #|Action plan');
+    expect(sheet.rows[0].slice(1, 4).join('|')).toBe('3.4|1|First gap action');
+    expect(sheet.rows[1].slice(1, 4).join('|')).toBe('3.4|2|Second gap action');
+  });
+
+  it('keeps Gap # when the dialog picked its own columns', () => {
+    const sheet = actionPlansSheet(plans, clauses, 'CBUAE', ['Clause #', 'Action plan'], undefined, true);
+    expect(sheet.headers.join('|')).toBe('Clause #|Gap #|Action plan');
+  });
+
+  it('leaves the sheet unchanged on other pages and for demo accounts', () => {
+    const sheet = actionPlansSheet(plans, clauses, 'CBUAE', undefined, undefined, false);
+    expect(sheet.headers.join('|')).not.toContain('Gap #');
+    expect(sheet.rows[0][2]).toBe('Second gap action');
   });
 });
