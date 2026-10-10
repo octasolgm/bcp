@@ -1,5 +1,7 @@
 import { extractNumericClauseRef } from '../../gov-point-filter';
 import {
+  hasDisplayableFulfilledClauses,
+  parseBulletLines,
   parseReferenceComplianceBlock,
   resolvePolicyRefAndExtract,
   type ReferenceComplianceBlock,
@@ -15,7 +17,22 @@ import {
   resolveAiCorrectiveActionForPoint,
 } from '../cap-gap-count';
 import { aiActionsForGap } from '../action-plan-seed';
-import { actionPlansForGap, actionPlansForPoint, type ActionPlanEntry } from '../action-plan';
+import {
+  actionPlanPriorityLabel,
+  actionPlanStatusLabel,
+  actionPlansForGap,
+  actionPlansForPoint,
+  formatActionPlanDate,
+  type ActionPlanEntry,
+} from '../action-plan';
+import { normalizeGapRisk } from '../doc-analysis-ready';
+import { deriveGapStatus, gapStateKey, gapStatusLabel, type GapState } from '../gap-state';
+import {
+  evidenceReviewsForPoint,
+  gapEvidenceOutcomeLabel,
+  latestGapVerdict,
+  type GapEvidenceReview,
+} from '../gap-evidence-rerun';
 import {
   complianceSeverityLabel,
   resolveAnalysisPointSeverity,
@@ -47,6 +64,10 @@ export type GapAnalysisExcelRow = {
   confidence: string;
   phase1?: GapAnalysisPhaseExport;
   phase2?: GapAnalysisPhaseExport;
+  /** New analysis page: "What this reference fulfills" lines, as shown on the page (PDF). */
+  fulfilled?: string[];
+  /** New analysis page: the gaps text already lists this clause's saved actions, so the PDF does not repeat them. */
+  actionsInGaps?: boolean;
 };
 
 function extractMessage(raw?: string | null): string {
@@ -138,43 +159,70 @@ function gapsForPoint(
   return '';
 }
 
+/** Page state the gap analysis page shows next to the AI result: edits, resolutions, re-check results. */
+export type RegulExportPageState = {
+  /** The run's saved action plans (shown, edited, added and resolved on the page). */
+  actionPlans?: ActionPlanEntry[];
+  /** Saved gap rows: risk and Pending / Resolved per gap. */
+  gapStates?: Map<string, GapState>;
+  /** "Rerun this gap" evidence reviews of the run, newest first (as the page receives them). */
+  evidenceReviews?: GapEvidenceReview[];
+};
+
+function actionLine(plan: ActionPlanEntry): string {
+  const tags = [actionPlanStatusLabel(plan.status), `${actionPlanPriorityLabel(plan.priority)} priority`];
+  const due = formatActionPlanDate(plan.targetDate);
+  if (due && due !== '\u2014') tags.push(`due ${due}`);
+  if (plan.responsibilityName?.trim()) tags.push(plan.responsibilityName.trim());
+  return `Action (${tags.join(', ')}): ${plan.actionPlan.trim()}`;
+}
+
 /**
  * Gaps cell for the new analysis page (regul hybrid pipeline), built from the same sources as the gap analysis page:
- * the gaps are the page's own gap list (the AI's "[n]" gap lines, or the user's edited gaps), and the actions under
- * each gap are the run's saved action plans for that gap (the ones shown, edited and added on the page). Only when the
- * run has no saved action plans yet are the AI's drafted actions used, matched to gaps the way they are seeded (every
- * "[n]" action belongs to gap n). Actions attached to no listed gap go under "Other actions", so none is dropped.
- * Empty when the point has no gaps, so the caller keeps the older text.
+ * the page's own gap list (the AI's "[n]" gap lines, or the user's edited gaps) with each gap's risk and Pending /
+ * Resolved state (saved gap row, resolved once all its actions are resolved), the latest "Rerun this gap" result, and
+ * under each gap the run's saved action plans for it with their status, priority, due date and owner. Only when the
+ * run has no saved action plans yet are the AI's drafted actions used, matched by "[n]" as they are seeded. Actions
+ * attached to no listed gap go under "Other actions", so none is dropped. Empty when the point has no gaps, so the
+ * caller keeps the older text.
  */
-function regulHybridGapsCell(point: AnalysisPoint, runActionPlans: ActionPlanEntry[] | undefined): string {
+function regulHybridGapsCell(point: AnalysisPoint, page: RegulExportPageState): string {
   const gaps = capGapsForAnalysisPoint(point, true).filter((g) => g.missing.trim());
   if (!gaps.length) return '';
+  const saved = page.actionPlans?.length ? actionPlansForPoint(page.actionPlans, point.id) : null;
+  const reviews = evidenceReviewsForPoint(page.evidenceReviews, point.id);
+  const rawPlan =
+    point.finalActionPlan?.trim() || point.originalAiActionPlan?.trim() || resolveAiCorrectiveActionForPoint(point);
+  const aiPlan = rawPlan && !isVerificationMetaCapText(rawPlan) ? rawPlan : '';
   const blocks: string[] = [];
   const orphans: string[] = [];
 
-  if (runActionPlans?.length) {
-    const plans = actionPlansForPoint(runActionPlans, point.id);
-    for (const gap of gaps) {
-      const actions = actionPlansForGap(plans, gap.index).map((p) => p.actionPlan.trim()).filter(Boolean);
-      blocks.push([`Gap ${gap.index}: ${gap.missing.trim()}`, ...actions.map((a) => `Action: ${a}`)].join('\n'));
+  for (const gap of gaps) {
+    const state = page.gapStates?.get(gapStateKey(point.id, gap.index)) ?? null;
+    const plans = saved ? actionPlansForGap(saved, gap.index) : [];
+    const risk = actionPlanPriorityLabel(state?.risk ?? normalizeGapRisk(gap.priority));
+    const lines = [`Gap ${gap.index} (Risk ${risk}, ${gapStatusLabel(deriveGapStatus(plans, state))}): ${gap.missing.trim()}`];
+    const verdict = latestGapVerdict(reviews, gap.index);
+    if (verdict) {
+      const remaining = verdict.gap.remaining?.trim();
+      lines.push(
+        `Evidence review: ${gapEvidenceOutcomeLabel(verdict.gap.outcome)}` +
+          (remaining && verdict.gap.outcome !== 'fulfilled' ? `; still missing: ${remaining}` : ''),
+      );
     }
-    const listed = new Set(gaps.map((g) => g.index));
-    for (const plan of plans) {
-      const index = plan.gapIndex || 1;
-      if (!listed.has(index) && plan.actionPlan.trim()) orphans.push(`[${index}] ${plan.actionPlan.trim()}`);
+    if (saved) lines.push(...plans.filter((p) => p.actionPlan.trim()).map(actionLine));
+    else lines.push(...aiActionsForGap({ ...gap, fix: gap.fix?.trim() || aiPlan }).map((a) => `Action: ${a}`));
+    blocks.push(lines.join('\n'));
+  }
+
+  const listed = new Set(gaps.map((g) => g.index));
+  if (saved) {
+    for (const plan of saved) {
+      if (!listed.has(plan.gapIndex || 1) && plan.actionPlan.trim()) orphans.push(actionLine(plan));
     }
   } else {
-    const rawPlan =
-      point.finalActionPlan?.trim() ||
-      point.originalAiActionPlan?.trim() ||
-      resolveAiCorrectiveActionForPoint(point);
-    const plan = rawPlan && !isVerificationMetaCapText(rawPlan) ? rawPlan : '';
-    for (const gap of gaps) {
-      const actions = aiActionsForGap({ ...gap, fix: plan });
-      blocks.push([`Gap ${gap.index}: ${gap.missing.trim()}`, ...actions.map((a) => `Action: ${a}`)].join('\n'));
-    }
-    const maxIndex = Math.max(...gaps.map((g) => g.index));
-    for (const m of plan.replace(/\r\n/g, '\n').matchAll(/(?:^|\n|\s)\[(\d+)\]\s*([^\n]*)/g)) {
+    const maxIndex = Math.max(...listed);
+    for (const m of aiPlan.replace(/\r\n/g, '\n').matchAll(/(?:^|\n|\s)\[(\d+)\]\s*([^\n]*)/g)) {
       if (Number(m[1]) > maxIndex && m[2].trim()) orphans.push(`[${m[1]}] ${m[2].trim()}`);
     }
   }
@@ -262,9 +310,7 @@ export function buildGapAnalysisExportRows(
     compliantNote?: string;
     /** New analysis page (regul hybrid pipeline): gaps column lists the page's gaps with their actions. */
     regulHybridGaps?: boolean;
-    /** The run's saved action plans (shown under each gap on the page); used with regulHybridGaps. */
-    actionPlans?: ActionPlanEntry[];
-  } = {},
+  } & RegulExportPageState = {},
 ): GapAnalysisExcelRow[] {
   const keyed: { key: string; row: GapAnalysisExcelRow }[] = [];
   const seen = new Set<string>();
@@ -297,6 +343,12 @@ export function buildGapAnalysisExportRows(
     );
 
     const severity = resolveAnalysisPointSeverity(point);
+    // A clause the page closed (every gap resolved, status set to compliant automatically) still lists its
+    // resolved gaps on the page, so the export lists them too instead of the compliant note.
+    const hybridGaps =
+      !!options.regulHybridGaps &&
+      (severity !== 'compliant' || (point.finalStatusSource ?? '').toLowerCase() === 'auto');
+    const hybridCell = hybridGaps ? regulHybridGapsCell(point, options) : '';
     const hasPhase2 = Boolean(llmMsg.trim());
 
     const row: GapAnalysisExcelRow = {
@@ -311,10 +363,15 @@ export function buildGapAnalysisExportRows(
       status: exportStatusLabel(severity),
       complyYesNo: complyYesNoFromSeverity(severity),
       gapsIdentified:
-        (options.regulHybridGaps && severity !== 'compliant' ? regulHybridGapsCell(point, options.actionPlans) : '') ||
+        hybridCell ||
         gapsForPoint(point, structured, report.agreement, options.compliantNote),
       confidence: resolveDisplayConfidence(point),
     };
+    if (options.regulHybridGaps) {
+      const fulfilled = landingBlock?.fulfilledClauses ?? '';
+      row.fulfilled = hasDisplayableFulfilledClauses(fulfilled) ? parseBulletLines(fulfilled) : [];
+      row.actionsInGaps = !!hybridCell && !!options.actionPlans?.length;
+    }
 
     if (landingMsg.trim()) row.phase1 = phaseExport(landingBlock);
     if (hasPhase2) row.phase2 = phaseExport(llmBlock);

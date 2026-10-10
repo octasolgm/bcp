@@ -17,6 +17,8 @@ import { AnalyseRegulComponent } from '../analyse-regul/analyse-regul.component'
 import { AnalyseBase } from '../shared/analyse-base';
 import type { AnalysisPoint } from '../../../lib/nd/types';
 import type { GapAnalysisExcelOptions } from '../../../lib/nd/export/gap-analysis-export';
+import { indexGapStates } from '../../../lib/nd/gap-state';
+import type { GapEvidenceReview } from '../../../lib/nd/gap-evidence-rerun';
 import { NdPipelinePanelService } from '../../services/nd/nd-pipeline-panel.service';
 import { NdStepTrackerService, type NdStep } from '../../services/nd/nd-step-tracker.service';
 import { NdPageHeaderActionsService } from '../../services/nd/nd-page-header-actions.service';
@@ -448,10 +450,25 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * A regulation doc parsed+extracted via Azure DI has real clause/section text sitting right
    * there — no reason to depend on the separate, older Landing AI gov-point extraction that
    * this document may never have been run through. */
-  /** Excel / PDF gaps column lists each gap with its action (real accounts); demo exports stay as they are. */
+  /**
+   * Excel / PDF show what the gap analysis page shows (real accounts): each gap with its risk, Pending / Resolved
+   * state and "Rerun this gap" result, and its saved actions. Demo exports stay as they are.
+   */
   protected override async gapAnalysisExportOptions(): Promise<GapAnalysisExcelOptions> {
     const options = await super.gapAnalysisExportOptions();
-    return { ...options, regulHybridGaps: !this.ndAuth.isDemoViewer() };
+    if (this.ndAuth.isDemoViewer() || !this.ndRunId) return { ...options, regulHybridGaps: false };
+    const [gaps, results] = await Promise.all([
+      this.ndApi.getRunGaps(this.ndRunId),
+      this.ndApi.getResults(this.ndRunId),
+    ]);
+    const evidenceReviews =
+      (results.success ? (results.data as { gapEvidenceReviews?: GapEvidenceReview[] } | null)?.gapEvidenceReviews : null) ?? [];
+    return {
+      ...options,
+      regulHybridGaps: true,
+      gapStates: gaps.success && gaps.data ? indexGapStates(gaps.data) : new Map(),
+      evidenceReviews,
+    };
   }
 
   protected override async fetchNdRegulationPoints(id: string): Promise<{

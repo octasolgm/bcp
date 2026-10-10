@@ -186,4 +186,4 @@ Tasks
 - 5 of 8 gap re-checks on that run failed on the OpenRouter credit limit; failed checks keep the gap, so the results stay valid
 Bug fixes
 - Report and AML abbreviations (SAR, STR, KYC, ...) were taken as the bank's own name in the v6 search wording
-- Excel / PDF export, new analysis page: the "Identified Gaps" column showed the drafted actions under one "Gap 1" instead of the gaps; it now lists each gap with its own action(s), the same gaps and actions (including edits) as the gap analysis page
+- Excel / PDF export, new analysis page: the "Identified Gaps" column showed the drafted actions under one "Gap 1" instead of the gaps; it now lists each gap with its own action(s); the export now matches the gap analysis page, including gap risk, resolved gaps and actions, edited gaps and actions, action due dates and owners, and gap re-check results

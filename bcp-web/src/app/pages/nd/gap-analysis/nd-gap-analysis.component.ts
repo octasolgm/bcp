@@ -3264,6 +3264,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         llmLabel: this.ndRunLlmLabel,
         compliantNote: this.ndCompliantNote,
         regulHybridGaps: this.exportRegulHybridGaps,
+        gapStates: this.gapStates,
+        evidenceReviews: this.ndRunData?.gapEvidenceReviews ?? [],
         selection,
       };
       if (this.ndRunWorkflowEngine && isRegulWorkflow(this.ndRunWorkflowEngine)) {
@@ -3296,6 +3298,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         subtitle: this.subtitle,
         ...this.exportOptions(),
         regulHybridGaps: this.exportRegulHybridGaps,
+        gapStates: this.gapStates,
+        evidenceReviews: this.ndRunData?.gapEvidenceReviews ?? [],
       });
       this.toast.show('Exported gap analysis PDF', 'success');
     } catch {

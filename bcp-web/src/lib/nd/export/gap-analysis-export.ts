@@ -5,6 +5,8 @@ import {
   gapExportIncludesPhaseColumns,
   type GapAnalysisExcelRow,
 } from './gap-analysis-export-rows';
+import type { GapState } from '../gap-state';
+import type { GapEvidenceReview } from '../gap-evidence-rerun';
 import {
   actionPlanPriorityLabel,
   actionPlanStatusLabel,
@@ -51,8 +53,12 @@ export type GapAnalysisExcelOptions = {
   llmLabel?: string;
   /** Written in the gaps column of compliant rows (new analysis page only). */
   compliantNote?: string;
-  /** New analysis page (regul hybrid pipeline, real accounts): gaps column lists gap lines with their actions. */
+  /** New analysis page (regul hybrid pipeline, real accounts): gaps column lists the page's gaps with their actions. */
   regulHybridGaps?: boolean;
+  /** Saved gap rows (risk, Pending / Resolved) of the run; used with regulHybridGaps. */
+  gapStates?: Map<string, GapState>;
+  /** "Rerun this gap" evidence reviews of the run; used with regulHybridGaps. */
+  evidenceReviews?: GapEvidenceReview[];
   selection?: GapAnalysisExportSelection;
 };
 
@@ -329,6 +335,8 @@ export async function exportRegulGapAnalysisExcelFromPoints(
     compliantNote: options.compliantNote,
     regulHybridGaps: options.regulHybridGaps,
     actionPlans: options.actionPlans,
+    gapStates: options.gapStates,
+    evidenceReviews: options.evidenceReviews,
   });
   if (!rows.length) return;
   const docName = options.regulationDocumentName ?? '';
@@ -370,6 +378,8 @@ export async function exportGapAnalysisExcelFromPoints(
     compliantNote: options.compliantNote,
     regulHybridGaps: options.regulHybridGaps,
     actionPlans: options.actionPlans,
+    gapStates: options.gapStates,
+    evidenceReviews: options.evidenceReviews,
   });
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
@@ -406,8 +416,10 @@ export type GapAnalysisExportMeta = {
   regulationDocumentName?: string;
   actionPlans?: ActionPlanEntry[];
   clauseByPointId?: Map<string, string>;
-  /** New analysis page (regul hybrid pipeline, real accounts): gaps list gap lines with their actions. */
+  /** New analysis page (regul hybrid pipeline, real accounts): gaps list the page's gaps with their actions. */
   regulHybridGaps?: boolean;
+  gapStates?: Map<string, GapState>;
+  evidenceReviews?: GapEvidenceReview[];
 };
 
 export async function exportGapAnalysisPdfFromPoints(
@@ -417,6 +429,8 @@ export async function exportGapAnalysisPdfFromPoints(
   const rows = buildGapAnalysisExportRows(points, {
     regulHybridGaps: meta.regulHybridGaps,
     actionPlans: meta.actionPlans,
+    gapStates: meta.gapStates,
+    evidenceReviews: meta.evidenceReviews,
   });
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
@@ -478,6 +492,10 @@ export async function exportGapAnalysisPdfFromPoints(
       write('Document reference:', 8, true);
       write(r.documentReference.trim(), 8);
     }
+    if (r.fulfilled?.length) {
+      write('What this reference fulfills:', 8, true);
+      for (const line of r.fulfilled) write(`- ${line}`, 8);
+    }
     if (r.gapsIdentified?.trim()) {
       write('Gaps identified:', 8, true);
       write(r.gapsIdentified.trim(), 8);
@@ -493,7 +511,8 @@ export async function exportGapAnalysisPdfFromPoints(
       write(`Phase 2: ${r.phase2.status} · ${r.phase2.confidence}`, 8);
       if (r.phase2.gapsIdentified?.trim()) write(r.phase2.gapsIdentified.trim(), 8);
     }
-    const plans = plansByClause.get(r.pointNumber) ?? [];
+    // New analysis page: the gaps text already lists each action under its gap.
+    const plans = r.actionsInGaps ? [] : plansByClause.get(r.pointNumber) ?? [];
     if (plans.length) {
       write(`Action plans (${plans.length}):`, 8, true);
       for (const plan of plans) {

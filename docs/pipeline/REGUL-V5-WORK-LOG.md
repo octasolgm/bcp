@@ -69,7 +69,7 @@ or document, no code.
 | T33 | Plan V2 task 3: the bank's own name for itself | Bug | Done (v6, automatic detection) | To confirm on a v6 run of 3.3 | branch feature/regul-plan-v2 |
 | T34 | Gap re-check costs one AI call per gap: setting to skip low-risk gaps | Feature | Done (on by default) | To confirm | branch feature/regul-plan-v2 |
 | T35 | "SAR" detected as one of the bank's own names | Bug | Done | To confirm | branch feature/regul-plan-v2 |
-| T36 | Excel / PDF "Identified Gaps" column showed the action text instead of the gaps | Bug | Done | To confirm on the next export | branch feature/regul-plan-v2 |
+| T36 | Excel / PDF "Identified Gaps" column showed the action text instead of the gaps; export now matches the gap analysis page (edits, resolutions) | Bug | Done | To confirm on the next export | branch feature/regul-plan-v2 |
 
 ---
 
@@ -515,17 +515,28 @@ or document, no code.
   and never what is actually missing. The Actions sheet was right.
 - **Cause:** the export built the column from the clause's action plan text (the old engines keep their gaps there).
   On the new analysis page the gaps are stored separately, as one "[n] ..." line per gap in the "Gap analysis" field.
-- **Fix:** on the new analysis page (real accounts only), the column is built from the same sources as the gap
-  analysis page: the page's own gap list ("Gap n: <gap line>", or the user's edited gaps), and under each gap the run's
-  saved action plans for that gap (the actions shown, edited and added on the page). Only when the run has no saved
-  action plans yet are the AI's drafted actions used, matched by "[n]" like the Actions sheet seeds them. Actions
-  attached to no listed gap go under "Other actions", so no text is dropped. Compliant rows keep their note. Same
-  change in the PDF export. Other pages, older engines and demo accounts keep the previous text.
-- **Where:** `gap-analysis-export-rows.ts` (`regulHybridGapsCell`, options `regulHybridGaps` and `actionPlans`),
-  `gap-analysis-export.ts`, `nd-gap-analysis.component.ts` (`exportRegulHybridGaps`),
-  `analyse-regul-full-v2.component.ts` (`gapAnalysisExportOptions`).
-- **Verified:** 7 new unit tests (10 in the file pass), including saved and user-added actions and user-edited gaps;
-  the real 3.8 result of the 10 Oct run renders as two gaps, each with its own action; web type check clean.
+- **Fix:** on the new analysis page (real accounts only), the export shows what the gap analysis page shows, including
+  everything users edit or resolve there:
+  - each gap from the page's own gap list (the AI's gap lines, or the user's edited gaps) as
+    "Gap n (Risk High/Medium/Low, Pending/Resolved): <gap>", with the risk saved on the page (else the AI's) and
+    Resolved once all its actions are resolved or the gap was resolved by hand;
+  - the latest "Rerun this gap" result under the gap ("Evidence review: Partly fulfilled; still missing: ...");
+  - under each gap its saved actions as on the page: "Action (Resolved, High priority, due 15 Nov 2026, owner): ...";
+    edited, added and deleted actions follow the page; actions of a gap no longer listed go under "Other actions";
+  - only while the run has no saved actions yet, the AI's drafted actions matched by "[n]" as they are seeded;
+  - status column: the page's status (manual change or automatic "compliant" once every gap is resolved); a clause
+    closed automatically lists its resolved gaps instead of the compliant note;
+  - PDF: also "What this reference fulfills", and the separate per-clause action list is not repeated when the
+    actions are already listed under their gaps.
+  Other pages, older engines and demo accounts keep the previous export.
+- **Where:** `gap-analysis-export-rows.ts` (`regulHybridGapsCell`, `RegulExportPageState`: action plans, gap states,
+  evidence reviews), `gap-analysis-export.ts` (Excel options, PDF meta and layout), `nd-gap-analysis.component.ts`
+  (passes the page's gap states and evidence reviews), `analyse-regul-full-v2.component.ts` (loads them for its own
+  export).
+- **Verified:** 10 tests for this column (13 in the file pass): AI actions before any is saved, several actions per
+  gap, saved actions with status / priority / due date / owner, saved gap risk and resolved state, latest evidence
+  review, automatically closed clause, edited gaps, other pages unchanged; the real 3.8 result renders with the same
+  risks as the run (Low, Medium); web type check clean.
 - **Status:** done; confirm on the next export.
 
 ---
