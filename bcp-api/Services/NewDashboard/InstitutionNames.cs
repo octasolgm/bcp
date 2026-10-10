@@ -32,6 +32,10 @@ public static partial class InstitutionNames
         "Authority", "Authorities", "Government", "Ministry", "Court", "Law", "Article", "Section", "Policy", "Procedure",
         "Manual", "Report", "Reports", "Person", "Persons", "Entity", "Entities", "Committee", "Head", "Director",
         "Directors", "Auditor", "Audit", "Internal", "External", "Group",
+        // Reports, processes and AML terms written in capitals ("SAR shall be filed ...") are not the bank.
+        "SAR", "SARs", "STR", "STRs", "CTR", "CTRs", "AML", "CFT", "CTF", "CDD", "EDD", "SDD", "KYC", "KYB", "PEP", "PEPs",
+        "UBO", "UBOs", "TFS", "NRA", "ML", "TF", "PF", "EOCN", "GoAML", "RFI", "RFIs", "MLRO", "DMLRO", "AMLCO",
+        "SWIFT", "IBAN", "NPO", "NPOs", "DNFBP", "DNFBPs", "VASP", "VASPs",
     };
 
     public static IReadOnlyList<string> Detect(IEnumerable<string> texts)

@@ -68,6 +68,7 @@ or document, no code.
 | T32 | Plan V2 task 2: keyword search understands word forms; pipeline v6 added | Bug | Done (v6 only) | To confirm on a v6 run | branch feature/regul-plan-v2 |
 | T33 | Plan V2 task 3: the bank's own name for itself | Bug | Done (v6, automatic detection) | To confirm on a v6 run of 3.3 | branch feature/regul-plan-v2 |
 | T34 | Gap re-check costs one AI call per gap: setting to skip low-risk gaps | Feature | Done (on by default) | To confirm | branch feature/regul-plan-v2 |
+| T35 | "SAR" detected as one of the bank's own names | Bug | Done | To confirm | branch feature/regul-plan-v2 |
 
 ---
 
@@ -494,6 +495,16 @@ or document, no code.
   failures; web build passes.
 - **Cost:** 3.5 drops from ~$0.15 to ~$0.08 per clause.
 
+### T35 - "SAR" detected as one of the bank's own names (Bug)
+
+- **Problem:** the 10 Oct v6 run listed "UAE, SAR, DIFC" as the bank's names, so clauses were also searched as "SAR are
+  prohibited from ...".
+- **Cause:** "SAR shall be submitted ..." looks like a duty of a capitalised name.
+- **Fix:** report, process and AML abbreviations (SAR, STR, CTR, CDD, EDD, KYC, PEP, UBO, TFS, NRA, MLRO, goAML, ...)
+  are never taken as the bank's name.
+- **Where:** `InstitutionNames.NotSelfNames`; test extended.
+- **Status:** done.
+
 ---
 
 ## 3. Test runs
@@ -505,6 +516,7 @@ or document, no code.
 | 3.5 | v5, prompt v11, local | Partial 72%, 2 gaps | Definitions gap right; actions on the wrong gap; risk Medium; whole paragraph quoted in a gap | T21, T22, T23, T26 |
 | 3.5 (latest) | v5, prompt v11 | Partial 70%, 3 low gaps ("funds", "proceeds", timeframe), each with its own action, Low / 45 days | All covered points right against the PDFs; judgment 50 s, gap checks 4-8 s; timeframe note missing (T26) | T17, T18, T21-T23 |
 | 3.5 (latest), downloaded report | same run | 120 passages selected (114 keyword, 22 meaning matches); p.22 selected; p.24 not selected by the main search but found by the gap check; gap check answered not_covered for all 3 gaps | Steps 1-6 33 s (Azure calls one by one, T29); timeframe classed not covered although p.22 / p.24 deal with it (T28); "GPML" and long-form "AML" acronyms in the search wording (T30) | T28-T30 |
+| 10 Oct, 3.4 / 3.5 / 3.7 / 3.8 / 3.9 | v6, prompt v11, Azure, gap re-check on | 3.4 partial (bearer shares, High); 3.5 partial (funds, proceeds, timeframe, Low); 3.7 partial (first limb of the TF definition, Low); 3.8 partial (illegal organisations definition, Low; NPO attention, Medium); 3.9 compliant | Shahid's question: clauses that only use "funds" / "proceeds" (3.4, 3.7, 3.8, 3.9) raised no "funds / proceeds definition" gap; each gap is that clause's own requirement. 5 of 8 gap checks failed with OpenRouter 402 (credit / in-flight budget), gaps kept. Bank names included "SAR" (T35). Duplicate manual still selected. Excel "Identified Gaps" column shows the action text (export bug) | T33, T35 |
 
 ---
 

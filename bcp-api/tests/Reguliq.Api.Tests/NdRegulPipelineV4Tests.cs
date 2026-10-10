@@ -153,6 +153,7 @@ public class NdRegulPipelineV4Tests
             texts.Add("UAE shall maintain records. The FIU will review the report. Employees must report promptly.");
         }
         texts.Add("CBUAE shall issue guidance.");
+        for (var i = 0; i < 6; i++) texts.Add("SAR shall be submitted to the FIU. STR must include the narrative.");
 
         var names = InstitutionNames.Detect(texts);
 
@@ -161,6 +162,8 @@ public class NdRegulPipelineV4Tests
         Assert.DoesNotContain("FIU", names);
         Assert.DoesNotContain("Employees", names);
         Assert.DoesNotContain("CBUAE", names);
+        Assert.DoesNotContain("SAR", names);
+        Assert.DoesNotContain("STR", names);
     }
 
     [Fact]
