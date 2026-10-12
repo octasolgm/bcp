@@ -49,6 +49,7 @@ import {
   type SeededActionPlan,
 } from '../../../../lib/nd/action-plan-seed';
 import { capGapsForAnalysisPoint } from '../../../../lib/nd/cap-gap-count';
+import { notifyAnalysisFinished } from '../../../../lib/nd/analysis-finish-notify';
 import { isAnalysisRunResultsReady } from '../../../../lib/nd/analysis-run-status';
 import { finalizeEmbedToastNote } from '../../../../lib/nd/finalize-embed-toast';
 import { normalizeGapRisk } from '../../../../lib/nd/doc-analysis-ready';
@@ -384,6 +385,13 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   get canUseEvals(): boolean {
     return !this.embedMode && !!this.ndRunId && this.isNdRegulWorkflow
       && this.auth.isPlatformAdmin() && !this.auth.isDemoViewer();
+  }
+
+  /** Temporary test of the "sound when an analysis finishes" notification on an existing analysis: plays the chime
+   * and reads out this run's summary with the browser voice (no AI, no credits), whatever the admin setting is. */
+  testFinishSound(): void {
+    const points = (this.ndRunData?.points ?? []).filter((p) => !!p.regulationPointId);
+    void notifyAnalysisFinished('voice', points.length ? points : this.ndRunData?.points ?? []);
   }
 
   /** Free retrieval check drawer (Steps 1-6 only, no AI call). */

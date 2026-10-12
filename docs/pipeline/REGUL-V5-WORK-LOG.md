@@ -557,6 +557,9 @@ or document, no code.
   (`announceRunFinished`, `pollNdRunWhileHidden`), `analyse-base.ts` (hook, default unchanged), admin prompts page.
 - **Verified:** 3 unit tests (setting values, status and gap counts by risk, spoken sentence); API build and web
   build pass.
+- **Temporary test button:** "Test finish sound" in the gap analysis report header (platform super admins, real
+  analyses, next to Retrieval check) plays the chime and reads out that analysis's summary, so it can be tested on
+  an existing run without a new analysis. Remove once confirmed.
 - **Status:** done; turn it on in Admin and confirm on the next run.
 
 ---

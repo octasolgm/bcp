@@ -59,6 +59,12 @@
         Retrieval check
       </button>
     }
+    @if (canUseEvals) {
+      <!-- Temporary: test the finish sound on this analysis without running a new one. -->
+      <button type="button" class="btn-secondary" title="Play the finish chime and read out this analysis's summary (browser voice, no AI, no credits)" (click)="testFinishSound()">
+        Test finish sound
+      </button>
+    }
     @if (!embedMode && canDeleteSession) {
       <button
         type="button"
