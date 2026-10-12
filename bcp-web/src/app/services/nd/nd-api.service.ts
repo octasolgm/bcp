@@ -1127,6 +1127,15 @@ export class NdApiService {
     return this.request<NdEmbeddingProviderSetting>('PUT', '/nd/admin/settings/regul-embedding-provider', { provider });
   }
 
+  /** Sound when an analysis finishes: off / tone / voice (read by every signed-in user, set by the platform admin). */
+  getAnalysisFinishSound() {
+    return this.request<{ mode: string }>('GET', '/nd/admin/settings/analysis-finish-sound');
+  }
+
+  updateAnalysisFinishSound(mode: string) {
+    return this.request<{ mode: string }>('PUT', '/nd/admin/settings/analysis-finish-sound', { mode });
+  }
+
   getRegulGapCheckSkipLow() {
     return this.request<{ enabled: boolean }>('GET', '/nd/admin/settings/regul-gap-check-skip-low');
   }

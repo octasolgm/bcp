@@ -70,6 +70,7 @@ or document, no code.
 | T34 | Gap re-check costs one AI call per gap: setting to skip low-risk gaps | Feature | Done (on by default) | To confirm | branch feature/regul-plan-v2 |
 | T35 | "SAR" detected as one of the bank's own names | Bug | Done | To confirm | branch feature/regul-plan-v2 |
 | T36 | Excel / PDF "Identified Gaps" column showed the action text instead of the gaps; export now matches the gap analysis page (edits, resolutions) | Bug | Done | To confirm on the next export | branch feature/regul-plan-v2 |
+| T37 | Sound when an analysis finishes (chime, or chime and spoken summary), admin setting | Feature | Done (off by default) | To confirm on a run | branch feature/regul-plan-v2 |
 
 ---
 
@@ -536,6 +537,27 @@ or document, no code.
   dialog column choice; other pages unchanged. Real 3.8 result: two gaps with the run's risks (Low, Medium); web
   type check clean.
 - **Status:** done; confirm on the next export.
+
+---
+
+### T37 - Sound when an analysis finishes (Feature)
+
+- **Request:** a tone when an analysis finishes, optionally followed by a spoken summary (status counts and gaps),
+  without using AI credits; an admin setting for off / tone only / tone and detail.
+- **Fix:** Admin > Analysis prompts > "Sound when an analysis finishes": Off (default), Chime only, Chime and summary,
+  with a "Play sample" button. On the V5 analysis page, when a run the page saw in flight finishes, the browser plays
+  a two-note chime (Web Audio API) and, in summary mode, reads out e.g. "Analysis finished. 5 clauses: 1 compliant,
+  4 partially compliant. 6 gaps: 1 high risk, 2 medium risk, 3 low risk." with the browser's own speech engine. A
+  failed run gets the chime and "Analysis stopped with an error". No AI call, no credits. A finished run that is only
+  opened is never announced. With a sound set, the page keeps polling in a background tab so the sound plays when the
+  run ends. Demo accounts: always off.
+- **Where:** `RegulWorkflowLlmSettingsService` (`GetFinishSoundModeAsync`, `SetFinishSoundModeAsync`, key
+  `nd_analysis_finish_sound`), `SystemSettingsController` (`analysis-finish-sound`: GET any signed-in user, PUT
+  platform admin), `analysis-finish-notify.ts` (new), `analyse-regul-full-v2.component.ts`
+  (`announceRunFinished`, `pollNdRunWhileHidden`), `analyse-base.ts` (hook, default unchanged), admin prompts page.
+- **Verified:** 3 unit tests (setting values, status and gap counts by risk, spoken sentence); API build and web
+  build pass.
+- **Status:** done; turn it on in Admin and confirm on the next run.
 
 ---
 

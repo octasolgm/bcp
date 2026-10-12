@@ -114,6 +114,39 @@ public class SystemSettingsController(
         });
     }
 
+    /// <summary>Sound when an analysis finishes: off / tone / voice. Every signed-in user reads it (the browser
+    /// plays it); only the platform super admin changes it.</summary>
+    [HttpGet("analysis-finish-sound")]
+    public async Task<IActionResult> GetAnalysisFinishSound(CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct);
+        if (error != null) return error;
+        return Ok(new { success = true, data = new { mode = await regulLlmSettings.GetFinishSoundModeAsync(ct) } });
+    }
+
+    public sealed record AnalysisFinishSoundRequest(string Mode);
+
+    [HttpPut("analysis-finish-sound")]
+    public async Task<IActionResult> UpdateAnalysisFinishSound([FromBody] AnalysisFinishSoundRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+        if (RegulWorkflowLlmSettingsService.NormalizeFinishSoundMode(body.Mode) == null)
+            return BadRequest(new { success = false, message = "Choose off, tone or voice." });
+        var mode = await regulLlmSettings.SetFinishSoundModeAsync(body.Mode, profile.Id, ct);
+        return Ok(new
+        {
+            success = true,
+            data = new { mode },
+            message = mode switch
+            {
+                RegulWorkflowLlmSettingsService.FinishSoundVoice => "A chime and a spoken summary play when an analysis finishes.",
+                RegulWorkflowLlmSettingsService.FinishSoundTone => "A chime plays when an analysis finishes.",
+                _ => "No sound when an analysis finishes.",
+            },
+        });
+    }
+
     [HttpGet("regul-pipeline-version")]
     public async Task<IActionResult> GetRegulPipelineVersion(CancellationToken ct)
     {

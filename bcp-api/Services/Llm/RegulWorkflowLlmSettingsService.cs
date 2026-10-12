@@ -146,6 +146,61 @@ public class RegulWorkflowLlmSettingsService(
             _ => null,
         };
 
+    public const string FinishSoundOff = "off";
+    public const string FinishSoundTone = "tone";
+    public const string FinishSoundVoice = "voice";
+    private const string FinishSoundSettingKey = "nd_analysis_finish_sound";
+    private const string FinishSoundMemoKey = "nd_analysis_finish_sound_mode";
+
+    /// <summary>What the analysis page does when a run it is watching finishes: "off" (nothing, the default), "tone"
+    /// (a short chime) or "voice" (chime, then the browser reads out the status and gap counts). Played and spoken by
+    /// the user's browser, so it uses no AI call and no credits.</summary>
+    public async Task<string> GetFinishSoundModeAsync(CancellationToken ct = default)
+    {
+        if (cache.TryGetValue(FinishSoundMemoKey, out string? cached) && cached != null) return cached;
+        var row = await db.NdSystemSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Key == FinishSoundSettingKey, ct);
+        var mode = NormalizeFinishSoundMode(row?.ValueJson) ?? FinishSoundOff;
+        cache.Set(FinishSoundMemoKey, mode, CacheTtl);
+        return mode;
+    }
+
+    public async Task<string> SetFinishSoundModeAsync(string mode, Guid updatedBy, CancellationToken ct = default)
+    {
+        var normalized = NormalizeFinishSoundMode(mode)
+            ?? throw new ArgumentException("Choose off, tone or voice.", nameof(mode));
+        var row = await db.NdSystemSettings.FirstOrDefaultAsync(s => s.Key == FinishSoundSettingKey, ct);
+        var json = $"\"{normalized}\"";
+        if (row == null)
+        {
+            db.NdSystemSettings.Add(new NdSystemSetting
+            {
+                Key = FinishSoundSettingKey,
+                ValueJson = json,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                UpdatedBy = updatedBy,
+            });
+        }
+        else
+        {
+            row.ValueJson = json;
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+            row.UpdatedBy = updatedBy;
+        }
+        await db.SaveChangesAsync(ct);
+        cache.Remove(FinishSoundMemoKey);
+        return normalized;
+    }
+
+    public static string? NormalizeFinishSoundMode(string? value) =>
+        (value ?? "").Trim().Trim('"').ToLowerInvariant() switch
+        {
+            FinishSoundOff => FinishSoundOff,
+            FinishSoundTone => FinishSoundTone,
+            FinishSoundVoice => FinishSoundVoice,
+            _ => null,
+        };
+
     private const string GapCheckSkipLowSettingKey = "regul_gap_check_skip_low";
     private const string GapCheckSkipLowMemoKey = "regul_gap_check_skip_low_enabled";
 

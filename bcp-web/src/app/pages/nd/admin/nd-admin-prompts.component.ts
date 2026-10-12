@@ -11,6 +11,13 @@ import type {
   AnalysisPromptVersion,
   DualVerifyLlmProviderOption,
 } from '../../../../lib/nd/types';
+import {
+  analysisFinishSpeech,
+  normalizeFinishSoundMode,
+  playFinishChime,
+  speakText,
+  type FinishSoundMode,
+} from '../../../../lib/nd/analysis-finish-notify';
 
 @Component({
   selector: 'app-nd-admin-prompts',
@@ -114,6 +121,56 @@ export class NdAdminPromptsComponent implements OnInit {
     this.gapSkipLowMessage = res.message ?? 'Saved.';
   }
 
+  finishSoundMode: FinishSoundMode | null = null;
+  finishSoundSelected: FinishSoundMode = 'off';
+  finishSoundSaving = false;
+  finishSoundMessage = '';
+
+  async loadFinishSound(): Promise<void> {
+    const res = await this.api.getAnalysisFinishSound();
+    if (res.success && res.data) {
+      this.finishSoundMode = normalizeFinishSoundMode(res.data.mode);
+      this.finishSoundSelected = this.finishSoundMode;
+    }
+  }
+
+  async saveFinishSound(): Promise<void> {
+    this.finishSoundSaving = true;
+    this.finishSoundMessage = '';
+    const res = await this.api.updateAnalysisFinishSound(this.finishSoundSelected);
+    this.finishSoundSaving = false;
+    if (!res.success || !res.data) {
+      this.finishSoundMessage = res.message ?? 'Could not save the setting. Please try again.';
+      return;
+    }
+    this.finishSoundMode = normalizeFinishSoundMode(res.data.mode);
+    this.finishSoundSelected = this.finishSoundMode;
+    this.finishSoundMessage = res.message ?? 'Saved.';
+  }
+
+  /** Plays the selected option with sample counts, so the admin hears it before saving. */
+  previewFinishSound(): void {
+    if (this.finishSoundSelected === 'off') return;
+    void (async () => {
+      await playFinishChime();
+      if (this.finishSoundSelected === 'voice') {
+        speakText(
+          analysisFinishSpeech({
+            clauses: 5,
+            compliant: 1,
+            partial: 4,
+            nonCompliant: 0,
+            notAnalysed: 0,
+            gaps: 6,
+            highGaps: 1,
+            mediumGaps: 2,
+            lowGaps: 3,
+          }),
+        );
+      }
+    })();
+  }
+
   embeddingSetting: NdEmbeddingProviderSetting | null = null;
   embeddingSelected = 'local';
   embeddingSaving = false;
@@ -179,7 +236,7 @@ export class NdAdminPromptsComponent implements OnInit {
       if (!Number.isNaN(n)) this.versionsPanelPct = Math.min(45, Math.max(18, n));
     }
     await this.auth.refreshProfile();
-    await Promise.all([this.load(), this.loadLlmProviders(), this.loadRetrievalCache(), this.loadPipelineVersion(), this.loadEmbeddingProvider(), this.loadGapSkipLow()]);
+    await Promise.all([this.load(), this.loadLlmProviders(), this.loadRetrievalCache(), this.loadPipelineVersion(), this.loadEmbeddingProvider(), this.loadGapSkipLow(), this.loadFinishSound()]);
   }
 
   async loadLlmProviders(): Promise<void> {

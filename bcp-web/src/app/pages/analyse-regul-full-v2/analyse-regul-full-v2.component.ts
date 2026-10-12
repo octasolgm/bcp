@@ -28,6 +28,12 @@ import { capGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
 import { resolveAnalysisPointSeverity } from '../../../lib/nd/point-compliance-status';
 import { buildSeededActionPlansForGap, type SeededActionPlan } from '../../../lib/nd/action-plan-seed';
 import { logClauseRetrieval, logClauseTraces } from '../../../lib/nd/pipeline-console-log';
+import {
+  normalizeFinishSoundMode,
+  notifyAnalysisFailed,
+  notifyAnalysisFinished,
+  type FinishSoundMode,
+} from '../../../lib/nd/analysis-finish-notify';
 
 function clauseNoFromSnapshot(snapshot: string | null | undefined): string | null {
   if (!snapshot) return null;
@@ -291,6 +297,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     this.syncPageHeaderMarquee();
     this.pageHeaderActions.setShowInProgressNav(true);
     super.ngOnInit();
+    void this.loadFinishSoundMode();
     // Doc lists themselves load asynchronously (super.ngOnInit kicks that off), and how long
     // that takes varies with network/DB latency — no fixed delay is ever safely "long enough".
     // Instead of guessing delays, poll fast and recursively re-check readiness on every tick:
@@ -763,6 +770,34 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * reload ourselves makes a live run look exactly like the reopened one. */
   private rehydratedRunPhase = '';
 
+  /** Admin setting: chime / chime and spoken summary when a run this page watched finishes. Demo accounts: off. */
+  private finishSoundMode: FinishSoundMode = 'off';
+  /** The run this page has seen in flight; only such a run is announced, never a finished run that is just opened. */
+  private finishSoundLiveRunId: string | null = null;
+
+  private async loadFinishSoundMode(): Promise<void> {
+    if (this.ndAuth.isDemoViewer()) return;
+    const res = await this.ndApi.getAnalysisFinishSound();
+    if (res.success && res.data) this.finishSoundMode = normalizeFinishSoundMode(res.data.mode);
+  }
+
+  protected override pollNdRunWhileHidden(): boolean {
+    return this.finishSoundMode !== 'off' && !this.ndAuth.isDemoViewer();
+  }
+
+  private announceRunFinished(runId: string, status: string): void {
+    if (this.finishSoundLiveRunId !== runId) return;
+    this.finishSoundLiveRunId = null;
+    const mode = this.ndAuth.isDemoViewer() ? 'off' : this.finishSoundMode;
+    const s = (status || '').toLowerCase();
+    if (s === 'completed') {
+      const points = this.ndRunDetailPoints.filter((p) => !!p.regulationPointId);
+      void notifyAnalysisFinished(mode, points.length ? points : this.ndRunDetailPoints);
+    } else if (s === 'failed') {
+      void notifyAnalysisFailed(mode);
+    }
+  }
+
   protected override onNdRunPollMerged(data: {
     status: string;
     workflowEngine?: string;
@@ -776,6 +811,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     const runId = this.ndRunId;
     if (!runId) return;
     const settled = ['completed', 'failed', 'cancelled'].includes((data.status || '').toLowerCase());
+    if (!settled) this.finishSoundLiveRunId = runId;
     const phaseKey = `${runId}:${settled ? 'done' : 'live'}`;
     if (this.rehydratedRunPhase === phaseKey) return;
     this.rehydratedRunPhase = phaseKey;
@@ -787,6 +823,8 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       // The reopened page has the real status, so mirror it — but only once the run (and so its snapshot) has
       // been loaded: with a real status and no snapshot the same helpers recurse without end.
       if (this.ndRunId === runId && status && this.ndRunSelectedSnapshot) this.ndRunStatus = status;
+      // Counts come from the reloaded results, so the spoken summary matches what the page now shows.
+      if (settled && this.ndRunId === runId) this.announceRunFinished(runId, status);
     });
   }
 

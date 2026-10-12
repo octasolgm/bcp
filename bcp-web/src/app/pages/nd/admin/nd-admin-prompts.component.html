@@ -380,6 +380,38 @@
               </div>
             </section>
           }
+          @if (finishSoundMode !== null) {
+            <section class="nd-card cache-card">
+              <div class="cache-card-text">
+                <h2>Sound when an analysis finishes</h2>
+                <p class="nd-muted">
+                  Played by the user's browser on the analysis page when a run they are watching finishes, even in a
+                  background tab. Uses no AI and no credits. "Chime" plays a short tone. "Chime and summary" also reads
+                  out the result, for example "Analysis finished. 5 clauses: 1 compliant, 4 partially compliant. 6 gaps:
+                  1 high risk, 2 medium risk, 3 low risk." Not used for demo accounts.
+                </p>
+                @if (finishSoundMessage) {
+                  <p class="nd-success">{{ finishSoundMessage }}</p>
+                }
+              </div>
+              <div class="cache-card-actions">
+                <select class="nd-input pipeline-select" id="finish-sound-mode" [(ngModel)]="finishSoundSelected" aria-label="Sound when an analysis finishes">
+                  <option value="off">Off</option>
+                  <option value="tone">Chime only</option>
+                  <option value="voice">Chime and summary</option>
+                </select>
+                <button type="button" class="nd-btn-secondary" (click)="previewFinishSound()">Play sample</button>
+                <button
+                  type="button"
+                  class="nd-btn-primary"
+                  [disabled]="finishSoundSaving || finishSoundSelected === finishSoundMode"
+                  (click)="saveFinishSound()"
+                >
+                  {{ finishSoundSaving ? 'Saving...' : 'Save' }}
+                </button>
+              </div>
+            </section>
+          }
           @if (embeddingLoadError && !embeddingSetting) {
             <section class="nd-card cache-card">
               <div class="cache-card-text">

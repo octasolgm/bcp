@@ -318,6 +318,12 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     processedPointsCount: number;
   }): void {}
 
+  /** Keep polling the run while the tab is in the background (off by default: polling pauses until the tab is
+   * visible again). The V5 page turns it on when a finish sound is set, so the sound plays when the run ends. */
+  protected pollNdRunWhileHidden(): boolean {
+    return false;
+  }
+
   protected isRegulPipelineRun(): boolean {
     return isRegulWorkflow(this.ndWorkflowEngine);
   }
@@ -5421,7 +5427,7 @@ ${this.findingsPreview
         ? 3_000
         : 10_000;
     const tick = () => {
-      if (typeof document !== 'undefined' && document.hidden) return;
+      if (typeof document !== 'undefined' && document.hidden && !this.pollNdRunWhileHidden()) return;
       if (this.ndRunPollInFlight) return;
       this.ndRunPollInFlight = true;
       void this.ndApi
