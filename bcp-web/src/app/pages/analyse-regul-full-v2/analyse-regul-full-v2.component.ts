@@ -485,6 +485,12 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     document?: StoredDocumentDto;
   }> {
     const doc = this.regulationDocs.find((d) => d.id === id);
+    // The readiness poll may not have answered yet (a new workspace, or a regulation picked right after the
+    // page opened). Ask for this document's status now rather than falling back to the older points source,
+    // which showed e.g. 1 point and then the real 96 once the poll caught up.
+    if (doc && !this.ndAuth.isDemoViewer() && !this.localPipelineReady.has(this.storedDocId(doc))) {
+      await this.checkLocalReadiness(doc);
+    }
     if (doc && this.localPipelineReady.has(this.storedDocId(doc))) {
       const sections = await this.loadLocalSections(this.storedDocId(doc));
       const points = this.localSectionsToGovPoints(doc, sections);
@@ -492,6 +498,29 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       return { success: true, points, document: doc };
     }
     return super.fetchNdRegulationPoints(id);
+  }
+
+  /** One document's azure-di status, asked directly (same light call as the readiness poll). */
+  private async checkLocalReadiness(doc: StoredDocumentDto): Promise<void> {
+    const id = this.storedDocId(doc);
+    const res = await this.ndApi.localExtractStatusBatch([id], 'azure-di', { lite: true });
+    const status = res.success ? res.data?.[id] : undefined;
+    if (status?.extractStatus !== 'extracted') return;
+    this.localPipelineReady.add(id);
+    if ((status.sectionCount ?? 0) > 0) doc.pointCount = status.sectionCount;
+  }
+
+  /** V5 starts with no clause ticked (real accounts): a run covers only the clauses the user picks, and the
+   * run counter shows that number. Demo accounts keep their existing behaviour. */
+  protected override selectAllPointsOnLoad(): boolean {
+    return this.ndAuth.isDemoViewer();
+  }
+
+  /** Point count next to a regulation: the extracted clause count once known; until the first status check
+   * has answered, no number (the older stored count, often 0 or 1, is not this page's count). */
+  regDocPointLabel(doc: StoredDocumentDto): string {
+    if (this.ndAuth.isDemoViewer() || this.localPipelineReady.has(this.storedDocId(doc))) return `${doc.pointCount ?? 0} pts`;
+    return this.hasSyncedPipelineDocsOnce ? `${doc.pointCount ?? 0} pts` : '... pts';
   }
 
   /** The document's extracted clauses (clause number + text). Read once per document with the full status

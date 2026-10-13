@@ -11,3 +11,7 @@ A demo of the analysis is planned for this week. It walks through one money laun
 Sound when an analysis finishes
 
 The analysis page can now play a short chime when an analysis finishes, so you do not need to watch the screen. Administrators can also choose a spoken summary after the chime, which reads out how many clauses are compliant or partially compliant and how many gaps were found at each risk level. The sound is produced by your browser and uses no AI credits. It is off by default and can be turned on in the analysis settings.
+
+Choosing clauses for a new analysis
+
+When a regulation is selected on the new analysis page, the page now shows the regulation's full clause list straight away, instead of a smaller number that changed a moment later. No clauses are pre-selected any more, so an analysis only covers the clauses you choose, and the progress counter shows exactly that number.

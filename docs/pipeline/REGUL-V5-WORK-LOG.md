@@ -71,6 +71,7 @@ or document, no code.
 | T35 | "SAR" detected as one of the bank's own names | Bug | Done | To confirm | branch feature/regul-plan-v2 |
 | T36 | Excel / PDF "Identified Gaps" column showed the action text instead of the gaps; export now matches the gap analysis page (edits, resolutions) | Bug | Done | To confirm on the next export | branch feature/regul-plan-v2 |
 | T37 | Sound when an analysis finishes (chime, or chime and spoken summary), admin setting | Feature | Done (off by default) | To confirm on a run | branch feature/regul-plan-v2 |
+| T38 | New analysis page: point count jumped (1, then 96), every clause ticked by default, run counter 0/85 for one clause | Bug | Done | To confirm in a new workspace | branch feature/regul-plan-v2 |
 
 ---
 
@@ -561,6 +562,35 @@ or document, no code.
   analyses, next to Retrieval check) plays the chime and reads out that analysis's summary, so it can be tested on
   an existing run without a new analysis. Remove once confirmed.
 - **Status:** done; turn it on in Admin and confirm on the next run.
+
+---
+
+### T38 - New analysis page: point count, default selection and run counter (Bug)
+
+- **Problem (reported in a new workspace):** picking a regulation with 96 clauses first showed 1 point, then 96 a
+  little later; every clause was ticked as soon as the points loaded; after ticking one clause and running, the
+  counter read 0/85.
+- **Cause:**
+  - the page reads each document's real clause count from a readiness poll; when the regulation was picked before
+    that poll had answered, the page fell back to the older points source (which held 1 point for this document)
+    and only showed the 96 extracted clauses once the poll caught up; the "N pts" label showed the older stored
+    count in the meantime;
+  - the shared points loader ticks every loaded point when there is no saved selection (85 of the 96 sections are
+    analysable clauses);
+  - before the run's own clause list arrives, the counter takes its total from the ticked clauses, so with every
+    clause ticked it read 0/85.
+- **Fix (V5 page, real accounts):**
+  - when a regulation is picked and its status is not known yet, the page asks for that document's status
+    directly and loads its extracted clauses; the list shows "Loading points..." meanwhile, never the older count;
+  - the "N pts" label shows "... pts" until the first status check has answered;
+  - nothing is ticked when the points load; the user ticks the clauses to run, and the counter follows them.
+  - Demo accounts keep their existing behaviour (all points ticked, older label); V3 / V4 pages unchanged
+    (the shared loader keeps ticking everything unless a page opts out).
+- **Where:** `analyse-base.ts` (`selectAllPointsOnLoad` hook, default true), `analyse-regul-full-v2.component.ts`
+  (`fetchNdRegulationPoints`, `checkLocalReadiness`, `selectAllPointsOnLoad`, `regDocPointLabel`) and its template.
+- **Verified:** web build passes. Not yet seen in the app: confirm in a new workspace (pick the regulation right
+  after the page opens, tick one clause, run).
+- **Status:** done; to confirm.
 
 ---
 

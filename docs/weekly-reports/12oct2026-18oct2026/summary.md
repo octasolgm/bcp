@@ -9,3 +9,11 @@ Tasks
 - Sound when an analysis finishes: admin setting Off / Chime only / Chime and summary; the browser plays a chime and can read out the status and gap counts (no AI, no credits); demo accounts unaffected
 Bug fixes
 - None
+
+13 Oct 2026
+
+Tasks
+- Temporary "Test finish sound" button on the analysis report, to test the finish notification on an existing analysis
+- Run guide from upload to export, and client version of the improvements update
+Bug fixes
+- New analysis page: a regulation's point count showed the older stored count first (1, then 96); every clause was ticked when the points loaded; the run counter showed 0/85 for one ticked clause. The page now loads the real clause list straight away, starts with nothing ticked, and counts only the ticked clauses (demo accounts unchanged)

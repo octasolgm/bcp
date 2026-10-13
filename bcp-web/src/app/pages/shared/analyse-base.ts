@@ -318,6 +318,12 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
     processedPointsCount: number;
   }): void {}
 
+  /** Tick every loaded point when a regulation's points load with no saved selection (default). The V5 page
+   * starts with nothing ticked, so a run only ever covers the clauses the user chose. */
+  protected selectAllPointsOnLoad(): boolean {
+    return true;
+  }
+
   /** Keep polling the run while the tab is in the background (off by default: polling pauses until the tab is
    * visible again). The V5 page turns it on when a finish sound is set, so the sound plays when the run ends. */
   protected pollNdRunWhileHidden(): boolean {
@@ -3110,7 +3116,7 @@ ${this.findingsPreview
       for (const p of filtered) {
         if (selectionOnly.has(p.point_id)) this.selected.add(p.point_id);
       }
-    } else {
+    } else if (this.selectAllPointsOnLoad()) {
       filtered.forEach((p) => this.selected.add(p.point_id));
     }
     this.expandedChapters.clear();
