@@ -78,13 +78,17 @@ public sealed class NdAiUsageRecorder(
     /// <summary>
     /// Bills a non-LLM cost (currently Azure Document Intelligence OCR, priced per page) into the same
     /// ledger, so it shows up in every existing usage/cost/margin report alongside LLM spend. Uses the
-    /// scope's <c>Feature</c>/workspace exactly like <see cref="RecordAsync"/>; provider/model are set to
-    /// distinguish it in the "by provider"/"by model" breakdowns.
+    /// scope's workspace exactly like <see cref="RecordAsync"/>; provider/model are set to distinguish it in
+    /// the "by provider"/"by model" breakdowns. <paramref name="feature"/> overrides the scope's feature (a
+    /// parse made inside a plain request would otherwise show as "request"), and <paramref name="note"/>
+    /// carries what was billed, e.g. the page count.
     /// </summary>
     public async Task RecordNonLlmCostAsync(
         string provider,
-        string? detail,
+        string? model,
         decimal usdCost,
+        string? feature = null,
+        string? note = null,
         CancellationToken ct = default)
     {
         var scope = NdAiUsageContext.Value;
@@ -104,8 +108,9 @@ public sealed class NdAiUsageRecorder(
                 UsdCost = usdCost,
                 UsdCostEstimated = true,
                 Provider = provider,
-                Model = detail,
-                Feature = scope.Feature,
+                Model = model,
+                Feature = feature ?? scope.Feature,
+                Note = note,
                 AnalysisRunId = scope.AnalysisRunId,
                 CreatedBy = scope.UserId,
             });

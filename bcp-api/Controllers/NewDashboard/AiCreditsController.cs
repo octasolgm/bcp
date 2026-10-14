@@ -5,6 +5,7 @@ using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services.NewDashboard.Ai;
+using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
 
@@ -21,6 +22,7 @@ public class AiCreditsController(
     SupabaseJwtValidator jwt,
     NdAiCreditService credits,
     NdAiPricingService pricing,
+    NdDemoUserDirectory demoDirectory,
     IMemoryCache memoryCache) : NdControllerBase
 {
     public record TopUpRequest(decimal Credits, string? Note);
@@ -162,6 +164,131 @@ public class AiCreditsController(
         var names = await LoadProfileNamesAsync(db, rows.Select(r => r.CreatedBy), ct);
         var myRate = await pricing.GetPricingAsync(ct);
         return Ok(new { success = true, data = rows.Select(r => MapEntry(r, names, includeUsd: false, myRate.UsdPerCredit)) });
+    }
+
+    /// <summary>
+    /// The workspace admin's own usage report: the same breakdowns as the platform <c>usage</c> view, locked to
+    /// the caller's workspace. Only what the client was billed is shown, never our provider cost, margin or
+    /// markup, and never another workspace.
+    /// </summary>
+    [HttpGet("me/usage")]
+    public async Task<IActionResult> MyUsage(
+        [FromQuery] DateTimeOffset? from,
+        [FromQuery] DateTimeOffset? to,
+        [FromQuery] string? model,
+        [FromQuery] string? feature,
+        [FromQuery] string? kind,
+        [FromQuery] int take = 100,
+        CancellationToken ct = default)
+    {
+        var (profile, jwtUser, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        // Demo accounts have no credit account; this report is for real workspaces only.
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, jwtUser, ct);
+        if (demoCtx.ViewerIsDemo)
+            return StatusCode(403, new { success = false, message = "AI usage is not available for demo accounts." });
+
+        // The workspace always comes from the request scope, never from the query string.
+        var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? profile.TenantId ?? WorkspaceScope.DefaultWorkspaceId;
+        var scoped = db.NdAiCreditLedger.IgnoreQueryFilters().AsNoTracking().Where(e => e.TenantId == workspaceId);
+
+        var q = scoped;
+        if (from is DateTimeOffset f) q = q.Where(e => e.CreatedAt >= f);
+        if (to is DateTimeOffset t) q = q.Where(e => e.CreatedAt <= t);
+        if (!string.IsNullOrWhiteSpace(model)) q = q.Where(e => e.Model != null && e.Model.Contains(model));
+        if (!string.IsNullOrWhiteSpace(feature)) q = q.Where(e => e.Feature == feature);
+        if (AiCreditKinds.IsValid(kind)) q = q.Where(e => e.Kind == kind);
+
+        var spend = q.Where(e => e.Kind == AiCreditKinds.Usage);
+        var rate = await pricing.GetPricingAsync(ct);
+        var perCredit = rate.UsdPerCredit > 0 ? rate.UsdPerCredit : NdAiCreditPricing.Default.UsdPerCredit;
+
+        var totals = await spend
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Credits = -(g.Sum(e => (decimal?)e.Credits) ?? 0m),
+                Billed = g.Sum(e => (decimal?)(e.BilledUsd ?? (-e.Credits * perCredit))) ?? 0m,
+                Calls = g.LongCount(),
+                PromptTokens = g.Sum(e => (long?)e.PromptTokens) ?? 0,
+                CompletionTokens = g.Sum(e => (long?)e.CompletionTokens) ?? 0,
+            })
+            .FirstOrDefaultAsync(ct);
+
+        // By model only: which provider a model was reached through is our business, not the client's.
+        var perModel = await spend
+            .GroupBy(e => e.Model ?? "unknown")
+            .Select(g => new
+            {
+                Model = g.Key,
+                Credits = -g.Sum(e => e.Credits),
+                Billed = g.Sum(e => (decimal?)(e.BilledUsd ?? (-e.Credits * perCredit))) ?? 0m,
+                Calls = g.LongCount(),
+            })
+            .OrderByDescending(x => x.Credits)
+            .ToListAsync(ct);
+
+        var perFeature = await spend
+            .GroupBy(e => e.Feature ?? "request")
+            .Select(g => new
+            {
+                Feature = g.Key,
+                Credits = -g.Sum(e => e.Credits),
+                Billed = g.Sum(e => (decimal?)(e.BilledUsd ?? (-e.Credits * perCredit))) ?? 0m,
+                Calls = g.LongCount(),
+            })
+            .OrderByDescending(x => x.Credits)
+            .ToListAsync(ct);
+
+        var rows = await q
+            .OrderByDescending(e => e.CreatedAt)
+            .Take(Math.Clamp(take, 1, 500))
+            .ToListAsync(ct);
+        var names = await LoadProfileNamesAsync(db, rows.Select(r => r.CreatedBy), ct);
+
+        // The balance is the whole ledger, never the filtered window.
+        var summary = await credits.GetSummaryAsync(workspaceId, ct);
+
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                summary = new
+                {
+                    workspaceId = summary.WorkspaceId,
+                    granted = summary.Granted,
+                    used = summary.Used,
+                    balance = summary.Balance,
+                    unlimited = summary.Unlimited,
+                    isLow = summary.IsLow,
+                    isExhausted = summary.IsExhausted,
+                    usedPct = Math.Round(summary.UsedFraction * 100, 1),
+                    lowThresholdPct = summary.LowThresholdPct,
+                    usdPerCredit = rate.UsdPerCredit,
+                    creditsPerDollar = Math.Round(1m / perCredit, 2),
+                    balanceUsd = Math.Round(summary.Balance * perCredit, 4),
+                },
+                totals = new
+                {
+                    credits = totals?.Credits ?? 0m,
+                    billedUsd = totals?.Billed ?? 0m,
+                    calls = totals?.Calls ?? 0,
+                    promptTokens = totals?.PromptTokens ?? 0,
+                    completionTokens = totals?.CompletionTokens ?? 0,
+                },
+                byModel = perModel.Select(m => new { model = m.Model, credits = m.Credits, billedUsd = m.Billed, calls = m.Calls }),
+                byFeature = perFeature.Select(x => new { feature = x.Feature, credits = x.Credits, billedUsd = x.Billed, calls = x.Calls }),
+                rows = rows.Select(r => MapEntry(r, names, includeUsd: false, perCredit)),
+                // Filter choices come from this workspace's own lines only.
+                filters = new
+                {
+                    models = await scoped.Where(e => e.Model != null).Select(e => e.Model!).Distinct().OrderBy(m => m).ToListAsync(ct),
+                    features = await scoped.Where(e => e.Feature != null).Select(e => e.Feature!).Distinct().OrderBy(x => x).ToListAsync(ct),
+                },
+            },
+        });
     }
 
     [HttpGet("workspaces/{workspaceId:guid}")]

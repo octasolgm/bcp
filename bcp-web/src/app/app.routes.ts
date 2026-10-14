@@ -593,6 +593,16 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'admin/usage',
+            canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
+            data: { ndRoles: ['super_admin'] },
+            title: 'AI usage · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-workspace-usage.component').then(
+                (m) => m.NdAdminWorkspaceUsageComponent,
+              ),
+          },
+          {
             path: 'admin/ai-credits',
             canActivate: [ndRoleGuard],
             data: { ndRoles: ['super_admin'] },

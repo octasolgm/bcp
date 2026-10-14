@@ -1041,6 +1041,9 @@ export class NdShellComponent implements OnInit, OnDestroy {
     const children: NavItem[] = [];
     if (this.auth.canManageWorkspaces()) {
       children.push({ id: 'admin-ai-usage', path: '/nd/admin/ai-usage', label: 'AI usage', icon: 'list' });
+    } else if (!this.auth.isDemoViewer()) {
+      // A workspace admin gets the same usage view, locked to their own workspace.
+      children.push({ id: 'admin-usage', path: '/nd/admin/usage', label: 'AI usage', icon: 'list' });
     }
     // Every workspace admin sees their own AI credit balance; demo accounts have no credit account.
     if (!this.auth.isDemoViewer()) {

@@ -526,6 +526,22 @@ export type NdAiUsageReport = {
   };
 };
 
+/** A workspace admin's own usage report: billed amounts only, never our provider cost or margin. */
+export type NdMyAiUsageReport = {
+  summary: NdAiCreditSummary;
+  totals: {
+    credits: number;
+    billedUsd: number;
+    calls: number;
+    promptTokens: number;
+    completionTokens: number;
+  };
+  byModel: { model: string; credits: number; billedUsd: number; calls: number }[];
+  byFeature: { feature: string; credits: number; billedUsd: number; calls: number }[];
+  rows: NdAiCreditEntry[];
+  filters: { models: string[]; features: string[] };
+};
+
 export type NdWorkspaceMember = {
   id: string;
   fullName: string;
@@ -894,6 +910,16 @@ export class NdApiService {
     }
     const suffix = q.toString() ? `?${q}` : '';
     return this.request<NdAiUsageReport>('GET', `/nd/ai-credits/usage${suffix}`);
+  }
+
+  /** The workspace admin's own usage report, always for their own workspace; all filters are optional. */
+  getMyAiUsageReport(params?: { from?: string; to?: string; model?: string; feature?: string; kind?: string; take?: number }) {
+    const q = new URLSearchParams();
+    for (const [key, value] of Object.entries(params ?? {})) {
+      if (value) q.set(key, String(value));
+    }
+    const suffix = q.toString() ? `?${q}` : '';
+    return this.request<NdMyAiUsageReport>('GET', `/nd/ai-credits/me/usage${suffix}`);
   }
 
   getAiPricing() {

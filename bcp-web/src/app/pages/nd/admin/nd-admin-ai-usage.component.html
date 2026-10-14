@@ -255,7 +255,7 @@
                     <td>{{ kindLabel(r.kind) }}</td>
                     <td class="muted">{{ r.model ?? '-' }}</td>
                     <td class="muted">{{ r.kind === 'usage' ? providerLabel(r.provider) : '-' }}</td>
-                    <td class="muted">{{ r.kind === 'usage' ? featureLabel(r.feature) : (r.note || (r.by ? 'by ' + r.by : '-')) }}</td>
+                    <td class="muted">{{ r.kind === 'usage' ? featureLabel(r.feature) + (r.note ? ' - ' + r.note : '') : (r.note || (r.by ? 'by ' + r.by : '-')) }}</td>
                     <td class="num" [class.credit-plus]="r.credits > 0">
                       {{ r.credits > 0 ? '+' : '' }}{{ r.credits | number: '1.0-2' }}
                     </td>

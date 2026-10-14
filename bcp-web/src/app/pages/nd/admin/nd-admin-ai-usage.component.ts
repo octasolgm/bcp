@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdApiService, type NdAiUsageReport } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { aiFeatureLabel, aiKindLabel } from './nd-ai-usage-labels';
 
 type PeriodKey = '7d' | '30d' | 'month' | 'all' | 'custom';
 
@@ -158,27 +159,10 @@ export class NdAdminAiUsageComponent implements OnInit {
   }
 
   featureLabel(feature: string | null | undefined): string {
-    switch (feature) {
-      case 'analysis':
-        return 'Analysis';
-      case 'rerun_forward':
-        return 'Forward rerun';
-      case 'rerun_reverse':
-        return 'Reverse rerun';
-      case 'rerun_point':
-        return 'Clause rerun';
-      case 'gap_evidence_rerun':
-        return 'Gap evidence re-check';
-      case 'request':
-        return 'Other';
-      default:
-        return feature ?? '-';
-    }
+    return aiFeatureLabel(feature);
   }
 
   kindLabel(kind: string): string {
-    if (kind === 'topup') return 'Credits added';
-    if (kind === 'adjustment') return 'Adjustment';
-    return 'AI call';
+    return aiKindLabel(kind);
   }
 }

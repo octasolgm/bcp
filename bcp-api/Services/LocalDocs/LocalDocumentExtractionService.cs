@@ -99,9 +99,11 @@ public sealed class LocalDocumentExtractionService(
 
         await aiUsage.RecordNonLlmCostAsync(
             "azure-document-intelligence",
-            $"{billedPages} page(s)",
+            "Azure Document Intelligence (layout)",
             billedPages * azureDocIntelligenceOptions.Value.UsdPerPage,
-            ct);
+            feature: "document_parsing",
+            note: $"{billedPages} {(billedPages == 1 ? "page" : "pages")} - {fileName}",
+            ct: ct);
 
         return new LocalParseResult(fileName, billedPages, billedPages, markdown, warnings);
     }
