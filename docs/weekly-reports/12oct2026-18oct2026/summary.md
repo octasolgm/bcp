@@ -31,6 +31,7 @@ Tasks
 - Exports include the gap evidence re-check results: Excel gets two new sheets, "Evidence re-check" (per gap: result, what the evidence covered, what is still missing, the quotes found with document/section/page, evidence documents, clause status before and after, date, who) and "Re-check actions" (per action: result, part done, part still to do, resolved / split / unchanged, reason); the PDF lists the same under each clause. Export dialog has an "Include sheets" option for them. Checked by running both exports on sample data
 - Export Policy Extract (new analysis pipeline, real accounts): each document reference is followed by its quote, as on the gap analysis page, instead of numbered points; the newest evidence re-check's quotes follow under "New evidence" with document, section and page. PDF no longer repeats the references separately
 - Production build and ZIP deploy to Azure: bcp-api-dev (2026.10.14.01) and bcp-web-dev (2026.10.14.02); API settings synced; startup health ready
+- Production build and ZIP deploy to Azure of the AI usage, re-check loader and export changes: bcp-api-dev and bcp-web-dev both on 2026.10.14.05; API settings synced (18); startup health ready
 
 Bug fixes
 - AI usage: Azure Document Intelligence parsing showed as model "114 page(s)" with activity "Other". New parses are recorded as "Azure Document Intelligence (layout)" with activity "Document parsing" and a note with the page count and file name, shown on both usage pages
