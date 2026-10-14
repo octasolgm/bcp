@@ -247,16 +247,30 @@
     <ol class="gap-rerun-stages" aria-label="Re-check stages">
       @for (stage of evidenceRerunStages; track stage.key) {
         <li [class.is-done]="evidenceRerunStageState(stage.key) === 'done'" [class.is-active]="evidenceRerunStageState(stage.key) === 'active'">
+          @if (evidenceRerunActive && evidenceRerunStageState(stage.key) === 'active') {
+            <span class="row-action-spinner gap-rerun-spinner" aria-hidden="true"></span>
+          }
           {{ stage.label }}
         </li>
       }
     </ol>
 
     @if (evidenceRerunActive) {
-      <p class="gap-rerun-phase-line">
-        <strong>{{ evidenceRerunPhaseLabel }}</strong>
-        @if (evidenceRerun.phaseDetail) { — {{ evidenceRerun.phaseDetail }} }
+      <p class="gap-rerun-phase-line" role="status">
+        <span class="row-action-spinner gap-rerun-spinner" aria-hidden="true"></span>
+        <span>
+          <strong>{{ evidenceRerunPhaseLabel }}</strong>
+          @if (evidenceRerun.phaseDetail) { — {{ evidenceRerun.phaseDetail }} }
+        </span>
       </p>
+      <!-- Slides until the first clause finishes, then fills with the share of clauses done. -->
+      <span class="nd-progress-track gap-rerun-bar" aria-hidden="true">
+        <span
+          class="nd-progress-fill"
+          [class.is-indeterminate]="prog.completed + prog.failed === 0"
+          [style.width.%]="prog.all ? ((prog.completed + prog.failed) / prog.all) * 100 : 0"
+        ></span>
+      </span>
     } @else if (evidenceRerun.status === 'failed' && evidenceRerun.error) {
       <p class="gap-rerun-error" role="alert">{{ evidenceRerun.error }}</p>
     } @else {
@@ -305,7 +319,12 @@
         @for (row of evidenceRerunRowsFiltered; track row.reviewId) {
           <li class="gap-rerun-clause-row" [attr.data-status]="row.status">
             <button type="button" class="gap-rerun-clause-no" (click)="openEvidenceRerunClause(row)">{{ evidenceRerunItemLabel(row) }}</button>
-            <span class="gap-rerun-clause-status">{{ evidenceRerunItemStatusLabel(row.status) }}</span>
+            <span class="gap-rerun-clause-status">
+              @if (row.status === 'running') {
+                <span class="row-action-spinner gap-rerun-spinner" aria-hidden="true"></span>
+              }
+              {{ evidenceRerunItemStatusLabel(row.status) }}
+            </span>
             @if (row.clauseOutcome) {
               <span class="gap-rerun-outcome" [attr.data-outcome]="row.clauseOutcome">{{ gapEvidenceOutcomeLabel(row.clauseOutcome) }}</span>
             }
@@ -726,6 +745,7 @@
     [gapColumns]="exportDialogColumns"
     [hasActionPlans]="exportDialogHasActionPlans"
     [hasReviews]="exportDialogHasReviews"
+    [hasEvidenceRecheck]="exportDialogHasEvidenceRecheck"
     [defaultFormat]="headerExportFormat"
     (cancelled)="closeExportDialog()"
     (confirmed)="runExportConfirm($event)"

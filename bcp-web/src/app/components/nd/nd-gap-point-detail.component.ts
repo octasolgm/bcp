@@ -97,8 +97,10 @@ import {
 import type { TempPointReviewComment, TempReviewCommentsChangeEvent } from '../../../lib/nd/temp-point-review-comment';
 import {
   evidenceDocNames,
+  evidenceExtractQuotes,
   evidenceQuoteRefLabel,
   gapEvidenceOutcomeLabel,
+  latestCompletedEvidenceReview,
   latestGapVerdict,
   rerunCount,
   type GapEvidenceActionResult,
@@ -1226,24 +1228,12 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   }
 
   get latestEvidenceReview(): GapEvidenceReview | null {
-    return this.evidenceReviews.find((r) => r.status === 'completed') ?? null;
+    return latestCompletedEvidenceReview(this.evidenceReviews);
   }
 
   /** Quotes from the newest evidence review, shown with their document reference under Policy extract. */
   get evidenceExtracts(): GapEvidenceQuote[] {
-    const review = this.latestEvidenceReview;
-    if (!review) return [];
-    const seen = new Set<string>();
-    const out: GapEvidenceQuote[] = [];
-    for (const gap of review.gaps) {
-      for (const quote of gap.quotes ?? []) {
-        const key = quote.text.trim().toLowerCase();
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        out.push(quote);
-      }
-    }
-    return out.slice(0, 8);
+    return evidenceExtractQuotes(this.latestEvidenceReview);
   }
 
   openEvidenceQuote(quote: GapEvidenceQuote): void {

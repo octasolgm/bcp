@@ -33,3 +33,13 @@ We published another production build of the API and web app to the dev Azure en
 Being worked on
 
 A clause analysed in a newly created workspace came back compliant, while the same clause found three gaps in the main workspace. We found the reason: that workspace's administrator account has "demo" in its email address, so the platform treats it as a demonstration account and shows the fixed demonstration result instead of running a real analysis. Creating the workspace administrator with an email address and name that do not contain "demo" gives a normal, live analysis. We are also checking whether two display issues seen in that workspace come from the same cause.
+
+Progress while re-checking gaps
+
+When you re-check open gaps against newly uploaded evidence, the progress panel now shows clearly that work is happening: the current stage and each clause being checked have a spinning indicator, and a progress bar fills as clauses are completed.
+
+Re-check results in the exported report
+
+The Excel and PDF reports now include what each evidence re-check found. In Excel, a new "Evidence re-check" sheet shows, for every gap that was re-checked, whether the new evidence fulfilled it, what it covered, what is still missing, and the exact passages found in your documents with their page numbers. A second sheet, "Re-check actions", shows what happened to each corrective action: resolved, split into a done part and a remaining part, or unchanged. The PDF report lists the same results under each clause. Both sheets can be switched off in the export options.
+
+The Policy Extract column of the exported report now reads the same as the analysis report page: each document reference is shown with the passage quoted from it, rather than a numbered list in a separate column. When gaps have been re-checked against newly uploaded evidence, the passages found in that evidence follow underneath, labelled "New evidence" with the document, section and page.

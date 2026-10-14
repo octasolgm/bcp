@@ -213,6 +213,29 @@ export function latestGapVerdict(
   return null;
 }
 
+/** The newest completed re-check of a clause (reviews arrive newest first). */
+export function latestCompletedEvidenceReview(
+  reviews: readonly GapEvidenceReview[] | null | undefined,
+): GapEvidenceReview | null {
+  return (reviews ?? []).find((r) => r.status === 'completed') ?? null;
+}
+
+/** Quotes from one re-check, each once, as the page shows them under "New evidence" in Policy extract. */
+export function evidenceExtractQuotes(review: GapEvidenceReview | null, limit = 8): GapEvidenceQuote[] {
+  if (!review) return [];
+  const seen = new Set<string>();
+  const out: GapEvidenceQuote[] = [];
+  for (const gap of review.gaps) {
+    for (const quote of gap.quotes ?? []) {
+      const key = quote.text.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(quote);
+    }
+  }
+  return out.slice(0, limit);
+}
+
 export function evidenceReviewsForPoint(
   reviews: readonly GapEvidenceReview[] | null | undefined,
   pointId: string,

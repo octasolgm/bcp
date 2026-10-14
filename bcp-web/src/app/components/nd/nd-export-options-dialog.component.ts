@@ -42,6 +42,8 @@ export class NdExportOptionsDialogComponent {
   /** Hidden when the run has no action plans — there would be nothing to write. */
   @Input() hasActionPlans = false;
   @Input() hasReviews = false;
+  /** The run has completed "rerun gaps against uploaded evidence" results to write to their own sheets. */
+  @Input() hasEvidenceRecheck = false;
   /** When false, the dialog only offers Excel (embedded views without PDF export). */
   @Input() allowPdf = true;
   /** Pre-select format when the dialog opens (e.g. last choice from the page). */
@@ -76,6 +78,7 @@ export class NdExportOptionsDialogComponent {
 
   includeActionPlans = true;
   includeReviews = true;
+  includeEvidenceRecheck = true;
 
   /** Each section starts open; collapsing just hides the column grid, selections stay intact. */
   collapsed = { gap: false, actionPlan: false, review: false };
@@ -141,6 +144,7 @@ export class NdExportOptionsDialogComponent {
       includeReviews: this.hasReviews && this.includeReviews,
       reviewColumns: [...this.selectedReview],
       reviewColumnLabels: NdExportOptionsDialogComponent.cleanLabels(this.reviewLabels, this.selectedReview),
+      includeEvidenceRecheck: this.hasEvidenceRecheck && this.includeEvidenceRecheck,
     });
   }
 }

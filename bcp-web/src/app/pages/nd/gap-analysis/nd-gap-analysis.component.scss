@@ -357,6 +357,9 @@
 }
 
 .gap-rerun-clause-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -400,6 +403,9 @@
   padding: 0;
 
   li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     padding: 0.25rem 0.6rem;
     border-radius: 999px;
     border: 1px solid var(--border-strong);
@@ -434,6 +440,23 @@
 
 .gap-rerun-error {
   color: var(--critical, #c62828);
+}
+
+.gap-rerun-phase-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Inline loader beside the active stage, the phase line and each running clause. */
+.gap-rerun-spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.gap-rerun-progress .gap-rerun-bar {
+  max-width: none;
+  margin: -0.35rem 0 0.75rem;
 }
 
 .gap-rerun-clause-row .gap-rerun-clause-no {

@@ -660,6 +660,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   exportDialogColumns: string[] = [];
   exportDialogHasActionPlans = false;
   exportDialogHasReviews = false;
+  exportDialogHasEvidenceRecheck = false;
   private lastLoadKey = '';
   private loadGeneration = 0;
   private pendingLoadRunId: string | null = null;
@@ -3239,6 +3240,9 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     });
     this.exportDialogHasActionPlans = plans.length > 0;
     this.exportDialogHasReviews = plans.some((p) => (p.reviews ?? []).length > 0);
+    this.exportDialogHasEvidenceRecheck = (this.ndRunData?.gapEvidenceReviews ?? []).some(
+      (r) => r.status === 'completed',
+    );
     this.showExportDialog = true;
     this.cdr.markForCheck();
   }

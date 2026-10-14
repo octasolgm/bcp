@@ -27,7 +27,11 @@ Investigated, follow up pending
 14 Oct 2026
 
 Tasks
+- Gap evidence re-check panel shows a loader while it runs: spinner on the active stage, the phase line and each running clause, plus a progress bar (moving until the first clause finishes, then filling as clauses complete)
+- Exports include the gap evidence re-check results: Excel gets two new sheets, "Evidence re-check" (per gap: result, what the evidence covered, what is still missing, the quotes found with document/section/page, evidence documents, clause status before and after, date, who) and "Re-check actions" (per action: result, part done, part still to do, resolved / split / unchanged, reason); the PDF lists the same under each clause. Export dialog has an "Include sheets" option for them. Checked by running both exports on sample data
+- Export Policy Extract (new analysis pipeline, real accounts): each document reference is followed by its quote, as on the gap analysis page, instead of numbered points; the newest evidence re-check's quotes follow under "New evidence" with document, section and page. PDF no longer repeats the references separately
 - Production build and ZIP deploy to Azure: bcp-api-dev (2026.10.14.01) and bcp-web-dev (2026.10.14.02); API settings synced; startup health ready
 
 Bug fixes
 - AI usage: Azure Document Intelligence parsing showed as model "114 page(s)" with activity "Other". New parses are recorded as "Azure Document Intelligence (layout)" with activity "Document parsing" and a note with the page count and file name, shown on both usage pages
+- Gap evidence re-check: "localhost refused to connect" during "Rerun all gaps" was the local API having stopped (it had been started from the in-app browser panel, which stops it when the panel closes); API and web now run from the Terminal panel instead. The interrupted re-check is closed as "interrupted, run it again" after 3 minutes

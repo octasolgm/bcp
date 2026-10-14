@@ -224,6 +224,33 @@
           }
         </section>
       }
+
+      @if (hasEvidenceRecheck) {
+        <section class="xo-section is-collapsed">
+          <div class="xo-section-head">
+            <div class="xo-collapse-toggle">
+              <h3>Evidence re-check</h3>
+            </div>
+            <div class="xo-section-actions">
+              <label class="xo-sheet-toggle">
+                <span class="xo-checkbox">
+                  <input type="checkbox" [(ngModel)]="includeEvidenceRecheck" />
+                  <span class="xo-checkbox-box" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="none">
+                      <path d="M3 8.2l3.2 3.2L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </span>
+                Include sheets
+              </label>
+            </div>
+          </div>
+          <p class="xo-hint">
+            Two sheets: each gap's re-check result with the evidence quotes found, and each action's result
+            (resolved, split or unchanged).
+          </p>
+        </section>
+      }
     }
   </div>
 

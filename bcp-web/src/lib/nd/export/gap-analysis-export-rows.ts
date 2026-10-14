@@ -20,16 +20,22 @@ import {
   actionPlanPriorityLabel,
   actionPlansForGap,
   actionPlansForPoint,
+  formatActionPlanDate,
   type ActionPlanEntry,
 } from '../action-plan';
 import { normalizeGapRisk } from '../doc-analysis-ready';
 import { deriveGapStatus, gapStateKey, gapStatusLabel, type GapState } from '../gap-state';
 import {
+  evidenceDocNames,
+  evidenceExtractQuotes,
+  evidenceQuoteRefLabel,
   evidenceReviewsForPoint,
   gapEvidenceOutcomeLabel,
+  latestCompletedEvidenceReview,
   latestGapVerdict,
   type GapEvidenceReview,
 } from '../gap-evidence-rerun';
+import { buildPolicyExtractBlocks, formatPolicyRefLabel } from '../policy-doc-resolve';
 import {
   complianceSeverityLabel,
   resolveAnalysisPointSeverity,
@@ -63,6 +69,8 @@ export type GapAnalysisExcelRow = {
   phase2?: GapAnalysisPhaseExport;
   /** New analysis page: "What this reference fulfills" lines, as shown on the page (PDF). */
   fulfilled?: string[];
+  /** New analysis page: policyExtract already pairs each document reference with its quote, as the page does. */
+  policyExtractPaired?: boolean;
 };
 
 function extractMessage(raw?: string | null): string {
@@ -191,6 +199,41 @@ function regulHybridGapsCell(point: AnalysisPoint, page: RegulExportPageState): 
     }
     return lines.join('\n');
   });
+  return normalizeMultiline(blocks.join('\n\n'));
+}
+
+/**
+ * Policy Extract cell as the gap analysis page shows it: each document reference line followed by its quote, then the
+ * newest evidence re-check's quotes under "New evidence". Same pairing as the page (buildPolicyExtractBlocks).
+ */
+function pairedPolicyExtractCell(
+  documentReference: string,
+  policyExtract: string,
+  reviews: GapEvidenceReview[],
+): string {
+  const refLines = documentReference
+    .split(/[;\n]+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const blocks = buildPolicyExtractBlocks(refLines, [], policyExtract, [])
+    .map((b) => {
+      const label = b.refLine?.trim() || (b.ref ? formatPolicyRefLabel(b.ref, true) : '');
+      return [label, b.detail.trim()].filter(Boolean).join('\n');
+    })
+    .filter(Boolean);
+
+  const review = latestCompletedEvidenceReview(reviews);
+  const quotes = evidenceExtractQuotes(review);
+  if (review && quotes.length) {
+    const lines = [
+      `New evidence - ${evidenceDocNames(review.evidenceDocuments)} (${formatActionPlanDate(review.completedAt || review.createdAt)})`,
+    ];
+    for (const quote of quotes) {
+      const unverified = quote.verified ? '' : '\n(Not found word-for-word in the document - confirm manually)';
+      lines.push(`${evidenceQuoteRefLabel(quote)}\n${quote.text.trim()}${unverified}`);
+    }
+    blocks.push(lines.join('\n\n'));
+  }
   return normalizeMultiline(blocks.join('\n\n'));
 }
 
@@ -333,6 +376,15 @@ export function buildGapAnalysisExportRows(
     if (options.regulHybridGaps) {
       const fulfilled = landingBlock?.fulfilledClauses ?? '';
       row.fulfilled = hasDisplayableFulfilledClauses(fulfilled) ? parseBulletLines(fulfilled) : [];
+      const paired = pairedPolicyExtractCell(
+        documentReference && !isGenericDocReference(documentReference) ? documentReference : '',
+        policyExtract || '',
+        evidenceReviewsForPoint(options.evidenceReviews, point.id),
+      );
+      if (paired) {
+        row.policyExtract = paired;
+        row.policyExtractPaired = true;
+      }
     }
 
     if (landingMsg.trim()) row.phase1 = phaseExport(landingBlock);

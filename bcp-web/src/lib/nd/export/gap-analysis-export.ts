@@ -7,6 +7,7 @@ import {
 } from './gap-analysis-export-rows';
 import type { GapState } from '../gap-state';
 import type { GapEvidenceReview } from '../gap-evidence-rerun';
+import { completedEvidenceReviews, evidenceRecheckPdfLines, evidenceRecheckSheets } from './gap-evidence-export';
 import {
   actionPlanPriorityLabel,
   actionPlanStatusLabel,
@@ -35,6 +36,8 @@ export type GapAnalysisExportSelection = {
   includeReviews?: boolean;
   reviewColumns?: string[];
   reviewColumnLabels?: Record<string, string>;
+  /** The "Evidence re-check" and "Re-check actions" sheets (results of rerunning gaps against uploaded evidence). */
+  includeEvidenceRecheck?: boolean;
 };
 
 /** Column/sheet choices from the export dialog plus the chosen file format. */
@@ -57,7 +60,8 @@ export type GapAnalysisExcelOptions = {
   regulHybridGaps?: boolean;
   /** Saved gap rows (risk, Pending / Resolved) of the run; used with regulHybridGaps. */
   gapStates?: Map<string, GapState>;
-  /** "Rerun this gap" evidence reviews of the run; used with regulHybridGaps. */
+  /** "Rerun this gap" evidence reviews of the run: summarised in the gaps column (with regulHybridGaps) and
+   *  written in full to their own sheets. */
   evidenceReviews?: GapEvidenceReview[];
   selection?: GapAnalysisExportSelection;
 };
@@ -302,13 +306,12 @@ function reviewsSheet(
 
 function extraSheets(options: GapAnalysisExcelOptions): ExcelSheetSpec[] {
   const plans = options.actionPlans ?? [];
-  if (!plans.length) return [];
   const selection = options.selection ?? {};
   const clauses = options.clauseByPointId ?? new Map<string, string>();
   const docName = options.regulationDocumentName ?? '';
   const sheets: ExcelSheetSpec[] = [];
 
-  if (selection.includeActionPlans !== false) {
+  if (plans.length && selection.includeActionPlans !== false) {
     sheets.push(
       actionPlansSheet(
         plans,
@@ -320,9 +323,12 @@ function extraSheets(options: GapAnalysisExcelOptions): ExcelSheetSpec[] {
       ),
     );
   }
-  if (selection.includeReviews !== false) {
+  if (plans.length && selection.includeReviews !== false) {
     const sheet = reviewsSheet(plans, clauses, docName, selection.reviewColumns, selection.reviewColumnLabels);
     if (sheet) sheets.push(sheet);
+  }
+  if (selection.includeEvidenceRecheck !== false) {
+    sheets.push(...evidenceRecheckSheets(options.evidenceReviews, clauses, docName));
   }
   return sheets;
 }
@@ -471,6 +477,12 @@ export async function exportGapAnalysisPdfFromPoints(
     if (list) list.push(plan);
     else plansByClause.set(clause, [plan]);
   }
+  const recheckByClause = new Map<string, GapEvidenceReview[]>();
+  for (const { clause, review } of completedEvidenceReviews(meta.evidenceReviews, meta.clauseByPointId ?? new Map())) {
+    const list = recheckByClause.get(clause);
+    if (list) list.push(review);
+    else recheckByClause.set(clause, [review]);
+  }
 
   // Loaded on demand — jsPDF is large and only PDF export needs it, so keep it out
   // of every route's initial bundle.
@@ -518,7 +530,7 @@ export async function exportGapAnalysisPdfFromPoints(
       write('Policy extract:', 8, true);
       write((r.policyExtract || r.policyResponse).trim(), 8);
     }
-    if (r.documentReference?.trim()) {
+    if (r.documentReference?.trim() && !r.policyExtractPaired) {
       write('Document reference:', 8, true);
       write(r.documentReference.trim(), 8);
     }
@@ -555,6 +567,9 @@ export async function exportGapAnalysisPdfFromPoints(
           write(`   ↳ Review — ${review.reviewerName ?? 'Reviewer'}: ${review.comment}`, 8);
         }
       }
+    }
+    for (const line of evidenceRecheckPdfLines(recheckByClause.get(r.pointNumber) ?? [])) {
+      write(line.text, 8, !!line.bold);
     }
     y += 5;
   }
