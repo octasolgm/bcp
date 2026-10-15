@@ -32,7 +32,25 @@ Tasks
 - Export Policy Extract (new analysis pipeline, real accounts): each document reference is followed by its quote, as on the gap analysis page, instead of numbered points; the newest evidence re-check's quotes follow under "New evidence" with document, section and page. PDF no longer repeats the references separately
 - Production build and ZIP deploy to Azure: bcp-api-dev (2026.10.14.01) and bcp-web-dev (2026.10.14.02); API settings synced; startup health ready
 - Production build and ZIP deploy to Azure of the AI usage, re-check loader and export changes: bcp-api-dev and bcp-web-dev both on 2026.10.14.05; API settings synced (18); startup health ready
+- Another dev deploy: bcp-api-dev ZIP retry (2026.10.14.05) after upload network errors; bcp-web-dev (2026.10.14.06)
 
 Bug fixes
 - AI usage: Azure Document Intelligence parsing showed as model "114 page(s)" with activity "Other". New parses are recorded as "Azure Document Intelligence (layout)" with activity "Document parsing" and a note with the page count and file name, shown on both usage pages
 - Gap evidence re-check: "localhost refused to connect" during "Rerun all gaps" was the local API having stopped (it had been started from the in-app browser panel, which stops it when the panel closes); API and web now run from the Terminal panel instead. The interrupted re-check is closed as "interrupted, run it again" after 3 minutes
+
+15 Oct 2026
+
+Tasks
+- In-house deployment plan and client data-protection brief (docs/in-house-deployment): deployment models, data flow, controls, phases, install runbook, responsibilities, acceptance checklist, and a list of engineering gaps found (no container packaging yet, OpenRouter requests carry no zero-retention or no-training flags, embeddings default to Azure OpenAI, qualitative review sends full policy text); Google app decision: demo only, no verification
+- Built cloud storage import, Google Drive first: Admin settings > Integrations page (Connect pop-up, Disconnect, recent imports), "Import from cloud" button beside Upload on the Internal and Regulation document pages (browse folders, search, pick up to 25 PDF/Word/Google Docs, imported as Pending parse), encrypted sign-in storage per workspace, read-only access, audit log, demo accounts excluded; OneDrive/SharePoint, Dropbox, Box and pCloud shown as coming soon. 11 new tests; full sign-in with a real Google test user still to be checked
+- Google side set up for Drive import (Google Cloud project, consent screen, Web OAuth client with local and dev callback addresses); guide written up in docs/storage-provider-integration/google-drive.md
+- Design doc for connecting cloud storage (OneDrive, Google Drive, Dropbox, Box, pCloud) and importing documents: docs/storage-provider-integration/README.md (not built yet; open decisions listed in it)
+- Step-by-step guide for the team chat (upload, parse, extract, run analysis, report, rerun all gaps, export, finalize, profile), checked against the app; parse and extract are manual buttons, and Run analysis starts straight away with no confirmation box
+
+Bug fixes
+- New analysis page: the regulation list showed "0 pts" and a red "NOT PARSED / NOT EXTRACTED" with no loader while the parse/extract status check was still waiting (more than 2 minutes once). A failed or slow check was treated as an answer. Each row now shows "Checking..." with a spinner row and "... pts" until its own status has really come back, with a "taking longer than usual" or error line while waiting (real accounts only; demo accounts unchanged). Checked by holding the status request for 20 s
+
+Investigated, follow up pending
+- Why the status check took over 2 minutes once: it normally answers in about 0.4 s here and nothing slow or failing was in the API log that was still available. The page waits up to 60 s per attempt and retries every 4 s, so two slow attempts give about 2 minutes; likely a slow or just-restarted API or database at that moment, not confirmed
+- The "type start to confirm" box in the new analysis page markup is never shown (the code runs the action directly), so Run analysis has no confirmation
+

@@ -43,3 +43,20 @@ Re-check results in the exported report
 The Excel and PDF reports now include what each evidence re-check found. In Excel, a new "Evidence re-check" sheet shows, for every gap that was re-checked, whether the new evidence fulfilled it, what it covered, what is still missing, and the exact passages found in your documents with their page numbers. A second sheet, "Re-check actions", shows what happened to each corrective action: resolved, split into a done part and a remaining part, or unchanged. The PDF report lists the same results under each clause. Both sheets can be switched off in the export options.
 
 The Policy Extract column of the exported report now reads the same as the analysis report page: each document reference is shown with the passage quoted from it, rather than a numbered list in a separate column. When gaps have been re-checked against newly uploaded evidence, the passages found in that evidence follow underneath, labelled "New evidence" with the document, section and page.
+
+Document status on the New analysis page
+
+When you open the New analysis page, each document now shows "Checking..." with a small spinner while the page finds out whether it has been parsed and extracted, instead of briefly showing a red "Not parsed / not extracted" and "0 pts". The real status and clause count appear as soon as the answer arrives. If the answer is slow, the page says so, and if it cannot be reached it shows why and keeps trying.
+
+Being worked on
+
+We saw the document check take over two minutes once. It normally answers in under a second, so we are looking into what slowed it down at that moment. We also noticed that starting an analysis begins immediately, without a confirmation step, and are checking whether one is wanted.
+
+Importing documents from cloud storage
+
+We have written up how workspaces will connect their own OneDrive, SharePoint, Google Drive, Dropbox, Box or pCloud account and import documents straight into Internal or Regulation documents. A workspace admin clicks Connect, signs in with their own account and allows read-only access, then picks files to import. Access can be removed at any time, and every import is recorded. Google Drive is now built: under Admin settings, a new Integrations page lets a workspace admin connect a Google account in a pop-up, and an Import from cloud button next to Upload on the document pages lets admins and makers browse folders, search, and import PDF, Word or Google Docs files, which then wait to be parsed and extracted like any upload. Access is read-only, every import is recorded, and the connection can be removed at any time. OneDrive, SharePoint, Dropbox, Box and pCloud are listed as coming soon.
+
+In-house deployment for banks
+
+We wrote a plan for installing Comply Solutions on a client's own servers or private cloud, and a plain-language brief explaining how documents are protected. It covers the options (hosted demo, in-house with approved cloud services, fully contained), exactly what data goes where, the controls in place, how a deployment is delivered in phases, and what the client and we are each responsible for. The hosted portal is described as a demonstration environment for sample documents.
+
