@@ -677,3 +677,11 @@
     }
   </aside>
 }
+
+@if (showCloudImport) {
+  <app-nd-cloud-import-dialog
+    kind="regulation" [departmentId]="uploadDept || null"
+    (closed)="showCloudImport = false"
+    (imported)="onCloudImported()"
+  />
+}

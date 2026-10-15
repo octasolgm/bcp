@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
+import { NdCloudImportDialogComponent } from '../../../components/nd/nd-cloud-import-dialog.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
 import {
   NdPageHeaderActionsService,
@@ -72,7 +73,7 @@ const RecentUploadKeepMs = 90_000;
 @Component({
   selector: 'app-nd-internal-documents',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent, NdCloudImportDialogComponent],
   templateUrl: './nd-internal-documents.component.html',
   styleUrls: ['./nd-internal-documents.component.scss', '../nd-shared.scss'],
 })
@@ -82,6 +83,21 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
   readonly auth = inject(NdAuthService);
+
+  /** Import from Google Drive or another connected storage (real accounts only). */
+  showCloudImport = false;
+
+  get canImportCloud(): boolean {
+    return this.canUpload && !this.auth.isDemoViewer();
+  }
+
+  openCloudImport(): void {
+    this.showCloudImport = true;
+  }
+
+  onCloudImported(): void {
+    void this.load(true);
+  }
   private readonly shellFocus = inject(NdShellFocusService);
   private readonly workspaceNav = inject(NdWorkspaceNavService);
   private readonly pageHeaderActions = inject(NdPageHeaderActionsService);
@@ -162,6 +178,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       uploading: this.uploading,
       uploadLabel: '+ Upload',
       onUpload: () => this.fileInput?.nativeElement.click(),
+      onImportCloud: this.canImportCloud ? () => this.openCloudImport() : undefined,
     });
   }
 

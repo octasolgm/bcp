@@ -38,6 +38,7 @@ import type { AnalysisRunSummary, Department, RegulationDocument, RegulationPoin
 import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.component';
 import { NdManualRegulationPointsPanelComponent } from './nd-manual-regulation-points-panel.component';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
+import { NdCloudImportDialogComponent } from '../../../components/nd/nd-cloud-import-dialog.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
 import {
   NdPageHeaderActionsService,
@@ -94,7 +95,7 @@ type RegulationDocAnalysisRun = {
 @Component({
   selector: 'app-nd-regulation-documents',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent, NdPageAlertComponent],
+  imports: [CommonModule, FormsModule, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent, NdPageAlertComponent, NdCloudImportDialogComponent],
   templateUrl: './nd-regulation-documents.component.html',
   styleUrls: ['./nd-regulation-documents.component.scss', '../nd-shared.scss'],
 })
@@ -108,6 +109,21 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly workspaceNav = inject(NdWorkspaceNavService);
   readonly auth = inject(NdAuthService);
+
+  /** Import from Google Drive or another connected storage (real accounts only). */
+  showCloudImport = false;
+
+  get canImportCloud(): boolean {
+    return this.canUpload && !this.auth.isDemoViewer();
+  }
+
+  openCloudImport(): void {
+    this.showCloudImport = true;
+  }
+
+  onCloudImported(): void {
+    void this.loadDocs(true);
+  }
   private readonly pageHeaderActions = inject(NdPageHeaderActionsService);
 
   @ViewChild('uploadInput') private uploadInput?: ElementRef<HTMLInputElement>;
@@ -210,6 +226,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
       uploading: this.uploading,
       uploadLabel: '+ Upload regulation',
       onUpload: () => this.uploadInput?.nativeElement.click(),
+      onImportCloud: this.canImportCloud ? () => this.openCloudImport() : undefined,
     });
   }
 

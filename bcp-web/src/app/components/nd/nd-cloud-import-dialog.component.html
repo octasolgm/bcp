@@ -1,0 +1,183 @@
+<div class="ci-backdrop" (click)="importing ? null : close()"></div>
+<div class="ci-dialog" role="dialog" aria-modal="true" aria-labelledby="ci-title">
+  <header class="ci-head">
+    <div>
+      <h2 id="ci-title">Import from cloud</h2>
+      <p class="ci-sub">
+        Files are copied into <strong>{{ kindLabel }}</strong>. Nothing in your account is changed.
+      </p>
+    </div>
+    <button type="button" class="ci-close" aria-label="Close" [disabled]="importing" (click)="close()">×</button>
+  </header>
+
+  <div class="ci-body">
+    @if (loadingProviders) {
+      <p class="ci-muted"><span class="ci-spinner" aria-hidden="true"></span> Loading your connected storage…</p>
+    } @else if (!providers.length) {
+      <div class="ci-empty">
+        <strong>No cloud storage connected yet</strong>
+        @if (canManageConnections) {
+          <p>Connect Google Drive (or another service) once, then pick files here.</p>
+          <a class="ci-btn primary" routerLink="/nd/admin/integrations" (click)="close()">Open Integrations</a>
+        } @else {
+          <p>Ask a workspace admin to connect a storage account under Admin settings, then Integrations.</p>
+        }
+        @if (error) {
+          <p class="ci-error" role="alert">{{ error }}</p>
+        }
+      </div>
+    } @else if (!active) {
+      <p class="ci-muted">Choose where to import from.</p>
+      <ul class="ci-providers">
+        @for (p of providers; track p.id) {
+          <li>
+            <button type="button" class="ci-provider" (click)="choose(p)">
+              <strong>{{ p.name }}</strong>
+              <span>{{ p.connection?.accountLabel }}</span>
+              @if (p.connection?.status === 'needs_reconnect') {
+                <em>Needs reconnect</em>
+              }
+            </button>
+          </li>
+        }
+      </ul>
+    } @else if (results) {
+      <div class="ci-results" aria-live="polite">
+        <strong>{{ importedCount }} imported</strong>
+        <ul>
+          @for (r of results; track r.fileId) {
+            <li [attr.data-result]="r.result">
+              <span class="ci-result-name">{{ r.fileName }}</span>
+              <span class="ci-result-label">{{ resultLabel(r) }}</span>
+            </li>
+          }
+        </ul>
+        <p class="ci-muted">
+          The files now appear in the list as <strong>Pending parse</strong>. Click Parse, then Extract, as for any upload.
+        </p>
+      </div>
+    } @else {
+      <div class="ci-toolbar">
+        @if (providers.length > 1) {
+          <button type="button" class="ci-link" (click)="backToProviders()">← {{ active.name }}</button>
+        } @else {
+          <span class="ci-account">{{ active.name }} · {{ active.connection?.accountLabel }}</span>
+        }
+        <form class="ci-search" (submit)="$event.preventDefault(); runSearch()">
+          <input
+            type="search"
+            [(ngModel)]="search"
+            name="ciSearch"
+            placeholder="Search by file name…"
+            aria-label="Search files"
+          />
+          @if (searching) {
+            <button type="button" class="ci-link" (click)="clearSearch()">Clear</button>
+          }
+        </form>
+      </div>
+
+      <nav class="ci-crumbs" aria-label="Folder path">
+        @if (searching) {
+          <span>Search results for “{{ search }}”</span>
+        } @else {
+          @for (c of trail; track $index; let last = $last) {
+            @if (last) {
+              <strong>{{ c.name }}</strong>
+            } @else {
+              <button type="button" class="ci-link" (click)="goToCrumb($index)">{{ c.name }}</button>
+              <span aria-hidden="true">/</span>
+            }
+          }
+          @if (isGoogle && trail.length === 1) {
+            <button type="button" class="ci-link ci-shared" (click)="openSharedWithMe()">Shared with me</button>
+          }
+        }
+      </nav>
+
+      @if (error) {
+        <div class="ci-error" role="alert">
+          {{ error }}
+          @if (needsReconnect && canManageConnections) {
+            <a routerLink="/nd/admin/integrations" (click)="close()">Reconnect</a>
+          } @else if (needsReconnect) {
+            <span>Ask a workspace admin to reconnect it.</span>
+          }
+        </div>
+      }
+
+      <div class="ci-list" [attr.aria-busy]="loadingList">
+        @if (loadingList && !items.length) {
+          <p class="ci-muted"><span class="ci-spinner" aria-hidden="true"></span> Opening…</p>
+        } @else if (!items.length && !error) {
+          <p class="ci-muted">Nothing here.</p>
+        } @else {
+          @if (importableOnPage.length) {
+            <label class="ci-row ci-row-head">
+              <input
+                type="checkbox"
+                [checked]="allOnPageSelected"
+                (change)="toggleAllOnPage($any($event.target).checked)"
+                aria-label="Select all PDF and Word files on this page"
+              />
+              <span>Select all PDF and Word files here</span>
+            </label>
+          }
+          @for (item of items; track item.id) {
+            @if (item.isFolder) {
+              <button type="button" class="ci-row ci-folder" (click)="openFolder(item)">
+                <span class="ci-icon" aria-hidden="true">📁</span>
+                <span class="ci-name">{{ item.name }}</span>
+                <span class="ci-meta">Folder</span>
+              </button>
+            } @else {
+              <label class="ci-row" [class.is-disabled]="!item.importable" [class.is-on]="isSelected(item)">
+                <input
+                  type="checkbox"
+                  [checked]="isSelected(item)"
+                  [disabled]="!item.importable || (atLimit && !isSelected(item))"
+                  (change)="toggle(item)"
+                />
+                <span class="ci-name">{{ item.name }}</span>
+                <span class="ci-meta">{{ typeLabel(item) }}@if (item.sizeBytes) { · {{ sizeLabel(item.sizeBytes) }} }</span>
+              </label>
+            }
+          }
+          @if (nextPageToken) {
+            <button type="button" class="ci-btn" [disabled]="loadingList" (click)="load(true)">
+              {{ loadingList ? 'Loading…' : 'Load more' }}
+            </button>
+          }
+        }
+      </div>
+    }
+  </div>
+
+  <footer class="ci-foot">
+    @if (results) {
+      <button type="button" class="ci-btn" (click)="anotherImport()">Import more</button>
+      <button type="button" class="ci-btn primary" (click)="close()">Done</button>
+    } @else {
+      <span class="ci-count" aria-live="polite">
+        @if (selectedCount) {
+          {{ selectedCount }} selected@if (atLimit) { (most at once: {{ maxFiles }}) }
+        } @else if (active) {
+          Choose PDF or Word files (up to 50 MB each).
+        }
+      </span>
+      <button type="button" class="ci-btn" [disabled]="importing" (click)="close()">Cancel</button>
+      <button
+        type="button"
+        class="ci-btn primary"
+        [disabled]="!selectedCount || importing"
+        (click)="runImport()"
+      >
+        @if (importing) {
+          <span class="ci-spinner" aria-hidden="true"></span> Importing…
+        } @else {
+          Import {{ selectedCount || '' }}
+        }
+      </button>
+    }
+  </footer>
+</div>

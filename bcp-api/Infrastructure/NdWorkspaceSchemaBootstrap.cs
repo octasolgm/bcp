@@ -53,6 +53,8 @@ public static class NdWorkspaceSchemaBootstrap
         ("nd_local_document_extraction_sections", "nd_local_document_extractions", "extraction_id", null),
         ("nd_local_document_passages", "nd_local_document_extractions", "extraction_id", null),
         ("nd_ai_credit_ledger", null, null, "created_by"),
+        ("nd_cloud_connections", null, null, "connected_by"),
+        ("nd_cloud_import_log", null, null, "imported_by"),
         ("gap_evidence_reruns", "analysis_runs", "analysis_run_id", null),
         ("gap_evidence_reviews", "analysis_runs", "analysis_run_id", null),
         ("regul_clause_traces", "analysis_runs", "analysis_run_id", null),
@@ -147,6 +149,46 @@ public static class NdWorkspaceSchemaBootstrap
             -- NULL = platform default (UAE, DD/MM/YYYY); a value sets this workspace's own date format.
             ALTER TABLE nd_workspaces
               ADD COLUMN IF NOT EXISTS date_format_region TEXT NULL;
+            """,
+            ct);
+
+        // Cloud storage connections (Google Drive, OneDrive, ...) and the log of what was imported from them.
+        // Refresh tokens are stored encrypted (CloudSecrets); one connection per provider per workspace.
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS nd_cloud_connections (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              tenant_id UUID NULL,
+              provider TEXT NOT NULL,
+              account_id TEXT NULL,
+              account_label TEXT NULL,
+              refresh_token_enc TEXT NOT NULL DEFAULT '',
+              scopes TEXT NULL,
+              status TEXT NOT NULL DEFAULT 'connected',
+              last_error TEXT NULL,
+              connected_by UUID NULL,
+              connected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              last_used_at TIMESTAMPTZ NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_nd_cloud_connections_tenant_provider
+              ON nd_cloud_connections (tenant_id, provider);
+            CREATE TABLE IF NOT EXISTS nd_cloud_import_log (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              tenant_id UUID NULL,
+              connection_id UUID NULL,
+              provider TEXT NOT NULL,
+              account_label TEXT NULL,
+              provider_file_id TEXT NOT NULL,
+              file_name TEXT NOT NULL,
+              kind TEXT NOT NULL DEFAULT 'internal',
+              stored_document_id UUID NULL,
+              result TEXT NOT NULL DEFAULT 'imported',
+              error TEXT NULL,
+              imported_by UUID NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_cloud_import_log_tenant
+              ON nd_cloud_import_log (tenant_id, created_at DESC);
             """,
             ct);
 

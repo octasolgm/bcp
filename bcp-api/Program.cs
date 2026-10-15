@@ -246,6 +246,12 @@ builder.Services.Configure<SupabaseStorageOptions>(o =>
         ?? "doc";
 });
 builder.Services.AddHttpClient<SupabaseStorageService>(c => c.Timeout = TimeSpan.FromMinutes(5));
+// Cloud storage connections (Google Drive now, others plug in as providers): see docs/storage-provider-integration.
+builder.Services.AddHttpClient("cloud", c => c.Timeout = TimeSpan.FromMinutes(5));
+builder.Services.AddSingleton<Reguliq.Api.Services.NewDashboard.Integrations.CloudSecrets>();
+builder.Services.AddSingleton<Reguliq.Api.Services.NewDashboard.Integrations.ICloudStorageProvider, Reguliq.Api.Services.NewDashboard.Integrations.GoogleDriveProvider>();
+builder.Services.AddSingleton<Reguliq.Api.Services.NewDashboard.Integrations.CloudProviderRegistry>();
+builder.Services.AddScoped<Reguliq.Api.Services.NewDashboard.Integrations.NdCloudService>();
 
 // New Dashboard (enterprise platform)
 builder.Services.Configure<Reguliq.Api.Infrastructure.NewDashboard.SupabaseJwtOptions>(o =>

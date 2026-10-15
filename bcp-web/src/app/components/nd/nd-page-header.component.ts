@@ -43,6 +43,17 @@ import { InProgressNavButtonComponent } from '../in-progress-nav-button/in-progr
               {{ toolbar.upload.label }}
             </button>
           }
+          @if (toolbar.importCloud) {
+            <button
+              type="button"
+              class="nd-page-header-upload-btn"
+              (click)="toolbar.importCloud.run()"
+              [disabled]="toolbar.importCloud.disabled"
+              title="Import documents from Google Drive or another connected storage"
+            >
+              Import from cloud
+            </button>
+          }
           @if (toolbar.export) {
             <div class="nd-page-header-export-group">
               @if (toolbar.export.format) {

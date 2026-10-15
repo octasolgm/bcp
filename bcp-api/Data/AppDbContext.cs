@@ -60,6 +60,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdDemoAnalysisTemplatePoint> NdDemoAnalysisTemplatePoints => Set<NdDemoAnalysisTemplatePoint>();
     public DbSet<NdWorkspace> NdWorkspaces => Set<NdWorkspace>();
     public DbSet<NdAiCreditLedgerEntry> NdAiCreditLedger => Set<NdAiCreditLedgerEntry>();
+    public DbSet<NdCloudConnection> NdCloudConnections => Set<NdCloudConnection>();
+    public DbSet<NdCloudImportLog> NdCloudImportLog => Set<NdCloudImportLog>();
 
     /// <summary>
     /// Workspace the current request acts in; null outside a request (workers, startup) = no filter.
@@ -439,6 +441,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     private void ConfigureTenantScoping(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<NdWorkspace>(e => e.HasIndex(w => w.Slug).IsUnique());
+        modelBuilder.Entity<NdCloudConnection>(e => e.HasIndex(x => new { x.TenantId, x.Provider }).IsUnique());
+        modelBuilder.Entity<NdCloudImportLog>(e => e.HasIndex(x => new { x.TenantId, x.CreatedAt }));
         modelBuilder.Entity<NdAiCreditLedgerEntry>(e =>
         {
             e.HasIndex(x => new { x.TenantId, x.CreatedAt });

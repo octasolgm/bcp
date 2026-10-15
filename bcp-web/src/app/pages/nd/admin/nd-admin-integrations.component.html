@@ -1,0 +1,126 @@
+<div class="nd-catalog-page nd-admin-modern">
+  <div class="page-header page-header--catalog">
+    <div class="page-header-title-block">
+      <p class="page-eyebrow">Your workspace</p>
+      <h1>Integrations</h1>
+      <p class="subtitle">
+        Connect your own cloud storage, then import PDF and Word files straight into Internal or Regulation documents.
+        Access is read-only: nothing in your account is changed, and you can disconnect at any time.
+      </p>
+    </div>
+  </div>
+
+  @if (loading && !providers.length) {
+    <p class="muted-loading">Loading integrations…</p>
+  } @else if (error) {
+    <p class="nd-error">{{ error }}</p>
+  } @else {
+    <div class="nd-catalog-body">
+      <div class="int-grid">
+        @for (p of providers; track p.id) {
+          <section class="card-surface int-card" [attr.data-status]="statusKind(p)">
+            <header class="int-card-head">
+              <h2>{{ p.name }}</h2>
+              <span class="int-badge" [attr.data-status]="statusKind(p)">{{ statusLabel(p) }}</span>
+            </header>
+
+            @if (p.connection) {
+              <p class="int-account">
+                Account: <strong>{{ p.connection.accountLabel }}</strong>
+              </p>
+              <p class="muted">Connected {{ p.connection.connectedAt | date: 'dd MMM yyyy, HH:mm' }}</p>
+              @if (p.connection.status === 'needs_reconnect') {
+                <p class="int-warn" role="alert">
+                  {{ p.connection.lastError || 'The sign-in stopped working.' }} Connect again to keep importing.
+                </p>
+              }
+            } @else if (!p.configured) {
+              <p class="muted">
+                The platform owner has not added the keys for this service yet, so it cannot be connected.
+              </p>
+            } @else {
+              <p class="muted">Not connected. You will sign in on {{ p.name }}'s own page and choose to allow read-only access.</p>
+            }
+
+            <div class="int-actions">
+              @if (p.configured) {
+                <button type="button" class="btn-primary btn-sm" [disabled]="!!busyId" (click)="connect(p)">
+                  @if (busyId === p.id) {
+                    Waiting for sign-in…
+                  } @else if (p.connection) {
+                    Reconnect
+                  } @else {
+                    Connect
+                  }
+                </button>
+              }
+              @if (p.connection) {
+                <button type="button" class="btn-secondary btn-sm" [disabled]="!!busyId" (click)="disconnect(p)">Disconnect</button>
+              }
+            </div>
+
+            @if (isPlatformAdmin && p.callbackUrl) {
+              <details class="int-setup">
+                <summary>Platform setup</summary>
+                <p class="muted">
+                  Add this address as an authorized redirect address in the {{ p.name }} developer console, and put the client id
+                  and secret in the server configuration. See docs/storage-provider-integration.
+                </p>
+                <div class="int-callback">
+                  <code>{{ p.callbackUrl }}</code>
+                  <button type="button" class="btn-secondary btn-sm" (click)="copy(p.callbackUrl!)">Copy</button>
+                </div>
+                <p class="muted">Keys: {{ p.configured ? 'added' : 'not added yet' }}.</p>
+              </details>
+            }
+          </section>
+        }
+
+        @for (c of comingSoon; track c.id) {
+          <section class="card-surface int-card int-soon">
+            <header class="int-card-head">
+              <h2>{{ c.name }}</h2>
+              <span class="int-badge" data-status="off">Coming soon</span>
+            </header>
+            <p class="muted">Planned. It will use the same Connect button.</p>
+          </section>
+        }
+      </div>
+
+      <h2 class="section-heading">Recent imports</h2>
+      @if (!log.length) {
+        <div class="card-surface empty-state">
+          <strong>Nothing imported yet</strong>
+          <p>Use Import from cloud on the Internal Documents or Regulation Documents page.</p>
+        </div>
+      } @else {
+        <div class="card-surface table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>File</th>
+                <th>As</th>
+                <th>From</th>
+                <th>By</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of log; track r.id) {
+                <tr>
+                  <td class="muted">{{ r.createdAt | date: 'dd MMM, HH:mm' }}</td>
+                  <td>{{ r.fileName }}</td>
+                  <td>{{ kindLabel(r.kind) }}</td>
+                  <td class="muted">{{ r.accountLabel }}</td>
+                  <td class="muted">{{ r.by || '-' }}</td>
+                  <td [class.int-fail]="r.result === 'failed'">{{ resultLabel(r) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+</div>

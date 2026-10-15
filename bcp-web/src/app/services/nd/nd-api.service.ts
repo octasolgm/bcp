@@ -542,6 +542,61 @@ export type NdMyAiUsageReport = {
   filters: { models: string[]; features: string[] };
 };
 
+/** A workspace's sign-in to one cloud storage service. The sign-in itself never reaches the browser. */
+export type NdCloudConnection = {
+  id: string;
+  provider: string;
+  accountLabel?: string | null;
+  status: 'connected' | 'needs_reconnect';
+  lastError?: string | null;
+  connectedAt: string;
+  lastUsedAt?: string | null;
+};
+
+export type NdCloudProvider = {
+  id: string;
+  name: string;
+  /** The platform owner has added this service's client id and secret. */
+  configured: boolean;
+  /** Platform owner only: the address to register in the provider's console. */
+  callbackUrl?: string | null;
+  connection?: NdCloudConnection | null;
+};
+
+export type NdCloudItem = {
+  id: string;
+  name: string;
+  isFolder: boolean;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  modifiedAt?: string | null;
+  importable: boolean;
+};
+
+export type NdCloudFolderPage = { items: NdCloudItem[]; nextPageToken?: string | null; folderName: string };
+
+export type NdCloudImportResult = {
+  fileId: string;
+  fileName: string;
+  result: 'imported' | 'duplicate' | 'failed';
+  storedDocumentId?: string | null;
+  error?: string | null;
+};
+
+export type NdCloudImportSummary = { imported: number; duplicate: number; failed: number };
+
+export type NdCloudImportLogRow = {
+  id: string;
+  provider: string;
+  accountLabel?: string | null;
+  fileName: string;
+  kind: string;
+  result: string;
+  error?: string | null;
+  by?: string | null;
+  createdAt: string;
+};
+
 export type NdWorkspaceMember = {
   id: string;
   fullName: string;
@@ -920,6 +975,54 @@ export class NdApiService {
     }
     const suffix = q.toString() ? `?${q}` : '';
     return this.request<NdMyAiUsageReport>('GET', `/nd/ai-credits/me/usage${suffix}`);
+  }
+
+  // ---- Cloud storage (Google Drive, ...): see docs/storage-provider-integration ----
+
+  /** Origin the cloud sign-in pop-up reports back from (the API), for checking its message. */
+  cloudApiOrigin(): string {
+    try {
+      return new URL(this.baseUrl()).origin;
+    } catch {
+      return '';
+    }
+  }
+
+  getCloudProviders() {
+    return this.request<NdCloudProvider[]>('GET', '/nd/integrations/providers');
+  }
+
+  /** Returns the provider's sign-in address, to open in a pop-up. */
+  startCloudConnect(provider: string) {
+    return this.request<{ url: string }>('POST', `/nd/integrations/providers/${provider}/connect`, {
+      returnOrigin: window.location.origin,
+    });
+  }
+
+  disconnectCloud(connectionId: string) {
+    return this.request<unknown>('DELETE', `/nd/integrations/connections/${connectionId}`);
+  }
+
+  browseCloud(connectionId: string, params: { folder?: string | null; pageToken?: string | null; q?: string | null } = {}) {
+    const q = new URLSearchParams();
+    if (params.folder) q.set('folder', params.folder);
+    if (params.pageToken) q.set('pageToken', params.pageToken);
+    if (params.q) q.set('q', params.q);
+    const suffix = q.toString() ? `?${q}` : '';
+    return this.request<NdCloudFolderPage>('GET', `/nd/integrations/connections/${connectionId}/browse${suffix}`);
+  }
+
+  importFromCloud(
+    connectionId: string,
+    body: { fileIds: string[]; kind: 'internal' | 'regulation'; departmentId?: string | null },
+  ) {
+    return this.request<NdCloudImportResult[]>('POST', `/nd/integrations/connections/${connectionId}/import`, body).then(
+      (res) => res as typeof res & { summary?: NdCloudImportSummary },
+    );
+  }
+
+  getCloudImportLog(take = 50) {
+    return this.request<NdCloudImportLogRow[]>('GET', `/nd/integrations/import-log?take=${take}`);
   }
 
   getAiPricing() {

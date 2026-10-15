@@ -11,6 +11,11 @@ export type NdPageHeaderUploadAction = {
   run: () => void;
 };
 
+export type NdPageHeaderImportAction = {
+  disabled?: boolean;
+  run: () => void;
+};
+
 export type NdPageHeaderExportFormatOption = {
   value: string;
   label: string;
@@ -36,6 +41,8 @@ export type NdPageHeaderHistoryAction = {
 export type NdPageHeaderActionsState = {
   refresh?: NdPageHeaderRefreshAction;
   upload?: NdPageHeaderUploadAction;
+  /** "Import from cloud" beside Upload (Google Drive and other connected storage). */
+  importCloud?: NdPageHeaderImportAction;
   export?: NdPageHeaderExportAction;
   history?: NdPageHeaderHistoryAction;
 };
@@ -95,6 +102,8 @@ export function syncCatalogPageHeaderActions(
     uploading: boolean;
     uploadLabel: string;
     onUpload: () => void;
+    /** Show "Import from cloud" beside Upload. */
+    onImportCloud?: () => void;
   },
 ): void {
   if (!opts.showRefresh && !opts.showUpload) {
@@ -111,6 +120,7 @@ export function syncCatalogPageHeaderActions(
       disabled: opts.uploading,
       run: opts.onUpload,
     };
+    if (opts.onImportCloud) state.importCloud = { disabled: opts.uploading, run: opts.onImportCloud };
   }
   service.set(state);
 }

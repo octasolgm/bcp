@@ -732,3 +732,11 @@
     </div>
   </aside>
 }
+
+@if (showCloudImport) {
+  <app-nd-cloud-import-dialog
+    kind="internal"
+    (closed)="showCloudImport = false"
+    (imported)="onCloudImported()"
+  />
+}

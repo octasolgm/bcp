@@ -1005,6 +1005,10 @@ export class NdShellComponent implements OnInit, OnDestroy {
       { id: 'admin-users', path: '/nd/admin/users', label: 'User management', icon: 'users' },
       { id: 'admin-departments', path: '/nd/admin/departments', label: 'Departments', icon: 'building' },
     );
+    // Connect cloud storage (Google Drive, ...) to import documents; real accounts only, never demo.
+    if (!this.auth.isDemoViewer()) {
+      children.push({ id: 'admin-integrations', path: '/nd/admin/integrations', label: 'Integrations', icon: 'library' });
+    }
     if (platform) {
       children.push({ id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' });
     }

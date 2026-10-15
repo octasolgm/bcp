@@ -368,21 +368,7 @@ public class InternalDocumentsController(
                 "documents/nd",
                 ct);
 
-            var row = new StoredDocument
-            {
-                Title = title,
-                OriginalFileName = prepared.OriginalFileName,
-                FileType = prepared.FileType,
-                DocKind = "document",
-                StorageBucket = storage.Bucket,
-                StoragePath = prepared.StoragePath,
-                FileHash = prepared.FileHash,
-                SizeBytes = prepared.SizeBytes,
-                ContentType = prepared.ContentType,
-                ParseStatus = "pending",
-                UploadedBy = profile!.Id,
-            };
-            row.ExtractionCacheKey = NdRegulationCacheKeys.ForStoredDocument(row.Id);
+            var row = NdInternalDocumentFactory.Create(prepared, title, storage.Bucket, profile!.Id);
             appDb.StoredDocuments.Add(row);
             await appDb.SaveChangesAsync(ct);
             dashboardCache.Invalidate();
