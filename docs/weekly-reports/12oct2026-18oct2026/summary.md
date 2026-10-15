@@ -36,3 +36,12 @@ Tasks
 Bug fixes
 - AI usage: Azure Document Intelligence parsing showed as model "114 page(s)" with activity "Other". New parses are recorded as "Azure Document Intelligence (layout)" with activity "Document parsing" and a note with the page count and file name, shown on both usage pages
 - Gap evidence re-check: "localhost refused to connect" during "Rerun all gaps" was the local API having stopped (it had been started from the in-app browser panel, which stops it when the panel closes); API and web now run from the Terminal panel instead. The interrupted re-check is closed as "interrupted, run it again" after 3 minutes
+
+15 Oct 2026
+
+Tasks
+- OpenRouter data protection: every request now asks OpenRouter for zero data retention and no training (on by default, switchable in settings); models with no qualifying provider fail with a clear message. Tested on the whole model list: all main models work, three Qwen models and the free models cannot be served under these rules. Only the OpenRouter request changed; analysis, prompts and pages untouched. 6 new tests (docs/openrouter-privacy.md)
+
+Bug fixes
+- None
+

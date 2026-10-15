@@ -43,3 +43,8 @@ Re-check results in the exported report
 The Excel and PDF reports now include what each evidence re-check found. In Excel, a new "Evidence re-check" sheet shows, for every gap that was re-checked, whether the new evidence fulfilled it, what it covered, what is still missing, and the exact passages found in your documents with their page numbers. A second sheet, "Re-check actions", shows what happened to each corrective action: resolved, split into a done part and a remaining part, or unchanged. The PDF report lists the same results under each clause. Both sheets can be switched off in the export options.
 
 The Policy Extract column of the exported report now reads the same as the analysis report page: each document reference is shown with the passage quoted from it, rather than a numbered list in a separate column. When gaps have been re-checked against newly uploaded evidence, the passages found in that evidence follow underneath, labelled "New evidence" with the document, section and page.
+
+OpenRouter data protection
+
+Requests to AI models through OpenRouter now ask for zero data retention and no training on your data, so only providers with that policy answer. We tested every model we offer: the main models (Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot, Z.AI) all still work, while three Qwen models and the free-tier models cannot be served under these rules and now show a clear message instead. Analysis itself is unchanged.
+
