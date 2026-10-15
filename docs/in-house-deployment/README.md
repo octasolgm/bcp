@@ -62,10 +62,10 @@ may give weaker results and need GPU or large CPU capacity.
 | In transit | TLS on every hop (browser, API, database, AI and document services) | Client infrastructure + our configuration |
 | At rest | Disk or volume encryption for database and storage (client's standard). Cloud-storage tokens are additionally encrypted by the app | Tokens: built. Disk: client |
 | Secrets | Keys in the client's secret store (Key Vault, HashiCorp Vault) or protected environment variables. Never in git | To define per client |
-| Network | Private network, firewall egress allow-list that allows only the AI and document endpoints the client approves | Client + us |
-| AI vendor terms | OpenRouter: ask for zero data retention and no training on every request. Azure OpenAI in the client's tenant: Microsoft's terms apply | Request flags not set yet, see section 12 |
+| Network | Private network, firewall egress allow-list that allows only the AI and document endpoints the client approves. The API also refuses calls to hosts not in `Privacy:AllowedOutboundHosts` and can require https | App setting built 15 Oct. Firewall: client |
+| AI vendor terms | OpenRouter: every request carries zero data retention and no training (on by default, can be switched off). Azure OpenAI in the client's tenant: Microsoft's terms apply. Settings and test results: [privacy-settings.md](privacy-settings.md) | OpenRouter flags built 15 Oct. Models without a qualifying provider fail with a clear message |
 | Document reading vendor | Azure Document Intelligence: processed in its region, results held temporarily, encrypted, retrieved only with the same key (Microsoft data and privacy page) | Setting per client |
-| Logging | Operational logs must not contain document text or AI prompts | To audit, see section 12 |
+| Logging | Operational logs must not contain document text or AI prompts | Audited 15 Oct: none found; provider error bodies cut to 300 characters are the only residual (privacy-settings.md section 5) |
 | Audit | Imports, reviews and status changes are recorded with who and when | Partly built |
 | Retention and deletion | Client sets the period. Deleting a workspace removes its documents, vectors and results | To define and test |
 | Backups | Client's standard backup of PostgreSQL and storage, encrypted, with a tested restore | Client + us |
@@ -148,15 +148,16 @@ may give weaker results and need GPU or large CPU capacity.
 
 1. **Container and installer packaging.** There is no Dockerfile or compose file. Needed: container images (API, web, Docling service) and a
    documented self-hosted Supabase setup that works with the API.
-2. **AI request data-protection flags.** The OpenRouter client sends no `provider` preferences today. Add per-request
-   `{"zdr": true, "data_collection": "deny"}` (configurable), then test which models still answer when strict, because strict mode
-   narrows the available models.
-3. **Embedding default.** `appsettings.json` has set search embeddings to Azure OpenAI since 08 Oct. In-house packages must default to the local model.
-4. **Local or client-hosted AI.** Confirm a configurable OpenAI-compatible endpoint (for example vLLM or the client's gateway) for model C, and test quality.
-5. **Log hygiene audit.** Verify logs never contain document text or prompts. Add a redaction setting.
-6. **Documents sent to AI.** Document exactly what is sent per analysis step so the client can approve it. Standard steps: clause text and retrieved
-   passages. Qualitative assessment: much larger text. Add an admin switch (or build-time default) that disables the qualitative assessment
-   for in-house installs.
+2. **AI request data-protection flags.** DONE 15 Oct: every OpenRouter request carries zero retention and no training by default, with a clear error
+   for models no provider serves under those rules (Qwen and the free models). Tested on the whole catalog, see privacy-settings.md. Still to do: the same
+   check for each client's approved model list.
+3. **Embedding default.** `appsettings.json` has set search embeddings to Azure OpenAI since 08 Oct. DONE 15 Oct as a profile: `bcp-api/appsettings.InHouse.example.json`
+   sets `local`. The installer must apply it.
+4. **Local or client-hosted AI.** `OpenAI:BaseUrl` plus a custom model name should reach an OpenAI-compatible server (for example vLLM), but this is untested.
+   Test with a real self-hosted model and measure quality.
+5. **Log hygiene audit.** DONE 15 Oct (none found, see privacy-settings.md). Repeat before each client release. A redaction setting for provider error bodies is still open.
+6. **Documents sent to AI.** Standard steps send clause text and retrieved passages. The qualitative assessment can now be disabled
+   (`Privacy:DisableQualitativeAssessment`, set in the in-house profile). Still to do: a written per-step data list for client approval.
 7. **Update delivery.** Signed packages, version file, rollback steps.
 8. **SSO.** Check whether the client's identity provider can sign users in through self-hosted Supabase (SAML or OIDC).
 9. **Deletion.** Test full workspace deletion (documents, vectors, results, backups policy).

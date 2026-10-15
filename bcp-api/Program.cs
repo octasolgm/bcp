@@ -246,6 +246,9 @@ builder.Services.Configure<SupabaseStorageOptions>(o =>
         ?? "doc";
 });
 builder.Services.AddHttpClient<SupabaseStorageService>(c => c.Timeout = TimeSpan.FromMinutes(5));
+// Outbound allow-list and https rule (Privacy section) for every HTTP call the API makes; does nothing when unset.
+builder.Services.AddTransient<Reguliq.Api.Services.Llm.OutboundPolicyHandler>();
+builder.Services.ConfigureHttpClientDefaults(b => b.AddHttpMessageHandler<Reguliq.Api.Services.Llm.OutboundPolicyHandler>());
 // Cloud storage connections (Google Drive now, others plug in as providers): see docs/storage-provider-integration.
 builder.Services.AddHttpClient("cloud", c => c.Timeout = TimeSpan.FromMinutes(5));
 builder.Services.AddSingleton<Reguliq.Api.Services.NewDashboard.Integrations.CloudSecrets>();

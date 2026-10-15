@@ -34,6 +34,7 @@ public class NdRegulAnalysisProcessor(
     NdLocalDocumentPayloadLoader localPayloadLoader,
     NdGapEvidencePrepareService documentPrepare,
     NdRegulClauseContextService clauseContexts,
+    IConfiguration configuration,
     ILogger<NdRegulAnalysisProcessor> logger)
 {
     /// <summary>V5: every internal document must be parsed, extracted and indexed before Steps 1-6, or
@@ -201,7 +202,13 @@ public class NdRegulAnalysisProcessor(
             logger.LogInformation("Regul pipeline phase=reverse for run {RunId}", runId);
             await RunReversePhaseAsync(run, ct);
 
-            if (run.EnableQualitative)
+            // The qualitative review sends the regulation and policy text as a whole to the AI model, far more than a
+            // clause judgment does, so an installation can switch it off for good (Privacy:DisableQualitativeAssessment).
+            var qualitative = run.EnableQualitative
+                && !Reguliq.Api.Services.Llm.LlmPrivacySettings.From(configuration).DisableQualitativeAssessment;
+            if (run.EnableQualitative && !qualitative)
+                logger.LogInformation("Qualitative review skipped for run {RunId}: disabled by Privacy:DisableQualitativeAssessment", runId);
+            if (qualitative)
             {
                 if (runCancellation.IsStopRequested(runId))
                 {

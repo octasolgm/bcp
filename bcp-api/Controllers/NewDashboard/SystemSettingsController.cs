@@ -13,9 +13,64 @@ public class SystemSettingsController(
     DualVerifyLlmSettingsService llmSettings,
     RegulWorkflowLlmSettingsService regulLlmSettings,
     FinalizeEmbedLlmSettingsService finalizeEmbedLlmSettings,
-    Microsoft.Extensions.Options.IOptions<Services.LocalDocs.AzureOpenAIOptions> azureOpenAiOptions) : NdControllerBase
+    Microsoft.Extensions.Options.IOptions<Services.LocalDocs.AzureOpenAIOptions> azureOpenAiOptions,
+    Microsoft.Extensions.Options.IOptions<Services.LocalDocs.AzureDocumentIntelligenceOptions> azureDocIntelligenceOptions,
+    IConfiguration configuration) : NdControllerBase
 {
     public record DualVerifyLlmUpdateRequest(string Provider, string Model);
+
+    /// <summary>
+    /// What this installation currently lets leave the server, so a security reviewer can check it without reading
+    /// configuration files: OpenRouter data rules, the full-text qualitative review, the outbound allow-list, the
+    /// embedding choice and the document-reading service. Host names only, never keys.
+    /// </summary>
+    [HttpGet("privacy-posture")]
+    public async Task<IActionResult> PrivacyPosture(CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        var privacy = LlmPrivacySettings.From(configuration);
+        var embedding = await regulLlmSettings.GetEmbeddingProviderAsync(ct);
+        var azureDi = azureDocIntelligenceOptions.Value;
+        Uri.TryCreate(azureDi.Endpoint, UriKind.Absolute, out var azureDiUri);
+        Uri.TryCreate(azureOpenAiOptions.Value.Endpoint, UriKind.Absolute, out var azureOpenAiUri);
+
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                openRouter = new
+                {
+                    zeroDataRetention = privacy.OpenRouterZeroDataRetention,
+                    denyDataCollection = privacy.OpenRouterDenyDataCollection,
+                    sentWithEveryRequest = privacy.OpenRouterProviderPreferences(),
+                },
+                qualitativeAssessmentDisabled = privacy.DisableQualitativeAssessment,
+                outbound = new
+                {
+                    restricted = privacy.OutboundRestricted,
+                    allowedHosts = privacy.AllowedOutboundHosts,
+                    requireHttps = privacy.RequireHttpsOutbound,
+                    insecureHostsAllowed = privacy.AllowInsecureHosts,
+                },
+                embeddingProvider = embedding,
+                documentReading = new
+                {
+                    azureDocumentIntelligenceConfigured = azureDiUri != null && !string.IsNullOrWhiteSpace(azureDi.ApiKey),
+                    azureDocumentIntelligenceHost = azureDiUri?.Host,
+                    usesHttps = azureDiUri?.Scheme == Uri.UriSchemeHttps,
+                    note = "The processing region is a property of the Azure resource: check it in the Azure portal (Overview, Location).",
+                },
+                azureOpenAi = new
+                {
+                    configured = azureOpenAiUri != null && !string.IsNullOrWhiteSpace(azureOpenAiOptions.Value.ApiKey),
+                    host = azureOpenAiUri?.Host,
+                },
+            },
+        });
+    }
 
     [HttpGet("dual-verify-llm")]
     public async Task<IActionResult> GetDualVerifyLlm(CancellationToken ct)

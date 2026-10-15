@@ -36,8 +36,9 @@ policy, that sends much more of the text. It is switched off unless someone turn
 ### AI analysis: your model route
 - Option 1: your own Azure OpenAI deployment in your tenant (Microsoft's enterprise terms apply).
 - Option 2: OpenRouter with strict data controls. OpenRouter supports per-request routing flags: `zdr: true` (only endpoints with a zero-data-retention
-  policy) and `data_collection: "deny"` (exclude providers that store or train on data). Source: OpenRouter, "Zero Data Retention (ZDR)". Before your install:
-  we enable and test these flags (they limit which models can answer), and you approve the list of models.
+  policy) and `data_collection: "deny"` (exclude providers that store or train on data). Source: OpenRouter, "Zero Data Retention (ZDR)". Available: Comply Solutions
+  sends both on every OpenRouter request by default, and shows what it sends on an admin screen. These rules limit which models can answer (we tested the whole list we offer);
+  you approve the list of models.
 - Option 3: a model you host yourself (fully contained option).
 - In every option, we do not use your content to train any model, and we will not use a route that does not let us commit to that in writing.
 
@@ -47,7 +48,7 @@ policy, that sends much more of the text. It is switched off unless someone turn
 - Encryption in transit on every connection. Encryption at rest through your disk or database encryption (before your install: confirmed per environment).
 - Stored cloud-storage sign-in tokens are encrypted by the application (available).
 - Secrets held in your secret store (before your install).
-- Network egress allow-list to only the approved endpoints (before your install, with your network team).
+- Network egress allow-list to only the approved endpoints: the application itself refuses calls to any host you have not listed (available), and your firewall enforces the same list (with your network team).
 - Activity records: who imported, uploaded, reviewed and when (available, being extended).
 - No standing access for our staff. Support only when you open a ticket, through your controls, recorded and ended afterwards.
 - You choose retention. Deleting a workspace removes its documents, search vectors and results (before your install: tested and documented).

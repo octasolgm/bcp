@@ -60,3 +60,7 @@ In-house deployment for banks
 
 We wrote a plan for installing Comply Solutions on a client's own servers or private cloud, and a plain-language brief explaining how documents are protected. It covers the options (hosted demo, in-house with approved cloud services, fully contained), exactly what data goes where, the controls in place, how a deployment is delivered in phases, and what the client and we are each responsible for. The hosted portal is described as a demonstration environment for sample documents.
 
+Stronger data protection for AI and document services
+
+Requests to AI models through OpenRouter now ask for zero data retention and no training on your data, so the model providers that answer are only those with that policy. We tested every model we offer: all the main models still work (Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot, Z.AI), while three Qwen models and the free-tier models cannot be served under these rules and now show a clear message instead. Installations can also switch off the optional full-text policy review, restrict which outside services the platform may contact, and require secure connections for all of them. An administrator can see which of these protections are in effect. We also checked that application logs never contain document text, prompts or AI answers.
+

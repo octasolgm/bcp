@@ -390,6 +390,9 @@ public abstract class ChatCompletionsClientBase(
     protected virtual IReadOnlyDictionary<string, string> ExtraHeaders() =>
         new Dictionary<string, string>();
 
+    /// <summary>A provider-specific explanation for a failed call, or null to use the generic message.</summary>
+    protected virtual Exception? MapHttpError(System.Net.HttpStatusCode status, string body, string model) => null;
+
     public Task<string> AnalyzeTextAsync(string prompt, string model, CancellationToken ct = default) =>
         PostChatAsync(prompt, model, ct);
 
@@ -461,7 +464,10 @@ public abstract class ChatCompletionsClientBase(
             throw new HttpRequestException(
                 $"{label} account is out of credit (402). Top up the {label} balance and run again. Details: {text[..Math.Min(300, text.Length)]}");
         if (!res.IsSuccessStatusCode)
+        {
+            if (MapHttpError(res.StatusCode, text, model) is { } mapped) throw mapped;
             throw new HttpRequestException($"{label} API error ({res.StatusCode}): {text[..Math.Min(300, text.Length)]}");
+        }
 
         using var doc = JsonDocument.Parse(text);
         LogUsage(model, doc.RootElement);
@@ -580,14 +586,32 @@ public class OpenRouterLlmClient(IHttpClientFactory httpFactory, IConfiguration 
     // Kimi K3 defaults to maximum reasoning effort, which inflates output tokens and latency far more
     // than clause judgment needs. Unlike the direct Moonshot API (which takes reasoning_effort at the
     // top level), OpenRouter's unified reasoning parameter is nested under "reasoning".
-    protected override IReadOnlyDictionary<string, object?> ExtraFields(string model) =>
-        model.Contains("kimi-k3", StringComparison.OrdinalIgnoreCase)
-            ? new Dictionary<string, object?>
-            {
-                ["reasoning"] = new { effort = "high" },
-                ["max_tokens"] = MoonshotLlmClient.KimiMaxTokens,
-            }
-            : new Dictionary<string, object?>();
+    protected override IReadOnlyDictionary<string, object?> ExtraFields(string model)
+    {
+        var fields = new Dictionary<string, object?>();
+        if (model.Contains("kimi-k3", StringComparison.OrdinalIgnoreCase))
+        {
+            fields["reasoning"] = new { effort = "high" };
+            fields["max_tokens"] = MoonshotLlmClient.KimiMaxTokens;
+        }
+
+        // Data protection on every request: OpenRouter routes only to endpoints that keep no data (zdr) and do
+        // not train on it (data_collection: deny). Both are on unless Privacy:OpenRouter turns them off.
+        var provider = LlmPrivacySettings.From(config).OpenRouterProviderPreferences();
+        if (provider != null) fields["provider"] = provider;
+        return fields;
+    }
+
+    // With strict routing, a model that no endpoint serves under those rules answers 404 "No endpoints found
+    // matching your data policy". Say so plainly instead of silently dropping the protection.
+    protected override Exception? MapHttpError(System.Net.HttpStatusCode status, string body, string model) =>
+        status == System.Net.HttpStatusCode.NotFound
+        && body.Contains("data policy", StringComparison.OrdinalIgnoreCase)
+            ? new HttpRequestException(
+                $"OpenRouter has no provider for '{model}' that meets this installation's data-protection rules " +
+                "(zero data retention and no training on your data). Choose another model, or change " +
+                "Privacy:OpenRouter settings if your policy allows it.")
+            : null;
 }
 
 /// <summary>The model hit its token limit mid-answer (finish_reason "length"); the text is incomplete.</summary>
