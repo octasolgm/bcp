@@ -202,6 +202,13 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * the slow-poll interval only kicks in after this, so no fixed delay is ever "too short" for
    * how long the doc lists actually took to load. */
   private hasSyncedPipelineDocsOnce = false;
+  /** Stored-document ids a status check has really ANSWERED for. hasSyncedPipelineDocsOnce flips when a check
+   * merely finishes, including a failed or timed-out one, which left the picker on the old red "not parsed /
+   * 0 pts" state as if that were the answer. A row shows "Checking..." until its own id is in here, so a
+   * document that is listed after the first answer (or whose check failed) is covered too. */
+  private readonly pipelineStatusCheckedIds = new Set<string>();
+  private pipelineStatusError = '';
+  private readonly pipelineStatusWaitStart = Date.now();
 
   private static readonly STEP1_HEIGHT_KEY = 'v2-step1-height-px';
   /** Drag-resizable height of the Step 1 (Regulation sources) box — the handle sits between it
@@ -421,7 +428,14 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     // response (parsed text + sections) took 11-19 s and 1.5 MB per call for a dozen documents — which is
     // also how long the picker sat on the red "not parsed" state. Clause text is fetched on demand below.
     const res = await this.ndApi.localExtractStatusBatch(allIds, 'azure-di', { lite: true });
-    if (!res.success || !res.data) return;
+    if (!res.success || !res.data) {
+      // Not an answer: keep the pickers on "Checking..." and say why, rather than showing the old red state.
+      this.pipelineStatusError = res.message ?? 'The server did not answer';
+      this.cdr.markForCheck();
+      return;
+    }
+    this.pipelineStatusError = '';
+    for (const id of allIds) this.pipelineStatusCheckedIds.add(id);
 
     this.localPipelineReady.clear();
     for (const [id, status] of Object.entries(res.data)) {
@@ -520,7 +534,36 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * has answered, no number (the older stored count, often 0 or 1, is not this page's count). */
   regDocPointLabel(doc: StoredDocumentDto): string {
     if (this.ndAuth.isDemoViewer() || this.localPipelineReady.has(this.storedDocId(doc))) return `${doc.pointCount ?? 0} pts`;
-    return this.hasSyncedPipelineDocsOnce ? `${doc.pointCount ?? 0} pts` : '... pts';
+    return this.docStatusPending(doc) ? '... pts' : `${doc.pointCount ?? 0} pts`;
+  }
+
+  /** Real accounts: no status check has answered for this document yet (see pipelineStatusCheckedIds). */
+  docStatusPending(doc: StoredDocumentDto): boolean {
+    return !this.ndAuth.isDemoViewer() && !this.pipelineStatusCheckedIds.has(this.storedDocId(doc));
+  }
+
+  /** Spinner row at the top of each list while any document in it is still waiting for its first answer. */
+  get checkingRegDocStatus(): boolean {
+    return this.regulationDocs.some((d) => this.docStatusPending(d));
+  }
+
+  get checkingComplianceDocStatus(): boolean {
+    return this.complianceDocs.some((d) => this.docStatusPending(d));
+  }
+
+  /** Second line of the "Checking document status" row. */
+  get docStatusCheckHint(): string {
+    if (this.pipelineStatusError) return `Could not check yet (${this.pipelineStatusError}). Trying again every few seconds.`;
+    if (Date.now() - this.pipelineStatusWaitStart > 15_000) return 'Taking longer than usual. The server may still be starting.';
+    return 'Reading the parse and extract status of your documents.';
+  }
+
+  override regDocReadyLabel(doc: StoredDocumentDto): string {
+    return this.docStatusPending(doc) ? 'Checking…' : super.regDocReadyLabel(doc);
+  }
+
+  override complianceDocReadyLabel(doc: StoredDocumentDto): string {
+    return this.docStatusPending(doc) ? 'Checking…' : super.complianceDocReadyLabel(doc);
   }
 
   /** The document's extracted clauses (clause number + text). Read once per document with the full status
@@ -595,6 +638,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * legacy ParseStatus is still 'failed' from a prior Landing AI attempt. Fixed the same way as
    * the pill: check the real azure-di status first, on V5 only. */
   override complianceParseLabel(docId: string): string {
+    if (!this.ndAuth.isDemoViewer() && !this.pipelineStatusCheckedIds.has(docId)) return 'Checking…';
     if (this.localPipelineReady.has(docId)) return 'Parsed';
     return super.complianceParseLabel(docId);
   }

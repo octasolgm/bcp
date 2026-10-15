@@ -96,6 +96,17 @@
                 <p class="empty-msg">Loading regulations…</p>
               } @else {
                 <ul class="file-list">
+                  @if (checkingRegDocStatus) {
+                    <li>
+                      <div class="file-row file-row-stack upload-row">
+                        <span class="upload-row-spinner" aria-hidden="true"></span>
+                        <span class="file-row-body">
+                          <span class="fname-line"><span class="fname">Checking document status…</span></span>
+                          <span class="fsub"><span class="fmeta ready-label">{{ docStatusCheckHint }}</span></span>
+                        </span>
+                      </div>
+                    </li>
+                  }
                   @if (regUploadPipelineV2; as p) {
                     <li>
                       <div class="file-row file-row-stack upload-row" [class.is-failed]="p.stage === 'failed'">
@@ -118,7 +129,7 @@
                       class="file-row file-row-stack"
                       [class.selected]="isRegFileSelected(doc.id)"
                       [class.manual-reg-row]="doc.isNdManual"
-                      [class.doc-ready-red]="regDocReadyState(doc) === 'not_ready'"
+                      [class.doc-ready-red]="regDocReadyState(doc) === 'not_ready' && !docStatusPending(doc)"
                       [class.doc-ready-green]="regDocReadyState(doc) === 'analysed'"
                       [disabled]="!canSelectRegDoc(doc)"
                       (click)="toggleRegFile(doc)"
@@ -623,6 +634,17 @@
             <p class="empty-msg">Loading…</p>
           } @else {
             <ul class="file-list">
+              @if (checkingComplianceDocStatus) {
+                <li>
+                  <div class="file-row file-row-stack upload-row">
+                    <span class="upload-row-spinner" aria-hidden="true"></span>
+                    <span class="file-row-body">
+                      <span class="fname-line"><span class="fname">Checking document status…</span></span>
+                      <span class="fsub"><span class="fmeta ready-label">{{ docStatusCheckHint }}</span></span>
+                    </span>
+                  </div>
+                </li>
+              }
               @if (complianceUploadPipelineV2; as p) {
                 <li>
                   <div class="file-row file-row-stack upload-row" [class.is-failed]="p.stage === 'failed'">
@@ -644,7 +666,7 @@
                     type="button"
                     class="file-row file-row-stack"
                     [class.selected]="isComplianceFileSelected(doc.id)"
-                    [class.doc-ready-red]="complianceDocReadyState(doc) === 'not_ready'"
+                    [class.doc-ready-red]="complianceDocReadyState(doc) === 'not_ready' && !docStatusPending(doc)"
                     [class.doc-ready-green]="complianceDocReadyState(doc) === 'analysed'"
                     [disabled]="attachingCompliance || !canSelectComplianceDoc(doc)"
                     (click)="toggleComplianceFile(doc)"
