@@ -228,6 +228,16 @@ export class NdAdminWorkspacesComponent implements OnInit {
     else this.error = res.message ?? 'Could not load credits';
   }
 
+  /** For money shown as "-$0.35" rather than "$-0.35". */
+  absValue(v: number): number {
+    return Math.abs(v);
+  }
+
+  /** How full a limit's usage bar is, 0-100. */
+  meterPct(used: number, limit: number): number {
+    return limit > 0 ? Math.min(100, Math.max(0, (used / limit) * 100)) : 0;
+  }
+
   /** The spend-limit number as credits, whichever unit it was typed in. */
   private creditLimitAsCredits(): number {
     const n = Number(this.creditLimitInput) || 0;
