@@ -76,3 +76,11 @@ Platform administrators can now limit how many clauses a client workspace may an
 Consistent policy text across documents
 
 When an analysis is finalized and the same resolved action is written into more than one internal document, every document now receives the same policy wording. On the usage pages, these calls are now listed as "Finalize - policy text" with the clause and gap they were for, instead of "Other".
+
+A cleaner Business workspaces page
+
+The Business workspaces page now fits any window size. On narrower screens each workspace is shown as its own card instead of a wide table, and the create form no longer cuts off fields. Opening a workspace's credits now shows a tidy summary of credits, cost, billed amount, profit and clauses analysed, followed by the spend limit, clause limit and margin settings with usage bars, then adding credits, date format and spend by model.
+
+Being worked on
+
+On phone-sized screens the main menu stays open and takes up most of the screen. We plan to turn it into a menu that slides out when needed.

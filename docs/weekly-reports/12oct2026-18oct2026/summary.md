@@ -67,4 +67,8 @@ Tasks
 - Finalize: the same clause gap action embedded in several internal documents now gets one policy text per finalize, identical in every document (was a different AI text per document, each one paid for)
 
 Bug fixes
+- Business workspaces page cut off on narrow screens (create form fields clipped, workspace table wider than the screen, open credits panel stretched the table off-screen). The page now follows the space beside the sidebar: the list turns into one card per workspace when narrow, and the credits panel was regrouped into Credits and billing (figure tiles, including profit and clauses analysed), Limits and margin (with usage bars), Add credits, Date format and Spend by model. Negative balances read "-$0.35" instead of "$-0.35". Checked at 327 px and 1083 px wide
 - AI usage: finalize calls showed as activity "Other". They now show as "Finalize - policy text" with the clause and gap in the detail
+
+Investigated, follow up pending
+- On a phone-width screen the app sidebar stays open and leaves the page only a few pixels wide; this affects every page, not only Business workspaces. Needs a phone layout for the app shell (sidebar as a slide-out menu)
