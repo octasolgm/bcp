@@ -399,6 +399,8 @@ export type NdWorkspaceSummary = {
   aiCreditLowThresholdPct?: number;
   /** Hard cap on total credits this workspace may ever consume. Null/undefined = no limit. */
   aiCreditLimit?: number | null;
+  /** Most clauses this workspace may ever have analysed. Null/undefined = no limit. */
+  clauseLimit?: number | null;
   /** This workspace's own markup, overriding the platform default. Null/undefined = uses the default. */
   aiMarkupOverride?: number | null;
   /** Which country's date convention this workspace displays dates in. Null/undefined = UAE default. */
@@ -440,6 +442,11 @@ export type NdAiCreditSummary = {
   creditLimit?: number | null;
   /** What that credit limit is worth in real dollars, at the current price per credit. */
   creditLimitUsd?: number | null;
+  /** Most clauses this workspace may ever have analysed (null/undefined = no limit), and how many it has used. */
+  clauseLimit?: number | null;
+  clausesUsed?: number;
+  clausesRemaining?: number | null;
+  clauseLimitReached?: boolean;
   /** This workspace's own markup override. Null/undefined = uses the platform default. */
   markupOverride?: number | null;
   /** The markup actually applied to this workspace's calls (override, else the platform default). */
@@ -1059,6 +1066,15 @@ export class NdApiService {
       'PUT',
       `/nd/ai-credits/workspaces/${workspaceId}/credit-limit`,
       { creditLimit },
+    );
+  }
+
+  /** Sets the most clauses this workspace may ever have analysed. Pass null to remove the limit. */
+  setWorkspaceClauseLimit(workspaceId: string, clauseLimit: number | null) {
+    return this.request<{ clauseLimit: number | null; clausesUsed: number; clausesRemaining: number | null }>(
+      'PUT',
+      `/nd/ai-credits/workspaces/${workspaceId}/clause-limit`,
+      { clauseLimit },
     );
   }
 

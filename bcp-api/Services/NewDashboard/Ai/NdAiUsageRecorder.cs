@@ -64,6 +64,7 @@ public sealed class NdAiUsageRecorder(
                 CompletionTokens = usage.CompletionTokens,
                 CachedTokens = usage.CachedTokens,
                 GenerationId = usage.GenerationId,
+                Note = scope.Note,
                 CreatedBy = scope.UserId,
             });
             await db.SaveChangesAsync(ct);

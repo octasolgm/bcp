@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
+using Reguliq.Api.Services.NewDashboard.Ai;
 using Reguliq.Api.Services.NewDashboard.CorrectedDocs;
 using Reguliq.Api.Services.Storage;
 
@@ -74,9 +75,15 @@ public class NdCorrectedDocumentService(
 
         // The AI note writing is paid per call, so it runs only for documents that actually get a new copy.
         var generatingIds = toGenerate.Select(t => t.Source.Id).ToHashSet();
-        var embedJobs = await EnrichEmbedJobsAsync(
-            (await embedResolver.ResolveForRunAsync(runId, ct)).Where(j => generatingIds.Contains(j.StoredDocumentId)).ToList(),
-            ct);
+        // Billed to the run's workspace under its own activity, so the usage page shows these calls as
+        // "Finalize - policy text" instead of the generic "Other".
+        IReadOnlyList<NdActionPlanEmbedJob> embedJobs;
+        using (NdAiUsageContext.Enter(run.TenantId, runId, "finalize_embed", actorId))
+        {
+            embedJobs = await EnrichEmbedJobsAsync(
+                (await embedResolver.ResolveForRunAsync(runId, ct)).Where(j => generatingIds.Contains(j.StoredDocumentId)).ToList(),
+                ct);
+        }
         var jobsByDocId = embedJobs.ToDictionary(j => j.StoredDocumentId);
 
         // The slow part — downloading and (for a malformed PDF) rendering every page — runs a
@@ -167,19 +174,37 @@ public class NdCorrectedDocumentService(
         CancellationToken ct)
     {
         if (jobs.Count == 0) return jobs;
+        // One finalize writes one policy text per clause gap action, however many internal documents it
+        // lands in: the same resolved action must read the same everywhere, and is paid for once.
+        var generated = new Dictionary<string, string>(StringComparer.Ordinal);
         var enriched = new List<NdActionPlanEmbedJob>(jobs.Count);
         foreach (var job in jobs)
         {
             var targets = new List<NdActionPlanEmbedTarget>(job.Targets.Count);
             foreach (var target in job.Targets)
             {
-                var body = await finalizeEmbedContent.GenerateEmbedBodyAsync(target, ct);
+                var key = EmbedBodyKey(target);
+                if (!generated.TryGetValue(key, out var body))
+                {
+                    // The note says what this call wrote, so the usage page can show clause and gap.
+                    var note = $"Policy text for clause {target.ClauseNo}"
+                        + (target.GapIndex > 0 ? $", gap {target.GapIndex}" : "");
+                    using var billing = NdAiUsageContext.Enter(
+                        NdAiUsageContext.Value?.TenantId, NdAiUsageContext.Value?.AnalysisRunId,
+                        "finalize_embed", NdAiUsageContext.Value?.UserId, note);
+                    body = await finalizeEmbedContent.GenerateEmbedBodyAsync(target, ct);
+                    generated[key] = body;
+                }
                 targets.Add(target with { GeneratedEmbedBody = body });
             }
             enriched.Add(new NdActionPlanEmbedJob(job.StoredDocumentId, targets));
         }
         return enriched;
     }
+
+    /// <summary>Identifies one resolved action on one clause gap, independent of which document it embeds into.</summary>
+    internal static string EmbedBodyKey(NdActionPlanEmbedTarget t) =>
+        string.Join('\u001f', t.ClauseNo.Trim(), t.GapIndex, (t.GapText ?? "").Trim(), (t.ActionText ?? "").Trim());
 
     private sealed record EmbeddedFile(
         string StoragePath,

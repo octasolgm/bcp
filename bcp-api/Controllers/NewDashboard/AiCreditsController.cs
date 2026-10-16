@@ -124,6 +124,7 @@ public class AiCreditsController(
 
         var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? profile.TenantId ?? WorkspaceScope.DefaultWorkspaceId;
         var summary = await credits.GetSummaryAsync(workspaceId, ct);
+        var clauses = await credits.GetClauseUsageAsync(workspaceId, ct);
         var rate = await pricing.GetPricingAsync(ct);
 
         // Workspace users see credits, never our provider cost.
@@ -148,6 +149,10 @@ public class AiCreditsController(
                 balanceUsd = Math.Round(summary.Balance * rate.UsdPerCredit, 4),
                 creditLimit = summary.CreditLimit,
                 creditLimitUsd = summary.CreditLimit.HasValue ? rate.UsdFor(summary.CreditLimit.Value) : (decimal?)null,
+                clauseLimit = clauses.Limit,
+                clausesUsed = clauses.Used,
+                clausesRemaining = clauses.Remaining,
+                clauseLimitReached = clauses.IsReached,
             },
         });
     }
@@ -298,6 +303,7 @@ public class AiCreditsController(
         if (error != null) return error;
 
         var summary = await credits.GetSummaryAsync(workspaceId, ct);
+        var clauses = await credits.GetClauseUsageAsync(workspaceId, ct);
         var rows = await credits.RecentAsync(workspaceId, 50, ct);
         var names = await LoadProfileNamesAsync(db, rows.Select(r => r.CreatedBy), ct);
         var rate = await pricing.GetPricingAsync(ct);
@@ -344,6 +350,10 @@ public class AiCreditsController(
                     creditsPerDollar = Math.Round(1m / perCredit, 2),
                     grantedUsd = Math.Round(summary.Granted * perCredit, 4),
                     balanceUsd = Math.Round(summary.Balance * perCredit, 4),
+                    clauseLimit = clauses.Limit,
+                    clausesUsed = clauses.Used,
+                    clausesRemaining = clauses.Remaining,
+                    clauseLimitReached = clauses.IsReached,
                     // Platform admin only: what the AI cost us against what this client was charged.
                     costUsd = totalCost,
                     billedUsd = totalBilled,
@@ -649,6 +659,40 @@ public class AiCreditsController(
             {
                 creditLimit = ws.AiCreditLimit,
                 creditLimitUsd = ws.AiCreditLimit.HasValue ? rate.UsdFor(ws.AiCreditLimit.Value) : (decimal?)null,
+            },
+        });
+    }
+
+    public record ClauseLimitRequest(int? ClauseLimit);
+
+    /// <summary>Sets (or clears, with null) the most clauses this workspace may ever have analysed. Works
+    /// alongside the credit limit: whichever is reached first stops new analyses.</summary>
+    [HttpPut("workspaces/{workspaceId:guid}/clause-limit")]
+    public async Task<IActionResult> SetClauseLimit(Guid workspaceId, [FromBody] ClauseLimitRequest body, CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        if (body.ClauseLimit is < 0)
+            return BadRequest(new { success = false, message = "Clause limit can't be negative." });
+
+        var ws = await db.NdWorkspaces.FirstOrDefaultAsync(w => w.Id == workspaceId, ct);
+        if (ws == null) return NotFound(new { success = false, message = "Workspace not found." });
+
+        ws.ClauseLimit = body.ClauseLimit;
+        ws.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var usage = await credits.GetClauseUsageAsync(workspaceId, ct);
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                clauseLimit = usage.Limit,
+                clausesUsed = usage.Used,
+                clausesRemaining = usage.Remaining,
+                clauseLimitReached = usage.IsReached,
             },
         });
     }

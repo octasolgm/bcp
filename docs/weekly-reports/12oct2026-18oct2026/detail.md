@@ -64,3 +64,15 @@ Stronger data protection for AI and document services
 
 Requests to AI models through OpenRouter now ask for zero data retention and no training on your data, so the model providers that answer are only those with that policy. We tested every model we offer: all the main models still work (Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot, Z.AI), while three Qwen models and the free-tier models cannot be served under these rules and now show a clear message instead. Installations can also switch off the optional full-text policy review, restrict which outside services the platform may contact, and require secure connections for all of them. An administrator can see which of these protections are in effect. We also checked that application logs never contain document text, prompts or AI answers.
 
+
+How finalized actions appear in the updated internal documents
+
+When a reviewer finalizes an analysis, each resolved action is turned into policy wording and added to a new version of the internal document, rather than repeating the action text typed during review. The wording is written by the AI model chosen in Admin settings, using the clause, the specific gap and the action as background, and is shown under a "Policy Update" heading that names the regulatory clause it addresses. In PDF files the text is placed on a new page right after the page where the evidence was found; in Word files it is placed as a highlighted paragraph next to the related text. The original version is never changed. A written guide to this process is now available to the team.
+
+Clause limits for workspaces
+
+Platform administrators can now limit how many clauses a client workspace may analyse in total, as well as, or instead of, a spend limit. The spend limit can be entered in dollars or in credits, with the equivalent shown alongside. When an analysis would take a workspace past either limit it does not start, and the message says how many clauses are left. The workspace settings now show spend limit, clause limit and margin side by side, each with its current usage.
+
+Consistent policy text across documents
+
+When an analysis is finalized and the same resolved action is written into more than one internal document, every document now receives the same policy wording. On the usage pages, these calls are now listed as "Finalize - policy text" with the clause and gap they were for, instead of "Other".

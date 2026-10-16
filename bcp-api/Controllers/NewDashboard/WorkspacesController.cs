@@ -301,6 +301,7 @@ public partial class WorkspacesController(
         createdAt = w.CreatedAt,
         aiCreditLowThresholdPct = w.AiCreditLowThresholdPct,
         aiCreditLimit = w.AiCreditLimit,
+        clauseLimit = w.ClauseLimit,
         aiMarkupOverride = w.AiMarkupOverride,
         dateFormatRegion = w.DateFormatRegion,
     };

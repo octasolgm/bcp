@@ -55,6 +55,31 @@ public class AnalysisRunsController(
         });
     }
 
+    /// <summary>
+    /// Refuses to start an analysis that would take the workspace past its clause limit (set by the platform
+    /// admin; independent of the AI credit limit). Only a start is checked: re-runs of clauses already
+    /// analysed are not new clauses, and a run already in progress is left to finish.
+    /// </summary>
+    private async Task<IActionResult?> GuardClauseLimitAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? WorkspaceScope.DefaultWorkspaceId;
+        var usage = await aiCredits.GetClauseUsageAsync(workspaceId, ct);
+        if (!usage.HasLimit) return null;
+        var toRun = Math.Max(0, run.TotalPointsCount - run.ProcessedPointsCount);
+        if (usage.Fits(toRun)) return null;
+
+        var message = usage.IsReached
+            ? $"This workspace has used all {usage.Limit} clauses it is allowed to analyse. Ask your administrator to raise the clause limit, then start the analysis again."
+            : $"This analysis has {toRun} clauses but this workspace has only {usage.Remaining} of its {usage.Limit} allowed clauses left. Remove some clauses from the analysis or ask your administrator to raise the clause limit.";
+        return StatusCode(402, new
+        {
+            success = false,
+            code = "clause_limit_reached",
+            message,
+            data = new { clauseLimit = usage.Limit, clausesUsed = usage.Used, clausesRemaining = usage.Remaining },
+        });
+    }
+
     public record CreateRunRequest(
         string Name,
         string? Description,
@@ -901,6 +926,8 @@ public class AnalysisRunsController(
         {
             var creditError = await GuardAiCreditsAsync(ct);
             if (creditError != null) return creditError;
+            var clauseLimitError = await GuardClauseLimitAsync(run, ct);
+            if (clauseLimitError != null) return clauseLimitError;
         }
 
         if (useRegul && run.RegulClausesConfirmedAt == null)
@@ -983,6 +1010,8 @@ public class AnalysisRunsController(
 
         var forwardCreditError = await GuardAiCreditsAsync(ct);
         if (forwardCreditError != null) return forwardCreditError;
+        var forwardClauseLimitError = await GuardClauseLimitAsync(run, ct);
+        if (forwardClauseLimitError != null) return forwardClauseLimitError;
 
         if (run.Status is "running" or "processing" && runCancellation.HasActiveWorker(id))
             return Ok(new { success = true, message = "Analysis already in progress", id, status = run.Status });

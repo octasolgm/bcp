@@ -257,84 +257,118 @@
                             </div>
                           </div>
 
-                          <div class="credit-limit-margin-grid">
-                            <form class="credit-limit-form" (ngSubmit)="saveCreditLimit(item)">
-                              <span class="muted">Credit limit for this business</span>
-                              <label class="inline-radio">
-                                <input
-                                  type="radio"
-                                  [checked]="creditLimitNoLimit"
-                                  (change)="creditLimitNoLimit = true"
-                                  name="creditLimitMode-{{ item.workspace.id }}"
-                                />
-                                No limit
-                              </label>
-                              <label class="inline-radio">
-                                <input
-                                  type="radio"
-                                  [checked]="!creditLimitNoLimit"
-                                  (change)="creditLimitNoLimit = false"
-                                  name="creditLimitMode-{{ item.workspace.id }}"
-                                />
-                                Set a limit
-                              </label>
-                              @if (!creditLimitNoLimit) {
-                                <input
-                                  type="number"
-                                  step="1"
-                                  min="0"
-                                  class="inline-input"
-                                  [(ngModel)]="creditLimitInput"
-                                  name="creditLimitInput-{{ item.workspace.id }}"
-                                  placeholder="Max credits"
-                                  aria-label="Max credits"
-                                />
-                                <span class="muted">≈ ${{ creditLimitInputUsd | number: '1.2-2' }}</span>
-                              }
-                              <button type="submit" class="btn-secondary btn-sm" [disabled]="savingCreditLimit">
-                                {{ savingCreditLimit ? 'Saving…' : 'Save limit' }}
-                              </button>
-                            </form>
+                          <div class="limits-section">
+                            <h4 class="limits-heading">Limits and margin</h4>
+                            <p class="muted limits-hint">
+                              Set a spend limit, a clause limit, or both. New analyses stop when either one is reached.
+                            </p>
+                            <div class="limits-grid">
+                              <form class="limit-card" (ngSubmit)="saveCreditLimit(item)">
+                                <div class="limit-card-head">
+                                  <strong>Spend limit</strong>
+                                  <span class="muted">
+                                    @if (c.summary.creditLimit != null) {
+                                      {{ c.summary.used | number: '1.0-2' }} of {{ c.summary.creditLimit | number: '1.0-2' }} credits used
+                                    } @else {
+                                      Not limited
+                                    }
+                                  </span>
+                                </div>
+                                <div class="seg" role="group" aria-label="Spend limit mode">
+                                  <button type="button" [class.on]="creditLimitNoLimit" (click)="creditLimitNoLimit = true">No limit</button>
+                                  <button type="button" [class.on]="!creditLimitNoLimit" (click)="creditLimitNoLimit = false">Set limit</button>
+                                </div>
+                                @if (!creditLimitNoLimit) {
+                                  <div class="limit-input-row">
+                                    <div class="seg seg-sm" role="group" aria-label="Limit unit">
+                                      <button type="button" [class.on]="creditLimitUnit === 'usd'" (click)="setCreditLimitUnit('usd')">$ Dollars</button>
+                                      <button type="button" [class.on]="creditLimitUnit === 'credits'" (click)="setCreditLimitUnit('credits')">Credits</button>
+                                    </div>
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0"
+                                      class="inline-input"
+                                      [(ngModel)]="creditLimitInput"
+                                      name="creditLimitInput-{{ item.workspace.id }}"
+                                      [placeholder]="creditLimitUnit === 'usd' ? 'Max dollars' : 'Max credits'"
+                                      aria-label="Spend limit"
+                                    />
+                                  </div>
+                                  <span class="muted limit-equiv">{{ creditLimitEquivalent }}</span>
+                                }
+                                <button type="submit" class="btn-secondary btn-sm" [disabled]="savingCreditLimit">
+                                  {{ savingCreditLimit ? 'Saving...' : 'Save spend limit' }}
+                                </button>
+                              </form>
 
-                            <form class="credit-limit-form" (ngSubmit)="saveMarkup(item)">
-                              <span class="muted">Margin for this business</span>
-                              <label class="inline-radio">
-                                <input
-                                  type="radio"
-                                  [checked]="markupUseDefault"
-                                  (change)="markupUseDefault = true"
-                                  name="markupMode-{{ item.workspace.id }}"
-                                />
-                                Use default ({{ priceMarkup }}x)
-                              </label>
-                              <label class="inline-radio">
-                                <input
-                                  type="radio"
-                                  [checked]="!markupUseDefault"
-                                  (change)="markupUseDefault = false"
-                                  name="markupMode-{{ item.workspace.id }}"
-                                />
-                                Set specific margin
-                              </label>
-                              @if (!markupUseDefault) {
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  min="0.1"
-                                  class="inline-input"
-                                  [(ngModel)]="markupInput"
-                                  name="markupInput-{{ item.workspace.id }}"
-                                  placeholder="e.g. 1.5"
-                                  aria-label="Markup multiplier"
-                                />
-                              }
-                              <button type="submit" class="btn-secondary btn-sm" [disabled]="savingMarkup">
-                                {{ savingMarkup ? 'Saving…' : 'Save margin' }}
-                              </button>
-                            </form>
+                              <form class="limit-card" (ngSubmit)="saveClauseLimit(item)">
+                                <div class="limit-card-head">
+                                  <strong>Clause limit</strong>
+                                  <span class="muted">
+                                    @if (c.summary.clauseLimit != null) {
+                                      {{ c.summary.clausesUsed ?? 0 | number: '1.0-0' }} of {{ c.summary.clauseLimit | number: '1.0-0' }} clauses used
+                                    } @else {
+                                      {{ c.summary.clausesUsed ?? 0 | number: '1.0-0' }} analysed, not limited
+                                    }
+                                  </span>
+                                </div>
+                                <div class="seg" role="group" aria-label="Clause limit mode">
+                                  <button type="button" [class.on]="clauseLimitNoLimit" (click)="clauseLimitNoLimit = true">No limit</button>
+                                  <button type="button" [class.on]="!clauseLimitNoLimit" (click)="clauseLimitNoLimit = false">Set limit</button>
+                                </div>
+                                @if (!clauseLimitNoLimit) {
+                                  <div class="limit-input-row">
+                                    <input
+                                      type="number"
+                                      step="1"
+                                      min="0"
+                                      class="inline-input"
+                                      [(ngModel)]="clauseLimitInput"
+                                      name="clauseLimitInput-{{ item.workspace.id }}"
+                                      placeholder="Max clauses"
+                                      aria-label="Clause limit"
+                                    />
+                                    <span class="muted">clauses in total</span>
+                                  </div>
+                                }
+                                <button type="submit" class="btn-secondary btn-sm" [disabled]="savingClauseLimit">
+                                  {{ savingClauseLimit ? 'Saving...' : 'Save clause limit' }}
+                                </button>
+                              </form>
+
+                              <form class="limit-card" (ngSubmit)="saveMarkup(item)">
+                                <div class="limit-card-head">
+                                  <strong>Margin (profit)</strong>
+                                  <span class="muted">now {{ c.summary.effectiveMarkup ?? priceMarkup }}x</span>
+                                </div>
+                                <div class="seg" role="group" aria-label="Margin mode">
+                                  <button type="button" [class.on]="markupUseDefault" (click)="markupUseDefault = true">Default ({{ priceMarkup }}x)</button>
+                                  <button type="button" [class.on]="!markupUseDefault" (click)="markupUseDefault = false">Custom</button>
+                                </div>
+                                @if (!markupUseDefault) {
+                                  <div class="limit-input-row">
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      min="0.1"
+                                      class="inline-input"
+                                      [(ngModel)]="markupInput"
+                                      name="markupInput-{{ item.workspace.id }}"
+                                      placeholder="e.g. 1.5"
+                                      aria-label="Markup multiplier"
+                                    />
+                                    <span class="muted">x cost (1.5 = +50%)</span>
+                                  </div>
+                                }
+                                <button type="submit" class="btn-secondary btn-sm" [disabled]="savingMarkup">
+                                  {{ savingMarkup ? 'Saving...' : 'Save margin' }}
+                                </button>
+                              </form>
+                            </div>
                           </div>
 
-                          <form class="credit-limit-form" (ngSubmit)="saveDateFormat(item)">
+<form class="credit-limit-form" (ngSubmit)="saveDateFormat(item)">
                             <span class="muted">Date format</span>
                             <select
                               class="inline-input"

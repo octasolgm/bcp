@@ -14,10 +14,11 @@ public static class NdAiUsageContext
     public static NdAiUsageScope? Value => Current.Value ?? FromRequestWorkspace();
 
     /// <summary>Bills every AI call made inside the returned scope to this workspace and run.</summary>
-    public static IDisposable Enter(Guid? tenantId, Guid? analysisRunId, string feature, Guid? userId = null)
+    public static IDisposable Enter(
+        Guid? tenantId, Guid? analysisRunId, string feature, Guid? userId = null, string? note = null)
     {
         var previous = Current.Value;
-        Current.Value = new NdAiUsageScope(tenantId, analysisRunId, feature, userId);
+        Current.Value = new NdAiUsageScope(tenantId, analysisRunId, feature, userId, note);
         return new Restore(previous);
     }
 
@@ -30,4 +31,4 @@ public static class NdAiUsageContext
     }
 }
 
-public sealed record NdAiUsageScope(Guid? TenantId, Guid? AnalysisRunId, string Feature, Guid? UserId);
+public sealed record NdAiUsageScope(Guid? TenantId, Guid? AnalysisRunId, string Feature, Guid? UserId, string? Note = null);

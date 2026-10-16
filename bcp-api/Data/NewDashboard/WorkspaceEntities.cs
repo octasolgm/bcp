@@ -36,6 +36,11 @@ public class NdWorkspace
     [Column("ai_credit_limit")]
     public decimal? AiCreditLimit { get; set; }
 
+    /// <summary>Hard cap on the total number of clauses this workspace may ever have analysed. Null = no
+    /// limit. Independent of the AI credit limit: either, both or neither can be set.</summary>
+    [Column("clause_limit")]
+    public int? ClauseLimit { get; set; }
+
     /// <summary>Per-workspace markup override. Null = use the platform default markup.</summary>
     [Column("ai_markup_override")]
     public decimal? AiMarkupOverride { get; set; }

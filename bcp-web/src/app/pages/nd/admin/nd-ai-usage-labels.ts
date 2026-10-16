@@ -12,6 +12,8 @@ export function aiFeatureLabel(feature: string | null | undefined): string {
       return 'Clause rerun';
     case 'gap_evidence_rerun':
       return 'Gap evidence re-check';
+    case 'finalize_embed':
+      return 'Finalize - policy text';
     case 'document_parsing':
       return 'Document parsing';
     case 'request':

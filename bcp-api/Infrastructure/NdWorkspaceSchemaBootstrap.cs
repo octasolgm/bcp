@@ -143,6 +143,9 @@ public static class NdWorkspaceSchemaBootstrap
             -- ever consumed by this workspace, independent of how many credits were topped up.
             ALTER TABLE nd_workspaces
               ADD COLUMN IF NOT EXISTS ai_credit_limit NUMERIC(18,4) NULL;
+            -- NULL = no cap; a value is the most clauses this workspace may ever have analysed.
+            ALTER TABLE nd_workspaces
+              ADD COLUMN IF NOT EXISTS clause_limit INTEGER NULL;
             -- NULL = use the platform's default markup; a value overrides it for this workspace only.
             ALTER TABLE nd_workspaces
               ADD COLUMN IF NOT EXISTS ai_markup_override NUMERIC(18,4) NULL;

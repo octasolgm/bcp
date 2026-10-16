@@ -57,3 +57,14 @@ Investigated, follow up pending
 - Why the status check took over 2 minutes once: it normally answers in about 0.4 s here and nothing slow or failing was in the API log that was still available. The page waits up to 60 s per attempt and retries every 4 s, so two slow attempts give about 2 minutes; likely a slow or just-restarted API or database at that moment, not confirmed
 - The "type start to confirm" box in the new analysis page markup is never shown (the code runs the action directly), so Run analysis has no confirmation
 
+
+16 Oct 2026
+
+Tasks
+- Checked how finalize writes resolved actions into the corrected internal documents (new version v2) and wrote it up in docs/workflow/finalize-embed-actions.md: which AI model is used (Admin setting, falls back to the analysis model, then Gemini 3.5 Flash), the exact prompt, the settings sent to the model, how the document and page are chosen, and how the text is written into PDF and Word files. Confirmed in the code that the action wording is rewritten as policy text, not copied. Not run end to end in this session
+- Started the app: web (port 3002) and API (port 5100) were already running from another session, so no second copy was started
+- Workspace clause limit: the platform admin can now cap how many clauses a workspace may have analysed in total, on its own or together with the spend limit; a new analysis that would go past it is refused with a message showing what is left (re-runs of clauses already analysed are not counted). Workspaces page "Limits and margin" panel redone as three cards: spend limit (typed in dollars or credits, with the other shown beside it), clause limit (used / limit), margin. 8 new tests
+- Finalize: the same clause gap action embedded in several internal documents now gets one policy text per finalize, identical in every document (was a different AI text per document, each one paid for)
+
+Bug fixes
+- AI usage: finalize calls showed as activity "Other". They now show as "Finalize - policy text" with the clause and gap in the detail

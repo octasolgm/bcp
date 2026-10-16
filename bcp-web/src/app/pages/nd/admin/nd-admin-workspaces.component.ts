@@ -71,6 +71,11 @@ export class NdAdminWorkspacesComponent implements OnInit {
   /** Credit-limit + margin form for whichever workspace's credits panel is open. */
   creditLimitNoLimit = true;
   creditLimitInput: number | null = null;
+  /** Whether the spend-limit number is typed in dollars or in credits (stored as credits either way). */
+  creditLimitUnit: 'usd' | 'credits' = 'usd';
+  clauseLimitNoLimit = true;
+  clauseLimitInput: number | null = null;
+  savingClauseLimit = false;
   savingCreditLimit = false;
   markupUseDefault = true;
   markupInput: number | null = null;
@@ -206,7 +211,13 @@ export class NdAdminWorkspacesComponent implements OnInit {
     this.topUpAmount = null;
     this.topUpNote = '';
     this.creditLimitNoLimit = item.workspace.aiCreditLimit == null;
-    this.creditLimitInput = item.workspace.aiCreditLimit ?? null;
+    this.creditLimitUnit = 'usd';
+    this.creditLimitInput =
+      item.workspace.aiCreditLimit == null
+        ? null
+        : Math.round(item.workspace.aiCreditLimit * this.priceUsdPerCredit * 100) / 100;
+    this.clauseLimitNoLimit = item.workspace.clauseLimit == null;
+    this.clauseLimitInput = item.workspace.clauseLimit ?? null;
     this.markupUseDefault = item.workspace.aiMarkupOverride == null;
     this.markupInput = item.workspace.aiMarkupOverride ?? null;
     this.dateFormatInput = item.workspace.dateFormatRegion ?? 'default';
@@ -217,26 +228,67 @@ export class NdAdminWorkspacesComponent implements OnInit {
     else this.error = res.message ?? 'Could not load credits';
   }
 
-  /** Dollar value of the credit-limit form's current number, at the platform's price per credit. */
-  get creditLimitInputUsd(): number {
-    return this.creditLimitInput ? this.creditLimitInput * this.priceUsdPerCredit : 0;
+  /** The spend-limit number as credits, whichever unit it was typed in. */
+  private creditLimitAsCredits(): number {
+    const n = Number(this.creditLimitInput) || 0;
+    if (this.creditLimitUnit === 'credits') return n;
+    return this.priceUsdPerCredit > 0 ? Math.round((n / this.priceUsdPerCredit) * 10000) / 10000 : 0;
+  }
+
+  /** The other-unit equivalent shown under the spend-limit field. */
+  get creditLimitEquivalent(): string {
+    if (!this.creditLimitInput) return '';
+    return this.creditLimitUnit === 'usd'
+      ? `= ${this.creditLimitAsCredits().toLocaleString(undefined, { maximumFractionDigits: 2 })} credits`
+      : `= $${(this.creditLimitInput * this.priceUsdPerCredit).toFixed(2)}`;
+  }
+
+  /** Switching the unit converts the number already typed, so the limit itself does not change. */
+  setCreditLimitUnit(unit: 'usd' | 'credits'): void {
+    if (unit === this.creditLimitUnit) return;
+    if (this.creditLimitInput) {
+      this.creditLimitInput =
+        unit === 'credits'
+          ? this.creditLimitAsCredits()
+          : Math.round(this.creditLimitInput * this.priceUsdPerCredit * 100) / 100;
+    }
+    this.creditLimitUnit = unit;
   }
 
   async saveCreditLimit(item: NdWorkspaceListItem): Promise<void> {
-    const limit = this.creditLimitNoLimit ? null : Number(this.creditLimitInput);
+    const limit = this.creditLimitNoLimit ? null : this.creditLimitAsCredits();
     if (!this.creditLimitNoLimit && (!limit || limit < 0)) {
-      this.error = 'Enter a credit limit of 0 or more, or choose "No limit".';
+      this.error = 'Enter a spend limit above 0, or choose "No limit".';
       return;
     }
     this.savingCreditLimit = true;
     const res = await this.api.setWorkspaceCreditLimit(item.workspace.id, limit);
     this.savingCreditLimit = false;
     if (!res.success) {
-      this.error = res.message ?? 'Could not save the credit limit';
+      this.error = res.message ?? 'Could not save the spend limit';
       return;
     }
     item.workspace.aiCreditLimit = limit;
-    this.message = limit == null ? `"${item.workspace.name}" now has no credit limit.` : 'Credit limit saved.';
+    this.message = limit == null ? `"${item.workspace.name}" now has no spend limit.` : 'Spend limit saved.';
+    const refreshed = await this.api.getWorkspaceAiCredits(item.workspace.id);
+    if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
+  }
+
+  async saveClauseLimit(item: NdWorkspaceListItem): Promise<void> {
+    const limit = this.clauseLimitNoLimit ? null : Math.floor(Number(this.clauseLimitInput));
+    if (!this.clauseLimitNoLimit && (limit == null || !Number.isFinite(limit) || limit < 0)) {
+      this.error = 'Enter a whole number of clauses, or choose "No limit".';
+      return;
+    }
+    this.savingClauseLimit = true;
+    const res = await this.api.setWorkspaceClauseLimit(item.workspace.id, limit);
+    this.savingClauseLimit = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not save the clause limit';
+      return;
+    }
+    item.workspace.clauseLimit = limit;
+    this.message = limit == null ? `"${item.workspace.name}" now has no clause limit.` : 'Clause limit saved.';
     const refreshed = await this.api.getWorkspaceAiCredits(item.workspace.id);
     if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
   }

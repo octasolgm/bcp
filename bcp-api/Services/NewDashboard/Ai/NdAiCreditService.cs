@@ -28,6 +28,18 @@ public sealed record NdAiCreditSummary(
         || (CreditLimit is decimal limit && limit > 0 && Used / limit >= (100 - LowThresholdPct) / 100m));
 }
 
+/// <summary>How many clauses a workspace has had analysed against its clause limit (null = no limit).</summary>
+public sealed record NdClauseUsage(int? Limit, int Used)
+{
+    public bool HasLimit => Limit.HasValue;
+    public bool IsReached => Limit.HasValue && Used >= Limit.Value;
+    public int? Remaining => Limit.HasValue ? Math.Max(0, Limit.Value - Used) : null;
+
+    /// <summary>True when a run that still has <paramref name="clausesToRun"/> clauses to analyse fits in
+    /// what is left. A workspace with no limit always fits.</summary>
+    public bool Fits(int clausesToRun) => !Limit.HasValue || Used + Math.Max(0, clausesToRun) <= Limit.Value;
+}
+
 /// <summary>
 /// Reads and moves a workspace's AI credits. The balance is always the sum of the ledger, so a top-up,
 /// an AI call and a manual correction are all one insert and the history explains any number on screen.
@@ -77,6 +89,23 @@ public sealed class NdAiCreditService(AppDbContext db, IMemoryCache cache)
 
         cache.Set(BalanceCacheKey(workspaceId), summary, CacheTtl);
         return summary;
+    }
+
+    /// <summary>
+    /// Clauses this workspace has had analysed, against its clause limit. Counts the clauses each run has
+    /// actually processed (deleted runs still count: the work was done), so restarting a run does not count
+    /// its clauses twice and a run that never started costs nothing. Re-runs of a clause do not count.
+    /// </summary>
+    public async Task<NdClauseUsage> GetClauseUsageAsync(Guid workspaceId, CancellationToken ct = default)
+    {
+        var limit = await db.NdWorkspaces.AsNoTracking()
+            .Where(w => w.Id == workspaceId)
+            .Select(w => w.ClauseLimit)
+            .FirstOrDefaultAsync(ct);
+        var used = await db.NdAnalysisRuns.IgnoreQueryFilters().AsNoTracking()
+            .Where(r => r.TenantId == workspaceId)
+            .SumAsync(r => (int?)r.ProcessedPointsCount, ct) ?? 0;
+        return new NdClauseUsage(limit, used);
     }
 
     /// <summary>Adds credits (or removes them, as an adjustment) and returns the new position.</summary>
