@@ -160,6 +160,7 @@
 .btn-new-analysis {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
   padding: 0.4rem 0.85rem;
   border-radius: var(--radius-md);
   background: var(--accent);
@@ -175,6 +176,13 @@
   }
 }
 
+// Phone only (icon-only button) - see the phone layout block at the end of this file.
+.btn-new-analysis-icon {
+  display: none;
+  flex-shrink: 0;
+}
+
+.btn-mobile-nav,
 .btn-settings,
 .btn-notifications {
   display: flex;
@@ -881,5 +889,132 @@
   &:hover {
     opacity: 1;
     background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phone layout (keep the breakpoint in sync with PHONE_QUERY in nd-shell.component.ts).
+// The sidebar leaves the flex row and becomes a slide-out drawer over the page, opened from the
+// top-bar menu button; content gets the full width. Desktop/tablet rules above are unchanged.
+// ---------------------------------------------------------------------------------------------
+.btn-mobile-nav {
+  flex-shrink: 0;
+}
+
+.mobile-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--backdrop);
+  z-index: 89;
+  animation: mobileNavFade 0.2s ease;
+}
+
+@keyframes mobileNavFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+    height: 56px;
+    min-height: 56px;
+  }
+
+  .brand {
+    max-width: none;
+  }
+
+  .topbar-actions {
+    gap: 0.375rem;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .btn-new-analysis {
+    flex-shrink: 0;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+  }
+
+  .btn-new-analysis-icon {
+    display: block;
+  }
+
+  .btn-new-analysis-label {
+    display: none;
+  }
+
+  .workspace-switcher {
+    min-width: 0;
+
+    select {
+      max-width: 7.5rem;
+      min-width: 0;
+    }
+  }
+
+  .workspace-chip {
+    max-width: 7.5rem;
+    min-width: 0;
+  }
+
+  .role-badge:not(.inline) {
+    max-width: 6rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .btn-settings,
+  .btn-notifications {
+    flex-shrink: 0;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 90;
+    width: min(300px, 85vw);
+    height: auto;
+    padding: calc(1rem + env(safe-area-inset-top, 0px)) 0.65rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    border-right: 1px solid var(--border);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 0.22s ease,
+      visibility 0s linear 0.22s;
+  }
+
+  .shell.mobile-nav-open .sidebar {
+    transform: none;
+    visibility: visible;
+    box-shadow: 0 0 32px rgba(0, 0, 0, 0.28);
+    transition: transform 0.22s ease;
+  }
+
+  .content-scroll {
+    padding: 0.65rem 0.75rem 1rem;
+
+    .content-tight-left & {
+      padding-left: 0.75rem;
+    }
+  }
+}
+
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .shell.mobile-nav-open .sidebar {
+    transition: none;
+  }
+
+  .mobile-nav-backdrop {
+    animation: none;
   }
 }
