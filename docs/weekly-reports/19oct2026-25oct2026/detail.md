@@ -11,3 +11,7 @@ The two side panels that appear while running an analysis, the progress tracker 
 Being worked on
 
 On a tablet in portrait, when the navigation and both analysis side panels are open at once, they leave no room for the page itself until one of them is collapsed. On a small phone, a few fields on the New analysis page are also slightly cut off at the edge. Both are being looked at next.
+
+Dev environment deploy
+
+We published fresh API and web builds to the dev Azure environment (API build 2026.10.19.04, web 2026.10.19.05). Use https://bcp-web-dev.azurewebsites.net as usual. After login, hard refresh your browser (Ctrl+Shift+R) and open Settings to confirm the build version.

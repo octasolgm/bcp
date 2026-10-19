@@ -7,6 +7,8 @@ Tasks
 
 - Phone layout for the two side panels on the New analysis and evidence re-check flows (analysis step tracker on the left, admin pipeline progress panel on the right): below 720px each starts as a slim tab at the screen edge and opens as a panel over the page with a dimmed backdrop (closes on tapping outside or Escape), so the page keeps most of the width with no sideways scrolling. Tablet and desktop unchanged, including each panel's collapsed state and dragged width
 
+- Deployed bcp-api-dev (2026.10.19.04) and bcp-web-dev (2026.10.19.05) to Azure dev from release/2026.10.16.01 checkout; API settings synced; startup health ready
+
 Bug fixes
 - On a phone the navigation stayed fully open beside every page and left the page about 38px wide
 - On a phone the step tracker and pipeline panel kept their full widths beside the page and squeezed it
