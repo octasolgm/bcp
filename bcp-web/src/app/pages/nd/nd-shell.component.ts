@@ -1,4 +1,15 @@
-import { Component, OnDestroy, OnInit, inject, ChangeDetectorRef, effect, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  inject,
+  ChangeDetectorRef,
+  effect,
+  signal,
+} from '@angular/core';
 import { Location, NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
@@ -82,6 +93,9 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private static readonly SIDEBAR_DEFAULT_WIDTH = 300;
   private static readonly BADGE_CACHE_KEY = 'nd-sidebar-badges';
   private static readonly SIDEBAR_COLLAPSED_KEY = 'nd-sidebar-manually-collapsed';
+  /** At or below this width the sidebar leaves the layout and becomes a slide-out drawer opened
+   * from the top-bar menu button. Keep in sync with the phone media queries in the scss. */
+  private static readonly PHONE_QUERY = '(max-width: 720px)';
 
   readonly auth = inject(NdAuthService);
   readonly toast = inject(ToastService);
@@ -113,6 +127,14 @@ export class NdShellComponent implements OnInit, OnDestroy {
   pass2LlmSummary = '';
   sidebarWidth = NdShellComponent.SIDEBAR_DEFAULT_WIDTH;
   sidebarManuallyCollapsed = false;
+  /** Phone layout: the sidebar is an overlay drawer, closed by default. The desktop collapsed
+   * state and width are left untouched (and still saved) so they come back on a wider screen. */
+  readonly isPhone = signal(false);
+  mobileNavOpen = false;
+  private phoneMedia: MediaQueryList | null = null;
+  private onPhoneMediaChange: ((e: MediaQueryListEvent) => void) | null = null;
+  @ViewChild('mobileNavButton') private mobileNavButton?: ElementRef<HTMLButtonElement>;
+  @ViewChild('sidebarEl') private sidebarEl?: ElementRef<HTMLElement>;
   private navSub: Subscription | null = null;
   private navRefreshSub: Subscription | null = null;
   private badgeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -216,6 +238,11 @@ export class NdShellComponent implements OnInit, OnDestroy {
     return ['/nd/analyse-regul-full-v2'];
   }
 
+  /** Desktop/tablet only — the phone drawer always shows full labels at its own CSS width. */
+  get sidebarCollapsed(): boolean {
+    return !this.isPhone() && (this.shellFocus.regulationPointsPanelOpen() || this.sidebarManuallyCollapsed);
+  }
+
   /** Sidebar's actual rendered width right now — drives the floating toggle button's position
    * on the sidebar/content divider line, matching the same 56px collapsed width in scss. */
   get effectiveSidebarWidth(): number {
@@ -225,6 +252,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    this.watchPhoneLayout();
     await this.auth.refreshProfile(true);
     const role = this.auth.getRole();
     if (!role) {
@@ -274,6 +302,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
     this.navSub = this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd))
       .subscribe(() => {
+        this.closeMobileNav();
         this.syncExpandedGroupsToRoute();
         this.scheduleNavBadgeRefresh();
         this.syncActiveSessionPolling();
@@ -356,6 +385,52 @@ export class NdShellComponent implements OnInit, OnDestroy {
       this.sessionsWatching = false;
     }
     document.body.classList.remove('panel-resizing');
+    if (this.phoneMedia && this.onPhoneMediaChange) {
+      this.phoneMedia.removeEventListener('change', this.onPhoneMediaChange);
+    }
+  }
+
+  private watchPhoneLayout(): void {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    this.phoneMedia = window.matchMedia(NdShellComponent.PHONE_QUERY);
+    this.isPhone.set(this.phoneMedia.matches);
+    this.onPhoneMediaChange = (e) => {
+      this.isPhone.set(e.matches);
+      if (!e.matches) this.mobileNavOpen = false;
+      this.cdr.markForCheck();
+    };
+    this.phoneMedia.addEventListener('change', this.onPhoneMediaChange);
+  }
+
+  toggleMobileNav(): void {
+    if (this.mobileNavOpen) {
+      this.closeMobileNav(true);
+      return;
+    }
+    this.mobileNavOpen = true;
+    // Render the drawer as open now (it is inert while closed; event coalescing would otherwise
+    // defer this to the next frame), then move focus into it.
+    this.cdr.detectChanges();
+    const first = this.sidebarEl?.nativeElement.querySelector<HTMLElement>('a[href], button');
+    first?.focus({ preventScroll: true });
+  }
+
+  closeMobileNav(restoreFocus = false): void {
+    if (!this.mobileNavOpen) return;
+    this.mobileNavOpen = false;
+    this.cdr.markForCheck();
+    if (restoreFocus) this.mobileNavButton?.nativeElement.focus();
+  }
+
+  /** Tapping a link that points at the current page fires no NavigationEnd, so close here too. */
+  onSidebarClick(event: MouseEvent): void {
+    if (!this.mobileNavOpen) return;
+    if ((event.target as Element | null)?.closest('a')) this.closeMobileNav();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.closeMobileNav(true);
   }
 
   startSidebarResize(event: MouseEvent): void {
