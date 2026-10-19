@@ -213,7 +213,7 @@
     </aside>
 
     @if (stepTracker.active()) {
-      <app-nd-step-tracker />
+      <app-nd-step-tracker [phone]="isPhone()" />
     }
 
     <main class="content" [class.content-tight-left]="stepTracker.active() && !stepTracker.collapsed()">
@@ -228,7 +228,7 @@
     </main>
 
     @if (pipelinePanel.active() && auth.canManageWorkspaces()) {
-      <app-nd-pipeline-progress-panel />
+      <app-nd-pipeline-progress-panel [phone]="isPhone()" />
     }
   </div>
 

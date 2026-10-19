@@ -1,4 +1,17 @@
-import { ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  HostListener,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -73,6 +86,7 @@ type DocStatusRow = {
   selector: 'app-nd-pipeline-progress-panel',
   standalone: true,
   imports: [CommonModule, FormsModule],
+  host: { '[class.phone]': 'phone()' },
   templateUrl: './nd-pipeline-progress-panel.component.html',
   styleUrl: './nd-pipeline-progress-panel.component.scss',
 })
@@ -83,7 +97,19 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
   private readonly host = inject(ElementRef<HTMLElement>);
 
   readonly steps = STEPS;
-  readonly collapsed = this.panel.collapsed;
+
+  /** Phone layout (the shell's PHONE_QUERY): the rail stays collapsed by default and opening it
+   * shows the panel as an overlay with a backdrop, so the page keeps its width. Tracked apart
+   * from the service's collapsed flag so the tablet/desktop state is left as it was. */
+  readonly phone = input(false);
+  readonly phoneOpen = signal(false);
+  readonly collapsed = computed(() => (this.phone() ? !this.phoneOpen() : this.panel.collapsed()));
+
+  @ViewChild('toggleBtn') private toggleBtn?: ElementRef<HTMLButtonElement>;
+
+  private readonly resetPhoneOpen = effect(() => {
+    if (!this.phone()) this.phoneOpen.set(false);
+  });
   // Clauses arrive in whatever order the backend processed them in (creation/selection order,
   // not clause order) — sort by clause number so §1.1 always reads before §2.5 in every step's
   // feed, matching how the regulation points list itself is ordered.
@@ -382,7 +408,19 @@ export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {
   );
 
   toggleCollapsed(): void {
-    this.panel.toggleCollapsed();
+    if (this.phone()) this.phoneOpen.update((v) => !v);
+    else this.panel.toggleCollapsed();
+  }
+
+  closePhone(restoreFocus = false): void {
+    if (!this.phoneOpen()) return;
+    this.phoneOpen.set(false);
+    if (restoreFocus) this.toggleBtn?.nativeElement.focus();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.closePhone(true);
   }
 
   toggleClause(key: string): void {
