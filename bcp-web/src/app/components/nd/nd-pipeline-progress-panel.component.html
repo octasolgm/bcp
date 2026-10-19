@@ -1,10 +1,14 @@
+@if (phone() && phoneOpen()) {
+  <div class="phone-backdrop" (click)="closePhone()" aria-hidden="true"></div>
+}
 <aside
   class="pipeline-panel"
   [class.collapsed]="collapsed()"
-  [style.width.px]="collapsed() ? null : panelWidth()"
-  [style.min-width.px]="collapsed() ? null : panelWidth()"
+  [class.phone-open]="phone() && phoneOpen()"
+  [style.width.px]="collapsed() || phone() ? null : panelWidth()"
+  [style.min-width.px]="collapsed() || phone() ? null : panelWidth()"
 >
-  @if (!collapsed()) {
+  @if (!collapsed() && !phone()) {
     <div
       class="panel-resize-handle"
       role="separator"
@@ -15,6 +19,7 @@
     ></div>
   }
   <button
+    #toggleBtn
     type="button"
     class="panel-toggle"
     (click)="toggleCollapsed()"

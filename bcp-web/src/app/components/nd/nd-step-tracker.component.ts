@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, computed, effect, inject, input, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NdStepTrackerService } from '../../services/nd/nd-step-tracker.service';
 
@@ -7,14 +7,19 @@ import { NdStepTrackerService } from '../../services/nd/nd-step-tracker.service'
   selector: 'app-nd-step-tracker',
   standalone: true,
   imports: [CommonModule],
+  host: { '[class.phone]': 'phone()' },
   template: `
+    @if (phone() && phoneOpen()) {
+      <div class="phone-backdrop" (click)="closePhone()" aria-hidden="true"></div>
+    }
     <aside
       class="step-tracker"
-      [class.collapsed]="stepTracker.collapsed()"
-      [style.width.px]="stepTracker.collapsed() ? null : stepTracker.width()"
-      [style.min-width.px]="stepTracker.collapsed() ? null : stepTracker.width()"
+      [class.collapsed]="collapsed()"
+      [class.phone-open]="phone() && phoneOpen()"
+      [style.width.px]="collapsed() || phone() ? null : stepTracker.width()"
+      [style.min-width.px]="collapsed() || phone() ? null : stepTracker.width()"
     >
-      @if (!stepTracker.collapsed()) {
+      @if (!collapsed() && !phone()) {
         <div
           class="tracker-resize-handle"
           role="separator"
@@ -25,25 +30,26 @@ import { NdStepTrackerService } from '../../services/nd/nd-step-tracker.service'
         ></div>
       }
       <button
+        #toggleBtn
         type="button"
         class="tracker-toggle"
-        (click)="stepTracker.toggleCollapsed()"
-        [attr.aria-label]="stepTracker.collapsed() ? 'Show progress tracker' : 'Hide progress tracker'"
-        [attr.aria-pressed]="!stepTracker.collapsed()"
+        (click)="toggle()"
+        [attr.aria-label]="collapsed() ? 'Show progress tracker' : 'Hide progress tracker'"
+        [attr.aria-pressed]="!collapsed()"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          @if (stepTracker.collapsed()) {
+          @if (collapsed()) {
             <polyline points="9 18 15 12 9 6" />
           } @else {
             <polyline points="15 18 9 12 15 6" />
           }
         </svg>
-        @if (stepTracker.collapsed()) {
+        @if (collapsed()) {
           <span class="tracker-toggle-label">Progress</span>
         }
       </button>
 
-      @if (!stepTracker.collapsed()) {
+      @if (!collapsed()) {
         <h3 class="step-tracker-title">Progress</h3>
         <ol class="step-list">
           @for (step of stepTracker.steps(); track step.label; let last = $last) {
@@ -72,7 +78,36 @@ import { NdStepTrackerService } from '../../services/nd/nd-step-tracker.service'
 export class NdStepTrackerComponent {
   readonly stepTracker = inject(NdStepTrackerService);
 
+  /** Phone layout (the shell's PHONE_QUERY): the rail stays collapsed by default and opening it
+   * shows the tracker as an overlay with a backdrop, so the page keeps its width. Tracked apart
+   * from the service's collapsed flag so the tablet/desktop state is left as it was. */
+  readonly phone = input(false);
+  readonly phoneOpen = signal(false);
+  readonly collapsed = computed(() => (this.phone() ? !this.phoneOpen() : this.stepTracker.collapsed()));
+
+  @ViewChild('toggleBtn') private toggleBtn?: ElementRef<HTMLButtonElement>;
+
+  private readonly resetPhoneOpen = effect(() => {
+    if (!this.phone()) this.phoneOpen.set(false);
+  });
+
   private resizeCleanup: (() => void) | null = null;
+
+  toggle(): void {
+    if (this.phone()) this.phoneOpen.update((v) => !v);
+    else this.stepTracker.toggleCollapsed();
+  }
+
+  closePhone(restoreFocus = false): void {
+    if (!this.phoneOpen()) return;
+    this.phoneOpen.set(false);
+    if (restoreFocus) this.toggleBtn?.nativeElement.focus();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.closePhone(true);
+  }
 
   startResize(event: PointerEvent): void {
     event.preventDefault();

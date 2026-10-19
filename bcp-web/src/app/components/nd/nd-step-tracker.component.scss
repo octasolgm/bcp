@@ -182,3 +182,44 @@
     color: var(--text-secondary);
   }
 }
+
+// Phone (<= 720px, PHONE_QUERY in nd-shell): the host keeps a 44px rail in the shell's flex row
+// and the open tracker floats over the page from the left edge, like the nav drawer.
+:host(.phone) {
+  flex-shrink: 0;
+  width: 44px;
+}
+
+.phone-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--backdrop);
+  z-index: 89;
+  animation: phoneBackdropFade 0.2s ease;
+}
+
+@keyframes phoneBackdropFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.step-tracker.phone-open {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 90;
+  width: min(260px, 85vw);
+  min-width: 0;
+  height: auto;
+  max-height: none;
+  padding-top: calc(1.1rem + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 0 32px rgba(0, 0, 0, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-backdrop {
+    animation: none;
+  }
+}
