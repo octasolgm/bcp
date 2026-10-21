@@ -21,6 +21,21 @@ public sealed class WorkspaceResolutionMiddleware(RequestDelegate next)
 
     public static string CacheKey(Guid profileId) => $"nd:ws-scope:{profileId}";
 
+    /// <summary>
+    /// Pre-ND API routes. They now require a signed-in user too (see LegacyApiAccessAttribute), so they get the
+    /// same workspace scope; without it the tenant filters would return every workspace's rows.
+    /// </summary>
+    private static readonly PathString[] LegacyPrefixes =
+    [
+        "/documents",
+        "/landing-ai",
+        "/dual-verify-kafka",
+        "/bcpweb",
+    ];
+
+    private static bool IsScopedPath(PathString path) =>
+        path.StartsWithSegments("/nd") || LegacyPrefixes.Any(p => path.StartsWithSegments(p));
+
     public async Task InvokeAsync(
         HttpContext context,
         SupabaseJwtValidator jwt,
@@ -29,8 +44,8 @@ public sealed class WorkspaceResolutionMiddleware(RequestDelegate next)
     {
         WorkspaceScope.Set(null);
 
-        if (context.Request.Path.StartsWithSegments("/nd")
-            && context.Request.Headers.Authorization.FirstOrDefault() is { Length: > 0 } authHeader)
+        if (IsScopedPath(context.Request.Path)
+            &&context.Request.Headers.Authorization.FirstOrDefault() is { Length: > 0 } authHeader)
         {
             var user = await jwt.ValidateTokenAsync(authHeader, context.RequestAborted);
             if (user != null)

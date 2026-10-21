@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Models;
 using Reguliq.Api.Services;
 
@@ -6,6 +7,7 @@ namespace Reguliq.Api.Controllers;
 
 [ApiController]
 [Route("bcpweb")]
+[LegacyApiAccess]
 public class BcpwebController(DashboardService dashboard) : ControllerBase
 {
     [HttpGet("dashboard")]

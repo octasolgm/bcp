@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Reguliq.Api.Infrastructure.NewDashboard;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Models;
@@ -9,6 +10,7 @@ namespace Reguliq.Api.Controllers;
 
 [ApiController]
 [Route("dual-verify-kafka")]
+[LegacyApiAccess]
 public class DualVerifyKafkaController(
     DualVerifyService service,
     DualVerifyStoreService store,

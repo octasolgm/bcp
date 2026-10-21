@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
+using Reguliq.Api.Infrastructure.NewDashboard;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
@@ -14,6 +15,7 @@ namespace Reguliq.Api.Controllers;
 
 [ApiController]
 [Route("documents")]
+[LegacyApiAccess]
 public class DocumentsController(
     AppDbContext db,
     SupabaseStorageService storage,
@@ -237,6 +239,7 @@ public class DocumentsController(
         }
     }
 
+    [LegacyApiAccess(LegacyApiAccess.SignedIn)]
     [HttpGet("{id:guid}/signed-url")]
     public async Task<ActionResult<object>> GetSignedUrl(Guid id, CancellationToken ct)
     {
@@ -422,6 +425,7 @@ public class DocumentsController(
     /// Register TFS Guidelines.pdf in stored_documents, link existing gov extract cache by file hash,
     /// and upload the PDF to private Storage when ServiceRoleKey is configured.
     /// </summary>
+    [LegacyApiAccess(LegacyApiAccess.PlatformAdmin)]
     [HttpPost("seed-tfs-guidelines")]
     [RequestSizeLimit(52_428_800)]
     public async Task<ActionResult<object>> SeedTfsGuidelines(
@@ -488,6 +492,7 @@ public class DocumentsController(
     /// Upload TFS + IMPTFS to Storage, register both stored_documents rows,
     /// and link the 32-point combined compliance session to those file hashes.
     /// </summary>
+    [LegacyApiAccess(LegacyApiAccess.PlatformAdmin)]
     [HttpPost("seed-analysis-bundle")]
     [RequestSizeLimit(52_428_800)]
     public async Task<ActionResult<object>> SeedAnalysisBundle(

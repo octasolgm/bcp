@@ -2,11 +2,12 @@
 param(
     [string]$Api = "http://localhost:5100",
     [string]$Email = "superadmin@reguliq.com",
-    [string]$Password = "123456",
+    [string]$Password = $env:BCP_CHECK_PASSWORD,
     [int]$BootstrapWaitSec = 120
 )
 
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($Password)) { throw "Pass -Password or set BCP_CHECK_PASSWORD (the password for -Email)." }
 $script:failed = $false
 
 function Fail([string]$msg) {

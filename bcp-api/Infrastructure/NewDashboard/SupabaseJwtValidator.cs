@@ -34,8 +34,9 @@ public class SupabaseJwtValidator(
 
         if (!_opts.IsConfigured)
         {
-            // Fast local path when JwtSecret is not set — parse claims without signature check.
-            if (hostEnvironment.IsDevelopment() || AzureHosting.IsAppService == false)
+            // Fast local path when JwtSecret is not set — parse claims without signature check. Local Development
+            // only: on any other host (Azure, an in-house server) this would accept a hand-made token for any user.
+            if (hostEnvironment.IsDevelopment() && !AzureHosting.IsAppService)
             {
                 logger.LogWarning(
                     "[ND JWT] Supabase:JwtSecret is not set — using payload parse (no signature check). " +

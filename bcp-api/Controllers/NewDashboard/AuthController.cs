@@ -75,23 +75,13 @@ public class AuthController(
         if (user == null)
             return Unauthorized(new { success = false, message = "Unauthorized" });
 
-        var existing = await db.NdProfiles.AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == user.UserId, ct);
-
-        string? roleToApply = null;
-        if (!string.IsNullOrWhiteSpace(body.Role))
-        {
-            if (existing == null)
-                roleToApply = body.Role;
-            else if (existing.Role == "super_admin")
-                roleToApply = body.Role;
-        }
-
+        // Roles are never self-assigned here: a new profile is always created as maker, and only an admin can
+        // change a role (UsersController). Taking body.Role let any newly signed-up account make itself super_admin.
         var profile = await GetOrCreateProfileAsync(
             db,
             user,
             body.FullName,
-            roleToApply,
+            requestedRole: null,
             body.DepartmentId,
             ct);
 

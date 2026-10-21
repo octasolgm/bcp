@@ -25,19 +25,27 @@ $ErrorActionPreference = "Stop"
 # Example: gmrehman project hxfbzhjlmkiqhbbeftfq
 $Old = @{
     ProjectRef    = "hxfbzhjlmkiqhbbeftfq"
-    DbPassword    = "YOUR_OLD_DB_PASSWORD"
+    DbPassword    = $env:BCP_MIGRATE_OLD_DB_PASSWORD
     PoolerHost    = "aws-1-ap-northeast-2.pooler.supabase.com"
     Url           = "https://hxfbzhjlmkiqhbbeftfq.supabase.co"
-    ServiceRoleKey = "YOUR_OLD_SERVICE_ROLE_KEY"
+    ServiceRoleKey = $env:BCP_MIGRATE_OLD_SERVICE_ROLE_KEY
 }
 
 # ── NEW project (target — empty schema already created) ─────────────────────
 $New = @{
     ProjectRef    = "prxmkrmwqxlltwjnazay"
-    DbPassword    = "23ComplySolution@123"
+    DbPassword    = $env:BCP_MIGRATE_NEW_DB_PASSWORD
     PoolerHost    = ""   # leave empty to use direct db.*.supabase.co
     Url           = "https://prxmkrmwqxlltwjnazay.supabase.co"
-    ServiceRoleKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByeG1rcm13cXhsbHR3am5hemF5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Njk3MDAxMiwiZXhwIjoyMTAyNTQ2MDEyfQ.iYiQLk76Cye8HjAUP-dp-0u_RdIVTZgjcaQT-92x9ww"
+    ServiceRoleKey = $env:BCP_MIGRATE_NEW_SERVICE_ROLE_KEY
+}
+
+# Secrets come from environment variables, never from this file:
+#   BCP_MIGRATE_OLD_DB_PASSWORD, BCP_MIGRATE_OLD_SERVICE_ROLE_KEY, BCP_MIGRATE_NEW_DB_PASSWORD, BCP_MIGRATE_NEW_SERVICE_ROLE_KEY
+foreach ($cfg in @($Old, $New)) {
+    if ([string]::IsNullOrWhiteSpace($cfg.DbPassword)) {
+        throw "Set the BCP_MIGRATE_OLD_DB_PASSWORD and BCP_MIGRATE_NEW_DB_PASSWORD environment variables before running this script."
+    }
 }
 
 function Get-DbUri([hashtable]$cfg) {

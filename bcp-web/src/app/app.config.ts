@@ -1,8 +1,9 @@
 import { ApplicationConfig, APP_INITIALIZER, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 
 import { routes } from './app.routes';
+import { legacyApiAuthInterceptor } from './services/legacy-api-auth.interceptor';
 import { ThemeService } from './services/theme.service';
 import { AppConfigService } from './services/app-config.service';
 
@@ -20,7 +21,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideHttpClient(),
+    provideHttpClient(withInterceptors([legacyApiAuthInterceptor])),
     {
       provide: APP_INITIALIZER,
       useFactory: initAppConfig,

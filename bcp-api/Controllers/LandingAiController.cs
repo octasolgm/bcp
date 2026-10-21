@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Reguliq.Api.Infrastructure.NewDashboard;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Models;
@@ -10,6 +11,7 @@ namespace Reguliq.Api.Controllers;
 
 [ApiController]
 [Route("landing-ai")]
+[LegacyApiAccess]
 public class LandingAiController(
     GovPointsService govPoints,
     LandingAiGovExtractService govExtract,
@@ -183,6 +185,7 @@ public class LandingAiController(
         }
     }
 
+    [LegacyApiAccess(LegacyApiAccess.PlatformAdmin)]
     [HttpPost("seed/builtin")]
     public IActionResult SeedBuiltin()
     {
