@@ -33,3 +33,14 @@ Bug fixes
 Investigated, follow up pending
 - Full in-house deployment plan doc pulling together all options: deployment packages (hosted, in-house Managed AI, in-house Own AI, fully contained), hosting options (single server, VMs, private cloud, Kubernetes, GPU), components and sizing, AI and document-reading choices, network modes (connected, restricted, air-gapped), security controls, licensing summary, install runbook, updates/backups/DR/monitoring, responsibilities, 6-phase bank rollout (about 6 to 9 weeks), built vs to build (about 6 to 8 weeks of engineering before the first bank, containers and license module first), risks. Waiting on package, pricing and engineering start decisions
 - Saved the whole in-house plan into the repo as docs/in-house-deployment/: full-plan.md, licensing-overview.md, licensing-design.md, pricing-ai-keys-profit.md, azure-deployment.md (one-script install into a bank's Azure subscription with Bicep + PowerShell, VM route first, Container Apps later, Marketplace later) and implementation-guide.md (work packages and exact code locations for whoever builds it); README now has an index. Documentation only, nothing implemented
+
+21 Oct 2026
+
+Tasks
+- Committed the in-house deployment docs (47e68d3, local only, not pushed)
+
+Bug fixes
+- None
+
+Investigated, follow up pending
+- Pull of release/2026.10.19.02 blocked on purpose: the GitHub remote has forged, force-pushed copies of real commits (same message and author, different committer timezone) on main, release/2026.10.16.01, 2026.10.19.01, 2026.10.19.02, feature/workspace-clause-limit and merged/oct15-all. They add hidden obfuscated JavaScript (end of bcp-web/karma.conf.js, new bcp-web/api.js and public/api.js wired into npm start, a fake font file run by an auto-run VS Code task). Local branches on this machine are clean and never checked out the bad commits. Nothing merged, pushed or released. Waiting on the owner to secure the GitHub account and decide the remote clean-up
