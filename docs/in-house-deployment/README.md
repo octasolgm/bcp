@@ -3,6 +3,24 @@
 Status: plan, written 15 Oct 2026. Nothing here has been deployed at a client yet. Section 12 lists what is not ready.
 Client-facing explanation of data protection: [data-protection.md](data-protection.md).
 
+## Documents in this folder (start here)
+
+Added 19 to 20 Oct 2026. All are plans; nothing in them is implemented yet unless marked "Built".
+
+| File | What it covers |
+| --- | --- |
+| [full-plan.md](full-plan.md) | Master plan: every deployment option, hosting, sizing, AI and network choices, security, runbook, operations, rollout phases, what is built vs to build, risks, open decisions |
+| [licensing-overview.md](licensing-overview.md) | What we sell: trials, subscriptions, recurring add-ons, one-time packs, lifecycle, invoices, who does what |
+| [licensing-design.md](licensing-design.md) | How licensing works technically: signatures, license file format, plans as templates, states, limit enforcement, online and offline delivery, tamper resistance, issuing licenses, updates |
+| [pricing-ai-keys-profit.md](pricing-ai-keys-profit.md) | Managed AI (our keys, one per bank) vs Own AI (bank keys), cost tracking per bank, profit, non-payment |
+| [azure-deployment.md](azure-deployment.md) | Installing into a bank's Azure subscription with one script (Bicep + PowerShell), routes, resources, package contents, Marketplace later |
+| [implementation-guide.md](implementation-guide.md) | Build hand-off for a developer or AI: ground rules, work packages, exact code locations, acceptance criteria |
+| This README | Original 15 Oct plan: deployment models A/B/C, data flow, protection controls, install runbook, settings, acceptance checklist |
+| [data-protection.md](data-protection.md), [privacy-settings.md](privacy-settings.md) | Client-facing data protection and the privacy settings already built |
+
+Related: [../roadmap/ON-PREM-DEPLOYMENT-ROADMAP.md](../roadmap/ON-PREM-DEPLOYMENT-ROADMAP.md),
+[../roadmap/ON-PREM-DEPLOYMENT-TODO.md](../roadmap/ON-PREM-DEPLOYMENT-TODO.md), [../costing/AI-CREDITS-COSTING.md](../costing/AI-CREDITS-COSTING.md).
+
 ## 1. Why this exists
 
 The hosted portal (bcp-web-dev on Azure, data in Supabase cloud) is a demonstration and evaluation environment. Banks and
