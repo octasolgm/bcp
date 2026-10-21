@@ -38,9 +38,15 @@ Investigated, follow up pending
 
 Tasks
 - Committed the in-house deployment docs (47e68d3, local only, not pushed)
+- System guide for the external security testing team (docs/security-testing/system-guide.md + PDF): quick start for the main flow, then workspaces and limits, users and roles, departments, documents, libraries, running analysis, gaps/actions/reviews/evidence/export, maker-checker-reviewer flow, finalize to corrected v2 document, other admin and billing pages, ground rules on not touching existing data
 
 Bug fixes
-- None
+- Security: legacy API routes (/documents, /landing-ai, /dual-verify-kafka, /bcpweb) accepted calls with no login and ignored workspaces; now need a signed-in active user, run in the caller's workspace, legacy-table routes Default workspace only, seed routes platform super admin only; portal sends the login token to these routes
+- Security: a new account could make itself super_admin through POST /nd/auth/profile; role is no longer read from that request, new profiles are always maker
+- Security: tokens were accepted without signature check on non-Azure hosts when the JWT secret was missing; now only in local Development
+- Security: removed the hardcoded Supabase service key and DB passwords from scripts/migrate-old-to-new-supabase.ps1 and the default 123456 password from scripts/check-api.ps1 (environment variables now); keys not rotated, by decision
+- Branch security/critical-fixes-2026-10-21 and release branch release/2026.10.21.01 created locally (not pushed, remote compromised). API build, web production build and API tests run; anonymous and forged-token calls to the old routes return 401 locally. Signed-in use of the old routes still to be checked after deploy
 
 Investigated, follow up pending
 - Pull of release/2026.10.19.02 blocked on purpose: the GitHub remote has forged, force-pushed copies of real commits (same message and author, different committer timezone) on main, release/2026.10.16.01, 2026.10.19.01, 2026.10.19.02, feature/workspace-clause-limit and merged/oct15-all. They add hidden obfuscated JavaScript (end of bcp-web/karma.conf.js, new bcp-web/api.js and public/api.js wired into npm start, a fake font file run by an auto-run VS Code task). Local branches on this machine are clean and never checked out the bad commits. Nothing merged, pushed or released. Waiting on the owner to secure the GitHub account and decide the remote clean-up
+- Internal security assessment before handing over to the external cyber security team: docs/cybersecurity/security-assessment-2026-10-21.md. 5 critical, 7 high, 9 medium, 5 low. Criticals: live Supabase service_role key and DB passwords committed in scripts/migrate-old-to-new-supabase.ps1 (plus AI keys in old commit 17886c8), compromised GitHub remote, legacy /documents, /landing-ai, /dual-verify-kafka, /bcpweb endpoints with no auth and no workspace filter, self-assigned super_admin via POST /nd/auth/profile on first login, JWT signature skipped on non-Azure hosts when the secret is missing. Also npm audit (jspdf critical, Angular high) and NuGet transitive CVEs. C-3, C-4 and C-5 fixed (see Bug fixes); secret rotation, GitHub clean-up and the high/medium items still open

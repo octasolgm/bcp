@@ -29,3 +29,9 @@ Dev environment deploy
 We published fresh API and web builds to the dev Azure environment (API build 2026.10.19.04, web 2026.10.19.05). Use https://bcp-web-dev.azurewebsites.net as usual. After login, hard refresh your browser (Ctrl+Shift+R) and open Settings to confirm the build version.
 
 The latest dev deploy includes the phone layout work above (API 2026.10.19.06, web 2026.10.19.07). Hard refresh again if Settings still shows an older web build.
+
+Security testing
+
+An independent security testing team has started work on the platform. We prepared a system guide for them. It starts with a short version of the main flow and then covers every feature: setting up client workspaces and their limits, creating users with maker, checker and reviewer roles, uploading and preparing documents, running a compliance analysis, working on gaps, actions and reviews, the approval flow up to final sign-off, and the corrected policy document produced at the end. It lets them test the full product on the dev environment without affecting existing data.
+
+Before the external testers go deeper, we also ran our own full security review of the platform, covering sign-in and permissions, separation between client workspaces, document uploads, stored keys, the web hosting setup and third-party components. We now have a prioritised list of improvements, and the most important ones are being fixed first, starting with stronger access checks and replacing credentials, before the external testing continues.
