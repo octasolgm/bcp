@@ -11,6 +11,9 @@
         {{ metricHint }} ·
       }
       {{ rows.length }} analysis with a count · {{ totalCount }} total
+      @if (showsResolution) {
+        · {{ totalResolved }} resolved · {{ totalCount - totalResolved }} pending
+      }
     </p>
   </div>
   <div class="header-actions">
@@ -52,7 +55,15 @@
               <td>
                 <app-nd-status-badge [status]="row.run.status" />
               </td>
-              <td class="num count-cell">{{ row.count }}</td>
+              <td class="num count-cell">
+                {{ row.count }}
+                @if (showsResolution) {
+                  <span class="count-split">
+                    <span class="chip resolved">{{ row.resolved }} resolved</span>
+                    <span class="chip pending">{{ row.count - row.resolved }} pending</span>
+                  </span>
+                }
+              </td>
               <td>{{ formatDate(row.run.createdAt) }}</td>
             </tr>
           }

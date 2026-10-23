@@ -73,10 +73,12 @@ Tasks
 - Started local API (5100) and web (3002) for the session
 - Committed the 22-23 Oct work on security/critical-fixes-2026-10-21 (1627062 client package, 946b403 status poll, 5a25685 ES256 JWT, 4d7ec71 regulation list, 2db0c68 report) and created release branch release/2026.10.23.01 for the dev deploy (local only, not pushed). API fixes not deployed yet
 - Deployed bcp-web-dev 2026.10.23.01 (web only) with the status batching fix; API unchanged (2026.10.21.06). Build also carries the client-edition code, inactive on dev (no edition in app-config)
+- Built full release/2026.10.23.01 on branch release/2026.10.23.01: API Release publish (bcp-api.zip) and web production (bcp-web-dist.zip), both stamped 2026.10.23.01; includes ES256 JWT and regulation list fixes in the API package. Azure ZIP deploy left for manual run (deploy-api.ps1 -SkipBuild, then web zip)
 - New analysis uploads (regulation and internal) are now prepared by the server like gap-evidence uploads: new POST /nd/local-documents/azure-di/{id}/prepare runs parse, extract and (internal only) index in the background; the page follows progress (Parsing, Extracting, Preparing for analysis), then selects the document and shows its points; survives closing the page. Demo accounts keep the old in-page flow. The prepare service no longer waits for indexing on regulation documents (they are never indexed); gap evidence unchanged
 - New analysis pickers: documents not parsed and extracted are hidden (real accounts; still listed while their first status check runs), and each document shows its upload date
 - Azure Internal and Regulation Documents pages (real accounts): status column shows "✓ Parsed" with a clickable "Extract now", or "Not parsed"/"Failed" with "Parse now"/"Parse again", and "✓ Ready to analyse"/"✓ Already analysed" in green; actions show only "View" (was View structural / View sections); View parsed, Parsed text, JSON, Repair, Refresh pages and semantic buttons hidden; tooltips no longer name Azure/Tesseract/Landing AI. Engine test pages and demo view unchanged
 - Points panel on those pages: shows "N points" instead of "3 stored · 1 compared in gap analysis · 1 introduction"; the reference note and the "Structural extract covers 100.0% of parsed text" line are hidden
+- Overview card breakdown (gap cards): each analysis shows its count split into resolved and pending, with resolved/pending totals in the header, same split as the overview card
 - Gap analysis report: picking a point scrolls it to the top of the left Points list
 
 Bug fixes

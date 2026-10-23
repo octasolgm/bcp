@@ -337,7 +337,7 @@ public class WorkspaceController(
             data = new
             {
                 runs = summaries,
-                counts = counts.Select(kv => new { runId = kv.Key, count = kv.Value }).ToList(),
+                counts = counts.Values.Select(c => new { runId = c.RunId, count = c.Count, resolved = c.Resolved }).ToList(),
             },
         });
     }

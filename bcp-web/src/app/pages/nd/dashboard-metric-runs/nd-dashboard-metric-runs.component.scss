@@ -85,3 +85,27 @@
     color: var(--accent);
   }
 }
+
+.count-split {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.count-split .chip {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+}
+
+.count-split .chip.resolved {
+  background: var(--low-bg);
+  color: var(--low);
+}
+
+.count-split .chip.pending {
+  background: var(--medium-bg, var(--critical-bg));
+  color: var(--medium, var(--critical));
+}
