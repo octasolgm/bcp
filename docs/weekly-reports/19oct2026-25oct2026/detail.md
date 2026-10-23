@@ -35,3 +35,18 @@ Security testing
 An independent security testing team has started work on the platform. We prepared a system guide for them. It starts with a short version of the main flow and then covers every feature: setting up client workspaces and their limits, creating users with maker, checker and reviewer roles, uploading and preparing documents, running a compliance analysis, working on gaps, actions and reviews, the approval flow up to final sign-off, and the corrected policy document produced at the end. It lets them test the full product on the dev environment without affecting existing data.
 
 Before the external testers go deeper, we also ran our own full security review of the platform, covering sign-in and permissions, separation between client workspaces, document uploads, stored keys, the web hosting setup and third-party components. We now have a prioritised list of improvements, and the most important ones are being fixed first, starting with stronger access checks and replacing credentials, before the external testing continues.
+
+Installing in a client's own Azure
+
+We prepared a ready-to-send installation package for clients who want the platform running in their own Azure account. The client receives one zip file with a step-by-step PDF guide. Their IT team fills in a short settings file with their own keys, runs one installer, and the platform is set up and started in their Azure account, connected to their own database project. The package itself contains no keys and is identical for every client, so each client's details stay only in their own environment.
+
+Updates arrive as a new numbered package. Installing one is a single command that takes a few minutes and keeps all settings, users, documents and history; going back to the previous version is the same command run from the older package. Every file in the package is checked before anything is installed, and clients can confirm the download with a fingerprint sent to them separately.
+
+The client installation package now contains only the parts of the platform that clients use today: the New analysis page and the Documents pages, where uploaded documents are read by Azure Document Intelligence. Older analysis screens and internal test pages for other document-reading engines are hidden in client installations. Clients now need only three services of their own: an AI analysis key, Azure Document Intelligence and Azure OpenAI for document search, all set up in their own Azure account. The guide explains how to create each one.
+
+Client installations also start with exactly the same analysis setup as our own service, including the latest analysis instructions and AI model choice, so results match what clients have seen in demonstrations. Every update brings the newest analysis improvements, while any changes a client's administrator has made are kept.
+
+We also fixed an issue on the New analysis page where, with a larger number of documents in the library, the document list could stay on "Checking document status" with a message that the service could not be reached. The page now checks documents in smaller groups, so it works however many documents are listed. This fix is live on the dev environment (web build 2026.10.23.01); hard refresh the page (Ctrl+Shift+R) to pick it up.
+
+Two more reliability fixes are ready for the next deploy. Every page request now confirms your sign-in directly on our server instead of asking the sign-in service each time, which makes pages respond faster and removes occasional failures when that service was slow. The Regulation Documents list could also sometimes appear without its documents when the page loaded; it now loads reliably every time.
+
