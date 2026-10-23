@@ -1955,7 +1955,7 @@ export class NdApiService {
   getDashboardMetricRunCounts(metric: string, params?: { mineOnly?: boolean }) {
     const q = new URLSearchParams({ metric });
     if (params?.mineOnly) q.set('mineOnly', 'true');
-    return this.request<{ runs: unknown[]; counts: Array<{ runId: string; count: number }> }>(
+    return this.request<{ runs: unknown[]; counts: Array<{ runId: string; count: number; resolved: number }> }>(
       'GET',
       `/nd/workspace/dashboard-metric-runs?${q}`,
       undefined,

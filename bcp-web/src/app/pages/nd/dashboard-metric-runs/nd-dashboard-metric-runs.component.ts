@@ -18,6 +18,8 @@ import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.c
 type MetricRunRow = {
   run: AnalysisRunSummary;
   count: number;
+  /** Gap cards only: how many of count are resolved. */
+  resolved: number;
 };
 
 @Component({
@@ -57,6 +59,15 @@ export class NdDashboardMetricRunsComponent implements OnInit, OnDestroy {
     return this.rows.reduce((s, r) => s + r.count, 0);
   }
 
+  get totalResolved(): number {
+    return this.rows.reduce((s, r) => s + r.resolved, 0);
+  }
+
+  /** Gap cards split each count into resolved and pending, like the overview card does. */
+  get showsResolution(): boolean {
+    return this.metricId === 'critical' || this.metricId === 'medium' || this.metricId === 'low';
+  }
+
   ngOnInit(): void {
     this.sub = this.route.queryParamMap.subscribe((params) => {
       this.metricId = parseDashboardMetricId(params.get('metric'));
@@ -92,9 +103,9 @@ export class NdDashboardMetricRunsComponent implements OnInit, OnDestroy {
         this.loadError = res.message ?? 'Could not load analysis runs.';
         return;
       }
-      const counts = new Map(res.data.counts.map((c) => [c.runId, c.count]));
+      const counts = new Map(res.data.counts.map((c) => [c.runId, c]));
       this.rows = sortAnalysisRunsByRecent(res.data.runs as AnalysisRunSummary[])
-        .map((run) => ({ run, count: counts.get(run.id) ?? 0 }))
+        .map((run) => ({ run, count: counts.get(run.id)?.count ?? 0, resolved: counts.get(run.id)?.resolved ?? 0 }))
         .filter((r) => r.count > 0);
     } catch {
       this.loadError = 'Could not load analysis breakdown.';

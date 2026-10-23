@@ -48,7 +48,7 @@ Client installations also start with exactly the same analysis setup as our own 
 
 We also fixed an issue on the New analysis page where, with a larger number of documents in the library, the document list could stay on "Checking document status" with a message that the service could not be reached. The page now checks documents in smaller groups, so it works however many documents are listed. This fix is live on the dev environment (web build 2026.10.23.01); hard refresh the page (Ctrl+Shift+R) to pick it up.
 
-Two more reliability fixes are ready for the next deploy. Every page request now confirms your sign-in directly on our server instead of asking the sign-in service each time, which makes pages respond faster and removes occasional failures when that service was slow. The Regulation Documents list could also sometimes appear without its documents when the page loaded; it now loads reliably every time.
+Two more reliability fixes are packaged in release build 2026.10.23.01 (API and web). Every page request now confirms your sign-in directly on our server instead of asking the sign-in service each time, which makes pages respond faster and removes occasional failures when that service was slow. The Regulation Documents list could also sometimes appear without its documents when the page loaded; it now loads reliably every time. After we push that build to dev, hard refresh and check Settings for matching API and web version 2026.10.23.01.
 
 Simpler document preparation and clearer document pages
 

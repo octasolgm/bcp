@@ -550,7 +550,7 @@ public static class NdRunEnrichmentHelper
     /// <see cref="LoadWorkspaceDashboardStatsAsync"/> — so the breakdown adds up to exactly the card's number.
     /// Only runs with a count above zero are returned.
     /// </summary>
-    public static async Task<Dictionary<Guid, int>> LoadWorkspaceMetricRunCountsAsync(
+    public static async Task<Dictionary<Guid, RunMetricCount>> LoadWorkspaceMetricRunCountsAsync(
         AppDbContext db,
         string metric,
         bool mineOnly,
@@ -566,20 +566,21 @@ public static class NdRunEnrichmentHelper
             runsQ = runsQ.Where(r => r.CreatedBy == profileId.Value);
         var runIds = await runsQ.Select(r => r.Id).ToListAsync(ct);
 
-        var result = new Dictionary<Guid, int>();
+        var result = new Dictionary<Guid, RunMetricCount>();
         if (runIds.Count == 0) return result;
 
         // Column filters are fixed strings chosen here, never request text.
         string sqlFor(string placeholders) => metric switch
         {
             "critical" or "medium" or "low" => $"""
-                SELECT analysis_run_id AS "RunId", COUNT(*)::int AS "Count"
+                SELECT analysis_run_id AS "RunId", COUNT(*)::int AS "Count",
+                  COUNT(*) FILTER (WHERE status = 'resolved')::int AS "Resolved"
                 FROM analysis_gaps
                 WHERE analysis_run_id IN ({placeholders}) AND risk = '{(metric == "critical" ? "high" : metric)}'
                 GROUP BY analysis_run_id
                 """,
             _ => $"""
-                SELECT analysis_run_id AS "RunId", COUNT(*)::int AS "Count"
+                SELECT analysis_run_id AS "RunId", COUNT(*)::int AS "Count", 0 AS "Resolved"
                 FROM (
                   SELECT
                     p.analysis_run_id,
@@ -612,12 +613,13 @@ public static class NdRunEnrichmentHelper
                 .SqlQueryRaw<RunMetricCount>(sqlFor(placeholders), batch.Cast<object>().ToArray())
                 .ToListAsync(ct);
             foreach (var row in rows)
-                if (row.Count > 0) result[row.RunId] = row.Count;
+                if (row.Count > 0) result[row.RunId] = row;
         }
         return result;
     }
 
-    public sealed record RunMetricCount(Guid RunId, int Count);
+    /// <summary>Resolved is set for gap metrics only (compliance points have no resolved state).</summary>
+    public sealed record RunMetricCount(Guid RunId, int Count, int Resolved);
 
     /// <summary>
     /// Same tally as the production SQL above, restricted to a run-id list. Aggregating in
