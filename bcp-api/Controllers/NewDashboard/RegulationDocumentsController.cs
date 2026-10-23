@@ -89,25 +89,22 @@ public class RegulationDocumentsController(
         if (hiddenOnly && profile!.Role != "super_admin")
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
-        var deptNamesTask = LoadDepartmentNamesAsync(demoCtx, ct);
-        // List cards never show the extracted content, so the heavy columns stay in the database.
-        var ndDocsTask = NdDemoDataFilters.ApplyToRegulationDocuments(
-                db.NdRegulationDocuments.AsNoTracking(),
-                demoCtx)
-            .SelectListColumns()
-            .ToListAsync(ct);
-
-        Dictionary<Guid, string> deptNames;
+        // One after the other: both use the request's DbContext, which allows one operation at a time. Run together
+        // they regularly failed with "A second operation was started on this context instance", and the catch below
+        // then showed the list with no regulation documents.
+        var deptNames = await LoadDepartmentNamesAsync(demoCtx, ct);
         List<NdRegulationDocument> ndDocs;
         try
         {
-            await Task.WhenAll(deptNamesTask, ndDocsTask);
-            deptNames = await deptNamesTask;
-            ndDocs = await ndDocsTask;
+            // List cards never show the extracted content, so the heavy columns stay in the database.
+            ndDocs = await NdDemoDataFilters.ApplyToRegulationDocuments(
+                    db.NdRegulationDocuments.AsNoTracking(),
+                    demoCtx)
+                .SelectListColumns()
+                .ToListAsync(ct);
         }
         catch
         {
-            deptNames = await deptNamesTask;
             ndDocs = [];
         }
 
