@@ -18,6 +18,8 @@ export type RunGapEvidenceUpload = {
 const API_TIMEOUT_MS = 60_000;
 /** Document/library catalog lists — first load after API restart can be slow on Supabase. */
 const CATALOG_LIST_TIMEOUT_MS = 60_000;
+/** Document ids per local-documents status call (see localExtractStatusBatch). */
+const STATUS_BATCH_IDS_PER_CALL = 40;
 /** Run list / nav badges — multiple DB aggregations while workers are active. */
 const ANALYSIS_RUNS_LIST_TIMEOUT_MS = 90_000;
 /** Status poll for large runs (~140 points) — allow slow DB without canceling mid-response. */
@@ -1831,15 +1833,30 @@ export class NdApiService {
   /** Persisted local-extraction status for a batch of documents, keyed by document id — for list rendering.
    * `lite` asks for statuses and counts only (no parsed text, no sections — those come back empty): use it for
    * readiness checks and polling. The full response is hundreds of KB per document and slow to read. */
-  localExtractStatusBatch(ids: string[], engine: NdOcrEngine = 'tesseract', opts?: { lite?: boolean }) {
-    if (ids.length === 0) return Promise.resolve({ success: true, data: {} } as NdApiResult<Record<string, NdLocalExtractionResult>>);
-    return this.request<Record<string, NdLocalExtractionResult>>(
-      'GET',
-      `/nd/local-documents/${engine}/status?ids=${ids.join(',')}${opts?.lite ? '&lite=true' : ''}`,
-      undefined,
-      true,
-      CATALOG_LIST_TIMEOUT_MS,
+  async localExtractStatusBatch(
+    ids: string[],
+    engine: NdOcrEngine = 'tesseract',
+    opts?: { lite?: boolean },
+  ): Promise<NdApiResult<Record<string, NdLocalExtractionResult>>> {
+    if (ids.length === 0) return { success: true, data: {} };
+    // Azure App Service (IIS) rejects query strings over 2048 characters with a bare 404 that carries no CORS
+    // headers, which the browser reports as a CORS error. 40 ids (~1.5 KB) per call keeps every URL under it.
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += STATUS_BATCH_IDS_PER_CALL) chunks.push(ids.slice(i, i + STATUS_BATCH_IDS_PER_CALL));
+    const results = await Promise.all(
+      chunks.map((chunk) =>
+        this.request<Record<string, NdLocalExtractionResult>>(
+          'GET',
+          `/nd/local-documents/${engine}/status?ids=${chunk.join(',')}${opts?.lite ? '&lite=true' : ''}`,
+          undefined,
+          true,
+          CATALOG_LIST_TIMEOUT_MS,
+        ),
+      ),
     );
+    const failed = results.find((r) => !r.success || !r.data);
+    if (failed) return failed;
+    return { success: true, data: Object.assign({}, ...results.map((r) => r.data)) };
   }
 
   /** Same as localExtractStatusBatch, but checks every OCR engine and keeps whichever row has
