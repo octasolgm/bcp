@@ -71,6 +71,7 @@ Tasks
 - Client keys reduced to OpenRouter, Azure Document Intelligence and Azure OpenAI embeddings (text-embedding-3-small, same as live); Kafka off, no Landing AI/Gemini keys; README.pdf updated with how to create the two Azure AI resources
 - Client installs now get our live analysis setup: build exports current prompt versions (regul_judgment v11, full v2) and analysis settings (openrouter kimi-k3, pipeline v6, dual-verify kimi-k2.6, gap check, prompt cache) read-only into client-baseline.json in backend.zip; API applies it at startup only when ClientBaseline__Enabled=true (ClientBaselineSeeder), replacing system-set values on each patch and keeping anything the client's admin changed. 3 new unit tests pass
 - Started local API (5100) and web (3002) for the session
+- Committed the 22-23 Oct work on security/critical-fixes-2026-10-21 (1627062 client package, 946b403 status poll, 5a25685 ES256 JWT, 4d7ec71 regulation list, 2db0c68 report) and created release branch release/2026.10.23.01 for the dev deploy (local only, not pushed). API fixes not deployed yet
 - Deployed bcp-web-dev 2026.10.23.01 (web only) with the status batching fix; API unchanged (2026.10.21.06). Build also carries the client-edition code, inactive on dev (no edition in app-config)
 
 Bug fixes
