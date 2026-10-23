@@ -1,3 +1,4 @@
+import { environment } from '../../../environments/environment';
 import {
   Component,
   ElementRef,
@@ -1009,7 +1010,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
         icon: 'plus',
         cta: true,
       });
-      if (!demo) {
+      if (!demo && !environment.clientEdition) {
         children.push({
           id: 'analysis-versions',
           path: '/nd/analysis-versions',

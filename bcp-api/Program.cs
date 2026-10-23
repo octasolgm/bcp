@@ -422,6 +422,7 @@ file static class StartupBootstrap
                 {
                     logger.LogWarning(seedEx, "Analysis prompt version seed skipped at startup.");
                 }
+                await ApplyClientBaselineAsync(scope.ServiceProvider, db, env, logger);
                 try
                 {
                     var filled = await scope.ServiceProvider
@@ -499,6 +500,7 @@ file static class StartupBootstrap
             await NdSchemaBootstrap.EnsureAsync(db);
             var migrator = scope.ServiceProvider.GetRequiredService<LocalDataMigrationService>();
             await migrator.MigrateAsync();
+            await ApplyClientBaselineAsync(scope.ServiceProvider, db, env, logger);
             state.SetStatus("ready");
             logger.LogInformation("Startup bootstrap completed.");
         }
@@ -520,6 +522,24 @@ file static class StartupBootstrap
             }
 
             state.SetStatus("degraded", ex.Message);
+        }
+    }
+
+    // Client installs only: our live prompt versions and analysis settings (see ClientBaselineSeeder).
+    private static async Task ApplyClientBaselineAsync(
+        IServiceProvider services,
+        AppDbContext db,
+        IWebHostEnvironment env,
+        ILogger logger)
+    {
+        try
+        {
+            await ClientBaselineSeeder.ApplyAsync(
+                db, services.GetRequiredService<IConfiguration>(), env, logger, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Client baseline skipped at startup.");
         }
     }
 }

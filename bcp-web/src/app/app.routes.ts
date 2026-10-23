@@ -3,24 +3,25 @@ import { ShellComponent } from './layout/shell.component';
 import { authGuard, guestGuard } from './guards/auth.guard';
 import { ndAuthGuard, ndGuestGuard } from './guards/nd-auth.guard';
 import { ndPlatformAdminGuard, ndRoleGuard } from './guards/nd-role.guard';
+import { ndDenyClientEditionGuard } from './guards/nd-deny-client-edition.guard';
 import { ndDenyDemoViewerGuard } from './guards/nd-deny-demo-viewer.guard';
 
 const ndAnalyseV8Route = {
-  canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
+  canActivate: [ndRoleGuard, ndDenyDemoViewerGuard, ndDenyClientEditionGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
   loadComponent: () =>
     import('./pages/analyse-v8/analyse-v8.component').then((m) => m.AnalyseV8Component),
 };
 
 const ndAnalyseV9Route = {
-  canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
+  canActivate: [ndRoleGuard, ndDenyDemoViewerGuard, ndDenyClientEditionGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
   loadComponent: () =>
     import('./pages/analyse-v9/analyse-v9.component').then((m) => m.AnalyseV9Component),
 };
 
 const ndAnalyseRegulRoute = {
-  canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
+  canActivate: [ndRoleGuard, ndDenyDemoViewerGuard, ndDenyClientEditionGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
   title: 'Regul Workflow · Comply Solutions',
   loadComponent: () =>
@@ -28,7 +29,7 @@ const ndAnalyseRegulRoute = {
 };
 
 const ndAnalyseRegulFullRoute = {
-  canActivate: [ndRoleGuard],
+  canActivate: [ndRoleGuard, ndDenyClientEditionGuard],
   data: { ndRoles: ['maker', 'super_admin'] },
   title: 'Regul Full Markdown · Comply Solutions',
   loadComponent: () =>
@@ -174,7 +175,7 @@ export const routes: Routes = [
   {
     path: 'old',
     component: ShellComponent,
-    canActivate: [authGuard],
+    canActivate: [authGuard, ndDenyClientEditionGuard],
     canActivateChild: [authGuard],
     children: legacyAppRoutes,
   },
@@ -244,6 +245,7 @@ export const routes: Routes = [
           },
           {
             path: 'regulation-documents',
+            canActivate: [ndDenyClientEditionGuard],
             loadComponent: () =>
               import('./pages/nd/regulation-documents/nd-regulation-documents.component').then(
                 (m) => m.NdRegulationDocumentsComponent,
@@ -277,6 +279,7 @@ export const routes: Routes = [
           },
           {
             path: 'internal-documents',
+            canActivate: [ndDenyClientEditionGuard],
             loadComponent: () =>
               import('./pages/nd/internal-documents/nd-internal-documents.component').then(
                 (m) => m.NdInternalDocumentsComponent,
@@ -287,6 +290,7 @@ export const routes: Routes = [
             // panel, analysis history, delete), but "Parse & Extract" runs locally (PdfPig +
             // Tesseract, no Landing AI). Separate route from internal-documents, which is untouched.
             path: 'internal-documents-new',
+            canActivate: [ndDenyClientEditionGuard],
             data: { engine: 'tesseract' },
             loadComponent: () =>
               import('./pages/nd/internal-documents/nd-internal-documents-local.component').then(
@@ -296,6 +300,7 @@ export const routes: Routes = [
           {
             // V2 — same as regulation-documents above, but local parse+extract instead of Landing AI.
             path: 'regulation-documents-new',
+            canActivate: [ndDenyClientEditionGuard],
             data: { engine: 'tesseract' },
             loadComponent: () =>
               import('./pages/nd/regulation-documents/nd-regulation-documents-local.component').then(
@@ -306,6 +311,7 @@ export const routes: Routes = [
             // Same page/component as internal-documents-new, but parse runs through RapidOCR (PaddleOCR
             // ONNX models) instead of Tesseract — a separate route so both can be compared side by side.
             path: 'internal-documents-rapidocr',
+            canActivate: [ndDenyClientEditionGuard],
             data: { engine: 'rapidocr' },
             loadComponent: () =>
               import('./pages/nd/internal-documents/nd-internal-documents-local.component').then(
@@ -316,6 +322,7 @@ export const routes: Routes = [
             // Same page/component as regulation-documents-new, but parse runs through RapidOCR instead
             // of Tesseract — a separate route so both can be compared side by side.
             path: 'regulation-documents-rapidocr',
+            canActivate: [ndDenyClientEditionGuard],
             data: { engine: 'rapidocr' },
             loadComponent: () =>
               import('./pages/nd/regulation-documents/nd-regulation-documents-local.component').then(
@@ -326,6 +333,7 @@ export const routes: Routes = [
             // Same page/component as internal-documents-new, but parse runs through Docling's default
             // (light) pipeline — layout model + RapidOCR under the hood, via a local Python service.
             path: 'internal-documents-docling-light',
+            canActivate: [ndDenyClientEditionGuard],
             data: { engine: 'docling-light' },
             loadComponent: () =>
               import('./pages/nd/internal-documents/nd-internal-documents-local.component').then(
@@ -334,6 +342,7 @@ export const routes: Routes = [
           },
           {
             path: 'regulation-documents-docling-light',
+            canActivate: [ndDenyClientEditionGuard],
             data: { engine: 'docling-light' },
             loadComponent: () =>
               import('./pages/nd/regulation-documents/nd-regulation-documents-local.component').then(
@@ -345,6 +354,7 @@ export const routes: Routes = [
             // testing, but ~21 min/page on this CPU-only setup. Only practical for short documents until
             // this runs on a GPU. See docs/pipeline/LIBRARY-REFERENCE.md.
             path: 'internal-documents-docling-glm',
+            canActivate: [ndDenyClientEditionGuard],
             data: { engine: 'docling-glm' },
             loadComponent: () =>
               import('./pages/nd/internal-documents/nd-internal-documents-local.component').then(
@@ -353,6 +363,7 @@ export const routes: Routes = [
           },
           {
             path: 'regulation-documents-docling-glm',
+            canActivate: [ndDenyClientEditionGuard],
             data: { engine: 'docling-glm' },
             loadComponent: () =>
               import('./pages/nd/regulation-documents/nd-regulation-documents-local.component').then(
@@ -427,7 +438,7 @@ export const routes: Routes = [
           },
           {
             path: 'analysis-versions',
-            canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
+            canActivate: [ndRoleGuard, ndDenyDemoViewerGuard, ndDenyClientEditionGuard],
             data: { ndRoles: ['maker', 'super_admin'] },
             title: 'Analysis versions · Comply Solutions',
             loadComponent: () =>

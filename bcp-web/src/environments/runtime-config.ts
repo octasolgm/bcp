@@ -6,6 +6,8 @@ export interface RuntimeAppConfig {
   supabaseAnonKey?: string;
   ndApiUrl?: string;
   appUrl?: string;
+  /** "client" on client installs (deploy/client-package); hides pages that are not part of the client product. */
+  edition?: string;
 }
 
 /** Overlay build-time environment with values from /assets/app-config.json (or Azure App Settings via server.js). */
@@ -25,6 +27,7 @@ export function applyRuntimeConfig(cfg: RuntimeAppConfig | null | undefined): vo
     environment.ndApiUrl = isLocalHost ? resolveApiUrl() : ndApi;
   }
   if (app) environment.appUrl = app;
+  if (cfg.edition?.trim().toLowerCase() === 'client') environment.clientEdition = true;
 }
 
 export function supabaseConfigured(): boolean {

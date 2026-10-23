@@ -1,0 +1,31 @@
+{
+  "_readme": "Copy this file to settings.json and fill in every value marked REQUIRED. Keep settings.json private: it holds your keys. See README.pdf section 4.",
+
+  "azure": {
+    "subscriptionId": "REQUIRED - your Azure subscription id",
+    "resourceGroup": "rg-complysolutions",
+    "location": "uaenorth",
+    "namePrefix": "REQUIRED - short lowercase name for your organisation, letters and numbers only, e.g. bankalpha",
+    "planSku": "P1v3"
+  },
+
+  "supabase": {
+    "projectUrl": "REQUIRED - e.g. https://abcdefgh.supabase.co",
+    "anonKey": "REQUIRED - anon public key",
+    "serviceRoleKey": "REQUIRED - service_role secret key",
+    "jwtSecret": "REQUIRED - JWT secret",
+    "databaseConnectionString": "REQUIRED - Session pooler connection string with your database password filled in",
+    "storageBucket": "doc"
+  },
+
+  "ai": {
+    "openRouterApiKey": "REQUIRED - AI analysis key (OpenRouter)",
+    "documentIntelligenceEndpoint": "REQUIRED - e.g. https://yourname.cognitiveservices.azure.com/",
+    "documentIntelligenceKey": "REQUIRED - Azure Document Intelligence key",
+    "azureOpenAIEndpoint": "REQUIRED - e.g. https://yourname.openai.azure.com/",
+    "azureOpenAIKey": "REQUIRED - Azure OpenAI key",
+    "embeddingDeployment": "text-embedding-3-small"
+  },
+
+  "extraApiSettings": {}
+}

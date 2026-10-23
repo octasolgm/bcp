@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Comply Solutions - Installation and Update Guide</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root { --ink: #1d2430; --muted: #5b6575; --line: #d9dee6; --accent: #0f5ea8; --soft: #eef4fb; --warn: #fff6e5; --warn-line: #f0c36d; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.5; margin: 0; background: #fff; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; color: var(--accent); }
+  h2 { font-size: 14pt; margin: 20pt 0 6pt; padding-bottom: 3pt; border-bottom: 1.5pt solid var(--accent); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 4pt; break-after: avoid; }
+  p { margin: 4pt 0 6pt; }
+  ul, ol { margin: 4pt 0 8pt; padding-left: 18pt; }
+  li { margin: 2pt 0; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9.5pt; background: #f3f5f8; padding: 0 3pt; border-radius: 3pt; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 9pt; background: #f3f5f8; border: 1pt solid var(--line); border-radius: 4pt; padding: 7pt 9pt; white-space: pre-wrap; word-break: break-all; break-inside: avoid; margin: 4pt 0 8pt; }
+  table { width: 100%; border-collapse: collapse; margin: 4pt 0 10pt; font-size: 9.5pt; break-inside: avoid; }
+  th, td { border: 1pt solid var(--line); padding: 4pt 6pt; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  .cover { border-bottom: 1pt solid var(--line); padding-bottom: 10pt; margin-bottom: 6pt; }
+  .meta { color: var(--muted); font-size: 9.5pt; }
+  .box { border: 1pt solid var(--line); background: var(--soft); border-radius: 4pt; padding: 7pt 10pt; margin: 6pt 0 10pt; break-inside: avoid; }
+  .warn { background: var(--warn); border-color: var(--warn-line); }
+  .flow { display: flex; gap: 6pt; align-items: stretch; margin: 6pt 0 10pt; break-inside: avoid; }
+  .flow div { flex: 1; border: 1pt solid var(--line); border-radius: 4pt; padding: 6pt; font-size: 9pt; background: #fafbfc; }
+  .flow b { display: block; color: var(--accent); margin-bottom: 2pt; }
+  .toc { columns: 2; font-size: 10pt; margin: 4pt 0; }
+  .page-break { break-before: page; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>Comply Solutions</h1>
+  <div style="font-size:13pt; font-weight:600;">Installation and Update Guide</div>
+  <div class="meta">Package version {{VERSION}} - {{DATE}}</div>
+</div>
+
+<ol class="toc">
+  <li>About this package</li>
+  <li>How the installation works</li>
+  <li>Before you start (prerequisites)</li>
+  <li>Prepare Supabase and the settings file</li>
+  <li>Install</li>
+  <li>First sign-in and users</li>
+  <li>Installing updates</li>
+  <li>Going back to the previous version</li>
+  <li>What is created in your Azure</li>
+  <li>Troubleshooting</li>
+  <li>Security and support</li>
+</ol>
+
+<h2>1. About this package</h2>
+<p>This package installs Comply Solutions into <b>your own Azure subscription</b>. The application, your documents and your data stay in your environment. Comply Solutions does not need access to your Azure account.</p>
+<table>
+  <tr><th style="width:32%">File</th><th>What it is</th></tr>
+  <tr><td><code>README.pdf</code></td><td>This guide.</td></tr>
+  <tr><td><code>CHANGELOG.txt</code></td><td>What is new in this version.</td></tr>
+  <tr><td><code>install.ps1</code></td><td>First-time installation. Run once per environment.</td></tr>
+  <tr><td><code>deploy-patch.ps1</code></td><td>Installs an update on an existing installation.</td></tr>
+  <tr><td><code>settings-template.json</code></td><td>Template for your settings (keys and names). Used by the installer only.</td></tr>
+  <tr><td><code>backend.zip</code>, <code>frontend.zip</code></td><td>The application itself. Do not unzip or change these.</td></tr>
+  <tr><td><code>lib\common.ps1</code></td><td>Shared code used by the two scripts.</td></tr>
+  <tr><td><code>version.json</code>, <code>checksums.txt</code></td><td>Version number and file fingerprints. The scripts check them and stop if any file was changed.</td></tr>
+</table>
+<h3>What the package includes</h3>
+<ul>
+  <li><b>New analysis</b>: compliance analysis of your internal documents against regulations, with gaps, actions, reviews and the maker, checker and reviewer flow.</li>
+  <li><b>Documents</b>: Internal Documents, Regulation Documents and the Regulation Points Library. Documents are read with Azure Document Intelligence.</li>
+  <li><b>Administration</b>: users, departments, settings and AI usage.</li>
+</ul>
+<p>The analysis uses the same prompts and settings as the Comply Solutions service on the date of the package. Each update brings the latest ones, unless your administrator has changed them.</p>
+<div class="box">Every package you receive has the same layout. A new version is a new package with a new number, for example <code>ComplySolutions-v1.3.0.zip</code>. Keep the previous package folder: you need it to go back a version.</div>
+
+<h2>2. How the installation works</h2>
+<div class="flow">
+  <div><b>Your users</b>Open the Comply Solutions web address in a browser and sign in.</div>
+  <div><b>Web app (Azure)</b>The screens your users see. Runs in your Azure App Service.</div>
+  <div><b>API (Azure)</b>Processing, analysis and security checks. Runs in your Azure App Service.</div>
+  <div><b>Supabase (your project)</b>Database, sign-in accounts and document storage, in your own Supabase project.</div>
+</div>
+<p>The installer creates the Azure parts for you, connects them to your Supabase project and starts the application. On first start the application creates all of its database tables by itself. Nothing needs to be created in the database by hand.</p>
+<p>Updates replace only the application files. Your settings, users, documents and analysis history are kept.</p>
+
+<h2>3. Before you start (prerequisites)</h2>
+<table>
+  <tr><th style="width:32%">You need</th><th>Details</th></tr>
+  <tr><td>Azure subscription</td><td>The person running the installer needs the <b>Contributor</b> role on the subscription (or on the resource group, if it already exists).</td></tr>
+  <tr><td>A Windows computer</td><td>Windows 10 or 11, or Windows Server, with PowerShell (built in) and internet access to Azure.</td></tr>
+  <tr><td>Azure CLI</td><td>Free Microsoft tool. Install once: open PowerShell and run<br><code>winget install -e --id Microsoft.AzureCLI</code><br>or download it from <code>https://aka.ms/installazurecliwindows</code>. Close and reopen PowerShell after installing.</td></tr>
+  <tr><td>Supabase account</td><td>At <code>https://supabase.com</code>. A paid plan is recommended for production (backups and no pausing).</td></tr>
+  <tr><td>AI analysis key</td><td>An OpenRouter API key, provided by Comply Solutions or your own if agreed.</td></tr>
+  <tr><td>Azure Document Intelligence</td><td>A Document Intelligence resource in your Azure (used to read uploaded documents). You need its endpoint and key. See 4.3.</td></tr>
+  <tr><td>Azure OpenAI</td><td>An Azure OpenAI resource with a <code>text-embedding-3-small</code> deployment (used to search document passages). You need its endpoint and key. See 4.3.</td></tr>
+  <tr><td>Time</td><td>About 45 minutes for the first installation, 10 minutes for each update.</td></tr>
+</table>
+
+<h2 class="page-break">4. Prepare Supabase and the settings file</h2>
+<h3>4.1 Create the Supabase project</h3>
+<ol>
+  <li>Sign in at <code>https://supabase.com</code> and choose <b>New project</b>.</li>
+  <li>Choose a region close to your users and a strong <b>database password</b>. Save the password safely; you need it in step 4.2.</li>
+  <li>When the project is ready, open <b>Database &gt; Extensions</b>, search for <code>vector</code> and enable it.</li>
+  <li>Open <b>Storage</b>, choose <b>New bucket</b>, name it <code>doc</code> and leave it <b>private</b> (Public bucket switched off).</li>
+</ol>
+
+<h3>4.2 Collect the values</h3>
+<table>
+  <tr><th style="width:38%">Setting in settings.json</th><th>Where to find it in Supabase</th></tr>
+  <tr><td><code>supabase.projectUrl</code></td><td>Project Settings &gt; API &gt; Project URL</td></tr>
+  <tr><td><code>supabase.anonKey</code></td><td>Project Settings &gt; API Keys &gt; <code>anon</code> <code>public</code></td></tr>
+  <tr><td><code>supabase.serviceRoleKey</code></td><td>Project Settings &gt; API Keys &gt; <code>service_role</code> (secret)</td></tr>
+  <tr><td><code>supabase.jwtSecret</code></td><td>Project Settings &gt; JWT Keys &gt; Legacy JWT Secret</td></tr>
+  <tr><td><code>supabase.databaseConnectionString</code></td><td>Click <b>Connect</b> at the top of the project, choose <b>Session pooler</b>, copy the URI and replace <code>[YOUR-PASSWORD]</code> with your database password</td></tr>
+</table>
+<p>Menu names can differ slightly as Supabase updates its dashboard.</p>
+
+<h3>4.3 Create the Azure AI services</h3>
+<p>Both live in your Azure subscription, so your documents are read and searched inside your own tenant.</p>
+<ol>
+  <li><b>Document Intelligence:</b> in the Azure Portal choose <b>Create a resource &gt; Document Intelligence</b>, pick your resource group and region, pricing tier <b>S0</b>. When created, open <b>Keys and Endpoint</b> and copy the endpoint and Key 1.</li>
+  <li><b>Azure OpenAI:</b> choose <b>Create a resource &gt; Azure OpenAI</b>, same resource group. When created, open it in <b>Azure AI Foundry</b>, go to <b>Deployments &gt; Deploy model</b>, choose <code>text-embedding-3-small</code> and keep the deployment name <code>text-embedding-3-small</code>. Then copy the endpoint and key from <b>Keys and Endpoint</b>.</li>
+</ol>
+<table>
+  <tr><th style="width:38%">Setting in settings.json</th><th>Value</th></tr>
+  <tr><td><code>ai.openRouterApiKey</code></td><td>Your OpenRouter key</td></tr>
+  <tr><td><code>ai.documentIntelligenceEndpoint</code></td><td>Document Intelligence endpoint, e.g. <code>https://yourname.cognitiveservices.azure.com/</code></td></tr>
+  <tr><td><code>ai.documentIntelligenceKey</code></td><td>Document Intelligence Key 1</td></tr>
+  <tr><td><code>ai.azureOpenAIEndpoint</code></td><td>Azure OpenAI endpoint, e.g. <code>https://yourname.openai.azure.com/</code></td></tr>
+  <tr><td><code>ai.azureOpenAIKey</code></td><td>Azure OpenAI Key 1</td></tr>
+  <tr><td><code>ai.embeddingDeployment</code></td><td>The deployment name, normally <code>text-embedding-3-small</code></td></tr>
+</table>
+
+<h3>4.4 Fill in the settings file</h3>
+<ol>
+  <li>Unzip the package to a folder, for example <code>C:\ComplySolutions\v{{VERSION}}</code>.</li>
+  <li>Copy <code>settings-template.json</code> to <code>settings.json</code> in the same folder.</li>
+  <li>Open <code>settings.json</code> in Notepad and replace every value that starts with <code>REQUIRED</code>.</li>
+</ol>
+<table>
+  <tr><th style="width:38%">Azure setting</th><th>Meaning</th></tr>
+  <tr><td><code>azure.subscriptionId</code></td><td>Your subscription id (Azure Portal &gt; Subscriptions).</td></tr>
+  <tr><td><code>azure.resourceGroup</code></td><td>Name of the resource group to create or use. Default <code>rg-complysolutions</code>.</td></tr>
+  <tr><td><code>azure.location</code></td><td>Azure region, for example <code>uaenorth</code>, <code>westeurope</code>, <code>eastus</code>.</td></tr>
+  <tr><td><code>azure.namePrefix</code></td><td>Short lowercase name for your organisation (3 to 20 letters or numbers). Your web address becomes <code>https://&lt;prefix&gt;-cs-web.azurewebsites.net</code>.</td></tr>
+  <tr><td><code>azure.planSku</code></td><td>Server size. <code>P1v3</code> is recommended for production; <code>B2</code> is enough for a test environment.</td></tr>
+</table>
+<div class="box warn"><b>Keep settings.json private.</b> It contains your keys. Store it like a password, and never email it. The installer copies the values into your Azure App Service settings; updates do not need this file.</div>
+
+<h2 class="page-break">5. Install</h2>
+<ol>
+  <li>Open <b>PowerShell</b> (Start menu, type PowerShell).</li>
+  <li>Go to the package folder:
+<pre>cd C:\ComplySolutions\v{{VERSION}}</pre></li>
+  <li>Allow the scripts to run for this window only, and unblock the downloaded files:
+<pre>Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+Get-ChildItem -Recurse | Unblock-File</pre></li>
+  <li>Run the installer:
+<pre>.\install.ps1</pre></li>
+  <li>A browser window opens for the Azure sign-in. Sign in with the account that has the Contributor role.</li>
+  <li>Wait until the script prints <b>Installation complete</b>. The first start takes a few minutes while the application prepares the database.</li>
+</ol>
+<p>The script shows each step as it runs: verifying files, signing in, creating resources, saving settings, deploying the API and deploying the web app. If a step fails, it stops and says what to fix. You can safely run <code>install.ps1</code> again after fixing it.</p>
+<p>At the end it prints your web address and the two values used for updates:</p>
+<pre>Your app:  https://bankalpha-cs-web.azurewebsites.net
+Keep these values for future updates:  -ResourceGroup rg-complysolutions  -NamePrefix bankalpha</pre>
+
+<h2>6. First sign-in and users</h2>
+<h3>6.1 Create the administrator</h3>
+<ol>
+  <li>In Supabase, open <b>Authentication &gt; Users</b>, choose <b>Add user &gt; Create new user</b>, enter your email and a password, and tick <b>Auto confirm user</b>.</li>
+  <li>Open your web address and sign in with that user once. This creates the user's profile.</li>
+  <li>In Supabase, open <b>SQL Editor</b>, paste the statement below with your email, and press <b>Run</b>:
+<pre>update profiles
+set role = 'super_admin', is_platform_admin = true
+where id = (select id from auth.users where email = 'admin@yourbank.com');</pre></li>
+  <li>Sign out and sign in again. You now have the administrator menus.</li>
+</ol>
+<h3>6.2 Add your users</h3>
+<p>As the administrator, open <b>Users</b> in the application to add your colleagues and give each one a role. Users always sign in at your own web address. Their accounts exist only in your Supabase project.</p>
+<h3>6.3 Your own domain (optional)</h3>
+<p>To use an address such as <code>compliance.yourbank.com</code>, add a custom domain and certificate to the web App Service in the Azure Portal, then tell Comply Solutions support so the matching settings can be updated.</p>
+
+<h2 class="page-break">7. Installing updates</h2>
+<p>When Comply Solutions releases an update you receive a new package, for example <code>ComplySolutions-v1.3.0.zip</code>, together with its SHA-256 fingerprint in a separate message.</p>
+<ol>
+  <li>(Recommended) Check the download. In PowerShell:
+<pre>Get-FileHash .\ComplySolutions-v1.3.0.zip -Algorithm SHA256</pre>
+  The result must match the fingerprint you received. If it does not, do not use the file.</li>
+  <li>Unzip it to a new folder, for example <code>C:\ComplySolutions\v1.3.0</code>. Keep the old folder.</li>
+  <li>Read <code>CHANGELOG.txt</code>.</li>
+  <li>In PowerShell:
+<pre>cd C:\ComplySolutions\v1.3.0
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+Get-ChildItem -Recurse | Unblock-File
+.\deploy-patch.ps1 -ResourceGroup rg-complysolutions -NamePrefix bankalpha</pre></li>
+  <li>Wait for <b>Update complete</b>. The script shows the version before and after.</li>
+  <li>Open the application, sign in and check that it works.</li>
+</ol>
+<div class="box">An update takes about 5 to 10 minutes. Users may see the application restart for about a minute, so plan updates outside busy hours. Your settings, users, documents and history are not changed. If the update includes database changes, the application applies them by itself when it starts.</div>
+<p>If you have more than one subscription, add <code>-SubscriptionId &lt;id&gt;</code> to the command.</p>
+
+<h2>8. Going back to the previous version</h2>
+<p>Run <code>deploy-patch.ps1</code> from the <b>previous</b> package folder with the same values:</p>
+<pre>cd C:\ComplySolutions\v1.2.0
+.\deploy-patch.ps1 -ResourceGroup rg-complysolutions -NamePrefix bankalpha</pre>
+<p>Database changes made by a newer version only add tables or columns, so the previous version keeps working with them. Contact support before going back more than one version.</p>
+
+<h2>9. What is created in your Azure</h2>
+<table>
+  <tr><th style="width:38%">Resource</th><th>Name</th></tr>
+  <tr><td>Resource group</td><td>The name from <code>azure.resourceGroup</code></td></tr>
+  <tr><td>App Service plan (the server)</td><td><code>&lt;prefix&gt;-cs-plan</code></td></tr>
+  <tr><td>App Service for the API</td><td><code>&lt;prefix&gt;-cs-api</code></td></tr>
+  <tr><td>App Service for the web app</td><td><code>&lt;prefix&gt;-cs-web</code></td></tr>
+</table>
+<p>Both App Services are set to HTTPS only, TLS 1.2 or higher, FTP disabled and always on. You pay Microsoft for the App Service plan and Supabase for your project, as with any service in your accounts.</p>
+
+<h2>10. Troubleshooting</h2>
+<table>
+  <tr><th style="width:38%">Message</th><th>What to do</th></tr>
+  <tr><td>Azure CLI is not installed</td><td>Install it (section 3), close PowerShell, open a new window and run the script again.</td></tr>
+  <tr><td>... cannot be loaded because running scripts is disabled</td><td>Run the two commands in section 5 step 3 first.</td></tr>
+  <tr><td>Please fill in '...'</td><td>A value in <code>settings.json</code> is still empty or still says REQUIRED.</td></tr>
+  <tr><td>File ... does not match the checksum</td><td>The package was changed or damaged. Download it again; do not continue.</td></tr>
+  <tr><td>Could not create ... The name may already be used</td><td>App names are unique across all of Azure. Choose a different <code>azure.namePrefix</code> and run again.</td></tr>
+  <tr><td>The API could not prepare the database</td><td>Check <code>databaseConnectionString</code> (password filled in, Session pooler URI) and that the <code>vector</code> extension is enabled. Fix <code>settings.json</code> and run <code>install.ps1</code> again.</td></tr>
+  <tr><td>App Service ... not found (during an update)</td><td>Use the same <code>-ResourceGroup</code> and <code>-NamePrefix</code> values the installer printed at the end.</td></tr>
+  <tr><td>Documents stay unread or show a parse error</td><td>Check the Document Intelligence endpoint and key in <code>settings.json</code>, then run <code>install.ps1</code> again.</td></tr>
+  <tr><td>Analysis finds no matching passages</td><td>Check the Azure OpenAI endpoint, key and deployment name (<code>text-embedding-3-small</code>), then run <code>install.ps1</code> again.</td></tr>
+  <tr><td>Sign-in works but menus are missing</td><td>Complete section 6.1 step 3, then sign out and in again.</td></tr>
+</table>
+<p>When contacting support, send the full text shown in the PowerShell window (do not include <code>settings.json</code>).</p>
+
+<h2>11. Security and support</h2>
+<ul>
+  <li>The package contains no keys. Your keys go only into your own Azure App Service settings.</li>
+  <li>The scripts check every package file against <code>checksums.txt</code> before deploying. Never edit the package files.</li>
+  <li>Documents are read and searched by Azure services in your own subscription. AI analysis calls go to the OpenRouter key you provide.</li>
+  <li>Comply Solutions has no access to your Azure subscription or Supabase project unless you grant it.</li>
+  <li>The connection to your application is HTTPS only.</li>
+</ul>
+<div class="box"><b>Support:</b> contact your Comply Solutions account manager, quoting your package version ({{VERSION}}) and the text shown by the script.</div>
+
+</body>
+</html>
