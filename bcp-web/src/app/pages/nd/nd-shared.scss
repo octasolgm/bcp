@@ -2003,6 +2003,55 @@ tr.doc-ready-green td:first-child {
   display: inline-block;
 }
 
+/* Live Documents pages: a status line ("✓ Parsed", "✓ Ready to analyse") with the next step as a link below. */
+.nd-status-simple {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.nd-status-ok {
+  color: var(--low);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.nd-status-bad {
+  color: var(--critical);
+  font-weight: 650;
+}
+
+.nd-status-muted {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.nd-status-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--accent-hover, var(--accent));
+  }
+
+  &:disabled {
+    color: var(--text-muted);
+    text-decoration: none;
+    cursor: default;
+  }
+}
+
 /* Reusable progress bar for parse/extract activity in a table cell. */
 .nd-progress-track {
   display: block;

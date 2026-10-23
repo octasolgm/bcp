@@ -301,17 +301,59 @@
             <td class="col-pts muted">{{ docPageMeta(d) }}</td>
             <td class="col-pts muted" [title]="usedInAnalysesLabel(d.analysisRunCount)">{{ d.analysisRunCount ?? 0 }}</td>
             <td class="col-status">
-              @if (showsParsedPendingExtractChips(d)) {
+              @if (cleanView && !isParsingDoc(d)) {
+                <div class="nd-status-simple">
+                  @if (analysisReadyState(d) !== 'not_ready') {
+                    <span class="nd-status-ok"><span aria-hidden="true">✓</span> {{ analysisReadyLabel(d) }}</span>
+                  } @else if (isDocParsed(d)) {
+                    <span class="nd-status-ok"><span aria-hidden="true">✓</span> Parsed</span>
+                    @if (canRunLocalPipeline(d)) {
+                      <button
+                        type="button"
+                        class="nd-status-link"
+                        [disabled]="!canClickRowExtract(d)"
+                        (click)="handleExtractSections(d, $event)"
+                      >
+                        {{ extractingId === d.id ? 'Extracting…' : 'Extract now' }}
+                      </button>
+                    }
+                  } @else if ((d.parseStatus ?? '').toLowerCase() === 'failed') {
+                    <span class="nd-status-bad">Parse failed</span>
+                    @if (canRunLocalPipeline(d)) {
+                      <button
+                        type="button"
+                        class="nd-status-link"
+                        [disabled]="!!parsingId"
+                        (click)="handleParse(d, $event)"
+                      >
+                        Parse again
+                      </button>
+                    }
+                  } @else {
+                    <span class="nd-status-muted">Not parsed</span>
+                    @if (canRunLocalPipeline(d)) {
+                      <button
+                        type="button"
+                        class="nd-status-link"
+                        [disabled]="!!parsingId"
+                        (click)="handleParse(d, $event)"
+                      >
+                        Parse now
+                      </button>
+                    }
+                  }
+                </div>
+              } @else if (showsParsedPendingExtractChips(d)) {
                 <div class="nd-status-chip-stack">
                   <span class="severity-badge doc-ready-green">Parsed</span>
                   <span class="severity-badge doc-ready-red">Pending extract</span>
                 </div>
-              } @else {
+              } @else if (!cleanView) {
                 <span class="severity-badge" [ngClass]="analysisReadyClass(d)">{{ analysisReadyLabel(d) }}</span>
               }
               @if (isParsingDoc(d)) {
                 <span class="cell-subline">{{ parseStatusText(d) }}</span>
-                <span class="nd-progress-track" role="progressbar" [attr.aria-label]="isCloudEngine ? 'Parsing with Azure' : 'Parsing locally'">
+                <span class="nd-progress-track" role="progressbar" [attr.aria-label]="parseStatusText(d)">
                   <span class="nd-progress-fill is-indeterminate" [style.width.%]="100"></span>
                 </span>
               }
@@ -333,10 +375,10 @@
                     title="View extracted sections"
                     (click)="openSections(d, $event)"
                   >
-                    View sections
+                    {{ cleanView ? 'View' : 'View sections' }}
                   </button>
                 }
-                @if (showRowParsedTextButton(d)) {
+                @if (showRowParsedTextButton(d) && !cleanView) {
                   <button
                     type="button"
                     class="row-action-btn compact"
@@ -346,7 +388,7 @@
                     View parsed
                   </button>
                 }
-                @if (showSemanticExtract) {
+                @if (showSemanticExtract && !cleanView) {
                   <button
                     type="button"
                     class="row-action-btn compact"
@@ -438,7 +480,7 @@
                     type="button"
                     class="row-action-btn compact"
                     [class.primary]="!isDocParsed(d)"
-                    [title]="isCloudEngine ? 'Parse to text with page references using Azure (cloud, billed per page)' : 'Parse to text with page references, locally (PdfPig + Tesseract, no Landing AI)'"
+                    [attr.title]="parseButtonTitle()"
                     [disabled]="parsingId === d.id"
                     (click)="handleParse(d, $event)"
                   >
@@ -454,7 +496,7 @@
                   >
                     {{ extractingId === d.id ? 'Extracting…' : extractButtonLabel(d) }}
                   </button>
-                  @if (showSemanticExtract) {
+                  @if (showSemanticExtract && !cleanView) {
                     <button
                       type="button"
                       class="row-action-btn compact"
@@ -529,7 +571,7 @@
                 </span>
               </div>
               <div class="panel-top-toolbar">
-            @if (parsedTextFor(sectionsFor)) {
+            @if (parsedTextFor(sectionsFor) && !cleanView) {
               <button type="button" class="btn-secondary btn-sm" (click)="toggleParsedText()">
                 {{ showParsedText ? 'Hide parsed' : 'Parsed text' }}
               </button>
@@ -561,7 +603,7 @@
               >
                 {{ extractingId === sectionsFor.id ? 'Extracting…' : extractButtonLabel(sectionsFor) }}
               </button>
-              @if (showSemanticExtract) {
+              @if (showSemanticExtract && !cleanView) {
                 <button
                   type="button"
                   class="btn-secondary btn-sm"
@@ -577,7 +619,7 @@
             </div>
           </div>
         </div>
-        @if (sectionsFor && structuralCoveragePct(sectionsFor); as covPct) {
+        @if (sectionsFor && !cleanView && structuralCoveragePct(sectionsFor); as covPct) {
           <p
             class="structural-coverage-note"
             [class.structural-coverage-note-warn]="structuralCoverageLow(sectionsFor)"
@@ -610,7 +652,7 @@
             [sections]="sectionRows"
             [loading]="loadingSections"
             [extracting]="isParsingDoc(sectionsFor) || extractingId === sectionsFor.id"
-            [extractingLabel]="isParsingDoc(sectionsFor) ? parseStatusText(sectionsFor) : 'Extracting sections locally…'"
+            [extractingLabel]="isParsingDoc(sectionsFor) ? parseStatusText(sectionsFor) : (cleanView ? 'Extracting sections…' : 'Extracting sections locally…')"
             [extractingPct]="null"
             [repairing]="false"
             [repairingLabel]="''"

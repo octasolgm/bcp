@@ -6,18 +6,11 @@ import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { formatDate } from '../../../../lib/nd/utils';
 import { sortAnalysisRunsByRecent } from '../../../../lib/nd/analysis-run-status';
-import type { AnalysisPoint, AnalysisRunSummary } from '../../../../lib/nd/types';
-import {
-  aggregateGapRiskCounts,
-  type ActionItemReviewRow,
-} from '../../../../lib/nd/dashboard-gap-risk';
+import type { AnalysisRunSummary } from '../../../../lib/nd/types';
 import {
   DASHBOARD_METRICS,
-  complianceCountForRun,
   gapAnalysisQueryForMetric,
-  isRiskTierMetric,
   parseDashboardMetricId,
-  riskCountFromGaps,
   type DashboardMetricId,
 } from '../../../../lib/nd/dashboard-metric';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
@@ -89,67 +82,20 @@ export class NdDashboardMetricRunsComponent implements OnInit, OnDestroy {
     try {
       await this.auth.refreshProfile();
       const role = this.auth.getRole();
-      const listParams = { ndOnly: true, summaryOnly: true, page: 1, pageSize: 20 };
-      const res = await this.api.getAnalysisRuns(
-        role === 'maker' ? { ...listParams, mineOnly: true } : listParams,
+      // Same runs and the same tallies as the overview card (server side), across every analysis - so the
+      // rows add up to exactly the number on the card.
+      const res = await this.api.getDashboardMetricRunCounts(
+        this.metricId,
+        role === 'maker' ? { mineOnly: true } : undefined,
       );
       if (!res.success || !res.data) {
         this.loadError = res.message ?? 'Could not load analysis runs.';
         return;
       }
-
-      const runs = sortAnalysisRunsByRecent(res.data as AnalysisRunSummary[]);
-      const metric = this.metricId;
-
-      if (isRiskTierMetric(metric)) {
-        // Prefer server gap-risk tallies (same as overview) — avoid N× full getResults.
-        const fromSummary = runs
-          .map((run) => ({
-            run,
-            count: riskCountFromGaps(
-              {
-                critical: run.criticalGaps ?? 0,
-                medium: run.mediumGaps ?? 0,
-                low: run.lowGaps ?? 0,
-                total:
-                  (run.criticalGaps ?? 0) + (run.mediumGaps ?? 0) + (run.lowGaps ?? 0),
-              },
-              metric,
-            ),
-          }))
-          .filter((r) => r.count > 0);
-        const hasServer =
-          runs.some((r) => r.criticalGaps != null || r.mediumGaps != null || r.lowGaps != null);
-        if (hasServer) {
-          this.rows = fromSummary;
-        } else {
-          const candidates = runs.filter(
-            (r) =>
-              (r.compliant ?? 0) + (r.partial ?? 0) + (r.nonCompliant ?? 0) > 0 ||
-              (r.processedPointsCount ?? 0) > 0,
-          );
-          const scored: MetricRunRow[] = [];
-          for (const run of candidates) {
-            const detail = await this.api.getResults(run.id);
-            if (!detail.success || !detail.data) continue;
-            const data = detail.data as {
-              points?: AnalysisPoint[];
-              actionItemReviews?: ActionItemReviewRow[];
-            };
-            const gaps = aggregateGapRiskCounts(
-              data.points ?? [],
-              data.actionItemReviews ?? [],
-            );
-            const count = riskCountFromGaps(gaps, metric);
-            if (count > 0) scored.push({ run, count });
-          }
-          this.rows = scored;
-        }
-      } else {
-        this.rows = runs
-          .map((run) => ({ run, count: complianceCountForRun(run, metric) }))
-          .filter((r) => r.count > 0);
-      }
+      const counts = new Map(res.data.counts.map((c) => [c.runId, c.count]));
+      this.rows = sortAnalysisRunsByRecent(res.data.runs as AnalysisRunSummary[])
+        .map((run) => ({ run, count: counts.get(run.id) ?? 0 }))
+        .filter((r) => r.count > 0);
     } catch {
       this.loadError = 'Could not load analysis breakdown.';
       this.rows = [];

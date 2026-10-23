@@ -547,6 +547,13 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     return this.auth.getRole() === 'super_admin';
   }
 
+  /** The live Regulation Documents page (Azure engine) for real accounts: status with Parse now / Extract now
+   * links, only the View action, and no tool names in tooltips. The engine test pages and the demo view keep
+   * the full set of actions. */
+  get cleanView(): boolean {
+    return this.engine === 'azure-di' && !this.auth.isDemoViewer();
+  }
+
   showRowParseButton(doc: RegulationDocument): boolean {
     return this.canExtract && !this.isManualDoc(doc);
   }

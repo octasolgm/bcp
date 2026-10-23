@@ -50,3 +50,13 @@ We also fixed an issue on the New analysis page where, with a larger number of d
 
 Two more reliability fixes are ready for the next deploy. Every page request now confirms your sign-in directly on our server instead of asking the sign-in service each time, which makes pages respond faster and removes occasional failures when that service was slow. The Regulation Documents list could also sometimes appear without its documents when the page loaded; it now loads reliably every time.
 
+Simpler document preparation and clearer document pages
+
+Uploading a regulation or internal document from the New analysis page now prepares it fully in the background, the same way evidence uploads on an analysis report already work. The page shows each step as it happens, and once the document is ready it is selected and its points are shown. Preparation carries on even if you leave the page. The document lists on New analysis now show only documents that are ready to analyse, together with the date each one was uploaded.
+
+On the Internal Documents and Regulation Documents pages, the status column is now easier to read. A parsed document shows a green tick with an "Extract now" link underneath, a document that has not been parsed yet shows a "Parse now" link, and a document that is ready to analyse is shown in green with a tick. Each row now has a single "View" button, and technical options that were only meant for our own testing have been removed from these pages. The points panel shows a simple point count without internal statistics.
+
+In an analysis report, choosing a point now moves it to the top of the points list on the left, so the following points are easy to reach.
+
+The overview cards now open exactly the records they count. Before, a card such as "Medium risk gaps" could show one number on the overview and a smaller number, or nothing, once opened. Opening a card now lists every analysis that contributes to the number, adding up to the same total.
+

@@ -145,6 +145,13 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     return this.engine === 'azure-di';
   }
 
+  /** The live Internal Documents page (Azure engine) for real accounts: status with Parse now / Extract now
+   * links, only the View action, and no tool names in tooltips. The engine test pages and the demo view keep
+   * the full set of actions. */
+  get cleanView(): boolean {
+    return this.isCloudEngine && !this.auth.isDemoViewer();
+  }
+
   get parseTag(): string {
     return this.isCloudEngine ? 'Azure' : 'Local';
   }
@@ -324,6 +331,13 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     );
   }
 
+  parseButtonTitle(): string | null {
+    if (this.cleanView) return null;
+    return this.isCloudEngine
+      ? 'Parse to text with page references using Azure (cloud, billed per page)'
+      : 'Parse to text with page references, locally (PdfPig + Tesseract, no Landing AI)';
+  }
+
   isDocParsed(doc: InternalDocument): boolean {
     const s = (doc.parseStatus ?? '').toLowerCase();
     return s === 'parsed' || s === 'completed';
@@ -386,6 +400,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
   }
 
   parseStatusText(_doc: InternalDocument): string {
+    if (this.cleanView) return 'Parsing…';
     return this.isCloudEngine ? 'Parsing with Azure…' : 'Parsing locally…';
   }
 

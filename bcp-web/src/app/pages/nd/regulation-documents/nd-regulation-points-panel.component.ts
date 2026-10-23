@@ -65,6 +65,8 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   @Input() reportedPointCount: number | null = null;
   @Input() highlightPointNumber = '';
   @Input() canOpenSource = false;
+  /** Live Documents page: a plain "N points" line, without the stored / compared counts and the reference note. */
+  @Input() simpleSummary = false;
   @Output() openSourcePage = new EventEmitter<number>();
 
   search = '';
@@ -130,6 +132,7 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   get statusLabel(): string {
     if (this.loading || this.building) return 'Loading points…';
     if (!this.storedCount) return 'No points extracted yet.';
+    if (this.simpleSummary) return this.storedCount === 1 ? '1 point' : `${this.storedCount} points`;
     const base = formatPointCountSummary({
       storedCount: this.storedCount,
       analyseCount: this.analyseCount,
@@ -144,7 +147,7 @@ export class NdRegulationPointsPanelComponent implements OnChanges {
   }
 
   get viewNote(): string {
-    if (!this.storedCount || this.skippedCount === 0) return '';
+    if (this.simpleSummary || !this.storedCount || this.skippedCount === 0) return '';
     return 'Introduction, annex, and section-header points are shown for reference. Gap analysis uses numbered requirement leaves only (from clause 2 onward).';
   }
 

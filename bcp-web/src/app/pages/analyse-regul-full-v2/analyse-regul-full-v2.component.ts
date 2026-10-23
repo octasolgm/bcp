@@ -60,6 +60,12 @@ function clauseNoFromSnapshot(snapshot: string | null | undefined): string | nul
  * page currently behaves exactly like V4 (same engine, forward-only, full-markdown), and is
  * where the actual Step 3-4 retrieval changes land once that backend work starts.
  */
+type UploadPipelineStage = 'uploading' | 'parsing' | 'extracting' | 'indexing' | 'done' | 'failed';
+
+/** How often an upload's server-side preparation is checked, and how long this page follows it. */
+const UPLOAD_PREPARE_POLL_MS = 3000;
+const UPLOAD_PREPARE_WAIT_MS = 20 * 60_000;
+
 @Component({
   selector: 'app-analyse-regul-full-v2',
   standalone: true,
@@ -535,6 +541,31 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   regDocPointLabel(doc: StoredDocumentDto): string {
     if (this.ndAuth.isDemoViewer() || this.localPipelineReady.has(this.storedDocId(doc))) return `${doc.pointCount ?? 0} pts`;
     return this.docStatusPending(doc) ? '... pts' : `${doc.pointCount ?? 0} pts`;
+  }
+
+  /** Real accounts see only documents that are parsed and extracted. A document still waiting for its first status
+   * answer stays listed (as "Checking...") so the lists do not flash empty while the page loads. Demo accounts
+   * keep their full lists. */
+  override get filteredRegulationDocs(): StoredDocumentDto[] {
+    return super.filteredRegulationDocs.filter((d) => this.showInPicker(d, this.regDocReadyState(d)));
+  }
+
+  override get filteredComplianceDocs(): StoredDocumentDto[] {
+    return super.filteredComplianceDocs.filter((d) => this.showInPicker(d, this.complianceDocReadyState(d)));
+  }
+
+  private showInPicker(doc: StoredDocumentDto, state: DocAnalysisReadyState): boolean {
+    if (this.ndAuth.isDemoViewer() || this.docStatusPending(doc)) return true;
+    return state !== 'not_ready';
+  }
+
+  /** "Uploaded 12 Oct 2026" under each document in the two pickers. */
+  uploadedDateLabel(doc: StoredDocumentDto): string {
+    const raw = doc.uploaded?.trim();
+    if (!raw) return '';
+    const time = Date.parse(raw);
+    if (Number.isNaN(time)) return `Uploaded ${raw}`;
+    return `Uploaded ${new Date(time).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
   }
 
   /** Real accounts: no status check has answered for this document yet (see pipelineStatusCheckedIds). */
@@ -1090,7 +1121,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   // the list in place.
   // --------------------------------------------------------------------------------
 
-  uploadPipelineLabel(stage: 'uploading' | 'parsing' | 'extracting' | 'done' | 'failed'): string {
+  uploadPipelineLabel(stage: UploadPipelineStage): string {
     switch (stage) {
       case 'uploading':
         return 'Uploading…';
@@ -1098,6 +1129,8 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
         return 'Parsing…';
       case 'extracting':
         return 'Extracting…';
+      case 'indexing':
+        return 'Preparing for analysis…';
       case 'done':
         return 'Parsed and extracted';
       case 'failed':
@@ -1105,8 +1138,46 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     }
   }
 
-  regUploadPipelineV2: { name: string; stage: 'uploading' | 'parsing' | 'extracting' | 'done' | 'failed'; message?: string } | null = null;
-  complianceUploadPipelineV2: { name: string; stage: 'uploading' | 'parsing' | 'extracting' | 'done' | 'failed'; message?: string } | null = null;
+  regUploadPipelineV2: { name: string; stage: UploadPipelineStage; message?: string } | null = null;
+  complianceUploadPipelineV2: { name: string; stage: UploadPipelineStage; message?: string } | null = null;
+
+  /** Real accounts: the server parses, extracts and (internal documents) indexes the upload itself - the same
+   * pipeline as gap-evidence uploads on the report, so it finishes even if this page is closed - and this page
+   * follows its progress. Resolves once the document is ready, has failed, or is still running after the wait. */
+  private async prepareUploadOnServer(
+    id: string,
+    isRegulation: boolean,
+    onStage: (stage: UploadPipelineStage) => void,
+  ): Promise<{ ok: true; sectionCount: number | null } | { ok: false; message: string }> {
+    const started = await this.ndApi.localPrepareById(id, 'azure-di');
+    if (!started.success) return { ok: false, message: started.message ?? 'Could not start parsing' };
+    const deadline = Date.now() + UPLOAD_PREPARE_WAIT_MS;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, UPLOAD_PREPARE_POLL_MS));
+      const res = await this.ndApi.localExtractStatusBatch([id], 'azure-di', { lite: true });
+      const row = res.success ? res.data?.[id] : undefined;
+      if (!row || row.status !== 'parsed') {
+        if (row?.status === 'failed') return { ok: false, message: row.error || 'Parse failed' };
+        onStage('parsing');
+        continue;
+      }
+      if (row.extractStatus !== 'extracted') {
+        if (row.extractStatus === 'failed') return { ok: false, message: row.extractError || 'Extract failed' };
+        onStage('extracting');
+        continue;
+      }
+      if (!isRegulation && row.indexStatus !== 'indexed') {
+        if (row.indexStatus === 'failed') return { ok: false, message: row.indexError || 'Preparing for analysis failed' };
+        onStage('indexing');
+        continue;
+      }
+      return { ok: true, sectionCount: row.sectionCount ?? null };
+    }
+    return {
+      ok: false,
+      message: 'Still preparing on the server. It will finish by itself; refresh this page in a few minutes.',
+    };
+  }
 
   /** Overrides the base's onRegulationUpload (which only uploads, then tells a real — non-demo —
    * account to go parse/extract it manually from Regulation Docs) to also run parse + extract
@@ -1143,6 +1214,20 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       }
 
       this.regUploadPipelineV2 = { name: file.name, stage: 'parsing' };
+      if (!this.ndAuth.isDemoViewer()) {
+        const prepared = await this.prepareUploadOnServer(id, true, (stage) => {
+          this.regUploadPipelineV2 = { name: file.name, stage };
+          this.cdr.markForCheck();
+        });
+        if (!prepared.ok) {
+          this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: prepared.message };
+          this.toast.show(prepared.message, 'error', 5000);
+          this.refreshRegulations(() => this.reapplyRegSelection(keptRegIds));
+          return;
+        }
+        await this.finishRegulationUpload(file, id, keptRegIds);
+        return;
+      }
       const parsed = await this.ndApi.localParseById(id, 'azure-di');
       if (!parsed.success || parsed.data?.status === 'failed') {
         this.regUploadPipelineV2 = {
@@ -1168,25 +1253,30 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
         return;
       }
 
-      this.regUploadPipelineV2 = { name: file.name, stage: 'done' };
-      this.toast.show(`Parsed and extracted "${file.name}"`, 'success', 3500);
-      await this.syncLocalPipelineReadiness();
-      this.refreshRegulations(() => {
-        this.reapplyRegSelection(keptRegIds);
-        const doc = this.regulationDocs.find((d) => d.id === id);
-        if (doc && this.canSelectRegDoc(doc)) this.selectedRegIds.add(doc.id);
-        this.selectedRegDocs = this.regulationDocs.filter((d) => this.selectedRegIds.has(d.id));
-        this.loadPointsForSelectedFiles();
-      });
-      setTimeout(() => {
-        if (this.regUploadPipelineV2?.stage === 'done') this.regUploadPipelineV2 = null;
-      }, 2500);
+      await this.finishRegulationUpload(file, id, keptRegIds);
     } catch {
       this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: 'Upload failed' };
       this.toast.show('Regulation upload failed.', 'error', 4000);
     } finally {
       this.uploadingReg = false;
     }
+  }
+
+  /** Uploaded regulation is parsed and extracted: refresh the list, select it and show its points. */
+  private async finishRegulationUpload(file: File, id: string, keptRegIds: Set<string>): Promise<void> {
+    this.regUploadPipelineV2 = { name: file.name, stage: 'done' };
+    this.toast.show(`Parsed and extracted "${file.name}"`, 'success', 3500);
+    await this.syncLocalPipelineReadiness();
+    this.refreshRegulations(() => {
+      this.reapplyRegSelection(keptRegIds);
+      const doc = this.regulationDocs.find((d) => d.id === id);
+      if (doc && this.canSelectRegDoc(doc)) this.selectedRegIds.add(doc.id);
+      this.selectedRegDocs = this.regulationDocs.filter((d) => this.selectedRegIds.has(d.id));
+      this.loadPointsForSelectedFiles();
+    });
+    setTimeout(() => {
+      if (this.regUploadPipelineV2?.stage === 'done') this.regUploadPipelineV2 = null;
+    }, 2500);
   }
 
   private reapplyRegSelection(keptRegIds: Set<string>): void {
@@ -1251,6 +1341,19 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       }
 
       this.complianceUploadPipelineV2 = { name: file.name, stage: 'parsing' };
+      if (!this.ndAuth.isDemoViewer()) {
+        const prepared = await this.prepareUploadOnServer(id, false, (stage) => {
+          this.complianceUploadPipelineV2 = { name: file.name, stage };
+          this.cdr.markForCheck();
+        });
+        if (!prepared.ok) {
+          this.complianceUploadPipelineV2 = { name: file.name, stage: 'failed', message: prepared.message };
+          this.toast.show(prepared.message, 'error', 5000);
+          return;
+        }
+        await this.finishComplianceUpload(file, id, prepared.sectionCount);
+        return;
+      }
       const parsed = await this.ndApi.localParseById(id, 'azure-di');
       if (!parsed.success || parsed.data?.status === 'failed') {
         this.complianceUploadPipelineV2 = {
@@ -1282,45 +1385,49 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
         return;
       }
 
-      // The dedicated Internal Documents page (this doc's real source of truth from here on)
-      // reads from the ND catalog; this page's own compliance list still reads from the older,
-      // separate document store, so the doc this pipeline just finished would otherwise never
-      // appear here to select. Inject it directly instead of switching this page's whole list
-      // source (a bigger change than this fix needs).
-      const sectionCount = extracted.data?.sectionCount ?? null;
-      const readyDoc: StoredDocumentDto = {
-        id,
-        title: file.name,
-        category: 'Compliance',
-        pages: 0,
-        uploaded: new Date().toISOString(),
-        version: 'v1',
-        status: 'ready',
-        filter: 'aml',
-        fileType: file.name.split('.').pop()?.toUpperCase() ?? '',
-        docKind: 'document',
-        storagePath: '',
-        history: [],
-        originalFileName: file.name,
-        sizeBytes: file.size,
-        parseStatus: 'parsed',
-        sectionExtractStatus: 'extracted',
-        sectionCount,
-      };
-      this.complianceDocs = [readyDoc, ...this.complianceDocs.filter((d) => d.id !== id)];
-      this.selectedComplianceIds.add(id);
-      await this.syncLocalPipelineReadiness();
-
-      this.complianceUploadPipelineV2 = { name: file.name, stage: 'done' };
-      this.toast.show(`Parsed and extracted "${file.name}"`, 'success', 3500);
-      setTimeout(() => {
-        if (this.complianceUploadPipelineV2?.stage === 'done') this.complianceUploadPipelineV2 = null;
-      }, 2500);
+      await this.finishComplianceUpload(file, id, extracted.data?.sectionCount ?? null);
     } catch {
       this.complianceUploadPipelineV2 = { name: file.name, stage: 'failed', message: 'Upload failed' };
       this.toast.show('Internal document upload failed.', 'error', 4000);
     } finally {
       this.uploadingCompliance = false;
     }
+  }
+
+  /** Uploaded internal document is ready: add it to the list and select it. */
+  private async finishComplianceUpload(file: File, id: string, sectionCount: number | null): Promise<void> {
+    // The dedicated Internal Documents page (this doc's real source of truth from here on)
+    // reads from the ND catalog; this page's own compliance list still reads from the older,
+    // separate document store, so the doc this pipeline just finished would otherwise never
+    // appear here to select. Inject it directly instead of switching this page's whole list
+    // source (a bigger change than this fix needs).
+    const readyDoc: StoredDocumentDto = {
+      id,
+      title: file.name,
+      category: 'Compliance',
+      pages: 0,
+      uploaded: new Date().toISOString(),
+      version: 'v1',
+      status: 'ready',
+      filter: 'aml',
+      fileType: file.name.split('.').pop()?.toUpperCase() ?? '',
+      docKind: 'document',
+      storagePath: '',
+      history: [],
+      originalFileName: file.name,
+      sizeBytes: file.size,
+      parseStatus: 'parsed',
+      sectionExtractStatus: 'extracted',
+      sectionCount,
+    };
+    this.complianceDocs = [readyDoc, ...this.complianceDocs.filter((d) => d.id !== id)];
+    this.selectedComplianceIds.add(id);
+    await this.syncLocalPipelineReadiness();
+
+    this.complianceUploadPipelineV2 = { name: file.name, stage: 'done' };
+    this.toast.show(`Parsed and extracted "${file.name}"`, 'success', 3500);
+    setTimeout(() => {
+      if (this.complianceUploadPipelineV2?.stage === 'done') this.complianceUploadPipelineV2 = null;
+    }, 2500);
   }
 }

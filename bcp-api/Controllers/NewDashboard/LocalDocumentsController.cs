@@ -6,6 +6,7 @@ using Reguliq.Api.Data.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
 using Reguliq.Api.Services;
 using Reguliq.Api.Services.LocalDocs;
+using Reguliq.Api.Services.NewDashboard;
 using Reguliq.Api.Services.Storage;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -193,6 +194,42 @@ public class LocalDocumentsController(
         await SyncGapEvidenceStoredDocumentParseStatusAsync(id, "parsed", null, CancellationToken.None);
 
         return Ok(new { success = true, data = ToDto(id, fileName, row) });
+    }
+
+    /// <summary>
+    /// Upload-and-forget for documents uploaded on New analysis: parse → extract (→ index, internal documents
+    /// only) runs on the server through the same pipeline as gap-evidence uploads, so it finishes even if the
+    /// page is closed. Returns at once; poll GET status for progress. Steps already done are skipped.
+    /// </summary>
+    [HttpPost("{id:guid}/prepare")]
+    public async Task<IActionResult> Prepare(
+        string engine,
+        Guid id,
+        [FromServices] IServiceScopeFactory scopeFactory,
+        CancellationToken ct)
+    {
+        var (_, _, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        if (!OcrEngineNames.IsAzureDocIntelligence(engine))
+            return BadRequest(new { success = false, message = "Automatic preparation runs on the Azure engine only." });
+
+        var doc = await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (doc == null) return NotFound(new { success = false, message = "Document not found." });
+        if (string.IsNullOrWhiteSpace(doc.StoragePath))
+            return BadRequest(new { success = false, message = "Document has no stored file." });
+
+        var fileName = doc.OriginalFileName ?? doc.Title ?? Path.GetFileName(doc.StoragePath) ?? "document";
+        if (!SupportedDocumentTypes.IsSupported(fileName))
+            return BadRequest(new
+            {
+                success = false,
+                message = $"'{Path.GetExtension(fileName)}' is not supported. Allowed: {SupportedDocumentTypes.DescribeAllowed()}.",
+            });
+
+        NdGapEvidencePrepareService.StartInBackground(
+            scopeFactory, [id], AnalysisWorkflowEngine.RegulPipelineHybrid, logger);
+        return Ok(new { success = true });
     }
 
     /// <summary>

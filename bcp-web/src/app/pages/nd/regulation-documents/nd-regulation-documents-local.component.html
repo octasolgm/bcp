@@ -305,12 +305,54 @@
                 <td class="muted col-actor" [title]="actorLabel(d.uploadedByName)">{{ actorLabel(d.uploadedByName) }}</td>
                 <td class="muted col-actor" [title]="isManualDoc(d) ? '—' : actorLabel(d.extractedByName)">{{ isManualDoc(d) ? '—' : actorLabel(d.extractedByName) }}</td>
                 <td class="col-status">
-                  @if (showsParsedPendingExtractChips(d)) {
+                  @if (cleanView && !isManualDoc(d) && !isParsingDoc(d) && !isExtractingDoc(d)) {
+                    <div class="nd-status-simple">
+                      @if (analysisReadyState(d) !== 'not_ready') {
+                        <span class="nd-status-ok"><span aria-hidden="true">✓</span> {{ analysisReadyLabel(d) }}</span>
+                      } @else if (isParsedDoc(d) || isPausedDoc(d)) {
+                        <span class="nd-status-ok"><span aria-hidden="true">✓</span> Parsed</span>
+                        @if (showRowExtractButton(d)) {
+                          <button
+                            type="button"
+                            class="nd-status-link"
+                            [disabled]="!!extractDisabledReason(d)"
+                            (click)="handleExtract(d, $event)"
+                          >
+                            Extract now
+                          </button>
+                        }
+                      } @else if ((d.extractionStatus ?? '').toLowerCase() === 'failed') {
+                        <span class="nd-status-bad">Failed</span>
+                        @if (showRowParseButton(d)) {
+                          <button
+                            type="button"
+                            class="nd-status-link"
+                            [disabled]="!!parseDisabledReason(d)"
+                            (click)="handleParse(d, $event)"
+                          >
+                            Parse again
+                          </button>
+                        }
+                      } @else {
+                        <span class="nd-status-muted">Not parsed</span>
+                        @if (showRowParseButton(d)) {
+                          <button
+                            type="button"
+                            class="nd-status-link"
+                            [disabled]="!!parseDisabledReason(d)"
+                            (click)="handleParse(d, $event)"
+                          >
+                            Parse now
+                          </button>
+                        }
+                      }
+                    </div>
+                  } @else if (showsParsedPendingExtractChips(d)) {
                     <div class="nd-status-chip-stack">
                       <span class="severity-badge doc-ready-green">Parsed</span>
                       <span class="severity-badge doc-ready-red">Pending extract</span>
                     </div>
-                  } @else {
+                  } @else if (!cleanView || isManualDoc(d)) {
                     <span class="severity-badge" [ngClass]="analysisReadyClass(d)">{{ analysisReadyLabel(d) }}</span>
                   }
                   @if (isParsingDoc(d) || isExtractingDoc(d)) {
@@ -340,9 +382,9 @@
                       [disabled]="!!viewDisabledReason(d)"
                       (click)="viewPoints(d, $event)"
                     >
-                      View structural
+                      {{ cleanView ? 'View' : 'View structural' }}
                     </button>
-                    @if (showRowParsedTextButton(d)) {
+                    @if (showRowParsedTextButton(d) && !cleanView) {
                       <button
                         type="button"
                         class="row-action-btn compact"
@@ -352,7 +394,7 @@
                         View parsed
                       </button>
                     }
-                    @if (showSemanticExtract) {
+                    @if (showSemanticExtract && !cleanView) {
                       <button
                         type="button"
                         class="row-action-btn compact"
@@ -405,7 +447,7 @@
                       >
                         {{ extractButtonLabel(d) }}
                       </button>
-                      @if (showSemanticExtract) {
+                      @if (showSemanticExtract && !cleanView) {
                         <button
                           type="button"
                           class="row-action-btn compact"
@@ -417,7 +459,7 @@
                         </button>
                       }
                     }
-                    @if (showRowRepairButton(d)) {
+                    @if (showRowRepairButton(d) && !cleanView) {
                       <button
                         type="button"
                         class="row-action-btn compact"
@@ -428,9 +470,9 @@
                         {{ repairingPointsId === d.id ? 'Repairing…' : 'Repair' }}
                       </button>
                     }
-                    @if (showRowJsonButton(d) || !isManualDoc(d)) {
+                    @if ((showRowJsonButton(d) && !cleanView) || !isManualDoc(d)) {
                       <div class="row-export-actions">
-                        @if (showRowJsonButton(d)) {
+                        @if (showRowJsonButton(d) && !cleanView) {
                           <button
                             type="button"
                             class="row-action-btn icon-only export-btn"
@@ -590,7 +632,7 @@
                 {{ parsingId === selectedDoc.id || isParsingDoc(selectedDoc) ? 'Parsing…' : 'Parse' }}
               </button>
             }
-            @if (showRowRepairButton(selectedDoc)) {
+            @if (showRowRepairButton(selectedDoc) && !cleanView) {
               <button
                 type="button"
                 class="btn-secondary btn-sm"
@@ -601,7 +643,7 @@
                 {{ repairingPointsId === selectedDoc.id ? 'Repairing…' : 'Repair' }}
               </button>
             }
-            @if ((hasExtractedPoints(selectedDoc) || (selectedDoc.pointCount ?? 0) > 0) && !auth.isDemoViewer()) {
+            @if ((hasExtractedPoints(selectedDoc) || (selectedDoc.pointCount ?? 0) > 0) && !auth.isDemoViewer() && !cleanView) {
               <button
                 type="button"
                 class="btn-secondary btn-sm"
@@ -621,7 +663,7 @@
               >
                 {{ extractingId === selectedDoc.id || isExtractingDoc(selectedDoc) ? 'Extracting…' : 'Extract' }}
               </button>
-              @if (showSemanticExtract) {
+              @if (showSemanticExtract && !cleanView) {
                 <button
                   type="button"
                   class="btn-secondary btn-sm"
@@ -634,13 +676,13 @@
               }
             }
           }
-          @if (selectedDoc && parsedTextFor(selectedDoc)) {
+          @if (selectedDoc && parsedTextFor(selectedDoc) && !cleanView) {
             <button type="button" class="btn-secondary btn-sm" (click)="toggleParsedText()">
               {{ showParsedText ? 'Hide parsed' : 'Parsed text' }}
             </button>
           }
           @if (selectedDoc && !auth.isDemoViewer()) {
-            @if (hasExtractedPoints(selectedDoc) || isManualDoc(selectedDoc)) {
+            @if ((hasExtractedPoints(selectedDoc) || isManualDoc(selectedDoc)) && !cleanView) {
               <button
                 type="button"
                 class="btn-secondary btn-sm"
@@ -679,7 +721,7 @@
         </div>
       </div>
       <ng-template #coverageNote>
-        @if (selectedDoc && structuralCoveragePct(selectedDoc); as covPct) {
+        @if (selectedDoc && !cleanView && structuralCoveragePct(selectedDoc); as covPct) {
           <p
             class="structural-coverage-note"
             [class.structural-coverage-note-warn]="structuralCoverageLow(selectedDoc)"
@@ -725,6 +767,7 @@
             [reportedPointCount]="docListPointCount(selectedDoc)"
             [highlightPointNumber]="highlightPointNumber"
             [canOpenSource]="!isManualDoc(selectedDoc!)"
+            [simpleSummary]="cleanView"
             (openSourcePage)="openRegulationSourcePage(selectedDoc!, $event)"
           >
             <div panelIntro><ng-container [ngTemplateOutlet]="coverageNote" /></div>

@@ -145,7 +145,11 @@ public sealed class NdGapEvidencePrepareService(
             await db.SaveChangesAsync(ct);
         }
 
-        if (row.IndexStatus == "indexed" && row.ExtractStatus == "extracted" && row.Status == "parsed")
+        // Regulation documents are the query side of the hybrid pipeline and are never indexed (same rule as
+        // LocalDocumentsController.Extract), so they are done once parsed and extracted.
+        var isRegulationDocument = await db.NdRegulationDocuments.AnyAsync(d => d.StoredDocumentId == storedDocumentId, ct);
+        var extracted = row.ExtractStatus == "extracted" && row.Status == "parsed";
+        if (extracted && (isRegulationDocument || row.IndexStatus == "indexed"))
         {
             await SyncStoredDocumentParseStatusAsync(doc, "parsed", null, ct);
             return;
@@ -160,10 +164,10 @@ public sealed class NdGapEvidencePrepareService(
         if (row.ExtractStatus != "extracted" || row.SectionCount is null or 0)
         {
             if (onStep != null) await onStep($"Extracting \"{fileName}\"");
-            await ExtractLocalRowAsync(doc, row, fileName, storedDocumentId, ct);
+            await ExtractLocalRowAsync(doc, row, fileName, storedDocumentId, isRegulationDocument, ct);
         }
 
-        if (row.IndexStatus != "indexed")
+        if (!isRegulationDocument && row.IndexStatus != "indexed")
         {
             if (onStep != null) await onStep($"Indexing \"{fileName}\"");
             await WaitForIndexedAsync(row.Id, ct);
@@ -227,6 +231,7 @@ public sealed class NdGapEvidencePrepareService(
         NdLocalDocumentExtraction row,
         string fileName,
         Guid storedDocumentId,
+        bool isRegulationDocument,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(row.MarkdownText))
@@ -258,13 +263,17 @@ public sealed class NdGapEvidencePrepareService(
         row.WarningsJson = JsonSerializer.Serialize(result.Warnings);
         row.ExtractError = null;
         row.ExtractedAt = DateTimeOffset.UtcNow;
-        row.IndexStatus = "pending";
-        row.IndexError = null;
+        if (!isRegulationDocument)
+        {
+            row.IndexStatus = "pending";
+            row.IndexError = null;
+        }
         ApplyStructuralCoverage(row, result.Sections);
         row.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
 
-        indexingQueue.Enqueue(new IndexingJobMessage(row.Id));
+        if (!isRegulationDocument)
+            indexingQueue.Enqueue(new IndexingJobMessage(row.Id));
 
         try
         {

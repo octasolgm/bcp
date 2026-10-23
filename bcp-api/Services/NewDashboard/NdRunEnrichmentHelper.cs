@@ -545,6 +545,81 @@ public static class NdRunEnrichmentHelper
     }
 
     /// <summary>
+    /// Per-run counts behind one dashboard card (critical/medium/low gaps, compliant/partial/non-compliant
+    /// points, or all scored findings), from the same runs and the same tallies as
+    /// <see cref="LoadWorkspaceDashboardStatsAsync"/> — so the breakdown adds up to exactly the card's number.
+    /// Only runs with a count above zero are returned.
+    /// </summary>
+    public static async Task<Dictionary<Guid, int>> LoadWorkspaceMetricRunCountsAsync(
+        AppDbContext db,
+        string metric,
+        bool mineOnly,
+        Guid? profileId,
+        CancellationToken ct,
+        NdDemoIsolationContext? demoCtx = null)
+    {
+        const string deleted = "deleted";
+        var runsQ = db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != deleted);
+        if (demoCtx is { Enabled: true })
+            runsQ = NdDemoDataFilters.ApplyToAnalysisRuns(runsQ, demoCtx);
+        if (mineOnly && profileId.HasValue)
+            runsQ = runsQ.Where(r => r.CreatedBy == profileId.Value);
+        var runIds = await runsQ.Select(r => r.Id).ToListAsync(ct);
+
+        var result = new Dictionary<Guid, int>();
+        if (runIds.Count == 0) return result;
+
+        // Column filters are fixed strings chosen here, never request text.
+        string sqlFor(string placeholders) => metric switch
+        {
+            "critical" or "medium" or "low" => $"""
+                SELECT analysis_run_id AS "RunId", COUNT(*)::int AS "Count"
+                FROM analysis_gaps
+                WHERE analysis_run_id IN ({placeholders}) AND risk = '{(metric == "critical" ? "high" : metric)}'
+                GROUP BY analysis_run_id
+                """,
+            _ => $"""
+                SELECT analysis_run_id AS "RunId", COUNT(*)::int AS "Count"
+                FROM (
+                  SELECT
+                    p.analysis_run_id,
+                    CASE
+                      WHEN p.final_status IN ('compliant','partial_compliant','non_compliant') THEN p.final_status
+                      WHEN p.landing_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.landing_ai_status
+                      WHEN p.google_ai_status IN ('compliant','partial_compliant','non_compliant') THEN p.google_ai_status
+                      ELSE NULL
+                    END AS effective_status
+                  FROM analysis_points p
+                  WHERE p.analysis_run_id IN ({placeholders})
+                ) t
+                WHERE {metric switch
+                {
+                    "compliant" => "effective_status = 'compliant'",
+                    "partial" => "effective_status = 'partial_compliant'",
+                    "non_compliant" => "effective_status = 'non_compliant'",
+                    _ => "effective_status IS NOT NULL",
+                }}
+                GROUP BY analysis_run_id
+                """,
+        };
+
+        // Chunked IN lists, same reason as ComputeComplianceTotalsForRunsAsync below.
+        foreach (var chunk in runIds.Chunk(50))
+        {
+            var batch = chunk.ToArray();
+            var placeholders = string.Join(", ", batch.Select((_, i) => $"{{{i}}}"));
+            var rows = await db.Database
+                .SqlQueryRaw<RunMetricCount>(sqlFor(placeholders), batch.Cast<object>().ToArray())
+                .ToListAsync(ct);
+            foreach (var row in rows)
+                if (row.Count > 0) result[row.RunId] = row.Count;
+        }
+        return result;
+    }
+
+    public sealed record RunMetricCount(Guid RunId, int Count);
+
+    /// <summary>
     /// Same tally as the production SQL above, restricted to a run-id list. Aggregating in
     /// SQL matters here: demo workspaces would otherwise stream every analysis point over
     /// the wire on each dashboard load.

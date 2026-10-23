@@ -1775,6 +1775,12 @@ export class NdApiService {
    * leaves the server). Does not detect clauses/points — call localExtractById for that afterward.
    * See docs/discussion/REGUL-PIPELINE-BUILD-PLAN.md.
    */
+  /** Starts parse → extract (→ index for internal documents) on the server for a freshly uploaded document,
+   * same pipeline as gap-evidence uploads; returns at once. Follow progress with localExtractStatusBatch. */
+  localPrepareById(docId: string, engine: NdOcrEngine = 'azure-di') {
+    return this.request<unknown>('POST', `/nd/local-documents/${engine}/${docId}/prepare`);
+  }
+
   localParseById(docId: string, engine: NdOcrEngine = 'tesseract') {
     // A scanned, multi-page PDF runs every page through local OCR (no cloud service, so no shortcut) —
     // that can genuinely take several minutes longer than a normal API call. Docling's GLM-OCR mode is
@@ -1939,6 +1945,19 @@ export class NdApiService {
     return this.request<NdWorkspaceNavCounts>(
       'GET',
       '/nd/workspace/nav-counts',
+      undefined,
+      true,
+      ANALYSIS_RUNS_LIST_TIMEOUT_MS,
+    );
+  }
+
+  /** Per-analysis counts behind one overview card, from the same tallies as getDashboardStats. */
+  getDashboardMetricRunCounts(metric: string, params?: { mineOnly?: boolean }) {
+    const q = new URLSearchParams({ metric });
+    if (params?.mineOnly) q.set('mineOnly', 'true');
+    return this.request<{ runs: unknown[]; counts: Array<{ runId: string; count: number }> }>(
+      'GET',
+      `/nd/workspace/dashboard-metric-runs?${q}`,
       undefined,
       true,
       ANALYSIS_RUNS_LIST_TIMEOUT_MS,

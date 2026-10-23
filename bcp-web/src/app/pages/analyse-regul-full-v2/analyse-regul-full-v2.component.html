@@ -148,6 +148,9 @@
                           <span class="fsub">
                             <span class="fmeta ready-label">{{ regDocReadyLabel(doc) }}</span>
                             <span class="fmeta muted">{{ usedInAnalysesMeta(doc) }}</span>
+                            @if (uploadedDateLabel(doc); as uploadedOn) {
+                              <span class="fmeta muted">{{ uploadedOn }}</span>
+                            }
                           </span>
                         </span>
                       </button>
@@ -679,6 +682,9 @@
                       <span class="fsub">
                         <span class="fmeta ready-label">{{ complianceDocReadyLabel(doc) }}</span>
                         <span class="fmeta muted">{{ usedInAnalysesMeta(doc) }}</span>
+                        @if (uploadedDateLabel(doc); as uploadedOn) {
+                          <span class="fmeta muted">{{ uploadedOn }}</span>
+                        }
                         @if (isNdShell) {
                           <span class="fmeta parse-status" [class.parsed]="complianceParseLabel(doc.id) === 'Parsed'">{{ complianceParseLabel(doc.id) }}</span>
                         }

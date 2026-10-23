@@ -784,6 +784,11 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   private itemHasGapRisk(item: GapItemData, tier: ActionPlanPriority): boolean {
     const point = this.analysisPointForGap(item);
     if (!point?.id) return false;
+    // The overview counts the saved gap rows, so a clause with a saved gap of this risk always matches, even
+    // when its gap text no longer splits into that many gaps.
+    for (const state of this.gapStates.values()) {
+      if (state.analysisPointId === point.id && state.risk === tier) return true;
+    }
     return capGapsForAnalysisPoint(point, this.isNdRegulWorkflow).some((gap) => {
       const state = this.gapStates.get(gapStateKey(point.id!, gap.index));
       return (state?.risk ?? normalizeGapRisk(gap.priority)) === tier;
@@ -807,7 +812,9 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
 
   private refreshFilteredItems(): void {
     let list = this.items;
-    if (this.activeFilter === 'with_gaps') {
+    // Opened from an overview risk card: the card counts every gap of that risk, resolved ones included, so the
+    // risk filter alone decides; "with gaps" would drop clauses whose gaps are all resolved.
+    if (this.activeFilter === 'with_gaps' && !this.riskTierFilter) {
       list = list.filter(
         (i) =>
           (i.gapCount ?? 0) > 0 ||
@@ -1007,6 +1014,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     const res = await this.ndApi.getRunGaps(this.ndRunId);
     if (!res.success || !res.data) return;
     this.gapStates = indexGapStates(res.data);
+    // The risk-card filter reads the saved gaps, which can arrive after the clause list.
+    if (this.riskTierFilter) this.refreshFilteredItems();
     this.cdr.markForCheck();
   }
 
@@ -3140,6 +3149,19 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.editingPointId = null;
     this.closeHistory();
     this.cdr.markForCheck();
+    this.scrollRailPointToTop(item.id);
+  }
+
+  /** The point just picked moves to the top of the left Points list, so the next ones follow right below it. */
+  private scrollRailPointToTop(itemId: string): void {
+    setTimeout(() => {
+      const rail = document.querySelector<HTMLElement>('.list-rail');
+      const row = rail?.querySelector<HTMLElement>(`[data-gap-item-id="${CSS.escape(itemId)}"]`);
+      if (!rail || !row) return;
+      const top = row.getBoundingClientRect().top - rail.getBoundingClientRect().top + rail.scrollTop;
+      const padding = parseFloat(getComputedStyle(rail).paddingTop) || 0;
+      rail.scrollTo({ top: Math.max(0, top - padding), behavior: 'smooth' });
+    });
   }
 
   get selectedGapItem(): GapItemData | null {

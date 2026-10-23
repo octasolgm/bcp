@@ -291,4 +291,54 @@ public class WorkspaceController(
             },
         });
     }
+
+    private static readonly HashSet<string> DashboardMetrics =
+        ["critical", "medium", "low", "findings", "compliant", "partial", "non_compliant"];
+
+    /// <summary>Per-analysis breakdown behind one overview card: same runs and tallies as dashboard-stats, so the
+    /// counts add up to the number on the card.</summary>
+    [HttpGet("dashboard-metric-runs")]
+    public async Task<IActionResult> DashboardMetricRuns(
+        [FromQuery] string metric,
+        [FromQuery] bool mineOnly = false,
+        CancellationToken ct = default)
+    {
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+        if (string.IsNullOrWhiteSpace(metric) || !DashboardMetrics.Contains(metric))
+            return BadRequest(new { success = false, message = "Unknown dashboard metric." });
+
+        var role = profile!.Role;
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var effectiveMineOnly = (mineOnly || role == "maker") && !demoCtx.ViewerIsDemo;
+        var cacheScope = $"dashboard-metric-runs:{metric}:{profile.Id}:{role}:{effectiveMineOnly}:demo={demoCtx.ViewerIsDemo}";
+
+        var counts = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>
+            await NdRunEnrichmentHelper.LoadWorkspaceMetricRunCountsAsync(
+                db, metric, effectiveMineOnly, profile.Id, innerCt, demoCtx), ct);
+
+        // Every counted run, not just the 20 most recent the runs list returns, so nothing on the card is missing.
+        var countedIds = counts.Keys.ToList();
+        var runs = countedIds.Count == 0
+            ? []
+            : await db.NdAnalysisRuns.AsNoTracking()
+                .Where(r => countedIds.Contains(r.Id))
+                .OrderByDescending(r => r.CreatedAt)
+                .SelectListColumns()
+                .ToListAsync(ct);
+        var demoProfileIds = demoCtx.Enabled ? await demoDirectory.GetDemoProfileIdsAsync(ct) : null;
+        var summaries = await NdRunEnrichmentHelper.MapSummariesLightAsync(
+            db, runs, ct, skipGapStats: true, demoProfileIds);
+
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                runs = summaries,
+                counts = counts.Select(kv => new { runId = kv.Key, count = kv.Value }).ToList(),
+            },
+        });
+    }
 }
