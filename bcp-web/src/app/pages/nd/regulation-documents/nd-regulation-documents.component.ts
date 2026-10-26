@@ -1275,6 +1275,29 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.hidingId = null;
   }
 
+  /** Platform super admin, in the deleted list: remove the regulation for good (workspace admins only soft delete). */
+  get canDeletePermanently(): boolean {
+    return this.showDeleted && this.auth.isPlatformAdmin() && !this.auth.isDemoViewer();
+  }
+
+  async handleDeletePermanently(doc: RegulationDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (!confirm(`Delete "${doc.name}" permanently? Its file, points and parsed text are removed and cannot be restored.`)) return;
+    this.hidingId = doc.id;
+    this.error = '';
+    this.message = '';
+    const res = await this.api.deleteRegulationPermanently(doc.id);
+    this.hidingId = null;
+    if (!res.success) {
+      this.error = res.message ?? 'Failed to delete the regulation';
+      return;
+    }
+    if (this.selectedDoc?.id === doc.id) this.closePointsPanel();
+    this.message = res.message ?? 'Regulation deleted permanently';
+    this.workspaceNav.bumpNavBadges({ regulationDocumentsDeleted: -1 });
+    await this.loadDocs(true);
+  }
+
   actorLabel(name?: string | null): string {
     const trimmed = (name ?? '').trim();
     return trimmed || '—';

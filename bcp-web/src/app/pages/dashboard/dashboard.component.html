@@ -66,14 +66,14 @@
     }
   </button>
   @if (inNdShell) {
-    <button type="button" class="stat-card actions" disabled>
+    <button type="button" class="stat-card actions" (click)="openActions('all')">
       <span class="stat-label">Actions</span>
       <strong class="stat-value">{{ totalActionsCount < 0 ? '…' : totalActionsCount }}</strong>
       <span class="stat-hint">Corrective actions across all gaps</span>
       @if (!ndStatsLoading) {
         <span class="stat-breakdown">
-          <span class="chip resolved">{{ totalActionsResolved }} resolved</span>
-          <span class="chip pending">{{ totalActionsPending }} pending</span>
+          <span class="chip resolved chip-link" role="button" tabindex="0" (click)="openActions('resolved', $event)" (keydown.enter)="openActions('resolved', $event)">{{ totalActionsResolved }} resolved</span>
+          <span class="chip pending chip-link" role="button" tabindex="0" (click)="openActions('pending', $event)" (keydown.enter)="openActions('pending', $event)">{{ totalActionsPending }} pending</span>
         </span>
       } @else {
         <span class="stat-breakdown stat-breakdown--spacer" aria-hidden="true"></span>

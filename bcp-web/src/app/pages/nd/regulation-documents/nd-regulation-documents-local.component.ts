@@ -46,8 +46,15 @@ import {
   sortIndicator,
   type SortDir,
 } from '../../../../lib/nd/list-utils';
-import type { AnalysisRunSummary, Department, RegulationDocument, RegulationPoint } from '../../../../lib/nd/types';
+import type {
+  AnalysisRunSummary,
+  Department,
+  RegulationDocument,
+  RegulationPoint,
+  RulebookCategory,
+} from '../../../../lib/nd/types';
 import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.component';
+import { NdTreeSelectComponent, type NdTreeSelectOption } from '../../../components/nd/nd-tree-select.component';
 import { NdManualRegulationPointsPanelComponent } from './nd-manual-regulation-points-panel.component';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdCloudImportDialogComponent } from '../../../components/nd/nd-cloud-import-dialog.component';
@@ -118,7 +125,8 @@ type RegulationDocAnalysisRun = {
 @Component({
   selector: 'app-nd-regulation-documents-local',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent, NdPageAlertComponent, NdCloudImportDialogComponent],
+  imports: [
+    NdTreeSelectComponent,CommonModule, FormsModule, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent, NdPageAlertComponent, NdCloudImportDialogComponent],
   templateUrl: './nd-regulation-documents-local.component.html',
   styleUrls: [
     './nd-regulation-documents.component.scss',
@@ -176,6 +184,26 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   docs: RegulationDocument[] = [];
   departments: Department[] = [];
   deptFilter = '';
+
+  /** Live page: documents are filed under rulebook categories (any level, several each) instead of a department. */
+  rulebookCategories: RulebookCategory[] = [];
+  /** Categories in tree order with their level, for the filter and the picker. */
+  rulebookOptions: Array<{ category: RulebookCategory; level: number; path: string }> = [];
+  private categoryLinks: Record<string, string[]> = {};
+  rulebookFilter = '';
+  /** The document whose categories are being picked, with the working selection. */
+  /** Live page: plain list, or documents grouped under the collapsible rulebook tree. */
+  docView: 'list' | 'rulebook' = this.readDocView();
+  rulebookViewExpanded = new Set<string>();
+  pickerDoc: RegulationDocument | null = null;
+  pickerSelected = new Set<string>();
+  pickerSearch = '';
+  /** Picker tabs: the whole tree, or only what is ticked. */
+  pickerTab: 'all' | 'selected' = 'all';
+  /** Groups opened in the picker tree (it starts collapsed, with the groups of ticked categories open). */
+  pickerExpanded = new Set<string>();
+  savingCategories = false;
+  deletingPermanentlyId: string | null = null;
   statusFilter = '';
   searchQuery = '';
   sortColumn: 'name' | 'department' | 'points' | 'pages' | 'analyses' | 'created' | 'status' = 'created';
@@ -230,6 +258,9 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     this.restorePanelSplit();
+    // Opened from a document link (e.g. Regulatory Authorities): start filtered to that document.
+    const q = this.route.snapshot.queryParamMap.get('q');
+    if (q) this.searchQuery = q;
     void this.auth.refreshProfile();
     if (this.route.snapshot.queryParamMap.get('deleted') === '1') {
       await this.router.navigate(['/nd/regulation-documents/deleted'], { replaceUrl: true });
@@ -663,6 +694,282 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   async loadDepartments(): Promise<void> {
     const res = await this.api.getDepartments();
     if (res.success && res.data) this.departments = res.data as Department[];
+    // Not gated on cleanView: that reads the profile, which may still be loading here. Demo pages never show it.
+    if (this.engine === 'azure-di') await this.loadRulebook();
+  }
+
+  // ---- rulebook categories (live page) ---------------------------------------------------------------
+
+  async loadRulebook(): Promise<void> {
+    const [cats, links] = await Promise.all([
+      this.api.getRulebookCategories(),
+      this.api.getRegulationCategoryLinks(),
+    ]);
+    if (cats.success && cats.data) {
+      this.rulebookCategories = cats.data;
+      this.rulebookOptions = this.buildRulebookOptions(cats.data);
+    }
+    if (links.success && links.data) this.categoryLinks = links.data;
+  }
+
+  private buildRulebookOptions(all: RulebookCategory[]) {
+    const out: Array<{ category: RulebookCategory; level: number; path: string }> = [];
+    const walk = (parentId: string | null, level: number, prefix: string) => {
+      all
+        .filter((c) => (c.parentId ?? null) === parentId)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+        .forEach((c) => {
+          const path = prefix ? `${prefix} › ${c.name}` : c.name;
+          out.push({ category: c, level, path });
+          if (level < 4) walk(c.id, level + 1, path);
+        });
+    };
+    walk(null, 1, '');
+    return out;
+  }
+
+  private readDocView(): 'list' | 'rulebook' {
+    try {
+      return localStorage.getItem('nd-reg-doc-view') === 'rulebook' ? 'rulebook' : 'list';
+    } catch {
+      return 'list';
+    }
+  }
+
+  setDocView(view: 'list' | 'rulebook'): void {
+    this.docView = view;
+    try {
+      localStorage.setItem('nd-reg-doc-view', view);
+    } catch {
+      /* per-viewer convenience only */
+    }
+  }
+
+  /**
+   * Rows of the "By rulebook" view, in tree order: a category row (with how many listed documents sit in it or
+   * below it) and, when it is open, the documents filed directly under it, then its sub-categories. Categories
+   * with no documents are left out. Documents with no category come last under "Not categorised".
+   */
+  get rulebookViewRows(): Array<
+    | { kind: 'cat'; id: string; name: string; path: string; level: number; count: number }
+    | { kind: 'doc'; doc: RegulationDocument; level: number; key: string }
+  > {
+    const docs = this.countableVisibleDocs.filter((d) => !this.isManualDoc(d));
+    const direct = new Map<string, RegulationDocument[]>();
+    const uncategorised: RegulationDocument[] = [];
+    for (const d of docs) {
+      const ids = this.categoryLinks[d.id] ?? [];
+      if (!ids.length) uncategorised.push(d);
+      for (const id of ids) direct.set(id, [...(direct.get(id) ?? []), d]);
+    }
+    // Distinct documents in each category's subtree (a document filed twice in one branch counts once).
+    const subtree = new Map<string, Set<string>>();
+    for (let i = this.rulebookOptions.length - 1; i >= 0; i--) {
+      const o = this.rulebookOptions[i];
+      const set = new Set((direct.get(o.category.id) ?? []).map((d) => d.id));
+      for (let j = i + 1; j < this.rulebookOptions.length && this.rulebookOptions[j].level > o.level; j++) {
+        if (this.rulebookOptions[j].level === o.level + 1) {
+          for (const id of subtree.get(this.rulebookOptions[j].category.id) ?? []) set.add(id);
+        }
+      }
+      subtree.set(o.category.id, set);
+    }
+
+    const rows: Array<
+      | { kind: 'cat'; id: string; name: string; path: string; level: number; count: number }
+      | { kind: 'doc'; doc: RegulationDocument; level: number; key: string }
+    > = [];
+    let hiddenBelow = 0;
+    for (const o of this.rulebookOptions) {
+      if (hiddenBelow && o.level > hiddenBelow) continue;
+      hiddenBelow = 0;
+      const count = subtree.get(o.category.id)?.size ?? 0;
+      if (!count) {
+        hiddenBelow = o.level;
+        continue;
+      }
+      rows.push({ kind: 'cat', id: o.category.id, name: o.category.name, path: o.path, level: o.level, count });
+      if (!this.rulebookViewExpanded.has(o.category.id)) {
+        hiddenBelow = o.level;
+        continue;
+      }
+      for (const d of direct.get(o.category.id) ?? []) {
+        rows.push({ kind: 'doc', doc: d, level: o.level + 1, key: `${o.category.id}:${d.id}` });
+      }
+    }
+    if (uncategorised.length) {
+      rows.push({ kind: 'cat', id: '__none', name: 'Not categorised', path: 'Not categorised', level: 1, count: uncategorised.length });
+      if (this.rulebookViewExpanded.has('__none')) {
+        for (const d of uncategorised) rows.push({ kind: 'doc', doc: d, level: 2, key: `none:${d.id}` });
+      }
+    }
+    return rows;
+  }
+
+  toggleRulebookViewGroup(id: string): void {
+    if (this.rulebookViewExpanded.has(id)) this.rulebookViewExpanded.delete(id);
+    else this.rulebookViewExpanded.add(id);
+  }
+
+  expandRulebookView(): void {
+    this.rulebookViewExpanded = new Set([...this.rulebookOptions.map((o) => o.category.id), '__none']);
+  }
+
+  collapseRulebookView(): void {
+    this.rulebookViewExpanded = new Set();
+  }
+
+  /** Options for the rulebook filter dropdown (tree order). */
+  get rulebookTreeOptions(): NdTreeSelectOption[] {
+    return this.rulebookOptions.map((o) => ({
+      id: o.category.id,
+      name: o.category.name,
+      parentId: o.category.parentId,
+      level: o.level,
+      path: o.path,
+    }));
+  }
+
+  docCategories(doc: RegulationDocument): Array<{ name: string; path: string }> {
+    const ids = this.categoryLinks[doc.id] ?? [];
+    return this.rulebookOptions
+      .filter((o) => ids.includes(o.category.id))
+      .map((o) => ({ name: o.category.name, path: o.path }));
+  }
+
+  /** The filter matches a document filed under the chosen category or anything below it. */
+  private docMatchesRulebook(doc: RegulationDocument): boolean {
+    if (!this.rulebookFilter) return true;
+    const idx = this.rulebookOptions.findIndex((o) => o.category.id === this.rulebookFilter);
+    if (idx < 0) return true;
+    const level = this.rulebookOptions[idx].level;
+    const scope = new Set([this.rulebookFilter]);
+    for (let i = idx + 1; i < this.rulebookOptions.length && this.rulebookOptions[i].level > level; i++) {
+      scope.add(this.rulebookOptions[i].category.id);
+    }
+    return (this.categoryLinks[doc.id] ?? []).some((id) => scope.has(id));
+  }
+
+  openCategoryPicker(doc: RegulationDocument, event?: Event): void {
+    event?.stopPropagation();
+    this.pickerDoc = doc;
+    this.pickerSelected = new Set(this.categoryLinks[doc.id] ?? []);
+    this.pickerSearch = '';
+    this.pickerTab = 'all';
+    this.pickerExpanded = new Set();
+    for (const id of this.pickerSelected) {
+      let parent = this.rulebookCategories.find((c) => c.id === id)?.parentId ?? null;
+      while (parent) {
+        this.pickerExpanded.add(parent);
+        parent = this.rulebookCategories.find((c) => c.id === parent)?.parentId ?? null;
+      }
+    }
+  }
+
+  pickerHasChildren(id: string): boolean {
+    return this.rulebookCategories.some((c) => c.parentId === id);
+  }
+
+  togglePickerGroup(id: string, event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (this.pickerExpanded.has(id)) this.pickerExpanded.delete(id);
+    else this.pickerExpanded.add(id);
+  }
+
+  pickerExpandAll(): void {
+    this.pickerExpanded = new Set(this.rulebookCategories.filter((c) => this.pickerHasChildren(c.id)).map((c) => c.id));
+  }
+
+  pickerCollapseAll(): void {
+    this.pickerExpanded = new Set();
+  }
+
+  /** Ticks every category in view, at every level (search results, or the whole tree). */
+  pickerSelectAll(): void {
+    const q = this.pickerSearch.trim().toLowerCase();
+    for (const o of this.rulebookOptions) {
+      if (!q || o.path.toLowerCase().includes(q)) this.pickerSelected.add(o.category.id);
+    }
+  }
+
+  get pickerRulebookCount(): number {
+    return this.rulebookOptions.filter((o) => o.level === 3 && this.pickerSelected.has(o.category.id)).length;
+  }
+
+  pickerClear(): void {
+    this.pickerSelected = new Set();
+  }
+
+  closeCategoryPicker(): void {
+    this.pickerDoc = null;
+  }
+
+  /** Esc closes the picker without saving. */
+  @HostListener('document:keydown.escape')
+  onPickerEscape(): void {
+    if (this.pickerDoc) this.closeCategoryPicker();
+  }
+
+  /** Search and the Selected tab show a flat list with full paths; otherwise the tree, following open groups. */
+  get pickerFlat(): boolean {
+    return !!this.pickerSearch.trim() || this.pickerTab === 'selected';
+  }
+
+  get pickerOptions() {
+    const q = this.pickerSearch.trim().toLowerCase();
+    let list = this.rulebookOptions;
+    if (this.pickerTab === 'selected') list = list.filter((o) => this.pickerSelected.has(o.category.id));
+    if (q) return list.filter((o) => o.path.toLowerCase().includes(q));
+    if (this.pickerFlat) return list;
+    const visible = new Set<string>();
+    return list.filter((o) => {
+      const parent = o.category.parentId ?? null;
+      const show = !parent || (visible.has(parent) && this.pickerExpanded.has(parent));
+      if (show) visible.add(o.category.id);
+      return show;
+    });
+  }
+
+  togglePickerCategory(id: string): void {
+    if (this.pickerSelected.has(id)) this.pickerSelected.delete(id);
+    else this.pickerSelected.add(id);
+  }
+
+  async saveCategoryPicker(): Promise<void> {
+    const doc = this.pickerDoc;
+    if (!doc || this.savingCategories) return;
+    this.savingCategories = true;
+    const ids = [...this.pickerSelected];
+    const res = await this.api.setRegulationCategories(doc.id, ids);
+    this.savingCategories = false;
+    if (!res.success) {
+      this.toast.show(res.message ?? 'Could not save the categories', 'error', 4000);
+      return;
+    }
+    this.categoryLinks = { ...this.categoryLinks, [doc.id]: ids };
+    this.pickerDoc = null;
+    this.toast.show('Rulebook categories saved', 'success', 2500);
+  }
+
+  // ---- permanent delete (platform super admin) ------------------------------------------------------
+
+  get canDeletePermanently(): boolean {
+    return this.showDeleted && this.auth.isPlatformAdmin() && !this.auth.isDemoViewer();
+  }
+
+  async handleDeletePermanently(doc: RegulationDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (!confirm(`Delete "${doc.name}" permanently? Its file, points and parsed text are removed and cannot be restored.`)) return;
+    this.deletingPermanentlyId = doc.id;
+    const res = await this.api.deleteRegulationPermanently(doc.id);
+    this.deletingPermanentlyId = null;
+    if (!res.success) {
+      this.toast.show(res.message ?? 'Could not delete the regulation', 'error', 5000);
+      return;
+    }
+    this.docs = this.docs.filter((d) => d.id !== doc.id);
+    this.toast.show('Regulation deleted permanently', 'success', 3000);
   }
 
   async loadDocs(silent = false, replace = false): Promise<void> {
@@ -937,6 +1244,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   get visibleDocs(): RegulationDocument[] {
     let list = this.docs.filter((doc) => {
       if (!matchesSearch(this.searchQuery, [doc.name, doc.departmentName])) return false;
+      if (this.cleanView && !this.docMatchesRulebook(doc)) return false;
       return true;
     });
 
@@ -945,7 +1253,9 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
         case 'name':
           return compareText(a.name, b.name, this.sortDir);
         case 'department':
-          return compareText(a.departmentName ?? '', b.departmentName ?? '', this.sortDir);
+          return this.cleanView
+            ? compareText(this.docCategories(a)[0]?.path ?? '', this.docCategories(b)[0]?.path ?? '', this.sortDir)
+            : compareText(a.departmentName ?? '', b.departmentName ?? '', this.sortDir);
         case 'points':
           return compareNumber(a.pointCount ?? 0, b.pointCount ?? 0, this.sortDir);
         case 'pages':
@@ -966,7 +1276,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   }
 
   get hasActiveFilters(): boolean {
-    return hasListFilters(this.searchQuery, '', this.deptFilter, this.statusFilter);
+    return hasListFilters(this.searchQuery, this.rulebookFilter, this.deptFilter, this.statusFilter);
   }
 
   toggleSort(column: typeof this.sortColumn): void {
@@ -982,6 +1292,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   clearFilters(): void {
     this.searchQuery = '';
     this.deptFilter = '';
+    this.rulebookFilter = '';
     this.statusFilter = '';
     void this.loadDocs();
   }

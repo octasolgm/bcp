@@ -12,6 +12,18 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "bcp-api/Bcp.Api.csproj", "--launch-profile", "http"],
       "port": 5100
+    },
+    {
+      "name": "jumppl-ai-service",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "C:/Users/Pc/Documents/GitHub/jumppl_ai_service/jumppl_ai/jumppl_ai.csproj", "--launch-profile", "jumppl_ai", "--", "--urls", "http://localhost:5220"],
+      "port": 5220
+    },
+    {
+      "name": "jumppl-main-portal",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d C:\\Users\\Pc\\Documents\\GitHub\\jumppl-workspace-new && npx nx serve main-portal"],
+      "port": 56658
     }
   ]
 }

@@ -409,6 +409,13 @@ public class ActionPlanInsightsController(
             .Select(p => new { p.Id, p.PointSnapshot })
             .ToDictionaryAsync(p => p.Id, p => p.PointSnapshot, ct);
 
+        // Same records as the overview Actions card: regulation clauses only, not the reverse-coverage "INT" rows
+        // (internal sections no regulation covers) that the older Regul pipeline stored as points.
+        plans = plans
+            .Where(p => !ClauseLabel(snapshots.GetValueOrDefault(p.AnalysisPointId)).No
+                .StartsWith(NdRegulReverseIntRows.IntClausePrefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
         var buckets = new Dictionary<string, MisOwnerBucket>();
 
         foreach (var plan in plans)

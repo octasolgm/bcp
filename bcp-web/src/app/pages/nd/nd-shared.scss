@@ -1899,6 +1899,14 @@ tr.internal-doc-group-label-row {
   flex-shrink: 0;
 }
 
+.row-action-spinner.nd-inline-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 0.35rem;
+  vertical-align: -2px;
+}
+
 .row-action-btn.is-loading {
   opacity: 0.9;
   cursor: wait;

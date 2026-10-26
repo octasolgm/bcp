@@ -1,6 +1,24 @@
 import type { ActionItemReviewEntry } from './action-item-review';
 import type { TempPointReviewComment } from './temp-point-review-comment';
 
+/** One node of a workspace's rulebook category tree (up to three levels; parentId null = top level). */
+export type RulebookCategory = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  description?: string | null;
+  sortOrder: number;
+  /** The rulebook's page on the source site (sample pack). */
+  sourceUrl?: string | null;
+  /** True when "Import rulebook documents" can download this rulebook's document. */
+  hasDocumentSource?: boolean;
+  /** Direct link to the rulebook's official PDF (opens in the browser; the file name identifies the rulebook). */
+  documentUrl?: string | null;
+  /** Regulation documents filed under this category. */
+  documentCount?: number;
+  createdAt?: string;
+};
+
 export type Department = {
   id: string;
   name: string;
@@ -9,6 +27,10 @@ export type Department = {
   documentCount?: number;
   libraryCount?: number;
   createdAt?: string;
+  /** Parent department (null = top level); departments nest up to three levels. */
+  parentId?: string | null;
+  /** Internal documents filed under this department. */
+  internalDocumentCount?: number;
 };
 
 export type DualVerifyLlmProviderOption = {

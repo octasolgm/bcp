@@ -31,7 +31,8 @@ public class RegulationDocumentsController(
     NdDemoUserDirectory demoDirectory,
     NdDemoInterceptionService demoInterception,
     DemoAnalysisSeedService demoSeed,
-    NdDashboardCacheService dashboardCache) : NdControllerBase
+    NdDashboardCacheService dashboardCache,
+    ILogger<RegulationDocumentsController> logger) : NdControllerBase
 {
     public record UpdateRegulationRequest(string? DepartmentId);
 
@@ -1115,6 +1116,104 @@ public class RegulationDocumentsController(
         await db.SaveChangesAsync(ct);
         dashboardCache.Invalidate();
         return Ok(new { success = true, message = "Regulation hidden from library (data kept in database)." });
+    }
+
+    public record SetCategoriesRequest(List<Guid>? CategoryIds);
+
+    /// <summary>Rulebook categories of every regulation document in the workspace: document id -> category ids.</summary>
+    [HttpGet("categories")]
+    public async Task<IActionResult> CategoryLinks(CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var links = await db.NdRegulationDocumentCategories.AsNoTracking()
+            .Select(l => new { l.RegulationDocumentId, l.CategoryId })
+            .ToListAsync(ct);
+        var data = links
+            .GroupBy(l => l.RegulationDocumentId)
+            .ToDictionary(g => g.Key.ToString(), g => g.Select(l => l.CategoryId).ToList());
+        return Ok(new { success = true, data });
+    }
+
+    /// <summary>Replaces the rulebook categories a regulation document is filed under (any level, several allowed).</summary>
+    [HttpPut("{id:guid}/categories")]
+    public async Task<IActionResult> SetCategories(Guid id, [FromBody] SetCategoriesRequest body, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        var doc = await db.NdRegulationDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (doc == null) return NotFound(new { success = false, message = "Regulation not found." });
+
+        var wanted = (body.CategoryIds ?? []).Distinct().ToList();
+        var known = await db.NdRulebookCategories.AsNoTracking()
+            .Where(c => wanted.Contains(c.Id))
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+        if (known.Count != wanted.Count)
+            return BadRequest(new { success = false, message = "One or more categories were not found." });
+
+        var current = await db.NdRegulationDocumentCategories.Where(l => l.RegulationDocumentId == id).ToListAsync(ct);
+        db.NdRegulationDocumentCategories.RemoveRange(current.Where(l => !wanted.Contains(l.CategoryId)));
+        foreach (var categoryId in wanted.Where(c => current.All(l => l.CategoryId != c)))
+            db.NdRegulationDocumentCategories.Add(new NdRegulationDocumentCategory { RegulationDocumentId = id, CategoryId = categoryId });
+        await db.SaveChangesAsync(ct);
+        dashboardCache.Invalidate();
+        return Ok(new { success = true, data = wanted });
+    }
+
+    /// <summary>
+    /// Platform super admin only: removes an already deleted regulation for good - its points, parsed text, category
+    /// links, database rows and the stored file. Refused while any analysis or points library still uses it, so no
+    /// report loses its source. Workspace admins and makers only ever soft delete (DELETE above).
+    /// </summary>
+    [HttpDelete("{id:guid}/permanent")]
+    public async Task<IActionResult> DeletePermanently(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        var ndDoc = await db.NdRegulationDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, ct)
+            ?? await db.NdRegulationDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.StoredDocumentId == id, ct);
+        var storedId = ndDoc?.StoredDocumentId ?? (ndDoc == null ? id : null);
+        var stored = storedId is Guid sid
+            ? await db.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == sid && d.DocKind == "regulation", ct)
+            : null;
+        if (ndDoc == null && stored == null) return NotFound(new { success = false, message = "Not found" });
+        if (ndDoc?.IsManual == true)
+            return BadRequest(new { success = false, message = "Manual custom points cannot be deleted." });
+        if (ndDoc != null ? ndDoc.Status != StatusHidden : stored?.IsHidden != true)
+            return BadRequest(new { success = false, message = "Delete the regulation first; only deleted regulations can be removed permanently." });
+
+        var regDocIds = storedId is Guid linked
+            ? await db.NdRegulationDocuments.AsNoTracking().Where(d => d.StoredDocumentId == linked).Select(d => d.Id).ToListAsync(ct)
+            : [ndDoc!.Id];
+        if (ndDoc != null && !regDocIds.Contains(ndDoc.Id)) regDocIds.Add(ndDoc.Id);
+
+        var counts = await NdDocumentAnalysisRunCountHelper.LoadAsync(db, ct);
+        var runs = regDocIds.Max(rid => counts.CountForRegulation(rid, storedId));
+        if (runs > 0)
+            return Conflict(new { success = false, message = $"Used in {runs} analysis run(s). Delete those analyses first." });
+        var libraryPoints = await db.NdLibraryPoints.AsNoTracking()
+            .CountAsync(lp => db.NdRegulationPoints.Any(rp => rp.Id == lp.RegulationPointId && regDocIds.Contains(rp.RegulationDocumentId)), ct);
+        if (libraryPoints > 0)
+            return Conflict(new { success = false, message = $"{libraryPoints} of its points are in a points library. Remove them there first." });
+
+        // Points, library links and category links go with the regulation rows; parsed text and sections go with
+        // the stored document (database cascades).
+        await db.NdRegulationDocuments.Where(d => regDocIds.Contains(d.Id)).ExecuteDeleteAsync(ct);
+        if (stored != null)
+            await db.StoredDocuments.Where(d => d.Id == stored.Id).ExecuteDeleteAsync(ct);
+
+        var path = stored?.StoragePath ?? ndDoc?.FilePath;
+        if (!string.IsNullOrWhiteSpace(path) && storage.IsConfigured)
+        {
+            try { await storage.DeleteAsync(path, ct); }
+            catch (Exception ex) { logger.LogWarning(ex, "Stored file {Path} was not removed", path); }
+        }
+        dashboardCache.Invalidate();
+        return Ok(new { success = true, message = "Regulation deleted permanently." });
     }
 
     [HttpPost("{id:guid}/restore")]

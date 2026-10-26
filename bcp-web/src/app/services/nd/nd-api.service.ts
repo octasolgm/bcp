@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http
 import { firstValueFrom, timeout, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
-import type { PointGapAttachment } from '../../../lib/nd/types';
+import type { PointGapAttachment, RulebookCategory } from '../../../lib/nd/types';
 import type { GapEvidenceRerun, GapEvidenceRerunRequest } from '../../../lib/nd/gap-evidence-rerun';
 
 export type RunGapEvidenceUpload = {
@@ -907,7 +907,7 @@ export class NdApiService {
     return this.request<unknown[]>('GET', '/nd/departments');
   }
 
-  createDepartment(body: { name: string; description?: string }) {
+  createDepartment(body: { name: string; description?: string; parentId?: string | null }) {
     return this.request<unknown>('POST', '/nd/departments', body);
   }
 
@@ -917,6 +917,83 @@ export class NdApiService {
 
   deleteDepartment(id: string) {
     return this.request<unknown>('DELETE', `/nd/departments/${id}`);
+  }
+
+  /** Adds typical bank departments (three levels); only when the workspace has none yet. */
+  importSampleDepartments() {
+    return this.request<unknown>('POST', '/nd/departments/import-sample');
+  }
+
+  /** Departments of every internal document: stored document id -> department ids. */
+  getInternalDepartmentLinks() {
+    return this.request<Record<string, string[]>>('GET', '/nd/internal-documents/departments');
+  }
+
+  setInternalDocumentDepartments(documentId: string, departmentIds: string[]) {
+    return this.request<string[]>('PUT', `/nd/internal-documents/${documentId}/departments`, { departmentIds });
+  }
+
+  getRulebookCategories() {
+    return this.request<RulebookCategory[]>('GET', '/nd/rulebook-categories');
+  }
+
+  createRulebookCategory(body: { name: string; description?: string; parentId?: string | null }) {
+    return this.request<RulebookCategory>('POST', '/nd/rulebook-categories', body);
+  }
+
+  updateRulebookCategory(id: string, body: { name: string; description?: string }) {
+    return this.request<RulebookCategory>('PUT', `/nd/rulebook-categories/${id}`, body);
+  }
+
+  /** Deletes the category and everything under it. */
+  deleteRulebookCategory(id: string) {
+    return this.request<unknown>('DELETE', `/nd/rulebook-categories/${id}`);
+  }
+
+  /** Imports the CBUAE Rulebook structure; only when the workspace has no categories yet. */
+  importSampleRulebookCategories() {
+    return this.request<unknown>('POST', '/nd/rulebook-categories/import-sample');
+  }
+
+  /** Downloads one rulebook's document from its source into Regulation Documents, filed under the category. */
+  importRulebookDocument(categoryId: string) {
+    return this.request<{ regulationDocumentId: string; name: string }>(
+      'POST',
+      `/nd/rulebook-categories/${categoryId}/import-document`,
+      undefined,
+      true,
+      REGULATION_UPLOAD_TIMEOUT_MS,
+    );
+  }
+
+  /** Uploads a rulebook document the admin downloaded themselves, filed under the category. */
+  uploadRulebookDocument(categoryId: string, file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return this.postMultipart<{ regulationDocumentId: string; name: string }>(
+      `/nd/rulebook-categories/${categoryId}/upload-document`,
+      form,
+      REGULATION_UPLOAD_TIMEOUT_MS,
+    );
+  }
+
+  /** Rulebook categories of every regulation document: regulation document id -> category ids. */
+  getRegulationCategoryLinks() {
+    return this.request<Record<string, string[]>>('GET', '/nd/regulation-documents/categories');
+  }
+
+  setRegulationCategories(regulationId: string, categoryIds: string[]) {
+    return this.request<string[]>('PUT', `/nd/regulation-documents/${regulationId}/categories`, { categoryIds });
+  }
+
+  /** Platform super admin: removes an already deleted regulation for good. */
+  deleteRegulationPermanently(regulationId: string) {
+    return this.request<unknown>('DELETE', `/nd/regulation-documents/${regulationId}/permanent`);
+  }
+
+  /** Platform super admin: removes an already deleted internal document for good. */
+  deleteInternalDocumentPermanently(documentId: string) {
+    return this.request<unknown>('DELETE', `/nd/internal-documents/${documentId}/permanent`);
   }
 
   getUsers() {

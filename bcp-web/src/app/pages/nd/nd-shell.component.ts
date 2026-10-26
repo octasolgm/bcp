@@ -802,6 +802,19 @@ export class NdShellComponent implements OnInit, OnDestroy {
   /// their own nav group below (landingAiGroup) - same pattern as Tesseract/RapidOCR/Docling, so the
   /// legacy engine is still reachable but no longer the default one people land on.
   private documentsGroup(role: string): NavGroup {
+    // Real accounts: internal and regulation documents here; the regulatory authorities tree and the points library
+    // are under Regulatory Library (below), which lists Regulation Documents too. Demo accounts keep their menu.
+    if (!this.auth.isDemoViewer()) {
+      return {
+        id: 'documents',
+        label: 'Documents',
+        icon: 'file',
+        children: [
+          { id: 'internal-documents', path: '/nd/internal-documents-azure-di', label: 'Internal Documents', icon: 'file' },
+          { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation Documents', icon: 'library' },
+        ],
+      };
+    }
     const children: NavItem[] = [
       { id: 'internal-documents', path: '/nd/internal-documents-azure-di', label: 'Internal Documents', icon: 'file' },
       { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation Documents', icon: 'library' },
@@ -817,6 +830,25 @@ export class NdShellComponent implements OnInit, OnDestroy {
       });
     }
     return { id: 'documents', label: 'Documents', icon: 'file', children };
+  }
+
+  /// Regulatory Library (real accounts): the regulatory authorities tree (admins), regulation documents and the
+  /// selective regulation points library. Same item ids as before, so their nav counts carry over.
+  private regulatoryLibraryGroup(): NavGroup {
+    const children: NavItem[] = [];
+    if (this.auth.getRole() === 'super_admin') {
+      children.push({
+        id: 'admin-rulebook-categories',
+        path: '/nd/admin/rulebook-categories',
+        label: 'Regulatory Authorities',
+        icon: 'building',
+      });
+    }
+    children.push(
+      { id: 'regulation-documents', path: '/nd/regulation-documents-azure-di', label: 'Regulation Documents', icon: 'library' },
+      { id: 'libraries', path: '/nd/libraries', label: 'Regulatory Selective Points', icon: 'list' },
+    );
+    return { id: 'regulatory-library', label: 'Regulatory Library', icon: 'library', children };
   }
 
   /// Landing AI (legacy) - the original Internal/Regulation Documents pages, moved out of the primary
@@ -1155,6 +1187,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
           ...(pending ? [this.group(pending)] : []),
           this.divider('after-pending-reviews'),
           this.group(this.documentsGroup(role)),
+          ...(this.auth.isDemoViewer() ? [] : [this.group(this.regulatoryLibraryGroup())]),
           this.group(this.adminGroup()),
           ...(billing ? [this.group(billing)] : []),
         ];
@@ -1167,6 +1200,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
           ...(pending ? [this.group(pending)] : []),
           this.divider('after-pending-reviews'),
           this.group(this.documentsGroup(role)),
+          ...(this.auth.isDemoViewer() ? [] : [this.group(this.regulatoryLibraryGroup())]),
         ];
       }
       case 'checker': {

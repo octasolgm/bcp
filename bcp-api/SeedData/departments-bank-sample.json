@@ -1,0 +1,72 @@
+{
+  "source": "Typical departments of a UAE bank, as a starting point to adjust",
+  "departments": [
+    { "name": "Compliance", "children": [
+      { "name": "Regulatory Compliance" },
+      { "name": "AML/CFT", "children": [
+        { "name": "Know Your Customer (KYC) and Customer Due Diligence" },
+        { "name": "Transaction Monitoring" },
+        { "name": "Sanctions Screening" },
+        { "name": "Financial Intelligence Unit (FIU) Reporting" }
+      ] },
+      { "name": "Fraud Prevention" },
+      { "name": "Consumer Protection" }
+    ] },
+    { "name": "Risk Management", "children": [
+      { "name": "Credit Risk" },
+      { "name": "Market Risk" },
+      { "name": "Liquidity Risk" },
+      { "name": "Operational Risk" },
+      { "name": "Enterprise Risk Management" },
+      { "name": "Model Risk" }
+    ] },
+    { "name": "Finance", "children": [
+      { "name": "Financial Control" },
+      { "name": "Regulatory Reporting" },
+      { "name": "Capital Management" },
+      { "name": "Tax" }
+    ] },
+    { "name": "Treasury and Markets", "children": [
+      { "name": "Asset and Liability Management (ALM)" },
+      { "name": "Trading" }
+    ] },
+    { "name": "Retail Banking", "children": [
+      { "name": "Cards" },
+      { "name": "Personal Loans" },
+      { "name": "Mortgages" },
+      { "name": "Deposits and Accounts" },
+      { "name": "Wealth Management" }
+    ] },
+    { "name": "Corporate and Institutional Banking", "children": [
+      { "name": "Corporate Lending" },
+      { "name": "Transaction Banking" },
+      { "name": "SME Banking" },
+      { "name": "Trade Finance" }
+    ] },
+    { "name": "Operations", "children": [
+      { "name": "Payments and Settlements" },
+      { "name": "Trade Finance Operations" },
+      { "name": "Branch Operations" },
+      { "name": "Account Services" }
+    ] },
+    { "name": "Information Technology", "children": [
+      { "name": "Information Security" },
+      { "name": "IT Infrastructure" },
+      { "name": "Digital Banking" },
+      { "name": "Data Management" }
+    ] },
+    { "name": "Shari'ah and Islamic Banking", "children": [
+      { "name": "Shari'ah Compliance" },
+      { "name": "Internal Shari'ah Audit" }
+    ] },
+    { "name": "Internal Audit" },
+    { "name": "Legal" },
+    { "name": "Human Resources" },
+    { "name": "Customer Experience", "children": [
+      { "name": "Complaints Handling" }
+    ] },
+    { "name": "Corporate Governance", "children": [
+      { "name": "Board Secretariat" }
+    ] }
+  ]
+}

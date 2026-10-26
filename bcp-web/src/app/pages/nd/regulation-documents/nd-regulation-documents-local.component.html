@@ -15,7 +15,7 @@
 <input #uploadInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
 @if (!showDeleted) {
 <div class="filter-pills nd-list-toolbar nd-shrink reg-docs-toolbar">
-  @if (canUpload && !showDeleted) {
+  @if (canUpload && !showDeleted && !cleanView) {
     <label class="upload-dept upload-dept--toolbar">
       <span class="upload-dept-label">Department</span>
       <select class="upload-dept-select" [(ngModel)]="uploadDept" name="uploadDept" aria-label="Department for upload">
@@ -52,12 +52,26 @@
       placeholder="Search regulations…"
       aria-label="Search regulations"
     />
-    <select class="filter-select" [(ngModel)]="deptFilter" (ngModelChange)="onFiltersChange()">
-      <option value="">All departments</option>
-      @for (d of departments; track d.id) {
-        <option [value]="d.id">{{ d.name }}</option>
-      }
-    </select>
+    @if (cleanView) {
+      <div class="rbv-switch" role="group" aria-label="View">
+        <button type="button" [class.active]="docView === 'list'" (click)="setDocView('list')">List</button>
+        <button type="button" [class.active]="docView === 'rulebook'" (click)="setDocView('rulebook')">By rulebook</button>
+      </div>
+      <app-nd-tree-select
+        [options]="rulebookTreeOptions"
+        [value]="rulebookFilter"
+        (valueChange)="rulebookFilter = $event"
+        allLabel="All rulebook categories"
+        ariaLabel="Filter by rulebook category"
+      />
+    } @else {
+      <select class="filter-select" [(ngModel)]="deptFilter" (ngModelChange)="onFiltersChange()">
+        <option value="">All departments</option>
+        @for (d of departments; track d.id) {
+          <option [value]="d.id">{{ d.name }}</option>
+        }
+      </select>
+    }
     <select class="filter-select" [(ngModel)]="statusFilter" (ngModelChange)="onFiltersChange()">
       <option value="">All statuses</option>
       <option value="extracted">Extracted</option>
@@ -197,6 +211,42 @@
           <button type="button" class="filter-clear" [disabled]="!!bulkProgress" (click)="selection.clear()">Clear selection</button>
         </div>
       }
+      @if (cleanView && docView === 'rulebook') {
+        <div class="card-surface rbv-tree">
+          <div class="rbv-tools">
+            <button type="button" class="filter-clear" (click)="expandRulebookView()">Expand all</button>
+            <button type="button" class="filter-clear" (click)="collapseRulebookView()">Collapse all</button>
+          </div>
+          @for (row of rulebookViewRows; track row.kind === 'cat' ? row.id : row.key) {
+            @if (row.kind === 'cat') {
+              <button
+                type="button"
+                class="rbv-cat"
+                [class.rbv-l1]="row.level === 1"
+                [style.padding-left.rem]="0.75 + (row.level - 1) * 1.4"
+                [attr.aria-expanded]="rulebookViewExpanded.has(row.id)"
+                [title]="row.path"
+                (click)="toggleRulebookViewGroup(row.id)"
+              >
+                <span class="rbv-caret" [class.open]="rulebookViewExpanded.has(row.id)">▸</span>
+                <span class="rbv-name">{{ row.name }}</span>
+                <span class="rbv-count">{{ row.count }} document{{ row.count === 1 ? '' : 's' }}</span>
+              </button>
+            } @else {
+              <div class="rbv-doc" [style.padding-left.rem]="0.75 + (row.level - 1) * 1.4 + 1.2">
+                <button type="button" class="rbv-doc-name" [title]="row.doc.name" (click)="viewPoints(row.doc, $event)">{{ row.doc.name }}</button>
+                <span class="rbv-meta">{{ docPointMeta(row.doc) }}</span>
+                <span class="rbv-meta" [class.nd-status-ok]="analysisReadyState(row.doc) !== 'not_ready'">{{ analysisReadyLabel(row.doc) }}</span>
+                @if (canUpload) {
+                  <button type="button" class="nd-status-link" (click)="openCategoryPicker(row.doc, $event)">Categories</button>
+                }
+              </div>
+            }
+          } @empty {
+            <p class="muted rbv-empty">No documents to show.</p>
+          }
+        </div>
+      } @else {
       <div class="card-surface table-wrap table-scroll-body nd-table-fit reg-docs-table-wrap">
         <table class="reg-docs-table nd-sticky-edges">
           <colgroup>
@@ -228,7 +278,7 @@
                 </label>
                 Regulation <span class="sort-indicator">{{ sortMark('name') }}</span>
               </th>
-              <th class="sortable col-dept" (click)="toggleSort('department')">Department <span class="sort-indicator">{{ sortMark('department') }}</span></th>
+              <th class="sortable col-dept" (click)="toggleSort('department')">{{ cleanView ? 'Rulebook' : 'Department' }} <span class="sort-indicator">{{ sortMark('department') }}</span></th>
               <th class="sortable col-pts" (click)="toggleSort('points')">Points <span class="sort-indicator">{{ sortMark('points') }}</span></th>
               <th class="sortable col-pts" (click)="toggleSort('pages')" title="Total PDF pages in the uploaded document">Pages <span class="sort-indicator">{{ sortMark('pages') }}</span></th>
               <th class="sortable col-pts" (click)="toggleSort('analyses')" title="Analysis runs that use this regulation">Used in analyses <span class="sort-indicator">{{ sortMark('analyses') }}</span></th>
@@ -279,6 +329,20 @@
                   }
                 </td>
                 <td class="col-dept" (click)="$event.stopPropagation()">
+                  @if (cleanView) {
+                    <div class="rb-cell">
+                      @for (c of docCategories(d); track c.path) {
+                        <span class="rb-chip" [title]="c.path">{{ c.name }}</span>
+                      } @empty {
+                        <span class="muted">Not categorised</span>
+                      }
+                      @if (canUpload && !showDeleted && !isManualDoc(d)) {
+                        <button type="button" class="nd-status-link" (click)="openCategoryPicker(d, $event)">
+                          {{ docCategories(d).length ? 'Change' : 'Assign' }}
+                        </button>
+                      }
+                    </div>
+                  } @else {
                   @if (canUpload) {
                     <select
                       class="inline-select"
@@ -293,6 +357,7 @@
                     </select>
                   } @else {
                     <span class="muted">{{ d.departmentName ?? 'Uncategorized' }}</span>
+                  }
                   }
                 </td>
                 <td class="col-pts">{{ docPointMeta(d) }}</td>
@@ -580,6 +645,16 @@
                           {{ hidingId === d.id ? 'Restoring…' : 'Restore' }}
                         </button>
                       }
+                      @if (canDeletePermanently) {
+                        <button
+                          type="button"
+                          class="row-action-btn compact danger"
+                          [disabled]="deletingPermanentlyId === d.id"
+                          (click)="handleDeletePermanently(d, $event)"
+                        >
+                          {{ deletingPermanentlyId === d.id ? 'Deleting…' : 'Delete permanently' }}
+                        </button>
+                      }
                     }
                   </div>
                 </td>
@@ -588,6 +663,7 @@
           </tbody>
         </table>
       </div>
+      }
     }
   </div>
 
@@ -851,4 +927,86 @@
     (closed)="showCloudImport = false"
     (imported)="onCloudImported()"
   />
+}
+
+@if (pickerDoc; as doc) {
+  <div class="rb-picker-backdrop" (click)="closeCategoryPicker()"></div>
+  <div class="rb-picker card-surface" role="dialog" aria-modal="true" aria-label="Rulebook categories">
+    <header class="rb-picker-head">
+      <div>
+        <strong>Rulebook categories</strong>
+        <p class="muted">{{ doc.name }}</p>
+      </div>
+      <button type="button" class="btn-close" (click)="closeCategoryPicker()" aria-label="Close">×</button>
+    </header>
+    @if (!rulebookOptions.length) {
+      <p class="muted rb-picker-empty">No rulebook categories yet. Add them in Regulatory Library › Regulatory Authorities.</p>
+    } @else {
+      <div class="rb-picker-tabs" role="tablist">
+        <button type="button" role="tab" [class.active]="pickerTab === 'all'" [attr.aria-selected]="pickerTab === 'all'" (click)="pickerTab = 'all'">
+          All categories
+        </button>
+        <button type="button" role="tab" [class.active]="pickerTab === 'selected'" [attr.aria-selected]="pickerTab === 'selected'" (click)="pickerTab = 'selected'">
+          Selected ({{ pickerSelected.size }})
+        </button>
+      </div>
+      <div class="rb-picker-tools">
+        <input
+          type="search"
+          class="filter-search rb-picker-search"
+          [(ngModel)]="pickerSearch"
+          placeholder="Search categories…"
+          aria-label="Search categories"
+        />
+        <button type="button" class="filter-clear" (click)="pickerSelectAll()">Select all</button>
+        <button type="button" class="filter-clear" (click)="pickerClear()">Clear</button>
+        @if (!pickerFlat) {
+          <button type="button" class="filter-clear" (click)="pickerExpandAll()">Expand</button>
+          <button type="button" class="filter-clear" (click)="pickerCollapseAll()">Collapse</button>
+        }
+      </div>
+      <ul class="rb-picker-list">
+        @for (o of pickerOptions; track o.category.id) {
+          <li
+            [class.rb-pl-1]="!pickerFlat && o.level === 1"
+            [class.rb-pl-2]="!pickerFlat && o.level === 2"
+            [class.rb-pl-3]="!pickerFlat && o.level === 3"
+            [class.rb-pl-4]="!pickerFlat && o.level === 4"
+          >
+            <label [title]="o.path">
+              @if (!pickerFlat && pickerHasChildren(o.category.id)) {
+                <button
+                  type="button"
+                  class="rb-picker-caret"
+                  [class.open]="pickerExpanded.has(o.category.id)"
+                  [attr.aria-label]="(pickerExpanded.has(o.category.id) ? 'Collapse ' : 'Expand ') + o.category.name"
+                  (click)="togglePickerGroup(o.category.id, $event)"
+                >▸</button>
+              } @else if (!pickerFlat) {
+                <span class="rb-picker-caret" aria-hidden="true"></span>
+              }
+              <input
+                type="checkbox"
+                [checked]="pickerSelected.has(o.category.id)"
+                (change)="togglePickerCategory(o.category.id)"
+              />
+              <span>{{ pickerFlat ? o.path : o.category.name }}</span>
+            </label>
+          </li>
+        } @empty {
+          <li class="muted rb-picker-none">{{ pickerTab === 'selected' ? 'Nothing selected yet.' : 'No categories match.' }}</li>
+        }
+      </ul>
+    }
+    <footer class="rb-picker-foot">
+      <span class="muted">
+        {{ pickerSelected.size }} selected
+        @if (pickerSelected.size) { ({{ pickerSelected.size - pickerRulebookCount }} categories · {{ pickerRulebookCount }} rulebooks) }
+      </span>
+      <button type="button" class="nd-btn-secondary" (click)="closeCategoryPicker()">Cancel</button>
+      <button type="button" class="nd-btn-primary" [disabled]="savingCategories" (click)="saveCategoryPicker()">
+        @if (savingCategories) { <span class="rb-spinner" aria-hidden="true"></span> }{{ savingCategories ? 'Saving…' : 'Save' }}
+      </button>
+    </footer>
+  </div>
 }

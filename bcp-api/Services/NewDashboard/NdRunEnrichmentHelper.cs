@@ -436,7 +436,7 @@ public static class NdRunEnrichmentHelper
                     END AS effective_status
                   FROM analysis_points p
                   INNER JOIN analysis_runs r ON r.id = p.analysis_run_id
-                  WHERE r.status <> 'deleted' AND r.created_by = {0}
+                  WHERE r.status <> 'deleted' AND r.created_by = {0} AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 ) t
                 """,
                 profileId.Value).FirstOrDefaultAsync(ct) ?? new WorkspaceComplianceTotals(0, 0, 0);
@@ -452,7 +452,8 @@ public static class NdRunEnrichmentHelper
                   COUNT(*) FILTER (WHERE g.risk = 'low' AND g.status = 'resolved')::int AS "LowResolved"
                 FROM analysis_gaps g
                 INNER JOIN analysis_runs r ON r.id = g.analysis_run_id
-                WHERE r.status <> 'deleted' AND r.created_by = {0}
+                INNER JOIN analysis_points p ON p.id = g.analysis_point_id
+                WHERE r.status <> 'deleted' AND r.created_by = {0} AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 """,
                 profileId.Value).FirstOrDefaultAsync(ct) ?? new WorkspaceGapRiskTotals(0, 0, 0, 0, 0, 0);
         }
@@ -474,7 +475,7 @@ public static class NdRunEnrichmentHelper
                     END AS effective_status
                   FROM analysis_points p
                   INNER JOIN analysis_runs r ON r.id = p.analysis_run_id
-                  WHERE r.status <> 'deleted'
+                  WHERE r.status <> 'deleted' AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 ) t
                 """).FirstOrDefaultAsync(ct) ?? new WorkspaceComplianceTotals(0, 0, 0);
 
@@ -489,7 +490,8 @@ public static class NdRunEnrichmentHelper
                   COUNT(*) FILTER (WHERE g.risk = 'low' AND g.status = 'resolved')::int AS "LowResolved"
                 FROM analysis_gaps g
                 INNER JOIN analysis_runs r ON r.id = g.analysis_run_id
-                WHERE r.status <> 'deleted'
+                INNER JOIN analysis_points p ON p.id = g.analysis_point_id
+                WHERE r.status <> 'deleted' AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 """).FirstOrDefaultAsync(ct) ?? new WorkspaceGapRiskTotals(0, 0, 0, 0, 0, 0);
         }
 
@@ -510,7 +512,8 @@ public static class NdRunEnrichmentHelper
                   COUNT(*) FILTER (WHERE a.status = 'resolved')::int AS "Resolved"
                 FROM analysis_action_plans a
                 INNER JOIN analysis_runs r ON r.id = a.analysis_run_id
-                WHERE r.status <> 'deleted' AND r.created_by = {0}
+                INNER JOIN analysis_points p ON p.id = a.analysis_point_id
+                WHERE r.status <> 'deleted' AND r.created_by = {0} AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 """,
                 profileId.Value).FirstOrDefaultAsync(ct) ?? new WorkspaceActionTotals(0, 0);
         }
@@ -523,7 +526,8 @@ public static class NdRunEnrichmentHelper
                   COUNT(*) FILTER (WHERE a.status = 'resolved')::int AS "Resolved"
                 FROM analysis_action_plans a
                 INNER JOIN analysis_runs r ON r.id = a.analysis_run_id
-                WHERE r.status <> 'deleted'
+                INNER JOIN analysis_points p ON p.id = a.analysis_point_id
+                WHERE r.status <> 'deleted' AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 """).FirstOrDefaultAsync(ct) ?? new WorkspaceActionTotals(0, 0);
         }
 
@@ -573,11 +577,13 @@ public static class NdRunEnrichmentHelper
         string sqlFor(string placeholders) => metric switch
         {
             "critical" or "medium" or "low" => $"""
-                SELECT analysis_run_id AS "RunId", COUNT(*)::int AS "Count",
-                  COUNT(*) FILTER (WHERE status = 'resolved')::int AS "Resolved"
-                FROM analysis_gaps
-                WHERE analysis_run_id IN ({placeholders}) AND risk = '{(metric == "critical" ? "high" : metric)}'
-                GROUP BY analysis_run_id
+                SELECT g.analysis_run_id AS "RunId", COUNT(*)::int AS "Count",
+                  COUNT(*) FILTER (WHERE g.status = 'resolved')::int AS "Resolved"
+                FROM analysis_gaps g
+                INNER JOIN analysis_points p ON p.id = g.analysis_point_id
+                WHERE g.analysis_run_id IN ({placeholders}) AND g.risk = '{(metric == "critical" ? "high" : metric)}'
+                  AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
+                GROUP BY g.analysis_run_id
                 """,
             _ => $"""
                 SELECT analysis_run_id AS "RunId", COUNT(*)::int AS "Count", 0 AS "Resolved"
@@ -591,7 +597,7 @@ public static class NdRunEnrichmentHelper
                       ELSE NULL
                     END AS effective_status
                   FROM analysis_points p
-                  WHERE p.analysis_run_id IN ({placeholders})
+                  WHERE p.analysis_run_id IN ({placeholders}) AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 ) t
                 WHERE {metric switch
                 {
@@ -655,7 +661,7 @@ public static class NdRunEnrichmentHelper
                       ELSE NULL
                     END AS effective_status
                   FROM analysis_points p
-                  WHERE p.analysis_run_id IN ({placeholders})
+                  WHERE p.analysis_run_id IN ({placeholders}) AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 ) t
                 """;
 
@@ -690,14 +696,15 @@ public static class NdRunEnrichmentHelper
             var placeholders = string.Join(", ", batch.Select((_, i) => $"{{{i}}}"));
             var sql = $"""
                 SELECT
-                  COUNT(*) FILTER (WHERE risk = 'high')::int AS "High",
-                  COUNT(*) FILTER (WHERE risk = 'high' AND status = 'resolved')::int AS "HighResolved",
-                  COUNT(*) FILTER (WHERE risk = 'medium')::int AS "Medium",
-                  COUNT(*) FILTER (WHERE risk = 'medium' AND status = 'resolved')::int AS "MediumResolved",
-                  COUNT(*) FILTER (WHERE risk = 'low')::int AS "Low",
-                  COUNT(*) FILTER (WHERE risk = 'low' AND status = 'resolved')::int AS "LowResolved"
-                FROM analysis_gaps
-                WHERE analysis_run_id IN ({placeholders})
+                  COUNT(*) FILTER (WHERE g.risk = 'high')::int AS "High",
+                  COUNT(*) FILTER (WHERE g.risk = 'high' AND g.status = 'resolved')::int AS "HighResolved",
+                  COUNT(*) FILTER (WHERE g.risk = 'medium')::int AS "Medium",
+                  COUNT(*) FILTER (WHERE g.risk = 'medium' AND g.status = 'resolved')::int AS "MediumResolved",
+                  COUNT(*) FILTER (WHERE g.risk = 'low')::int AS "Low",
+                  COUNT(*) FILTER (WHERE g.risk = 'low' AND g.status = 'resolved')::int AS "LowResolved"
+                FROM analysis_gaps g
+                INNER JOIN analysis_points p ON p.id = g.analysis_point_id
+                WHERE g.analysis_run_id IN ({placeholders}) AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 """;
 
             var row = await db.Database
@@ -731,9 +738,10 @@ public static class NdRunEnrichmentHelper
             var sql = $"""
                 SELECT
                   COUNT(*)::int AS "Total",
-                  COUNT(*) FILTER (WHERE status = 'resolved')::int AS "Resolved"
-                FROM analysis_action_plans
-                WHERE analysis_run_id IN ({placeholders})
+                  COUNT(*) FILTER (WHERE a.status = 'resolved')::int AS "Resolved"
+                FROM analysis_action_plans a
+                INNER JOIN analysis_points p ON p.id = a.analysis_point_id
+                WHERE a.analysis_run_id IN ({placeholders}) AND COALESCE(p.point_snapshot->>'pointNumber', '') NOT LIKE 'INT %'
                 """;
 
             var row = await db.Database

@@ -46,6 +46,15 @@
       placeholder="Search documents…"
       aria-label="Search documents"
     />
+    @if (cleanView && departmentOptions.length) {
+      <app-nd-tree-select
+        [options]="departmentTreeOptions"
+        [value]="deptFilter"
+        (valueChange)="deptFilter = $event"
+        allLabel="All departments"
+        ariaLabel="Filter by department"
+      />
+    }
     <select class="filter-select" [(ngModel)]="parseFilter" aria-label="Filter by parse status">
       <option value="">All parse statuses</option>
       <option value="pending">Pending parse</option>
@@ -111,6 +120,9 @@
     <table class="internal-docs-table nd-sticky-edges">
       <colgroup>
         <col class="col-doc" />
+        @if (cleanView) {
+          <col class="col-dept" />
+        }
         <col class="col-date" />
         <col class="col-actor" />
         <col class="col-actor" />
@@ -135,6 +147,9 @@
             </label>
             Document
           </th>
+          @if (cleanView) {
+            <th class="col-dept">Departments</th>
+          }
           <th class="col-date">Uploaded</th>
           <th class="col-actor">Uploaded by</th>
           <th class="col-actor">Parsed by</th>
@@ -294,6 +309,22 @@
                 </span>
               }
             </td>
+            @if (cleanView) {
+              <td class="col-dept" (click)="$event.stopPropagation()">
+                <div class="rb-cell">
+                  @for (dp of docDepartments(d); track dp.path) {
+                    <span class="rb-chip" [title]="dp.path">{{ dp.name }}</span>
+                  } @empty {
+                    <span class="muted">None</span>
+                  }
+                  @if (canUpload && departmentOptions.length) {
+                    <button type="button" class="nd-status-link" (click)="openDepartmentPicker(d, $event)">
+                      {{ docDepartments(d).length ? 'Change' : 'Assign' }}
+                    </button>
+                  }
+                </div>
+              </td>
+            }
             <td class="muted col-date">{{ formatTableDate(d.uploaded) }}</td>
             <td class="muted col-actor" [title]="actorLabel(d.uploadedByName)">{{ actorLabel(d.uploadedByName) }}</td>
             <td class="muted col-actor" [title]="actorLabel(d.parsedByName)">{{ actorLabel(d.parsedByName) }}</td>
@@ -781,4 +812,55 @@
     (closed)="showCloudImport = false"
     (imported)="onCloudImported()"
   />
+}
+
+@if (pickerDoc; as doc) {
+  <div class="rb-picker-backdrop" (click)="closeDepartmentPicker()"></div>
+  <div class="rb-picker card-surface" role="dialog" aria-modal="true" aria-label="Departments">
+    <header class="rb-picker-head">
+      <div>
+        <strong>Departments</strong>
+        <p class="muted">{{ doc.title }}</p>
+      </div>
+      <button type="button" class="btn-close" (click)="closeDepartmentPicker()" aria-label="Close">×</button>
+    </header>
+    <div class="rb-picker-tabs" role="tablist">
+      <button type="button" role="tab" [class.active]="pickerTab === 'all'" (click)="pickerTab = 'all'">All departments</button>
+      <button type="button" role="tab" [class.active]="pickerTab === 'selected'" (click)="pickerTab = 'selected'">Selected ({{ pickerSelected.size }})</button>
+    </div>
+    <div class="rb-picker-tools">
+      <input type="search" class="filter-search rb-picker-search" [(ngModel)]="pickerSearch" placeholder="Search departments…" aria-label="Search departments" />
+      <button type="button" class="filter-clear" (click)="pickerSelectAll()">Select all</button>
+      <button type="button" class="filter-clear" (click)="pickerClear()">Clear</button>
+      @if (!pickerFlat) {
+        <button type="button" class="filter-clear" (click)="pickerExpandAll()">Expand</button>
+        <button type="button" class="filter-clear" (click)="pickerCollapseAll()">Collapse</button>
+      }
+    </div>
+    <ul class="rb-picker-list">
+      @for (o of pickerOptions; track o.dept.id) {
+        <li [class.rb-pl-1]="!pickerFlat && o.level === 1" [class.rb-pl-2]="!pickerFlat && o.level === 2" [class.rb-pl-3]="!pickerFlat && o.level === 3">
+          <label [title]="o.path">
+            @if (!pickerFlat && pickerHasChildren(o.dept.id)) {
+              <button type="button" class="rb-picker-caret" [class.open]="pickerExpanded.has(o.dept.id)" (click)="togglePickerGroup(o.dept.id, $event)"
+                [attr.aria-label]="(pickerExpanded.has(o.dept.id) ? 'Collapse ' : 'Expand ') + o.dept.name">▸</button>
+            } @else if (!pickerFlat) {
+              <span class="rb-picker-caret" aria-hidden="true"></span>
+            }
+            <input type="checkbox" [checked]="pickerSelected.has(o.dept.id)" (change)="togglePickerDepartment(o.dept.id)" />
+            <span>{{ pickerFlat ? o.path : o.dept.name }}</span>
+          </label>
+        </li>
+      } @empty {
+        <li class="muted rb-picker-none">{{ pickerTab === 'selected' ? 'Nothing selected yet.' : 'No departments match.' }}</li>
+      }
+    </ul>
+    <footer class="rb-picker-foot">
+      <span class="muted">{{ pickerSelected.size }} selected</span>
+      <button type="button" class="nd-btn-secondary" (click)="closeDepartmentPicker()">Cancel</button>
+      <button type="button" class="nd-btn-primary" [disabled]="savingDepartments" (click)="saveDepartmentPicker()">
+        @if (savingDepartments) { <span class="rb-spinner" aria-hidden="true"></span> }{{ savingDepartments ? 'Saving…' : 'Save' }}
+      </button>
+    </footer>
+  </div>
 }

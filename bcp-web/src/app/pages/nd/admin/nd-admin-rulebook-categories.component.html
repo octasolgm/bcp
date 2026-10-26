@@ -1,0 +1,269 @@
+<div class="page-header">
+  <div>
+    <h1>Regulatory Authorities</h1>
+    <p class="nd-muted">Group your regulations by rulebook area, up to three levels: category, sub-category and rulebook.</p>
+  </div>
+</div>
+
+<ng-template #categoryForm let-placeholder="placeholder">
+  <form class="rb-form" (ngSubmit)="saveForm()">
+    <input
+      class="nd-input"
+      name="rbName"
+      [(ngModel)]="formName"
+      [placeholder]="placeholder"
+      aria-label="Category name"
+      required
+      autofocus
+    />
+    <input
+      class="nd-input"
+      name="rbDescription"
+      [(ngModel)]="formDescription"
+      placeholder="Description (optional)"
+      aria-label="Description"
+    />
+    <button type="submit" class="nd-btn-primary" [disabled]="saving || !formName.trim()">
+      @if (saving) { <span class="rb-spinner" aria-hidden="true"></span> }{{ saving ? 'Saving…' : 'Save' }}
+    </button>
+    <button type="button" class="nd-btn-secondary" [disabled]="saving" (click)="cancelForm()">Cancel</button>
+  </form>
+</ng-template>
+
+<div class="nd-page-body">
+<div class="nd-page nd-page-fill">
+  @if (!isAdmin) {
+    <p class="nd-error">Access denied</p>
+  } @else {
+    @if (error) {
+      <p class="nd-error">{{ error }}</p>
+    }
+
+    @if (loading && totalCount === 0) {
+      <p class="nd-muted rb-loading"><span class="rb-spinner" aria-hidden="true"></span> Loading rulebook categories…</p>
+    } @else if (totalCount === 0) {
+      <div class="nd-card rb-empty">
+        <strong>No rulebook categories yet</strong>
+        <p class="nd-muted">
+          Start from the regulatory authorities (Central Bank of the UAE, DFSA, ADGM and the Capital Market Authority)
+          with their rulebooks, including the full CBUAE Rulebook, and adjust them, or add your own.
+        </p>
+        <div class="rb-empty-actions">
+          <button type="button" class="nd-btn-primary" [disabled]="importing" (click)="importSample()">
+            @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }{{ importing ? 'Importing categories…' : 'Import sample rulebook categories' }}
+          </button>
+          <button type="button" class="nd-btn-secondary" [disabled]="importing" (click)="openAddRoot()">
+            Add category
+          </button>
+        </div>
+        @if (form?.mode === 'add-root') {
+          <ng-container [ngTemplateOutlet]="categoryForm" [ngTemplateOutletContext]="{ placeholder: 'Authority name, e.g. Central Bank of the UAE' }" />
+        }
+      </div>
+    } @else {
+      <div class="filter-pills nd-list-toolbar nd-shrink">
+        <input
+          type="search"
+          class="filter-search"
+          [(ngModel)]="searchQuery"
+          placeholder="Search categories…"
+          aria-label="Search categories"
+        />
+        <select class="filter-select" [(ngModel)]="docFilter" aria-label="Filter rulebooks">
+          <option value="">All categories and rulebooks</option>
+          <option value="with-doc">With a document</option>
+          <option value="without-doc">Without a document</option>
+        </select>
+        <button type="button" class="filter-clear" (click)="expandAll()">Expand all</button>
+        <button type="button" class="filter-clear" (click)="collapseAll()">Collapse all</button>
+        <span class="filter-count">{{ totalCount }} categories · {{ rulebookCount }} rulebooks · {{ importedDocumentCount }} documents</span>
+        <label class="nd-btn-secondary rb-upload" [class.busy]="!!bulkUpload">
+          <input
+            type="file"
+            class="rb-file"
+            accept=".pdf"
+            multiple
+            [disabled]="!!bulkUpload"
+            (change)="uploadDownloadedPdfs($event)"
+          />
+          @if (bulkUpload) { <span class="rb-spinner" aria-hidden="true"></span> }
+          {{ bulkUpload ? 'Uploading ' + bulkUpload.done + ' of ' + bulkUpload.total + '…' : 'Upload downloaded PDFs' }}
+        </label>
+        @if (pendingDocumentImports.length && !docImport) {
+          <button type="button" class="nd-btn-secondary rb-add-root" (click)="importDocuments()">
+            Import rulebook documents ({{ pendingDocumentImports.length }})
+          </button>
+        }
+        <button type="button" class="nd-btn-primary" [class.rb-add-root]="!pendingDocumentImports.length || docImport" (click)="openAddRoot()">
+          Add category
+        </button>
+      </div>
+
+      @if (uploadNotice) {
+        <div class="nd-card rb-import-progress" role="status" aria-live="polite">
+          <span class="rb-spinner" aria-hidden="true"></span>
+          <span class="rb-import-text">{{ uploadNotice }}</span>
+        </div>
+      }
+      @if (docImport; as p) {
+        <div class="nd-card rb-import-progress" role="status" aria-live="polite">
+          <span class="rb-spinner" aria-hidden="true"></span>
+          <span class="rb-import-text">
+            Importing rulebook documents: {{ p.done }} of {{ p.total }}
+            @if (p.failed) { · {{ p.failed }} could not be downloaded }
+          </span>
+          <span class="nd-progress-track rb-import-track">
+            <span class="nd-progress-fill" [style.width.%]="(p.done / p.total) * 100"></span>
+          </span>
+          <button type="button" class="nd-btn-secondary rb-btn" (click)="cancelDocImport()">Stop</button>
+        </div>
+      }
+      @if (docImportNotice) {
+        <div class="nd-card rb-import-notice">
+          The Central Bank's site only allows downloads from a person's browser, so documents cannot be fetched
+          automatically. Click <strong>Download PDF</strong> on the rulebooks you need, then use
+          <strong>Upload downloaded PDFs</strong> to add them all at once: each file is filed under its rulebook by
+          its file name. <strong>Upload document</strong> on a row adds one file to that rulebook.
+        </div>
+      }
+      @if (unmatchedFiles.length) {
+        <div class="nd-card rb-import-notice">
+          Not added ({{ unmatchedFiles.length }}): {{ unmatchedFiles.join(', ') }}. Files must keep the name they had
+          when downloaded, or use <strong>Upload document</strong> on the right rulebook.
+        </div>
+      }
+
+      @if (form?.mode === 'add-root') {
+        <div class="nd-card rb-root-form">
+          <ng-container [ngTemplateOutlet]="categoryForm" [ngTemplateOutletContext]="{ placeholder: 'Authority name, e.g. Central Bank of the UAE' }" />
+        </div>
+      }
+
+      @if (!visibleRows.length) {
+        <div class="nd-card nd-empty">
+          <strong>No categories match your search</strong>
+        </div>
+      } @else {
+        <div class="nd-card rb-tree" role="tree" aria-label="Rulebook categories">
+          @for (row of visibleRows; track row.node.category.id) {
+            @let node = row.node;
+            <div
+              class="rb-row"
+              role="treeitem"
+              [attr.aria-level]="node.level"
+              [attr.aria-expanded]="row.hasChildren ? isExpanded(node) : null"
+              [class.rb-level-1]="node.level === 1"
+              [class.rb-level-2]="node.level === 2"
+              [class.rb-level-3]="node.level === 3"
+              [class.rb-level-4]="node.level === 4"
+              [class.rb-busy]="deletingId === node.category.id"
+            >
+              @if (isEditing(node)) {
+                <div class="rb-indent"></div>
+                <ng-container [ngTemplateOutlet]="categoryForm" [ngTemplateOutletContext]="{ placeholder: 'Category name' }" />
+              } @else {
+                <div class="rb-indent"></div>
+                @if (row.hasChildren) {
+                  <button
+                    type="button"
+                    class="rb-caret"
+                    [class.open]="isExpanded(node)"
+                    [attr.aria-label]="(isExpanded(node) ? 'Collapse ' : 'Expand ') + node.category.name"
+                    (click)="toggle(node)"
+                  >
+                    ▸
+                  </button>
+                } @else {
+                  <span class="rb-caret rb-caret-leaf" aria-hidden="true">•</span>
+                }
+                <div class="rb-main">
+                  <span class="rb-name">{{ node.category.name }}</span>
+                  @if (node.category.description) {
+                    <span class="rb-desc">{{ node.category.description }}</span>
+                  }
+                </div>
+                <span class="rb-meta">
+                  {{ levelLabel(node.level, row.hasChildren) }}@if (row.hasChildren) { · {{ node.children.length }} under it }
+                  @if (node.category.documentCount) {
+                    ·
+                    <button
+                      type="button"
+                      class="rb-doc-count rb-doc-toggle"
+                      [attr.aria-expanded]="docsOpen.has(node.category.id)"
+                      (click)="toggleDocs(node)"
+                    >
+                      <span class="rb-doc-caret" [class.open]="docsOpen.has(node.category.id)">▸</span>
+                      {{ node.category.documentCount }} document{{ node.category.documentCount === 1 ? '' : 's' }}
+                    </button>
+                  }
+                </span>
+                <div class="rb-actions">
+                  @if (node.category.documentUrl && !node.category.documentCount) {
+                    <a class="nd-btn-secondary rb-btn" [href]="node.category.documentUrl" target="_blank" rel="noopener noreferrer">Download PDF</a>
+                  }
+                  @if (node.category.sourceUrl) {
+                    <a class="nd-btn-secondary rb-btn" [href]="node.category.sourceUrl" target="_blank" rel="noopener noreferrer">Source</a>
+                  }
+                  <label class="nd-btn-secondary rb-btn rb-upload" [class.busy]="uploadingId === node.category.id">
+                    <input
+                      type="file"
+                      class="rb-file"
+                      accept=".pdf,.docx,.doc"
+                      [disabled]="!!uploadingId"
+                      (change)="uploadDocument(node, $event)"
+                    />
+                    @if (uploadingId === node.category.id) { <span class="rb-spinner" aria-hidden="true"></span> }{{ uploadingId === node.category.id ? 'Uploading…' : node.category.documentCount ? 'Upload another' : 'Upload document' }}
+                  </label>
+                  @if (node.level < maxLevel) {
+                    <button type="button" class="nd-btn-secondary rb-btn" (click)="openAddChild(node)">
+                      Add {{ childLabel(node.level) }}
+                    </button>
+                  }
+                  <button type="button" class="nd-btn-secondary rb-btn" (click)="openEdit(node)">Edit</button>
+                  <button
+                    type="button"
+                    class="nd-btn-secondary nd-danger rb-btn"
+                    [disabled]="deletingId === node.category.id"
+                    (click)="remove(node)"
+                  >
+                    @if (deletingId === node.category.id) { <span class="rb-spinner" aria-hidden="true"></span> }{{ deletingId === node.category.id ? 'Deleting…' : 'Delete' }}
+                  </button>
+                </div>
+              }
+            </div>
+            @if (docsOpen.has(node.category.id)) {
+              <div class="rb-docs" [style.padding-left.rem]="2.6 + (node.level - 1) * 1.6">
+                @if (docsLoading) {
+                  <span class="nd-muted"><span class="rb-spinner" aria-hidden="true"></span>Loading documents…</span>
+                } @else {
+                  @for (doc of docsFor(node); track doc.id) {
+                    <a class="rb-doc-link" routerLink="/nd/regulation-documents-azure-di" [queryParams]="{ q: doc.name }">
+                      <span aria-hidden="true">📄</span> {{ doc.name }}
+                    </a>
+                  } @empty {
+                    <span class="nd-muted">No documents to show.</span>
+                  }
+                }
+              </div>
+            }
+            @if (isAddingChildOf(node)) {
+              <div
+                class="rb-row rb-row-form"
+                [class.rb-level-2]="node.level === 1"
+                [class.rb-level-3]="node.level === 2"
+                [class.rb-level-4]="node.level === 3"
+              >
+                <div class="rb-indent"></div>
+                <ng-container
+                  [ngTemplateOutlet]="categoryForm"
+                  [ngTemplateOutletContext]="{ placeholder: childLabel(node.level) + ' name under ' + node.category.name }"
+                />
+              </div>
+            }
+          }
+        </div>
+      }
+    }
+  }
+</div>
+</div>

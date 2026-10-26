@@ -75,6 +75,12 @@ export class NdMisPanelComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
+  /** Opened from the overview Actions card: show this tab (no toggling back to all). */
+  selectStatus(filter: 'all' | 'pending' | 'resolved'): void {
+    this.statusFilter = filter;
+    this.cdr.markForCheck();
+  }
+
   setStatusFilter(filter: 'all' | 'pending' | 'resolved'): void {
     this.statusFilter = this.statusFilter === filter ? 'all' : filter;
     this.cdr.markForCheck();

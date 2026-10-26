@@ -60,6 +60,9 @@ public static class NdWorkspaceSchemaBootstrap
         ("regul_clause_traces", "analysis_runs", "analysis_run_id", null),
         ("nd_clause_evals", null, null, "created_by"),
         ("nd_retrieval_expectations", null, null, "updated_by"),
+        ("nd_rulebook_categories", null, null, "created_by"),
+        ("nd_regulation_document_categories", "regulation_documents", "regulation_document_id", null),
+        ("nd_internal_document_departments", "stored_documents", "stored_document_id", null),
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)
@@ -192,6 +195,47 @@ public static class NdWorkspaceSchemaBootstrap
             );
             CREATE INDEX IF NOT EXISTS idx_nd_cloud_import_log_tenant
               ON nd_cloud_import_log (tenant_id, created_at DESC);
+            """,
+            ct);
+
+        // Rulebook categories: a per-workspace tree up to three levels deep (parent_id NULL = top level).
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS nd_rulebook_categories (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              tenant_id UUID NULL,
+              parent_id UUID NULL REFERENCES nd_rulebook_categories(id) ON DELETE CASCADE,
+              name TEXT NOT NULL,
+              description TEXT NULL,
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              created_by UUID NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_rulebook_categories_parent
+              ON nd_rulebook_categories (tenant_id, parent_id, sort_order);
+            ALTER TABLE nd_rulebook_categories ADD COLUMN IF NOT EXISTS source_url TEXT NULL;
+            ALTER TABLE nd_rulebook_categories ADD COLUMN IF NOT EXISTS document_url TEXT NULL;
+            CREATE TABLE IF NOT EXISTS nd_regulation_document_categories (
+              regulation_document_id UUID NOT NULL REFERENCES regulation_documents(id) ON DELETE CASCADE,
+              category_id UUID NOT NULL REFERENCES nd_rulebook_categories(id) ON DELETE CASCADE,
+              tenant_id UUID NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              PRIMARY KEY (regulation_document_id, category_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_regulation_document_categories_category
+              ON nd_regulation_document_categories (tenant_id, category_id);
+            -- Departments nest up to three levels; internal documents are filed under them (several each).
+            ALTER TABLE departments ADD COLUMN IF NOT EXISTS parent_id UUID NULL REFERENCES departments(id) ON DELETE CASCADE;
+            CREATE TABLE IF NOT EXISTS nd_internal_document_departments (
+              stored_document_id UUID NOT NULL REFERENCES stored_documents(id) ON DELETE CASCADE,
+              department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+              tenant_id UUID NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              PRIMARY KEY (stored_document_id, department_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_internal_document_departments_department
+              ON nd_internal_document_departments (tenant_id, department_id);
             """,
             ct);
 
