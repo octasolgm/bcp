@@ -1205,8 +1205,12 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
         this.toast.show(this.regUploadPipelineV2.message!, 'error', 4000);
         return;
       }
-      const id = (uploaded.data as { id?: string } | undefined)?.id;
-      if (!id) {
+      const uploadData = uploaded.data as { id?: string; storedDocumentId?: string } | undefined;
+      const regDocId = uploadData?.id?.trim();
+      // Regulation upload returns NdRegulationDocument id; azure-di prepare/parse/extract use StoredDocument id
+      // (same as internal upload and /nd/regulation-documents-azure-di).
+      const storedDocId = uploadData?.storedDocumentId?.trim() || regDocId;
+      if (!regDocId || !storedDocId) {
         this.regUploadPipelineV2 = null;
         this.toast.show('Document uploaded', 'success', 3000);
         this.refreshRegulations(() => this.reapplyRegSelection(keptRegIds));
@@ -1215,7 +1219,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
 
       this.regUploadPipelineV2 = { name: file.name, stage: 'parsing' };
       if (!this.ndAuth.isDemoViewer()) {
-        const prepared = await this.prepareUploadOnServer(id, true, (stage) => {
+        const prepared = await this.prepareUploadOnServer(storedDocId, true, (stage) => {
           this.regUploadPipelineV2 = { name: file.name, stage };
           this.cdr.markForCheck();
         });
@@ -1225,10 +1229,10 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
           this.refreshRegulations(() => this.reapplyRegSelection(keptRegIds));
           return;
         }
-        await this.finishRegulationUpload(file, id, keptRegIds);
+        await this.finishRegulationUpload(file, regDocId, keptRegIds);
         return;
       }
-      const parsed = await this.ndApi.localParseById(id, 'azure-di');
+      const parsed = await this.ndApi.localParseById(storedDocId, 'azure-di');
       if (!parsed.success || parsed.data?.status === 'failed') {
         this.regUploadPipelineV2 = {
           name: file.name,
@@ -1241,7 +1245,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       }
 
       this.regUploadPipelineV2 = { name: file.name, stage: 'extracting' };
-      const extracted = await this.ndApi.localExtractById(id, 'azure-di');
+      const extracted = await this.ndApi.localExtractById(storedDocId, 'azure-di');
       if (!extracted.success || extracted.data?.extractStatus === 'failed') {
         this.regUploadPipelineV2 = {
           name: file.name,
@@ -1253,7 +1257,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
         return;
       }
 
-      await this.finishRegulationUpload(file, id, keptRegIds);
+      await this.finishRegulationUpload(file, regDocId, keptRegIds);
     } catch {
       this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: 'Upload failed' };
       this.toast.show('Regulation upload failed.', 'error', 4000);
