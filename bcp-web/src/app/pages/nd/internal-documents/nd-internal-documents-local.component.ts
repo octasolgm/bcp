@@ -14,6 +14,7 @@ import {
 import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
 import { isActiveDocumentRun } from '../../../services/active-analysis-sessions.service';
 import { ToastService } from '../../../services/toast.service';
+import { NdTreeSelectComponent, type NdTreeSelectOption } from '../../../components/nd/nd-tree-select.component';
 import { startPanelResize } from '../../shared/panel-resize';
 import { formatBytes, formatDate, formatTableDate } from '../../../../lib/nd/utils';
 import { catalogPdfPageLabel, detailPanelPagesPhrase } from '../../../../lib/nd/doc-page-count';
@@ -95,7 +96,8 @@ const RecentUploadKeepMs = 90_000;
 @Component({
   selector: 'app-nd-internal-documents-local',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent, NdCloudImportDialogComponent],
+  imports: [
+    NdTreeSelectComponent,CommonModule, FormsModule, RouterLink, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent, NdCloudImportDialogComponent],
   templateUrl: './nd-internal-documents-local.component.html',
   styleUrls: [
     './nd-internal-documents.component.scss',
@@ -538,6 +540,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     if (res.success && res.data) {
       this.docs = this.keepRecentUploads(res.data as InternalDocument[]);
       await this.mergeLocalStatuses();
+      await this.loadDepartmentTree();
     } else if (!silent || this.docs.length === 0) {
       this.error = res.message ?? 'Failed to load documents';
     }
@@ -662,6 +665,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
       }
       if (this.sourceFilter && (doc.source ?? 'nd') !== this.sourceFilter) return false;
       if (this.parseFilter && (doc.parseStatus ?? 'pending') !== this.parseFilter) return false;
+      if (this.cleanView && !this.docMatchesDepartment(doc)) return false;
       return true;
     });
 
@@ -672,7 +676,165 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     return groupInternalDocumentsByAnalysisSource(this.visibleDocs, this.sortColumn, this.sortDir);
   }
 
-  readonly internalDocsTableColSpan = 10;
+  get internalDocsTableColSpan(): number {
+    return this.cleanView ? 11 : 10;
+  }
+
+  // ---- departments (live page): internal documents are filed under departments, several each ---------
+
+  departmentOptions: Array<{ dept: { id: string; name: string; parentId?: string | null }; level: number; path: string }> = [];
+  private departmentLinks: Record<string, string[]> = {};
+  deptFilter = '';
+  pickerDoc: InternalDocument | null = null;
+  pickerSelected = new Set<string>();
+  pickerSearch = '';
+  pickerTab: 'all' | 'selected' = 'all';
+  pickerExpanded = new Set<string>();
+  savingDepartments = false;
+
+  async loadDepartmentTree(): Promise<void> {
+    if (!this.isCloudEngine) return;
+    const [depts, links] = await Promise.all([this.api.getDepartments(), this.api.getInternalDepartmentLinks()]);
+    if (depts.success && depts.data) {
+      const all = depts.data as Array<{ id: string; name: string; parentId?: string | null; isActive?: boolean }>;
+      const out: typeof this.departmentOptions = [];
+      const walk = (parentId: string | null, level: number, prefix: string) => {
+        all
+          .filter((d) => (d.parentId ?? null) === parentId && d.isActive !== false)
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .forEach((d) => {
+            const path = prefix ? `${prefix} › ${d.name}` : d.name;
+            out.push({ dept: d, level, path });
+            if (level < 3) walk(d.id, level + 1, path);
+          });
+      };
+      walk(null, 1, '');
+      this.departmentOptions = out;
+    }
+    if (links.success && links.data) this.departmentLinks = links.data;
+  }
+
+  /** Options for the department filter dropdown (tree order). */
+  get departmentTreeOptions(): NdTreeSelectOption[] {
+    return this.departmentOptions.map((o) => ({
+      id: o.dept.id,
+      name: o.dept.name,
+      parentId: o.dept.parentId,
+      level: o.level,
+      path: o.path,
+    }));
+  }
+
+  docDepartments(doc: InternalDocument): Array<{ name: string; path: string }> {
+    const ids = this.departmentLinks[doc.id] ?? [];
+    return this.departmentOptions.filter((o) => ids.includes(o.dept.id)).map((o) => ({ name: o.dept.name, path: o.path }));
+  }
+
+  private docMatchesDepartment(doc: InternalDocument): boolean {
+    if (!this.deptFilter) return true;
+    const idx = this.departmentOptions.findIndex((o) => o.dept.id === this.deptFilter);
+    if (idx < 0) return true;
+    const level = this.departmentOptions[idx].level;
+    const scope = new Set([this.deptFilter]);
+    for (let i = idx + 1; i < this.departmentOptions.length && this.departmentOptions[i].level > level; i++) {
+      scope.add(this.departmentOptions[i].dept.id);
+    }
+    return (this.departmentLinks[doc.id] ?? []).some((id) => scope.has(id));
+  }
+
+  openDepartmentPicker(doc: InternalDocument, event?: Event): void {
+    event?.stopPropagation();
+    this.pickerDoc = doc;
+    this.pickerSelected = new Set(this.departmentLinks[doc.id] ?? []);
+    this.pickerSearch = '';
+    this.pickerTab = 'all';
+    this.pickerExpanded = new Set();
+    for (const id of this.pickerSelected) {
+      let parent = this.departmentOptions.find((o) => o.dept.id === id)?.dept.parentId ?? null;
+      while (parent) {
+        this.pickerExpanded.add(parent);
+        parent = this.departmentOptions.find((o) => o.dept.id === parent)?.dept.parentId ?? null;
+      }
+    }
+  }
+
+  closeDepartmentPicker(): void {
+    this.pickerDoc = null;
+  }
+
+  /** Esc closes the picker without saving. */
+  @HostListener('document:keydown.escape')
+  onPickerEscape(): void {
+    if (this.pickerDoc) this.closeDepartmentPicker();
+  }
+
+  pickerHasChildren(id: string): boolean {
+    return this.departmentOptions.some((o) => o.dept.parentId === id);
+  }
+
+  togglePickerGroup(id: string, event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (this.pickerExpanded.has(id)) this.pickerExpanded.delete(id);
+    else this.pickerExpanded.add(id);
+  }
+
+  pickerExpandAll(): void {
+    this.pickerExpanded = new Set(this.departmentOptions.filter((o) => this.pickerHasChildren(o.dept.id)).map((o) => o.dept.id));
+  }
+
+  pickerCollapseAll(): void {
+    this.pickerExpanded = new Set();
+  }
+
+  pickerSelectAll(): void {
+    const q = this.pickerSearch.trim().toLowerCase();
+    for (const o of this.departmentOptions) if (!q || o.path.toLowerCase().includes(q)) this.pickerSelected.add(o.dept.id);
+  }
+
+  pickerClear(): void {
+    this.pickerSelected = new Set();
+  }
+
+  togglePickerDepartment(id: string): void {
+    if (this.pickerSelected.has(id)) this.pickerSelected.delete(id);
+    else this.pickerSelected.add(id);
+  }
+
+  get pickerFlat(): boolean {
+    return !!this.pickerSearch.trim() || this.pickerTab === 'selected';
+  }
+
+  get pickerOptions() {
+    const q = this.pickerSearch.trim().toLowerCase();
+    let list = this.departmentOptions;
+    if (this.pickerTab === 'selected') list = list.filter((o) => this.pickerSelected.has(o.dept.id));
+    if (q) return list.filter((o) => o.path.toLowerCase().includes(q));
+    if (this.pickerFlat) return list;
+    const visible = new Set<string>();
+    return list.filter((o) => {
+      const parent = o.dept.parentId ?? null;
+      const show = !parent || (visible.has(parent) && this.pickerExpanded.has(parent));
+      if (show) visible.add(o.dept.id);
+      return show;
+    });
+  }
+
+  async saveDepartmentPicker(): Promise<void> {
+    const doc = this.pickerDoc;
+    if (!doc || this.savingDepartments) return;
+    this.savingDepartments = true;
+    const ids = [...this.pickerSelected];
+    const res = await this.api.setInternalDocumentDepartments(doc.id, ids);
+    this.savingDepartments = false;
+    if (!res.success) {
+      this.toast.show(res.message ?? 'Could not save the departments', 'error', 4000);
+      return;
+    }
+    this.departmentLinks = { ...this.departmentLinks, [doc.id]: ids };
+    this.pickerDoc = null;
+    this.toast.show('Departments saved', 'success', 2500);
+  }
 
   /** Analysis group whose embed history drawer is open. */
   embedHistoryGroupKey: string | null = null;

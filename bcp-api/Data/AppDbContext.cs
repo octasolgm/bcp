@@ -23,6 +23,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<NdProfile> NdProfiles => Set<NdProfile>();
     public DbSet<NdDepartment> NdDepartments => Set<NdDepartment>();
+    public DbSet<NdRulebookCategory> NdRulebookCategories => Set<NdRulebookCategory>();
+    public DbSet<NdRegulationDocumentCategory> NdRegulationDocumentCategories => Set<NdRegulationDocumentCategory>();
+    public DbSet<NdInternalDocumentDepartment> NdInternalDocumentDepartments => Set<NdInternalDocumentDepartment>();
     public DbSet<NdRegulationDocument> NdRegulationDocuments => Set<NdRegulationDocument>();
     public DbSet<NdRegulationPoint> NdRegulationPoints => Set<NdRegulationPoint>();
     public DbSet<NdInternalDocumentSection> NdInternalDocumentSections => Set<NdInternalDocumentSection>();
@@ -441,6 +444,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     private void ConfigureTenantScoping(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<NdWorkspace>(e => e.HasIndex(w => w.Slug).IsUnique());
+        // Self-reference so EF inserts parents before children and deletes children first (the table has the FK).
+        modelBuilder.Entity<NdRulebookCategory>()
+            .HasOne<NdRulebookCategory>()
+            .WithMany()
+            .HasForeignKey(c => c.ParentId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<NdInternalDocumentDepartment>(e =>
+        {
+            e.HasKey(x => new { x.StoredDocumentId, x.DepartmentId });
+            e.HasOne<NdDepartment>().WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdRegulationDocumentCategory>(e =>
+        {
+            e.HasKey(x => new { x.RegulationDocumentId, x.CategoryId });
+            e.HasOne<NdRulebookCategory>().WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<NdCloudConnection>(e => e.HasIndex(x => new { x.TenantId, x.Provider }).IsUnique());
         modelBuilder.Entity<NdCloudImportLog>(e => e.HasIndex(x => new { x.TenantId, x.CreatedAt }));
         modelBuilder.Entity<NdAiCreditLedgerEntry>(e =>

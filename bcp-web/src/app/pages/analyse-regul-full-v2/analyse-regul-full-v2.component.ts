@@ -214,7 +214,6 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
    * document that is listed after the first answer (or whose check failed) is covered too. */
   private readonly pipelineStatusCheckedIds = new Set<string>();
   private pipelineStatusError = '';
-  private readonly pipelineStatusWaitStart = Date.now();
 
   private static readonly STEP1_HEIGHT_KEY = 'v2-step1-height-px';
   /** Drag-resizable height of the Step 1 (Regulation sources) box — the handle sits between it
@@ -585,7 +584,6 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   /** Second line of the "Checking document status" row. */
   get docStatusCheckHint(): string {
     if (this.pipelineStatusError) return `Could not check yet (${this.pipelineStatusError}). Trying again every few seconds.`;
-    if (Date.now() - this.pipelineStatusWaitStart > 15_000) return 'Taking longer than usual. The server may still be starting.';
     return 'Reading the parse and extract status of your documents.';
   }
 

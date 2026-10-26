@@ -8,6 +8,115 @@
 <div class="nd-page nd-page-fill">
   @if (!isSuperAdmin) {
     <p class="nd-error">Access denied</p>
+  } @else if (treeMode) {
+    <ng-template #deptForm let-placeholder="placeholder">
+      <form class="rb-form" (ngSubmit)="saveForm()">
+        <input class="nd-input" name="dName" [(ngModel)]="formName" [placeholder]="placeholder" aria-label="Department name" required />
+        <input class="nd-input" name="dDescription" [(ngModel)]="formDescription" placeholder="Description (optional)" aria-label="Description" />
+        <button type="submit" class="nd-btn-primary" [disabled]="saving || !formName.trim()">
+          @if (saving) { <span class="rb-spinner" aria-hidden="true"></span> }{{ saving ? 'Saving…' : 'Save' }}
+        </button>
+        <button type="button" class="nd-btn-secondary" [disabled]="saving" (click)="cancelForm()">Cancel</button>
+      </form>
+    </ng-template>
+
+    @if (error) {
+      <p class="nd-error">{{ error }}</p>
+    }
+
+    @if (loading && departments.length === 0) {
+      <p class="nd-muted rb-loading"><span class="rb-spinner" aria-hidden="true"></span> Loading departments…</p>
+    } @else if (departments.length === 0) {
+      <div class="nd-card rb-empty">
+        <strong>No departments yet</strong>
+        <p class="nd-muted">
+          Start from typical bank departments (Compliance, Risk Management, Finance, Operations and more, with their
+          units and teams) and adjust them, or add your own.
+        </p>
+        <div class="rb-empty-actions">
+          <button type="button" class="nd-btn-primary" [disabled]="importing" (click)="importSample()">
+            @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }{{ importing ? 'Adding departments…' : 'Add sample bank departments' }}
+          </button>
+          <button type="button" class="nd-btn-secondary" [disabled]="importing" (click)="openAddRoot()">Add department</button>
+        </div>
+        @if (form?.mode === 'add-root') {
+          <ng-container [ngTemplateOutlet]="deptForm" [ngTemplateOutletContext]="{ placeholder: 'Department name, e.g. Compliance' }" />
+        }
+      </div>
+    } @else {
+      <div class="filter-pills nd-list-toolbar nd-shrink">
+        <input type="search" class="filter-search" [(ngModel)]="treeSearch" placeholder="Search departments…" aria-label="Search departments" />
+        <button type="button" class="filter-clear" (click)="expandAll()">Expand all</button>
+        <button type="button" class="filter-clear" (click)="collapseAll()">Collapse all</button>
+        <span class="filter-count">{{ departments.length }} departments</span>
+        <button type="button" class="nd-btn-primary rb-add-root" (click)="openAddRoot()">Add department</button>
+      </div>
+      @if (form?.mode === 'add-root') {
+        <div class="nd-card rb-root-form">
+          <ng-container [ngTemplateOutlet]="deptForm" [ngTemplateOutletContext]="{ placeholder: 'Department name, e.g. Compliance' }" />
+        </div>
+      }
+      @if (!treeRows.length) {
+        <div class="nd-card nd-empty"><strong>No departments match your search</strong></div>
+      } @else {
+        <div class="nd-card rb-tree" role="tree" aria-label="Departments">
+          @for (row of treeRows; track row.node.dept.id) {
+            @let node = row.node;
+            <div
+              class="rb-row"
+              role="treeitem"
+              [attr.aria-level]="node.level"
+              [class.rb-level-1]="node.level === 1"
+              [class.rb-level-2]="node.level === 2"
+              [class.rb-level-3]="node.level === 3"
+              [class.rb-busy]="deletingDeptId === node.dept.id || savingDeptId === node.dept.id"
+            >
+              <div class="rb-indent"></div>
+              @if (isEditing(node)) {
+                <ng-container [ngTemplateOutlet]="deptForm" [ngTemplateOutletContext]="{ placeholder: 'Department name' }" />
+              } @else {
+                @if (row.hasChildren) {
+                  <button type="button" class="rb-caret" [class.open]="isExpanded(node)" (click)="toggle(node)"
+                    [attr.aria-label]="(isExpanded(node) ? 'Collapse ' : 'Expand ') + node.dept.name">▸</button>
+                } @else {
+                  <span class="rb-caret rb-caret-leaf" aria-hidden="true">•</span>
+                }
+                <div class="rb-main">
+                  <span class="rb-name">{{ node.dept.name }}</span>
+                  @if (node.dept.description) { <span class="rb-desc">{{ node.dept.description }}</span> }
+                </div>
+                <span class="rb-meta">
+                  {{ levelLabel(node.level) }}@if (row.hasChildren) { · {{ node.children.length }} under it }
+                  · {{ node.dept.internalDocumentCount ?? 0 }} internal docs
+                </span>
+                <span class="severity-badge" [class.doc-ready-green]="node.dept.isActive" [class.doc-ready-red]="!node.dept.isActive">
+                  {{ node.dept.isActive ? 'Active' : 'Inactive' }}
+                </span>
+                <div class="rb-actions">
+                  @if (node.level < maxLevel) {
+                    <button type="button" class="nd-btn-secondary rb-btn" (click)="openAddChild(node)">Add {{ node.level === 1 ? 'unit' : 'team' }}</button>
+                  }
+                  <button type="button" class="nd-btn-secondary rb-btn" (click)="openEdit(node)">Edit</button>
+                  <button type="button" class="nd-btn-secondary rb-btn" [disabled]="savingDeptId === node.dept.id" (click)="toggleActive(node.dept)">
+                    {{ node.dept.isActive ? 'Deactivate' : 'Activate' }}
+                  </button>
+                  <button type="button" class="nd-btn-secondary nd-danger rb-btn" [disabled]="deletingDeptId === node.dept.id" (click)="removeNode(node)">
+                    @if (deletingDeptId === node.dept.id) { <span class="rb-spinner" aria-hidden="true"></span> }{{ deletingDeptId === node.dept.id ? 'Deleting…' : 'Delete' }}
+                  </button>
+                </div>
+              }
+            </div>
+            @if (isAddingChildOf(node)) {
+              <div class="rb-row rb-row-form" [class.rb-level-2]="node.level === 1" [class.rb-level-3]="node.level === 2">
+                <div class="rb-indent"></div>
+                <ng-container [ngTemplateOutlet]="deptForm"
+                  [ngTemplateOutletContext]="{ placeholder: (node.level === 1 ? 'Unit' : 'Team') + ' name under ' + node.dept.name }" />
+              </div>
+            }
+          }
+        </div>
+      }
+    }
   } @else {
     <form class="nd-card nd-form-card nd-form-grid nd-shrink" (ngSubmit)="handleCreate()">
       <label class="nd-label">
@@ -90,7 +199,7 @@
               </div>
             </div>
             <div class="nd-actions">
-              <app-nd-status-badge [status]="d.isActive ? 'completed' : 'failed'" />
+              <span class="severity-badge" [class.doc-ready-green]="d.isActive" [class.doc-ready-red]="!d.isActive">{{ d.isActive ? 'Active' : 'Inactive' }}</span>
               <button
                 type="button"
                 class="nd-btn-secondary"

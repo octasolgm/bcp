@@ -27,7 +27,8 @@ public class InternalDocumentsController(
     NdDemoUserDirectory demoDirectory,
     NdDemoInterceptionService demoInterception,
     SupabaseJwtValidator jwt,
-    NdDashboardCacheService dashboardCache) : NdControllerBase
+    NdDashboardCacheService dashboardCache,
+    ILogger<InternalDocumentsController> logger) : NdControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] bool hiddenOnly = false, CancellationToken ct = default)
@@ -535,6 +536,80 @@ public class InternalDocumentsController(
         dashboardCache.Invalidate();
 
         return Ok(new { success = true, message = "Document removed from library (data kept in database)." });
+    }
+
+    public record SetDepartmentsRequest(List<Guid>? DepartmentIds);
+
+    /// <summary>Departments of every internal document in the workspace: document id -> department ids.</summary>
+    [HttpGet("departments")]
+    public async Task<IActionResult> DepartmentLinks(CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var links = await appDb.NdInternalDocumentDepartments.AsNoTracking()
+            .Select(l => new { l.StoredDocumentId, l.DepartmentId })
+            .ToListAsync(ct);
+        var data = links
+            .GroupBy(l => l.StoredDocumentId)
+            .ToDictionary(g => g.Key.ToString(), g => g.Select(l => l.DepartmentId).ToList());
+        return Ok(new { success = true, data });
+    }
+
+    /// <summary>Replaces the departments an internal document is filed under (any level, several allowed).</summary>
+    [HttpPut("{id:guid}/departments")]
+    public async Task<IActionResult> SetDepartments(Guid id, [FromBody] SetDepartmentsRequest body, CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
+        if (error != null) return error;
+
+        if (!await appDb.StoredDocuments.AnyAsync(d => d.Id == id, ct))
+            return NotFound(new { success = false, message = "Document not found." });
+
+        var wanted = (body.DepartmentIds ?? []).Distinct().ToList();
+        var known = await appDb.NdDepartments.AsNoTracking().Where(d => wanted.Contains(d.Id)).CountAsync(ct);
+        if (known != wanted.Count)
+            return BadRequest(new { success = false, message = "One or more departments were not found." });
+
+        var current = await appDb.NdInternalDocumentDepartments.Where(l => l.StoredDocumentId == id).ToListAsync(ct);
+        appDb.NdInternalDocumentDepartments.RemoveRange(current.Where(l => !wanted.Contains(l.DepartmentId)));
+        foreach (var departmentId in wanted.Where(d => current.All(l => l.DepartmentId != d)))
+            appDb.NdInternalDocumentDepartments.Add(new NdInternalDocumentDepartment { StoredDocumentId = id, DepartmentId = departmentId });
+        await appDb.SaveChangesAsync(ct);
+        dashboardCache.Invalidate();
+        return Ok(new { success = true, data = wanted });
+    }
+
+    /// <summary>
+    /// Platform super admin only: removes an already deleted internal document for good - parsed text, sections,
+    /// database row and the stored file. Refused while any analysis uses it. Others only ever soft delete.
+    /// </summary>
+    [HttpDelete("{id:guid}/permanent")]
+    public async Task<IActionResult> DeletePermanently(Guid id, CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(appDb, jwt, ct);
+        if (error != null) return error;
+
+        var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(
+            d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+        if (doc == null)
+            return NotFound(new { success = false, message = "Document not found." });
+        if (!doc.IsHidden)
+            return BadRequest(new { success = false, message = "Delete the document first; only deleted documents can be removed permanently." });
+
+        var runs = (await NdDocumentAnalysisRunCountHelper.LoadAsync(appDb, ct)).CountForInternal(id);
+        if (runs > 0)
+            return Conflict(new { success = false, message = $"Used in {runs} analysis run(s). Delete those analyses first." });
+
+        // Parsed text, sections and passages go with the row (database cascades).
+        await appDb.StoredDocuments.Where(d => d.Id == id).ExecuteDeleteAsync(ct);
+        if (!string.IsNullOrWhiteSpace(doc.StoragePath) && storage.IsConfigured)
+        {
+            try { await storage.DeleteAsync(doc.StoragePath, ct); }
+            catch (Exception ex) { logger.LogWarning(ex, "Stored file {Path} was not removed", doc.StoragePath); }
+        }
+        dashboardCache.Invalidate();
+        return Ok(new { success = true, message = "Document deleted permanently." });
     }
 
     [HttpPost("{id:guid}/restore")]

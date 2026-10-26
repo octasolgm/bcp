@@ -461,6 +461,16 @@
                         >
                           {{ hidingId === d.id ? 'Restoring…' : 'Restore' }}
                         </button>
+                        @if (canDeletePermanently) {
+                          <button
+                            type="button"
+                            class="row-action-btn compact danger"
+                            [disabled]="hidingId === d.id"
+                            (click)="handleDeletePermanently(d, $event)"
+                          >
+                            @if (hidingId === d.id) { <span class="row-action-spinner nd-inline-spinner" aria-hidden="true"></span> }Delete permanently
+                          </button>
+                        }
                       }
                     }
                   </div>

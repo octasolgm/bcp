@@ -837,6 +837,27 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.deletingId = null;
   }
 
+  /** Platform super admin, in the deleted list: remove the document for good (workspace admins only soft delete). */
+  get canDeletePermanently(): boolean {
+    return this.showDeleted && this.auth.isPlatformAdmin() && !this.auth.isDemoViewer();
+  }
+
+  async handleDeletePermanently(doc: InternalDocument, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (!confirm(`Delete "${doc.title}" permanently? Its file and parsed text are removed and cannot be restored.`)) return;
+    this.deletingId = doc.id;
+    this.error = '';
+    const res = await this.api.deleteInternalDocumentPermanently(doc.id);
+    this.deletingId = null;
+    if (!res.success) {
+      this.error = res.message ?? 'Failed to delete the document';
+      return;
+    }
+    this.toast.show('Document deleted permanently', 'success', 3000);
+    this.workspaceNav.bumpNavBadges({ internalDocumentsDeleted: -1 });
+    await this.load(true);
+  }
+
   actorLabel(name?: string | null): string {
     const trimmed = (name ?? '').trim();
     return trimmed || '—';

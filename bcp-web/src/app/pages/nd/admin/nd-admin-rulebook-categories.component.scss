@@ -1,0 +1,283 @@
+.rb-empty {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+
+  p {
+    margin: 0;
+    max-width: 44rem;
+  }
+}
+
+.rb-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.rb-add-root {
+  margin-left: auto;
+}
+
+.rb-root-form {
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.rb-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+
+  .nd-input {
+    flex: 1 1 14rem;
+    min-width: 10rem;
+  }
+}
+
+.rb-tree {
+  padding: 0.25rem 0;
+  overflow: auto;
+}
+
+.rb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &:hover:not(.rb-row-form) {
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+}
+
+.rb-busy {
+  opacity: 0.55;
+}
+
+.rb-indent {
+  flex: 0 0 auto;
+  width: 0;
+}
+
+.rb-level-2 .rb-indent {
+  width: 1.6rem;
+}
+
+.rb-level-3 .rb-indent {
+  width: 3.2rem;
+}
+
+.rb-level-4 .rb-indent {
+  width: 4.8rem;
+}
+
+.rb-caret {
+  flex: 0 0 1.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.rb-caret-leaf {
+  cursor: default;
+  text-align: center;
+  font-size: 0.7rem;
+}
+
+.rb-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rb-name {
+  overflow-wrap: anywhere;
+}
+
+.rb-level-1 .rb-name {
+  font-weight: 650;
+}
+
+.rb-level-2 .rb-name {
+  font-weight: 550;
+}
+
+.rb-desc {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.rb-meta {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.rb-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.rb-btn {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .rb-row {
+    flex-wrap: wrap;
+  }
+
+  .rb-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .rb-meta {
+    display: none;
+  }
+}
+
+.rb-import-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.rb-import-text {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.rb-import-track {
+  flex: 1;
+  max-width: none;
+}
+
+.rb-import-notice {
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+  border-left: 3px solid var(--medium, var(--accent));
+}
+
+.rb-doc-count {
+  color: var(--low);
+  font-weight: 600;
+}
+
+.rb-upload {
+  position: relative;
+  cursor: pointer;
+
+  &.busy {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.rb-file {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+a.rb-btn {
+  text-decoration: none;
+}
+
+.rb-spinner {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-right: 0.4rem;
+  vertical-align: -0.12rem;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: rb-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes rb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.rb-loading {
+  display: flex;
+  align-items: center;
+}
+
+.rb-doc-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.rb-doc-caret {
+  display: inline-block;
+  font-size: 0.65rem;
+  transition: transform 0.15s ease;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.rb-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.5rem;
+  padding-right: 0.9rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+  font-size: 0.8125rem;
+}
+
+.rb-doc-link {
+  color: var(--accent);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}

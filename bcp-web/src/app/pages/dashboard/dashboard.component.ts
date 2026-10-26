@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { forkJoin, Observable, of } from 'rxjs';
@@ -771,6 +771,16 @@ export class DashboardComponent implements OnInit {
   }
 
   /** Drill into analyses that contribute to this dashboard card total. */
+  @ViewChild(NdMisPanelComponent) private misPanel?: NdMisPanelComponent;
+  @ViewChild(NdMisPanelComponent, { read: ElementRef }) private misPanelEl?: ElementRef<HTMLElement>;
+
+  /** Actions card: scroll to the corrective actions panel below and show the chosen tab. */
+  openActions(status: 'all' | 'pending' | 'resolved', event?: Event): void {
+    event?.stopPropagation();
+    this.misPanel?.selectStatus(status);
+    this.misPanelEl?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   openMetricBreakdown(metric: DashboardMetricId): void {
     if (this.inNdShell) {
       void this.router.navigate(['/nd/overview/metric'], {

@@ -1,0 +1,1221 @@
+{
+ "source": "Regulatory authorities with their rulebook structure. CBUAE: https://rulebook.centralbank.ae/en (structure and document links as published, read 26 Oct 2026). DFSA, ADGM and CMA: main rulebook modules as a starting point to adjust.",
+ "categories": [
+  {
+   "name": "Central Bank of the UAE",
+   "sourceUrl": "https://rulebook.centralbank.ae/en",
+   "children": [
+    {
+     "name": "All Licensed Financial Institutions",
+     "children": [
+      {
+       "name": "Laws",
+       "children": [
+        {
+         "name": "Federal Decree-Law No. (6) of 2025 Regarding the Central Bank, Regulation of Financial Institutions and Activities, and Insurance Business",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/federal-decree-law-no-6-2025-regarding-central-bank-regulation-financial-institutions-and",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6185_VER1.pdf"
+        },
+        {
+         "name": "Central Bank & Organization of Financial Institutions and Activities Law",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/central-bank-organization-financial-institutions-and-activities-law",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_421_VER7.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/laws"
+      },
+      {
+       "name": "AML/CFT",
+       "children": [
+        {
+         "name": "Anti-Money Laundering and Combating the Financing of Terrorism and Illegal Organisations Laws",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/anti-money-laundering-and-combating-financing-terrorism-and-illegal-organisations-laws"
+        },
+        {
+         "name": "Procedures for Anti-Money Laundering and Combating the Financing of Terrorism and Illicit Organizations",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/procedures-anti-money-laundering-and-combating-financing-terrorism-and-illicit",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1853_VER1.pdf"
+        },
+        {
+         "name": "Anti-Money Laundering and Combating the Financing of Terrorism and Illegal Organisations Guidelines for Financial Institutions",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/anti-money-laundering-and-combating-financing-terrorism-and-illegal-organisations",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3945_VER2.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on Suspicious Transaction Reporting",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-suspicious-transaction-reporting",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_418_VER2.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on the Implementation of Targeted Financial Sanctions",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-implementation-targeted-financial-sanctions",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_996_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on Transaction Monitoring and Sanctions Screening",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-transaction-monitoring-and-sanctions-screening",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_949_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions Providing Services to Cash-intensive Businesses",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-providing-services-cash-intensive-businesses",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_915_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Exchange Houses",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-exchange-houses",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_202_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions Providing Services to Legal Persons and Arrangements",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-providing-services-legal-persons-and-arrangements",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_699_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions Providing Services to the Real Estate and the Precious Metals and Stones Sectors",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-providing-services-real-estate-and-precious",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_644_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Registered Hawala Providers and Licensed Financial Institutions Providing Services to Registered Hawala Providers",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-registered-hawala-providers-and-licensed-financial-institutions-providing",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_498_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on the Risks Relating to Payments",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-risks-relating-payments",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4368_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on the Risks Relating to Politically Exposed Persons",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-risks-relating-politically-exposed-persons",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4407_VER1.pdf"
+        },
+        {
+         "name": "Guidance for the Insurance Sector",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-insurance-sector",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4429_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on Digital Identification for Customer Due Diligence",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-digital-identification-customer-due-diligence",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4473_VER1.pdf"
+        },
+        {
+         "name": "Cabinet Decision No. (109) of 2023 on Regulating the Beneficial Owner Procedures",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/cabinet-decision-no-109-2023-regulating-beneficial-owner-procedures",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7154_VER1.pdf"
+        },
+        {
+         "name": "Cabinet Decision 74 of 2020: Terrorism Lists Regulation and Implementation of UN Security Council Resolutions",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/cabinet-decision-74-2020-terrorism-lists-regulation-and-implementation-un-security-council",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4496_VER1.pdf"
+        },
+        {
+         "name": "Registered Hawala Providers Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/registered-hawala-providers-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4588_VER1.pdf"
+        },
+        {
+         "name": "Best Practices for Licensed Financial Institutions on Implementing Role-Based AML/CFT/CPF Training",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/best-practices-licensed-financial-institutions-implementing-role-based-amlcftcpf-training",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6530_VER1.pdf"
+        },
+        {
+         "name": "Best Practices for Licensed Financial Institutions on Implementing a Risk-Based Approach and Conducting Risk-Based Institutional Risk Assessments",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/best-practices-licensed-financial-institutions-implementing-risk-based-approach-and",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6531_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on Correspondent Banking and Expectations for Managing Correspondent Banking Relationships",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-correspondent-banking-and-expectations-managing",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6587_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on Customer Due Diligence/Know Your Customer and Record-Keeping",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-customer-due-diligenceknow-your-customer-and",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6593_VER1.pdf"
+        },
+        {
+         "name": "The United Arab Emirates' Virtual Assets Travel Rule",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/united-arab-emirates%E2%80%99-virtual-assets-travel-rule",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6663_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on Risks Related to Proliferation Finance",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-risks-related-proliferation-finance",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6725_VER1.pdf"
+        },
+        {
+         "name": "Guidance for Licensed Financial Institutions on Risks Related to Trade-Based Money Laundering (TBML) and Transshipment",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-licensed-financial-institutions-risks-related-trade-based-money-laundering-%E2%80%9Ctbml%E2%80%9D",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6788_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/amlcft"
+      },
+      {
+       "name": "Market Conduct & Consumer Protection",
+       "children": [
+        {
+         "name": "Consumer Protection Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/consumer-protection-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2757_VER1.pdf"
+        },
+        {
+         "name": "Consumer Protection Standards",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/consumer-protection-standards",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4229_VER1.pdf"
+        },
+        {
+         "name": "Small to Medium Sized Enterprises (SME) - Customer Protection Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/small-medium-sized-enterprises-sme-customer-protection-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6969_VER1.pdf"
+        },
+        {
+         "name": "Small to Medium Sized Enterprises (SME) - Market Conduct Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/small-medium-sized-enterprises-sme-market-conduct-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2200_VER1.pdf"
+        },
+        {
+         "name": "Acceptance of Public Subscription",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/acceptance-public-subscription",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3912_VER1_0.pdf"
+        },
+        {
+         "name": "Approval for IPO Participation by Banks",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/approval-ipo-participation-banks",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3919_VER1.pdf"
+        },
+        {
+         "name": "Establishment of an Ombudsman Unit for The United Arab Emirates Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/establishment-ombudsman-unit-united-arab-emirates-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4711_VER1_0.pdf"
+        },
+        {
+         "name": "Guidance Note on the Consumer Protection and Responsible Adoption and Use of Artificial Intelligence and Machine Learning by Licensed Financial Institutions in the U.A.E.",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-note-consumer-protection-and-responsible-adoption-and-use-artificial-intelligence",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6958_VER1.pdf"
+        },
+        {
+         "name": "Telemarketing Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/telemarketing-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7000_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/market-conduct-consumer-protection"
+      },
+      {
+       "name": "Regulated Products",
+       "children": [
+        {
+         "name": "Crowdfunding",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/crowdfunding"
+        },
+        {
+         "name": "Dormant accounts",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/dormant-accounts"
+        },
+        {
+         "name": "Stored-value facilities",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/stored-value-facilities"
+        },
+        {
+         "name": "Retail Payment Systems Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/retail-payment-systems-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1494_VER1.pdf"
+        },
+        {
+         "name": "Large Value Payment Systems Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/large-value-payment-systems-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1627_VER1.pdf"
+        },
+        {
+         "name": "Retail Payment Services and Card Schemes Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/retail-payment-services-and-card-schemes-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1580_VER1.pdf"
+        },
+        {
+         "name": "Mortgage loans & Personal loans",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/mortgage-loans-personal-loans"
+        },
+        {
+         "name": "Payment Token Services Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/payment-token-services-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5731_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/regulated-products"
+      },
+      {
+       "name": "Regulations and Shari'ah Standards",
+       "children": [
+        {
+         "name": "Regulation No. 1/2026 for the Federal Decree by Law No. (50) of 2022 Concerning Promulgating the Commercial Transactions Law, Regarding Controls and Rules of Commercial Transactions of Islamic Financial Institutions and Takaful Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/regulation-no-12026-federal-decree-law-no-50-2022-concerning-promulgating-commercial",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7332_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/regulations-and-shari%E2%80%99ah-standards"
+      },
+      {
+       "name": "Shari'ah Supervision",
+       "children": [
+        {
+         "name": "Guidance Note Re Annual Shari'ah Report of Internal Shari'ah Supervision Committee",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-note-re-annual-shariah-report-internal-shariah-supervision-committee",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2620_VER1.pdf"
+        },
+        {
+         "name": "Guidance Note Re Charter of Internal Shari'ah Supervision Committee",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-note-re-charter-internal-shariah-supervision-committee",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2027_VER1.pdf"
+        },
+        {
+         "name": "Standard Re. Regulatory Requirements for Financial Institutions Housing an Islamic Window",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-regulatory-requirements-financial-institutions-housing-islamic-window",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3509_VER1.pdf"
+        },
+        {
+         "name": "Standard Re Shari'ah Compliance Function At Islamic Financial Institutions",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-shari%E2%80%99ah-compliance-function-islamic-financial-institutions",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5692_VER1.pdf"
+        },
+        {
+         "name": "Guidance Note Re Shari'ah Compliance Function At Islamic Financial Institutions",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-note-re-shari%E2%80%99ah-compliance-function-islamic-financial-institutions",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5705_VER1.pdf"
+        },
+        {
+         "name": "Standard Re External Shari'ah Audit for Islamic Financial Institutions",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-external-shari%E2%80%99ah%C2%A0-audit-islamic-financial-institutions",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6018_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/shari%E2%80%99ah-supervision"
+      },
+      {
+       "name": "Sustainable Finance",
+       "children": [
+        {
+         "name": "Principles for the effective management of climate-related financial risks",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/principles-effective-management-climate-related-financial-risks",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5114_VER1.pdf"
+        },
+        {
+         "name": "Principles for Sustainability-Related Disclosures",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/principles-sustainability-related-disclosures",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5791_VER1.pdf"
+        },
+        {
+         "name": "Climate-related Financial Risk Management Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/climate-related-financial-risk-management-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6431_VER1.pdf"
+        },
+        {
+         "name": "Principles for Climate Transition Planning",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/principles-climate-transition-planning",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6986_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/sustainable-finance"
+      },
+      {
+       "name": "Enabling Technologies",
+       "children": [
+        {
+         "name": "Guidelines for Financial Institutions Adopting Enabling Technologies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidelines-financial-institutions-adopting-enabling-technologies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2413_VER1.pdf"
+        },
+        {
+         "name": "Open Finance Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/open-finance-regulation-0",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6127_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/enabling-technologies"
+      },
+      {
+       "name": "Recovery and Resolution",
+       "children": [
+        {
+         "name": "Recovery Planning Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/recovery-planning-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5558_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/recovery-and-resolution"
+      },
+      {
+       "name": "Risk Management",
+       "children": [
+        {
+         "name": "Credit Risk Management Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/credit-risk-management-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5974_VER1.pdf"
+        },
+        {
+         "name": "Credit Risk Management Standards",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/credit-risk-management-standards",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5996_VER1.pdf"
+        },
+        {
+         "name": "Operational Risk Management Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/operational-risk-management-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7267_VER1.pdf"
+        },
+        {
+         "name": "Climate-related Financial Risk Management",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/climate-related-financial-risk-management"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/risk-management-0"
+      },
+      {
+       "name": "Other Topics",
+       "children": [
+        {
+         "name": "Regulation to Impose Financial Sanctions for Strict Liability Violations",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/regulation-impose-financial-sanctions-strict-liability-violations",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4208_VER1.pdf"
+        },
+        {
+         "name": "Administrative and Financial Penalties for Emiratization Violations Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/administrative-and-financial-penalties-emiratization-violations-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6672_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/other-topics"
+      },
+      {
+       "name": "Governance and Designated Functions",
+       "children": [
+        {
+         "name": "Fitness and Propriety Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/fitness-and-propriety-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6052_VER1.pdf"
+        },
+        {
+         "name": "Fitness and Propriety Standards",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/fitness-and-propriety-standards",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6070_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/governance-and-designated-functions"
+      }
+     ],
+     "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/all-licensed-financial-institutions"
+    },
+    {
+     "name": "Banking",
+     "children": [
+      {
+       "name": "Capital Adequacy",
+       "children": [
+        {
+         "name": "Regulations Re Capital Adequacy",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/regulations-re-capital-adequacy",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1836_VER1%20(1).pdf"
+        },
+        {
+         "name": "Standards for Capital Adequacy of Banks in the UAE",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standards-capital-adequacy-banks-uae",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1691_VER2.pdf"
+        },
+        {
+         "name": "Guidance for Capital Adequacy of Banks in the UAE",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-capital-adequacy-banks-uae",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2464_VER2.pdf"
+        },
+        {
+         "name": "Minimum Capital for Banks Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/minimum-capital-banks-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2103_VER1.pdf"
+        },
+        {
+         "name": "Regulation Regarding Accounting Provisions and Capital Requirements - Transitional Arrangements",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/regulation-regarding-accounting-provisions-and-capital-requirements-transitional",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3934_VER1.pdf"
+        },
+        {
+         "name": "Countercyclical Capital Buffer",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/countercyclical-capital-buffer"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/capital-adequacy"
+      },
+      {
+       "name": "Governance, Internal Control and Shareholding",
+       "children": [
+        {
+         "name": "Corporate Governance Regulation for Banks",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/corporate-governance-regulation-banks",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2179_VER1.pdf"
+        },
+        {
+         "name": "Corporate Governance Standards for Banks",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/corporate-governance-standards-banks",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1287_VER1.pdf"
+        },
+        {
+         "name": "Standard Re. Shari'ah Governance for Islamic Financial Institutions",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-shariah-governance-islamic-financial-institutions",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2825_VER1.pdf"
+        },
+        {
+         "name": "Major Acquisitions Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/major-acquisitions-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2792_VER1.pdf"
+        },
+        {
+         "name": "Transfer of Significant Shareholding Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/transfer-significant-shareholding-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2809_VER1.pdf"
+        },
+        {
+         "name": "National Shareholding in Banks Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/national-shareholding-banks-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4171_VER1.pdf"
+        },
+        {
+         "name": "Remuneration Regulation for Banks and Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/remuneration-regulation-banks-and-insurance-companies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7031_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/governance-internal-control-and-shareholding"
+      },
+      {
+       "name": "Liquidity",
+       "children": [
+        {
+         "name": "Regulations Re Liquidity at Banks",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/regulations-re-liquidity-banks",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2776_VER1.pdf"
+        },
+        {
+         "name": "Guidance Manual for Circular Number 33/2015 Liquidity Regulations at Banks",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guidance-manual-circular-number-332015-liquidity-regulations-banks",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1249_VER1.pdf"
+        },
+        {
+         "name": "Standard Re Liquidity at Islamic Banks",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-liquidity-islamic-banks",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1286_VER1.pdf"
+        },
+        {
+         "name": "Advances to Deposits Ratio",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/advances-deposits-ratio",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4122_VER1_0.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/liquidity"
+      },
+      {
+       "name": "Risk Management",
+       "children": [
+        {
+         "name": "Risk Management Regulation and Standards",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/risk-management-regulation-and-standards"
+        },
+        {
+         "name": "Credit Risk",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/credit-risk"
+        },
+        {
+         "name": "Operational Risk",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/operational-risk"
+        },
+        {
+         "name": "IRRBB",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/irrbb"
+        },
+        {
+         "name": "Country and Transfer Risk",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/country-and-transfer-risk"
+        },
+        {
+         "name": "Market Risk",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/market-risk"
+        },
+        {
+         "name": "Model Management Standards",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/model-management-standards",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4881_VER1.pdf"
+        },
+        {
+         "name": "Model Management Guidance",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/model-management-guidance",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4961_VER1.pdf"
+        },
+        {
+         "name": "Climate-related Financial Risk Management",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/climate-related-financial-risk-management-0"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/risk-management"
+      },
+      {
+       "name": "Internal Audit",
+       "children": [
+        {
+         "name": "Internal Controls, Compliance and Internal Audit Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/internal-controls-compliance-and-internal-audit-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1953_VER1.pdf"
+        },
+        {
+         "name": "Internal Controls, Compliance and Internal Audit Standards",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/internal-controls-compliance-and-internal-audit-standards",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2377_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/internal-audit"
+      },
+      {
+       "name": "Financial Reporting and External Audit",
+       "children": [
+        {
+         "name": "Financial Reporting & External Audit Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/financial-reporting-external-audit-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2028_VER1.pdf"
+        },
+        {
+         "name": "Financial Reporting and External Audit Standards",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/financial-reporting-and-external-audit-standards",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2370_VER1_0.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/financial-reporting-and-external-audit"
+      },
+      {
+       "name": "Other Regulations",
+       "children": [
+        {
+         "name": "Banks' Acquisition of Own Shares Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/banks%E2%80%99-acquisition-own-shares-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4841_VER1_0.pdf"
+        },
+        {
+         "name": "Outsourcing Regulation for Banks",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/outsourcing-regulation-banks",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2267_VER1.pdf"
+        },
+        {
+         "name": "Outsourcing Standards for Banks",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/outsourcing-standards-banks",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2327_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/other-regulations"
+      },
+      {
+       "name": "Special licenses",
+       "children": [
+        {
+         "name": "Specialized Banks with Low Risk Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/specialized-banks-low-risk-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1714_VER1.pdf"
+        },
+        {
+         "name": "Restricted Licence Banks Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/restricted-licence-banks-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4185_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/special-licenses"
+      }
+     ],
+     "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/banking"
+    },
+    {
+     "name": "Insurance",
+     "children": [
+      {
+       "name": "Licensing",
+       "children": [
+        {
+         "name": "Insurance Company Licensing Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-company-licensing-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7293_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/licensing-1"
+      },
+      {
+       "name": "Governance, Risk Management and Internal Control, Ownership Ratios",
+       "children": [
+        {
+         "name": "Corporate Governance Regulation for Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/corporate-governance-regulation-insurance-companies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4669_VER1.pdf"
+        },
+        {
+         "name": "Corporate Governance Standards for Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/corporate-governance-standards-insurance-companies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4640_VER1.pdf"
+        },
+        {
+         "name": "Risk Management and Internal Controls Regulation for Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/risk-management-and-internal-controls-regulation-insurance-companies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4689_VER1.pdf"
+        },
+        {
+         "name": "Risk Management and Internal Controls Standards for Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/risk-management-and-internal-controls-standards-insurance-companies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4654_VER1.pdf"
+        },
+        {
+         "name": "Operational Risk",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/operational-risk-0"
+        },
+        {
+         "name": "Board of Directors' Decision No. (15) of 2019 On the Instructions Concerning the Rules of Ownership Ratios in the Capital of Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/board-directors%E2%80%99-decision-no-15-2019-instructions-concerning-rules-ownership-ratios",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3858_VER1.pdf"
+        },
+        {
+         "name": "Climate-related Financial Risk Management",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/climate-related-financial-risk-management-1"
+        },
+        {
+         "name": "Standards re Enterprise Risk Management for Solvency Purposes for Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standards-re-enterprise-risk-management-solvency-purposes-insurance-companies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6678_VER1.pdf"
+        },
+        {
+         "name": "Remuneration Regulation for Banks and Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/remuneration-regulation-banks-and-insurance-companies-0",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7041_VER1.pdf"
+        },
+        {
+         "name": "Standard Regarding Regulatory Requirements For Insurance Companies Housing A Takaful Insurance Window",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-regarding-regulatory-requirements-insurance-companies-housing-takaful-insurance",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7313_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/governance-risk-management-and-internal-control-ownership-ratios"
+      },
+      {
+       "name": "Financial and Capital Regulations",
+       "children": [
+        {
+         "name": "Insurance Authority Board Decision Number (25) of 2014 Pertinent to Financial Regulations for Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-decision-number-25-2014-pertinent-financial-regulations",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1087_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority Board Decision Number (26) of 2014 Pertinent to Financial Regulations for Takaful Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-decision-number-26-2014-pertinent-financial-regulations-takaful",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_238_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority Board of Directors' Decision No. (14) of 2018, Pertinent to the Application of Financial Solvency Requirements",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors-decision-no-14-2018-pertinent-application-financial",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3121_VER1.pdf"
+        },
+        {
+         "name": "The Board of Directors' Decision No. (22) of 2017 Concerning the Application of the Investment Limits Stipulated in the Financial Regulations for Insurance Companies and the Financial Regulations for Takaful Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/board-directors-decision-no-22-2017-concerning-application-investment-limits-stipulated",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2978_VER1.pdf"
+        },
+        {
+         "name": "Cabinet Resolution No. 42 of 2009 Concerning Insurance Company Minimum Capital Regulations",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/cabinet-resolution-no-42-2009-concerning-insurance-company-minimum-capital-regulations",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_2839_VER2.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/financial-and-capital-regulations"
+      },
+      {
+       "name": "Regulatory Reporting",
+       "children": [
+        {
+         "name": "Insurance Authority Board of Directors' Resolution No. (20) of 2020 Concerning the Extension of the Periods Granted to Insurance Companies to Submit the Specified Financial Data and Reports",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors-resolution-no-20-2020-concerning-extension-periods",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3884_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority's Board of Directors' Decision No. (19) of 2020 Concerning the Guidance Manual for Insurance Companies and Related Professions to Submitting the Data, Information & Supervisory Reports",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority%E2%80%99s-broad-directors%E2%80%99-decision-no-19-2020-concerning-guidance-manual",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3435_VER1.pdf"
+        },
+        {
+         "name": "A Guide to the Regulatory Information, Data and Reports to be Provided by the Insurance Companies and Insurance-Related Professions",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/guide-regulatory-information-data-and-reports-be-provided-insurance-companies-and",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3440_VER1.pdf"
+        },
+        {
+         "name": "Financial Reporting and External Audit Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/financial-reporting-and-external-audit-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5609_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority Board of Directors Decision No. (32) of 2017 Concerning the Common Reporting Standard Regulations",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors-decision-no-32-2017-concerning-common-reporting",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4091_VER1_0.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/regulatory-reporting"
+      },
+      {
+       "name": "Takaful Insurance Regulations",
+       "children": [
+        {
+         "name": "Regulation Regarding Takaful Insurance",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/regulation-regarding-takaful-insurance-0",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7178_VER1.pdf"
+        },
+        {
+         "name": "Standard re Shari'ah Governance for Takaful Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-shari%E2%80%99ah-governance-takaful-insurance-companies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5056_VER1.pdf"
+        },
+        {
+         "name": "Standard Re Annual Shari'ah Report of Internal Shari'ah Supervision Committee for Takaful Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-annual-shari%E2%80%99ah-report-internal-shari%E2%80%99ah-supervision-committee-takaful",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5583_VER1.pdf"
+        },
+        {
+         "name": "Standard Re Charter of Internal Shari'ah Supervision Committee for Takaful Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-charter-internal-shari%E2%80%99ah-supervision-committee-takaful-insurance-companies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5590_VER1.pdf"
+        },
+        {
+         "name": "Standard Re External Shari'ah Audit for Takaful Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-external-shari%E2%80%99ah-audit-takaful-insurance-companies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6034_VER1.pdf"
+        },
+        {
+         "name": "Standard Re the Operational Model of Takaful Insurance",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-operational-model-takaful-insurance",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7246_VER1.pdf"
+        },
+        {
+         "name": "Standard of Shari'ah and Procedural Requirements for Agency (Wakala) in Takaful Insurance",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-shari%E2%80%99ah-and-procedural-requirements-agency-wakala-takaful-insurance"
+        },
+        {
+         "name": "Standard Re Controls and Procedures Establishing Takaful Insurance Fund",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-re-controls-and-procedures-establishing-takaful-insurance-fund",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_7233_VER1.pdf"
+        },
+        {
+         "name": "Standard Regarding Regulatory Requirements for Insurance Companies Housing A Takaful Insurance Window",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standard-regarding-regulatory-requirements-insurance-companies-housing-takaful-insurance-0"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/takaful-insurance-regulations"
+      },
+      {
+       "name": "Conduct (including disputes, pricing, policies)",
+       "children": [
+        {
+         "name": "Insurance Authority Board Resolution No. (33) of 2019 Concerning the Regulation of the Committees for the Settlement and Resolution of Insurance Disputes",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-resolution-no-33-2019-concerning-regulation-committees",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1884_VER2.pdf"
+        },
+        {
+         "name": "Insurance Authority Board Resolution No. 3 of 2010 Instructions Concerning the Code of Conduct and Ethics to be Observed by Insurance Companies and Insurance-Related Professions Operating in the UAE",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-resolution-no-3-2010-instructions-concerning-code-conduct-and",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_156_VER2.pdf"
+        },
+        {
+         "name": "Administrative Decision No. (140) of 2019 Concerning the Exclusion of Some Insurance Policies From the Requirement of Being Written in the Arabic Language",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/administrative-decision-no-140-2019-concerning-exclusion-some-insurance-policies",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3117_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority Board of Directors' Decision No. (49) of 2019 Concerning Instructions for Life Insurance and Family Takaful Insurance",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors%E2%80%99-decision-no-49-2019-concerning-instructions-life",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3459_VER2.pdf"
+        },
+        {
+         "name": "The Insurance Authority Board of Directors' Decision No. (41) of 2019 Concerning the Supervisory Rules for the Experimental Environment of Financial Technology in the Insurance Industry",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors-decision-no-41-2019-concerning-supervisory-rules",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1130_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority Board of Directors' Resolution No. (18) of 2020 Concerning the Electronic Insurance Regulations",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors-resolution-no-18-2020-concerning-electronic-insurance",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1002_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority Board of Directors Resolution No. (11) of 2016 Concerning the Revision of the Pricing Policy Applied by a Company in the Classes of Property and Liability Insurance",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors-resolution-no-11-2016-concerning-revision-pricing",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3845_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/conduct-including-disputes-pricing-policies"
+      },
+      {
+       "name": "Sanctions and Enforcement",
+       "children": [
+        {
+         "name": "Cabinet Resolution No. (7) of 2019 Concerning the Administrative Fines Imposed by the Insurance Authority",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/cabinet-resolution-no-7-2019-concerning-administrative-fines-imposed-insurance-authority",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_1150_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority (IA) Board of Directors' Resolution No. (25) of 2020 Concerning the Grievance Procedures Against the Administrative Fines Imposed by the Authority",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-ia-board-directors%E2%80%99-resolution-no-25-2020-concerning-grievance",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3901_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority Board of Directors Resolution No. (12) of 2016 Concerning the Elapse of the Impact of the Disciplinary Sanctions Imposed on Insurance-Related Professions",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors-resolution-no-12-2016-concerning-elapse-impact",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3853_VER1_0.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/sanctions-and-enforcement"
+      },
+      {
+       "name": "Motor Insurance",
+       "children": [
+        {
+         "name": "Insurance Authority Board of Directors' Decision No. (25) of 2016 Pertinent to Regulation of the Unified Motor Vehicle Insurance Policies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors-decision-no-25-2016-pertinent-regulation-unified-motor",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3394_VER2.pdf"
+        },
+        {
+         "name": "The Unified Motor Vehicle Insurance Policy Against Loss and Damage",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/unified-motor-vehicle-insurance-policy-against-loss-and-damage-issued-pursuant-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3013_VER2.pdf"
+        },
+        {
+         "name": "The Unified Motor Vehicle Insurance Policy Against Third Party Liability",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/unified-motor-vehicle-insurance-policy-against-third-party-liability-issued-pursuant",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3406_VER2.pdf"
+        },
+        {
+         "name": "Insurance Authority Board of Directors' Decision No. (30) of 2016 Concerning issuing Regulation for Motor Vehicle Insurance Tariffs",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors%E2%80%99-decision-no-30-2016-concerning-issuing-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_4246_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/motor-insurance"
+      },
+      {
+       "name": "Other Regulations",
+       "children": [
+        {
+         "name": "Insurance Authority's Board of Directors Decision No. (23) of 2019 Concerning Instructions Organizing Reinsurance Operations",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority%E2%80%99s-board-directors-decision-no23-2019-concerning-instructions",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3285_VER1.pdf"
+        },
+        {
+         "name": "Insurance Authority Board of Directors Resolution No. (10) of 2016 Concerning the Instructions on Regulating the Business of the Existing Licensed Composite Insurance Companies",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-authority-board-directors-resolution-no-10-2016-concerning-instructions",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3109_VER1.pdf"
+        },
+        {
+         "name": "Insurance Group Supervision Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-group-supervision-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6415_VER1.pdf"
+        },
+        {
+         "name": "Representation Offices Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/representation-offices-regulation"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/other-regulations-0"
+      },
+      {
+       "name": "Insurance-Related Professions",
+       "children": [
+        {
+         "name": "Actuaries",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/actuaries"
+        },
+        {
+         "name": "Bank Insurance",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/bank-insurance"
+        },
+        {
+         "name": "Insurance Agents",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-agents"
+        },
+        {
+         "name": "Insurance Brokers",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-brokers"
+        },
+        {
+         "name": "Insurance Consultants",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-consultants"
+        },
+        {
+         "name": "Insurance Producers",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-producers"
+        },
+        {
+         "name": "Points of Sale",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/points-sale"
+        },
+        {
+         "name": "Surveyors & Loss Adjusters",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/surveyors-loss-adjusters"
+        },
+        {
+         "name": "Third Party Health Insurance Administrators",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/third-party-health-insurance-administrators"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance-related-professions"
+      }
+     ],
+     "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/insurance"
+    },
+    {
+     "name": "Other Regulated Entities",
+     "children": [
+      {
+       "name": "Exchange Houses",
+       "children": [
+        {
+         "name": "Exchange Business Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/exchange-business-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_6092_VER1.pdf"
+        },
+        {
+         "name": "The Standards for the Regulations Regarding Licensing and Monitoring of Exchange Business",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/standards-regulations-regarding-licensing-and-monitoring-exchange-business",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_3524_VER1.20.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/exchange-houses"
+      },
+      {
+       "name": "(Restricted) Finance Companies",
+       "children": [
+        {
+         "name": "Finance Companies Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/finance-companies-regulation-0",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5072_VER1.pdf"
+        },
+        {
+         "name": "Risk Management",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/risk-management-1"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/restricted-finance-companies"
+      },
+      {
+       "name": "Representative Offices",
+       "children": [
+        {
+         "name": "The Central Bank Board of Directors' Resolution No. 57/3/1996 Regarding the Regulation for Representative Offices",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/central-bank-board-directors%E2%80%99-resolution-no-5731996-regarding-regulation-representative"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/representative-offices"
+      },
+      {
+       "name": "Crowdfunding",
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/crowdfunding-0"
+      },
+      {
+       "name": "Stored-Value Facilities",
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/stored-value-facilities-0"
+      },
+      {
+       "name": "Retail Payment Systems",
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/retail-payment-systems"
+      },
+      {
+       "name": "Large Value Payment Systems",
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/large-value-payment-systems"
+      },
+      {
+       "name": "Payment Services",
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/payment-services"
+      },
+      {
+       "name": "Sandbox",
+       "children": [
+        {
+         "name": "Sandbox Conditions Regulation",
+         "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/sandbox-conditions-regulation",
+         "documentUrl": "https://rulebook.centralbank.ae/sites/default/files/en_net_file_store/CBUAE_EN_5622_VER1.pdf"
+        }
+       ],
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/sandbox"
+      },
+      {
+       "name": "Payment Token Services",
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/payment-token-services"
+      },
+      {
+       "name": "Open Finance",
+       "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/open-finance"
+      }
+     ],
+     "sourceUrl": "https://rulebook.centralbank.ae/en/rulebook/other-regulated-entities"
+    }
+   ]
+  },
+  {
+   "name": "Dubai Financial Services Authority",
+   "sourceUrl": "https://www.dfsa.ae/rulebook",
+   "children": [
+    {
+     "name": "Rulebook Modules",
+     "children": [
+      {
+       "name": "General (GEN)"
+      },
+      {
+       "name": "Conduct of Business (COB)"
+      },
+      {
+       "name": "Prudential - Investment, Insurance Intermediation and Banking (PIB)"
+      },
+      {
+       "name": "Prudential - Insurance Business (PIN)"
+      },
+      {
+       "name": "Islamic Finance Rules (IFR)"
+      },
+      {
+       "name": "Anti-Money Laundering, Counter-Terrorist Financing and Sanctions (AML)"
+      },
+      {
+       "name": "Markets (MKT)"
+      },
+      {
+       "name": "Collective Investment Rules (CIR)"
+      },
+      {
+       "name": "Authorised Market Institutions (AMI)"
+      },
+      {
+       "name": "Recognition (REC)"
+      },
+      {
+       "name": "Fees (FER)"
+      }
+     ]
+    },
+    {
+     "name": "Sourcebooks",
+     "children": [
+      {
+       "name": "Regulatory Policy and Process (RPP)"
+      }
+     ]
+    },
+    {
+     "name": "Laws",
+     "children": [
+      {
+       "name": "Regulatory Law"
+      },
+      {
+       "name": "Markets Law"
+      },
+      {
+       "name": "Collective Investment Law"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Abu Dhabi Global Market",
+   "sourceUrl": "https://www.adgm.com/financial-services-regulatory-authority",
+   "children": [
+    {
+     "name": "FSRA Rulebooks",
+     "children": [
+      {
+       "name": "General (GEN)"
+      },
+      {
+       "name": "Conduct of Business (COBS)"
+      },
+      {
+       "name": "Prudential - Investment, Insurance Intermediation and Banking (PRU)"
+      },
+      {
+       "name": "Prudential - Insurers (PIN)"
+      },
+      {
+       "name": "Islamic Finance Rules (IFR)"
+      },
+      {
+       "name": "Anti-Money Laundering and Sanctions Rules and Guidance (AML)"
+      },
+      {
+       "name": "Market Rules (MKT)"
+      },
+      {
+       "name": "Fund Rules (FUNDS)"
+      },
+      {
+       "name": "Market Infrastructure (MIR)"
+      },
+      {
+       "name": "Fees (FEES)"
+      }
+     ]
+    },
+    {
+     "name": "Legislation",
+     "children": [
+      {
+       "name": "Financial Services and Markets Regulations"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Capital Market Authority",
+   "children": [
+    {
+     "name": "Laws and Regulations",
+     "children": [
+      {
+       "name": "Federal Law on the Capital Market Authority"
+      },
+      {
+       "name": "Regulations on Licensed Activities"
+      }
+     ]
+    },
+    {
+     "name": "Securities and Listing",
+     "children": [
+      {
+       "name": "Issuing and Offering of Securities"
+      },
+      {
+       "name": "Listing and Trading"
+      },
+      {
+       "name": "Disclosure and Transparency"
+      }
+     ]
+    },
+    {
+     "name": "Investment Funds",
+     "children": [
+      {
+       "name": "Investment Funds Regulations"
+      }
+     ]
+    },
+    {
+     "name": "Governance and Conduct",
+     "children": [
+      {
+       "name": "Corporate Governance of Public Joint Stock Companies"
+      },
+      {
+       "name": "Anti-Money Laundering and Combating the Financing of Terrorism"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

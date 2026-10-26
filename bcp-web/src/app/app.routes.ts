@@ -641,6 +641,16 @@ export const routes: Routes = [
               import('./pages/nd/admin/nd-admin-users.component').then((m) => m.NdAdminUsersComponent),
           },
           {
+            path: 'admin/rulebook-categories',
+            canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
+            data: { ndRoles: ['super_admin'] },
+            title: 'Regulatory Authorities · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-rulebook-categories.component').then(
+                (m) => m.NdAdminRulebookCategoriesComponent,
+              ),
+          },
+          {
             path: 'admin/departments',
             canActivate: [ndRoleGuard],
             data: { ndRoles: ['super_admin'] },

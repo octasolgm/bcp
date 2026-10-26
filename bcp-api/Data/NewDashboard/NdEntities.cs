@@ -63,6 +63,10 @@ public class NdDepartment : ITenantScoped
     [Column("description")]
     public string? Description { get; set; }
 
+    /// <summary>Parent department (null = top level); departments nest up to three levels.</summary>
+    [Column("parent_id")]
+    public Guid? ParentId { get; set; }
+
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
 
@@ -74,6 +78,82 @@ public class NdDepartment : ITenantScoped
 
     [Column("updated_at")]
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
+}
+
+/// <summary>Rulebook category tree for a workspace (up to three levels, e.g. Banking › Capital Adequacy ›
+/// Regulations Re Capital Adequacy). Root rows have no parent.</summary>
+[Table("nd_rulebook_categories")]
+public class NdRulebookCategory : ITenantScoped
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("parent_id")]
+    public Guid? ParentId { get; set; }
+
+    [Column("name")]
+    public string Name { get; set; } = "";
+
+    [Column("description")]
+    public string? Description { get; set; }
+
+    [Column("sort_order")]
+    public int SortOrder { get; set; }
+
+    /// <summary>The rulebook's page on the source site (sample pack only).</summary>
+    [Column("source_url")]
+    public string? SourceUrl { get; set; }
+
+    /// <summary>Direct link to the rulebook's official document; "Import rulebook documents" downloads it.</summary>
+    [Column("document_url")]
+    public string? DocumentUrl { get; set; }
+
+    [Column("created_by")]
+    public Guid? CreatedBy { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    [Column("updated_at")]
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
+}
+
+/// <summary>An internal document filed under a department (a document can sit in several).</summary>
+[Table("nd_internal_document_departments")]
+public class NdInternalDocumentDepartment : ITenantScoped
+{
+    [Column("stored_document_id")]
+    public Guid StoredDocumentId { get; set; }
+
+    [Column("department_id")]
+    public Guid DepartmentId { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
+}
+
+/// <summary>A regulation document filed under a rulebook category (a document can sit in several).</summary>
+[Table("nd_regulation_document_categories")]
+public class NdRegulationDocumentCategory : ITenantScoped
+{
+    [Column("regulation_document_id")]
+    public Guid RegulationDocumentId { get; set; }
+
+    [Column("category_id")]
+    public Guid CategoryId { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>Owning workspace (nd_workspaces.id).</summary>
     public Guid? TenantId { get; set; }
