@@ -3,6 +3,6 @@
   "private": true,
   "description": "Minimal static host for Azure App Service (reads App Settings for Supabase config)",
   "scripts": {
-    "start": "node api.js && node server.js"
+    "start": "node server.js"
   }
 }
