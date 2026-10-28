@@ -50,6 +50,8 @@ We also fixed an issue on the New analysis page where, with a larger number of d
 
 Two more reliability fixes are packaged in release build 2026.10.23.01 (API and web). Every page request now confirms your sign-in directly on our server instead of asking the sign-in service each time, which makes pages respond faster and removes occasional failures when that service was slow. The Regulation Documents list could also sometimes appear without its documents when the page loaded; it now loads reliably every time. After we push that build to dev, hard refresh and check Settings for matching API and web version 2026.10.23.01.
 
+We fixed a bug where uploading a regulation document on the New analysis page did not run the automatic parse and extract step (you could see "Document not found" on the upload). Internal uploads were unaffected because they already used the correct document id. Regulation uploads now use the same server-side prepare step as internal documents. If you uploaded a regulation file while the bug was live, upload it again or use Parse now on the Regulation Documents page for that file.
+
 Simpler document preparation and clearer document pages
 
 Uploading a regulation or internal document from the New analysis page now prepares it fully in the background, the same way evidence uploads on an analysis report already work. The page shows each step as it happens, and once the document is ready it is selected and its points are shown. Preparation carries on even if you leave the page. The document lists on New analysis now show only documents that are ready to analyse, together with the date each one was uploaded.

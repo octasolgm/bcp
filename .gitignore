@@ -52,6 +52,7 @@ bcp-web/bcp-web-dist.zip
 tmp-*.txt
 
 # IDE / OS
+.vscode/
 .idea/
 .DS_Store
 Thumbs.db
@@ -70,5 +71,3 @@ bcp-web/bo.txt
 bcp-web/src/environments/environment-old*.ts
 tools/db-test/bin/
 tools/db-test/obj/
-config.bat
-node_modules
