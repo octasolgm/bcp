@@ -250,6 +250,12 @@
         Finalize
       </button>
     }
+
+    @if (showViewEmbedding) {
+      <button type="button" class="btn-secondary" (click)="viewEmbedding.emit()">
+        View embedding
+      </button>
+    }
   </footer>
   }
 </section>

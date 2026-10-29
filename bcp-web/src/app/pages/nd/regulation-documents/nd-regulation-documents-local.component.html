@@ -12,7 +12,7 @@
 </div>
 
 <div class="nd-fill-panel reg-docs-fill">
-<input #uploadInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
+<input #uploadInput type="file" accept=".pdf,.doc,.docx" multiple hidden (change)="onFileChange($event); handleUpload()" />
 @if (!showDeleted) {
 <div class="filter-pills nd-list-toolbar nd-shrink reg-docs-toolbar">
   @if (canUpload && !showDeleted && !cleanView) {

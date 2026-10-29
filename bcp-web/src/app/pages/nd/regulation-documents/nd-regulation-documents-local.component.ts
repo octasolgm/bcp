@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NdApiService, NdLocalExtractionResult, NdOcrEngine } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { checkUploadAgainstLimits } from '../../../../lib/nd/upload-limits';
 import {
   dedupeRegulationDocuments,
   findRegulationDocumentIndex,
@@ -210,6 +211,8 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   sortDir: SortDir = 'desc';
   uploadDept = '';
   file: File | null = null;
+  /** Every file picked in the upload dialog (several can be chosen at once). */
+  files: File[] = [];
   loading = true;
   uploading = false;
   extractingId: string | null = null;
@@ -1299,7 +1302,49 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
 
   onFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.file = input.files?.[0] ?? null;
+    this.files = Array.from(input.files ?? []);
+    this.file = this.files[0] ?? null;
+    // Let the same file(s) be picked again later.
+    input.value = '';
+  }
+
+  /** Checks the picked files against this business's upload limits; shows why when they do not fit. */
+  private async withinUploadLimits(files: File[]): Promise<boolean> {
+    const workspaceId = this.auth.profile()?.workspace?.id;
+    if (!files.length || !workspaceId) return true;
+    const limits = await this.api.getWorkspaceUploadLimits(workspaceId);
+    const problem = checkUploadAgainstLimits(files, limits.success ? (limits.data ?? null) : null);
+    if (!problem) return true;
+    this.file = null;
+    this.message = '';
+    this.error = problem;
+    this.toast.show(problem, 'error', 6000);
+    return false;
+  }
+
+  /** Uploads every picked file, one after another; a single file keeps its usual messages. */
+  async handleUpload(): Promise<void> {
+    const files = this.files.length ? this.files : this.file ? [this.file] : [];
+    this.files = [];
+    if (!(await this.withinUploadLimits(files))) return;
+    if (files.length <= 1) {
+      this.file = files[0] ?? null;
+      await this.uploadOne();
+      return;
+    }
+    let ok = 0;
+    const failed: string[] = [];
+    for (const [i, f] of files.entries()) {
+      this.message = `Uploading ${i + 1} of ${files.length}: ${f.name}`;
+      this.file = f;
+      const result = await this.uploadOne(true);
+      if (result === true) ok++;
+      else failed.push(typeof result === 'string' ? `${f.name} (${result})` : f.name);
+    }
+    this.file = null;
+    this.message = `Uploaded ${ok} of ${files.length} documents.`;
+    this.error = failed.length ? `Could not upload: ${failed.join(', ')}` : '';
+    this.toast.show(this.message, failed.length ? 'warning' : 'success', 4000);
   }
 
   private upsertUploadedRegulationDoc(
@@ -1337,11 +1382,12 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     );
   }
 
-  async handleUpload(): Promise<void> {
-    if (!this.file) return;
+  /** True when stored, else the reason it failed. */
+  private async uploadOne(quiet = false): Promise<true | string> {
+    if (!this.file) return 'No file chosen';
     this.uploading = true;
     this.syncPageHeaderToolbar();
-    this.error = '';
+    if (!quiet) this.error = '';
     const file = this.file;
     const res = await this.api.uploadRegulationDocument(file, this.uploadDept || undefined);
     if (res.success) {
@@ -1379,16 +1425,17 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
       } else {
         this.message = 'Document uploaded';
       }
-      this.toast.show(this.message, 'success', 4000);
+      if (!quiet) this.toast.show(this.message, 'success', 4000);
       if (!this.showDeleted) {
         this.workspaceNav.bumpNavBadges({ regulationDocuments: 1 });
       }
       void this.loadDocs(true);
-    } else {
+    } else if (!quiet) {
       this.error = res.message ?? 'Upload failed';
     }
     this.uploading = false;
     this.syncPageHeaderToolbar();
+    return res.success ? true : (res.message ?? 'Upload failed');
   }
 
   async handleDeptChange(doc: RegulationDocument, departmentId: string): Promise<void> {

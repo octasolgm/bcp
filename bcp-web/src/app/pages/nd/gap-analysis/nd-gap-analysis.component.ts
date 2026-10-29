@@ -133,6 +133,7 @@ import {
   type RunReviewSubmitEvent,
 } from '../../../components/nd/nd-run-review-panel.component';
 import { NdRunHistoryPanelComponent } from '../../../components/nd/nd-run-history-panel.component';
+import { NdEmbedPreviewDrawerComponent } from '../../../components/nd/nd-embed-preview-drawer.component';
 import { DualVerifyResultCardComponent } from '../../../components/dual-verify-result-card/dual-verify-result-card.component';
 import type { ActionPlanHistoryEntry, InternalDocument, ResultsData } from '../../../../lib/nd/types';
 import { parsePointSnapshot } from '../../../../lib/nd/utils';
@@ -199,7 +200,7 @@ const PREP_QUEUE_GRACE_MS = 10 * 60_000;
 @Component({
   selector: 'app-nd-gap-analysis',
   standalone: true,
-  imports: [FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent, NdEvalCompareDrawerComponent, NdRetrievalCheckDrawerComponent],
+  imports: [NdEmbedPreviewDrawerComponent, FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent, NdEvalCompareDrawerComponent, NdRetrievalCheckDrawerComponent],
   templateUrl: './nd-gap-analysis.component.html',
   styleUrl: './nd-gap-analysis.component.scss',
 })
@@ -257,6 +258,8 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   selectedItemId: string | null = null;
   ndRunId: string | null = null;
   ndRunStatus = '';
+  /** Right-side panel: where resolved actions will be (or were) embedded in the internal documents. */
+  embedDrawerOpen = false;
   ndRunWorkflowEngine: string | null = null;
 
   /** "provider / model" that judged this run, for any run that recorded its model (demo runs never do). */
@@ -3895,5 +3898,20 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
       };
     });
     saveGapDrafts(this.sessionKey, overlays);
+  }
+  /** Workspace has the Actions module turned off: reports show gaps without their corrective actions. */
+  get actionsHidden(): boolean {
+    return this.auth.profile()?.workspace?.actionsEnabled === false;
+  }
+
+  /** Workspace has the Embeddings module on (the default), so finalize writes actions into documents. */
+  get embeddingsOn(): boolean {
+    const ws = this.auth.profile()?.workspace;
+    return ws?.actionsEnabled !== false && ws?.embeddingsEnabled !== false;
+  }
+
+  /** The embedding side panel is offered on real accounts with the Embeddings module on. */
+  get canViewEmbedding(): boolean {
+    return !!this.ndRunId && this.embeddingsOn && !this.auth.isDemoViewer();
   }
 }

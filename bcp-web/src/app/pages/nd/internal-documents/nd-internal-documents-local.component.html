@@ -15,7 +15,7 @@
 </div>
 
 <div class="nd-catalog-toolbar nd-fill-panel internal-docs-fill">
-<input #fileInput type="file" accept=".pdf,.doc,.docx" hidden (change)="onFileChange($event); handleUpload()" />
+<input #fileInput type="file" accept=".pdf,.doc,.docx" multiple hidden (change)="onFileChange($event); handleUpload()" />
 @if (message || error) {
   <div class="nd-alert-dock" aria-live="polite">
     @if (message) {

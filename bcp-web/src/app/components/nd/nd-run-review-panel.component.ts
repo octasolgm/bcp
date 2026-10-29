@@ -82,6 +82,9 @@ export class NdRunReviewPanelComponent implements OnInit, OnChanges {
   @Input() workflowSubmitTargets: SubmitTargetOption[] | null = null;
   /** Show Finalize (reviewer / super admin). */
   @Input() showFinalizeAction = false;
+  /** Shows "View embedding" next to Submit / Finalize (real accounts with the Embeddings module on). */
+  @Input() showViewEmbedding = false;
+  @Output() viewEmbedding = new EventEmitter<void>();
   @Output() submitReview = new EventEmitter<RunReviewSubmitEvent>();
   @Output() uploadEvidence = new EventEmitter<FileList>();
   @Output() deleteEvidence = new EventEmitter<string>();

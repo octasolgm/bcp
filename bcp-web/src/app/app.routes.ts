@@ -651,6 +651,16 @@ export const routes: Routes = [
               ),
           },
           {
+            path: 'admin/business-settings',
+            canActivate: [ndRoleGuard, ndDenyDemoViewerGuard],
+            data: { ndRoles: ['super_admin'] },
+            title: 'Business settings · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-business-settings.component').then(
+                (m) => m.NdAdminBusinessSettingsComponent,
+              ),
+          },
+          {
             path: 'admin/departments',
             canActivate: [ndRoleGuard],
             data: { ndRoles: ['super_admin'] },

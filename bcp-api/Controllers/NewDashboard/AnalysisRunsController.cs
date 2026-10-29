@@ -841,6 +841,62 @@ public class AnalysisRunsController(
     }
 
     /// <summary>
+    /// Before finalize: where each resolved action would be embedded if the run were finalized now -
+    /// document, page and clause - from the same resolver finalize uses. Database and parsed-text reads
+    /// only; the policy wording itself is written by AI at finalize and is not part of the preview.
+    /// </summary>
+    [HttpGet("{id:guid}/embed-preview")]
+    public async Task<IActionResult> EmbedPreview(
+        Guid id,
+        [FromServices] Reguliq.Api.Services.NewDashboard.CorrectedDocs.NdActionPlanEmbedResolver embedResolver,
+        CancellationToken ct)
+    {
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct,
+            "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (run == null) return NotFound(new { success = false, message = "Not found" });
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+            return StatusCode(403, new { success = false, message = "Forbidden" });
+
+        var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        if (!NdDemoDataFilters.CanAccessCreatedBy(run.CreatedBy, demoCtx))
+            return NotFound(new { success = false, message = "Not found" });
+
+        var jobs = await embedResolver.ResolveForRunAsync(id, ct);
+        var docIds = jobs.Select(j => j.StoredDocumentId).ToList();
+        var titles = await db.StoredDocuments.AsNoTracking()
+            .Where(d => docIds.Contains(d.Id))
+            .Select(d => new { d.Id, d.Title, d.Version })
+            .ToDictionaryAsync(d => d.Id, ct);
+
+        return Ok(new
+        {
+            success = true,
+            data = jobs
+                .Select(j => new
+                {
+                    id = j.StoredDocumentId,
+                    title = titles.GetValueOrDefault(j.StoredDocumentId)?.Title ?? "Internal document",
+                    version = titles.GetValueOrDefault(j.StoredDocumentId)?.Version ?? "",
+                    embeds = j.Targets
+                        .OrderBy(t => t.Page ?? int.MaxValue)
+                        .Select(t => new
+                        {
+                            clauseNo = t.ClauseNo,
+                            clauseTitle = t.ClauseTitle,
+                            gapIndex = t.GapIndex,
+                            gap = t.GapText,
+                            action = t.ActionText,
+                            page = t.Page,
+                        }),
+                })
+                .OrderBy(d => d.title),
+        });
+    }
+
+    /// <summary>
     /// The corrected/embedded internal-document copies NdCorrectedDocumentService generated when this
     /// run was finalized — for the "download the finalized document" action on the Finalized tab.
     /// Matched by this run's id appearing anywhere in the copy's history_json (the same id
@@ -878,17 +934,24 @@ public class AnalysisRunsController(
                 $"SELECT DISTINCT ON (title) * FROM stored_documents WHERE history_json::text LIKE {likePattern} ORDER BY title, version_number DESC")
             .AsNoTracking()
             .OrderBy(d => d.Title)
-            .Select(d => new
+            .Select(d => new { d.Id, d.Title, d.OriginalFileName, d.Version, d.SizeBytes, d.HistoryJson })
+            .ToListAsync(ct);
+
+        // Each copy also lists the resolved actions written into it (clause, action, page, text), so the
+        // report can show what was embedded where.
+        return Ok(new
+        {
+            success = true,
+            data = docs.Select(d => new
             {
                 id = d.Id,
                 title = d.Title,
                 originalFileName = d.OriginalFileName,
                 version = d.Version,
                 sizeBytes = d.SizeBytes,
-            })
-            .ToListAsync(ct);
-
-        return Ok(new { success = true, data = docs });
+                embeds = InternalDocumentsController.LatestFinalizeEmbeds(d.HistoryJson),
+            }),
+        });
     }
 
     [HttpPost("{id:guid}/start")]

@@ -3,8 +3,9 @@ import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http
 import { firstValueFrom, timeout, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
-import type { PointGapAttachment, RulebookCategory } from '../../../lib/nd/types';
+import type { InternalDocumentFinalizeEmbed, PointGapAttachment, RulebookCategory } from '../../../lib/nd/types';
 import type { GapEvidenceRerun, GapEvidenceRerunRequest } from '../../../lib/nd/gap-evidence-rerun';
+import type { NdUploadLimits } from '../../../lib/nd/upload-limits';
 
 export type RunGapEvidenceUpload = {
   storedDocumentId: string;
@@ -407,6 +408,14 @@ export type NdWorkspaceSummary = {
   aiMarkupOverride?: number | null;
   /** Which country's date convention this workspace displays dates in. Null/undefined = UAE default. */
   dateFormatRegion?: string | null;
+  /** Actions module (default on). Off hides corrective actions in this workspace's reports. */
+  actionsEnabled?: boolean;
+  /** Embeddings module (default on). Off means finalize generates no corrected document copies. */
+  embeddingsEnabled?: boolean;
+  /** Upload limits in MB set by the platform admin; null/undefined = no limit. */
+  maxDocumentMb?: number | null;
+  maxUploadMb?: number | null;
+  maxStorageMb?: number | null;
 };
 
 export type NdWorkspaceListItem = {
@@ -1175,6 +1184,28 @@ export class NdApiService {
     );
   }
 
+  /** Turns a workspace's Actions / Embeddings modules on or off (omit one to leave it unchanged). */
+  setWorkspaceModules(workspaceId: string, modules: { actionsEnabled?: boolean; embeddingsEnabled?: boolean }) {
+    return this.request<{ actionsEnabled: boolean; embeddingsEnabled: boolean }>(
+      'PUT',
+      `/nd/workspaces/${workspaceId}/modules`,
+      modules,
+    );
+  }
+
+  /** A workspace's upload limits (MB) and storage used. */
+  getWorkspaceUploadLimits(workspaceId: string) {
+    return this.request<NdUploadLimits>('GET', `/nd/workspaces/${workspaceId}/upload-limits`);
+  }
+
+  /** Platform admin: sets a workspace's upload limits in MB (null = no limit). */
+  setWorkspaceUploadLimits(
+    workspaceId: string,
+    limits: { maxDocumentMb: number | null; maxUploadMb: number | null; maxStorageMb: number | null },
+  ) {
+    return this.request<NdUploadLimits>('PUT', `/nd/workspaces/${workspaceId}/upload-limits`, limits);
+  }
+
   getDictionaryEntries() {
     return this.request<unknown[]>('GET', '/nd/dictionary');
   }
@@ -1742,10 +1773,28 @@ export class NdApiService {
     return this.downloadNdExport(`/nd/internal-documents/${docId}/export/file`, 'internal-document.pdf');
   }
 
+  /** Before finalize: where each resolved action would be embedded (document, page, clause) if the run
+   * were finalized now. The policy wording is only written at finalize. */
+  getEmbedPreviewForRun(runId: string) {
+    return this.request<
+      { id: string; title: string; version: string; embeds: InternalDocumentFinalizeEmbed[] }[]
+    >('GET', `/nd/analysis-runs/${runId}/embed-preview`);
+  }
+
   /** The corrected/embedded document copies generated when a run was finalized (see
    * NdCorrectedDocumentService) — for the "download the finalized document" action. */
   getGeneratedDocumentsForRun(runId: string) {
-    return this.request<{ id: string; title: string; originalFileName: string; version: string; sizeBytes: number }[]>(
+    return this.request<
+      {
+        id: string;
+        title: string;
+        originalFileName: string;
+        version: string;
+        sizeBytes: number;
+        /** Resolved actions written into this copy: clause, action, page and the embedded text. */
+        embeds?: InternalDocumentFinalizeEmbed[] | null;
+      }[]
+    >(
       'GET',
       `/nd/analysis-runs/${runId}/generated-documents`,
     );

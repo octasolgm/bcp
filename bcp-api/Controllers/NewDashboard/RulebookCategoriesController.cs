@@ -244,6 +244,8 @@ public class RulebookCategoriesController(
         if (category == null) return NotFound(new { success = false, message = "Category not found." });
         if (file == null || file.Length == 0) return BadRequest(new { success = false, message = "Choose a file to upload." });
         if (file.Length > MaxDocumentBytes) return BadRequest(new { success = false, message = "The file is too large." });
+        if (await NdUploadLimits.CheckAsync(db, file.FileName, file.Length, ct) is { } limitError)
+            return BadRequest(new { success = false, message = limitError });
 
         var fileName = Path.GetFileName(file.FileName);
         if (!SupportedDocumentTypes.IsSupported(fileName))

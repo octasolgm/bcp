@@ -460,6 +460,25 @@
                                 </button>
                               </form>
                             </section>
+
+                            <section class="ws-detail-section">
+                              <header class="ws-detail-head">
+                                <h3>Modules</h3>
+                              </header>
+                              <app-nd-workspace-modules
+                                [workspaceId]="item.workspace.id"
+                                [actionsEnabled]="item.workspace.actionsEnabled"
+                                [embeddingsEnabled]="item.workspace.embeddingsEnabled"
+                                (changed)="onModulesChanged(item, $event)"
+                              />
+                            </section>
+
+                            <section class="ws-detail-section">
+                              <header class="ws-detail-head">
+                                <h3>Upload limits</h3>
+                              </header>
+                              <app-nd-workspace-upload-limits [workspaceId]="item.workspace.id" [editable]="true" />
+                            </section>
                           </div>
 
                           <section class="ws-detail-section">

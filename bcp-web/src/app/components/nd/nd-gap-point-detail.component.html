@@ -189,7 +189,7 @@
     <section class="cap-section">
       <div class="cap-toolbar">
         <p class="cap-title">
-          Corrective Action Plan
+          {{ hideActions ? 'Gaps' : 'Corrective Action Plan' }}
           <span class="ai-tag">{{ capSourceLabel }} — review &amp; edit</span>
         </p>
         <div class="cap-toolbar-actions">
@@ -302,7 +302,7 @@
                           {{ gapVerdictChipLabel(verdict.gap.outcome) }}
                         </span>
                       }
-                      @if (actionCountForGap(gap.index); as actionCount) {
+                      @if (!hideActions && actionCountForGap(gap.index); as actionCount) {
                         <span class="gap-action-count-pill">{{ actionCount }} action{{ actionCount === 1 ? '' : 's' }}</span>
                       }
                       @if (reviewCountForGap(gap.index); as reviewCount) {
@@ -410,7 +410,7 @@
                           <blockquote class="policy-quote">{{ quote.text }}</blockquote>
                         </div>
                       }
-                      @for (action of actionResultsForGap(verdict.review, gap.index); track action.actionPlanId) {
+                      @for (action of hideActions ? [] : actionResultsForGap(verdict.review, gap.index); track action.actionPlanId) {
                         <p class="gap-evidence-action">
                           <span class="gap-evidence-action-tag" [attr.data-applied]="action.applied">{{ actionResultLabel(action) }}</span>
                           @if (action.applied === 'split') {
@@ -435,7 +435,7 @@
                     <p class="gap-risk-meter-hint">{{ gapTargetHint(gap) }}</p>
                   </div>
 
-                  @if (runId) {
+                  @if (runId && !hideActions) {
                     <app-nd-action-plans-section
                       class="gap-actions-block"
                       [runId]="runId"

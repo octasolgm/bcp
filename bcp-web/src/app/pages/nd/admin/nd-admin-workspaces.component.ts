@@ -12,6 +12,8 @@ import {
 import { RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { matchesSearch } from '../../../../lib/nd/list-utils';
+import { NdWorkspaceModulesComponent } from '../../../components/nd/nd-workspace-modules.component';
+import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-workspace-upload-limits.component';
 import { ND_DATE_FORMAT_OPTIONS } from '../../../../lib/nd/date-format';
 
 /**
@@ -22,7 +24,7 @@ import { ND_DATE_FORMAT_OPTIONS } from '../../../../lib/nd/date-format';
 @Component({
   selector: 'app-nd-admin-workspaces',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdPageAlertComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdPageAlertComponent, NdWorkspaceModulesComponent, NdWorkspaceUploadLimitsComponent],
   templateUrl: './nd-admin-workspaces.component.html',
   styleUrls: [
     './nd-admin-users.component.scss',
@@ -320,6 +322,13 @@ export class NdAdminWorkspacesComponent implements OnInit {
     this.message = markup == null ? `"${item.workspace.name}" now uses the default margin.` : 'Margin saved.';
     const refreshed = await this.api.getWorkspaceAiCredits(item.workspace.id);
     if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
+  }
+
+  onModulesChanged(item: NdWorkspaceListItem, modules: { actionsEnabled: boolean; embeddingsEnabled: boolean }): void {
+    item.workspace.actionsEnabled = modules.actionsEnabled;
+    item.workspace.embeddingsEnabled = modules.embeddingsEnabled;
+    // The platform admin may be acting inside this workspace: keep their own session's flags current too.
+    if (this.auth.profile()?.workspace?.id === item.workspace.id) void this.auth.refreshProfile(true);
   }
 
   async saveDateFormat(item: NdWorkspaceListItem): Promise<void> {

@@ -233,6 +233,86 @@ public partial class WorkspacesController(
         return Ok(new { success = true, data = new { dateFormatRegion = ws.DateFormatRegion } });
     }
 
+    public record ModulesRequest(bool? ActionsEnabled, bool? EmbeddingsEnabled);
+
+    /// <summary>Turns this workspace's optional modules on or off. Actions off only hides corrective actions
+    /// in reports; embeddings off stops finalize from generating corrected document copies. A business admin
+    /// manages their own workspace; the platform admin can set any workspace's.</summary>
+    [HttpPut("{id:guid}/modules")]
+    public async Task<IActionResult> SetModules(Guid id, [FromBody] ModulesRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+        if (!IsPlatformAdmin(profile) && profile.TenantId != id)
+            return StatusCode(403, new { success = false, message = "You can only change your own workspace's modules." });
+
+        var ws = await db.NdWorkspaces.FirstOrDefaultAsync(w => w.Id == id, ct);
+        if (ws == null) return NotFound(new { success = false, message = "Workspace not found." });
+
+        if (body.ActionsEnabled.HasValue) ws.ActionsEnabled = body.ActionsEnabled.Value;
+        if (body.EmbeddingsEnabled.HasValue) ws.EmbeddingsEnabled = body.EmbeddingsEnabled.Value;
+        // Embeddings write resolved actions into documents, so they depend on the Actions module:
+        // turning Actions off turns Embeddings off, and Embeddings cannot be on without Actions.
+        if (!ws.ActionsEnabled)
+        {
+            if (body.EmbeddingsEnabled == true)
+                return BadRequest(new { success = false, message = "Turn on Actions first: embeddings need actions." });
+            ws.EmbeddingsEnabled = false;
+        }
+        ws.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        await InvalidateMembersAsync(id, ct);
+
+        return Ok(new { success = true, data = new { actionsEnabled = ws.ActionsEnabled, embeddingsEnabled = ws.EmbeddingsEnabled } });
+    }
+
+    public record UploadLimitsRequest(int? MaxDocumentMb, int? MaxUploadMb, int? MaxStorageMb);
+
+    /// <summary>Sets a workspace's upload limits in MB (null or 0 = no limit). Platform admin only, so a
+    /// business cannot raise its own quota.</summary>
+    [HttpPut("{id:guid}/upload-limits")]
+    public async Task<IActionResult> SetUploadLimits(Guid id, [FromBody] UploadLimitsRequest body, CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        static int? Clean(int? mb) => mb is > 0 ? mb : null;
+        var doc = Clean(body.MaxDocumentMb);
+        var upload = Clean(body.MaxUploadMb);
+        var storage = Clean(body.MaxStorageMb);
+        if (doc > NdUploadLimits.ServerMaxDocumentMb)
+            return BadRequest(new { success = false, message = $"The per-document limit cannot be above {NdUploadLimits.ServerMaxDocumentMb} MB." });
+        if (doc != null && upload != null && upload < doc)
+            return BadRequest(new { success = false, message = "The per-upload limit cannot be smaller than the per-document limit." });
+        if (upload != null && storage != null && storage < upload)
+            return BadRequest(new { success = false, message = "The total storage limit cannot be smaller than the per-upload limit." });
+
+        var ws = await db.NdWorkspaces.FirstOrDefaultAsync(w => w.Id == id, ct);
+        if (ws == null) return NotFound(new { success = false, message = "Workspace not found." });
+
+        ws.MaxDocumentMb = doc;
+        ws.MaxUploadMb = upload;
+        ws.MaxStorageMb = storage;
+        ws.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        await InvalidateMembersAsync(id, ct);
+
+        return Ok(new { success = true, data = await NdUploadLimits.GetAsync(db, id, ct) });
+    }
+
+    /// <summary>A workspace's upload limits and how much of its storage is used, for the upload pages and
+    /// Business settings.</summary>
+    [HttpGet("{id:guid}/upload-limits")]
+    public async Task<IActionResult> GetUploadLimits(Guid id, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+        if (!IsPlatformAdmin(profile) && profile.TenantId != id)
+            return StatusCode(403, new { success = false, message = "You can only view your own workspace's limits." });
+
+        return Ok(new { success = true, data = await NdUploadLimits.GetAsync(db, id, ct) });
+    }
+
     /// <summary>Platform admin enters a workspace; every page then shows that workspace's data.</summary>
     [HttpPost("{id:guid}/switch")]
     public async Task<IActionResult> Switch(Guid id, CancellationToken ct)
@@ -304,6 +384,11 @@ public partial class WorkspacesController(
         clauseLimit = w.ClauseLimit,
         aiMarkupOverride = w.AiMarkupOverride,
         dateFormatRegion = w.DateFormatRegion,
+        actionsEnabled = w.ActionsEnabled,
+        embeddingsEnabled = w.EmbeddingsEnabled,
+        maxDocumentMb = w.MaxDocumentMb,
+        maxUploadMb = w.MaxUploadMb,
+        maxStorageMb = w.MaxStorageMb,
     };
 
     internal static string Slugify(string raw)

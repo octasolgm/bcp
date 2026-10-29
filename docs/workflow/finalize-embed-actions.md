@@ -119,7 +119,7 @@ trimmed, and a leading/trailing code fence is stripped.
 Header and footer wrap the LLM text (`NdActionPlanEmbedNote`):
 
 ```
-POLICY UPDATE - Regulatory Clause {ClauseNo} - {ClauseTitle}, Gap {n}
+POLICY UPDATE - Regulatory Clause {ClauseNo} - {ClauseTitle}
 
 {LLM policy text}
 

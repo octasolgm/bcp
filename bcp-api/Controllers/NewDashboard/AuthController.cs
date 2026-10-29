@@ -49,7 +49,7 @@ public class AuthController(
             var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? profile.TenantId ?? WorkspaceScope.DefaultWorkspaceId;
             var workspace = await db.NdWorkspaces.AsNoTracking()
                 .Where(w => w.Id == workspaceId)
-                .Select(w => new { id = w.Id, name = w.Name, slug = w.Slug, isActive = w.IsActive })
+                .Select(w => new { id = w.Id, name = w.Name, slug = w.Slug, isActive = w.IsActive, dateFormatRegion = w.DateFormatRegion, actionsEnabled = w.ActionsEnabled, embeddingsEnabled = w.EmbeddingsEnabled })
                 .FirstOrDefaultAsync(dbCts.Token);
             if (workspace is { isActive: false } && !IsPlatformAdmin(profile))
                 return StatusCode(403, new { success = false, message = "Your workspace has been deactivated. Contact your administrator." });

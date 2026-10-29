@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdApiService, NdLocalExtractionResult, NdOcrEngine } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { checkUploadAgainstLimits } from '../../../../lib/nd/upload-limits';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdCloudImportDialogComponent } from '../../../components/nd/nd-cloud-import-dialog.component';
 import { NdShellFocusService } from '../../../services/nd/nd-shell-focus.service';
@@ -162,6 +163,8 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
 
   docs: InternalDocument[] = [];
   file: File | null = null;
+  /** Every file picked in the upload dialog (several can be chosen at once). */
+  files: File[] = [];
   loading = true;
   uploading = false;
   parsingId: string | null = null;
@@ -986,14 +989,57 @@ Nothing is deleted from the database — file data is kept.`)) return;
 
   onFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.file = input.files?.[0] ?? null;
+    this.files = Array.from(input.files ?? []);
+    this.file = this.files[0] ?? null;
+    // Let the same file(s) be picked again later.
+    input.value = '';
   }
 
+  /** Checks the picked files against this business's upload limits; shows why when they do not fit. */
+  private async withinUploadLimits(files: File[]): Promise<boolean> {
+    const workspaceId = this.auth.profile()?.workspace?.id;
+    if (!files.length || !workspaceId) return true;
+    const limits = await this.api.getWorkspaceUploadLimits(workspaceId);
+    const problem = checkUploadAgainstLimits(files, limits.success ? (limits.data ?? null) : null);
+    if (!problem) return true;
+    this.file = null;
+    this.message = '';
+    this.error = problem;
+    this.toast.show(problem, 'error', 6000);
+    return false;
+  }
+
+  /** Uploads every picked file, one after another; a single file keeps its usual messages. */
   async handleUpload(): Promise<void> {
-    if (!this.file) return;
+    const files = this.files.length ? this.files : this.file ? [this.file] : [];
+    this.files = [];
+    if (!(await this.withinUploadLimits(files))) return;
+    if (files.length <= 1) {
+      this.file = files[0] ?? null;
+      await this.uploadOne();
+      return;
+    }
+    let ok = 0;
+    const failed: string[] = [];
+    for (const [i, f] of files.entries()) {
+      this.message = `Uploading ${i + 1} of ${files.length}: ${f.name}`;
+      this.file = f;
+      const result = await this.uploadOne(true);
+      if (result === true) ok++;
+      else failed.push(typeof result === 'string' ? `${f.name} (${result})` : f.name);
+    }
+    this.file = null;
+    this.message = `Uploaded ${ok} of ${files.length} documents.`;
+    this.error = failed.length ? `Could not upload: ${failed.join(', ')}` : '';
+    this.toast.show(this.message, failed.length ? 'warning' : 'success', 4000);
+  }
+
+  /** True when stored, else the reason it failed. */
+  private async uploadOne(quiet = false): Promise<true | string> {
+    if (!this.file) return 'No file chosen';
     this.uploading = true;
     this.syncPageHeaderToolbar();
-    this.error = '';
+    if (!quiet) this.error = '';
     const file = this.file;
     const res = await this.api.uploadInternalDocument(file);
     if (res.success) {
@@ -1005,16 +1051,19 @@ Nothing is deleted from the database — file data is kept.`)) return;
       };
       this.addOptimisticUpload(data, file);
       const tag = this.isCloudEngine ? '' : ' (Local)';
-      this.message = `Uploaded — status is Not parsed. Click Parse & Extract${tag} when ready.`;
-      this.error = '';
-      this.toast.show(this.message, 'success', 4000);
+      if (!quiet) {
+        this.message = `Uploaded — status is Not parsed. Click Parse & Extract${tag} when ready.`;
+        this.error = '';
+        this.toast.show(this.message, 'success', 4000);
+      }
       this.workspaceNav.bumpNavBadges({ internalDocuments: 1 });
       void this.load(true);
-    } else {
+    } else if (!quiet) {
       this.error = res.message ?? 'Upload failed';
     }
     this.uploading = false;
     this.syncPageHeaderToolbar();
+    return res.success ? true : (res.message ?? 'Upload failed');
   }
 
   /** Show the new row straight away instead of waiting for the next list refresh. */

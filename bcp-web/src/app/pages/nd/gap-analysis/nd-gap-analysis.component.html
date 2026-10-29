@@ -122,6 +122,11 @@
       @if (ndRunData.run.status === 'checker_approved') {
         <button type="button" class="workflow-link-btn" (click)="openReviewerQueue()">Reviewer queue →</button>
       }
+      @if (canViewEmbedding) {
+        <button type="button" class="workflow-link-btn" (click)="embedDrawerOpen = true">
+          {{ ndRunStatus === 'reviewer_approved' ? 'View embedded documents' : 'View embedding' }}
+        </button>
+      }
       <button type="button" class="workflow-link-btn" (click)="openNdResultsEditor()">Refresh run</button>
     </div>
   </div>
@@ -192,6 +197,8 @@
     [evidenceOnly]="!showRunReviewForm"
     [workflowSubmitTargets]="auth.getRole() === 'super_admin' ? superAdminWorkflowTargets : null"
     [showFinalizeAction]="canFinalizeWorkflowRunFlag"
+    [showViewEmbedding]="canViewEmbedding"
+    (viewEmbedding)="embedDrawerOpen = true"
     [submitting]="runReviewSubmitting"
     [error]="runReviewError"
     [reviewProgress]="reviewProgress"
@@ -444,6 +451,7 @@
       [tempReviewComments]="savedTempCommentsForPoint(ndPoint.id)"
       [canEditTempReviewComments]="canEditTempReviewComments"
       [actionPlans]="actionPlansFor(ndPoint.id)"
+      [hideActions]="actionsHidden"
       [focusGapIndex]="focusGapIndexFor(ndPoint.id)"
       [focusPlanId]="focusPlanIdFor(ndPoint.id)"
       [canEditActionPlans]="canEditActionPlans"
@@ -749,5 +757,14 @@
     [defaultFormat]="headerExportFormat"
     (cancelled)="closeExportDialog()"
     (confirmed)="runExportConfirm($event)"
+  />
+}
+
+@if (embedDrawerOpen && ndRunId) {
+  <app-nd-embed-preview-drawer
+    [runId]="ndRunId"
+    [finalized]="ndRunStatus === 'reviewer_approved'"
+    [hideActions]="actionsHidden"
+    (closed)="embedDrawerOpen = false"
   />
 }

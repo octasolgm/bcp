@@ -155,6 +155,15 @@ public static class NdWorkspaceSchemaBootstrap
             -- NULL = platform default (UAE, DD/MM/YYYY); a value sets this workspace's own date format.
             ALTER TABLE nd_workspaces
               ADD COLUMN IF NOT EXISTS date_format_region TEXT NULL;
+            -- Business modules, on by default (existing workspaces, including the demo, keep everything).
+            ALTER TABLE nd_workspaces
+              ADD COLUMN IF NOT EXISTS actions_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+            ALTER TABLE nd_workspaces
+              ADD COLUMN IF NOT EXISTS embeddings_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+            -- Upload limits in MB (NULL = no workspace limit).
+            ALTER TABLE nd_workspaces ADD COLUMN IF NOT EXISTS max_document_mb INT NULL;
+            ALTER TABLE nd_workspaces ADD COLUMN IF NOT EXISTS max_upload_mb INT NULL;
+            ALTER TABLE nd_workspaces ADD COLUMN IF NOT EXISTS max_storage_mb INT NULL;
             """,
             ct);
 

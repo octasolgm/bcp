@@ -50,6 +50,29 @@ public class NdWorkspace
     [Column("date_format_region")]
     public string? DateFormatRegion { get; set; }
 
+    /// <summary>Actions module: when off, corrective actions are hidden in this workspace's reports. Gaps and
+    /// actions are still produced and stored exactly as before; this only controls what is shown.</summary>
+    [Column("actions_enabled")]
+    public bool ActionsEnabled { get; set; } = true;
+
+    /// <summary>Embeddings module: when off, finalizing a report does not generate corrected (embedded)
+    /// copies of the internal documents.</summary>
+    [Column("embeddings_enabled")]
+    public bool EmbeddingsEnabled { get; set; } = true;
+
+    /// <summary>Upload limits in MB, set by the platform admin. Null = no workspace limit (the server's own
+    /// 50 MB per-file cap still applies).</summary>
+    [Column("max_document_mb")]
+    public int? MaxDocumentMb { get; set; }
+
+    /// <summary>Largest combined size of the files chosen in one multi-file upload.</summary>
+    [Column("max_upload_mb")]
+    public int? MaxUploadMb { get; set; }
+
+    /// <summary>Total size of all documents this business may keep in its library.</summary>
+    [Column("max_storage_mb")]
+    public int? MaxStorageMb { get; set; }
+
     [Column("created_by")]
     public Guid? CreatedBy { get; set; }
 

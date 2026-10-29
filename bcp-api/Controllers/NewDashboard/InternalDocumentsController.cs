@@ -354,6 +354,8 @@ public class InternalDocumentsController(
             return BadRequest(new { success = false, message = "Supabase Storage not configured." });
         if (file == null || file.Length == 0)
             return BadRequest(new { success = false, message = "No file provided." });
+        if (await NdUploadLimits.CheckAsync(appDb, file.FileName, file.Length, ct) is { } limitError)
+            return BadRequest(new { success = false, message = limitError });
 
         await using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);
@@ -973,7 +975,7 @@ public class InternalDocumentsController(
     /// </summary>
     /// <summary>The resolved action notes embedded into this finalized copy (latest history entry that
     /// recorded them): which clause, gap, action and page each note covers.</summary>
-    private static System.Text.Json.Nodes.JsonNode? LatestFinalizeEmbeds(string? historyJson)
+    internal static System.Text.Json.Nodes.JsonNode? LatestFinalizeEmbeds(string? historyJson)
     {
         if (string.IsNullOrEmpty(historyJson) || !historyJson.Contains("\"embeds\"", StringComparison.Ordinal))
             return null;

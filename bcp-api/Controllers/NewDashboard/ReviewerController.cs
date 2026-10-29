@@ -105,8 +105,11 @@ public class ReviewerController(
             await RecordStatusChangeAsync(db, runId, from, run.Status, profile.Id, body.OverallComment, ct);
 
         // Every finalize produces fresh corrected copies (a new version) from the actions resolved now —
-        // including a run sent back for review and finalized again.
-        var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile.Id, ct, force: true);
+        // including a run sent back for review and finalized again. Skipped when the workspace has the
+        // embeddings module turned off.
+        var corrected = await EmbeddingsEnabledAsync(run, ct)
+            ? await correctedDocuments.GenerateForRunAsync(runId, profile.Id, ct, force: true)
+            : [];
         var embed = await embedResolver.DescribeForRunAsync(runId, ct);
 
         return Ok(new
@@ -141,6 +144,9 @@ public class ReviewerController(
         if (run.Status != "reviewer_approved")
             return BadRequest(new { success = false, message = "Run is not finalized yet." });
 
+        if (!await EmbeddingsEnabledAsync(run, ct))
+            return BadRequest(new { success = false, message = "Embeddings are turned off for this workspace, so no finalized documents are generated." });
+
         var corrected = await correctedDocuments.GenerateForRunAsync(runId, profile!.Id, ct, force: true);
         var embed = await embedResolver.DescribeForRunAsync(runId, ct);
         return Ok(new
@@ -157,6 +163,16 @@ public class ReviewerController(
                 embed = MapEmbedDiagnostics(embed),
             },
         });
+    }
+
+    /// <summary>The run's workspace has the embeddings module on (the default).</summary>
+    private async Task<bool> EmbeddingsEnabledAsync(NdAnalysisRun run, CancellationToken ct)
+    {
+        var workspaceId = run.TenantId ?? WorkspaceScope.DefaultWorkspaceId;
+        return await db.NdWorkspaces.AsNoTracking()
+            .Where(w => w.Id == workspaceId)
+            .Select(w => (bool?)(w.ActionsEnabled && w.EmbeddingsEnabled))
+            .FirstOrDefaultAsync(ct) ?? true;
     }
 
     private static object MapEmbedDiagnostics(NdActionPlanEmbedResolver.EmbedDiagnostics embed) => new

@@ -202,6 +202,8 @@ export class NdGapPointDetailComponent implements OnChanges, OnDestroy {
   @Input() focusGapIndex: number | null = null;
   @Input() focusPlanId: string | null = null;
   @Input() actionPlans: ActionPlanEntry[] = [];
+  /** Workspace has the Actions module off: gaps still show, their corrective actions do not. */
+  @Input() hideActions = false;
   @Input() canEditActionPlans = false;
   @Input() canReviewActionPlans = false;
   /** Evidence re-check verdicts for this clause, newest first. */
