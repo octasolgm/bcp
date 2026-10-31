@@ -316,8 +316,17 @@ public class NdActionPlanEmbedResolver(
         return named.Count > 0 ? named : candidates;
     }
 
+    /// <summary>The document section an action amends, named right after the verb: "Amend 7.5 Customer Risk
+    /// Assessment ...", "Update section 4.2 ...". Checked before <see cref="SectionNumberInAction"/> so a
+    /// regulator reference later in the text ("(AML Rule 14.4.2, 5.1.1)") is never taken for the section.</summary>
+    private static readonly System.Text.RegularExpressions.Regex LeadingSectionNumber = new(
+        @"^\s*\[?\d*\]?\s*(?:amend|update|revise|extend)\s+(?:the\s+)?(?:section\s+|paragraph\s+)?(?<num>\d+(?:\.\d+)+)\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>"section 7.7" / "paragraph 3.2" anywhere in the action. Not "rule" or "clause": those are the
+    /// regulation's own numbering, not a section of the internal document.</summary>
     private static readonly System.Text.RegularExpressions.Regex SectionNumberInAction = new(
-        @"\b(?:section|rule|paragraph|clause)\s+(?<num>\d+(?:\.\d+)*)",
+        @"\b(?:section|paragraph)\s+(?<num>\d+(?:\.\d+)*)",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     private static readonly System.Text.RegularExpressions.Regex SectionNameInAction = new(
@@ -333,7 +342,8 @@ public class NdActionPlanEmbedResolver(
     private async Task<int?> FindSectionPageAsync(Guid docId, string actionText, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(actionText)) return null;
-        var numMatch = SectionNumberInAction.Match(actionText);
+        var numMatch = LeadingSectionNumber.Match(actionText);
+        if (!numMatch.Success) numMatch = SectionNumberInAction.Match(actionText);
         var nameMatch = numMatch.Success ? null : SectionNameInAction.Match(actionText);
         var number = numMatch.Success ? numMatch.Groups["num"].Value : null;
         var name = nameMatch is { Success: true } ? nameMatch.Groups["name"].Value.Trim() : null;
@@ -396,7 +406,19 @@ public class NdActionPlanEmbedResolver(
         return PolicyPageResolver.ResolveQuoteLocation(markdown, quote).Page;
     }
 
+    /// <summary>Parsed text per document for the life of this (request-scoped) resolver: one run reads the same
+    /// documents for every quote and action, and each read is a whole document from the database.</summary>
+    private readonly Dictionary<Guid, string?> markdownByDoc = new();
+
     private async Task<string?> LoadParsedMarkdownAsync(Guid docId, CancellationToken ct)
+    {
+        if (markdownByDoc.TryGetValue(docId, out var cached)) return cached;
+        var markdown = await LoadParsedMarkdownUncachedAsync(docId, ct);
+        markdownByDoc[docId] = markdown;
+        return markdown;
+    }
+
+    private async Task<string?> LoadParsedMarkdownUncachedAsync(Guid docId, CancellationToken ct)
     {
         var fromLocal = await db.NdLocalDocumentExtractions.AsNoTracking()
             .Where(e => e.StoredDocumentId == docId && e.MarkdownText != null)

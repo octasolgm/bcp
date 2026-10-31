@@ -699,3 +699,8 @@
     color: var(--text-muted);
   }
 }
+
+/* Sits at the right end of the Submit / Finalize row. */
+.view-embedding-btn {
+  margin-left: auto;
+}

@@ -48,6 +48,9 @@ Tasks
 - Platform setting "Analysis pipeline panel" (Platform settings, platform admin only): on shows the right-hand pipeline panel while an analysis runs, as before; off hides it and shows a plain "Processing your analysis - X of Y clauses checked" status at the top of the page, with no pipeline step names
 - Users who never saw the pipeline panel now also get that plain status while an analysis runs
 - New release branch release/2026.10.31.01 built and deployed to Azure dev
+- Pipeline panel switch applies instantly; the panel no longer flashes up on New analysis before the setting loads
+- Embedding side panel: documents fold open/closed, loading spinners on load, refresh and download; View embedding button sits at the right of the Submit / Finalize row
 
 Bug fixes
-- None
+- Embedding page reference: an action like "Amend 7.5 Customer Risk Assessment (AML Rule 14.4.2 ...)" now looks up section 7.5 in the internal document instead of the regulator's rule number, so the note lands on the section's own page
+- Embedding preview took 4 to 42 seconds: each document's parsed text was re-read from the database for every quote and action; now read once per document. No AI is used by the preview

@@ -43,3 +43,7 @@ We prepared a guide for running the sales of the platform in Jumppl. Each target
 ## Simpler progress while an analysis runs
 
 While an analysis runs, everyone now sees a simple status at the top of the page, such as "Processing your analysis - 12 of 40 clauses checked". The detailed technical progress panel on the right is kept for the platform team, and it can now be switched off from Platform settings, in which case the simple status is shown instead.
+
+## Faster and more accurate embedding preview
+
+The embedding preview now opens much faster, and each document in it can be folded open or closed. Page references are more accurate: when an action names the section of the internal document it changes, such as "Amend 7.5 Customer Risk Assessment", the note is placed on that section's page, and regulation rule numbers mentioned in the same action are no longer mistaken for it. The preview itself does not use any AI.

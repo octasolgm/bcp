@@ -38,6 +38,7 @@ type PreviewDoc = { id: string; title: string; version: string; embeds: Internal
         </div>
         <div class="ep-head-actions">
           <button type="button" class="ep-link" [disabled]="loading" (click)="load()">
+            @if (loading) {<span class="ep-spinner" aria-hidden="true"></span>}
             {{ loading ? 'Refreshing...' : 'Refresh' }}
           </button>
           <button type="button" class="ep-close" aria-label="Close" (click)="closed.emit()">✕</button>
@@ -46,7 +47,7 @@ type PreviewDoc = { id: string; title: string; version: string; embeds: Internal
 
       <div class="ep-body">
         @if (loading && !docs.length) {
-          <p class="ep-muted">Loading...</p>
+          <p class="ep-muted ep-loading"><span class="ep-spinner" aria-hidden="true"></span>Loading...</p>
         } @else if (error) {
           <p class="ep-error">{{ error }}</p>
         } @else if (!docs.length) {
@@ -63,14 +64,21 @@ type PreviewDoc = { id: string; title: string; version: string; embeds: Internal
           @for (doc of docs; track doc.id) {
             <section class="ep-doc">
               <div class="ep-doc-head">
-                <h3>
-                  <span aria-hidden="true">📄</span> {{ doc.title }}
+                <button type="button" class="ep-doc-toggle" [attr.aria-expanded]="!collapsed.has(doc.id)" (click)="toggle(doc.id)">
+                  <span class="ep-caret" [class.open]="!collapsed.has(doc.id)" aria-hidden="true">▸</span>
+                  <span aria-hidden="true">📄</span>
+                  <span class="ep-doc-title">{{ doc.title }}</span>
                   @if (doc.version) {<span class="ep-ver">{{ doc.version }}</span>}
-                </h3>
+                  <span class="ep-count">{{ doc.embeds.length }}</span>
+                </button>
                 @if (finalized) {
-                  <button type="button" class="ep-link" (click)="download(doc.id)">Download</button>
+                  <button type="button" class="ep-link" [disabled]="downloadingId === doc.id" (click)="download(doc.id)">
+                    @if (downloadingId === doc.id) {<span class="ep-spinner" aria-hidden="true"></span>}
+                    {{ downloadingId === doc.id ? 'Downloading...' : 'Download' }}
+                  </button>
                 }
               </div>
+              @if (!collapsed.has(doc.id)) {
               <ol class="ep-list">
                 @for (e of doc.embeds; track $index) {
                   <li class="ep-item">
@@ -89,6 +97,7 @@ type PreviewDoc = { id: string; title: string; version: string; embeds: Internal
                   </li>
                 }
               </ol>
+              }
             </section>
           }
           @if (!finalized) {
@@ -120,7 +129,25 @@ type PreviewDoc = { id: string; title: string; version: string; embeds: Internal
       .ep-summary { margin: 0 0 0.75rem; font-weight: 600; font-size: 0.875rem; }
       .ep-doc { margin-bottom: 1.1rem; }
       .ep-doc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; margin-bottom: 0.5rem; }
-      .ep-doc h3 { margin: 0; font-size: 0.9375rem; overflow-wrap: anywhere; }
+      .ep-doc-toggle {
+        display: flex; align-items: center; gap: 0.4rem; min-width: 0; padding: 0; border: 0; background: none;
+        color: inherit; font: inherit; font-size: 0.9375rem; font-weight: 600; text-align: left; cursor: pointer;
+      }
+      .ep-doc-title { overflow-wrap: anywhere; }
+      .ep-caret { display: inline-block; font-size: 0.7rem; transition: transform 0.15s ease; }
+      .ep-caret.open { transform: rotate(90deg); }
+      .ep-count {
+        flex: none; font-size: 0.7rem; font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 999px;
+        background: var(--border);
+      }
+      .ep-loading { display: flex; align-items: center; gap: 0.5rem; }
+      .ep-link { display: inline-flex; align-items: center; gap: 0.35rem; }
+      .ep-spinner {
+        display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 50%;
+        border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent);
+        animation: ep-spin 0.8s linear infinite;
+      }
+      @keyframes ep-spin { to { transform: rotate(360deg); } }
       .ep-label { margin: 0.5rem 0 0; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground, var(--muted)); }
       .ep-embedded { padding-left: 0.6rem; border-left: 3px solid var(--accent); }
       .ep-ver { margin-left: 0.35rem; font-size: 0.75rem; font-weight: 500; color: var(--muted-foreground, var(--muted)); }
@@ -151,6 +178,9 @@ export class NdEmbedPreviewDrawerComponent implements OnChanges {
   @Output() readonly closed = new EventEmitter<void>();
 
   docs: PreviewDoc[] = [];
+  /** Documents folded closed by the user; all open by default. */
+  collapsed = new Set<string>();
+  downloadingId: string | null = null;
   loading = false;
   error = '';
 
@@ -183,7 +213,16 @@ export class NdEmbedPreviewDrawerComponent implements OnChanges {
     this.cdr.markForCheck();
   }
 
-  download(docId: string): void {
-    void this.api.downloadInternalFileExport(docId);
+  toggle(docId: string): void {
+    if (this.collapsed.has(docId)) this.collapsed.delete(docId);
+    else this.collapsed.add(docId);
+  }
+
+  async download(docId: string): Promise<void> {
+    this.downloadingId = docId;
+    this.cdr.markForCheck();
+    await this.api.downloadInternalFileExport(docId);
+    this.downloadingId = null;
+    this.cdr.markForCheck();
   }
 }
