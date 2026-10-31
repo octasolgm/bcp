@@ -35,3 +35,11 @@ Business administrators have a new Business settings page under Admin settings, 
 ## Upload limits
 
 Each business can now have upload limits, all in MB: the largest single document, the largest combined size when several files are uploaded together, and the total size of its document library. The platform administrator sets them on the Business workspaces page, and the business sees them, along with how much storage it has used, on its Business settings page. When files are chosen for upload, they are checked against these limits first, and a clear message explains which file is too large or how much space is left. A business with no limits set works exactly as before.
+
+## Guide for managing sales in Jumppl
+
+We prepared a guide for running the sales of the platform in Jumppl. Each target bank becomes one item in the sales project, moving through clear pipeline stages from Lead to Won or Lost, with the bank's details such as bank type, emirate, decision maker and expected deal value kept in fixed fields. The client can keep the bank list up to date from the client portal, and an existing list in Excel can be imported in one step. The guide also describes the shared document folders, how the sales team asks the development team for demos and pilots, how a won bank is handed over for onboarding, and a checklist of what is set up at the start. The sales project now has these pipeline stages and is organised by country (UAE, Saudi Arabia and Pakistan) and then by bank type, with fields on every bank for its contacts, lead source, expected deal value and key dates, and the shared document folders for the sales team are in place. The client follows both the sales pipeline and the development work, with their document folders, through one client portal.
+
+## Simpler progress while an analysis runs
+
+While an analysis runs, everyone now sees a simple status at the top of the page, such as "Processing your analysis - 12 of 40 clauses checked". The detailed technical progress panel on the right is kept for the platform team, and it can now be switched off from Platform settings, in which case the simple status is shown instead.

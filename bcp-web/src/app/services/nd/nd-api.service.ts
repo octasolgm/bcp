@@ -1206,6 +1206,16 @@ export class NdApiService {
     return this.request<NdUploadLimits>('PUT', `/nd/workspaces/${workspaceId}/upload-limits`, limits);
   }
 
+  /** Platform display settings (pipeline panel on/off); readable by everyone signed in. */
+  getUiSettings() {
+    return this.request<{ pipelinePanelEnabled: boolean }>('GET', '/nd/ui-settings');
+  }
+
+  /** Platform admin: shows or hides the analysis pipeline panel for everyone. */
+  setUiSettings(settings: { pipelinePanelEnabled: boolean }) {
+    return this.request<{ pipelinePanelEnabled: boolean }>('PUT', '/nd/ui-settings', settings);
+  }
+
   getDictionaryEntries() {
     return this.request<unknown[]>('GET', '/nd/dictionary');
   }

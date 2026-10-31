@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
+import { NdPipelinePanelService } from '../../../services/nd/nd-pipeline-panel.service';
 import type { DualVerifyLlmProviderOption, DualVerifyLlmSettings } from '../../../../lib/nd/types';
 
 @Component({
@@ -15,6 +16,7 @@ import type { DualVerifyLlmProviderOption, DualVerifyLlmSettings } from '../../.
 export class NdAdminSettingsComponent implements OnInit {
   private readonly api = inject(NdApiService);
   readonly auth = inject(NdAuthService);
+  private readonly pipeline = inject(NdPipelinePanelService);
 
   loading = true;
   saving = false;
@@ -38,9 +40,30 @@ export class NdAdminSettingsComponent implements OnInit {
   finalizeEmbedError = '';
   finalizeEmbedMessage = '';
 
+  pipelinePanelEnabled = true;
+  pipelinePanelSaving = false;
+  pipelinePanelMessage = '';
+
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
     await this.load();
+    const ui = await this.api.getUiSettings();
+    if (ui.success && ui.data) this.pipelinePanelEnabled = ui.data.pipelinePanelEnabled;
+  }
+
+  /** Shows or hides the analysis pipeline panel for everyone (platform admin only). */
+  async savePipelinePanel(enabled: boolean): Promise<void> {
+    this.pipelinePanelSaving = true;
+    this.pipelinePanelMessage = '';
+    const res = await this.api.setUiSettings({ pipelinePanelEnabled: enabled });
+    this.pipelinePanelSaving = false;
+    if (res.success && res.data) {
+      this.pipelinePanelEnabled = res.data.pipelinePanelEnabled;
+      this.pipeline.setPanelEnabled(this.pipelinePanelEnabled);
+      this.pipelinePanelMessage = 'Saved.';
+    } else {
+      this.pipelinePanelMessage = res.message ?? 'Could not save.';
+    }
   }
 
   get isSuperAdmin(): boolean {

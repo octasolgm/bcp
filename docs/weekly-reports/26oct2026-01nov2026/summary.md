@@ -33,9 +33,21 @@ Tasks
 - Actions off hides corrective actions in reports (gaps and stored actions unchanged); Embeddings off makes finalize skip creating finalized document copies
 - Upload limits per business in MB: per document, per upload (several files together) and total storage; set by the platform admin on Business workspaces, shown read-only to the business on Business settings with storage used
 - Upload pages check the chosen files against the limits before uploading; the server also refuses a file over the per-document or storage limit
+- Sales guide for Comply Solutions in Jumppl (docs/jumppl/comply-solutions-sales-guide.md): one task per bank, pipeline statuses, bank custom fields, CSV import of the bank list, client portal use, file storage folders, sales to development handover, step-by-step tasks per role, daily/weekly/monthly routines, rules and Q&A, setup status
+- Jumppl Ultar Tech setup for Comply Solutions sales: pipeline statuses in Sales Comply Solutions (Lead to Won, Lost, On hold), folders 01-07 in Sales Folder Comply Solutions; sub-projects by country (UAE, Saudi Arabia, Pakistan) with bank types under each; 12 bank detail custom fields (city, contacts, lead source, deal value, dates) on the project and every sub-project
 
 Bug fixes
 - None
 
 Investigated, follow up pending
 - New pages not yet clicked through while signed in; API and web builds pass, 54 embed/workspace/finalize tests pass
+
+31 Oct 2026
+
+Tasks
+- Platform setting "Analysis pipeline panel" (Platform settings, platform admin only): on shows the right-hand pipeline panel while an analysis runs, as before; off hides it and shows a plain "Processing your analysis - X of Y clauses checked" status at the top of the page, with no pipeline step names
+- Users who never saw the pipeline panel now also get that plain status while an analysis runs
+- New release branch release/2026.10.31.01 built and deployed to Azure dev
+
+Bug fixes
+- None

@@ -143,7 +143,7 @@
             </thead>
             <tbody>
               @for (item of visibleItems; track item.workspace.id) {
-                <tr class="ws-row" [class.row-saving]="savingId === item.workspace.id" [class.ws-row-open]="creditsFor === item.workspace.id || membersFor === item.workspace.id">
+                <tr class="ws-row" [class.row-saving]="savingId === item.workspace.id" [class.ws-row-open]="creditsFor === item.workspace.id || membersFor === item.workspace.id || settingsFor === item.workspace.id">
                   <td class="col-name" data-label="Workspace">
                     @if (editingId === item.workspace.id) {
                       <div class="edit-stack">
@@ -209,6 +209,9 @@
                       <button type="button" class="btn-secondary btn-sm" (click)="toggleCredits(item)">
                         {{ creditsFor === item.workspace.id ? 'Hide credits' : 'Credits' }}
                       </button>
+                      <button type="button" class="btn-secondary btn-sm" (click)="toggleSettings(item)">
+                        {{ settingsFor === item.workspace.id ? 'Hide settings' : 'Business settings' }}
+                      </button>
                       <button type="button" class="btn-secondary btn-sm" (click)="startEdit(item)">Rename</button>
                       @if (!item.workspace.isDefault) {
                         <button
@@ -223,6 +226,56 @@
                     }
                   </td>
                 </tr>
+                @if (settingsFor === item.workspace.id) {
+                  <tr class="members-row ws-detail-row">
+                    <td colspan="8">
+                      <div class="ws-detail">
+                        <div class="ws-detail-split">
+                            <section class="ws-detail-section">
+                              <header class="ws-detail-head">
+                                <h3>Date format</h3>
+                              </header>
+                              <form class="ws-inline-form" (ngSubmit)="saveDateFormat(item)">
+                                <select
+                                  class="inline-input"
+                                  [(ngModel)]="dateFormatInput"
+                                  name="dateFormatInput-{{ item.workspace.id }}"
+                                  aria-label="Date format"
+                                >
+                                  <option value="default">Default (UAE, DD/MM/YYYY)</option>
+                                  @for (opt of dateFormatOptions; track opt.value) {
+                                    <option [value]="opt.value">{{ opt.label }}</option>
+                                  }
+                                </select>
+                                <button type="submit" class="btn-secondary btn-sm" [disabled]="savingDateFormat">
+                                  {{ savingDateFormat ? 'Saving...' : 'Save' }}
+                                </button>
+                              </form>
+                            </section>
+
+                            <section class="ws-detail-section">
+                              <header class="ws-detail-head">
+                                <h3>Modules</h3>
+                              </header>
+                              <app-nd-workspace-modules
+                                [workspaceId]="item.workspace.id"
+                                [actionsEnabled]="item.workspace.actionsEnabled"
+                                [embeddingsEnabled]="item.workspace.embeddingsEnabled"
+                                (changed)="onModulesChanged(item, $event)"
+                              />
+                            </section>
+
+                            <section class="ws-detail-section">
+                              <header class="ws-detail-head">
+                                <h3>Upload limits</h3>
+                              </header>
+                              <app-nd-workspace-upload-limits [workspaceId]="item.workspace.id" [editable]="true" />
+                            </section>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                }
                 @if (creditsFor === item.workspace.id) {
                   <tr class="members-row ws-detail-row">
                     <td colspan="8">
@@ -439,46 +492,6 @@
                               </form>
                             </section>
 
-                            <section class="ws-detail-section">
-                              <header class="ws-detail-head">
-                                <h3>Date format</h3>
-                              </header>
-                              <form class="ws-inline-form" (ngSubmit)="saveDateFormat(item)">
-                                <select
-                                  class="inline-input"
-                                  [(ngModel)]="dateFormatInput"
-                                  name="dateFormatInput-{{ item.workspace.id }}"
-                                  aria-label="Date format"
-                                >
-                                  <option value="default">Default (UAE, DD/MM/YYYY)</option>
-                                  @for (opt of dateFormatOptions; track opt.value) {
-                                    <option [value]="opt.value">{{ opt.label }}</option>
-                                  }
-                                </select>
-                                <button type="submit" class="btn-secondary btn-sm" [disabled]="savingDateFormat">
-                                  {{ savingDateFormat ? 'Saving...' : 'Save' }}
-                                </button>
-                              </form>
-                            </section>
-
-                            <section class="ws-detail-section">
-                              <header class="ws-detail-head">
-                                <h3>Modules</h3>
-                              </header>
-                              <app-nd-workspace-modules
-                                [workspaceId]="item.workspace.id"
-                                [actionsEnabled]="item.workspace.actionsEnabled"
-                                [embeddingsEnabled]="item.workspace.embeddingsEnabled"
-                                (changed)="onModulesChanged(item, $event)"
-                              />
-                            </section>
-
-                            <section class="ws-detail-section">
-                              <header class="ws-detail-head">
-                                <h3>Upload limits</h3>
-                              </header>
-                              <app-nd-workspace-upload-limits [workspaceId]="item.workspace.id" [editable]="true" />
-                            </section>
                           </div>
 
                           <section class="ws-detail-section">

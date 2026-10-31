@@ -99,6 +99,8 @@ export class NdPipelinePanelService {
   private readonly _runId = signal<string | null>(null);
   private readonly _totalClauses = signal(0);
   private readonly _judgedClauses = signal(0);
+  /** Platform setting: show this panel at all. Off shows only a plain "Processing" status. */
+  private readonly _panelEnabled = signal(true);
 
   readonly active = this._active.asReadonly();
   readonly collapsed = this._collapsed.asReadonly();
@@ -114,6 +116,12 @@ export class NdPipelinePanelService {
   /** Clauses selected in the run, and how many have finished Step 8 (completed or failed). */
   readonly totalClauses = this._totalClauses.asReadonly();
   readonly judgedClauses = this._judgedClauses.asReadonly();
+
+  readonly panelEnabled = this._panelEnabled.asReadonly();
+
+  setPanelEnabled(enabled: boolean): void {
+    this._panelEnabled.set(enabled);
+  }
 
   setRunId(id: string | null): void {
     if (id !== this._runId()) this._runId.set(id);

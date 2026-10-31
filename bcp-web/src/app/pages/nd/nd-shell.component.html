@@ -222,12 +222,18 @@
         [showBack]="showPageHeaderBack()"
         (back)="goBackFromPageHeader()"
       />
+      @if (showPlainRunStatus) {
+        <div class="run-status-strip" role="status" aria-live="polite">
+          <span class="run-status-spinner" aria-hidden="true"></span>
+          {{ plainRunStatusText }}
+        </div>
+      }
       <div class="content-scroll">
         <router-outlet />
       </div>
     </main>
 
-    @if (pipelinePanel.active() && auth.canManageWorkspaces()) {
+    @if (showPipelinePanel) {
       <app-nd-pipeline-progress-panel [phone]="isPhone()" />
     }
   </div>

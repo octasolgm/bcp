@@ -107,6 +107,27 @@ export class NdShellComponent implements OnInit, OnDestroy {
   readonly shellFocus = inject(NdShellFocusService);
   readonly pipelinePanel = inject(NdPipelinePanelService);
   readonly stepTracker = inject(NdStepTrackerService);
+
+  /** Pipeline panel shown only to the platform admin, and only while the platform setting has it on. */
+  get showPipelinePanel(): boolean {
+    return this.pipelinePanel.active() && this.auth.canManageWorkspaces() && this.pipelinePanel.panelEnabled();
+  }
+
+  /** Everyone else gets a plain status while an analysis runs, without any pipeline step names. */
+  get showPlainRunStatus(): boolean {
+    return this.pipelinePanel.active() && this.pipelinePanel.runActive() && !this.showPipelinePanel;
+  }
+
+  get plainRunStatusText(): string {
+    const total = this.pipelinePanel.totalClauses();
+    const done = Math.min(this.pipelinePanel.judgedClauses(), total);
+    return total > 0 ? `Processing your analysis - ${done} of ${total} clauses checked` : 'Processing your analysis...';
+  }
+
+  private async loadUiSettings(): Promise<void> {
+    const res = await this.api.getUiSettings();
+    if (res.success && res.data) this.pipelinePanel.setPanelEnabled(res.data.pipelinePanelEnabled);
+  }
   private readonly workspaceNav = inject(NdWorkspaceNavService);
   readonly deployVersion = inject(DeployVersionService);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -253,6 +274,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    void this.loadUiSettings();
     this.watchPhoneLayout();
     await this.auth.refreshProfile(true);
     const role = this.auth.getRole();

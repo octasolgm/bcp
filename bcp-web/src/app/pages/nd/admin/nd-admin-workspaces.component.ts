@@ -65,6 +65,8 @@ export class NdAdminWorkspacesComponent implements OnInit {
   /** Credit balances per workspace id, filled as the list loads. */
   credits = new Map<string, NdWorkspaceCredits>();
   creditsFor: string | null = null;
+  /** Row whose Business settings (date format, modules, upload limits) are open. */
+  settingsFor: string | null = null;
   creditsLoading = false;
   topUpAmount: number | null = null;
   topUpNote = '';
@@ -204,6 +206,15 @@ export class NdAdminWorkspacesComponent implements OnInit {
     return 'ok';
   }
 
+  toggleSettings(item: NdWorkspaceListItem): void {
+    if (this.settingsFor === item.workspace.id) {
+      this.settingsFor = null;
+      return;
+    }
+    this.settingsFor = item.workspace.id;
+    this.dateFormatInput = item.workspace.dateFormatRegion ?? 'default';
+  }
+
   async toggleCredits(item: NdWorkspaceListItem): Promise<void> {
     if (this.creditsFor === item.workspace.id) {
       this.creditsFor = null;
@@ -222,7 +233,6 @@ export class NdAdminWorkspacesComponent implements OnInit {
     this.clauseLimitInput = item.workspace.clauseLimit ?? null;
     this.markupUseDefault = item.workspace.aiMarkupOverride == null;
     this.markupInput = item.workspace.aiMarkupOverride ?? null;
-    this.dateFormatInput = item.workspace.dateFormatRegion ?? 'default';
     this.creditsLoading = true;
     const res = await this.api.getWorkspaceAiCredits(item.workspace.id);
     this.creditsLoading = false;

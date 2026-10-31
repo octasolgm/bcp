@@ -98,3 +98,11 @@
     flex-direction: column;
   }
 }
+
+.pipeline-panel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  font-weight: 500;
+}

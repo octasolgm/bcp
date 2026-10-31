@@ -16,6 +16,33 @@
     } @else if (loading) {
       <p class="nd-muted">Loading settings…</p>
     } @else {
+      @if (auth.isPlatformAdmin()) {
+        <section class="nd-card settings-card">
+          <header class="settings-card-header">
+            <div>
+              <h2>Analysis pipeline panel</h2>
+              <p class="nd-muted">
+                Show the right-hand panel with each pipeline step while an analysis runs. When off, a plain
+                "Processing your analysis" status is shown at the top instead, with no step names.
+              </p>
+            </div>
+          </header>
+          <label class="pipeline-panel-toggle">
+            <input
+              type="checkbox"
+              role="switch"
+              [checked]="pipelinePanelEnabled"
+              [disabled]="pipelinePanelSaving"
+              (change)="savePipelinePanel($any($event.target).checked)"
+            />
+            <span>{{ pipelinePanelEnabled ? 'Shown' : 'Hidden' }}</span>
+            @if (pipelinePanelMessage) {
+              <span class="nd-muted">{{ pipelinePanelMessage }}</span>
+            }
+          </label>
+        </section>
+      }
+
       <section class="nd-card settings-card">
         <header class="settings-card-header">
           <div>
