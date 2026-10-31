@@ -51,17 +51,21 @@ export class NdAdminSettingsComponent implements OnInit {
     if (ui.success && ui.data) this.pipelinePanelEnabled = ui.data.pipelinePanelEnabled;
   }
 
-  /** Shows or hides the analysis pipeline panel for everyone (platform admin only). */
+  /** Shows or hides the analysis pipeline panel for everyone (platform admin only). Applied straight away;
+   * the save runs in the background and is undone if it fails. */
   async savePipelinePanel(enabled: boolean): Promise<void> {
+    const previous = this.pipelinePanelEnabled;
+    this.pipelinePanelEnabled = enabled;
+    this.pipeline.setPanelEnabled(enabled);
     this.pipelinePanelSaving = true;
-    this.pipelinePanelMessage = '';
+    this.pipelinePanelMessage = 'Saving...';
     const res = await this.api.setUiSettings({ pipelinePanelEnabled: enabled });
     this.pipelinePanelSaving = false;
-    if (res.success && res.data) {
-      this.pipelinePanelEnabled = res.data.pipelinePanelEnabled;
-      this.pipeline.setPanelEnabled(this.pipelinePanelEnabled);
+    if (res.success) {
       this.pipelinePanelMessage = 'Saved.';
     } else {
+      this.pipelinePanelEnabled = previous;
+      this.pipeline.setPanelEnabled(previous);
       this.pipelinePanelMessage = res.message ?? 'Could not save.';
     }
   }

@@ -31,8 +31,8 @@
             <input
               type="checkbox"
               role="switch"
+              class="pipeline-panel-switch"
               [checked]="pipelinePanelEnabled"
-              [disabled]="pipelinePanelSaving"
               (change)="savePipelinePanel($any($event.target).checked)"
             />
             <span>{{ pipelinePanelEnabled ? 'Shown' : 'Hidden' }}</span>
