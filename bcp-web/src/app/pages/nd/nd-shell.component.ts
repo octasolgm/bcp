@@ -110,7 +110,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
 
   /** Pipeline panel shown only to the platform admin, and only while the platform setting has it on. */
   get showPipelinePanel(): boolean {
-    return this.pipelinePanel.active() && this.auth.canManageWorkspaces() && this.pipelinePanel.panelEnabled();
+    return this.pipelinePanel.active() && this.auth.canManageWorkspaces() && this.pipelinePanel.panelEnabled() === true;
   }
 
   /** Everyone else gets a plain status while an analysis runs, without any pipeline step names. */

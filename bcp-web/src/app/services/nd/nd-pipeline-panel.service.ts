@@ -99,8 +99,10 @@ export class NdPipelinePanelService {
   private readonly _runId = signal<string | null>(null);
   private readonly _totalClauses = signal(0);
   private readonly _judgedClauses = signal(0);
-  /** Platform setting: show this panel at all. Off shows only a plain "Processing" status. */
-  private readonly _panelEnabled = signal(true);
+  /** Platform setting: show this panel at all. Off shows only a plain "Processing" status. Starts from the
+   * value this browser last saw, and stays hidden (null) until the setting is known, so the panel never
+   * flashes up and then disappears. */
+  private readonly _panelEnabled = signal<boolean | null>(NdPipelinePanelService.readCachedPanelEnabled());
 
   readonly active = this._active.asReadonly();
   readonly collapsed = this._collapsed.asReadonly();
@@ -121,6 +123,22 @@ export class NdPipelinePanelService {
 
   setPanelEnabled(enabled: boolean): void {
     this._panelEnabled.set(enabled);
+    try {
+      localStorage.setItem(NdPipelinePanelService.PANEL_ENABLED_KEY, enabled ? '1' : '0');
+    } catch {
+      // Storage unavailable: the setting still applies for this page load.
+    }
+  }
+
+  private static readonly PANEL_ENABLED_KEY = 'nd.pipelinePanelEnabled';
+
+  private static readCachedPanelEnabled(): boolean | null {
+    try {
+      const v = localStorage.getItem(NdPipelinePanelService.PANEL_ENABLED_KEY);
+      return v === '1' ? true : v === '0' ? false : null;
+    } catch {
+      return null;
+    }
   }
 
   setRunId(id: string | null): void {
