@@ -6,6 +6,7 @@ Tasks
 - Deployed release/2026.11.02.02 and release/2026.11.02.03 to Azure dev (API and web)
 - Deployed release/2026.11.02.04 (21 points, failed run label, In progress badge) and created release/2026.11.02.06 (run start fixes); both web only, so no API restart
 - Tested a real 30 point run on 2026.11.02.04, started and stopped with permission: 30 held after the first 12 seconds and Stop responded in 0.3 seconds
+- Deployed release/2026.11.02.06 (web only; API stays on 2026.11.02.03) and repeated the test run, stopped after about 30 seconds: Run responds in 0.1 seconds, and Regulation points and Points selected stay at 30
 - Measured about 100 ms page freezes several times per second during a run; not fixed yet
 - Checked 2026.11.02.03 on app.comply-solutions.com: 30 points in the list and the New analysis panel, and document, chapter, row and All checkboxes all correct
 - New analysis: checkboxes on document and chapter headings, ticking a parent selects everything under it, partly selected shows a dash
@@ -33,6 +34,8 @@ Bug fixes
 - Excel export: confidence showed "-" on the New analysis page because it exported shortened results; it now exports the full results
 
 Investigated, follow up pending
+- First 12 seconds of a run still flicker: Points list title (0, 20, 0), a brief "did not start" message, and row ticks clearing for about 2 seconds
+- In progress badge still showed 1 seven seconds after a stop; not confirmed whether it clears by itself
 - TFS Guidelines (v13) has 3 extracted Annex lines of about 45 characters that repeat a heading; they are now offered and analysed like any clause. Removing them at extraction is a possible follow up
 - A TFS Guidelines (v13) analysis started at 23:31 was failed by the API restart during the deploy (0 of 30 done); it needs a rerun
 - Not yet confirmed on a complete run: counts during the run, Excel download and document delete
