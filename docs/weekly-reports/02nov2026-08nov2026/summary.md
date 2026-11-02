@@ -3,7 +3,8 @@
 Tasks
 - Default theme is now light for anyone with no saved theme choice, including the login page; a saved Light, Dark or System choice is still respected
 - Deployed release/2026.11.02.01 to Azure dev (API and web)
-- Deployed release/2026.11.02.02, then created release/2026.11.02.03 with the count fixes below
+- Deployed release/2026.11.02.02 and release/2026.11.02.03 to Azure dev (API and web)
+- Checked 2026.11.02.03 on app.comply-solutions.com: 30 points in the list and the New analysis panel, and document, chapter, row and All checkboxes all correct
 - New analysis: checkboxes on document and chapter headings, ticking a parent selects everything under it, partly selected shows a dash
 - New analysis: parent clauses that can be selected now have their own row, so section totals match the rows shown
 - Excel export: AI model column added on the New analysis and Results pages
@@ -24,5 +25,7 @@ Bug fixes
 
 Investigated, follow up pending
 - TFS Guidelines (v13) has 3 extracted Annex lines of about 45 characters that repeat a heading; they are now offered and analysed like any clause. Removing them at extraction is a possible follow up
-- New analysis count and checkbox fixes were compiled but not tried on a real signed-in run yet
+- A TFS Guidelines (v13) analysis started at 23:31 was failed by the API restart during the deploy (0 of 30 done); it needs a rerun
+- The New analysis page shows "Processing" for that failed run while the runs list shows Failed; not investigated yet
+- Not yet confirmed on a complete run: counts during the run, Excel download and document delete
 - Unit tests cannot run at the moment because some test files need a test package that is not installed
