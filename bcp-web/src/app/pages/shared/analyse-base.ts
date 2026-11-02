@@ -2837,7 +2837,7 @@ ${this.findingsPreview
             this.error = 'No extract points for the selected file(s). Upload/extract the regulation first.';
           } else if (!opts?.silent) {
             this.toast.show(
-              `Loaded ${this.govPoints.length} points for gap analysis (${this.regStoredCount} stored)`,
+              `Loaded ${this.loadedPointsCount()} points for gap analysis (${this.regStoredCount} stored)`,
               'success',
               2800,
             );
@@ -3144,6 +3144,10 @@ ${this.findingsPreview
       tfs.clauses = filtered.length || tfs.clauses;
     }
     this.syncSelectionToGovPoints();
+  }
+
+  protected loadedPointsCount(): number {
+    return this.govPoints.length;
   }
 
   regPointsFootnote(): string {

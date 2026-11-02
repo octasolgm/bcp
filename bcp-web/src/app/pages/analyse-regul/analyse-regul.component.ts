@@ -733,15 +733,20 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       : this.govPoints.length;
   }
 
+  protected override loadedPointsCount(): number {
+    if (!this.isDemoViewer && this.pointsSource === 'regulation') return this.rawGovPoints.length;
+    return super.loadedPointsCount();
+  }
+
   override regPointsFootnote(): string {
     // Demo runs used to advertise their clause count here; the pool count beside it
     // already says the same thing, so the note only repeated it.
-    if (!this.isDemoViewer) return super.regPointsFootnote();
+    // Real accounts: every selected point is analysed, so a separate "compared" figure only contradicted the count.
     return '';
   }
 
   displayDocAnalyseCount(doc: LibraryPointDisplayDoc): number {
-    if (!this.isDemoViewer) return doc.analyseCount;
+    if (!this.isDemoViewer) return this.docSelectionIds(doc).length;
     if (doc.useChapters) {
       return doc.chapters.reduce((n, ch) => n + this.displayChapterAnalyseCount(ch), 0);
     }
@@ -749,7 +754,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   displayChapterAnalyseCount(ch: LibraryPointDisplayChapter): number {
-    if (!this.isDemoViewer) return ch.analyseCount;
+    if (!this.isDemoViewer) return this.chapterSelectionIds(ch).length;
     return this.displayChapterAnalyseRows(ch).filter((r) => r.forAnalysis).length;
   }
 
@@ -764,14 +769,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         return pid != null && scopedSet.has(pid) && this.selected.has(pid);
       }).length;
     }
-    if (this.pointsSource === 'library') return super.displayDocSelectedCount(doc);
-    if (doc.useChapters) {
-      return doc.chapters.reduce((n, ch) => n + this.displayChapterSelectedCount(ch), 0);
-    }
-    return doc.flatRows.filter((r) => {
-      const pid = this.selectableRegPointId(r);
-      return pid != null && this.selected.has(pid);
-    }).length;
+    return this.docSelectionIds(doc).filter((id) => this.selected.has(id)).length;
   }
 
   override displayChapterSelectedCount(ch: LibraryPointDisplayChapter): number {
@@ -782,11 +780,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         return pid != null && scopedSet.has(pid) && this.selected.has(pid);
       }).length;
     }
-    if (this.pointsSource === 'library') return super.displayChapterSelectedCount(ch);
-    return this.displayChapterAnalyseRows(ch).filter((r) => {
-      const pid = this.selectableRegPointId(r);
-      return pid != null && this.selected.has(pid);
-    }).length;
+    return this.chapterSelectionIds(ch).filter((id) => this.selected.has(id)).length;
   }
 
   get pointsCatalogGovPoints(): GovPoint[] {

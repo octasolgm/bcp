@@ -655,12 +655,53 @@ public class LocalDocumentsController(
             rows = rows.Select(r => recovered.TryGetValue(r.Id, out var fresh) ? fresh : r).ToList();
         }
 
-        return rows.ToDictionary(r => r.StoredDocumentId.ToString(), r => (object)ToLiteDto(r));
+        var clauseCounts = await LoadClauseCountsAsync(rows.Select(r => r.Id).ToList(), ct);
+        return rows.ToDictionary(
+            r => r.StoredDocumentId.ToString(),
+            r => (object)ToLiteDto(r, clauseCounts.TryGetValue(r.Id, out var count) ? count : null));
+    }
+
+    private sealed class ClauseCountRow
+    {
+        public Guid Id { get; set; }
+        public int ClauseCount { get; set; }
+    }
+
+    /// <summary>
+    /// Different clauses per extraction: a heading repeated under the same number (a contents line such as
+    /// "Annex 1") is one clause, which is what the analysis picker offers. Counted in the database so the status
+    /// poll still never loads the sections. The ids come from rows the workspace filter already allowed.
+    /// </summary>
+    private async Task<Dictionary<Guid, int?>> LoadClauseCountsAsync(List<Guid> extractionIds, CancellationToken ct)
+    {
+        if (extractionIds.Count == 0) return [];
+        const string sql = """
+            SELECT e.id AS "Id", (
+              SELECT (COUNT(DISTINCT NULLIF(TRIM(COALESCE(s->>'clauseNo', s->>'ClauseNo')), ''))
+                + COUNT(*) FILTER (WHERE NULLIF(TRIM(COALESCE(s->>'clauseNo', s->>'ClauseNo')), '') IS NULL))::int
+              FROM jsonb_array_elements(e.sections_json::jsonb) s
+            ) AS "ClauseCount"
+            FROM nd_local_document_extractions e
+            WHERE e.id = ANY({0})
+            """;
+        try
+        {
+            var counts = await db.Database
+                .SqlQueryRaw<ClauseCountRow>(sql, new object[] { extractionIds.ToArray() })
+                .ToListAsync(ct);
+            return counts.Where(c => c.ClauseCount > 0).ToDictionary(c => c.Id, c => (int?)c.ClauseCount);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Only a nicer label; callers fall back to the section count.
+            logger.LogWarning(ex, "Could not count clauses for {Count} extraction(s)", extractionIds.Count);
+            return [];
+        }
     }
 
     /// <summary>Same shape as <see cref="ToDto"/> so the client type is unchanged, with the heavy fields empty
     /// and <c>lite: true</c> so a caller can tell they are not the real (empty) sections.</summary>
-    private static object ToLiteDto(LiteStatusRow r) => new
+    private static object ToLiteDto(LiteStatusRow r, int? clauseCount) => new
     {
         documentId = r.StoredDocumentId,
         fileName = (string?)null,
@@ -673,6 +714,7 @@ public class LocalDocumentsController(
         markdownText = (string?)null,
         extractStatus = r.ExtractStatus,
         sectionCount = r.SectionCount,
+        clauseCount,
         warnings = Array.Empty<string>(),
         sections = Array.Empty<LocalSection>(),
         extractError = r.ExtractError,

@@ -451,7 +451,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       const id = this.storedDocId(doc);
       const status = res.data[id];
       if (status?.extractStatus === 'extracted' && (status.sectionCount ?? 0) > 0) {
-        doc.pointCount = status.sectionCount;
+        doc.pointCount = status.clauseCount ?? status.sectionCount;
         // A re-extract elsewhere changes the count: drop the cached clauses so the next selection re-reads them.
         const cached = this.localSectionsByDoc.get(id);
         if (cached && cached.length !== status.sectionCount) this.localSectionsByDoc.delete(id);
@@ -526,7 +526,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     const status = res.success ? res.data?.[id] : undefined;
     if (status?.extractStatus !== 'extracted') return;
     this.localPipelineReady.add(id);
-    if ((status.sectionCount ?? 0) > 0) doc.pointCount = status.sectionCount;
+    if ((status.sectionCount ?? 0) > 0) doc.pointCount = status.clauseCount ?? status.sectionCount;
   }
 
   /** V5 starts with no clause ticked (real accounts): a run covers only the clauses the user picks, and the
