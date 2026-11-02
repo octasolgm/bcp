@@ -111,6 +111,10 @@ export class InProgressComponent implements OnInit, OnDestroy {
     );
     if (res.success && res.data) {
       this.allRuns = (res.data as AnalysisRunSummary[]).filter((r) => isNdRunProcessing(r));
+      // The badge can lag behind (it is cached and bumped ahead of time); this list is the real number.
+      if (!this.auth.isDemoViewer()) {
+        this.workspaceNav.bumpNavBadges({ analysisRunsInProgressExact: this.allRuns.length });
+      }
     } else {
       this.allRuns = [];
       this.loadError = res.message ?? 'Could not load ND analysis runs.';

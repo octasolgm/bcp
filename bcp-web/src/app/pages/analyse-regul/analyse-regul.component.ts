@@ -483,6 +483,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   toggleAllPoints(checked: boolean): void {
+    this.selectionEditedSinceRun = true;
     if (checked) this.selectAll();
     else this.clearSelection();
   }
@@ -503,6 +504,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override clearSelection(): void {
+    this.selectionEditedSinceRun = true;
     this.selected = new Set();
   }
 
@@ -552,6 +554,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override toggle(id: string): void {
+    this.selectionEditedSinceRun = true;
     const canonical =
       this.pointsSource === 'regulation'
         ? this.resolveCanonicalRegPointId(id) ?? id
@@ -707,6 +710,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   protected override syncSelectionToGovPoints(): void {
+    if (this.selectionIsTheRuns) {
+      this.selected = this.runPointSelectionIds();
+      return;
+    }
     if (this.pointsSource === 'regulation' && this.rawGovPoints.length) {
       const next = new Set<string>();
       for (const id of this.selected) {
@@ -748,9 +755,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       return this.demoSelectedIdsForDisplay().length;
     }
     // While the selection is the run's own, the count is the run's own: the same number as POINTS and n/N.
-    if (this.selected === this.runSelection && this.selected.size === this.runSelectionSize) {
-      return this.ndRegulatoryPointsInScope().length;
-    }
+    if (this.selectionIsTheRuns) return this.ndRegulatoryPointsInScope().length;
     if (this.pointsSource === 'regulation') {
       if (!this.selectedRegFileCount || !this.rawGovPoints.length) return 0;
       return this.comparableSelectedIds().length;
@@ -2225,9 +2230,37 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return meta;
   }
 
-  /** The selection last taken from the run, and its size, so a later change by the user can be told apart. */
-  private runSelection: Set<string> | null = null;
-  private runSelectionSize = 0;
+  /** The user changed the ticks after the selection was last taken from the run. */
+  private selectionEditedSinceRun = false;
+
+  private get selectionIsTheRuns(): boolean {
+    return (
+      !this.isDemoViewer &&
+      !!this.ndRunId &&
+      this.ndRunStatus !== 'draft' &&
+      this.ndRunPointsList.length > 0 &&
+      !this.selectionEditedSinceRun
+    );
+  }
+
+  /**
+   * The shared restore keeps only points in the comparable list, which leaves out headings and annexes (21 of a
+   * 30 clause run). A started run's selection is simply every point in that run.
+   */
+  protected override restoreNdRunSelection(selectedPointsSnapshot: string, points: AnalysisPoint[]): void {
+    super.restoreNdRunSelection(selectedPointsSnapshot, points);
+    if (this.selectionIsTheRuns) this.selected = this.runPointSelectionIds();
+  }
+
+  override selectPointIds(ids: string[]): void {
+    this.selectionEditedSinceRun = true;
+    super.selectPointIds(ids);
+  }
+
+  override clearPointIds(ids: string[]): void {
+    this.selectionEditedSinceRun = true;
+    super.clearPointIds(ids);
+  }
 
   private reconcileRunWithGovCatalog(): void {
     this.runPointMetaByAnalysisId.clear();
@@ -2288,8 +2321,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
           // Same ids as the checkboxes, one per run point: clause numbers alone left the boxes
           // empty and made clauses sharing a number collapse into one.
           this.selected = this.runPointSelectionIds();
-          this.runSelection = this.selected;
-          this.runSelectionSize = this.selected.size;
+          this.selectionEditedSinceRun = false;
         }
       }
     }

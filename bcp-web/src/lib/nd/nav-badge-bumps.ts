@@ -4,6 +4,8 @@ import type { AnalysisRunSummary } from './types';
 export type NdNavBadgeBumps = {
   analysisRunsAll?: number;
   analysisRunsInProgress?: number;
+  /** The real number, from a page that has just listed the running analyses; replaces the badge. */
+  analysisRunsInProgressExact?: number;
   analysisRunsCorrection?: number;
   adminDeletedRuns?: number;
   internalDocuments?: number;

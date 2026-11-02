@@ -783,6 +783,9 @@ export class NdShellComponent implements OnInit, OnDestroy {
     if (bumps.analysisRunsInProgress) {
       this.ndActiveRunCount = Math.max(0, this.ndActiveRunCount + bumps.analysisRunsInProgress);
     }
+    if (bumps.analysisRunsInProgressExact !== undefined) {
+      this.ndActiveRunCount = bumps.analysisRunsInProgressExact;
+    }
     this.cdr.markForCheck();
   }
 

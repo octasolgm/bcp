@@ -286,7 +286,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     this.stepTrackerRefreshTimer = setInterval(() => {
       this.stepTracker.setSteps(this.computeTrackerSteps());
       if (this.showEnginePipelinePanel) {
-        this.pipelinePanel.setRunActive(!!this.ndRunId);
+        this.pipelinePanel.setRunActive(!!this.ndRunId && this.ndRunInFlight);
         const panelRunId = this.ndRunId ?? this.activeNdRunId ?? null;
         if (panelRunId !== this.panelRunId) {
           // A different run: drop the previous run's Steps 1-6 data and wait for this run's own phase.
@@ -335,7 +335,12 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   /** Mirrors the Progress column empty/live/complete states in the blue shell header ticker. */
   private syncPageHeaderMarquee(): void {
     let text: string;
-    if (this.showLiveProgressColumn) {
+    if (!this.ndAuth.isDemoViewer() && this.ndRunId && !this.ndRunInFlight) {
+      // The page keeps its run view open for a run that stopped early, but nothing is running.
+      text = (this.ndRunWorkflowStatus || '').toLowerCase() === 'failed'
+        ? 'This analysis did not finish'
+        : `Analysis complete · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
+    } else if (this.showLiveProgressColumn) {
       const summary = this.forwardClauseProgressSummary;
       const count = this.sessionProgressLabel;
       text = `${summary} · Clauses ${count}`;
@@ -386,6 +391,12 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   /** Selected internal documents (pre-run selection or a resumed run's set) — pushed into the
    * shared panel service so the right-side panel can show per-document Parse/Extract/Index
    * status. */
+  /** The server really is working on this run (a failed or stopped run also keeps the run view open). */
+  private get ndRunInFlight(): boolean {
+    const status = (this.ndRunWorkflowStatus || this.ndRunStatus || '').toLowerCase();
+    return ['running', 'processing', 'queued', 'draft', ''].includes(status);
+  }
+
   private async syncPipelineDocs(): Promise<void> {
     const ids =
       this.selectedComplianceIds.size > 0
@@ -401,7 +412,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     });
     if (this.showEnginePipelinePanel) {
       this.pipelinePanel.setDocs(docs);
-      this.pipelinePanel.setRunActive(!!this.ndRunId);
+      this.pipelinePanel.setRunActive(!!this.ndRunId && this.ndRunInFlight);
     }
     this.stepTracker.setSteps(this.computeTrackerSteps());
 
