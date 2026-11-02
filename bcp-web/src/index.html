@@ -39,7 +39,7 @@
       } catch (e) {}
 
       var stored = localStorage.getItem('reguliq-theme');
-      var theme = stored === 'light' ? 'light' : 'dark';
+      var theme = stored === 'dark' ? 'dark' : 'light';
       if (stored === 'system') {
         theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
       }

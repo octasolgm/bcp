@@ -18,11 +18,11 @@ describe('ThemeService', () => {
     return TestBed.inject(ThemeService);
   }
 
-  it('defaults to dark theme', () => {
+  it('defaults to light theme', () => {
     const service = injectFresh();
-    expect(service.currentMode()).toBe('dark');
-    expect(service.resolvedTheme()).toBe('dark');
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(service.currentMode()).toBe('light');
+    expect(service.resolvedTheme()).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
   it('applies light theme and persists preference', () => {
