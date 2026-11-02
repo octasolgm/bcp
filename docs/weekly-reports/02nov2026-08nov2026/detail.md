@@ -14,7 +14,7 @@ You can now tick a document or a chapter to select every clause under it. If onl
 
 ## Consistent clause numbers
 
-If you select 30 clauses, the summary, the points list and the progress display are now designed to show the same number throughout the analysis. Clauses with headings such as "Introduction" no longer drop out of the list. Chapter totals now match the points shown, and regulation lists no longer count a repeated annex heading as an extra clause.
+If you select 30 clauses, the summary, the points list and the progress display are now designed to show the same number throughout the analysis. Clauses with headings such as "Introduction" no longer drop out of the list. Chapter totals now match the points shown. Every section found during extraction can now be selected, so the number shown under Regulation Documents and on the New analysis page is the same. Where a regulation repeats a number, for example when it restarts its sections in each chapter, the repeat is shown as "Section 2 (2)", so no clause is left out.
 
 ## Deleting documents
 
@@ -26,4 +26,4 @@ The first column now shows the name of the regulatory document, including the co
 
 ## Being worked on
 
-We are reviewing how to handle regulations that restart their section numbers in each chapter, so that every section can be selected for analysis. We are confirming the New analysis selection and clause number changes on a full analysis run before releasing them.
+We are confirming the New analysis selection and clause number changes on a full analysis run before releasing them.

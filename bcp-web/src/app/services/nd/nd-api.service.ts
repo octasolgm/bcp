@@ -348,8 +348,6 @@ export type NdLocalExtractionResult = {
   /** Extract status: pending | processing | extracted | failed */
   extractStatus?: string;
   sectionCount: number | null;
-  /** Different clause numbers; a heading repeated under one number counts once. Status poll only. */
-  clauseCount?: number | null;
   warnings: string[];
   sections: NdLocalExtractionSection[];
   extractError?: string | null;

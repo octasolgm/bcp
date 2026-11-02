@@ -60,6 +60,7 @@ import {
   type LibraryHierarchyGroup,
   type LibraryPointDisplayDoc,
   type LibraryPointDisplayChapter,
+  type PointDisplayTreeNode,
   type LibraryPointDisplayRow,
   type LibraryPointDisplayTree,
   type SourcedGovPoint,
@@ -408,6 +409,42 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     // Library runs select the de-duplicated points (see selectAll), so "All" is judged against those too.
     const pool = this.pointsSource === 'regulation' ? this.selectableRegulationPoints() : this.govPoints;
     return pool.length > 0 && pool.every((p) => this.selected.has(p.point_id));
+  }
+
+  private readonly chapterTrees = new WeakMap<LibraryPointDisplayChapter, PointDisplayTreeNode[]>();
+
+  /**
+   * The chapter's tree with the chapter's own clause back in it: the shared tree leaves out clause "2" because the
+   * accordion heading already says 2, which hid a clause that has its own text and is counted and analysed. Cached per
+   * chapter so the tree keeps its expanded rows between change detection passes.
+   */
+  chapterTree(ch: LibraryPointDisplayChapter): PointDisplayTreeNode[] {
+    if (this.isDemoViewer) return ch.tree;
+    const cached = this.chapterTrees.get(ch);
+    if (cached) return cached;
+    const number = ch.chapter.trim().replace(/\.$/, '');
+    const own = ch.sections
+      .flatMap((sec) => sec.rows)
+      .find((row) => row.displayId.trim().replace(/\.$/, '') === number);
+    const inTree = (nodes: PointDisplayTreeNode[]): boolean =>
+      nodes.some((node) => node.row === own || inTree(node.children));
+    const tree: PointDisplayTreeNode[] =
+      own && !inTree(ch.tree)
+        ? [
+            {
+              key: `${ch.chapter}:own`,
+              displayId: own.displayId,
+              row: own,
+              children: [],
+              depth: 1,
+              storedCount: 1,
+              analyseCount: own.forAnalysis ? 1 : 0,
+            },
+            ...ch.tree,
+          ]
+        : ch.tree;
+    this.chapterTrees.set(ch, tree);
+    return tree;
   }
 
   /** Every point id a chapter's checkbox covers, using the same ids as the checkboxes under it. */

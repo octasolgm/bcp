@@ -1023,7 +1023,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
         doc.extractionStatus = extractStatus === 'extracted' || extractStatus === 'failed' || extractStatus === 'processing'
           ? extractStatus
           : (local.status ?? 'pending').toLowerCase();
-        doc.pointCount = local.clauseCount ?? local.sectionCount ?? 0;
+        doc.pointCount = local.sectionCount ?? 0;
         doc.pageCount = local.totalPages ?? doc.pageCount;
       }
     } catch {

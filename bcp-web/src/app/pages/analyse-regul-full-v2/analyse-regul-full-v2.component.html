@@ -367,7 +367,7 @@
                                         @if (isLibraryChapterExpanded(doc.key, ch.chapter)) {
                                           <div class="acc-body tree-chapter-body">
                                             <app-nd-point-number-tree
-                                              [nodes]="ch.tree"
+                                              [nodes]="chapterTree(ch)"
                                               [selected]="selected"
                                               [selectedDetailPointId]="selectedDetailPointId"
                                               [catalogPoints]="pointsCatalogGovPoints"
@@ -459,7 +459,7 @@
               } @else if (!regulationDisplayUseDocGroups && !pointDisplayUseChapters && !govPoints.length) {
                 <p class="empty-msg">No points match search.</p>
               } @else {
-                @if (govSourceLabel) { <p class="source-note">{{ govSourceLabel }}</p> }
+                @if (isDemoViewer && govSourceLabel) { <p class="source-note">{{ govSourceLabel }}</p> }
                 <p class="source-note muted-small">Each regulation document has its own points · checked rows run in gap analysis (including section headers)</p>
                 @if (regulationDisplayUseDocGroups) {
                   @for (doc of visibleRegulationDisplayDocs; track doc.key) {
@@ -515,7 +515,7 @@
                                 @if (isRegChapterExpanded(doc.key, ch.chapter)) {
                                   <div class="acc-body tree-chapter-body">
                                     <app-nd-point-number-tree
-                                      [nodes]="ch.tree"
+                                      [nodes]="chapterTree(ch)"
                                       [selected]="selected"
                                       [selectedDetailPointId]="selectedDetailPointId"
                                       [catalogPoints]="pointsCatalogGovPoints"
@@ -599,7 +599,7 @@
                       @if (isChapterExpanded(ch.chapter)) {
                         <div class="acc-body">
                                     <app-nd-point-number-tree
-                                      [nodes]="ch.tree"
+                                      [nodes]="chapterTree(ch)"
                                       [selected]="selected"
                                       [selectedDetailPointId]="selectedDetailPointId"
                                       [catalogPoints]="pointsCatalogGovPoints"

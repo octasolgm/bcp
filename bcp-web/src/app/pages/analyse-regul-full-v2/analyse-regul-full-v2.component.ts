@@ -451,7 +451,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
       const id = this.storedDocId(doc);
       const status = res.data[id];
       if (status?.extractStatus === 'extracted' && (status.sectionCount ?? 0) > 0) {
-        doc.pointCount = status.clauseCount ?? status.sectionCount;
+        doc.pointCount = status.sectionCount;
         // A re-extract elsewhere changes the count: drop the cached clauses so the next selection re-reads them.
         const cached = this.localSectionsByDoc.get(id);
         if (cached && cached.length !== status.sectionCount) this.localSectionsByDoc.delete(id);
@@ -526,7 +526,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     const status = res.success ? res.data?.[id] : undefined;
     if (status?.extractStatus !== 'extracted') return;
     this.localPipelineReady.add(id);
-    if ((status.sectionCount ?? 0) > 0) doc.pointCount = status.clauseCount ?? status.sectionCount;
+    if ((status.sectionCount ?? 0) > 0) doc.pointCount = status.sectionCount;
   }
 
   /** V5 starts with no clause ticked (real accounts): a run covers only the clauses the user picks, and the
@@ -614,19 +614,15 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     sections: NdLocalExtractionSection[],
   ): NdGovPoint[] {
     const docName = doc.title || doc.originalFileName || 'Regulation document';
-    // A clause number must be unique: it becomes the point id, and the picker nests duplicate numbers
-    // ("3.1" twice -> "3.1.1"/"3.1.2") and then loses both. A document extracted before the table-of-
-    // contents fix can still hold a contents line ("3.1 Title / 13") next to the real clause 3.1, so when
-    // a number repeats keep the fullest text (the real clause), in the position it first appeared.
-    const fullest = new Map<string, NdLocalExtractionSection>();
-    for (const s of sections) {
-      const no = (s.clauseNo || '').trim();
-      const kept = fullest.get(no);
-      if (!no || !kept || s.clauseText.length > kept.clauseText.length) fullest.set(no || `__${fullest.size}`, s);
-    }
-    const unique = [...fullest.values()];
-    return unique.map((s, i) => {
-      const clauseNo = (s.clauseNo || '').trim() || String(i + 1);
+    // Every extracted section is one point, so this page shows the same count as the regulation lists and no
+    // clause is lost (some regulations restart "Section 2" in each chapter). A clause number must still be unique:
+    // it becomes the point id, and the picker and run nest or merge duplicates. A repeat becomes "Section 2 (2)".
+    const timesSeen = new Map<string, number>();
+    return sections.map((s, i) => {
+      const number = (s.clauseNo || '').trim() || String(i + 1);
+      const seen = (timesSeen.get(number) ?? 0) + 1;
+      timesSeen.set(number, seen);
+      const clauseNo = seen > 1 ? `${number} (${seen})` : number;
       const pointId = `${doc.id}:${clauseNo}`;
       return {
         point_id: pointId,
