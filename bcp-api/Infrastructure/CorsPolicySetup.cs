@@ -8,6 +8,7 @@ public static class CorsPolicySetup
         "http://localhost:3002",
         "http://localhost:4200",
         "https://bcp-web-dev.azurewebsites.net",
+        "https://app.comply-solutions.com",
     ];
 
     public static void AddBcpCors(IServiceCollection services, IConfiguration config)
