@@ -1383,6 +1383,7 @@ export abstract class AnalyseBase implements OnInit, OnDestroy {
       regulationDocumentName: this.regulationDocumentExportName,
       actionPlans,
       clauseByPointId,
+      keepConfidenceColumns: this.ndAuth.isDemoViewer(),
     };
   }
 

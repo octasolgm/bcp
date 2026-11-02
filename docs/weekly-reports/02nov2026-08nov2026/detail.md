@@ -22,7 +22,7 @@ Gap evidence documents shown under Internal Documents can now be deleted and res
 
 ## Gap analysis Excel export
 
-The first column now shows the name of the regulatory document, including the correct document for each clause when an analysis covers several regulations. The confidence percentage now exports correctly from the New analysis page, and the AI model used for the analysis is now included when the analysis recorded it.
+The first column now shows the name of the regulatory document, including the correct document for each clause when an analysis covers several regulations. The file no longer includes the confidence percentage or the AI model, and the New analysis page now exports the complete results.
 
 ## Being worked on
 

@@ -73,7 +73,7 @@ import { rollupClause, type ClauseRollup } from '../../../lib/nd/gap-state';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
 import { NdReportSummaryStackComponent } from '../../components/nd/nd-report-summary-stack.component';
 import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
-import { loadRegulationDocNamesByPoint, regulLlmLabel } from '../../../lib/nd/export/gap-export-doc-names';
+import { loadRegulationDocNamesByPoint } from '../../../lib/nd/export/gap-export-doc-names';
 import type { ResultsData } from '../../../lib/nd/types';
 import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints, exportRegulGapAnalysisExcelFromPoints } from '../../../lib/nd/export/gap-analysis-export';
 import {
@@ -2673,7 +2673,6 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
           const data = res.data as ResultsData;
           const fullById = new Map(data.points.map((p) => [p.id, p]));
           exportPoints = points.map((p) => fullById.get(p.id) ?? p);
-          options.llmLabel = regulLlmLabel(data.run);
           options.regulationDocNameByPointId = await loadRegulationDocNamesByPoint(exportPoints, (id) =>
             this.ndApi.getRegulationDocument(id),
           );

@@ -19,7 +19,7 @@ import {
   resolveAnalysisPointSeverity,
   resolvePointComplianceLabel,
 } from '../../../../lib/nd/point-compliance-status';
-import { loadRegulationDocNamesByPoint, regulLlmLabel } from '../../../../lib/nd/export/gap-export-doc-names';
+import { loadRegulationDocNamesByPoint } from '../../../../lib/nd/export/gap-export-doc-names';
 import { isRegulWorkflow } from '../../../../lib/nd/regul-fields';
 import {
   exportGapAnalysisExcelFromPoints,
@@ -718,9 +718,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
     const plans = this.data.actionPlans ?? [];
     this.exportDialogColumns = gapAnalysisExportColumns(
       this.data.points,
-      this.auth.isDemoViewer()
-        ? {}
-        : { regul: this.isRegulRun, withAiModel: !!regulLlmLabel(this.data.run) },
+      this.auth.isDemoViewer() ? { keepConfidenceColumns: true } : { regul: this.isRegulRun },
     );
     this.exportDialogHasActionPlans = plans.length > 0;
     this.exportDialogHasReviews = plans.some((p) => (p.reviews ?? []).length > 0);
@@ -746,6 +744,7 @@ export class NdResultsComponent implements OnInit, OnChanges {
     if (this.auth.isDemoViewer()) {
       await exportGapAnalysisExcelFromPoints(this.data.points, undefined, undefined, {
         ...this.exportOptions(),
+        keepConfidenceColumns: true,
         selection,
       });
       return;
@@ -756,7 +755,6 @@ export class NdResultsComponent implements OnInit, OnChanges {
     const options = {
       ...this.exportOptions(),
       regulationDocNameByPointId,
-      llmLabel: regulLlmLabel(this.data.run),
       selection,
     };
     const exportExcel = this.isRegulRun ? exportRegulGapAnalysisExcelFromPoints : exportGapAnalysisExcelFromPoints;

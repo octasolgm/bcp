@@ -54,8 +54,10 @@ export type GapAnalysisExcelOptions = {
   actionPlans?: ActionPlanEntry[];
   /** Point id → clause number, so action plan rows can be traced back to a clause. */
   clauseByPointId?: Map<string, string>;
-  /** "provider / model" that judged the run; when set the gap sheet gets a trailing "AI model" column. */
+  /** "provider / model" that judged the run; written only with keepConfidenceColumns. */
   llmLabel?: string;
+  /** Demo accounts keep the confidence and AI model columns; client exports leave them out. */
+  keepConfidenceColumns?: boolean;
   /** Written in the gaps column of compliant rows (new analysis page only). */
   compliantNote?: string;
   /** New analysis page (regul hybrid pipeline, real accounts): gaps column lists the page's gaps with their actions. */
@@ -69,6 +71,18 @@ export type GapAnalysisExcelOptions = {
 };
 
 export const AI_MODEL_HEADER = 'AI model';
+
+/** Internal figures that do not belong in a client's gap analysis file. */
+function isConfidenceOrModelColumn(header: string): boolean {
+  return header === AI_MODEL_HEADER || header.includes('Confidence %');
+}
+
+/** The dialog's column choice with the confidence and AI model columns removed, unless the caller keeps them. */
+function gapColumnsToWrite(headers: string[], options: GapAnalysisExcelOptions): string[] | undefined {
+  const wanted = options.selection?.gapColumns;
+  if (options.keepConfidenceColumns) return wanted;
+  return (wanted?.length ? wanted : headers).filter((h) => !isConfidenceOrModelColumn(h));
+}
 
 /** Columns offered by the export dialog for the action plan sheet. */
 export const ACTION_PLAN_EXPORT_COLUMNS = [
@@ -366,12 +380,13 @@ const REGUL_GAP_HEADERS = (requirementColumnHeader: string, withAiModel = false)
 /** Column names the export dialog should offer for the Gaps sheet of this run. */
 export function gapAnalysisExportColumns(
   points: AnalysisPoint[],
-  opts: { regul?: boolean; requirementColumnHeader?: string; withAiModel?: boolean } = {},
+  opts: { regul?: boolean; requirementColumnHeader?: string; withAiModel?: boolean; keepConfidenceColumns?: boolean } = {},
 ): string[] {
   const header = opts.requirementColumnHeader ?? REGULATORY_CLAUSE_HEADER;
-  if (opts.regul) return REGUL_GAP_HEADERS(header, opts.withAiModel);
-  const rows = buildGapAnalysisExportRows(points);
-  return buildHeaders(gapExportIncludesPhaseColumns(rows), header, opts.withAiModel);
+  const columns = opts.regul
+    ? REGUL_GAP_HEADERS(header, opts.withAiModel)
+    : buildHeaders(gapExportIncludesPhaseColumns(buildGapAnalysisExportRows(points)), header, opts.withAiModel);
+  return opts.keepConfidenceColumns ? columns : columns.filter((h) => !isConfidenceOrModelColumn(h));
 }
 
 /** Regul.ai Book 6 gap sheet — clause no, rule, gaps, document ref, policy extract. */
@@ -405,7 +420,7 @@ export async function exportRegulGapAnalysisExcelFromPoints(
     ...(llmLabel ? [llmLabel] : []),
   ]);
   const colWidths = [32, 12, 50, 45, 36, 50, 16, 14, 12, 34];
-  const picked = pickColumns(headers, matrix, options.selection?.gapColumns, options.selection?.gapColumnLabels);
+  const picked = pickColumns(headers, matrix, gapColumnsToWrite(headers, options), options.selection?.gapColumnLabels);
   await downloadExcelSheets(filename, [
     {
       sheetName: 'Gap Analysis',
@@ -435,15 +450,16 @@ export async function exportGapAnalysisExcelFromPoints(
   const includePhases = gapExportIncludesPhaseColumns(rows);
   const colWidths = buildColWidths(includePhases);
   const llmLabel = options.llmLabel?.trim() ?? '';
+  const headers = buildHeaders(includePhases, requirementColumnHeader, !!llmLabel);
   const picked = pickColumns(
-    buildHeaders(includePhases, requirementColumnHeader, !!llmLabel),
+    headers,
     rowsToMatrix(
       rows,
       includePhases,
       (r) => options.regulationDocNameByPointId?.get(r.pointId ?? '') || (options.regulationDocumentName ?? ''),
       llmLabel,
     ),
-    options.selection?.gapColumns,
+    gapColumnsToWrite(headers, options),
     options.selection?.gapColumnLabels,
   );
   await downloadExcelSheets(filename, [

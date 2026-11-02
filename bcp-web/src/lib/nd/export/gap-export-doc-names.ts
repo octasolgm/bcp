@@ -41,11 +41,3 @@ export function regulationDocName(doc: unknown): string {
   const d = (doc ?? {}) as { name?: string; title?: string; originalFileName?: string; fileName?: string };
   return d.name?.trim() || d.title?.trim() || d.originalFileName?.trim() || d.fileName?.trim() || '';
 }
-
-/** "provider / model" that judged a run; empty when the run recorded no model. */
-export function regulLlmLabel(run?: { regulLlmProvider?: string | null; regulLlmModel?: string | null } | null): string {
-  const model = run?.regulLlmModel?.trim();
-  if (!model) return '';
-  const provider = run?.regulLlmProvider?.trim();
-  return provider ? `${provider} / ${model}` : model;
-}

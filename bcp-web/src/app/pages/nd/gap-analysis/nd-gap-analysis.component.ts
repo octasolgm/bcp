@@ -3263,6 +3263,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.exportDialogColumns = gapAnalysisExportColumns(points, {
       regul: !!this.ndRunWorkflowEngine && isRegulWorkflow(this.ndRunWorkflowEngine),
       withAiModel: !!this.ndRunLlmLabel,
+      keepConfidenceColumns: this.auth.isDemoViewer(),
     });
     this.exportDialogHasActionPlans = plans.length > 0;
     this.exportDialogHasReviews = plans.some((p) => (p.reviews ?? []).length > 0);
@@ -3304,6 +3305,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
         ...this.exportOptions(),
         regulationDocNameByPointId,
         llmLabel: this.ndRunLlmLabel,
+        keepConfidenceColumns: this.auth.isDemoViewer(),
         compliantNote: this.ndCompliantNote,
         regulHybridGaps: this.exportRegulHybridGaps,
         gapStates: this.gapStates,

@@ -11,7 +11,6 @@ Tasks
 - Checked 2026.11.02.03 on app.comply-solutions.com: 30 points in the list and the New analysis panel, and document, chapter, row and All checkboxes all correct
 - New analysis: checkboxes on document and chapter headings, ticking a parent selects everything under it, partly selected shows a dash
 - New analysis: parent clauses that can be selected now have their own row, so section totals match the rows shown
-- Excel export: AI model column added on the New analysis and Results pages
 
 Bug fixes
 - app.comply-solutions.com did not work because the API blocked requests from that domain; now allowed
@@ -31,7 +30,8 @@ Bug fixes
 - Regulation and internal documents: a list refresh that started before a delete could bring the document back
 - Regulation documents: bulk delete now says when manual custom points were left out
 - Excel export: document name was blank on the Gap analysis and Results pages, and is now per clause for runs with several regulations
-- Excel export: confidence showed "-" on the New analysis page because it exported shortened results; it now exports the full results
+- Excel export: the New analysis page exported shortened results; it now exports the full results
+- Excel export: confidence and AI model columns removed from the gap analysis file for real accounts
 
 Investigated, follow up pending
 - First 12 seconds of a run still flicker: Points list title (0, 20, 0), a brief "did not start" message, and row ticks clearing for about 2 seconds
