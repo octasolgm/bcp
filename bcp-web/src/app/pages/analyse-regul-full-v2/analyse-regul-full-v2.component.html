@@ -312,34 +312,58 @@
                         <div class="acc-body lib-hier-lib-body">
                           @for (doc of lib.documents; track doc.key) {
                             <div class="acc-item lib-hier-doc">
-                              <button type="button" class="acc-head acc-head-nested" (click)="toggleLibraryDoc(doc.key)">
-                                <span class="chevron" [class.open]="isLibraryDocExpanded(doc.key)">›</span>
-                                <span>{{ doc.docName }}</span>
-                                <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ displayDocAnalyseCount(doc) }}</span>
-                              </button>
+                              <div class="acc-head-row">
+                                @if (!isDemoViewer) {
+                                  <input
+                                    type="checkbox"
+                                    class="acc-head-check"
+                                    [checked]="allIdsSelected(docSelectionIds(doc))"
+                                    [indeterminate]="someIdsSelected(docSelectionIds(doc))"
+                                    aria-label="Select every point under this heading"
+                                    (change)="setIdsSelected(docSelectionIds(doc), $any($event.target).checked)"
+                                  />
+                                }
+                                <button type="button" class="acc-head acc-head-nested" (click)="toggleLibraryDoc(doc.key)">
+                                  <span class="chevron" [class.open]="isLibraryDocExpanded(doc.key)">›</span>
+                                  <span>{{ doc.docName }}</span>
+                                  <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ displayDocAnalyseCount(doc) }}</span>
+                                </button>
+                              </div>
                               @if (isLibraryDocExpanded(doc.key)) {
                                 <div class="acc-body">
                                   @if (doc.useChapters) {
                                     @for (ch of doc.chapters; track ch.chapter) {
                                       <div class="acc-item tree-chapter-item">
-                                        <button
-                                          type="button"
-                                          class="acc-head tree-chapter-head"
-                                          (click)="toggleLibraryChapter(doc.key, ch.chapter)"
-                                        >
-                                          <span class="chevron" [class.open]="isLibraryChapterExpanded(doc.key, ch.chapter)">›</span>
-                                          <span>{{ ch.label }}</span>
-                                          <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ displayChapterAnalyseCount(ch) }}</span>
-                                          @if (displayChapterAnalyseCount(ch) > 0) {
-                                            <button
-                                              type="button"
-                                              class="acc-action"
-                                              (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)"
-                                            >
-                                              {{ displayChapterAllSelected(ch) ? '−' : '+' }}
-                                            </button>
+                                        <div class="acc-head-row">
+                                          @if (!isDemoViewer) {
+                                            <input
+                                              type="checkbox"
+                                              class="acc-head-check"
+                                              [checked]="allIdsSelected(chapterSelectionIds(ch))"
+                                              [indeterminate]="someIdsSelected(chapterSelectionIds(ch))"
+                                              aria-label="Select every point under this heading"
+                                              (change)="setIdsSelected(chapterSelectionIds(ch), $any($event.target).checked)"
+                                            />
                                           }
-                                        </button>
+                                          <button
+                                            type="button"
+                                            class="acc-head tree-chapter-head"
+                                            (click)="toggleLibraryChapter(doc.key, ch.chapter)"
+                                          >
+                                            <span class="chevron" [class.open]="isLibraryChapterExpanded(doc.key, ch.chapter)">›</span>
+                                            <span>{{ ch.label }}</span>
+                                            <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ displayChapterAnalyseCount(ch) }}</span>
+                                            @if (isDemoViewer && displayChapterAnalyseCount(ch) > 0) {
+                                              <button
+                                                type="button"
+                                                class="acc-action"
+                                                (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)"
+                                              >
+                                                {{ displayChapterAllSelected(ch) ? '−' : '+' }}
+                                              </button>
+                                            }
+                                          </button>
+                                        </div>
                                         @if (isLibraryChapterExpanded(doc.key, ch.chapter)) {
                                           <div class="acc-body tree-chapter-body">
                                             <app-nd-point-number-tree
@@ -348,6 +372,7 @@
                                               [selectedDetailPointId]="selectedDetailPointId"
                                               [catalogPoints]="pointsCatalogGovPoints"
                                               [resolvePointId]="selectableLibraryPointId.bind(this)"
+                                              [fullSelection]="!isDemoViewer"
                                               (togglePoint)="toggle($event)"
                                               (toggleGroup)="togglePointIds($event)"
                                               (selectGroup)="selectPointIds($event)"
@@ -365,6 +390,7 @@
                                       [selectedDetailPointId]="selectedDetailPointId"
                                       [catalogPoints]="pointsCatalogGovPoints"
                                       [resolvePointId]="selectableLibraryPointId.bind(this)"
+                                      [fullSelection]="!isDemoViewer"
                                       (togglePoint)="toggle($event)"
                                       (toggleGroup)="togglePointIds($event)"
                                       (selectGroup)="selectPointIds($event)"
@@ -438,30 +464,54 @@
                 @if (regulationDisplayUseDocGroups) {
                   @for (doc of visibleRegulationDisplayDocs; track doc.key) {
                     <div class="acc-item lib-hier-doc">
-                      <button type="button" class="acc-head acc-head-nested" (click)="toggleRegDoc(doc.key)">
-                        <span class="chevron" [class.open]="isRegDocExpanded(doc.key)">›</span>
-                        <span>{{ doc.docName }}</span>
-                        <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ displayDocAnalyseCount(doc) }}</span>
-                      </button>
+                      <div class="acc-head-row">
+                        @if (!isDemoViewer) {
+                          <input
+                            type="checkbox"
+                            class="acc-head-check"
+                            [checked]="allIdsSelected(docSelectionIds(doc))"
+                            [indeterminate]="someIdsSelected(docSelectionIds(doc))"
+                            aria-label="Select every point under this heading"
+                            (change)="setIdsSelected(docSelectionIds(doc), $any($event.target).checked)"
+                          />
+                        }
+                        <button type="button" class="acc-head acc-head-nested" (click)="toggleRegDoc(doc.key)">
+                          <span class="chevron" [class.open]="isRegDocExpanded(doc.key)">›</span>
+                          <span>{{ doc.docName }}</span>
+                          <span class="acc-meta">{{ displayDocSelectedCount(doc) }}/{{ displayDocAnalyseCount(doc) }}</span>
+                        </button>
+                      </div>
                       @if (isRegDocExpanded(doc.key)) {
                         <div class="acc-body">
                           @if (doc.useChapters) {
                             @for (ch of doc.chapters; track ch.chapter) {
                               <div class="acc-item tree-chapter-item">
-                                <button type="button" class="acc-head tree-chapter-head" (click)="toggleRegChapter(doc.key, ch.chapter)">
-                                  <span class="chevron" [class.open]="isRegChapterExpanded(doc.key, ch.chapter)">›</span>
-                                  <span>{{ ch.label }}</span>
-                                  <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ displayChapterAnalyseCount(ch) }}</span>
-                                  @if (displayChapterAnalyseCount(ch) > 0) {
-                                    <button
-                                      type="button"
-                                      class="acc-action"
-                                      (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)"
-                                    >
-                                      {{ displayChapterAllSelected(ch) ? '−' : '+' }}
-                                    </button>
+                                <div class="acc-head-row">
+                                  @if (!isDemoViewer) {
+                                    <input
+                                      type="checkbox"
+                                      class="acc-head-check"
+                                      [checked]="allIdsSelected(chapterSelectionIds(ch))"
+                                      [indeterminate]="someIdsSelected(chapterSelectionIds(ch))"
+                                      aria-label="Select every point under this heading"
+                                      (change)="setIdsSelected(chapterSelectionIds(ch), $any($event.target).checked)"
+                                    />
                                   }
-                                </button>
+                                  <button type="button" class="acc-head tree-chapter-head" (click)="toggleRegChapter(doc.key, ch.chapter)">
+                                    <span class="chevron" [class.open]="isRegChapterExpanded(doc.key, ch.chapter)">›</span>
+                                    <span>{{ ch.label }}</span>
+                                    <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ displayChapterAnalyseCount(ch) }}</span>
+                                    @if (isDemoViewer && displayChapterAnalyseCount(ch) > 0) {
+                                      <button
+                                        type="button"
+                                        class="acc-action"
+                                        (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)"
+                                      >
+                                        {{ displayChapterAllSelected(ch) ? '−' : '+' }}
+                                      </button>
+                                    }
+                                  </button>
+                                </div>
                                 @if (isRegChapterExpanded(doc.key, ch.chapter)) {
                                   <div class="acc-body tree-chapter-body">
                                     <app-nd-point-number-tree
@@ -470,6 +520,7 @@
                                       [selectedDetailPointId]="selectedDetailPointId"
                                       [catalogPoints]="pointsCatalogGovPoints"
                                       [resolvePointId]="selectableRegPointId.bind(this)"
+                                      [fullSelection]="!isDemoViewer"
                                       (togglePoint)="toggle($event)"
                                       (toggleGroup)="togglePointIds($event)"
                                       (selectGroup)="selectPointIds($event)"
@@ -487,6 +538,7 @@
                               [selectedDetailPointId]="selectedDetailPointId"
                               [catalogPoints]="pointsCatalogGovPoints"
                               [resolvePointId]="selectableRegPointId.bind(this)"
+                              [fullSelection]="!isDemoViewer"
                               (togglePoint)="toggle($event)"
                               (toggleGroup)="togglePointIds($event)"
                               (selectGroup)="selectPointIds($event)"
@@ -522,14 +574,28 @@
                 } @else if (pointDisplayUseChapters) {
                   @for (ch of visiblePointDisplayChapters; track ch.chapter) {
                     <div class="acc-item">
-                      <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
-                        <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
-                        <span>{{ ch.label }}</span>
-                        <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ displayChapterAnalyseCount(ch) }}</span>
-                        <button type="button" class="acc-action" (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)">
-                          {{ displayChapterAllSelected(ch) ? '−' : '+' }}
+                      <div class="acc-head-row">
+                        @if (!isDemoViewer) {
+                          <input
+                            type="checkbox"
+                            class="acc-head-check"
+                            [checked]="allIdsSelected(chapterSelectionIds(ch))"
+                            [indeterminate]="someIdsSelected(chapterSelectionIds(ch))"
+                            aria-label="Select every point under this heading"
+                            (change)="setIdsSelected(chapterSelectionIds(ch), $any($event.target).checked)"
+                          />
+                        }
+                        <button type="button" class="acc-head" (click)="toggleChapter(ch.chapter)">
+                          <span class="chevron" [class.open]="isChapterExpanded(ch.chapter)">›</span>
+                          <span>{{ ch.label }}</span>
+                          <span class="acc-meta">{{ displayChapterSelectedCount(ch) }}/{{ displayChapterAnalyseCount(ch) }}</span>
+                          @if (isDemoViewer) {
+                                                    <button type="button" class="acc-action" (click)="$event.stopPropagation(); toggleDisplayChapterSelection(ch)">
+                                                      {{ displayChapterAllSelected(ch) ? '−' : '+' }}
+                                                    </button>
+                          }
                         </button>
-                      </button>
+                      </div>
                       @if (isChapterExpanded(ch.chapter)) {
                         <div class="acc-body">
                                     <app-nd-point-number-tree
@@ -538,6 +604,7 @@
                                       [selectedDetailPointId]="selectedDetailPointId"
                                       [catalogPoints]="pointsCatalogGovPoints"
                                       [resolvePointId]="selectableRegPointId.bind(this)"
+                                      [fullSelection]="!isDemoViewer"
                                       (togglePoint)="toggle($event)"
                             (toggleGroup)="togglePointIds($event)"
                             (selectGroup)="selectPointIds($event)"

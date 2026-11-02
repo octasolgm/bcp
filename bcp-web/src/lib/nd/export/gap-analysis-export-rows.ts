@@ -52,6 +52,8 @@ export type GapAnalysisPhaseExport = {
 };
 
 export type GapAnalysisExcelRow = {
+  /** Analysis point this row came from. */
+  pointId?: string;
   /** Clause / point display number (e.g. 3.9 or INT 2-d). */
   pointNumber: string;
   requirement: string;
@@ -358,6 +360,7 @@ export function buildGapAnalysisExportRows(
     const hasPhase2 = Boolean(llmMsg.trim());
 
     const row: GapAnalysisExcelRow = {
+      pointId: point.id,
       pointNumber,
       requirement: requirementCell(point, landingBlock),
       policyResponse: policyCell(structured, llmMsg),

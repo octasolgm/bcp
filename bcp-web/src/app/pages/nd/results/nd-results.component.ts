@@ -19,9 +19,12 @@ import {
   resolveAnalysisPointSeverity,
   resolvePointComplianceLabel,
 } from '../../../../lib/nd/point-compliance-status';
+import { loadRegulationDocNamesByPoint, regulLlmLabel } from '../../../../lib/nd/export/gap-export-doc-names';
+import { isRegulWorkflow } from '../../../../lib/nd/regul-fields';
 import {
   exportGapAnalysisExcelFromPoints,
   exportGapAnalysisPdfFromPoints,
+  exportRegulGapAnalysisExcelFromPoints,
   gapAnalysisExportColumns,
   type GapAnalysisExportConfirm,
   type GapAnalysisExportSelection,
@@ -713,7 +716,12 @@ export class NdResultsComponent implements OnInit, OnChanges {
   exportExcel(): void {
     if (!this.data?.points?.length) return;
     const plans = this.data.actionPlans ?? [];
-    this.exportDialogColumns = gapAnalysisExportColumns(this.data.points);
+    this.exportDialogColumns = gapAnalysisExportColumns(
+      this.data.points,
+      this.auth.isDemoViewer()
+        ? {}
+        : { regul: this.isRegulRun, withAiModel: !!regulLlmLabel(this.data.run) },
+    );
     this.exportDialogHasActionPlans = plans.length > 0;
     this.exportDialogHasReviews = plans.some((p) => (p.reviews ?? []).length > 0);
     this.showExportDialog = true;
@@ -735,10 +743,29 @@ export class NdResultsComponent implements OnInit, OnChanges {
 
   async runXlsxExport(selection: GapAnalysisExportSelection): Promise<void> {
     if (!this.data?.points?.length) return;
-    await exportGapAnalysisExcelFromPoints(this.data.points, undefined, undefined, {
+    if (this.auth.isDemoViewer()) {
+      await exportGapAnalysisExcelFromPoints(this.data.points, undefined, undefined, {
+        ...this.exportOptions(),
+        selection,
+      });
+      return;
+    }
+    const regulationDocNameByPointId = await loadRegulationDocNamesByPoint(this.data.points, (id) =>
+      this.api.getRegulationDocument(id),
+    );
+    const options = {
       ...this.exportOptions(),
+      regulationDocNameByPointId,
+      llmLabel: regulLlmLabel(this.data.run),
       selection,
-    });
+    };
+    const exportExcel = this.isRegulRun ? exportRegulGapAnalysisExcelFromPoints : exportGapAnalysisExcelFromPoints;
+    await exportExcel(this.data.points, undefined, undefined, options);
+  }
+
+  private get isRegulRun(): boolean {
+    const engine = this.data?.run.workflowEngine;
+    return !!engine && isRegulWorkflow(engine);
   }
 
   private exportOptions() {

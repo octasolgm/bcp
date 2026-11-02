@@ -48,6 +48,8 @@ export type GapAnalysisExportConfirm = GapAnalysisExportSelection & {
 export type GapAnalysisExcelOptions = {
   /** Regulation document title shown in the first column of every row. */
   regulationDocumentName?: string;
+  /** Point id -> its own regulation's title, for runs over several regulations; wins over regulationDocumentName. */
+  regulationDocNameByPointId?: Map<string, string>;
   /** Action plans for the exported run — written to their own sheet. */
   actionPlans?: ActionPlanEntry[];
   /** Point id → clause number, so action plan rows can be traced back to a clause. */
@@ -153,7 +155,7 @@ function defaultFilename(prefix: string): string {
   return `${prefix}-${new Date().toISOString().slice(0, 10)}.xlsx`;
 }
 
-function buildHeaders(includePhases: boolean, requirementHeader: string): string[] {
+function buildHeaders(includePhases: boolean, requirementHeader: string, withAiModel = false): string[] {
   const headers = [
     REGULATION_DOC_HEADER,
     'Clause #',
@@ -175,23 +177,27 @@ function buildHeaders(includePhases: boolean, requirementHeader: string): string
       'Phase 2 — Gaps Identified',
     );
   }
+  if (withAiModel) headers.push(AI_MODEL_HEADER);
   return headers;
 }
 
 function buildColWidths(includePhases: boolean): number[] {
   const widths = [...BASE_COL_WIDTHS];
   if (includePhases) widths.push(16, 14, 36, 16, 14, 36);
+  widths.push(34);
   return widths;
 }
 
 function rowsToMatrix(
   rows: GapAnalysisExcelRow[],
   includePhases: boolean,
-  regulationDocumentName: string,
+  docNameOf: (row: GapAnalysisExcelRow) => string,
+  llmLabel = '',
 ): string[][] {
+  const aiModel = llmLabel ? [llmLabel] : [];
   return rows.map((r) => {
     const base = [
-      regulationDocumentName,
+      docNameOf(r),
       r.pointNumber,
       r.requirement,
       r.documentReference,
@@ -201,7 +207,7 @@ function rowsToMatrix(
       r.gapsIdentified,
       r.confidence,
     ];
-    if (!includePhases) return base;
+    if (!includePhases) return [...base, ...aiModel];
     return [
       ...base,
       r.phase1?.status ?? '',
@@ -210,6 +216,7 @@ function rowsToMatrix(
       r.phase2?.status ?? '',
       r.phase2?.confidence ?? '',
       r.phase2?.gapsIdentified ?? '',
+      ...aiModel,
     ];
   });
 }
@@ -242,12 +249,13 @@ export function actionPlansSheet(
   wanted: string[] | undefined,
   labels: Record<string, string> | undefined,
   withGapNo = false,
+  docNameByPointId?: Map<string, string>,
 ): ExcelSheetSpec {
   const ordered = withGapNo
     ? [...plans].sort((a, b) => gapNumberOf(a) - gapNumberOf(b) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     : plans;
   const rows = sortByClause(ordered, clauseByPointId, (p) => p.analysisPointId).map((plan) => [
-    regulationDocumentName,
+    docNameByPointId?.get(plan.analysisPointId) || regulationDocumentName,
     clauseByPointId.get(plan.analysisPointId) ?? '',
     ...(withGapNo ? [String(gapNumberOf(plan))] : []),
     plan.actionPlan ?? '',
@@ -279,12 +287,13 @@ function reviewsSheet(
   regulationDocumentName: string,
   wanted: string[] | undefined,
   labels: Record<string, string> | undefined,
+  docNameByPointId?: Map<string, string>,
 ): ExcelSheetSpec | null {
   const rows: string[][] = [];
   for (const plan of sortByClause(plans, clauseByPointId, (p) => p.analysisPointId)) {
     for (const review of plan.reviews ?? []) {
       rows.push([
-        regulationDocumentName,
+        docNameByPointId?.get(plan.analysisPointId) || regulationDocumentName,
         clauseByPointId.get(plan.analysisPointId) ?? '',
         plan.actionPlan ?? '',
         review.reviewerName ?? '',
@@ -320,11 +329,19 @@ function extraSheets(options: GapAnalysisExcelOptions): ExcelSheetSpec[] {
         selection.actionPlanColumns,
         selection.actionPlanColumnLabels,
         !!options.regulHybridGaps,
+        options.regulationDocNameByPointId,
       ),
     );
   }
   if (plans.length && selection.includeReviews !== false) {
-    const sheet = reviewsSheet(plans, clauses, docName, selection.reviewColumns, selection.reviewColumnLabels);
+    const sheet = reviewsSheet(
+      plans,
+      clauses,
+      docName,
+      selection.reviewColumns,
+      selection.reviewColumnLabels,
+      options.regulationDocNameByPointId,
+    );
     if (sheet) sheets.push(sheet);
   }
   if (selection.includeEvidenceRecheck !== false) {
@@ -354,7 +371,7 @@ export function gapAnalysisExportColumns(
   const header = opts.requirementColumnHeader ?? REGULATORY_CLAUSE_HEADER;
   if (opts.regul) return REGUL_GAP_HEADERS(header, opts.withAiModel);
   const rows = buildGapAnalysisExportRows(points);
-  return buildHeaders(gapExportIncludesPhaseColumns(rows), header);
+  return buildHeaders(gapExportIncludesPhaseColumns(rows), header, opts.withAiModel);
 }
 
 /** Regul.ai Book 6 gap sheet — clause no, rule, gaps, document ref, policy extract. */
@@ -376,7 +393,7 @@ export async function exportRegulGapAnalysisExcelFromPoints(
   const llmLabel = options.llmLabel?.trim() ?? '';
   const headers = REGUL_GAP_HEADERS(requirementColumnHeader, !!llmLabel);
   const matrix = rows.map((r) => [
-    docName,
+    options.regulationDocNameByPointId?.get(r.pointId ?? '') || docName,
     r.pointNumber,
     r.requirement,
     r.gapsIdentified,
@@ -417,9 +434,15 @@ export async function exportGapAnalysisExcelFromPoints(
   if (!rows.length) return;
   const includePhases = gapExportIncludesPhaseColumns(rows);
   const colWidths = buildColWidths(includePhases);
+  const llmLabel = options.llmLabel?.trim() ?? '';
   const picked = pickColumns(
-    buildHeaders(includePhases, requirementColumnHeader),
-    rowsToMatrix(rows, includePhases, options.regulationDocumentName ?? ''),
+    buildHeaders(includePhases, requirementColumnHeader, !!llmLabel),
+    rowsToMatrix(
+      rows,
+      includePhases,
+      (r) => options.regulationDocNameByPointId?.get(r.pointId ?? '') || (options.regulationDocumentName ?? ''),
+      llmLabel,
+    ),
     options.selection?.gapColumns,
     options.selection?.gapColumnLabels,
   );

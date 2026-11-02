@@ -18,6 +18,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError, distinctUntilChanged, map } from 'rxjs/operators';
+import { loadRegulationDocNamesByPoint, regulationDocName } from '../../../../lib/nd/export/gap-export-doc-names';
 import {
   isRegulPipelineHybridWorkflow,
   isRegulWorkflow,
@@ -3296,8 +3297,12 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     this.exporting = true;
     this.cdr.markForCheck();
     try {
+      const regulationDocNameByPointId = this.auth.isDemoViewer()
+        ? undefined
+        : await loadRegulationDocNamesByPoint(points, (id) => this.ndApi.getRegulationDocument(id));
       const options = {
         ...this.exportOptions(),
+        regulationDocNameByPointId,
         llmLabel: this.ndRunLlmLabel,
         compliantNote: this.ndCompliantNote,
         regulHybridGaps: this.exportRegulHybridGaps,
@@ -3725,8 +3730,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
     }
     const res = await this.ndApi.getRegulationDocument(docId);
     if (generation !== this.loadGeneration) return;
-    const doc = (res.data ?? null) as { title?: string; fileName?: string; originalFileName?: string } | null;
-    this.ndRegulationDocName = doc?.title?.trim() || doc?.originalFileName?.trim() || doc?.fileName?.trim() || '';
+    this.ndRegulationDocName = regulationDocName(res.data);
     this.cdr.markForCheck();
   }
 

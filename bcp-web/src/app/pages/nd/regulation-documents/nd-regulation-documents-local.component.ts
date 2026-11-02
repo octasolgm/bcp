@@ -975,14 +975,19 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     this.toast.show('Regulation deleted permanently', 'success', 3000);
   }
 
+  /** Only the newest list request may update the page, so a refresh that started before a delete cannot bring the document back. */
+  private docsLoadSeq = 0;
+
   async loadDocs(silent = false, replace = false): Promise<void> {
     if (!silent) this.loading = true;
     this.syncPageHeaderToolbar();
+    const seq = ++this.docsLoadSeq;
     const res = await this.api.getRegulationDocuments({
       departmentId: this.deptFilter || undefined,
       status: this.statusFilter || undefined,
       hiddenOnly: this.showDeleted,
     });
+    if (seq !== this.docsLoadSeq) return;
     if (res.success && res.data) {
       const incoming = res.data as RegulationDocument[];
       const merged = replace
@@ -1924,6 +1929,7 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     this.message = '';
     const res = await this.api.hideRegulationDocument(doc.id);
     if (res.success) {
+      this.docsLoadSeq++;
       this.message = res.message ?? 'Regulation removed from library';
       if (this.selectedDoc?.id === doc.id) this.closePointsPanel();
       this.removeRegulationDocFromList(doc);
@@ -2055,7 +2061,11 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
   }
 
   async bulkDelete(): Promise<void> {
-    const docs = this.selection.pick(this.visibleDocs).filter((d) => !this.isManualDoc(d));
+    const picked = this.selection.pick(this.visibleDocs);
+    const docs = picked.filter((d) => !this.isManualDoc(d));
+    if (picked.length > docs.length) {
+      this.toast.show('Manual custom points cannot be deleted, so they were left out.', 'info', 4000);
+    }
     if (!docs.length || !this.canUpload || this.showDeleted) return;
     if (
       !confirm(
@@ -2067,6 +2077,7 @@ Nothing is deleted from the database — extraction credits and points are kept.
     await this.runBulk('Delete', docs, async (d) => {
       const res = await this.api.hideRegulationDocument(d.id);
       if (res.success) {
+        this.docsLoadSeq++;
         if (this.selectedDoc?.id === d.id) this.closePointsPanel();
         this.removeRegulationDocFromList(d);
         this.workspaceNav.bumpNavBadges({ regulationDocuments: -1 });

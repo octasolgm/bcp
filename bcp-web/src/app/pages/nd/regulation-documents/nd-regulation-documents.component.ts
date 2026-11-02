@@ -614,14 +614,19 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     if (res.success && res.data) this.departments = res.data as Department[];
   }
 
+  /** Only the newest list request may update the page, so a refresh that started before a delete cannot bring the document back. */
+  private docsLoadSeq = 0;
+
   async loadDocs(silent = false, replace = false): Promise<void> {
     if (!silent) this.loading = true;
     this.syncPageHeaderToolbar();
+    const seq = ++this.docsLoadSeq;
     const res = await this.api.getRegulationDocuments({
       departmentId: this.deptFilter || undefined,
       status: this.statusFilter || undefined,
       hiddenOnly: this.showDeleted,
     });
+    if (seq !== this.docsLoadSeq) return;
     if (res.success && res.data) {
       const incoming = res.data as RegulationDocument[];
       const merged = replace
@@ -1240,6 +1245,7 @@ export class NdRegulationDocumentsComponent implements OnInit, OnDestroy {
     this.message = '';
     const res = await this.api.hideRegulationDocument(doc.id);
     if (res.success) {
+      this.docsLoadSeq++;
       this.message = res.message ?? 'Regulation removed from library';
       if (this.selectedDoc?.id === doc.id) this.closePointsPanel();
       this.removeRegulationDocFromList(doc);

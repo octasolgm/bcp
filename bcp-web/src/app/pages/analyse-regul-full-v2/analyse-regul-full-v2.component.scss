@@ -2359,3 +2359,21 @@
   align-items: center;
   gap: 0.75rem;
 }
+
+/* A checkbox in front of a document or chapter heading; it selects everything under that heading. */
+.acc-head-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+
+  > .acc-head {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.acc-head-check {
+  flex: none;
+  margin-left: 0.5rem;
+  cursor: pointer;
+}

@@ -523,8 +523,10 @@ public class InternalDocumentsController(
         var (profile, error) = await RequireAuthAsync(appDb, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
 
+        // Gap evidence uploads are listed on this page too, so they are removed the same way. Hiding one only
+        // takes it off this list; analyses it is attached to keep it.
         var doc = await appDb.StoredDocuments.FirstOrDefaultAsync(
-            d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+            d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal" || d.DocKind == "gap_evidence"), ct);
         if (doc == null)
             return NotFound(new { success = false, message = "Document not found." });
         if (doc.IsHidden)
@@ -593,9 +595,11 @@ public class InternalDocumentsController(
         if (error != null) return error;
 
         var doc = await appDb.StoredDocuments.AsNoTracking().FirstOrDefaultAsync(
-            d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+            d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal" || d.DocKind == "gap_evidence"), ct);
         if (doc == null)
             return NotFound(new { success = false, message = "Document not found." });
+        if (doc.DocKind == "gap_evidence" && await appDb.NdAnalysisPointAttachments.AnyAsync(a => a.StoredDocumentId == id, ct))
+            return Conflict(new { success = false, message = "This evidence is attached to an analysis. Remove it from that analysis first." });
         if (!doc.IsHidden)
             return BadRequest(new { success = false, message = "Delete the document first; only deleted documents can be removed permanently." });
 
@@ -621,7 +625,7 @@ public class InternalDocumentsController(
         if (error != null) return error;
 
         var doc = await appDb.StoredDocuments.FirstOrDefaultAsync(
-            d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal"), ct);
+            d => d.Id == id && (d.DocKind == "document" || d.DocKind == "internal" || d.DocKind == "gap_evidence"), ct);
         if (doc == null)
             return NotFound(new { success = false, message = "Document not found." });
         if (!doc.IsHidden)

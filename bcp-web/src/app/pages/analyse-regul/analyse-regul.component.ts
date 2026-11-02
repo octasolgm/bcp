@@ -72,6 +72,8 @@ import { rollupClause, type ClauseRollup } from '../../../lib/nd/gap-state';
 import { NdGapAnalysisComponent } from '../nd/gap-analysis/nd-gap-analysis.component';
 import { NdReportSummaryStackComponent } from '../../components/nd/nd-report-summary-stack.component';
 import { buildGapAnalysisExportRows } from '../../../lib/nd/export/gap-analysis-export-rows';
+import { loadRegulationDocNamesByPoint, regulLlmLabel } from '../../../lib/nd/export/gap-export-doc-names';
+import type { ResultsData } from '../../../lib/nd/types';
 import { exportGapAnalysisExcelFromPoints, exportGapAnalysisPdfFromPoints, exportRegulGapAnalysisExcelFromPoints } from '../../../lib/nd/export/gap-analysis-export';
 import {
   DEMO_CBUAE_ANALYSIS_POINT_COUNT,
@@ -403,8 +405,44 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       const scoped = this.demoSelectablePointIds();
       return scoped.length > 0 && scoped.every((id) => this.selected.has(id));
     }
-    const pool = this.selectableRegulationPoints();
+    // Library runs select the de-duplicated points (see selectAll), so "All" is judged against those too.
+    const pool = this.pointsSource === 'regulation' ? this.selectableRegulationPoints() : this.govPoints;
     return pool.length > 0 && pool.every((p) => this.selected.has(p.point_id));
+  }
+
+  /** Every point id a chapter's checkbox covers, using the same ids as the checkboxes under it. */
+  chapterSelectionIds(ch: LibraryPointDisplayChapter): string[] {
+    return this.rowSelectionIds(ch.sections.flatMap((sec) => sec.rows));
+  }
+
+  /** Every point id a document's checkbox covers. */
+  docSelectionIds(doc: LibraryPointDisplayDoc): string[] {
+    if (doc.useChapters) return doc.chapters.flatMap((ch) => this.chapterSelectionIds(ch));
+    return this.rowSelectionIds(doc.flatRows);
+  }
+
+  private rowSelectionIds(rows: LibraryPointDisplayRow[]): string[] {
+    const ids = new Set<string>();
+    for (const row of rows) {
+      const id = this.pointsSource === 'library' ? this.selectableLibraryPointId(row) : this.selectableRegPointId(row);
+      if (id) ids.add(id);
+    }
+    return [...ids];
+  }
+
+  allIdsSelected(ids: string[]): boolean {
+    return ids.length > 0 && ids.every((id) => this.selected.has(id));
+  }
+
+  /** Some but not all of a parent's points picked: drives its checkbox's dash state. */
+  someIdsSelected(ids: string[]): boolean {
+    const count = ids.filter((id) => this.selected.has(id)).length;
+    return count > 0 && count < ids.length;
+  }
+
+  setIdsSelected(ids: string[], checked: boolean): void {
+    if (checked) this.selectPointIds(ids);
+    else this.clearPointIds(ids);
   }
 
   toggleAllPoints(checked: boolean): void {
@@ -672,6 +710,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     if (this.isDemoViewer) {
       return this.demoSelectedIdsForDisplay().length;
     }
+    // While the selection is the run's own, the count is the run's own: the same number as POINTS and n/N.
+    if (this.selected === this.runSelection && this.selected.size === this.runSelectionSize) {
+      return this.ndRegulatoryPointsInScope().length;
+    }
     if (this.pointsSource === 'regulation') {
       if (!this.selectedRegFileCount || !this.rawGovPoints.length) return 0;
       return this.comparableSelectedIds().length;
@@ -920,6 +962,8 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   private isPointInRunScope(p: AnalysisPoint): boolean {
     if (!this.isRegulatoryAnalysisPoint(p)) return false;
+    // A started run holds exactly the clauses picked for it, so none of them can be out of scope.
+    if (!this.isDemoViewer && this.ndRunId && this.ndRunStatus !== 'draft') return true;
     const scope = this.runScopeGovKeys();
     if (!scope.size) return true;
     const meta = this.metaForAnalysisPoint(p);
@@ -933,11 +977,17 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
   private isRegulatoryAnalysisPoint(p: AnalysisPoint): boolean {
     const clause = parsePointSnapshot(p.pointSnapshot).pointNumber?.trim() ?? '';
-    if (clause.toUpperCase().startsWith('INT')) return false;
+    // Reverse rows are "INT 2-d"; a real clause such as "Introduction" or "Interpretation" stays in the run.
+    const isReverseRow = this.isDemoViewer
+      ? clause.toUpperCase().startsWith('INT')
+      : clause.toUpperCase().startsWith('INT ');
+    if (isReverseRow) return false;
     if (p.regulationPointId) return true;
     if (clause.length > 0) return true;
     const snap = parsePointSnapshot(p.pointSnapshot) as Record<string, unknown>;
     const pid = String(snap['pointId'] ?? snap['regulationPointId'] ?? p.regulationPointId ?? '').trim();
+    // The new analysis page identifies clauses as "document:clause" rather than by a stored point UUID.
+    if (!this.isDemoViewer) return pid.length > 0;
     return pid.length > 0 && this.looksLikeUuid(pid);
   }
 
@@ -2144,6 +2194,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return meta;
   }
 
+  /** The selection last taken from the run, and its size, so a later change by the user can be told apart. */
+  private runSelection: Set<string> | null = null;
+  private runSelectionSize = 0;
+
   private reconcileRunWithGovCatalog(): void {
     this.runPointMetaByAnalysisId.clear();
     this.runPointMetaByGovKey.clear();
@@ -2200,10 +2254,30 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
           this.selected.size === 0 ||
           this.ndAuth.isDemoViewer()
         ) {
-          this.selected = new Set(govKeys);
+          // Same ids as the checkboxes, one per run point: clause numbers alone left the boxes
+          // empty and made clauses sharing a number collapse into one.
+          this.selected = this.runPointSelectionIds();
+          this.runSelection = this.selected;
+          this.runSelectionSize = this.selected.size;
         }
       }
     }
+  }
+
+  private runPointSelectionIds(): Set<string> {
+    const ids = new Set<string>();
+    for (const p of this.ndRunPointsList) {
+      if (!this.isRegulatoryAnalysisPoint(p)) continue;
+      const snap = parsePointSnapshot(p.pointSnapshot) as Record<string, unknown>;
+      const meta = this.metaForAnalysisPoint(p);
+      ids.add(
+        this.resolveCanonicalRegPointId(String(snap['regulationPointId'] ?? '')) ??
+          this.resolveCanonicalRegPointId(String(snap['pointId'] ?? '')) ??
+          this.resolveCanonicalRegPointId(meta.govKey) ??
+          meta.govKey,
+      );
+    }
+    return ids;
   }
 
   /** Keep full gov catalog in demo session after hydrate/load from run points only. */
@@ -2481,12 +2555,27 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.exportingGapReport = true;
     this.cdr.markForCheck();
     try {
-      await exportRegulGapAnalysisExcelFromPoints(
-        points,
-        undefined,
-        undefined,
-        await this.gapAnalysisExportOptions(),
-      );
+      const options = await this.gapAnalysisExportOptions();
+      let exportPoints = points;
+      if (!this.isDemoViewer) {
+        // This page polls a shortened copy of each result, which cuts off everything after the policy text
+        // (confidence included). The export reads the full results, as the Gap analysis page does.
+        const res = await this.ndApi.getResults(this.ndRunId);
+        if (res.success && res.data) {
+          const data = res.data as ResultsData;
+          const fullById = new Map(data.points.map((p) => [p.id, p]));
+          exportPoints = points.map((p) => fullById.get(p.id) ?? p);
+          options.llmLabel = regulLlmLabel(data.run);
+          options.regulationDocNameByPointId = await loadRegulationDocNamesByPoint(exportPoints, (id) =>
+            this.ndApi.getRegulationDocument(id),
+          );
+          options.regulationDocumentName ||= [...options.regulationDocNameByPointId.values()][0] ?? '';
+        } else {
+          this.toast.show('Could not load the full results; try the export again', 'error');
+          return;
+        }
+      }
+      await exportRegulGapAnalysisExcelFromPoints(exportPoints, undefined, undefined, options);
       const label = scope === 'all' ? 'regulatory + INT clauses' : 'regulatory clauses';
       this.toast.show(`Exported ${rows.length} ${label} to Excel`, 'success');
     } catch {

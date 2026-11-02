@@ -707,11 +707,16 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Only the newest list request may update the page, so a refresh that started before a delete cannot bring the document back. */
+  private docsLoadSeq = 0;
+
   async load(silent = false): Promise<void> {
     if (!silent) this.loading = true;
     this.syncPageHeaderToolbar();
     this.error = '';
+    const seq = ++this.docsLoadSeq;
     const res = await this.api.getInternalDocuments(this.showDeleted);
+    if (seq !== this.docsLoadSeq) return;
     if (res.success && res.data) {
       this.docs = this.keepRecentUploads(res.data as InternalDocument[]);
       this.syncSectionExtractPollingFromDocs();
@@ -805,6 +810,7 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
     this.error = '';
     const res = await this.api.hideInternalDocument(doc.id);
     if (res.success) {
+      this.docsLoadSeq++;
       this.message = res.message ?? 'Document removed from library';
       this.removeInternalDocFromList(doc);
       if (!this.showDeleted) {

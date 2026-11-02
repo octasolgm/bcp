@@ -535,11 +535,16 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     }));
   }
 
+  /** Only the newest list request may update the page, so a refresh that started before a delete cannot bring the document back. */
+  private docsLoadSeq = 0;
+
   async load(silent = false): Promise<void> {
     if (!silent) this.loading = true;
     this.syncPageHeaderToolbar();
     this.error = '';
+    const seq = ++this.docsLoadSeq;
     const res = await this.api.getInternalDocuments();
+    if (seq !== this.docsLoadSeq) return;
     if (res.success && res.data) {
       this.docs = this.keepRecentUploads(res.data as InternalDocument[]);
       await this.mergeLocalStatuses();
@@ -642,6 +647,7 @@ export class NdInternalDocumentsLocalComponent implements OnInit, OnDestroy {
     this.error = '';
     const res = await this.api.hideInternalDocument(doc.id);
     if (res.success) {
+      this.docsLoadSeq++;
       this.message = res.message ?? 'Document removed from library';
       this.removeInternalDocFromList(doc);
       this.workspaceNav.bumpNavBadges({ internalDocuments: -1 });

@@ -7,7 +7,7 @@
       [style.marginLeft.rem]="baseDepth * 0.35"
     >
       <div class="tree-group-head-row">
-        @if (mode === 'analysis' && node.analyseCount > 0) {
+        @if (hasGroupSelection(node)) {
           <input
             type="checkbox"
             class="tree-group-check"
@@ -22,12 +22,12 @@
           <span class="chevron" [class.open]="isExpanded(node.key)">›</span>
           <span class="tree-group-label">{{ groupLabel(node) }}</span>
           @if (mode === 'analysis') {
-            <span class="acc-meta">{{ groupSelectedCount(node) }}/{{ node.analyseCount }}</span>
+            <span class="acc-meta">{{ groupSelectedCount(node) }}/{{ groupSelectableTotal(node) }}</span>
           } @else {
             <span class="acc-meta">{{ node.analyseCount }}/{{ node.storedCount }}</span>
           }
         </button>
-        @if (mode === 'analysis' && node.analyseCount > 0) {
+        @if (hasGroupSelection(node)) {
           <span class="tree-group-actions">
             <button
               type="button"
@@ -90,10 +90,26 @@
             </div>
           }
 
+          @if (fullSelection && mode === 'analysis' && node.row && resolvePointId(node.row); as pid) {
+            <label class="point-line point-line-rich" [class.detail-selected]="selectedDetailPointId === pid">
+              <input
+                type="checkbox"
+                [checked]="selected.has(pid)"
+                [attr.aria-label]="'Select point ' + node.row.displayId"
+                (change)="onToggle(pid)"
+              />
+              <span class="pid">{{ node.row.displayId }}</span>
+              <div class="point-text-wrap" (click)="onSelectDetail(pid, $event)">
+                <span class="ptxt">{{ pointTitle(node.row.point) || truncate(node.row.point.text, previewLen) }}</span>
+              </div>
+            </label>
+          }
+
           <app-nd-point-number-tree
             [nodes]="node.children"
             [baseDepth]="0"
             [mode]="mode"
+            [fullSelection]="fullSelection"
             [selected]="selected"
             [selectedDetailPointId]="selectedDetailPointId"
             [showRichDetails]="showRichDetails"

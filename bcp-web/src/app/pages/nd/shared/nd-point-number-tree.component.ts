@@ -26,6 +26,11 @@ export class NdPointNumberTreeComponent implements OnChanges {
   @Input({ required: true }) nodes: PointDisplayTreeNode[] = [];
   @Input() baseDepth = 0;
   @Input() mode: 'analysis' | 'view' = 'analysis';
+  /**
+   * New analysis page, real accounts: a parent clause that can itself be selected gets its own row, and a
+   * section's count covers every selectable point, so the totals match the rows on screen.
+   */
+  @Input() fullSelection = false;
   @Input() selected = new Set<string>();
   @Input() selectedDetailPointId: string | null = null;
   @Input() showRichDetails = true;
@@ -140,6 +145,16 @@ export class NdPointNumberTreeComponent implements OnChanges {
   groupAllSelected(node: PointDisplayTreeNode): boolean {
     const ids = this.selectableIds(node);
     return ids.length > 0 && ids.every((id) => this.selected.has(id));
+  }
+
+  /** Whether a section offers a checkbox and All / Clear. */
+  hasGroupSelection(node: PointDisplayTreeNode): boolean {
+    if (this.mode !== 'analysis') return false;
+    return this.fullSelection ? this.selectableIds(node).length > 0 : node.analyseCount > 0;
+  }
+
+  groupSelectableTotal(node: PointDisplayTreeNode): number {
+    return this.fullSelection ? this.selectableIds(node).length : node.analyseCount;
   }
 
   /** Some but not all children picked — drives the parent checkbox's dash state. */
