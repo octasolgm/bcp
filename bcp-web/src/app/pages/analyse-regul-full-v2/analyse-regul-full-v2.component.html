@@ -858,11 +858,13 @@
         <button
           type="button"
           class="btn-run v8-run"
-          [disabled]="!canRun || demoRunPreparing"
+          [disabled]="!canRun || demoRunPreparing || !!runStartingCount"
           (click)="runForwardOnlyAndScroll()"
         >
           @if (demoRunPreparing) {
             Preparing…
+          } @else if (runStartingCount) {
+            Starting…
           } @else {
             Run analysis
           }

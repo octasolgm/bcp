@@ -710,6 +710,10 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   protected override syncSelectionToGovPoints(): void {
+    if (this.runStartingIds) {
+      this.selected = new Set(this.runStartingIds);
+      return;
+    }
     if (this.selectionIsTheRuns) {
       this.selected = this.runPointSelectionIds();
       return;
@@ -754,6 +758,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     if (this.isDemoViewer) {
       return this.demoSelectedIdsForDisplay().length;
     }
+    if (this.runStartingCount) return this.runStartingCount;
     // While the selection is the run's own, the count is the run's own: the same number as POINTS and n/N.
     if (this.selectionIsTheRuns) return this.ndRegulatoryPointsInScope().length;
     if (this.pointsSource === 'regulation') {
@@ -2030,6 +2035,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
   }
 
   override get analysingListDone(): number {
+    if (this.runStartingCount) return 0;
     if (this.isDemoViewer && this.analysingListRows.length) {
       return this.analysingListRows.filter((r) => r.status === 'completed').length;
     }
@@ -2133,6 +2139,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       if (this.regulClauseRows.length) return this.regulClauseRows.length;
       return DEMO_CBUAE_ANALYSIS_POINT_COUNT;
     }
+    if (this.runStartingCount) return this.runStartingCount;
     if (this.ndRunPointsList.length) return this.ndRegulatoryPointsInScope().length;
     return super.analysingListTotal;
   }
@@ -2230,6 +2237,42 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     return meta;
   }
 
+  /**
+   * Real accounts, from clicking Run until the run's own points are on the page (a few seconds). The page reloads
+   * its state several times in that window, so the numbers and ticks hold the selection instead of flickering.
+   */
+  runStartingCount = 0;
+  private runStartingIds: Set<string> | null = null;
+  private runStartingTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private beginRunStart(ids: string[]): void {
+    this.runStartingCount = ids.length;
+    this.runStartingIds = new Set(this.selected);
+    if (this.runStartingTimer) clearTimeout(this.runStartingTimer);
+    // Never leave the page held if the run's points do not arrive.
+    this.runStartingTimer = setTimeout(() => this.endRunStart(), 20_000);
+  }
+
+  private endRunStart(): void {
+    if (this.runStartingTimer) clearTimeout(this.runStartingTimer);
+    this.runStartingTimer = null;
+    this.runStartingCount = 0;
+    this.runStartingIds = null;
+    this.cdr.markForCheck();
+  }
+
+  /** Once the started run holds every selected point on the page, the run's own numbers take over. */
+  private settleRunStart(): void {
+    if (!this.runStartingCount || !this.ndRunId || this.ndRunStatus === 'draft') return;
+    if (this.ndRegulatoryPointsInScope().length >= this.runStartingCount) this.endRunStart();
+  }
+
+  override stopAnalysis(): void {
+    super.stopAnalysis();
+    // The sidebar count drops once the server has finished stopping the run.
+    if (!this.isDemoViewer) window.setTimeout(() => this.notifyNewAnalysisRunCreated(), 2500);
+  }
+
   /** The user changed the ticks after the selection was last taken from the run. */
   private selectionEditedSinceRun = false;
 
@@ -2249,7 +2292,8 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
    */
   protected override restoreNdRunSelection(selectedPointsSnapshot: string, points: AnalysisPoint[]): void {
     super.restoreNdRunSelection(selectedPointsSnapshot, points);
-    if (this.selectionIsTheRuns) this.selected = this.runPointSelectionIds();
+    if (this.runStartingIds) this.selected = new Set(this.runStartingIds);
+    else if (this.selectionIsTheRuns) this.selected = this.runPointSelectionIds();
   }
 
   override selectPointIds(ids: string[]): void {
@@ -2320,8 +2364,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
         ) {
           // Same ids as the checkboxes, one per run point: clause numbers alone left the boxes
           // empty and made clauses sharing a number collapse into one.
-          this.selected = this.runPointSelectionIds();
+          this.selected = this.runStartingIds ? new Set(this.runStartingIds) : this.runPointSelectionIds();
           this.selectionEditedSinceRun = false;
+          this.settleRunStart();
         }
       }
     }
@@ -4340,9 +4385,14 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       return;
     }
 
+    if (!this.isDemoViewer) this.beginRunStart(selectedIds);
+
     if (this.ndRunId && this.ndRunStatus === 'draft') {
       const synced = await this.ensureDraftRunMatchesSelection(selectedIds);
-      if (!synced) return;
+      if (!synced) {
+        this.endRunStart();
+        return;
+      }
     }
 
     if (this.ndRunId) {
@@ -4369,6 +4419,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     this.pendingNdRunForwardOnly = true;
     const createRes = await this.ndApi.createAnalysisRun(this.buildNdCreateRunPayload(selectedIds));
     if (!createRes.success || !createRes.data?.id) {
+      this.endRunStart();
       this.pendingNdRunForwardOnly = false;
       this.error = createRes.message ?? 'Could not create analysis run';
       this.toast.show(this.error, 'error', 5000);

@@ -4471,7 +4471,8 @@ ${this.findingsPreview
       'success',
       2000,
     );
-    this.notifyNewAnalysisRunCreated({ inProgress: true });
+    // Real accounts: the sidebar refresh already counts this run; adding one on top showed 2 for a single run.
+    this.notifyNewAnalysisRunCreated({ inProgress: this.ndAuth.isDemoViewer() });
     this.markStep(0, false);
     this.markStep(1, true);
     this.progress = 25;
@@ -4548,7 +4549,8 @@ ${this.findingsPreview
     }
 
     this.toast.show('Analysis started', 'success', 2000);
-    this.notifyNewAnalysisRunCreated({ inProgress: true });
+    // Real accounts: the sidebar refresh already counts this run; adding one on top showed 2 for a single run.
+    this.notifyNewAnalysisRunCreated({ inProgress: this.ndAuth.isDemoViewer() });
     this.markStep(0, false);
     this.markStep(1, true);
     this.progress = 25;

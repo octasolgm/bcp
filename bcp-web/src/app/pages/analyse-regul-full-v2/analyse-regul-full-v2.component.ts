@@ -286,7 +286,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     this.stepTrackerRefreshTimer = setInterval(() => {
       this.stepTracker.setSteps(this.computeTrackerSteps());
       if (this.showEnginePipelinePanel) {
-        this.pipelinePanel.setRunActive(!!this.ndRunId && this.ndRunInFlight);
+        this.pipelinePanel.setRunActive(!!this.ndRunId && this.ndRunInFlight && !this.runStartingCount);
         const panelRunId = this.ndRunId ?? this.activeNdRunId ?? null;
         if (panelRunId !== this.panelRunId) {
           // A different run: drop the previous run's Steps 1-6 data and wait for this run's own phase.
@@ -335,11 +335,14 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   /** Mirrors the Progress column empty/live/complete states in the blue shell header ticker. */
   private syncPageHeaderMarquee(): void {
     let text: string;
-    if (!this.ndAuth.isDemoViewer() && this.ndRunId && !this.ndRunInFlight) {
+    const runStatus = (this.ndRunWorkflowStatus || '').toLowerCase();
+    if (this.runStartingCount) {
+      text = `Starting analysis · ${this.runStartingCount} points`;
+    } else if (!this.ndAuth.isDemoViewer() && this.ndRunId && !this.ndRunInFlight) {
       // The page keeps its run view open for a run that stopped early, but nothing is running.
-      text = (this.ndRunWorkflowStatus || '').toLowerCase() === 'failed'
-        ? 'This analysis did not finish'
-        : `Analysis complete · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
+      if (runStatus === 'failed') text = 'This analysis did not finish';
+      else if (runStatus === 'cancelled') text = `Analysis stopped · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
+      else text = `Analysis complete · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
     } else if (this.showLiveProgressColumn) {
       const summary = this.forwardClauseProgressSummary;
       const count = this.sessionProgressLabel;

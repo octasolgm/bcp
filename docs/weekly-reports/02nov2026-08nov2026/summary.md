@@ -4,7 +4,9 @@ Tasks
 - Default theme is now light for anyone with no saved theme choice, including the login page; a saved Light, Dark or System choice is still respected
 - Deployed release/2026.11.02.01 to Azure dev (API and web)
 - Deployed release/2026.11.02.02 and release/2026.11.02.03 to Azure dev (API and web)
-- Created release/2026.11.02.04 with the 21 points, failed run label and In progress badge fixes; web only, so no API restart
+- Deployed release/2026.11.02.04 (21 points, failed run label, In progress badge) and created release/2026.11.02.06 (run start fixes); both web only, so no API restart
+- Tested a real 30 point run on 2026.11.02.04, started and stopped with permission: 30 held after the first 12 seconds and Stop responded in 0.3 seconds
+- Measured about 100 ms page freezes several times per second during a run; not fixed yet
 - Checked 2026.11.02.03 on app.comply-solutions.com: 30 points in the list and the New analysis panel, and document, chapter, row and All checkboxes all correct
 - New analysis: checkboxes on document and chapter headings, ticking a parent selects everything under it, partly selected shows a dash
 - New analysis: parent clauses that can be selected now have their own row, so section totals match the rows shown
@@ -21,6 +23,9 @@ Bug fixes
 - New analysis: opening or running a run showed 21 points selected for a 30 point run, because the selection was rebuilt from comparable points only; it now uses every point in the run
 - New analysis: a failed run showed "Processing your analysis"; it now says it did not finish
 - In progress: the badge could say 1 while the page was empty; the page now corrects the badge
+- New analysis: for about 12 seconds after clicking Run the numbers jumped (0, 20, 0/59, 21) and the page said "did not start", with no response for 4 seconds; Run now shows Starting and the numbers hold until the run's points have loaded
+- New analysis: a stopped run said "Analysis complete"; it now says stopped
+- In progress badge counted a new run twice (2 for one run)
 - Internal documents: gap evidence documents could not be deleted, restored or permanently removed from the list
 - Regulation and internal documents: a list refresh that started before a delete could bring the document back
 - Regulation documents: bulk delete now says when manual custom points were left out
