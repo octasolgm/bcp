@@ -24,6 +24,22 @@ Gap evidence documents shown under Internal Documents can now be deleted and res
 
 The first column now shows the name of the regulatory document, including the correct document for each clause when an analysis covers several regulations. The file no longer includes the confidence percentage or the AI model, and the New analysis page now exports the complete results.
 
+## Default upload limits for new businesses
+
+A new business workspace now starts with upload limits of 2 MB per document, 20 MB per upload and 20 MB of total storage. The platform administrator can change or remove these limits for any business. Existing businesses keep their current limits.
+
+A new business workspace also starts with a limit of 50 analysed clauses in total. The limit now appears on the Business settings page, where the business can see how many clauses it has used and how many are left. Only the platform administrator can change it.
+
+## Upload limits checked everywhere
+
+Upload limits now apply to every way of adding a document, including evidence files and imports from cloud storage, so a business cannot go over its total storage. Restoring a deleted document is also refused if it would go over the limit. The settings form explains straight away if a value does not make sense, such as a per-upload limit larger than total storage.
+
+## Password reset emails
+
+The link in a password reset email now takes you to the page for setting a new password, on the same web address you requested it from.
+
 ## Being worked on
 
 We are confirming the New analysis selection and clause number changes on a full analysis run before releasing them.
+
+We are also extending the date format chosen for each business so that it applies on every page and in exported files. Today it applies to the date column on the analysis runs and review queue pages.

@@ -41,3 +41,26 @@ Investigated, follow up pending
 - A TFS Guidelines (v13) analysis started at 23:31 was failed by the API restart during the deploy (0 of 30 done); it needs a rerun
 - Not yet confirmed on a complete run: counts during the run, Excel download and document delete
 - Unit tests cannot run at the moment because some test files need a test package that is not installed
+
+04 Nov 2026
+
+Tasks
+- Deployed release/2026.11.04.01 to Azure dev (API and web); live versions confirmed, not yet tried while signed in
+- New business workspaces now start with upload limits of 2 MB per document, 20 MB per upload and 20 MB total storage; the platform admin can change or clear them. Existing workspaces are unchanged
+- New business workspaces now start with a clause limit of 50; the platform admin can change or clear it
+- Business settings now shows the clause limit: read-only for the bank admin, editable for the platform admin
+- Upload limits form checks values as you type: per upload cannot be more than total storage, per document cannot be more than per upload or total storage
+- Every upload route now checks the limits on the server: evidence attachments, run evidence, text documents, cloud imports and the older upload routes, which had no check before
+- A single file above the per-upload limit is now refused, and a request with several files is checked as a whole
+- Restoring a deleted document is refused if it would go over total storage
+- Upload pages now check the limits before sending the file
+
+Bug fixes
+- Reset password email: the link could open the main site instead of the new password page, and always pointed to the dev web address; it now returns to the new password page on the site the user is on. Not yet tested with a real email
+
+Investigated, follow up pending
+- Workspace date format setting is not followed across /nd: only the date column on Analysis runs, Checker queue and Reviewer queue uses it
+- Other pages and Excel and PDF exports use the browser's language or fixed formats, so the same workspace shows mixed date formats
+- Evidence re-check notes on the server use two other fixed formats, always in UTC
+- Awaiting decision on the fix; it would also change dates shown to demo accounts unless they are kept as they are
+- Forgot password and new password not yet tested end to end with a real account and a real email
