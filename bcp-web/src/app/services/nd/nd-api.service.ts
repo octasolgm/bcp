@@ -5,7 +5,7 @@ import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
 import type { InternalDocumentFinalizeEmbed, PointGapAttachment, RulebookCategory } from '../../../lib/nd/types';
 import type { GapEvidenceRerun, GapEvidenceRerunRequest } from '../../../lib/nd/gap-evidence-rerun';
-import type { NdUploadLimits } from '../../../lib/nd/upload-limits';
+import { checkUploadAgainstLimits, type NdUploadLimits } from '../../../lib/nd/upload-limits';
 
 export type RunGapEvidenceUpload = {
   storedDocumentId: string;
@@ -976,7 +976,9 @@ export class NdApiService {
   }
 
   /** Uploads a rulebook document the admin downloaded themselves, filed under the category. */
-  uploadRulebookDocument(categoryId: string, file: File) {
+  async uploadRulebookDocument(categoryId: string, file: File): Promise<NdApiResult<{ regulationDocumentId: string; name: string }>> {
+    const problem = await this.uploadLimitProblem([file]);
+    if (problem) return { success: false, message: problem };
     const form = new FormData();
     form.append('file', file);
     return this.postMultipart<{ regulationDocumentId: string; name: string }>(
@@ -1194,6 +1196,13 @@ export class NdApiService {
   }
 
   /** A workspace's upload limits (MB) and storage used. */
+  /** Why these files cannot be uploaded to the current workspace, or null when they fit. If the limits
+   * cannot be read the upload goes ahead, because the server checks every upload again. */
+  private async uploadLimitProblem(files: File[]): Promise<string | null> {
+    const limits = await this.request<NdUploadLimits>('GET', '/nd/workspaces/current/upload-limits');
+    return checkUploadAgainstLimits(files, limits.success ? (limits.data ?? null) : null);
+  }
+
   getWorkspaceUploadLimits(workspaceId: string) {
     return this.request<NdUploadLimits>('GET', `/nd/workspaces/${workspaceId}/upload-limits`);
   }
@@ -1546,7 +1555,9 @@ export class NdApiService {
     return this.request<unknown>('POST', `/nd/regulation-documents/${id}/restore`);
   }
 
-  async uploadRegulationDocument(file: File, departmentId?: string) {
+  async uploadRegulationDocument(file: File, departmentId?: string): Promise<NdApiResult<unknown>> {
+    const problem = await this.uploadLimitProblem([file]);
+    if (problem) return { success: false, message: problem };
     const form = new FormData();
     form.append('file', file);
     if (departmentId) form.append('departmentId', departmentId);
@@ -1881,7 +1892,9 @@ export class NdApiService {
     }>('POST', `/nd/internal-documents/${docId}/repair-section-pages`, undefined, true, REPAIR_SECTION_PAGES_START_TIMEOUT_MS);
   }
 
-  async uploadInternalDocument(file: File) {
+  async uploadInternalDocument(file: File): Promise<NdApiResult<unknown>> {
+    const problem = await this.uploadLimitProblem([file]);
+    if (problem) return { success: false, message: problem };
     const form = new FormData();
     form.append('file', file);
     return this.postMultipart<unknown>('/nd/internal-documents/upload', form);
@@ -1892,7 +1905,9 @@ export class NdApiService {
     return this.request<unknown[]>('GET', '/nd/text-documents', undefined, true, CATALOG_LIST_TIMEOUT_MS);
   }
 
-  async uploadTextDocument(file: File) {
+  async uploadTextDocument(file: File): Promise<NdApiResult<{ id: string; title: string; originalFileName: string }>> {
+    const problem = await this.uploadLimitProblem([file]);
+    if (problem) return { success: false, message: problem };
     const form = new FormData();
     form.append('file', file);
     return this.postMultipart<{ id: string; title: string; originalFileName: string }>('/nd/text-documents/upload', form);
@@ -2786,7 +2801,9 @@ export class NdApiService {
     return this.request<unknown[]>('GET', `/nd/results/${runId}/action-plan-history/${pointId}`);
   }
 
-  uploadPointGapAttachments(runId: string, pointId: string, files: File[], actionIndex?: number) {
+  async uploadPointGapAttachments(runId: string, pointId: string, files: File[], actionIndex?: number): Promise<NdApiResult<PointGapAttachment[]>> {
+    const problem = await this.uploadLimitProblem(files);
+    if (problem) return { success: false, message: problem };
     return this.uploadMultipart<PointGapAttachment[]>(
       `/nd/results/${runId}/points/${pointId}/attachments`,
       files,
@@ -2795,7 +2812,9 @@ export class NdApiService {
   }
 
   /** Attach one evidence document to every point in the run. */
-  uploadRunGapEvidence(runId: string, files: File[]) {
+  async uploadRunGapEvidence(runId: string, files: File[]): Promise<NdApiResult<RunGapEvidenceUpload[]>> {
+    const problem = await this.uploadLimitProblem(files);
+    if (problem) return { success: false, message: problem };
     return this.uploadMultipart<RunGapEvidenceUpload[]>(
       `/nd/results/${runId}/gap-evidence`,
       files,

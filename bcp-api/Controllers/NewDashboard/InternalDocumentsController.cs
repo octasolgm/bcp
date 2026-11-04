@@ -630,6 +630,8 @@ public class InternalDocumentsController(
             return NotFound(new { success = false, message = "Document not found." });
         if (!doc.IsHidden)
             return Ok(new { success = true, message = "Document is already active." });
+        if (await NdUploadLimits.CheckRestoreAsync(appDb, doc.OriginalFileName, doc.SizeBytes, ct) is { } limitError)
+            return BadRequest(new { success = false, message = limitError });
 
         doc.IsHidden = false;
         doc.HiddenAt = null;

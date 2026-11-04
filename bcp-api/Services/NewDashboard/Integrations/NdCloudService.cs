@@ -109,6 +109,9 @@ public sealed class NdCloudService(
                 return await LogAsync(connection, fileId, fileName, kind, null, "duplicate",
                     "This file is already in your documents.", userId, ct);
 
+            if (await NdUploadLimits.CheckAsync(db, download.FileName, download.Bytes.Length, ct) is { } limitError)
+                throw new CloudProviderException(limitError);
+
             Guid storedId;
             if (kind == "regulation")
             {

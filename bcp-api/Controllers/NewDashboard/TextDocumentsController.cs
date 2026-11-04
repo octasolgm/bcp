@@ -64,6 +64,8 @@ public class TextDocumentsController(
             return BadRequest(new { success = false, message = "Supabase Storage not configured." });
         if (file == null || file.Length == 0)
             return BadRequest(new { success = false, message = "No file provided." });
+        if (await NdUploadLimits.CheckAsync(db, file.FileName, file.Length, ct) is { } limitError)
+            return BadRequest(new { success = false, message = limitError });
 
         await using var ms = new MemoryStream();
         await file.CopyToAsync(ms, ct);

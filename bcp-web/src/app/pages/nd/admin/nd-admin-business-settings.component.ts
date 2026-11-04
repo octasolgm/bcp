@@ -1,21 +1,22 @@
 import { Component, computed, inject } from '@angular/core';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdWorkspaceModulesComponent } from '../../../components/nd/nd-workspace-modules.component';
+import { NdWorkspaceClauseLimitComponent } from '../../../components/nd/nd-workspace-clause-limit.component';
 import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-workspace-upload-limits.component';
 
 /**
- * Business settings for the signed-in admin's own workspace: its modules (Actions, Embeddings) and its
- * upload limits. Limits are set by the platform admin, so a business admin sees them read-only.
+ * Business settings for the signed-in admin's own workspace: its modules (Actions, Embeddings), its clause
+ * limit and its upload limits. Limits are set by the platform admin, so a business admin sees them read-only.
  */
 @Component({
   selector: 'app-nd-admin-business-settings',
   standalone: true,
-  imports: [NdWorkspaceModulesComponent, NdWorkspaceUploadLimitsComponent],
+  imports: [NdWorkspaceModulesComponent, NdWorkspaceClauseLimitComponent, NdWorkspaceUploadLimitsComponent],
   template: `
     <div class="page-header">
       <div>
         <h1>Business settings</h1>
-        <p class="subtitle">Modules and upload limits for {{ workspace()?.name || 'this business' }}.</p>
+        <p class="subtitle">Modules, clause limit and upload limits for {{ workspace()?.name || 'this business' }}.</p>
       </div>
     </div>
 
@@ -35,6 +36,22 @@ import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-work
               [embeddingsEnabled]="ws.embeddingsEnabled"
               (changed)="onModulesChanged()"
             />
+          </section>
+
+          <section class="nd-card settings-card">
+            <header class="settings-card-header">
+              <div>
+                <h2>Clause limit</h2>
+                <p class="nd-muted">
+                  @if (auth.isPlatformAdmin()) {
+                    The most clauses this business can have analysed in total. New analyses stop when it is reached.
+                  } @else {
+                    Set by the platform administrator. Contact them to change this limit.
+                  }
+                </p>
+              </div>
+            </header>
+            <app-nd-workspace-clause-limit [workspaceId]="ws.id" [editable]="auth.isPlatformAdmin()" />
           </section>
 
           <section class="nd-card settings-card">

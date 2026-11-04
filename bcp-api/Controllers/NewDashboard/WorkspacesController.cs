@@ -94,6 +94,9 @@ public partial class WorkspacesController(
         });
     }
 
+    /// <summary>Clause limit a new workspace starts with; the platform admin can change or clear it.</summary>
+    private const int DefaultClauseLimit = 50;
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateWorkspaceRequest body, CancellationToken ct)
     {
@@ -122,6 +125,10 @@ public partial class WorkspacesController(
             Slug = slug,
             Description = string.IsNullOrWhiteSpace(body.Description) ? null : body.Description.Trim(),
             CreatedBy = admin.Id,
+            MaxDocumentMb = NdUploadLimits.DefaultMaxDocumentMb,
+            MaxUploadMb = NdUploadLimits.DefaultMaxUploadMb,
+            MaxStorageMb = NdUploadLimits.DefaultMaxStorageMb,
+            ClauseLimit = DefaultClauseLimit,
         };
         db.NdWorkspaces.Add(workspace);
         await db.SaveChangesAsync(ct);
@@ -286,6 +293,8 @@ public partial class WorkspacesController(
             return BadRequest(new { success = false, message = "The per-upload limit cannot be smaller than the per-document limit." });
         if (upload != null && storage != null && storage < upload)
             return BadRequest(new { success = false, message = "The total storage limit cannot be smaller than the per-upload limit." });
+        if (doc != null && storage != null && storage < doc)
+            return BadRequest(new { success = false, message = "The total storage limit cannot be smaller than the per-document limit." });
 
         var ws = await db.NdWorkspaces.FirstOrDefaultAsync(w => w.Id == id, ct);
         if (ws == null) return NotFound(new { success = false, message = "Workspace not found." });
@@ -311,6 +320,17 @@ public partial class WorkspacesController(
             return StatusCode(403, new { success = false, message = "You can only view your own workspace's limits." });
 
         return Ok(new { success = true, data = await NdUploadLimits.GetAsync(db, id, ct) });
+    }
+
+    /// <summary>The upload limits of the workspace the caller is working in, checked before every upload.</summary>
+    [HttpGet("current/upload-limits")]
+    public async Task<IActionResult> GetCurrentUploadLimits(CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? profile.TenantId ?? WorkspaceScope.DefaultWorkspaceId;
+        return Ok(new { success = true, data = await NdUploadLimits.GetAsync(db, workspaceId, ct) });
     }
 
     /// <summary>Platform admin enters a workspace; every page then shows that workspace's data.</summary>

@@ -1235,6 +1235,10 @@ public class RegulationDocumentsController(
                 var stored = await db.StoredDocuments.FirstOrDefaultAsync(d => d.Id == storedId, ct);
                 if (stored != null)
                 {
+                    if (stored.IsHidden
+                        && await NdUploadLimits.CheckRestoreAsync(db, stored.OriginalFileName, stored.SizeBytes, ct) is { } limitError)
+                        return BadRequest(new { success = false, message = limitError });
+
                     stored.IsHidden = false;
                     stored.HiddenAt = null;
                     stored.HiddenBy = null;
@@ -1251,6 +1255,9 @@ public class RegulationDocumentsController(
             d => d.Id == id && d.DocKind == "regulation", ct);
         if (legacyStored == null)
             return NotFound(new { success = false, message = "Not found" });
+        if (legacyStored.IsHidden
+            && await NdUploadLimits.CheckRestoreAsync(db, legacyStored.OriginalFileName, legacyStored.SizeBytes, ct) is { } legacyLimitError)
+            return BadRequest(new { success = false, message = legacyLimitError });
 
         legacyStored.IsHidden = false;
         legacyStored.HiddenAt = null;

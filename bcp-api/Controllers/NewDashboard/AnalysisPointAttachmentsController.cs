@@ -84,6 +84,8 @@ public class AnalysisPointAttachmentsController(
             return BadRequest(new { success = false, message = "Supabase Storage not configured." });
         if (files == null || files.Count == 0)
             return BadRequest(new { success = false, message = "No files provided." });
+        if (await NdUploadLimits.CheckAsync(db, files, ct) is { } limitError)
+            return BadRequest(new { success = false, message = limitError });
 
         var uploaded = new List<object>();
         var prepareDocIds = new List<Guid>();

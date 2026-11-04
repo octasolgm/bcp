@@ -30,11 +30,14 @@ import { formatMb, type NdUploadLimits } from '../../../lib/nd/upload-limits';
           Total storage (MB)
           <input class="nd-input" type="number" min="1" name="storage" [(ngModel)]="storageMb" placeholder="No limit" />
         </label>
-        <button type="submit" class="nd-btn nd-btn-primary ul-save" [disabled]="saving">
+        <button type="submit" class="nd-btn nd-btn-primary ul-save" [disabled]="saving || !!validationError">
           {{ saving ? 'Saving...' : 'Save limits' }}
         </button>
       </form>
-      <p class="nd-muted ul-note">Leave a box empty for no limit. A single document can never be above 50 MB.</p>
+      <p class="nd-muted ul-note">Leave a box empty for no limit. A single document can never be above 50 MB. Per upload cannot be more than total storage.</p>
+      @if (validationError) {
+        <p class="nd-error ul-msg">{{ validationError }}</p>
+      }
     } @else {
       <dl class="ul-list">
         <div><dt>Per document</dt><dd>{{ show(limits?.maxDocumentMb) }}</dd></div>
@@ -88,6 +91,19 @@ export class NdWorkspaceUploadLimitsComponent implements OnChanges {
   error = '';
   message = '';
 
+  /** Why the values in the boxes cannot be saved, or '' when they can. The server checks the same rules. */
+  get validationError(): string {
+    const { docMb, uploadMb, storageMb } = this;
+    for (const value of [docMb, uploadMb, storageMb]) {
+      if (value != null && (!Number.isInteger(value) || value < 1)) return 'Limits must be whole numbers of at least 1 MB.';
+    }
+    if (docMb != null && docMb > 50) return 'The per-document limit cannot be above 50 MB.';
+    if (docMb != null && uploadMb != null && docMb > uploadMb) return 'The per-document limit cannot be more than the per-upload limit.';
+    if (uploadMb != null && storageMb != null && uploadMb > storageMb) return 'The per-upload limit cannot be more than total storage.';
+    if (docMb != null && storageMb != null && docMb > storageMb) return 'The per-document limit cannot be more than total storage.';
+    return '';
+  }
+
   get used(): string {
     return formatMb(this.limits?.usedStorageBytes ?? 0);
   }
@@ -125,6 +141,7 @@ export class NdWorkspaceUploadLimitsComponent implements OnChanges {
   }
 
   async save(): Promise<void> {
+    if (this.validationError) return;
     this.saving = true;
     this.error = '';
     this.message = '';

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard;
 using Microsoft.EntityFrameworkCore;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.Entities;
@@ -553,6 +554,8 @@ public class DocumentsController(
 
         if (bytes.Length == 0)
             throw new InvalidOperationException("No file provided.");
+        if (await NdUploadLimits.CheckAsync(db, file.FileName, bytes.Length, ct) is { } limitError)
+            throw new InvalidOperationException(limitError);
 
         var title = Path.GetFileNameWithoutExtension(file.FileName).Trim();
         if (string.IsNullOrWhiteSpace(title))
