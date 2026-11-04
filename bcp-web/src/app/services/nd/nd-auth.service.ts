@@ -193,9 +193,10 @@ export class NdAuthService {
   }
 
   async forgotPassword(email: string): Promise<{ error: string | null; resetLink?: string }> {
+    // The site the user is on, so the reset link brings them back to the same address.
     const base =
-      environment.appUrl ||
-      (typeof window !== 'undefined' ? window.location.origin : '');
+      (typeof window !== 'undefined' ? window.location.origin : '') ||
+      environment.appUrl;
     if (!base) return { error: 'App URL is not configured' };
 
     const res = await this.api.forgotPassword(email.trim(), base.replace(/\/$/, ''));

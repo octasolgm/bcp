@@ -188,11 +188,14 @@ public class AuthController(
         client.DefaultRequestHeaders.TryAddWithoutValidation("apikey", opts.ServiceRoleKey);
 
         var payload = new Dictionary<string, object?> { ["email"] = email };
+
+        // /recover reads the redirect from the query string and ignores it in the body.
+        var url = $"{opts.Url.TrimEnd('/')}/auth/v1/recover";
         if (!string.IsNullOrWhiteSpace(redirectTo))
-            payload["redirect_to"] = $"{redirectTo}/nd/auth/reset-password";
+            url += $"?redirect_to={Uri.EscapeDataString($"{redirectTo}/nd/auth/reset-password")}";
 
         var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-        var res = await client.PostAsync($"{opts.Url.TrimEnd('/')}/auth/v1/recover", content, ct);
+        var res = await client.PostAsync(url, content, ct);
         if (res.IsSuccessStatusCode) return null;
 
         var responseBody = await res.Content.ReadAsStringAsync(ct);
