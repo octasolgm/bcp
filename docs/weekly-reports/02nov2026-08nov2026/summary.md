@@ -76,7 +76,8 @@ Tasks
 - Action inbox now counts all of a user's departments
 - Business workspaces: the Users panel now manages that business's users: search, filter by role, add a user, change role, activate or deactivate. Your own account, platform super admins and demo accounts cannot be edited there
 - Modules can now only be changed by the platform super admin, also enforced on the server
-- Business settings page is view only for everyone; changes are made on Business workspaces
+- Business settings page is view only for everyone: modules show On or Off; changes are made on Business workspaces
+- Created and pushed release/2026.11.05.01 and deployed it to Azure dev (API and web)
 - One user can now belong to several businesses with a separate role in each: Add existing user on Business workspaces, with a role dropdown for each person that starts on their current role; creating a user with an email that already has an account adds that person instead
 - Users in several businesses get a business switcher at the top of the page
 - User management shows each user's businesses, for the platform super admin only
