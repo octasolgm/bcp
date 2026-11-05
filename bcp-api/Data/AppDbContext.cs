@@ -26,6 +26,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdRulebookCategory> NdRulebookCategories => Set<NdRulebookCategory>();
     public DbSet<NdRegulationDocumentCategory> NdRegulationDocumentCategories => Set<NdRegulationDocumentCategory>();
     public DbSet<NdInternalDocumentDepartment> NdInternalDocumentDepartments => Set<NdInternalDocumentDepartment>();
+    public DbSet<NdProfileDepartment> NdProfileDepartments => Set<NdProfileDepartment>();
+    public DbSet<NdWorkspaceMember> NdWorkspaceMembers => Set<NdWorkspaceMember>();
+    public DbSet<NdAnalysisRunDepartment> NdAnalysisRunDepartments => Set<NdAnalysisRunDepartment>();
     public DbSet<NdRegulationDocument> NdRegulationDocuments => Set<NdRegulationDocument>();
     public DbSet<NdRegulationPoint> NdRegulationPoints => Set<NdRegulationPoint>();
     public DbSet<NdInternalDocumentSection> NdInternalDocumentSections => Set<NdInternalDocumentSection>();
@@ -453,6 +456,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<NdInternalDocumentDepartment>(e =>
         {
             e.HasKey(x => new { x.StoredDocumentId, x.DepartmentId });
+            e.HasOne<NdDepartment>().WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdWorkspaceMember>(e => e.HasKey(x => new { x.ProfileId, x.WorkspaceId }));
+        modelBuilder.Entity<NdProfileDepartment>(e =>
+        {
+            e.HasKey(x => new { x.ProfileId, x.DepartmentId });
+            e.HasOne<NdDepartment>().WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NdAnalysisRunDepartment>(e =>
+        {
+            e.HasKey(x => new { x.AnalysisRunId, x.DepartmentId });
             e.HasOne<NdDepartment>().WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Cascade);
         });
         modelBuilder.Entity<NdRegulationDocumentCategory>(e =>

@@ -1,4 +1,5 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, HostListener } from '@angular/core';
+import { NdTypeaheadPickerComponent, type NdTypeaheadOption, type NdTypeaheadRolePick } from '../../../components/nd/nd-typeahead-picker.component';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
@@ -7,6 +8,7 @@ import {
   NdApiService,
   type NdWorkspaceCredits,
   type NdWorkspaceListItem,
+  type NdPlatformUser,
   type NdWorkspaceMember,
 } from '../../../services/nd/nd-api.service';
 import { RouterLink } from '@angular/router';
@@ -24,7 +26,7 @@ import { ND_DATE_FORMAT_OPTIONS } from '../../../../lib/nd/date-format';
 @Component({
   selector: 'app-nd-admin-workspaces',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdPageAlertComponent, NdWorkspaceModulesComponent, NdWorkspaceUploadLimitsComponent],
+  imports: [NdTypeaheadPickerComponent, CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdPageAlertComponent, NdWorkspaceModulesComponent, NdWorkspaceUploadLimitsComponent],
   templateUrl: './nd-admin-workspaces.component.html',
   styleUrls: [
     './nd-admin-users.component.scss',
@@ -514,11 +516,195 @@ export class NdAdminWorkspacesComponent implements OnInit {
     }
     this.membersFor = item.workspace.id;
     this.members = [];
+    this.memberSearch = '';
+    this.memberRoleFilter = '';
+    this.memberFormMode = null;
+    this.resetMemberForm();
     this.membersLoading = true;
-    const res = await this.api.getWorkspaceMembers(item.workspace.id);
+    await this.loadMembers(item.workspace.id);
     this.membersLoading = false;
+  }
+
+  private async loadMembers(workspaceId: string): Promise<void> {
+    const res = await this.api.getWorkspaceMembers(workspaceId);
+    if (this.membersFor !== workspaceId) return;
     if (res.success && res.data) this.members = res.data;
     else this.error = res.message ?? 'Failed to load users';
+  }
+
+  // ---- users of one business, managed from this page ----
+  memberSearch = '';
+  memberRoleFilter = '';
+  memberFormMode: 'existing' | 'new' | null = null;
+  readonly memberRoleOptions = [
+    { value: 'maker', label: 'Maker' },
+    { value: 'checker', label: 'Checker' },
+    { value: 'reviewer', label: 'Reviewer' },
+    { value: 'super_admin', label: 'Admin' },
+  ];
+  private platformUsers: NdPlatformUser[] = [];
+  addingMember = false;
+  savingMemberId: string | null = null;
+  newMemberName = '';
+  newMemberEmail = '';
+  newMemberRole = 'maker';
+  newMemberPassword = '';
+
+  private resetMemberForm(): void {
+    this.newMemberName = '';
+    this.newMemberEmail = '';
+    this.newMemberRole = 'maker';
+    this.newMemberPassword = '';
+  }
+
+  get visibleMembers(): NdWorkspaceMember[] {
+    const q = this.memberSearch.trim().toLowerCase();
+    return this.members.filter((m) => {
+      if (this.memberRoleFilter && m.role !== this.memberRoleFilter) return false;
+      return !q || m.fullName.toLowerCase().includes(q) || (m.email ?? '').toLowerCase().includes(q);
+    });
+  }
+
+  async addMember(item: NdWorkspaceListItem): Promise<void> {
+    const fullName = this.newMemberName.trim();
+    const email = this.newMemberEmail.trim();
+    if (!fullName || !email || this.addingMember) return;
+    this.addingMember = true;
+    this.error = '';
+    const res = await this.api.addWorkspaceMember(item.workspace.id, {
+      fullName,
+      email,
+      role: this.newMemberRole,
+      password: this.newMemberPassword || undefined,
+    });
+    this.addingMember = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not add the user';
+      return;
+    }
+    this.message = res.message ?? `${fullName} added to ${item.workspace.name}.`;
+    this.resetMemberForm();
+    this.memberFormMode = null;
+    item.userCount += 1;
+    await this.loadMembers(item.workspace.id);
+    this.syncAdmins(item);
+  }
+
+  async openMemberForm(mode: 'existing' | 'new'): Promise<void> {
+    this.memberFormMode = this.memberFormMode === mode ? null : mode;
+    if (this.memberFormMode !== 'existing') return;
+    const res = await this.api.getPlatformUsers();
+    if (res.success && res.data) this.platformUsers = res.data;
+    else this.error = res.message ?? 'Failed to load users';
+  }
+
+  /** Everyone on the platform who is not in this business yet. */
+  get existingUserOptions(): NdTypeaheadOption[] {
+    const inHere = new Set(this.members.map((m) => m.id));
+    return this.platformUsers
+      .filter((u) => !inHere.has(u.id))
+      .map((u) => ({
+        id: u.id,
+        label: u.fullName || u.email || 'Unnamed user',
+        hint: [u.email, u.homeWorkspaceName].filter(Boolean).join(' · '),
+        role: u.role,
+      }));
+  }
+
+  async addExistingMembers(item: NdWorkspaceListItem, picks: NdTypeaheadRolePick[]): Promise<void> {
+    if (!picks.length || this.addingMember) return;
+    this.addingMember = true;
+    this.error = '';
+    let added = 0;
+    for (const pick of picks) {
+      const res = await this.api.addExistingWorkspaceMember(item.workspace.id, pick.id, pick.role);
+      if (res.success) added++;
+      else this.error = res.message ?? 'Could not add the user';
+    }
+    this.addingMember = false;
+    if (added) {
+      this.message = `Added ${added} user${added === 1 ? '' : 's'} to ${item.workspace.name}.`;
+      item.userCount += added;
+      this.memberFormMode = null;
+      await this.loadMembers(item.workspace.id);
+      this.syncAdmins(item);
+    }
+  }
+
+  async removeMember(item: NdWorkspaceListItem, member: NdWorkspaceMember): Promise<void> {
+    if (!confirm(`Remove ${member.fullName} from ${item.workspace.name}? Their account and home business stay as they are.`)) return;
+    this.savingMemberId = member.id;
+    this.error = '';
+    const res = await this.api.removeWorkspaceMember(item.workspace.id, member.id);
+    this.savingMemberId = null;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not remove the user';
+      return;
+    }
+    this.message = `${member.fullName} removed from ${item.workspace.name}.`;
+    item.userCount = Math.max(0, item.userCount - 1);
+    await this.loadMembers(item.workspace.id);
+    this.syncAdmins(item);
+  }
+
+  /** Runs after a picker's own Esc handling: closes the innermost thing that is open, one press at a time. */
+  @HostListener('window:keydown.escape', ['$event'])
+  onEscape(event: Event): void {
+    if (event.defaultPrevented) return;
+    if (this.memberFormMode) this.memberFormMode = null;
+    else if (this.membersFor) this.membersFor = null;
+    else if (this.creditsFor) this.creditsFor = null;
+    else if (this.settingsFor) this.settingsFor = null;
+    else if (this.editingId) this.cancelEdit();
+  }
+
+  /** Changes made in another tab (such as deleting a user) show as soon as you come back. */
+  @HostListener('window:focus')
+  onWindowFocus(): void {
+    if (this.membersFor) void this.loadMembers(this.membersFor);
+  }
+
+  async setMemberRole(item: NdWorkspaceListItem, member: NdWorkspaceMember, role: string): Promise<void> {
+    if (role === member.role) return;
+    await this.saveMember(item, member, { role }, `${member.fullName} is now ${this.roleName(role)}.`);
+  }
+
+  async toggleMemberActive(item: NdWorkspaceListItem, member: NdWorkspaceMember): Promise<void> {
+    const isActive = !member.isActive;
+    if (!isActive && !confirm(`Deactivate ${member.fullName}? They will no longer be able to use ${item.workspace.name}.`)) return;
+    await this.saveMember(item, member, { isActive }, `${member.fullName} ${isActive ? 'activated' : 'deactivated'}.`);
+  }
+
+  private async saveMember(
+    item: NdWorkspaceListItem,
+    member: NdWorkspaceMember,
+    change: { role?: string; isActive?: boolean },
+    done: string,
+  ): Promise<void> {
+    this.savingMemberId = member.id;
+    this.error = '';
+    const res = await this.api.updateWorkspaceMember(item.workspace.id, member.id, change);
+    if (res.success) {
+      this.message = done;
+      await this.loadMembers(item.workspace.id);
+      this.syncAdmins(item);
+    } else {
+      this.error = res.message ?? 'Could not update the user';
+      // Puts the role dropdown back to the saved value.
+      this.members = [...this.members];
+    }
+    this.savingMemberId = null;
+  }
+
+  /** Keeps the Admins column in step with the list just changed. */
+  private syncAdmins(item: NdWorkspaceListItem): void {
+    item.admins = this.members
+      .filter((m) => m.role === 'super_admin' && !m.isPlatformAdmin)
+      .map((m) => ({ id: m.id, fullName: m.fullName }));
+  }
+
+  private roleName(role: string): string {
+    return role === 'super_admin' ? 'Admin' : role.charAt(0).toUpperCase() + role.slice(1);
   }
 
   adminNames(item: NdWorkspaceListItem): string {

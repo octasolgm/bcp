@@ -1967,6 +1967,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
     }
 
     this.ndRunId = createRes.data.id;
+    this.onNdRunCreated(createRes.data.id);
     this.notifyNewAnalysisRunCreated({ all: true });
     this.regulClausesConfirmed = false;
     if (this.ndAuth.isDemoViewer() && this.pendingNdRunForwardOnly) {
@@ -2165,6 +2166,9 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
       () => this.rerunForwardOnly(),
     );
   }
+
+  /** Called once when a new analysis has been created on the server. */
+  protected onNdRunCreated(_runId: string): void {}
 
   protected async rerunForwardOnly(): Promise<void> {
     if (!this.ndRunId) return;

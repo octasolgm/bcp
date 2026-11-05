@@ -618,10 +618,29 @@ export type NdCloudImportLogRow = {
 export type NdWorkspaceMember = {
   id: string;
   fullName: string;
+  email?: string | null;
   role: NdUserProfile['role'];
   isActive: boolean;
   isPlatformAdmin: boolean;
+  accountStatus?: string;
+  /** False for your own account, platform super admins and demo accounts. */
+  canEdit?: boolean;
+  /** Home is another business; this business only holds their role here. */
+  isGuest?: boolean;
+  homeWorkspaceName?: string | null;
 };
+
+export type NdPlatformUser = {
+  id: string;
+  fullName: string;
+  email?: string | null;
+  role: string;
+  homeWorkspaceId?: string | null;
+  homeWorkspaceName?: string | null;
+  workspaceIds: string[];
+};
+
+export type NdMyWorkspace = { id: string; name: string; isActive: boolean; isHome: boolean; role: string };
 
 export type FinalizeEmbedSummary = {
   resolvedActionPlans: number;
@@ -933,6 +952,35 @@ export class NdApiService {
     return this.request<unknown>('POST', '/nd/departments/import-sample');
   }
 
+  addDepartmentMembers(departmentId: string, userIds: string[]) {
+    return this.request<unknown>('POST', `/nd/departments/${departmentId}/members`, { userIds });
+  }
+
+  removeDepartmentMember(departmentId: string, userId: string) {
+    return this.request<unknown>('DELETE', `/nd/departments/${departmentId}/members/${userId}`);
+  }
+
+  addDepartmentDocuments(departmentId: string, documentIds: string[]) {
+    return this.request<unknown>('POST', `/nd/departments/${departmentId}/documents`, { documentIds });
+  }
+
+  removeDepartmentDocument(departmentId: string, documentId: string) {
+    return this.request<unknown>('DELETE', `/nd/departments/${departmentId}/documents/${documentId}`);
+  }
+
+  /** Analyses limited to specific departments: run id -> department ids. Others are visible to all departments. */
+  getAnalysisRunDepartmentMap() {
+    return this.request<Record<string, string[]>>('GET', '/nd/analysis-runs/departments');
+  }
+
+  getAnalysisRunDepartments(runId: string) {
+    return this.request<string[]>('GET', `/nd/analysis-runs/${runId}/departments`);
+  }
+
+  setAnalysisRunDepartments(runId: string, departmentIds: string[]) {
+    return this.request<string[]>('PUT', `/nd/analysis-runs/${runId}/departments`, { departmentIds });
+  }
+
   /** Departments of every internal document: stored document id -> department ids. */
   getInternalDepartmentLinks() {
     return this.request<Record<string, string[]>>('GET', '/nd/internal-documents/departments');
@@ -1030,6 +1078,31 @@ export class NdApiService {
 
   switchWorkspace(id: string) {
     return this.request<NdWorkspaceSummary>('POST', `/nd/workspaces/${id}/switch`);
+  }
+
+  addWorkspaceMember(id: string, body: { fullName: string; email: string; role: string; password?: string }) {
+    return this.request<{ id: string }>('POST', `/nd/workspaces/${id}/users`, body);
+  }
+
+  updateWorkspaceMember(id: string, userId: string, body: { role?: string; isActive?: boolean }) {
+    return this.request<unknown>('PUT', `/nd/workspaces/${id}/users/${userId}`, body);
+  }
+
+  getMyWorkspaces() {
+    return this.request<NdMyWorkspace[]>('GET', '/nd/workspaces/mine');
+  }
+
+  getPlatformUsers() {
+    return this.request<NdPlatformUser[]>('GET', '/nd/workspaces/all-users');
+  }
+
+  /** No role keeps the one the user has in their home workspace. */
+  addExistingWorkspaceMember(id: string, userId: string, role?: string) {
+    return this.request<{ id: string }>('POST', `/nd/workspaces/${id}/members`, { userId, role });
+  }
+
+  removeWorkspaceMember(id: string, userId: string) {
+    return this.request<unknown>('DELETE', `/nd/workspaces/${id}/members/${userId}`);
   }
 
   getWorkspaceMembers(id: string) {

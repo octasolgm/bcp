@@ -38,8 +38,36 @@ Upload limits now apply to every way of adding a document, including evidence fi
 
 The link in a password reset email now takes you to the page for setting a new password, on the same web address you requested it from.
 
+## Departments, teams and who sees what
+
+The Departments page can now add a standard set of bank departments at any time, not only when the list is empty. It adds only what is missing, so using it again creates no duplicates.
+
+Each department, unit and team now has two tabs, Team members and Documents. Type part of a name to filter the list, tick several items and add them together.
+
+On the User management page, a user can now belong to several departments, chosen from the same three level tree. Their action inbox follows all of them.
+
+Users other than admins now see the internal documents filed on their departments and everything under them, along with documents that have no department and documents they uploaded themselves. Existing documents stay visible until you file them.
+
+Every analysis is visible to all departments by default. Admins can limit it to specific departments from the New analysis, Analysis runs, Gap analysis and Results pages. Choosing a department includes its units and teams and the departments above them. Admins and the person who created the analysis always keep access.
+
+## Managing business users and settings
+
+The Users option on the Business workspaces page is now a full management panel. The platform administrator can search a business's users, filter them by role, add new users, change roles and activate or deactivate accounts without having to enter that business first.
+
+One person can now work in several businesses using the same login, with a separate role in each. An existing user can be added to another business and either keep their current role or be given a different one. They switch between their businesses from the top of the page, and the platform administrator can see each user's businesses on the User management page.
+
+Business settings are now clearly separated. Modules, the clause limit and upload limits are changed on the Business workspaces page, and the Business settings page shows them as view only.
+
 ## Being worked on
 
 We are confirming the New analysis selection and clause number changes on a full analysis run before releasing them.
 
 We are also extending the date format chosen for each business so that it applies on every page and in exported files. Today it applies to the date column on the analysis runs and review queue pages.
+
+We are also looking at how password reset emails will work when the platform is installed on a client's own servers.
+
+We corrected a setting that stopped the link in password reset emails from returning to the platform. We are now confirming the full reset with a real email.
+
+We are completing final testing of the department access rules with non-admin accounts before releasing them.
+
+We have also prepared separate query dictionaries and synonyms for each business, and will schedule this change separately.

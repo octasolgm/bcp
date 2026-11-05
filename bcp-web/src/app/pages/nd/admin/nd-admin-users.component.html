@@ -46,8 +46,14 @@
             <span>Department (optional)</span>
             <select [(ngModel)]="inviteDepartmentId" name="inviteDepartmentId">
               <option value="">No department</option>
+              @if (treeDepartments) {
+                @for (dept of inviteDepartmentOptions; track dept.id) {
+                  <option [value]="dept.id">{{ dept.label }}</option>
+                }
+              } @else {
               @for (dept of departments; track dept.id) {
                 <option [value]="dept.id">{{ dept.name }}</option>
+              }
               }
             </select>
           </label>
@@ -148,6 +154,9 @@
                   <th class="sortable" (click)="toggleSort('email')">Email <span class="sort-indicator">{{ sortMark('email') }}</span></th>
                   <th class="sortable" (click)="toggleSort('role')">Role <span class="sort-indicator">{{ sortMark('role') }}</span></th>
                   <th>Department</th>
+                  @if (showBusinesses) {
+                    <th>Businesses</th>
+                  }
                   <th class="sortable" (click)="toggleSort('status')">Account status <span class="sort-indicator">{{ sortMark('status') }}</span></th>
                   <th class="col-actions">Actions</th>
                 </tr>
@@ -183,6 +192,11 @@
                       }
                     </td>
                     <td>
+                      @if (treeDepartments) {
+                        <button type="button" class="inline-select" [title]="departmentSummaryTitle(u)" (click)="departmentPickerUser = u">
+                          {{ departmentSummary(u) }}
+                        </button>
+                      } @else {
                       <select
                         class="inline-select"
                         [ngModel]="u.departmentId ?? ''"
@@ -194,7 +208,19 @@
                           <option [value]="dept.id">{{ dept.name }}</option>
                         }
                       </select>
+                      }
                     </td>
+                    @if (showBusinesses) {
+                      <td class="user-businesses">
+                        @if (isLockedPlatformRow(u)) {
+                          <div>All businesses <span class="muted">· Super admin</span></div>
+                        } @else {
+                          @for (b of u.businesses ?? []; track b.id) {
+                            <div>{{ b.name }} <span class="muted">· {{ businessRole(b.role) }}{{ b.isHome ? ' · home' : '' }}</span></div>
+                          }
+                        }
+                      </td>
+                    }
                     <td>
                       <app-nd-status-badge [status]="u.accountStatus || (u.isActive ? 'active' : 'deactivated')" />
                     </td>
@@ -234,3 +260,17 @@
     }
   }
 </div>
+
+@if (departmentPickerUser; as pickerUser) {
+  <app-nd-department-picker
+    [departments]="departmentTree"
+    [selected]="pickerUser.departmentIds ?? []"
+    title="Departments"
+    [subtitle]="pickerUser.fullName"
+    hint="The user sees internal documents filed on these departments and everything under them."
+    emptyLabel="No department"
+    [saving]="savingDepartmentPicker"
+    (saved)="saveUserDepartments($event)"
+    (closed)="departmentPickerUser = null"
+  />
+}

@@ -389,12 +389,15 @@ public static class NdRunEnrichmentHelper
         bool mineOnly,
         Guid? profileId,
         CancellationToken ct,
-        NdDemoIsolationContext? demoCtx = null)
+        NdDemoIsolationContext? demoCtx = null,
+        NdDepartmentScope? departmentScope = null)
     {
         const string deleted = "deleted";
         var runsQ = db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != deleted);
         if (demoCtx is { Enabled: true })
             runsQ = NdDemoDataFilters.ApplyToAnalysisRuns(runsQ, demoCtx);
+        if (departmentScope != null)
+            runsQ = runsQ.ApplyToRuns(db, departmentScope);
         if (mineOnly && profileId.HasValue)
             runsQ = runsQ.Where(r => r.CreatedBy == profileId.Value);
 
@@ -560,12 +563,15 @@ public static class NdRunEnrichmentHelper
         bool mineOnly,
         Guid? profileId,
         CancellationToken ct,
-        NdDemoIsolationContext? demoCtx = null)
+        NdDemoIsolationContext? demoCtx = null,
+        NdDepartmentScope? departmentScope = null)
     {
         const string deleted = "deleted";
         var runsQ = db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != deleted);
         if (demoCtx is { Enabled: true })
             runsQ = NdDemoDataFilters.ApplyToAnalysisRuns(runsQ, demoCtx);
+        if (departmentScope != null)
+            runsQ = runsQ.ApplyToRuns(db, departmentScope);
         if (mineOnly && profileId.HasValue)
             runsQ = runsQ.Where(r => r.CreatedBy == profileId.Value);
         var runIds = await runsQ.Select(r => r.Id).ToListAsync(ct);

@@ -19,11 +19,11 @@ public static class NdActionPlanInbox
         AppDbContext db,
         IQueryable<NdAnalysisActionPlan> plans,
         Guid profileId,
-        Guid? departmentId) =>
+        IReadOnlyCollection<Guid> departmentIds) =>
         plans.Where(p =>
             p.ResponsibilityUserId == profileId
-            || (departmentId != null && p.ResponsibilityDepartmentId == departmentId)
+            || (p.ResponsibilityDepartmentId != null && departmentIds.Contains(p.ResponsibilityDepartmentId.Value))
             || db.NdAnalysisActionPlanAssignees.Any(a =>
                 a.ActionPlanId == p.Id
-                && (a.UserId == profileId || (departmentId != null && a.DepartmentId == departmentId))));
+                && (a.UserId == profileId || (a.DepartmentId != null && departmentIds.Contains(a.DepartmentId.Value)))));
 }

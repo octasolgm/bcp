@@ -10,6 +10,7 @@ import { NdReportSummaryStackComponent } from '../../../components/nd/nd-report-
 import { emptyClauseRollup, type ClauseRollup } from '../../../../lib/nd/gap-state';
 import { runWorkCounts } from '../../../../lib/nd/run-gap-stats';
 import { NdApiService } from '../../../services/nd/nd-api.service';
+import { NdRunDepartmentsComponent } from '../../../components/nd/nd-run-departments.component';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
 import { formatDate, parsePointSnapshot } from '../../../../lib/nd/utils';
@@ -54,7 +55,7 @@ import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sor
 @Component({
   selector: 'app-nd-results',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdExportOptionsDialogComponent, NdReportSummaryStackComponent],
+  imports: [NdRunDepartmentsComponent, CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdExportOptionsDialogComponent, NdReportSummaryStackComponent],
   templateUrl: './nd-results.component.html',
   styleUrls: ['./nd-results.component.scss', '../nd-shared.scss'],
 })

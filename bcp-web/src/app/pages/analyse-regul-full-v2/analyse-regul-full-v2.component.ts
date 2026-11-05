@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { NdRunDepartmentsComponent } from '../../components/nd/nd-run-departments.component';
 import { RouterLink } from '@angular/router';
 import { NdGapPointDetailComponent } from '../../components/nd/nd-gap-point-detail.component';
 import { NdPointSortControlsComponent } from '../../components/nd/nd-point-sort-controls.component';
@@ -70,6 +71,7 @@ const UPLOAD_PREPARE_WAIT_MS = 20 * 60_000;
   selector: 'app-analyse-regul-full-v2',
   standalone: true,
   imports: [
+    NdRunDepartmentsComponent,
     CommonModule,
     FormsModule,
     RouterLink,
@@ -88,6 +90,16 @@ const UPLOAD_PREPARE_WAIT_MS = 20 * 60_000;
   styleUrl: './analyse-regul-full-v2.component.scss',
 })
 export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
+  /** Departments chosen on this page before the analysis exists; empty means all departments. */
+  pendingRunDepartmentIds: string[] = [];
+
+  protected override onNdRunCreated(runId: string): void {
+    const ids = this.pendingRunDepartmentIds;
+    if (!ids.length) return;
+    this.pendingRunDepartmentIds = [];
+    void this.ndApi.setAnalysisRunDepartments(runId, ids);
+  }
+
   override readonly versionLabel = '';
   override readonly versionPath: string = '/analyse-regul-full-v2';
 

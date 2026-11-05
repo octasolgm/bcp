@@ -37,6 +37,9 @@
     }
   </div>
   <div class="header-actions">
+    @if (!embedMode && ndRunId) {
+      <app-nd-run-departments [runId]="ndRunId" />
+    }
     @if (templateDraftActionPlans.length; as templateCount) {
       <button
         type="button"

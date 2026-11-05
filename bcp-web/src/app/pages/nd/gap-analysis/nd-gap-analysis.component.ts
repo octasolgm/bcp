@@ -123,6 +123,7 @@ import { analysisPointToReportItem } from '../../../../lib/nd/analysis-point-map
 import type { AnalysisPoint, PointGapAttachment, PointSnapshot } from '../../../../lib/nd/types';
 import { NdApiService, NdRunAiSetup } from '../../../services/nd/nd-api.service';
 import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.service';
+import { NdRunDepartmentsComponent } from '../../../components/nd/nd-run-departments.component';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
@@ -201,7 +202,7 @@ const PREP_QUEUE_GRACE_MS = 10 * 60_000;
 @Component({
   selector: 'app-nd-gap-analysis',
   standalone: true,
-  imports: [NdEmbedPreviewDrawerComponent, FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent, NdEvalCompareDrawerComponent, NdRetrievalCheckDrawerComponent],
+  imports: [NdRunDepartmentsComponent, NdEmbedPreviewDrawerComponent, FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent, NdEvalCompareDrawerComponent, NdRetrievalCheckDrawerComponent],
   templateUrl: './nd-gap-analysis.component.html',
   styleUrl: './nd-gap-analysis.component.scss',
 })

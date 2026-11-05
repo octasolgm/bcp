@@ -44,6 +44,8 @@ public class WorkspaceController(
         var role = profile!.Role;
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
         var cacheScope = $"nav-counts:{profile.Id}:{role}:demo={demoCtx.ViewerIsDemo}";
+        var departmentScope = await NdDepartmentAccess.ResolveAsync(db, profile, demoCtx, ct);
+        var myDepartmentIds = await NdDepartmentAccess.UserDepartmentIdsAsync(db, profile, ct);
 
         var data = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>
         {
@@ -53,7 +55,8 @@ public class WorkspaceController(
             // batched and overlapped rather than issued one badge at a time.
             IQueryable<Data.NewDashboard.Entities.NdAnalysisRun> RunsFor(AppDbContext ctx)
             {
-                var q = NdDemoDataFilters.ApplyToAnalysisRuns(ctx.NdAnalysisRuns.AsNoTracking(), demoCtx);
+                var q = NdDemoDataFilters.ApplyToAnalysisRuns(ctx.NdAnalysisRuns.AsNoTracking(), demoCtx)
+                    .ApplyToRuns(ctx, departmentScope);
                 return NdDemoDataFilters.ApplyMakerRunScope(q, profile.Id, role, mineOnly, demoCtx);
             }
 
@@ -141,7 +144,8 @@ public class WorkspaceController(
                                 : usersQuery.Where(p => !demoProfileIds.Contains(p.Id));
                         }
 
-                        var users = await usersQuery.CountAsync(sct);
+                        var users = await usersQuery.CountAsync(sct)
+                            + await sdb.NdWorkspaceMembers.AsNoTracking().CountAsync(m => m.WorkspaceId == workspaceId, sct);
                         var depts = await NdDemoDataFilters.ApplyToDepartments(
                                 sdb.NdDepartments.AsNoTracking(), demoCtx)
                             .CountAsync(sct);
@@ -180,6 +184,7 @@ public class WorkspaceController(
                 // returning zero rows for reviews, undercounting the badge.
                 var visibleRunIds = await NdDemoDataFilters
                     .ApplyToAnalysisRuns(sdb.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != DeletedStatus), demoCtx)
+                    .ApplyToRuns(sdb, departmentScope)
                     .Select(r => r.Id)
                     .ToListAsync(sct);
                 var pendingActions = await NdActionPlanInbox
@@ -188,12 +193,12 @@ public class WorkspaceController(
                         sdb.NdAnalysisActionPlans.AsNoTracking()
                             .Where(p => p.Status == "pending" && visibleRunIds.Contains(p.AnalysisRunId)),
                         profile.Id,
-                        profile.DepartmentId)
+                        myDepartmentIds)
                     .CountAsync(sct);
                 var receivedReviews = await sdb.NdAnalysisActionPlanReviews.AsNoTracking()
                     .Where(r => visibleRunIds.Contains(r.AnalysisRunId) && r.ReviewerId != profile.Id)
                     .Where(r => r.AssigneeUserId == profile.Id
-                        || (profile.DepartmentId != null && r.AssigneeDepartmentId == profile.DepartmentId))
+                        || (r.AssigneeDepartmentId != null && myDepartmentIds.Contains(r.AssigneeDepartmentId.Value)))
                     .CountAsync(sct);
                 return pendingActions + receivedReviews;
             }, innerCt);
@@ -262,9 +267,10 @@ public class WorkspaceController(
         var effectiveMineOnly = (mineOnly || role == "maker") && !demoCtx.ViewerIsDemo;
         var cacheScope = $"dashboard-stats:{profile.Id}:{role}:{effectiveMineOnly}:demo={demoCtx.ViewerIsDemo}";
 
+        var departmentScope = await NdDepartmentAccess.ResolveAsync(db, profile, demoCtx, ct);
         var stats = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>
             await NdRunEnrichmentHelper.LoadWorkspaceDashboardStatsAsync(
-                db, effectiveMineOnly, profile.Id, innerCt, demoCtx), ct);
+                db, effectiveMineOnly, profile.Id, innerCt, demoCtx, departmentScope), ct);
 
         return Ok(new
         {
@@ -314,9 +320,10 @@ public class WorkspaceController(
         var effectiveMineOnly = (mineOnly || role == "maker") && !demoCtx.ViewerIsDemo;
         var cacheScope = $"dashboard-metric-runs:{metric}:{profile.Id}:{role}:{effectiveMineOnly}:demo={demoCtx.ViewerIsDemo}";
 
+        var departmentScope = await NdDepartmentAccess.ResolveAsync(db, profile, demoCtx, ct);
         var counts = await dashboardCache.GetOrCreateAsync(cacheScope, async innerCt =>
             await NdRunEnrichmentHelper.LoadWorkspaceMetricRunCountsAsync(
-                db, metric, effectiveMineOnly, profile.Id, innerCt, demoCtx), ct);
+                db, metric, effectiveMineOnly, profile.Id, innerCt, demoCtx, departmentScope), ct);
 
         // Every counted run, not just the 20 most recent the runs list returns, so nothing on the card is missing.
         var countedIds = counts.Keys.ToList();

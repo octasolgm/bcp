@@ -231,6 +231,9 @@
   }
 
   td.col-actions > button {
+    min-width: 6.4rem;
+    justify-content: center;
+    text-align: center;
     margin: 0.15rem 0 0.15rem 0.3rem;
   }
 
@@ -659,4 +662,129 @@
       grid-column: auto;
     }
   }
+}
+
+// Users panel: same card, table and form look as the rest of this page.
+.mu-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+
+.mu-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+
+  h3 {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 650;
+  }
+
+  p {
+    margin: 0.1rem 0 0;
+    font-size: 0.75rem;
+  }
+}
+
+.mu-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.mu-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+}
+
+.mu-form-wide {
+  grid-column: 1 / -1;
+}
+
+.mu-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+}
+
+.mu-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+
+  .filter-count {
+    margin-left: auto;
+  }
+}
+
+.mu-table-wrap {
+  max-height: 24rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+// Nested in a table cell, so it sets its own look instead of inheriting the page table's no-wrap cells.
+.table-wrap .mu-table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+    white-space: normal;
+    font-size: 0.8125rem;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .mu-col-actions {
+    text-align: right;
+    white-space: nowrap;
+
+    button + button {
+      margin-left: 0.3rem;
+    }
+  }
+}
+
+.mu-who {
+  overflow-wrap: anywhere;
+
+  strong,
+  span {
+    display: block;
+  }
+
+  span {
+    font-size: 0.75rem;
+  }
+}
+
+.mu-note {
+  margin: 0;
+  font-size: 0.75rem;
 }

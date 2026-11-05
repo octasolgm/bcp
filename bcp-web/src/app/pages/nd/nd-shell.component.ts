@@ -216,6 +216,12 @@ export class NdShellComponent implements OnInit, OnDestroy {
   private async loadWorkspaceOptions(): Promise<void> {
     if (!this.auth.canManageWorkspaces()) {
       this.workspaceOptions = [];
+      if (this.auth.isDemoViewer()) return;
+      const mine = await this.api.getMyWorkspaces();
+      if (mine.success && mine.data) {
+        this.workspaceOptions = mine.data as unknown as typeof this.workspaceOptions;
+        this.cdr.markForCheck();
+      }
       return;
     }
     const res = await this.api.getWorkspaces();

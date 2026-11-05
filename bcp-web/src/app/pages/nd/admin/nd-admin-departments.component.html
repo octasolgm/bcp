@@ -49,7 +49,10 @@
         <button type="button" class="filter-clear" (click)="expandAll()">Expand all</button>
         <button type="button" class="filter-clear" (click)="collapseAll()">Collapse all</button>
         <span class="filter-count">{{ departments.length }} departments</span>
-        <button type="button" class="nd-btn-primary rb-add-root" (click)="openAddRoot()">Add department</button>
+        <button type="button" class="nd-btn-secondary rb-add-root" [disabled]="importing" (click)="importSample()">
+          @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }{{ importing ? 'Adding departments…' : 'Add sample bank departments' }}
+        </button>
+        <button type="button" class="nd-btn-primary" (click)="openAddRoot()">Add department</button>
       </div>
       @if (form?.mode === 'add-root') {
         <div class="nd-card rb-root-form">
@@ -87,12 +90,13 @@
                 </div>
                 <span class="rb-meta">
                   {{ levelLabel(node.level) }}@if (row.hasChildren) { · {{ node.children.length }} under it }
-                  · {{ node.dept.internalDocumentCount ?? 0 }} internal docs
+                  · {{ node.dept.memberCount ?? 0 }} team · {{ node.dept.internalDocumentCount ?? 0 }} docs
                 </span>
                 <span class="severity-badge" [class.doc-ready-green]="node.dept.isActive" [class.doc-ready-red]="!node.dept.isActive">
                   {{ node.dept.isActive ? 'Active' : 'Inactive' }}
                 </span>
                 <div class="rb-actions">
+                  <button type="button" class="nd-btn-secondary rb-btn" [attr.aria-expanded]="panelId === node.dept.id" (click)="togglePanel(node)">Team &amp; docs</button>
                   @if (node.level < maxLevel) {
                     <button type="button" class="nd-btn-secondary rb-btn" (click)="openAddChild(node)">Add {{ node.level === 1 ? 'unit' : 'team' }}</button>
                   }
@@ -106,6 +110,42 @@
                 </div>
               }
             </div>
+            @if (panelId === node.dept.id) {
+              <div class="dp-panel" [class.dp-level-2]="node.level === 2" [class.dp-level-3]="node.level === 3">
+                <div class="dp-tabs" role="tablist" [attr.aria-label]="node.dept.name">
+                  <button type="button" role="tab" [attr.aria-selected]="panelTab === 'team'" [class.active]="panelTab === 'team'" (click)="panelTab = 'team'">Team members ({{ panelMembers.length }} of {{ panelMembers.length + userOptions.length }})</button>
+                  <button type="button" role="tab" [attr.aria-selected]="panelTab === 'documents'" [class.active]="panelTab === 'documents'" (click)="panelTab = 'documents'">Documents ({{ panelDocuments.length }} of {{ panelDocuments.length + documentOptions.length }})</button>
+                </div>
+                @if (panelLoading && !panelMembers.length && !panelDocuments.length) {
+                  <p class="nd-muted rb-loading"><span class="rb-spinner" aria-hidden="true"></span> Loading…</p>
+                } @else if (panelTab === 'team') {
+                  <app-nd-typeahead-picker [options]="userOptions" placeholder="Type a name or email to add team members" emptyLabel="Every active user is already here" [busy]="panelBusy" (add)="addMembers($event)" />
+                  <ul class="dp-items">
+                    @for (u of panelMembers; track u.id) {
+                      <li>
+                        <span>{{ u.fullName || u.email }}</span>
+                        @if (u.email && u.fullName) { <span class="nd-muted">{{ u.email }}</span> }
+                        <button type="button" class="nd-btn-secondary rb-btn" [disabled]="panelBusy" (click)="removeMember(u)">Remove</button>
+                      </li>
+                    } @empty {
+                      <li class="nd-muted">No team members added yet.</li>
+                    }
+                  </ul>
+                } @else {
+                  <app-nd-typeahead-picker [options]="documentOptions" placeholder="Type a document name to add documents" emptyLabel="Every internal document is already here" [busy]="panelBusy" (add)="addDocuments($event)" />
+                  <ul class="dp-items">
+                    @for (d of panelDocuments; track d.id) {
+                      <li>
+                        <span>{{ d.title }}</span>
+                        <button type="button" class="nd-btn-secondary rb-btn" [disabled]="panelBusy" (click)="removeDocument(d)">Remove</button>
+                      </li>
+                    } @empty {
+                      <li class="nd-muted">No documents added yet.</li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
             @if (isAddingChildOf(node)) {
               <div class="rb-row rb-row-form" [class.rb-level-2]="node.level === 1" [class.rb-level-3]="node.level === 2">
                 <div class="rb-indent"></div>

@@ -142,6 +142,69 @@ public class NdInternalDocumentDepartment : ITenantScoped
     public Guid? TenantId { get; set; }
 }
 
+/// <summary>
+/// A user's access to a business other than their home workspace, with the role they have there. Their home
+/// workspace and role stay on the profile. Not tenant scoped: sign-in reads it before a workspace is chosen.
+/// </summary>
+[Table("nd_workspace_members")]
+public class NdWorkspaceMember
+{
+    [Column("profile_id")]
+    public Guid ProfileId { get; set; }
+
+    [Column("workspace_id")]
+    public Guid WorkspaceId { get; set; }
+
+    [Column("role")]
+    public string Role { get; set; } = "maker";
+
+    [Column("is_active")]
+    public bool IsActive { get; set; } = true;
+
+    [Column("created_by")]
+    public Guid? CreatedBy { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    [Column("updated_at")]
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>A user's membership of a department, at any level (a user can sit in several).</summary>
+[Table("nd_profile_departments")]
+public class NdProfileDepartment : ITenantScoped
+{
+    [Column("profile_id")]
+    public Guid ProfileId { get; set; }
+
+    [Column("department_id")]
+    public Guid DepartmentId { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
+}
+
+/// <summary>A department an analysis is shared with. A run with no rows is visible to all departments.</summary>
+[Table("nd_analysis_run_departments")]
+public class NdAnalysisRunDepartment : ITenantScoped
+{
+    [Column("analysis_run_id")]
+    public Guid AnalysisRunId { get; set; }
+
+    [Column("department_id")]
+    public Guid DepartmentId { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Owning workspace (nd_workspaces.id).</summary>
+    public Guid? TenantId { get; set; }
+}
+
 /// <summary>A regulation document filed under a rulebook category (a document can sit in several).</summary>
 [Table("nd_regulation_document_categories")]
 public class NdRegulationDocumentCategory : ITenantScoped

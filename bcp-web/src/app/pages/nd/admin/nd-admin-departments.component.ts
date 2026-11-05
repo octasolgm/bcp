@@ -1,9 +1,10 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
+import { NdTypeaheadPickerComponent, type NdTypeaheadOption } from '../../../components/nd/nd-typeahead-picker.component';
 import {
   compareNumber,
   compareText,
@@ -17,6 +18,9 @@ import type { Department } from '../../../../lib/nd/types';
 
 type DeptSortColumn = 'name' | 'docs' | 'libraries' | 'status';
 
+type WorkspaceUser = { id: string; fullName: string; email?: string | null; role: string; isActive: boolean; departmentIds?: string[] };
+type WorkspaceDocument = { id: string; title: string };
+
 /** Departments nest at most this deep, e.g. Compliance › AML/CFT › Sanctions Screening. */
 const MAX_LEVEL = 3;
 
@@ -28,9 +32,9 @@ type DeptForm = { mode: 'add-root' } | { mode: 'add-child'; parentId: string } |
 @Component({
   selector: 'app-nd-admin-departments',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, NdTypeaheadPickerComponent],
   templateUrl: './nd-admin-departments.component.html',
-  styleUrls: ['../nd-shared.scss', './nd-admin-rulebook-categories.component.scss'],
+  styleUrls: ['../nd-shared.scss', './nd-admin-rulebook-categories.component.scss', './nd-admin-departments.component.scss'],
 })
 export class NdAdminDepartmentsComponent implements OnInit {
   private readonly api = inject(NdApiService);
@@ -231,8 +235,122 @@ export class NdAdminDepartmentsComponent implements OnInit {
     await this.load(true);
   }
 
+  // ---- team members and documents of one department, unit or team ----
+  panelId: string | null = null;
+  panelTab: 'team' | 'documents' = 'team';
+  panelLoading = false;
+  panelBusy = false;
+  private users: WorkspaceUser[] = [];
+  private documents: WorkspaceDocument[] = [];
+  private documentLinks: Record<string, string[]> = {};
+  private panelDataLoaded = false;
+
+  /** Runs after the picker's own Esc handling: an open list closes first, then the panel. */
+  @HostListener('window:keydown.escape', ['$event'])
+  onEscape(event: Event): void {
+    if (event.defaultPrevented) return;
+    if (this.panelId) this.panelId = null;
+    else if (this.form) this.form = null;
+  }
+
+  async togglePanel(node: DeptNode, tab: 'team' | 'documents' = 'team'): Promise<void> {
+    if (this.panelId === node.dept.id && this.panelTab === tab) {
+      this.panelId = null;
+      return;
+    }
+    this.panelId = node.dept.id;
+    this.panelTab = tab;
+    if (!this.panelDataLoaded) await this.loadPanelData();
+  }
+
+  private async loadPanelData(): Promise<void> {
+    this.panelLoading = true;
+    const [users, docs, links] = await Promise.all([
+      this.api.getUsers(),
+      this.api.getInternalDocuments(),
+      this.api.getInternalDepartmentLinks(),
+    ]);
+    this.panelLoading = false;
+    if (!users.success || !docs.success || !links.success) {
+      this.error = users.message ?? docs.message ?? links.message ?? 'Could not load team members and documents';
+      return;
+    }
+    this.users = (users.data ?? []) as WorkspaceUser[];
+    this.documents = ((docs.data ?? []) as Array<WorkspaceDocument & { docKind?: string }>).filter((d) => d.docKind !== 'gap_evidence');
+    this.documentLinks = (links.data ?? {}) as Record<string, string[]>;
+    this.panelDataLoaded = true;
+  }
+
+  get panelMembers(): WorkspaceUser[] {
+    const id = this.panelId;
+    return id ? this.users.filter((u) => u.departmentIds?.includes(id)) : [];
+  }
+
+  get panelDocuments(): WorkspaceDocument[] {
+    const id = this.panelId;
+    return id ? this.documents.filter((d) => this.documentLinks[d.id]?.includes(id)) : [];
+  }
+
+  get userOptions(): NdTypeaheadOption[] {
+    const id = this.panelId;
+    return this.users
+      .filter((u) => u.isActive && !(id && u.departmentIds?.includes(id)))
+      .map((u) => ({ id: u.id, label: u.fullName || u.email || 'Unnamed user', hint: u.email ?? undefined }));
+  }
+
+  get documentOptions(): NdTypeaheadOption[] {
+    const id = this.panelId;
+    return this.documents
+      .filter((d) => !(id && this.documentLinks[d.id]?.includes(id)))
+      .map((d) => ({ id: d.id, label: d.title }));
+  }
+
+  async addMembers(userIds: string[]): Promise<void> {
+    const id = this.panelId;
+    if (!id || !userIds.length) return;
+    await this.runPanelChange(() => this.api.addDepartmentMembers(id, userIds), `Added ${userIds.length} team member${userIds.length === 1 ? '' : 's'}`);
+  }
+
+  async removeMember(user: WorkspaceUser): Promise<void> {
+    const id = this.panelId;
+    if (!id) return;
+    await this.runPanelChange(() => this.api.removeDepartmentMember(id, user.id), 'Team member removed');
+  }
+
+  async addDocuments(documentIds: string[]): Promise<void> {
+    const id = this.panelId;
+    if (!id || !documentIds.length) return;
+    await this.runPanelChange(() => this.api.addDepartmentDocuments(id, documentIds), `Added ${documentIds.length} document${documentIds.length === 1 ? '' : 's'}`);
+  }
+
+  async removeDocument(document: WorkspaceDocument): Promise<void> {
+    const id = this.panelId;
+    if (!id) return;
+    await this.runPanelChange(() => this.api.removeDepartmentDocument(id, document.id), 'Document removed');
+  }
+
+  private async runPanelChange(change: () => Promise<{ success: boolean; message?: string }>, done: string): Promise<void> {
+    if (this.panelBusy) return;
+    this.panelBusy = true;
+    this.error = '';
+    const res = await change();
+    if (res.success) {
+      this.toast.show(done, 'success', 2500);
+      await Promise.all([this.loadPanelData(), this.load(true)]);
+    } else {
+      this.error = res.message ?? 'Could not save the change';
+    }
+    this.panelBusy = false;
+  }
+
   async importSample(): Promise<void> {
     if (this.importing) return;
+    if (
+      this.departments.length > 0 &&
+      !confirm('Add the sample bank departments to this workspace? Departments you already have stay as they are; only the missing ones are added.')
+    ) {
+      return;
+    }
     this.importing = true;
     this.error = '';
     const res = await this.api.importSampleDepartments();
@@ -242,7 +360,11 @@ export class NdAdminDepartmentsComponent implements OnInit {
       return;
     }
     const imported = (res as { imported?: number }).imported ?? 0;
-    this.toast.show(`Added ${imported} sample departments`, 'success', 3500);
+    this.toast.show(
+      imported ? `Added ${imported} sample department${imported === 1 ? '' : 's'}` : 'All the sample departments are already here',
+      'success',
+      3500,
+    );
     await this.load(true);
   }
 

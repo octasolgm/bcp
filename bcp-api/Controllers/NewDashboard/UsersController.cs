@@ -8,6 +8,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard;
 using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -22,7 +23,7 @@ public class UsersController(
     IMemoryCache memoryCache,
     NdDemoUserDirectory demoDirectory) : NdControllerBase
 {
-    public record UpdateUserRequest(string? FullName, string? Role, bool? IsActive, Guid? DepartmentId);
+    public record UpdateUserRequest(string? FullName, string? Role, bool? IsActive, Guid? DepartmentId, List<Guid>? DepartmentIds = null);
     public record InviteUserRequest(string FullName, string Email, string Role, string? Password, Guid? DepartmentId);
     public record SetPasswordRequest(string Password);
 
@@ -50,6 +51,9 @@ public class UsersController(
         var profile = await db.NdProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
         if (profile == null)
             return NotFound(new { success = false, message = "User not found." });
+        // One login across every business, so another business's admin must not be able to change it.
+        if (profile.TenantId != CurrentWorkspaceId && !IsPlatformAdmin(admin))
+            return StatusCode(403, new { success = false, message = "This user's password is managed by their home business." });
 
         var opts = jwtOptions.Value;
         if (string.IsNullOrWhiteSpace(opts.Url) || string.IsNullOrWhiteSpace(opts.ServiceRoleKey))
@@ -71,17 +75,14 @@ public class UsersController(
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct)
     {
-        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
+        var (viewer, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
 
         var authById = await FetchAuthUsersAsync(ct);
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
 
         var workspaceId = CurrentWorkspaceId;
-        var users = await db.NdProfiles.AsNoTracking()
-            .Where(p => p.TenantId == workspaceId)
-            .OrderBy(p => p.FullName)
-            .ToListAsync(ct);
+        var users = await NdWorkspaceMembers.ProfilesInWorkspaceAsync(db, workspaceId, ct);
         users = NdDemoDataFilters.FilterProfilesForUserManagement(
             users,
             demoCtx,
@@ -89,6 +90,35 @@ public class UsersController(
 
         var departmentNames = await db.NdDepartments.AsNoTracking()
             .ToDictionaryAsync(d => d.Id, d => d.Name, ct);
+        var memberships = (await db.NdProfileDepartments.AsNoTracking()
+                .Select(l => new { l.ProfileId, l.DepartmentId })
+                .ToListAsync(ct))
+            .GroupBy(l => l.ProfileId)
+            .ToDictionary(g => g.Key, g => g.Select(l => l.DepartmentId).ToList());
+
+        // Which businesses each user is in: for the platform super admin only, as a business admin must not
+        // learn the names of other clients.
+        Dictionary<Guid, List<object>>? businessesByUser = null;
+        if (IsPlatformAdmin(viewer) && !demoCtx.ViewerIsDemo)
+        {
+            var ids = users.Select(u => u.Id).ToList();
+            var names = await db.NdWorkspaces.AsNoTracking().ToDictionaryAsync(w => w.Id, w => w.Name, ct);
+            var homes = await db.NdProfiles.AsNoTracking()
+                .Where(p => ids.Contains(p.Id))
+                .Select(p => new { p.Id, p.TenantId, p.Role })
+                .ToListAsync(ct);
+            var others = await db.NdWorkspaceMembers.AsNoTracking().Where(m => ids.Contains(m.ProfileId)).ToListAsync(ct);
+            businessesByUser = homes.ToDictionary(h => h.Id, h =>
+            {
+                var list = new List<object>
+                {
+                    new { id = h.TenantId, name = h.TenantId is Guid t ? names.GetValueOrDefault(t) : null, role = h.Role, isHome = true },
+                };
+                list.AddRange(others.Where(o => o.ProfileId == h.Id).Select(o =>
+                    (object)new { id = (Guid?)o.WorkspaceId, name = names.GetValueOrDefault(o.WorkspaceId), role = o.Role, isHome = false }));
+                return list;
+            });
+        }
 
         return Ok(new
         {
@@ -105,8 +135,14 @@ public class UsersController(
                     isPlatformAdmin = IsPlatformAdmin(u),
                     departmentId = u.DepartmentId,
                     departmentName = u.DepartmentId is Guid did && departmentNames.TryGetValue(did, out var dn) ? dn : null,
+                    departmentIds = memberships.GetValueOrDefault(u.Id, [])
+                        .Concat(u.DepartmentId is Guid mainId ? [mainId] : Array.Empty<Guid>())
+                        .Distinct()
+                        .ToList(),
                     isActive = u.IsActive,
                     accountStatus = ResolveAccountStatus(u, auth),
+                    isGuest = u.TenantId != workspaceId,
+                    businesses = businessesByUser?.GetValueOrDefault(u.Id),
                     invitedAt = auth?.InvitedAt,
                     lastSignInAt = auth?.LastSignInAt,
                     emailConfirmedAt = auth?.EmailConfirmedAt,
@@ -116,13 +152,13 @@ public class UsersController(
         });
     }
 
-    private sealed record AuthUserInfo(
+    internal sealed record AuthUserInfo(
         string? Email,
         DateTimeOffset? InvitedAt,
         DateTimeOffset? LastSignInAt,
         DateTimeOffset? EmailConfirmedAt);
 
-    private static string ResolveAccountStatus(NdProfile profile, AuthUserInfo? auth)
+    internal static string ResolveAccountStatus(NdProfile profile, AuthUserInfo? auth)
     {
         if (!profile.IsActive) return "deactivated";
         if (auth == null) return "active";
@@ -132,14 +168,19 @@ public class UsersController(
         return "active";
     }
 
-    private async Task<Dictionary<Guid, AuthUserInfo>> FetchAuthUsersAsync(CancellationToken ct)
+    private Task<Dictionary<Guid, AuthUserInfo>> FetchAuthUsersAsync(CancellationToken ct) =>
+        FetchAuthUsersAsync(httpClientFactory, jwtOptions.Value, ct);
+
+    internal static async Task<Dictionary<Guid, AuthUserInfo>> FetchAuthUsersAsync(
+        IHttpClientFactory httpClientFactory,
+        SupabaseJwtOptions opts,
+        CancellationToken ct)
     {
         var map = new Dictionary<Guid, AuthUserInfo>();
-        var opts = jwtOptions.Value;
         if (string.IsNullOrWhiteSpace(opts.Url) || string.IsNullOrWhiteSpace(opts.ServiceRoleKey))
             return map;
 
-        var client = CreateAdminClient(opts);
+        var client = CreateAdminClient(httpClientFactory, opts);
         var res = await client.GetAsync($"{opts.Url.TrimEnd('/')}/auth/v1/admin/users?per_page=1000", ct);
         if (!res.IsSuccessStatusCode) return map;
 
@@ -199,20 +240,38 @@ public class UsersController(
         var user = await db.NdProfiles.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (user == null) return NotFound(new { success = false, message = "Not found" });
 
-        if (!string.IsNullOrWhiteSpace(body.FullName)) user.FullName = body.FullName.Trim();
+        var workspaceId = CurrentWorkspaceId;
+        var member = user.TenantId == workspaceId
+            ? null
+            : await db.NdWorkspaceMembers.FirstOrDefaultAsync(m => m.ProfileId == id && m.WorkspaceId == workspaceId, ct);
+        // Name and main department belong to the home workspace; a member only has a role and state here.
+        if (member == null && !string.IsNullOrWhiteSpace(body.FullName)) user.FullName = body.FullName.Trim();
         if (!string.IsNullOrWhiteSpace(body.Role))
         {
             var role = NormalizeManagedRole(body.Role);
             if (role == null)
                 return BadRequest(new { success = false, message = "Unknown role." });
-            if (admin!.Id == id && role != user.Role)
+            if (admin!.Id == id && role != admin.Role)
                 return BadRequest(new { success = false, message = "You cannot change your own role." });
-            user.Role = role;
+            if (member != null) member.Role = role;
+            else user.Role = role;
         }
-        if (body.IsActive.HasValue) user.IsActive = body.IsActive.Value;
+        if (body.IsActive.HasValue)
+        {
+            if (member != null) member.IsActive = body.IsActive.Value;
+            else user.IsActive = body.IsActive.Value;
+        }
         // Guid.Empty is how the picker clears a department, since a null field means "unchanged".
-        if (body.DepartmentId.HasValue)
+        if (member == null && body.DepartmentId.HasValue)
             user.DepartmentId = body.DepartmentId.Value == Guid.Empty ? null : body.DepartmentId.Value;
+        if (body.DepartmentIds != null)
+        {
+            var wanted = body.DepartmentIds.Distinct().ToList();
+            var known = await db.NdDepartments.AsNoTracking().CountAsync(d => wanted.Contains(d.Id), ct);
+            if (known != wanted.Count)
+                return BadRequest(new { success = false, message = "One or more departments were not found." });
+            await NdDepartmentAccess.SetUserDepartmentsAsync(db, user, wanted, ct);
+        }
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         InvalidateAuthProfile(memoryCache, id);
@@ -236,7 +295,7 @@ public class UsersController(
 
         var user = await db.NdProfiles.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (user == null) return NotFound(new { success = false, message = "Not found" });
-        user.IsActive = false;
+        await SetActiveHereAsync(user, false, ct);
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         InvalidateAuthProfile(memoryCache, id);
@@ -260,7 +319,7 @@ public class UsersController(
 
         var user = await db.NdProfiles.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (user == null) return NotFound(new { success = false, message = "Not found" });
-        user.IsActive = true;
+        await SetActiveHereAsync(user, true, ct);
         user.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         InvalidateAuthProfile(memoryCache, id);
@@ -285,27 +344,62 @@ public class UsersController(
         if (admin!.Id == id)
             return BadRequest(new { success = false, message = "You cannot delete your own account." });
 
+        // A user who belongs elsewhere is only removed from this business; the login stays.
+        var workspaceId = CurrentWorkspaceId;
+        var profile = await db.NdProfiles.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (profile != null && profile.TenantId != workspaceId)
+        {
+            var member = await db.NdWorkspaceMembers.FirstOrDefaultAsync(m => m.ProfileId == id && m.WorkspaceId == workspaceId, ct);
+            if (member != null) db.NdWorkspaceMembers.Remove(member);
+            if (profile.ActiveTenantId == workspaceId) profile.ActiveTenantId = null;
+            await db.SaveChangesAsync(ct);
+            InvalidateAuthProfile(memoryCache, id);
+            return Ok(new { success = true, deleted = true, removedFromWorkspaceOnly = true });
+        }
+
+        if (await db.NdWorkspaceMembers.AsNoTracking().AnyAsync(m => m.ProfileId == id, ct))
+            return BadRequest(new { success = false, message = "This user also belongs to other businesses. Remove them from those first." });
+
         var opts = jwtOptions.Value;
         if (string.IsNullOrWhiteSpace(opts.Url) || string.IsNullOrWhiteSpace(opts.ServiceRoleKey))
             return BadRequest(new { success = false, message = "Supabase admin API not configured." });
 
+        // The profile goes first: if saved work still points at it the delete is refused, and the login must
+        // survive, otherwise the user would stay listed with no way to sign in.
         var client = CreateAdminClient(opts);
-        var delRes = await client.DeleteAsync($"{opts.Url.TrimEnd('/')}/auth/v1/admin/users/{id}", ct);
-        if (!delRes.IsSuccessStatusCode && delRes.StatusCode != System.Net.HttpStatusCode.NotFound)
+        var strategy = db.Database.CreateExecutionStrategy();
+        IActionResult result = Ok(new { success = true, deleted = true });
+        await strategy.ExecuteAsync(async () =>
         {
-            var body = await delRes.Content.ReadAsStringAsync(ct);
-            return BadRequest(new { success = false, message = body });
-        }
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            if (profile != null)
+            {
+                db.NdProfiles.Remove(profile);
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateException)
+                {
+                    db.Entry(profile).State = EntityState.Unchanged;
+                    result = BadRequest(new { success = false, message = "This user has saved work that needs them, so they cannot be deleted. Deactivate them instead." });
+                    return;
+                }
+            }
 
-        var profile = await db.NdProfiles.FirstOrDefaultAsync(p => p.Id == id, ct);
-        if (profile != null)
-        {
-            db.NdProfiles.Remove(profile);
-            await db.SaveChangesAsync(ct);
-            InvalidateAuthProfile(memoryCache, id);
-        }
+            var delRes = await client.DeleteAsync($"{opts.Url.TrimEnd('/')}/auth/v1/admin/users/{id}", ct);
+            if (!delRes.IsSuccessStatusCode && delRes.StatusCode != System.Net.HttpStatusCode.NotFound)
+            {
+                var body = await delRes.Content.ReadAsStringAsync(ct);
+                result = BadRequest(new { success = false, message = body });
+                return;
+            }
+            await transaction.CommitAsync(ct);
+        });
 
-        return Ok(new { success = true, deleted = true });
+        InvalidateAuthProfile(memoryCache, id);
+        demoDirectory.InvalidateProfileCache();
+        return result;
     }
 
     [HttpPost("invite")]
@@ -327,6 +421,22 @@ public class UsersController(
         var inviteRole = NormalizeManagedRole(body.Role);
         if (inviteRole == null)
             return BadRequest(new { success = false, message = "Unknown role." });
+
+        // The email already has a login: it is the same person, so give them access to this business too.
+        var authUsers = await FetchAuthUsersAsync(ct);
+        var existingId = authUsers.FirstOrDefault(a => string.Equals(a.Value.Email, email, StringComparison.OrdinalIgnoreCase)).Key;
+        var existingProfile = existingId == Guid.Empty ? null : await db.NdProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == existingId, ct);
+        if (existingProfile != null)
+        {
+            if (existingProfile.TenantId == CurrentWorkspaceId)
+                return BadRequest(new { success = false, message = "This user is already in this business." });
+            if (existingProfile.IsPlatformAdmin)
+                return BadRequest(new { success = false, message = "A platform super admin already has access to every business." });
+            await NdWorkspaceMembers.AddOrUpdateAsync(db, existingProfile, CurrentWorkspaceId, inviteRole, admin!.Id, ct);
+            await db.SaveChangesAsync(ct);
+            InvalidateAuthProfile(memoryCache, existingProfile.Id);
+            return Ok(new { success = true, message = "This email already has an account, so it was added to this business. They keep their current password.", data = new { id = existingProfile.Id } });
+        }
 
         var (profileId, message, inviteError) = await CreateWorkspaceUserAsync(
             db, jwtOptions.Value, httpClientFactory, memoryCache, demoDirectory,
@@ -442,11 +552,27 @@ public class UsersController(
             .Where(p => p.Id == targetId)
             .Select(p => new { p.TenantId, p.IsPlatformAdmin, p.Role })
             .FirstOrDefaultAsync(ct);
-        if (target == null || target.TenantId != CurrentWorkspaceId)
+        var workspaceId = CurrentWorkspaceId;
+        if (target == null
+            || (target.TenantId != workspaceId
+                && !await db.NdWorkspaceMembers.AsNoTracking().AnyAsync(m => m.ProfileId == targetId && m.WorkspaceId == workspaceId, ct)))
             return NotFound(new { success = false, message = "User not found." });
         if (target.IsPlatformAdmin && target.Role == "super_admin" && !IsPlatformAdmin(admin))
             return StatusCode(403, new { success = false, message = "Only the platform super admin can change this account." });
         return null;
+    }
+
+    /// <summary>Home users change on the profile; a member from another business changes here only.</summary>
+    private async Task SetActiveHereAsync(NdProfile user, bool isActive, CancellationToken ct)
+    {
+        var workspaceId = CurrentWorkspaceId;
+        if (user.TenantId == workspaceId)
+        {
+            user.IsActive = isActive;
+            return;
+        }
+        var member = await db.NdWorkspaceMembers.FirstOrDefaultAsync(m => m.ProfileId == user.Id && m.WorkspaceId == workspaceId, ct);
+        if (member != null) member.IsActive = isActive;
     }
 
     private static string ParseSupabaseError(string raw)

@@ -63,6 +63,8 @@ public static class NdWorkspaceSchemaBootstrap
         ("nd_rulebook_categories", null, null, "created_by"),
         ("nd_regulation_document_categories", "regulation_documents", "regulation_document_id", null),
         ("nd_internal_document_departments", "stored_documents", "stored_document_id", null),
+        ("nd_profile_departments", "profiles", "profile_id", null),
+        ("nd_analysis_run_departments", "analysis_runs", "analysis_run_id", null),
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)
@@ -245,6 +247,37 @@ public static class NdWorkspaceSchemaBootstrap
             );
             CREATE INDEX IF NOT EXISTS idx_nd_internal_document_departments_department
               ON nd_internal_document_departments (tenant_id, department_id);
+            -- A user can work in businesses other than their home workspace, with a role in each.
+            CREATE TABLE IF NOT EXISTS nd_workspace_members (
+              profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+              workspace_id UUID NOT NULL REFERENCES nd_workspaces(id) ON DELETE CASCADE,
+              role TEXT NOT NULL,
+              is_active BOOLEAN NOT NULL DEFAULT true,
+              created_by UUID NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              PRIMARY KEY (profile_id, workspace_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_workspace_members_workspace ON nd_workspace_members (workspace_id);
+            -- A user can belong to several departments; an analysis with no rows is visible to all departments.
+            CREATE TABLE IF NOT EXISTS nd_profile_departments (
+              profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+              department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+              tenant_id UUID NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              PRIMARY KEY (profile_id, department_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_profile_departments_department
+              ON nd_profile_departments (tenant_id, department_id);
+            CREATE TABLE IF NOT EXISTS nd_analysis_run_departments (
+              analysis_run_id UUID NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
+              department_id UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+              tenant_id UUID NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              PRIMARY KEY (analysis_run_id, department_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_analysis_run_departments_department
+              ON nd_analysis_run_departments (tenant_id, department_id);
             """,
             ct);
 

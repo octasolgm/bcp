@@ -96,6 +96,15 @@ public sealed class WorkspaceResolutionMiddleware(RequestDelegate next)
         var target = home;
         if (profile is { IsPlatformAdmin: true, ActiveTenantId: Guid active })
             target = active;
+        else if (profile?.ActiveTenantId is Guid chosen && chosen != home)
+        {
+            // Another business the user belongs to. Removed, deactivated or a closed business: back home.
+            var allowed = await db.NdWorkspaceMembers.AsNoTracking().AnyAsync(
+                m => m.ProfileId == userId && m.WorkspaceId == chosen && m.IsActive
+                    && db.NdWorkspaces.Any(w => w.Id == chosen && w.IsActive),
+                ct);
+            if (allowed) target = chosen;
+        }
 
         var workspace = await db.NdWorkspaces.AsNoTracking()
             .Where(w => w.Id == target)

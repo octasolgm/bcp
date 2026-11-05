@@ -167,6 +167,15 @@
                   </button>
                 }
               </div>
+              @if (runDepartmentsReady && !isLegacy(run)) {
+                <app-nd-run-departments
+                  [runId]="run.id"
+                  [runName]="run.name"
+                  [departments]="runDepartmentTree"
+                  [selectedIds]="runDepartmentIds(run.id)"
+                  (changed)="runDepartmentMap[run.id] = $event"
+                />
+              }
             </td>
             <td class="col-docs" data-label="Documents">
               @if (run.regulationDocNames?.length || run.internalDocNames?.length) {

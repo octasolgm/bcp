@@ -31,6 +31,8 @@ export type Department = {
   parentId?: string | null;
   /** Internal documents filed under this department. */
   internalDocumentCount?: number;
+  /** Users who belong to this department. */
+  memberCount?: number;
 };
 
 export type DualVerifyLlmProviderOption = {

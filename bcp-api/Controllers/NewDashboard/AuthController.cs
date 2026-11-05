@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Reguliq.Api.Data;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard;
 using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -42,6 +43,8 @@ public class AuthController(
 
             if (profile == null)
                 profile = await GetOrCreateProfileAsync(db, user, user.Email?.Split('@')[0], null, null, dbCts.Token);
+            else
+                await NdWorkspaceMembers.ApplyToProfileAsync(db, profile, dbCts.Token);
 
             if (!profile.IsActive)
                 return StatusCode(403, new { success = false, message = "Account deactivated" });

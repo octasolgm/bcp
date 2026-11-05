@@ -853,8 +853,10 @@
             {{ workflowLoading ? 'Submitting…' : (ndRunWorkflowStatus === 'pulled_back' ? 'Resubmit for review' : 'Submit for review') }}
           </button>
         }
+        <app-nd-run-departments [runId]="activeNdRunId" />
         <a routerLink="/nd/analysis-runs" class="btn-secondary btn-sm run-workflow-btn">All analysis runs</a>
       } @else {
+        <app-nd-run-departments [runId]="ndRunId" (pendingChange)="pendingRunDepartmentIds = $event" />
         <button
           type="button"
           class="btn-run v8-run"

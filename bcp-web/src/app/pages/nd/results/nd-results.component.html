@@ -6,6 +6,11 @@
         <p class="subtitle">{{ data.run.name }}</p>
       }
     </div>
+    @if (data && runId) {
+      <div class="header-actions">
+        <app-nd-run-departments [runId]="runId" [runName]="data.run.name" />
+      </div>
+    }
   </div>
 }
 

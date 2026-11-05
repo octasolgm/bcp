@@ -64,3 +64,38 @@ Investigated, follow up pending
 - Evidence re-check notes on the server use two other fixed formats, always in UTC
 - Awaiting decision on the fix; it would also change dates shown to demo accounts unless they are kept as they are
 - Forgot password and new password not yet tested end to end with a real account and a real email
+
+05 Nov 2026
+
+Tasks
+- Departments: Add sample bank departments button now also shows when the workspace already has departments; it adds only what is missing, so adding again creates no duplicates
+- Departments: every level (department, unit, team) has Team members and Documents tabs; tabs show added of total (for example 0 of 1); type to filter, tick several, add them together; the list sits in the page, not over the rows, and its height can be dragged; Esc closes the list, then the panel
+- Users: a user can belong to several departments, chosen from the three level tree with search; demo accounts keep their dropdown
+- Internal documents: non-admins see documents filed on their departments and everything under them, documents with no department, and their own uploads; admins see all
+- Analysis: Visible to option on New analysis, Analysis runs, Gap analysis and Results; default is all departments, admins can limit it to specific ones; lists, dashboard numbers, queues, inbox and direct links all follow it
+- Action inbox now counts all of a user's departments
+- Business workspaces: the Users panel now manages that business's users: search, filter by role, add a user, change role, activate or deactivate. Your own account, platform super admins and demo accounts cannot be edited there
+- Modules can now only be changed by the platform super admin, also enforced on the server
+- Business settings page is view only for everyone; changes are made on Business workspaces
+- One user can now belong to several businesses with a separate role in each: Add existing user on Business workspaces, with a role dropdown for each person that starts on their current role; creating a user with an email that already has an account adds that person instead
+- Users in several businesses get a business switcher at the top of the page
+- User management shows each user's businesses, for the platform super admin only
+- Business Users panel redesigned to match the page; Esc closes what is open on Business workspaces, Departments and User management
+
+
+Bug fixes
+- Reset password email link opened localhost:3000 on the deployed site; Supabase Site URL is now app.comply-solutions.com, and app.comply-solutions.com, bcp-web-dev and localhost:3002 are accepted return addresses. Return addresses confirmed with a test call, not yet tested with a real email
+
+Investigated, follow up pending
+- Report that deleted users still showed in the business Users panel could not be reproduced: every listed user has a valid account. Panel now refreshes when you return to it; demo accounts removed from it. Delete could leave a user listed if it failed part way; order fixed
+- Query dictionary and Query synonyms per workspace: written and compiled, then set aside at the user's request; nothing applied to the database
+- Reset password email comes from Supabase's default sender because the app has no mail sending of its own and no custom mail server is set up in the code or the in-house package
+- App has no email notifications today; adding them needs a mail service in the API
+- In-house package and deployment docs have no mail settings yet
+- Decision: reset emails stay on the Supabase sender for now, custom SMTP stays off
+- Not decided yet: whether to build email notifications
+- New reset email not received after the redirect fix although the page reported success. Cause not found; the Supabase sender's low limits are one possibility. Full reset with a real email still not tested
+- Tested in the running app as an admin in workspace ABC: sample button (no duplicates), adding and removing team members and documents, counts, Esc, Users tree picker, Visible to choice on New analysis. Test data removed
+- Business Users panel tested in ABC: list, search, Add form fields and role change (changed and put back). Adding a real user and Deactivate not tested
+- Not yet tested: signing in as a user who belongs to several businesses, the switcher and their role in each; deleting a user with the new delete order
+- Not yet tested: what a non-admin account sees, because ABC has no non-admin user; saving Visible to on a real analysis, because ABC has no analyses

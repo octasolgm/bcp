@@ -22,7 +22,7 @@ import { NdApiService } from '../../services/nd/nd-api.service';
           role="switch"
           class="mod-switch"
           [checked]="actionsEnabled !== false"
-          [disabled]="saving"
+          [disabled]="saving || !editable"
           (change)="set({ actionsEnabled: $any($event.target).checked })"
         />
       </label>
@@ -39,7 +39,7 @@ import { NdApiService } from '../../services/nd/nd-api.service';
           role="switch"
           class="mod-switch"
           [checked]="actionsEnabled !== false && embeddingsEnabled !== false"
-          [disabled]="saving || actionsEnabled === false"
+          [disabled]="saving || !editable || actionsEnabled === false"
           (change)="set({ embeddingsEnabled: $any($event.target).checked })"
         />
       </label>
@@ -55,7 +55,7 @@ import { NdApiService } from '../../services/nd/nd-api.service';
       .mod-list { display: flex; flex-direction: column; gap: 0.25rem; }
       .mod-row {
         display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-        padding: 0.6rem 0; border-bottom: 1px solid var(--border); cursor: pointer;
+        padding: 0.6rem 0; border-bottom: 1px solid var(--border);
       }
       .mod-row:last-of-type { border-bottom: 0; }
       .mod-off { opacity: 0.6; }
@@ -85,12 +85,15 @@ export class NdWorkspaceModulesComponent {
   @Input({ required: true }) workspaceId!: string;
   @Input() actionsEnabled: boolean | undefined = true;
   @Input() embeddingsEnabled: boolean | undefined = true;
+  /** Only the platform super admin can change modules; everyone else sees them read-only. */
+  @Input() editable = false;
   @Output() readonly changed = new EventEmitter<{ actionsEnabled: boolean; embeddingsEnabled: boolean }>();
 
   saving = false;
   error = '';
 
   async set(modules: { actionsEnabled?: boolean; embeddingsEnabled?: boolean }): Promise<void> {
+    if (!this.editable) return;
     this.saving = true;
     this.error = '';
     this.cdr.markForCheck();

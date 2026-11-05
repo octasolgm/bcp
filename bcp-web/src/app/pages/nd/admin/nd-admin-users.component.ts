@@ -1,8 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
+import { NdDepartmentPickerComponent, ndDepartmentPath, type NdPickerDepartment } from '../../../components/nd/nd-department-picker.component';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import {
@@ -21,6 +22,12 @@ type AdminUser = {
   role: string;
   departmentId?: string | null;
   departmentName?: string | null;
+  /** Every department the user belongs to, at any level. */
+  departmentIds?: string[];
+  /** Platform super admin only: every business this user is in. */
+  businesses?: Array<{ id: string; name: string | null; role: string; isHome: boolean }> | null;
+  /** Their home is another business; delete only removes them from this one. */
+  isGuest?: boolean;
   isActive: boolean;
   /** Platform super admin account: only another platform admin may change it. */
   isPlatformAdmin?: boolean;
@@ -35,7 +42,7 @@ type UserSortColumn = 'name' | 'email' | 'role' | 'status';
 @Component({
   selector: 'app-nd-admin-users',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdStatusBadgeComponent, NdPageAlertComponent],
+  imports: [CommonModule, FormsModule, NdStatusBadgeComponent, NdPageAlertComponent, NdDepartmentPickerComponent],
   templateUrl: './nd-admin-users.component.html',
   styleUrls: ['./nd-admin-users.component.scss', '../nd-shared.scss'],
 })
@@ -112,8 +119,67 @@ export class NdAdminUsersComponent implements OnInit {
     }
     if (deptRes.success && deptRes.data) {
       this.departments = (deptRes.data as AdminDepartment[]).map((d) => ({ id: d.id, name: d.name }));
+      this.departmentTree = deptRes.data as NdPickerDepartment[];
     }
     this.loading = false;
+  }
+
+  // ---- real accounts choose several departments from the three-level tree; demo accounts keep the dropdown ----
+  departmentTree: NdPickerDepartment[] = [];
+  departmentPickerUser: AdminUser | null = null;
+  savingDepartmentPicker = false;
+
+  get treeDepartments(): boolean {
+    return !this.auth.isDemoViewer();
+  }
+
+  /** Invite list for real accounts, showing where each unit and team sits in the tree. */
+  get inviteDepartmentOptions(): Array<{ id: string; label: string }> {
+    return this.departmentTree
+      .filter((d) => d.isActive !== false)
+      .map((d) => ({ id: d.id, label: ndDepartmentPath(this.departmentTree, d.id) }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  get showBusinesses(): boolean {
+    return this.auth.isPlatformAdmin() && !this.auth.isDemoViewer();
+  }
+
+  businessRole(role: string): string {
+    return role === 'super_admin' ? 'Admin' : role.charAt(0).toUpperCase() + role.slice(1);
+  }
+
+  /** Esc closes the set password box. The department picker closes itself. */
+  @HostListener('window:keydown.escape')
+  onEscape(): void {
+    if (this.resetPasswordUserId) this.cancelResetPassword();
+  }
+
+  departmentSummary(user: AdminUser): string {
+    const ids = user.departmentIds ?? [];
+    if (!ids.length) return 'No department';
+    const first = this.departmentTree.find((d) => d.id === ids[0])?.name ?? '1 department';
+    return ids.length > 1 ? `${first} +${ids.length - 1}` : first;
+  }
+
+  departmentSummaryTitle(user: AdminUser): string {
+    return (user.departmentIds ?? []).map((id) => ndDepartmentPath(this.departmentTree, id)).join('\n');
+  }
+
+  async saveUserDepartments(ids: string[]): Promise<void> {
+    const user = this.departmentPickerUser;
+    if (!user || this.savingDepartmentPicker) return;
+    this.savingDepartmentPicker = true;
+    this.error = '';
+    const res = await this.api.updateUser(user.id, { departmentIds: ids });
+    this.savingDepartmentPicker = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Failed to update departments';
+      return;
+    }
+    const idx = this.users.findIndex((u) => u.id === user.id);
+    if (idx >= 0) this.users[idx] = { ...this.users[idx], departmentIds: ids };
+    this.departmentPickerUser = null;
   }
 
   /**

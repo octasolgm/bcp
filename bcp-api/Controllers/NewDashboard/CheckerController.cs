@@ -18,7 +18,7 @@ public class CheckerController(
     [HttpGet("queue")]
     public async Task<IActionResult> Queue(CancellationToken ct)
     {
-        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "checker", "reviewer");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "checker", "reviewer");
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
@@ -26,6 +26,7 @@ public class CheckerController(
             .Where(r => r.Status == "submitted_for_review");
         if (demoCtx.Enabled)
             runsQ = NdDemoDataFilters.ApplyToAnalysisRuns(runsQ, demoCtx);
+        runsQ = runsQ.ApplyToRuns(db, await NdDepartmentAccess.ResolveAsync(db, profile, demoCtx, ct));
         var runs = await runsQ
             .OrderByDescending(r => r.SubmittedToCheckerAt)
             .ToListAsync(ct);
@@ -36,7 +37,7 @@ public class CheckerController(
     [HttpGet("history")]
     public async Task<IActionResult> History(CancellationToken ct)
     {
-        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "checker");
+        var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "checker");
         if (error != null) return error;
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
@@ -44,6 +45,7 @@ public class CheckerController(
             .Where(r => r.Status == "checker_approved" || r.Status == "reviewer_approved");
         if (demoCtx.Enabled)
             runsQ = NdDemoDataFilters.ApplyToAnalysisRuns(runsQ, demoCtx);
+        runsQ = runsQ.ApplyToRuns(db, await NdDepartmentAccess.ResolveAsync(db, profile, demoCtx, ct));
         var runs = await runsQ
             .OrderByDescending(r => r.CheckerReviewedAt ?? r.UpdatedAt)
             .Take(50)

@@ -210,7 +210,7 @@
                         {{ creditsFor === item.workspace.id ? 'Hide credits' : 'Credits' }}
                       </button>
                       <button type="button" class="btn-secondary btn-sm" (click)="toggleSettings(item)">
-                        {{ settingsFor === item.workspace.id ? 'Hide settings' : 'Business settings' }}
+                        {{ settingsFor === item.workspace.id ? 'Hide settings' : 'Settings' }}
                       </button>
                       <button type="button" class="btn-secondary btn-sm" (click)="startEdit(item)">Rename</button>
                       @if (!item.workspace.isDefault) {
@@ -261,6 +261,7 @@
                                 [workspaceId]="item.workspace.id"
                                 [actionsEnabled]="item.workspace.actionsEnabled"
                                 [embeddingsEnabled]="item.workspace.embeddingsEnabled"
+                                [editable]="true"
                                 (changed)="onModulesChanged(item, $event)"
                               />
                             </section>
@@ -529,20 +530,161 @@
                 @if (membersFor === item.workspace.id) {
                   <tr class="members-row ws-detail-row">
                     <td colspan="8">
-                      @if (membersLoading) {
-                        <span class="muted">Loading users…</span>
-                      } @else if (!members.length) {
-                        <span class="muted">No users in {{ membersWorkspaceName }} yet.</span>
-                      } @else {
-                        <ul class="member-list">
-                          @for (m of members; track m.id) {
-                            <li>
-                              <strong>{{ m.fullName }}</strong>
-                              <span class="muted">{{ roleLabel(m) }}{{ m.isActive ? '' : ' · deactivated' }}</span>
-                            </li>
+                      <div class="ws-detail">
+                        <section class="mu-card" [attr.aria-label]="'Users of ' + item.workspace.name">
+                          <header class="mu-head">
+                            <div>
+                              <h3>Users</h3>
+                              <p class="muted">{{ members.length }} in {{ item.workspace.name }}</p>
+                            </div>
+                            <div class="mu-head-actions">
+                              <button type="button" class="btn-secondary btn-sm" [attr.aria-expanded]="memberFormMode === 'existing'" (click)="openMemberForm('existing')">Add existing user</button>
+                              <button type="button" class="btn-primary btn-sm" [attr.aria-expanded]="memberFormMode === 'new'" (click)="openMemberForm('new')">Create new user</button>
+                            </div>
+                          </header>
+
+                          @if (memberFormMode === 'existing') {
+                            <div class="mu-form">
+                              <div class="field mu-form-wide">
+                                <span>Users to add to {{ item.workspace.name }}</span>
+                                <app-nd-typeahead-picker
+                                  [options]="existingUserOptions"
+                                  placeholder="Type a name or email"
+                                  emptyLabel="Every user is already in this business"
+                                  [busy]="addingMember"
+                                  [roleOptions]="memberRoleOptions"
+                                  (addWithRoles)="addExistingMembers(item, $event)"
+                                />
+                              </div>
+                            </div>
                           }
-                        </ul>
-                      }
+
+                          @if (memberFormMode === 'new') {
+                            <form class="mu-form" (ngSubmit)="addMember(item)" autocomplete="off">
+                              <label class="field">
+                                <span>Full name</span>
+                                <input [(ngModel)]="newMemberName" name="newMemberName" autocomplete="off" required />
+                              </label>
+                              <label class="field">
+                                <span>Email</span>
+                                <input type="email" [(ngModel)]="newMemberEmail" name="newMemberEmail" autocomplete="off" placeholder="name@bank.com" required />
+                              </label>
+                              <label class="field">
+                                <span>Role</span>
+                                <select [(ngModel)]="newMemberRole" name="newMemberRole">
+                                  <option value="maker">Maker</option>
+                                  <option value="checker">Checker</option>
+                                  <option value="reviewer">Reviewer</option>
+                                  <option value="super_admin">Admin</option>
+                                </select>
+                              </label>
+                              <label class="field">
+                                <span>Initial password (optional)</span>
+                                <input type="password" [(ngModel)]="newMemberPassword" name="newMemberPassword" autocomplete="new-password" minlength="6" placeholder="Min 6 characters" />
+                              </label>
+                              <div class="mu-form-actions">
+                                <button type="submit" class="btn-primary btn-sm" [disabled]="addingMember || !newMemberName.trim() || !newMemberEmail.trim()">
+                                  {{ addingMember ? 'Adding…' : 'Add user' }}
+                                </button>
+                                <span class="muted">If this email already has an account, that person is added here and keeps their password.</span>
+                              </div>
+                            </form>
+                          }
+
+                          @if (members.length) {
+                            <div class="mu-toolbar">
+                              <input
+                                type="search"
+                                class="filter-search"
+                                [(ngModel)]="memberSearch"
+                                name="memberSearch-{{ item.workspace.id }}"
+                                placeholder="Search users…"
+                                aria-label="Search users"
+                              />
+                              <select class="filter-select" [(ngModel)]="memberRoleFilter" name="memberRoleFilter-{{ item.workspace.id }}" aria-label="Filter by role">
+                                <option value="">All roles</option>
+                                <option value="super_admin">Admin</option>
+                                <option value="maker">Maker</option>
+                                <option value="checker">Checker</option>
+                                <option value="reviewer">Reviewer</option>
+                              </select>
+                              <span class="filter-count">{{ visibleMembers.length }} of {{ members.length }}</span>
+                            </div>
+                          }
+
+                          @if (membersLoading) {
+                            <p class="muted ws-empty">Loading users…</p>
+                          } @else if (!members.length) {
+                            <p class="muted ws-empty">No users in {{ membersWorkspaceName }} yet.</p>
+                          } @else if (!visibleMembers.length) {
+                            <p class="muted ws-empty">No users match.</p>
+                          } @else {
+                            <div class="mu-table-wrap">
+                              <table class="mu-table">
+                                <thead>
+                                  <tr>
+                                    <th>Name</th>
+                                    <th>Role here</th>
+                                    <th>Home business</th>
+                                    <th>Status</th>
+                                    <th class="mu-col-actions">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  @for (m of visibleMembers; track m.id) {
+                                    <tr [class.row-saving]="savingMemberId === m.id">
+                                      <td class="mu-who">
+                                        <strong>{{ m.fullName }}</strong>
+                                        <span class="muted">{{ m.email || 'No email found' }}</span>
+                                      </td>
+                                      <td>
+                                        @if (m.canEdit) {
+                                          <select
+                                            class="filter-select"
+                                            [ngModel]="m.role"
+                                            name="memberRole-{{ m.id }}"
+                                            [attr.aria-label]="'Role of ' + m.fullName"
+                                            [disabled]="savingMemberId === m.id"
+                                            (ngModelChange)="setMemberRole(item, m, $event)"
+                                          >
+                                            <option value="maker">Maker</option>
+                                            <option value="checker">Checker</option>
+                                            <option value="reviewer">Reviewer</option>
+                                            <option value="super_admin">Admin</option>
+                                          </select>
+                                        } @else {
+                                          {{ roleLabel(m) }}
+                                        }
+                                      </td>
+                                      <td>
+                                        @if (m.isGuest) {
+                                          {{ m.homeWorkspaceName }}
+                                        } @else {
+                                          <span class="muted">This business</span>
+                                        }
+                                      </td>
+                                      <td><app-nd-status-badge [status]="m.accountStatus || (m.isActive ? 'active' : 'deactivated')" /></td>
+                                      <td class="mu-col-actions">
+                                        @if (m.canEdit) {
+                                          <button type="button" class="btn-secondary btn-sm" [disabled]="savingMemberId === m.id" (click)="toggleMemberActive(item, m)">
+                                            {{ m.isActive ? 'Deactivate' : 'Activate' }}
+                                          </button>
+                                          @if (m.isGuest) {
+                                            <button type="button" class="btn-secondary btn-sm" [disabled]="savingMemberId === m.id" (click)="removeMember(item, m)">Remove</button>
+                                          }
+                                        } @else {
+                                          <span class="muted">Not editable here</span>
+                                        }
+                                      </td>
+                                    </tr>
+                                  }
+                                </tbody>
+                              </table>
+                            </div>
+                          }
+                          <p class="muted mu-note">To set departments, click Open on this business, then go to User management.</p>
+                        </section>
+                      </div>
                     </td>
                   </tr>
                 }

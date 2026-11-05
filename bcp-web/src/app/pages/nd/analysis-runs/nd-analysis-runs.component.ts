@@ -7,6 +7,8 @@ import { NdWorkspaceNavService } from '../../../services/nd/nd-workspace-nav.ser
 import { finalizeEmbedToastNote } from '../../../../lib/nd/finalize-embed-toast';
 import { bumpsForAnalysisRunSoftDelete } from '../../../../lib/nd/nav-badge-bumps';
 import { NdApiService } from '../../../services/nd/nd-api.service';
+import { NdRunDepartmentsComponent } from '../../../components/nd/nd-run-departments.component';
+import type { NdPickerDepartment } from '../../../components/nd/nd-department-picker.component';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { ToastService } from '../../../services/toast.service';
 import { NdWorkspaceTabsComponent } from '../../../components/nd/nd-workspace-tabs.component';
@@ -47,10 +49,12 @@ import {
 
 type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'status' | 'maker';
 
+const NO_DEPARTMENTS: string[] = [];
+
 @Component({
   selector: 'app-nd-analysis-runs',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
+  imports: [NdRunDepartmentsComponent, CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
   templateUrl: './nd-analysis-runs.component.html',
   styleUrls: ['./nd-analysis-runs.component.scss', '../nd-shared.scss'],
 })
@@ -100,6 +104,7 @@ export class NdAnalysisRunsComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     await this.auth.refreshProfile();
+    void this.loadRunDepartments();
 
     this.route.queryParamMap.subscribe((params) => {
       const role = this.auth.getRole();
@@ -315,6 +320,23 @@ export class NdAnalysisRunsComponent implements OnInit {
   get canCreate(): boolean {
     const role = this.auth.getRole();
     return role === 'maker' || role === 'super_admin';
+  }
+
+  // ---- which departments can see each analysis (workspace admins) ----
+  runDepartmentTree: NdPickerDepartment[] = [];
+  runDepartmentMap: Record<string, string[]> = {};
+  runDepartmentsReady = false;
+
+  private async loadRunDepartments(): Promise<void> {
+    if (this.auth.getRole() !== 'super_admin' || this.auth.isDemoViewer()) return;
+    const [departments, map] = await Promise.all([this.api.getDepartments(), this.api.getAnalysisRunDepartmentMap()]);
+    if (departments.success && departments.data) this.runDepartmentTree = departments.data as NdPickerDepartment[];
+    if (map.success && map.data) this.runDepartmentMap = map.data;
+    this.runDepartmentsReady = true;
+  }
+
+  runDepartmentIds(runId: string): string[] {
+    return this.runDepartmentMap[runId] ?? NO_DEPARTMENTS;
   }
 
   get newAnalysisLink(): string[] {

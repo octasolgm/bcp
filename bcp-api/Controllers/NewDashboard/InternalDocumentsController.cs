@@ -45,10 +45,12 @@ public class InternalDocumentsController(
         await sectionService.RecoverAllStaleSectionExtractsAsync(ct);
         await parseService.RecoverAllStaleParsesAsync(ct);
 
+        var departmentScope = await NdDepartmentAccess.ResolveAsync(appDb, profile!, demoCtx, ct);
         var internalDocs = await NdDemoDataFilters.ApplyToStoredDocuments(
                 appDb.StoredDocuments.AsNoTracking()
                     .Where(d => (d.DocKind == "document" || d.DocKind == "internal") && d.IsHidden == hiddenOnly),
                 demoCtx)
+            .ApplyToDocuments(appDb, departmentScope)
             .ToListAsync(ct);
 
         var gapEvidenceDocs = await NdDemoDataFilters.ApplyToStoredDocuments(
@@ -580,6 +582,8 @@ public class InternalDocumentsController(
         foreach (var departmentId in wanted.Where(d => current.All(l => l.DepartmentId != d)))
             appDb.NdInternalDocumentDepartments.Add(new NdInternalDocumentDepartment { StoredDocumentId = id, DepartmentId = departmentId });
         await appDb.SaveChangesAsync(ct);
+        Reguliq.Api.Infrastructure.NewDashboard.NdDepartmentAccessFilter.Forget(
+            HttpContext.RequestServices.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>(), id);
         dashboardCache.Invalidate();
         return Ok(new { success = true, data = wanted });
     }

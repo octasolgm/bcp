@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Reguliq.Api.Data;
 using Reguliq.Api.Data.NewDashboard.Entities;
 using Reguliq.Api.Infrastructure.NewDashboard;
+using Reguliq.Api.Services.NewDashboard;
 using Reguliq.Api.Services.NewDashboard.Demo;
 
 namespace Reguliq.Api.Controllers.NewDashboard;
@@ -264,7 +265,11 @@ public abstract class NdControllerBase : ControllerBase
             .Include(p => p.Department)
             .FirstOrDefaultAsync(p => p.Id == userId, ct);
 
-        if (profile != null) cache?.Set(key, CloneAuthProfile(profile), AuthProfileCacheTtl);
+        if (profile != null)
+        {
+            await NdWorkspaceMembers.ApplyToProfileAsync(db, profile, ct);
+            cache?.Set(key, CloneAuthProfile(profile), AuthProfileCacheTtl);
+        }
         return profile;
     }
 

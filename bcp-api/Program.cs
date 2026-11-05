@@ -54,7 +54,7 @@ static void LogDatabaseUrlHint(string connectionString)
 
 builder.Services.AddSingleton(dbConfig);
 
-builder.Services.AddControllers()
+builder.Services.AddControllers(o => o.Filters.Add<Reguliq.Api.Infrastructure.NewDashboard.NdDepartmentAccessFilter>())
     .AddJsonOptions(o => o.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase);
 
 builder.Services.AddEndpointsApiExplorer();

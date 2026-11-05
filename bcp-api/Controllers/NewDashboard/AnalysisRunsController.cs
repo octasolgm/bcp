@@ -153,7 +153,7 @@ public class AnalysisRunsController(
 
         var q = NdDemoDataFilters.ApplyToAnalysisRuns(
             db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != DeletedStatus),
-            demoCtx);
+            demoCtx).ApplyToRuns(db, await NdDepartmentAccess.ResolveAsync(db, profile!, demoCtx, ct));
 
         if (profile!.Role == "maker" || mineOnly)
             q = NdDemoDataFilters.ApplyMakerRunScope(q, profile.Id, profile.Role, mineOnly, demoCtx);

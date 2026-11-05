@@ -126,15 +126,18 @@ public class ActionPlanInsightsController(
         if (error != null) return error;
 
         var ctx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var departmentScope = await NdDepartmentAccess.ResolveAsync(db, profile!, ctx, ct);
         var runIds = await NdDemoDataFilters
             .ApplyToAnalysisRuns(db.NdAnalysisRuns.AsNoTracking().Where(r => r.DeletedAt == null && r.Status != "deleted"), ctx)
+            .ApplyToRuns(db, departmentScope)
             .Select(r => r.Id)
             .ToListAsync(ct);
+        var myDepartmentIds = await NdDepartmentAccess.UserDepartmentIdsAsync(db, profile!, ct);
 
         var plans = runIds.Count == 0
             ? []
             : await NdActionPlanInbox
-                .AssignedTo(db, db.NdAnalysisActionPlans.AsNoTracking().Where(p => runIds.Contains(p.AnalysisRunId)), profile!.Id, profile.DepartmentId)
+                .AssignedTo(db, db.NdAnalysisActionPlans.AsNoTracking().Where(p => runIds.Contains(p.AnalysisRunId)), profile!.Id, myDepartmentIds)
                 .ToListAsync(ct);
 
         var counts = new
@@ -262,7 +265,7 @@ public class ActionPlanInsightsController(
         var ctx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
         var baseQuery = NdDemoDataFilters.ApplyToAnalysisRuns(
             db.NdAnalysisRuns.AsNoTracking().Where(r => r.DeletedAt == null && r.Status != "deleted"),
-            ctx);
+            ctx).ApplyToRuns(db, await NdDepartmentAccess.ResolveAsync(db, profile!, ctx, ct));
 
         var role = (profile!.Role ?? "").Trim().ToLowerInvariant();
         var runsQuery = role switch
@@ -291,13 +294,15 @@ public class ActionPlanInsightsController(
         if (error != null) return error;
 
         var ctx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
+        var departmentScope = await NdDepartmentAccess.ResolveAsync(db, profile!, ctx, ct);
         var runIds = await NdDemoDataFilters
             .ApplyToAnalysisRuns(db.NdAnalysisRuns.AsNoTracking().Where(r => r.DeletedAt == null && r.Status != "deleted"), ctx)
+            .ApplyToRuns(db, departmentScope)
             .Select(r => r.Id)
             .ToListAsync(ct);
 
         var myId = profile!.Id;
-        var myDept = profile.DepartmentId;
+        var myDepts = await NdDepartmentAccess.UserDepartmentIdsAsync(db, profile!, ct);
 
         var reviews = runIds.Count == 0
             ? []
@@ -305,7 +310,7 @@ public class ActionPlanInsightsController(
                 .Where(r => runIds.Contains(r.AnalysisRunId))
                 .Where(r =>
                     r.AssigneeUserId == myId
-                    || (myDept != null && r.AssigneeDepartmentId == myDept)
+                    || (r.AssigneeDepartmentId != null && myDepts.Contains(r.AssigneeDepartmentId.Value))
                     || r.ReviewerId == myId)
                 .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync(ct);
@@ -336,7 +341,7 @@ public class ActionPlanInsightsController(
             var plan = plans.GetValueOrDefault(r.ActionPlanId);
             var clause = ClauseLabel(snapshots.GetValueOrDefault(r.AnalysisPointId));
             var sentByMe = r.ReviewerId == myId;
-            var addressedToMe = r.AssigneeUserId == myId || (myDept != null && r.AssigneeDepartmentId == myDept);
+            var addressedToMe = r.AssigneeUserId == myId || (r.AssigneeDepartmentId is Guid toDept && myDepts.Contains(toDept));
             return new
             {
                 id = r.Id,
@@ -536,10 +541,10 @@ public class ActionPlanInsightsController(
         var emails = await FetchAuthEmailsAsync(ct);
         // Profiles are not tenant-filtered globally; assignees come from this workspace only.
         var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? WorkspaceScope.DefaultWorkspaceId;
-        var profiles = await db.NdProfiles.AsNoTracking()
-            .Where(p => p.IsActive && p.TenantId == workspaceId)
+        var profiles = (await NdWorkspaceMembers.ProfilesInWorkspaceAsync(db, workspaceId, ct))
+            .Where(p => p.IsActive)
             .OrderBy(p => p.FullName)
-            .ToListAsync(ct);
+            .ToList();
         profiles = NdDemoDataFilters.FilterProfiles(profiles, ctx, emails);
 
         return Ok(new
@@ -593,7 +598,7 @@ public class ActionPlanInsightsController(
         var ctx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
         var query = NdDemoDataFilters.ApplyToAnalysisRuns(
             db.NdAnalysisRuns.AsNoTracking().Where(r => r.DeletedAt == null),
-            ctx);
+            ctx).ApplyToRuns(db, await NdDepartmentAccess.ResolveAsync(db, profile, ctx, ct));
 
         if (string.Equals(profile.Role, "maker", StringComparison.OrdinalIgnoreCase))
             query = query.Where(r => r.CreatedBy == profile.Id);
