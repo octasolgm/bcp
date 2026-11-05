@@ -17,14 +17,18 @@ import { NdApiService } from '../../services/nd/nd-api.service';
           <strong>Actions</strong>
           <span class="mod-hint">Show corrective actions in analysis reports. Off hides them; gaps and saved actions are kept.</span>
         </span>
-        <input
-          type="checkbox"
-          role="switch"
-          class="mod-switch"
-          [checked]="actionsEnabled !== false"
-          [disabled]="saving || !editable"
-          (change)="set({ actionsEnabled: $any($event.target).checked })"
-        />
+        @if (editable) {
+          <input
+            type="checkbox"
+            role="switch"
+            class="mod-switch"
+            [checked]="actionsEnabled !== false"
+            [disabled]="saving"
+            (change)="set({ actionsEnabled: $any($event.target).checked })"
+          />
+        } @else {
+          <span class="mod-value" [class.mod-value-on]="actionsEnabled !== false">{{ actionsEnabled !== false ? 'On' : 'Off' }}</span>
+        }
       </label>
       <label class="mod-row" [class.mod-off]="actionsEnabled === false">
         <span class="mod-text">
@@ -34,14 +38,18 @@ import { NdApiService } from '../../services/nd/nd-api.service';
             @if (actionsEnabled === false) { Needs Actions on. }
           </span>
         </span>
-        <input
-          type="checkbox"
-          role="switch"
-          class="mod-switch"
-          [checked]="actionsEnabled !== false && embeddingsEnabled !== false"
-          [disabled]="saving || !editable || actionsEnabled === false"
-          (change)="set({ embeddingsEnabled: $any($event.target).checked })"
-        />
+        @if (editable) {
+          <input
+            type="checkbox"
+            role="switch"
+            class="mod-switch"
+            [checked]="actionsEnabled !== false && embeddingsEnabled !== false"
+            [disabled]="saving || actionsEnabled === false"
+            (change)="set({ embeddingsEnabled: $any($event.target).checked })"
+          />
+        } @else {
+          <span class="mod-value" [class.mod-value-on]="actionsEnabled !== false && embeddingsEnabled !== false">{{ actionsEnabled !== false && embeddingsEnabled !== false ? 'On' : 'Off' }}</span>
+        }
       </label>
       @if (error) {
         <p class="nd-error mod-msg">{{ error }}</p>
@@ -62,6 +70,8 @@ import { NdApiService } from '../../services/nd/nd-api.service';
       .mod-text { display: flex; flex-direction: column; gap: 0.15rem; }
       .mod-hint { font-size: 0.8125rem; color: var(--muted-foreground, var(--muted)); }
       .mod-msg { margin: 0.25rem 0 0; font-size: 0.8125rem; }
+      .mod-value { flex: none; font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); }
+      .mod-value-on { color: var(--accent); }
       .mod-switch {
         appearance: none; flex: none; width: 2.4rem; height: 1.35rem; border-radius: 999px;
         background: var(--border); position: relative; cursor: pointer; transition: background 0.15s ease;
