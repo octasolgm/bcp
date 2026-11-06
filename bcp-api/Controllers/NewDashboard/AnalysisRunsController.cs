@@ -514,7 +514,7 @@ public class AnalysisRunsController(
             return NotFound(new { success = false, message = "Not found" });
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
-        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, demoCtx))
+        if (!await NdDepartmentAccess.MakerCanReadRunAsync(db, profile!, id, run.CreatedBy, demoCtx, ct))
             return StatusCode(403, new { success = false, message = "Forbidden" });
         if (!NdDemoDataFilters.CanAccessCreatedBy(run.CreatedBy, demoCtx))
             return NotFound(new { success = false, message = "Not found" });
@@ -596,7 +596,7 @@ public class AnalysisRunsController(
         if (run.Status == DeletedStatus)
             return NotFound(new { success = false, message = "Not found" });
         var statusDemoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
-        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, statusDemoCtx))
+        if (!await NdDepartmentAccess.MakerCanReadRunAsync(db, profile!, id, run.CreatedBy, statusDemoCtx, ct))
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
         if (await NdStaleRunRecovery.TryRecoverRunAsync(id, db, runCancellation, logger, ct))
@@ -754,7 +754,7 @@ public class AnalysisRunsController(
         if (run == null || run.Status == DeletedStatus)
             return NotFound(new { success = false, message = "Not found" });
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
-        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, demoCtx))
+        if (!await NdDepartmentAccess.MakerCanReadRunAsync(db, profile!, id, run.CreatedBy, demoCtx, ct))
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
         var requested = (ids ?? "")

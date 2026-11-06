@@ -399,7 +399,10 @@ public static class NdRunEnrichmentHelper
         if (departmentScope != null)
             runsQ = runsQ.ApplyToRuns(db, departmentScope);
         if (mineOnly && profileId.HasValue)
-            runsQ = runsQ.Where(r => r.CreatedBy == profileId.Value);
+            // Makers: their own runs plus runs shared with their departments (unrestricted users: their own only).
+            runsQ = departmentScope is { Unrestricted: false } && departmentScope.ProfileId == profileId.Value
+                ? runsQ.ApplyMakerVisibility(db, departmentScope)
+                : runsQ.Where(r => r.CreatedBy == profileId.Value);
 
         var runMeta = await runsQ
             .GroupBy(_ => 1)
@@ -573,7 +576,10 @@ public static class NdRunEnrichmentHelper
         if (departmentScope != null)
             runsQ = runsQ.ApplyToRuns(db, departmentScope);
         if (mineOnly && profileId.HasValue)
-            runsQ = runsQ.Where(r => r.CreatedBy == profileId.Value);
+            // Makers: their own runs plus runs shared with their departments (unrestricted users: their own only).
+            runsQ = departmentScope is { Unrestricted: false } && departmentScope.ProfileId == profileId.Value
+                ? runsQ.ApplyMakerVisibility(db, departmentScope)
+                : runsQ.Where(r => r.CreatedBy == profileId.Value);
         var runIds = await runsQ.Select(r => r.Id).ToListAsync(ct);
 
         var result = new Dictionary<Guid, RunMetricCount>();

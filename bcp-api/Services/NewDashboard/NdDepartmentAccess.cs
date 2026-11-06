@@ -101,6 +101,15 @@ public static class NdDepartmentAccess
             .AnyAsync(l => l.AnalysisRunId == runId && ids.Contains(l.DepartmentId), ct);
     }
 
+    /// <summary>Whether this user may open (read) an analysis: everyone but makers may; a maker may open their own,
+    /// demo-scoped ones as before, and real makers also those shared with one of their departments.</summary>
+    public static async Task<bool> MakerCanReadRunAsync(
+        AppDbContext db, NdProfile profile, Guid runId, Guid? createdBy, NdDemoIsolationContext demoCtx, CancellationToken ct)
+    {
+        if (NdDemoDataFilters.MakerCanAccessRun(profile.Id, profile.Role, createdBy, demoCtx)) return true;
+        return profile.Role == "maker" && !demoCtx.ViewerIsDemo && await IsRunSharedWithAsync(db, profile, runId, ct);
+    }
+
     public static IQueryable<StoredDocument> ApplyToDocuments(this IQueryable<StoredDocument> query, AppDbContext db, NdDepartmentScope scope)
     {
         if (scope.Unrestricted) return query;

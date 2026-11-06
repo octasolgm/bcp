@@ -42,7 +42,7 @@ public class ResultsController(
         // a report currently with the checker/reviewer was still created inside that same
         // demo group, just not necessarily by this exact demo persona.
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
-        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, demoCtx))
+        if (!await NdDepartmentAccess.MakerCanReadRunAsync(db, profile!, runId, run.CreatedBy, demoCtx, ct))
             return StatusCode(403);
 
         // Template sync replays the seeded CBUAE x AML demo judgments over the run's points. Its own
@@ -395,7 +395,7 @@ public class ResultsController(
         if (run == null) return NotFound();
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
-        if (!NdDemoDataFilters.MakerCanAccessRun(profile!.Id, profile.Role, run.CreatedBy, demoCtx))
+        if (!await NdDepartmentAccess.MakerCanReadRunAsync(db, profile!, runId, run.CreatedBy, demoCtx, ct))
             return StatusCode(403);
 
         var points = await db.NdAnalysisPoints.AsNoTracking()
