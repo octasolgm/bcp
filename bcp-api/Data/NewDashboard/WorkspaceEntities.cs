@@ -65,6 +65,11 @@ public class NdWorkspace
     [Column("embeddings_enabled")]
     public bool EmbeddingsEnabled { get; set; } = true;
 
+    /// <summary>Integrations module (Pro): cloud storage connections (Google Drive, OneDrive, ...). Off by
+    /// default; only the platform super admin can turn it on.</summary>
+    [Column("integrations_enabled")]
+    public bool IntegrationsEnabled { get; set; }
+
     /// <summary>Upload limits in MB, set by the platform admin. Null = no workspace limit (the server's own
     /// 50 MB per-file cap still applies).</summary>
     [Column("max_document_mb")]

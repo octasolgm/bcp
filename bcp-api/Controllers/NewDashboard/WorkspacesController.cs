@@ -250,7 +250,7 @@ public partial class WorkspacesController(
         return Ok(new { success = true, data = new { dateFormatRegion = ws.DateFormatRegion } });
     }
 
-    public record ModulesRequest(bool? ActionsEnabled, bool? EmbeddingsEnabled);
+    public record ModulesRequest(bool? ActionsEnabled, bool? EmbeddingsEnabled, bool? IntegrationsEnabled = null);
 
     /// <summary>Turns this workspace's optional modules on or off. Actions off only hides corrective actions
     /// in reports; embeddings off stops finalize from generating corrected document copies. Only the platform
@@ -266,6 +266,7 @@ public partial class WorkspacesController(
 
         if (body.ActionsEnabled.HasValue) ws.ActionsEnabled = body.ActionsEnabled.Value;
         if (body.EmbeddingsEnabled.HasValue) ws.EmbeddingsEnabled = body.EmbeddingsEnabled.Value;
+        if (body.IntegrationsEnabled.HasValue) ws.IntegrationsEnabled = body.IntegrationsEnabled.Value;
         // Embeddings write resolved actions into documents, so they depend on the Actions module:
         // turning Actions off turns Embeddings off, and Embeddings cannot be on without Actions.
         if (!ws.ActionsEnabled)
@@ -278,7 +279,7 @@ public partial class WorkspacesController(
         await db.SaveChangesAsync(ct);
         await InvalidateMembersAsync(id, ct);
 
-        return Ok(new { success = true, data = new { actionsEnabled = ws.ActionsEnabled, embeddingsEnabled = ws.EmbeddingsEnabled } });
+        return Ok(new { success = true, data = new { actionsEnabled = ws.ActionsEnabled, embeddingsEnabled = ws.EmbeddingsEnabled, integrationsEnabled = ws.IntegrationsEnabled } });
     }
 
     public record UploadLimitsRequest(int? MaxDocumentMb, int? MaxUploadMb, int? MaxStorageMb);
@@ -674,6 +675,7 @@ public partial class WorkspacesController(
         dateFormatRegion = w.DateFormatRegion,
         actionsEnabled = w.ActionsEnabled,
         embeddingsEnabled = w.EmbeddingsEnabled,
+        integrationsEnabled = w.IntegrationsEnabled,
         maxDocumentMb = w.MaxDocumentMb,
         maxUploadMb = w.MaxUploadMb,
         maxStorageMb = w.MaxStorageMb,

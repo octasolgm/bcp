@@ -44,6 +44,7 @@ import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-work
               [workspaceId]="ws.id"
               [actionsEnabled]="ws.actionsEnabled"
               [embeddingsEnabled]="ws.embeddingsEnabled"
+              [integrationsEnabled]="ws.integrationsEnabled"
               [editable]="false"
             />
           </section>

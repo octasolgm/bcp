@@ -10,7 +10,26 @@
     </div>
   </div>
 
-  @if (loading && !providers.length) {
+  @if (!moduleOn) {
+    <div class="nd-catalog-body">
+      <section class="nd-card int-pro">
+        <span class="int-pro-chip">Pro</span>
+        <h2>Integrations are part of the Pro plan</h2>
+        <p>
+          Connect Google Drive, OneDrive and other cloud storage, then import PDF and Word files straight into your
+          Internal or Regulation documents.
+        </p>
+        <p class="nd-muted">
+          @if (isPlatformAdmin) {
+            Turn on the Integrations module for this business on
+            <a routerLink="/nd/admin/workspaces">Business workspaces</a>.
+          } @else {
+            Contact us to upgrade and turn on Integrations for your business.
+          }
+        </p>
+      </section>
+    </div>
+  } @else if (loading && !providers.length) {
     <p class="muted-loading">Loading integrations…</p>
   } @else if (error) {
     <p class="nd-error">{{ error }}</p>

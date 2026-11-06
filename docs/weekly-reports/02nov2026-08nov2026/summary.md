@@ -114,6 +114,12 @@ Tasks
 - Progress title in the blue top bar on New analysis now has colour: amber with a pulsing dot while an analysis starts or runs, green when complete, red when it failed, stopped or did not start
 - Demo accounts see no notice and no limits; demo runs skip the limit checks as before
 
+- New branch feature/integrations-module from release/2026.11.06.01
+- Integrations is now a business module (Pro), off by default; the platform super admin turns it on per business on Business workspaces, and Business settings shows it On or Off
+- Businesses that had already connected cloud storage keep Integrations on (only the Default workspace had one)
+- When off, the Integrations menu item shows a Pro tag and the page explains it is part of the Pro plan; the server refuses connect, browse and import, and a sign-in that comes back after the module was turned off is not saved
+- Query dictionary and synonyms left unchanged (shared platform list, platform super admin only), as decided
+- Tested signed in as platform super admin: Default workspace page works as before; in ABC the Pro tag, Pro page and server refusal all showed; Integrations switched on and off for the Limit test business; Business settings shows the Integrations row
 Bug fixes
 - A user still signed in when their business was deactivated saw every page fail; they are now signed out once and the sign-in page says the workspace has been deactivated
 - A user whose home business was deactivated but who also belongs to another active business was locked out; they now continue in the other business

@@ -58,6 +58,8 @@ type NavItem = {
   queryParams?: Record<string, string>;
   /** Show nav badge even when count is 0. */
   badgeAlways?: boolean;
+  /** Small label next to the name, e.g. "Pro" for a module this business has not turned on. */
+  tag?: string;
 };
 
 type NavGroup = {
@@ -1164,7 +1166,15 @@ export class NdShellComponent implements OnInit, OnDestroy {
     }
     // Connect cloud storage (Google Drive, ...) to import documents; real accounts only, never demo.
     if (!this.auth.isDemoViewer()) {
-      children.push({ id: 'admin-integrations', path: '/nd/admin/integrations', label: 'Integrations', icon: 'library' });
+      // Pro module: still listed when off so the business can see it exists, tagged "Pro".
+      const integrationsOn = this.auth.profile()?.workspace?.integrationsEnabled === true;
+      children.push({
+        id: 'admin-integrations',
+        path: '/nd/admin/integrations',
+        label: 'Integrations',
+        icon: 'library',
+        ...(integrationsOn ? {} : { tag: 'Pro' }),
+      });
     }
     if (platform) {
       children.push({ id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' });

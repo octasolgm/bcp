@@ -15,6 +15,9 @@ export type RunGapEvidenceUpload = {
   attachments: PointGapAttachment[];
 };
 
+/** A workspace's optional modules. */
+export type NdWorkspaceModules = { actionsEnabled: boolean; embeddingsEnabled: boolean; integrationsEnabled: boolean };
+
 /** Fired on window when the API says the user's business has been deactivated (the shell signs them out). */
 export const ND_WORKSPACE_DEACTIVATED_EVENT = 'nd-workspace-deactivated';
 
@@ -425,6 +428,8 @@ export type NdWorkspaceSummary = {
   actionsEnabled?: boolean;
   /** Embeddings module (default on). Off means finalize generates no corrected document copies. */
   embeddingsEnabled?: boolean;
+  /** Integrations module (Pro, default off): cloud storage connections such as Google Drive. */
+  integrationsEnabled?: boolean;
   /** Upload limits in MB set by the platform admin; null/undefined = no limit. */
   maxDocumentMb?: number | null;
   maxUploadMb?: number | null;
@@ -1285,9 +1290,12 @@ export class NdApiService {
     );
   }
 
-  /** Turns a workspace's Actions / Embeddings modules on or off (omit one to leave it unchanged). */
-  setWorkspaceModules(workspaceId: string, modules: { actionsEnabled?: boolean; embeddingsEnabled?: boolean }) {
-    return this.request<{ actionsEnabled: boolean; embeddingsEnabled: boolean }>(
+  /** Turns a workspace's Actions / Embeddings / Integrations modules on or off (omit one to leave it unchanged). */
+  setWorkspaceModules(
+    workspaceId: string,
+    modules: { actionsEnabled?: boolean; embeddingsEnabled?: boolean; integrationsEnabled?: boolean },
+  ) {
+    return this.request<NdWorkspaceModules>(
       'PUT',
       `/nd/workspaces/${workspaceId}/modules`,
       modules,

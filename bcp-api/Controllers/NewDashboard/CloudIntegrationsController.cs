@@ -37,6 +37,20 @@ public class CloudIntegrationsController(
     private async Task<bool> IsDemoAsync(JwtUser user, CancellationToken ct) =>
         (await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct)).ViewerIsDemo;
 
+    /// <summary>Integrations is a Pro module the platform super admin turns on per business (off by default).</summary>
+    private Task<bool> ModuleEnabledAsync(Guid workspaceId, CancellationToken ct) =>
+        db.NdWorkspaces.AsNoTracking().AnyAsync(w => w.Id == workspaceId && w.IntegrationsEnabled, ct);
+
+    private Task<bool> CurrentModuleEnabledAsync(NdProfile? profile, CancellationToken ct) =>
+        ModuleEnabledAsync(WorkspaceScope.CurrentWorkspaceId ?? profile?.TenantId ?? WorkspaceScope.DefaultWorkspaceId, ct);
+
+    private IActionResult ModuleOff() => StatusCode(403, new
+    {
+        success = false,
+        code = "module_disabled",
+        message = "Integrations are part of the Pro plan. Contact us to turn them on for your business.",
+    });
+
     private static object MapConnection(NdCloudConnection c) => new
     {
         id = c.Id,
@@ -76,6 +90,7 @@ public class CloudIntegrationsController(
         var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
         if (await IsDemoAsync(user, ct)) return Ok(new { success = true, data = Array.Empty<object>() });
+        if (!await CurrentModuleEnabledAsync(profile, ct)) return ModuleOff();
 
         var connections = await db.NdCloudConnections.AsNoTracking().ToListAsync(ct);
         var platformAdmin = IsPlatformAdmin(profile);
@@ -99,6 +114,7 @@ public class CloudIntegrationsController(
         if (error != null) return error;
         if (await IsDemoAsync(user, ct))
             return StatusCode(403, new { success = false, message = "Cloud storage is not available for demo accounts." });
+        if (!await CurrentModuleEnabledAsync(profile, ct)) return ModuleOff();
 
         var p = registry.Get(provider);
         if (p == null) return NotFound(new { success = false, message = "Unknown storage service." });
@@ -136,6 +152,9 @@ public class CloudIntegrationsController(
         if (cache.TryGetValue("nd:cloud-nonce:" + verified.Nonce, out _))
             return ResultPage(verified.ReturnOrigin, provider, false, "This sign-in link was already used. Close this window and try again.");
         cache.Set("nd:cloud-nonce:" + verified.Nonce, true, TimeSpan.FromMinutes(15));
+
+        if (!await ModuleEnabledAsync(verified.TenantId, ct))
+            return ResultPage(verified.ReturnOrigin, provider, false, "Integrations are not turned on for this business. Close this window.");
 
         if (!string.IsNullOrEmpty(error))
             return ResultPage(verified.ReturnOrigin, provider, false,
@@ -207,9 +226,10 @@ public class CloudIntegrationsController(
         [FromQuery] string? q,
         CancellationToken ct)
     {
-        var (_, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
+        var (browseProfile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
         if (await IsDemoAsync(user, ct)) return StatusCode(403, new { success = false, message = "Not available for demo accounts." });
+        if (!await CurrentModuleEnabledAsync(browseProfile, ct)) return ModuleOff();
 
         var row = await db.NdCloudConnections.FirstOrDefaultAsync(c => c.Id == id, ct);
         var p = row == null ? null : registry.Get(row.Provider);
@@ -238,6 +258,7 @@ public class CloudIntegrationsController(
         var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
         if (await IsDemoAsync(user, ct)) return StatusCode(403, new { success = false, message = "Not available for demo accounts." });
+        if (!await CurrentModuleEnabledAsync(profile, ct)) return ModuleOff();
 
         var kind = (body?.Kind ?? "internal").Trim().ToLowerInvariant();
         if (kind is not ("internal" or "regulation"))

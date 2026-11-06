@@ -162,7 +162,7 @@
                     >
                       <ng-container *ngTemplateOutlet="navIcon; context: { $implicit: child.icon }" />
                       <span class="nav-label-wrap">
-                        <span class="nav-label-text">{{ child.label }}</span>
+                        <span class="nav-label-text">{{ child.label }}@if (child.tag) { <span class="nav-tag">{{ child.tag }}</span> }</span>
                         @if (showNavPass2Subtitle(child)) {
                           <span class="nav-pass2-llm">Pass 2: {{ pass2LlmSummary }}</span>
                         }

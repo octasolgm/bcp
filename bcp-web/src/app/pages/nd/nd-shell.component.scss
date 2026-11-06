@@ -1045,3 +1045,19 @@
     transform: rotate(360deg);
   }
 }
+
+/* "Pro" next to a menu item for a module this business has not turned on. */
+.nav-tag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #7c3aed;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}

@@ -10,6 +10,7 @@ import {
   type NdWorkspaceListItem,
   type NdPlatformUser,
   type NdWorkspaceMember,
+  type NdWorkspaceModules,
 } from '../../../services/nd/nd-api.service';
 import { RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
@@ -361,9 +362,10 @@ export class NdAdminWorkspacesComponent implements OnInit {
     if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
   }
 
-  onModulesChanged(item: NdWorkspaceListItem, modules: { actionsEnabled: boolean; embeddingsEnabled: boolean }): void {
+  onModulesChanged(item: NdWorkspaceListItem, modules: NdWorkspaceModules): void {
     item.workspace.actionsEnabled = modules.actionsEnabled;
     item.workspace.embeddingsEnabled = modules.embeddingsEnabled;
+    item.workspace.integrationsEnabled = modules.integrationsEnabled;
     // The platform admin may be acting inside this workspace: keep their own session's flags current too.
     if (this.auth.profile()?.workspace?.id === item.workspace.id) void this.auth.refreshProfile(true);
   }

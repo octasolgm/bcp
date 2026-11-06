@@ -166,6 +166,21 @@ public static class NdWorkspaceSchemaBootstrap
               ADD COLUMN IF NOT EXISTS actions_enabled BOOLEAN NOT NULL DEFAULT TRUE;
             ALTER TABLE nd_workspaces
               ADD COLUMN IF NOT EXISTS embeddings_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+            -- Integrations module (Pro), off by default. Added once: a business that already connected
+            -- cloud storage keeps it on, so nothing it set up disappears.
+            DO $$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'nd_workspaces' AND column_name = 'integrations_enabled'
+              ) THEN
+                ALTER TABLE nd_workspaces ADD COLUMN integrations_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'nd_cloud_connections') THEN
+                  UPDATE nd_workspaces w SET integrations_enabled = TRUE
+                  WHERE EXISTS (SELECT 1 FROM nd_cloud_connections c WHERE c.tenant_id = w.id);
+                END IF;
+              END IF;
+            END $$;
             -- Upload limits in MB (NULL = no workspace limit).
             ALTER TABLE nd_workspaces ADD COLUMN IF NOT EXISTS max_document_mb INT NULL;
             ALTER TABLE nd_workspaces ADD COLUMN IF NOT EXISTS max_upload_mb INT NULL;

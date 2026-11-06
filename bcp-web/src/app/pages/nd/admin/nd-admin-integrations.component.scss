@@ -112,3 +112,36 @@
 .int-fail {
   color: var(--critical, #c62828);
 }
+
+/* Shown when the business does not have the Integrations (Pro) module. */
+.int-pro {
+  max-width: 640px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  border: 1px solid color-mix(in srgb, #7c3aed 35%, var(--border));
+  background: color-mix(in srgb, #7c3aed 6%, var(--bg-card));
+
+  h2 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+
+  p {
+    margin: 0;
+    line-height: 1.5;
+  }
+}
+
+.int-pro-chip {
+  align-self: flex-start;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #7c3aed;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

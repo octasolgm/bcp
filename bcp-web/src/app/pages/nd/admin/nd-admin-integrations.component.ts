@@ -1,6 +1,6 @@
 import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   NdApiService,
   type NdCloudImportLogRow,
@@ -25,7 +25,7 @@ const COMING_SOON: { id: string; name: string }[] = [
 @Component({
   selector: 'app-nd-admin-integrations',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   templateUrl: './nd-admin-integrations.component.html',
   styleUrls: ['./nd-admin-integrations.component.scss', './nd-admin-modern.scss', '../nd-shared.scss'],
 })
@@ -68,7 +68,18 @@ export class NdAdminIntegrationsComponent implements OnInit, OnDestroy {
     return this.auth.isPlatformAdmin();
   }
 
+  /** Integrations is a Pro module the platform super admin turns on per business (off by default). */
+  get moduleOn(): boolean {
+    return this.auth.profile()?.workspace?.integrationsEnabled === true;
+  }
+
   async load(): Promise<void> {
+    if (!this.moduleOn) {
+      this.providers = [];
+      this.log = [];
+      this.loading = false;
+      return;
+    }
     this.loading = true;
     const [prov, log] = await Promise.all([this.api.getCloudProviders(), this.api.getCloudImportLog(30)]);
     if (prov.success && prov.data) this.providers = prov.data;

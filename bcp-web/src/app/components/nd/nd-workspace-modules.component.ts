@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output, inject } from '@angular/core';
-import { NdApiService } from '../../services/nd/nd-api.service';
+import { NdApiService, type NdWorkspaceModules } from '../../services/nd/nd-api.service';
 
 /**
  * On/off switches for a workspace's optional modules. Actions off only hides corrective actions in that
@@ -51,6 +51,24 @@ import { NdApiService } from '../../services/nd/nd-api.service';
           <span class="mod-value" [class.mod-value-on]="actionsEnabled !== false && embeddingsEnabled !== false">{{ actionsEnabled !== false && embeddingsEnabled !== false ? 'On' : 'Off' }}</span>
         }
       </label>
+      <label class="mod-row">
+        <span class="mod-text">
+          <strong>Integrations <span class="mod-pro">Pro</span></strong>
+          <span class="mod-hint">Connect cloud storage (Google Drive, OneDrive and others) and import documents from it.</span>
+        </span>
+        @if (editable) {
+          <input
+            type="checkbox"
+            role="switch"
+            class="mod-switch"
+            [checked]="integrationsEnabled === true"
+            [disabled]="saving"
+            (change)="set({ integrationsEnabled: $any($event.target).checked })"
+          />
+        } @else {
+          <span class="mod-value" [class.mod-value-on]="integrationsEnabled === true">{{ integrationsEnabled === true ? 'On' : 'Off' }}</span>
+        }
+      </label>
       @if (error) {
         <p class="nd-error mod-msg">{{ error }}</p>
       } @else if (saving) {
@@ -72,6 +90,11 @@ import { NdApiService } from '../../services/nd/nd-api.service';
       .mod-msg { margin: 0.25rem 0 0; font-size: 0.8125rem; }
       .mod-value { flex: none; font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); }
       .mod-value-on { color: var(--accent); }
+      .mod-pro {
+        margin-left: 0.35rem; padding: 1px 7px; border-radius: 999px; vertical-align: middle;
+        background: #7c3aed; color: #fff; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
       .mod-switch {
         appearance: none; flex: none; width: 2.4rem; height: 1.35rem; border-radius: 999px;
         background: var(--border); position: relative; cursor: pointer; transition: background 0.15s ease;
@@ -95,14 +118,16 @@ export class NdWorkspaceModulesComponent {
   @Input({ required: true }) workspaceId!: string;
   @Input() actionsEnabled: boolean | undefined = true;
   @Input() embeddingsEnabled: boolean | undefined = true;
+  /** Pro module, off by default. */
+  @Input() integrationsEnabled: boolean | undefined = false;
   /** Only the platform super admin can change modules; everyone else sees them read-only. */
   @Input() editable = false;
-  @Output() readonly changed = new EventEmitter<{ actionsEnabled: boolean; embeddingsEnabled: boolean }>();
+  @Output() readonly changed = new EventEmitter<NdWorkspaceModules>();
 
   saving = false;
   error = '';
 
-  async set(modules: { actionsEnabled?: boolean; embeddingsEnabled?: boolean }): Promise<void> {
+  async set(modules: Partial<NdWorkspaceModules>): Promise<void> {
     if (!this.editable) return;
     this.saving = true;
     this.error = '';
@@ -112,6 +137,7 @@ export class NdWorkspaceModulesComponent {
     if (res.success && res.data) {
       this.actionsEnabled = res.data.actionsEnabled;
       this.embeddingsEnabled = res.data.embeddingsEnabled;
+      this.integrationsEnabled = res.data.integrationsEnabled;
       this.changed.emit(res.data);
     } else {
       this.error = res.message ?? 'Could not save.';

@@ -72,6 +72,10 @@ The progress message in the top bar of the New analysis page now uses colour so 
 
 When a business is deactivated, anyone still signed in to it is now signed out straight away and told that their workspace has been deactivated, instead of seeing errors on every page. People who also work in another business that is still active continue in that business.
 
+## Integrations as a Pro module
+
+Connecting cloud storage such as Google Drive and OneDrive is now a Pro module that our team turns on for each business. It is off for new businesses. When it is off, the Integrations page is still listed in the menu with a Pro label and explains what it offers, so you can ask us to enable it. Businesses that already had cloud storage connected keep it.
+
 ## Being worked on
 
 We are confirming the New analysis selection and clause number changes on a full analysis run before releasing them.
