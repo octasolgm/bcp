@@ -1320,9 +1320,10 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     const limits = await this.api.getWorkspaceUploadLimits(workspaceId);
     const problem = checkUploadAgainstLimits(files, limits.success ? (limits.data ?? null) : null);
     if (!problem) return true;
+    // A popup only: nothing was uploaded, so nothing should stay on the page.
     this.file = null;
     this.message = '';
-    this.error = problem;
+    this.error = '';
     this.toast.show(problem, 'error', 6000);
     return false;
   }
@@ -1348,8 +1349,10 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
     }
     this.file = null;
     this.message = `Uploaded ${ok} of ${files.length} documents.`;
-    this.error = failed.length ? `Could not upload: ${failed.join(', ')}` : '';
+    this.error = '';
     this.toast.show(this.message, failed.length ? 'warning' : 'success', 4000);
+    // Files that could not be uploaded: a popup, not a banner that stays on the page.
+    if (failed.length) this.toast.show(`Could not upload: ${failed.join(', ')}`, 'error', 8000);
   }
 
   private upsertUploadedRegulationDoc(
@@ -1436,7 +1439,8 @@ export class NdRegulationDocumentsLocalComponent implements OnInit, OnDestroy {
       }
       void this.loadDocs(true);
     } else if (!quiet) {
-      this.error = res.message ?? 'Upload failed';
+      // A popup, not a banner that stays on the page (e.g. over the upload limit).
+      this.toast.show(res.message ?? 'Upload failed', 'error', 6000);
     }
     this.uploading = false;
     this.syncPageHeaderToolbar();

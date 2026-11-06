@@ -124,6 +124,7 @@ Tasks
 - Tested signed in as platform super admin: Default workspace page works as before; in ABC the services showed with the Pro note instead of Connect, and the server refused connecting; Integrations switched on and off for the Limit test business; Business settings shows the Integrations row
 Bug fixes
 - New analysis: a file refused for being over the upload limit left a red error row in the document list; it now only shows a popup message
+- Internal Documents and Regulation Documents: a refused upload (over the limit, or refused by the server, one file or several) left an error message on the page; it now shows as a popup only
 - A user still signed in when their business was deactivated saw every page fail; they are now signed out once and the sign-in page says the workspace has been deactivated
 - A user whose home business was deactivated but who also belongs to another active business was locked out; they now continue in the other business
 

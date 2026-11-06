@@ -987,7 +987,8 @@ export class NdInternalDocumentsComponent implements OnInit, OnDestroy {
       }
       void this.load(true);
     } else {
-      this.error = res.message ?? 'Upload failed';
+      // A popup, not a banner that stays on the page (e.g. over the upload limit).
+      this.toast.show(res.message ?? 'Upload failed', 'error', 6000);
     }
     this.uploading = false;
     this.syncPageHeaderToolbar();
