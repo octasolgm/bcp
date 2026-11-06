@@ -7,8 +7,47 @@
 
 .int-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
   gap: 1rem;
+  min-width: 0;
+}
+
+/* :host so these win over the shared catalog styles loaded after this file. */
+:host .nd-catalog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+  overflow: visible;
+  padding-bottom: 1.5rem;
+}
+
+:host .section-heading {
+  margin: 0.75rem 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+:host .empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.25rem;
+
+  strong {
+    font-size: 0.9375rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+}
+
+:host .table-wrap {
+  overflow-x: auto;
 }
 
 .int-card {
