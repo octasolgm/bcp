@@ -1066,14 +1066,14 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     if (this.ndRunId && this.analysingListDone > 0) return null;
     const n = this.selectedCount;
     if (p.clauseLimit != null && (p.clausesRemaining ?? 0) <= 0) {
-      return `Your plan's ${p.clauseLimit} clauses are all used. Ask your administrator to raise the clause limit.`;
+      return `All ${p.clauseLimit} clauses allowed in the Demo module are used. Ask your administrator to raise the limit.`;
     }
     if (n <= 0) return null;
     if (p.maxClausesPerAnalysis != null && n > p.maxClausesPerAnalysis) {
-      return `Your plan allows up to ${p.maxClausesPerAnalysis} clauses per analysis. You selected ${n} - remove ${n - p.maxClausesPerAnalysis} to continue.`;
+      return `The Demo module allows ${p.maxClausesPerAnalysis} clauses / analysis. You selected ${n} - remove ${n - p.maxClausesPerAnalysis} to continue.`;
     }
     if (p.clausesRemaining != null && n > p.clausesRemaining) {
-      return `You selected ${n} clauses but your plan has ${p.clausesRemaining} left. Remove ${n - p.clausesRemaining} to continue.`;
+      return `You selected ${n} clauses but only ${p.clausesRemaining} are left in the Demo module. Remove ${n - p.clausesRemaining} to continue.`;
     }
     return null;
   }

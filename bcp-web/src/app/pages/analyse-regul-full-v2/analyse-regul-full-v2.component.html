@@ -814,14 +814,14 @@
     }
     @if (showPlanNotice && planLimits; as plan) {
       <div class="plan-notice" [class.plan-notice-over]="planOverLimit" role="status">
-        <span class="plan-chip">Demo plan</span>
+        <span class="plan-chip">Demo</span>
         <span class="plan-text">
-          You are on the Demo plan.
+          You are in the Demo module.
           @if (plan.maxClausesPerAnalysis != null) {
-            Up to <strong>{{ plan.maxClausesPerAnalysis }}</strong> clauses per analysis.
+            <strong>{{ plan.maxClausesPerAnalysis }} clauses / analysis.</strong>
           }
           @if (plan.clauseLimit != null) {
-            <strong>{{ plan.clausesRemaining ?? 0 }}</strong> of {{ plan.clauseLimit }} clauses left.
+            Total <strong>{{ plan.clauseLimit }}</strong> clauses are allowed in this module ({{ plan.clausesRemaining ?? 0 }} left).
           }
         </span>
         @if (plan.maxClausesPerAnalysis != null && !isSessionActive) {

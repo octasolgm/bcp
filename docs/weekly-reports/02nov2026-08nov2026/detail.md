@@ -62,7 +62,7 @@ Business settings are now clearly separated. Modules, the clause limit and uploa
 
 Each business can now have a limit on how many clauses one analysis may include, alongside the existing limit on the total number of clauses it may analyse. New businesses start with 10 clauses per analysis and 100 clauses in total, and our team can change either limit at any time.
 
-When a business has a limit, the New analysis page shows that it is on the Demo plan, how many clauses one analysis may include, and how many clauses are left. If the selected clauses go over a limit, the page explains why and the analysis cannot be started until fewer clauses are selected.
+When a business has a limit, the New analysis page shows that it is in the Demo module, how many clauses one analysis may include, and how many clauses are allowed in total and left. If the selected clauses go over a limit, the page explains why and the analysis cannot be started until fewer clauses are selected.
 
 ## Clearer analysis progress
 

@@ -122,6 +122,7 @@ Tasks
 - Integrations page layout fixed: space above Recent imports, padded empty state, cards no longer cut off on the right
 - Created and pushed release/2026.11.06.02 (plan limits work plus the Integrations module) and deployed it to Azure dev (API and web), shown as version 2026.11.06.05; API reported ready and the new code is in the live site files; not yet tested signed in on the live site
 - Redeployed the web app twice with the upload popup fixes; live site now shows version 2026.11.06.07
+- New analysis notice reworded: "You are in the Demo module. 10 clauses / analysis. Total 100 clauses are allowed in this module (N left)"; blocking messages use the same wording
 - Tested signed in as platform super admin: Default workspace page works as before; in ABC the services showed with the Pro note instead of Connect, and the server refused connecting; Integrations switched on and off for the Limit test business; Business settings shows the Integrations row
 Bug fixes
 - New analysis: a file refused for being over the upload limit left a red error row in the document list; it now only shows a popup message
