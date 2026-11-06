@@ -74,12 +74,6 @@ export class NdAdminIntegrationsComponent implements OnInit, OnDestroy {
   }
 
   async load(): Promise<void> {
-    if (!this.moduleOn) {
-      this.providers = [];
-      this.log = [];
-      this.loading = false;
-      return;
-    }
     this.loading = true;
     const [prov, log] = await Promise.all([this.api.getCloudProviders(), this.api.getCloudImportLog(30)]);
     if (prov.success && prov.data) this.providers = prov.data;

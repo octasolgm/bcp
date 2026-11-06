@@ -53,7 +53,7 @@ import { NdApiService, type NdWorkspaceModules } from '../../services/nd/nd-api.
       </label>
       <label class="mod-row">
         <span class="mod-text">
-          <strong>Integrations <span class="mod-pro">Pro</span></strong>
+          <strong>Integrations</strong>
           <span class="mod-hint">Connect cloud storage (Google Drive, OneDrive and others) and import documents from it.</span>
         </span>
         @if (editable) {
@@ -90,11 +90,6 @@ import { NdApiService, type NdWorkspaceModules } from '../../services/nd/nd-api.
       .mod-msg { margin: 0.25rem 0 0; font-size: 0.8125rem; }
       .mod-value { flex: none; font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); }
       .mod-value-on { color: var(--accent); }
-      .mod-pro {
-        margin-left: 0.35rem; padding: 1px 7px; border-radius: 999px; vertical-align: middle;
-        background: #7c3aed; color: #fff; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em;
-        text-transform: uppercase;
-      }
       .mod-switch {
         appearance: none; flex: none; width: 2.4rem; height: 1.35rem; border-radius: 999px;
         background: var(--border); position: relative; cursor: pointer; transition: background 0.15s ease;

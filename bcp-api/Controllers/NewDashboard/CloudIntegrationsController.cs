@@ -48,7 +48,7 @@ public class CloudIntegrationsController(
     {
         success = false,
         code = "module_disabled",
-        message = "Integrations are part of the Pro plan. Contact us to turn them on for your business.",
+        message = "This feature is available on Pro. Contact us to turn it on for your business.",
     });
 
     private static object MapConnection(NdCloudConnection c) => new
@@ -90,9 +90,11 @@ public class CloudIntegrationsController(
         var (profile, user, error) = await RequireAuthWithUserAsync(db, jwt, ct, "super_admin", "maker");
         if (error != null) return error;
         if (await IsDemoAsync(user, ct)) return Ok(new { success = true, data = Array.Empty<object>() });
-        if (!await CurrentModuleEnabledAsync(profile, ct)) return ModuleOff();
-
-        var connections = await db.NdCloudConnections.AsNoTracking().ToListAsync(ct);
+        // Module off: still list the services so the business can see what it would get; no connections.
+        var moduleOn = await CurrentModuleEnabledAsync(profile, ct);
+        var connections = moduleOn
+            ? await db.NdCloudConnections.AsNoTracking().ToListAsync(ct)
+            : [];
         var platformAdmin = IsPlatformAdmin(profile);
         var data = registry.All.Select(p => new
         {

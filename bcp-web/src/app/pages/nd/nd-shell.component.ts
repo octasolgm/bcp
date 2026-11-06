@@ -1166,15 +1166,8 @@ export class NdShellComponent implements OnInit, OnDestroy {
     }
     // Connect cloud storage (Google Drive, ...) to import documents; real accounts only, never demo.
     if (!this.auth.isDemoViewer()) {
-      // Pro module: still listed when off so the business can see it exists, tagged "Pro".
-      const integrationsOn = this.auth.profile()?.workspace?.integrationsEnabled === true;
-      children.push({
-        id: 'admin-integrations',
-        path: '/nd/admin/integrations',
-        label: 'Integrations',
-        icon: 'library',
-        ...(integrationsOn ? {} : { tag: 'Pro' }),
-      });
+      // Listed even when the module is off: the page shows the services with an "available on Pro" note.
+      children.push({ id: 'admin-integrations', path: '/nd/admin/integrations', label: 'Integrations', icon: 'library' });
     }
     if (platform) {
       children.push({ id: 'admin-settings', path: '/nd/admin/settings', label: 'Platform settings', icon: 'settings' });

@@ -74,7 +74,7 @@ When a business is deactivated, anyone still signed in to it is now signed out s
 
 ## Integrations as a Pro module
 
-Connecting cloud storage such as Google Drive and OneDrive is now a Pro module that our team turns on for each business. It is off for new businesses. When it is off, the Integrations page is still listed in the menu with a Pro label and explains what it offers, so you can ask us to enable it. Businesses that already had cloud storage connected keep it.
+Connecting cloud storage such as Google Drive and OneDrive is now a Pro module that our team turns on for each business. It is off for new businesses. When it is off, the Integrations page still shows the available services, and instead of a Connect button it explains that the feature is available on Pro. Businesses that already had cloud storage connected keep it.
 
 ## Being worked on
 
