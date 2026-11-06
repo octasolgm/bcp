@@ -364,16 +364,17 @@ public class UsersController(
         if (string.IsNullOrWhiteSpace(opts.Url) || string.IsNullOrWhiteSpace(opts.ServiceRoleKey))
             return BadRequest(new { success = false, message = "Supabase admin API not configured." });
 
-        // The profile goes first: if saved work still points at it the delete is refused, and the login must
-        // survive, otherwise the user would stay listed with no way to sign in.
+        // 1) Trial delete of the profile, rolled back: if saved work still points at it the delete is refused and
+        //    nothing changes. The trial must not stay open while Supabase deletes the login: profiles reference
+        //    auth.users ON DELETE CASCADE, so Supabase would wait on our row lock while we wait on Supabase.
         var client = CreateAdminClient(opts);
         var strategy = db.Database.CreateExecutionStrategy();
-        IActionResult result = Ok(new { success = true, deleted = true });
-        await strategy.ExecuteAsync(async () =>
+        IActionResult? refused = null;
+        if (profile != null)
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            if (profile != null)
+            await strategy.ExecuteAsync(async () =>
             {
+                await using var trial = await db.Database.BeginTransactionAsync(ct);
                 db.NdProfiles.Remove(profile);
                 try
                 {
@@ -381,22 +382,36 @@ public class UsersController(
                 }
                 catch (DbUpdateException)
                 {
-                    db.Entry(profile).State = EntityState.Unchanged;
-                    result = BadRequest(new { success = false, message = "This user has saved work that needs them, so they cannot be deleted. Deactivate them instead." });
-                    return;
+                    refused = BadRequest(new { success = false, message = "This user has saved work that needs them, so they cannot be deleted. Deactivate them instead." });
                 }
-            }
+                finally
+                {
+                    await trial.RollbackAsync(ct);
+                    db.Entry(profile).State = EntityState.Detached;
+                }
+            });
+        }
+        if (refused != null) return refused;
 
-            var delRes = await client.DeleteAsync($"{opts.Url.TrimEnd('/')}/auth/v1/admin/users/{id}", ct);
+        // 2) Delete the login. Its profile goes with it (cascade).
+        using (var delRes = await client.DeleteAsync($"{opts.Url.TrimEnd('/')}/auth/v1/admin/users/{id}", ct))
+        {
             if (!delRes.IsSuccessStatusCode && delRes.StatusCode != System.Net.HttpStatusCode.NotFound)
             {
                 var body = await delRes.Content.ReadAsStringAsync(ct);
-                result = BadRequest(new { success = false, message = body });
-                return;
+                return BadRequest(new { success = false, message = string.IsNullOrWhiteSpace(body) ? "Could not delete the user's login." : body });
             }
-            await transaction.CommitAsync(ct);
-        });
+        }
 
+        // 3) Make sure the profile is gone (no cascade configured, or the login was already missing).
+        var leftover = await db.NdProfiles.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (leftover != null)
+        {
+            db.NdProfiles.Remove(leftover);
+            await db.SaveChangesAsync(ct);
+        }
+
+        IActionResult result = Ok(new { success = true, deleted = true });
         InvalidateAuthProfile(memoryCache, id);
         demoDirectory.InvalidateProfileCache();
         return result;
