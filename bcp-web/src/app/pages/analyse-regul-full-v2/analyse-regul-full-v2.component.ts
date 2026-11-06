@@ -1293,8 +1293,9 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     try {
       const uploaded = await this.ndApi.uploadRegulationDocument(file);
       if (!uploaded.success) {
-        this.regUploadPipelineV2 = { name: file.name, stage: 'failed', message: uploaded.message ?? 'Upload failed' };
-        this.toast.show(this.regUploadPipelineV2.message!, 'error', 4000);
+        // Nothing was stored (e.g. over the upload limit): a popup is enough, no lasting row in the list.
+        this.regUploadPipelineV2 = null;
+        this.toast.show(uploaded.message ?? 'Upload failed', 'error', 6000);
         return;
       }
       const uploadData = uploaded.data as { id?: string; storedDocumentId?: string } | undefined;
@@ -1425,8 +1426,9 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     try {
       const uploaded = await this.ndApi.uploadInternalDocument(file);
       if (!uploaded.success) {
-        this.complianceUploadPipelineV2 = { name: file.name, stage: 'failed', message: uploaded.message ?? 'Upload failed' };
-        this.toast.show(this.complianceUploadPipelineV2.message!, 'error', 4000);
+        // Nothing was stored (e.g. over the upload limit): a popup is enough, no lasting row in the list.
+        this.complianceUploadPipelineV2 = null;
+        this.toast.show(uploaded.message ?? 'Upload failed', 'error', 6000);
         return;
       }
       const id = (uploaded.data as { id?: string } | undefined)?.id;
