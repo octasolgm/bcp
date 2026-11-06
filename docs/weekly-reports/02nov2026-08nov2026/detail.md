@@ -58,6 +58,12 @@ One person can now work in several businesses using the same login, with a separ
 
 Business settings are now clearly separated. Modules, the clause limit and upload limits are changed on the Business workspaces page, and the Business settings page shows them as view only.
 
+## Contact support
+
+Each business can now reach our support team from inside the platform. A Support button sits at the bottom right of every page. It opens a panel where you can report an issue, ask a question, request a guide or suggest a feature, choose a priority and describe what you need. Every request gets its own number, and our replies appear in a chat on that request, so the whole conversation stays in one place. You can mark a request as resolved, or reopen it if you need more help. A badge on the Support button tells you when we have replied, and the Support item in the left menu shows all of your requests on a full page.
+
+Business administrators see every request from their business. Other users see the requests they sent.
+
 ## Being worked on
 
 We are confirming the New analysis selection and clause number changes on a full analysis run before releasing them.
@@ -71,3 +77,5 @@ We corrected a setting that stopped the link in password reset emails from retur
 We are completing final testing of the department access rules with non-admin accounts before releasing them.
 
 We have also prepared separate query dictionaries and synonyms for each business, and will schedule this change separately.
+
+We are testing the new Contact support feature before releasing it, and we are setting up email alerts so that our team is notified of new requests even when they are not signed in.

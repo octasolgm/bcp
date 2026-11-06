@@ -1,0 +1,154 @@
+<div class="nd-page-body">
+  <div class="nd-page si">
+    <section class="si-list nd-card" aria-label="Support tickets">
+      <div class="si-filters">
+        <input
+          type="search"
+          class="nd-input"
+          [(ngModel)]="search"
+          (input)="onSearchInput()"
+          placeholder="Search subject, sender or SUP number"
+          aria-label="Search tickets"
+        />
+        <div class="si-filter-row">
+          <select class="nd-input" [(ngModel)]="status" (change)="onFilterChange()" aria-label="Status">
+            <option value="active">Active (open + waiting)</option>
+            <option value="">All statuses</option>
+            @for (s of statuses; track s.value) {
+              <option [value]="s.value">{{ s.label }}</option>
+            }
+          </select>
+          <select class="nd-input" [(ngModel)]="workspaceId" (change)="onFilterChange()" aria-label="Workspace">
+            <option value="">All workspaces</option>
+            @for (w of workspaces; track w.id) {
+              <option [value]="w.id">{{ w.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="si-filter-row">
+          <select class="nd-input" [(ngModel)]="category" (change)="onFilterChange()" aria-label="Type">
+            <option value="">All types</option>
+            @for (c of categories; track c.value) {
+              <option [value]="c.value">{{ c.label }}</option>
+            }
+          </select>
+          <select class="nd-input" [(ngModel)]="priority" (change)="onFilterChange()" aria-label="Priority">
+            <option value="">All priorities</option>
+            @for (p of priorities; track p.value) {
+              <option [value]="p.value">{{ p.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="si-count nd-muted">
+          {{ tickets.length }} ticket{{ tickets.length === 1 ? '' : 's' }}
+          @if (unreadCount > 0) { · <strong>{{ unreadCount }} unread</strong> }
+          <button type="button" class="si-clear" (click)="clearFilters()">Reset filters</button>
+        </div>
+      </div>
+
+      @if (loadingList && tickets.length === 0) {
+        <p class="nd-muted si-empty">Loading tickets...</p>
+      } @else if (listError) {
+        <p class="nd-error">{{ listError }}</p>
+      } @else if (tickets.length === 0) {
+        <p class="nd-muted si-empty">No tickets match these filters.</p>
+      } @else {
+        <ul class="si-rows">
+          @for (t of tickets; track t.id) {
+            <li>
+              <button type="button" class="si-row" [class.active]="selected?.id === t.id" [class.unread]="t.unread" (click)="select(t)">
+                <span class="si-row-top">
+                  <span class="si-num">{{ t.number }}</span>
+                  <span class="nd-badge" [ngClass]="statusBadge(t.status)">{{ statusLabel(t.status) }}</span>
+                  @if (t.priority === 'high' || t.priority === 'urgent') {
+                    <span class="nd-badge" [ngClass]="priorityBadge(t.priority)">{{ priorityLabel(t.priority) }}</span>
+                  }
+                  @if (t.unread) { <span class="si-dot" aria-label="Unread"></span> }
+                </span>
+                <span class="si-subject">{{ t.subject }}</span>
+                <span class="si-meta">
+                  <strong>{{ t.workspaceName || 'Unknown workspace' }}</strong> · {{ t.createdByName || 'Unknown' }} ·
+                  {{ formatWhen(t.lastMessageAt) }}
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <section class="si-thread nd-card" aria-label="Ticket conversation">
+      @if (!selected) {
+        <div class="si-placeholder nd-muted">Select a ticket to read and reply.</div>
+      } @else {
+        <header class="si-head">
+          <div class="si-head-main">
+            <span class="si-num">{{ selected.number }} · {{ categoryLabel(selected.category) }}</span>
+            <strong class="si-title">{{ selected.subject }}</strong>
+            <span class="nd-muted si-from">
+              {{ selected.workspaceName || 'Unknown workspace' }} · {{ selected.createdByName || 'Unknown' }}
+              @if (selected.createdByEmail) { &lt;{{ selected.createdByEmail }}&gt; }
+              · opened {{ formatWhen(selected.createdAt) }}
+            </span>
+          </div>
+          <div class="si-controls">
+            <label class="nd-label">
+              Status
+              <select class="nd-input" [ngModel]="selected.status" (ngModelChange)="update('status', $event)" [disabled]="saving">
+                @for (s of statuses; track s.value) {
+                  <option [value]="s.value">{{ s.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="nd-label">
+              Priority
+              <select class="nd-input" [ngModel]="selected.priority" (ngModelChange)="update('priority', $event)" [disabled]="saving">
+                @for (p of priorities; track p.value) {
+                  <option [value]="p.value">{{ p.label }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        </header>
+
+        <div class="si-messages" aria-live="polite">
+          @if (loadingThread && messages.length === 0) {
+            <p class="nd-muted">Loading conversation...</p>
+          }
+          @for (m of messages; track m.id) {
+            <div class="si-msg" [class.staff]="m.isStaff" [class.client]="!m.isStaff" [class.internal]="m.isInternal">
+              <div class="si-msg-author">
+                {{ m.authorName || (m.isStaff ? 'Support' : 'Client') }}
+                @if (m.isInternal) { <span class="si-internal-tag">Internal note</span> }
+              </div>
+              <div class="si-msg-body">{{ m.body }}</div>
+              <div class="si-msg-time">{{ formatWhen(m.createdAt) }}</div>
+            </div>
+          }
+          <div #messagesEnd></div>
+        </div>
+
+        <div class="si-reply" [class.internal]="internal">
+          <textarea
+            class="nd-input"
+            rows="3"
+            maxlength="5000"
+            [(ngModel)]="reply"
+            (keydown)="onReplyKey($event)"
+            [placeholder]="internal ? 'Internal note - only the support team sees this' : 'Reply to the client... (Ctrl+Enter to send)'"
+            aria-label="Reply"
+          ></textarea>
+          <div class="si-reply-actions">
+            <label class="si-internal-toggle">
+              <input type="checkbox" [(ngModel)]="internal" />
+              Internal note (client does not see it)
+            </label>
+            <button type="button" class="nd-btn-primary" [disabled]="sending || !reply.trim()" (click)="sendReply()">
+              {{ sending ? 'Sending...' : internal ? 'Add note' : 'Send reply' }}
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+  </div>
+</div>

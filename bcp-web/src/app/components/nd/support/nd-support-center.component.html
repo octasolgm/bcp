@@ -1,0 +1,163 @@
+<div class="sc" [class.sc-page]="mode === 'page'">
+  @switch (view) {
+    @case ('list') {
+      <div class="sc-intro">
+        <div>
+          <strong>How can we help?</strong>
+          <p class="nd-muted">Report an issue, ask a question or request a guide. Our team replies right here.</p>
+        </div>
+        <button type="button" class="nd-btn-primary" (click)="openNew()">New request</button>
+      </div>
+
+      <div class="sc-tabs" role="tablist">
+        <button type="button" role="tab" [class.active]="filter === 'active'" [attr.aria-selected]="filter === 'active'" (click)="filter = 'active'">
+          Active
+        </button>
+        <button type="button" role="tab" [class.active]="filter === 'all'" [attr.aria-selected]="filter === 'all'" (click)="filter = 'all'">
+          All requests
+        </button>
+      </div>
+
+      @if (loadingList && tickets.length === 0) {
+        <p class="nd-muted sc-empty">Loading your requests...</p>
+      } @else if (listError) {
+        <p class="nd-error">{{ listError }}</p>
+      } @else if (visibleTickets.length === 0) {
+        <div class="sc-empty">
+          <p class="nd-muted">
+            {{ filter === 'active' ? 'No active requests.' : 'You have not sent any requests yet.' }}
+          </p>
+        </div>
+      } @else {
+        <ul class="sc-list">
+          @for (t of visibleTickets; track t.id) {
+            <li>
+              <button type="button" class="sc-row" [class.unread]="t.unread" (click)="openTicket(t)">
+                <span class="sc-row-top">
+                  <span class="sc-num">{{ t.number }}</span>
+                  <span class="nd-badge" [ngClass]="statusBadge(t.status)">{{ statusLabel(t.status) }}</span>
+                  @if (t.unread) { <span class="sc-dot" aria-label="New reply"></span> }
+                </span>
+                <span class="sc-subject">{{ t.subject }}</span>
+                <span class="sc-meta">
+                  {{ categoryLabel(t.category) }}
+                  @if (isWorkspaceAdmin && !isMine(t) && t.createdByName) { · by {{ t.createdByName }} }
+                  · {{ formatWhen(t.lastMessageAt) }}
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    }
+
+    @case ('new') {
+      <button type="button" class="sc-back" (click)="backToList()">&larr; Back to requests</button>
+      <form class="sc-form" (ngSubmit)="submitNew()">
+        <fieldset class="sc-types">
+          <legend class="nd-label">What is this about?</legend>
+          @for (c of categories; track c.value) {
+            <label class="sc-type" [class.selected]="category === c.value">
+              <input type="radio" name="category" [value]="c.value" [(ngModel)]="category" />
+              <span>
+                <strong>{{ c.label }}</strong>
+                <span class="nd-muted">{{ c.hint }}</span>
+              </span>
+            </label>
+          }
+        </fieldset>
+
+        <label class="nd-label">
+          Subject
+          <input class="nd-input" name="subject" [(ngModel)]="subject" maxlength="200" placeholder="A short summary" required />
+        </label>
+
+        <label class="nd-label">
+          Priority
+          <select class="nd-input" name="priority" [(ngModel)]="priority">
+            @for (p of priorities; track p.value) {
+              <option [value]="p.value">{{ p.label }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="nd-label">
+          Message
+          <textarea
+            class="nd-input"
+            name="message"
+            rows="6"
+            maxlength="5000"
+            [(ngModel)]="message"
+            placeholder="Describe what you need. For an issue, include what you did, what you expected and what happened."
+            required
+          ></textarea>
+        </label>
+
+        <div class="sc-form-actions">
+          <button type="button" class="nd-btn-secondary" [disabled]="creating" (click)="backToList()">Cancel</button>
+          <button type="submit" class="nd-btn-primary" [disabled]="creating || !subject.trim() || !message.trim()">
+            {{ creating ? 'Sending...' : 'Send request' }}
+          </button>
+        </div>
+      </form>
+    }
+
+    @case ('thread') {
+      <button type="button" class="sc-back" (click)="backToList()">&larr; Back to requests</button>
+      @if (ticket) {
+        <div class="sc-thread-head">
+          <div class="sc-thread-title">
+            <span class="sc-num">{{ ticket.number }}</span>
+            <strong>{{ ticket.subject }}</strong>
+          </div>
+          <div class="sc-thread-badges">
+            <span class="nd-badge" [ngClass]="statusBadge(ticket.status)">{{ statusLabel(ticket.status) }}</span>
+            <span class="nd-badge nd-badge-gray">{{ categoryLabel(ticket.category) }}</span>
+            <span class="nd-badge" [ngClass]="priorityBadge(ticket.priority)">{{ priorityLabel(ticket.priority) }} priority</span>
+          </div>
+        </div>
+
+        <div class="sc-messages" aria-live="polite">
+          @if (loadingThread && messages.length === 0) {
+            <p class="nd-muted">Loading conversation...</p>
+          }
+          @for (m of messages; track m.id) {
+            <div class="sc-msg" [class.staff]="m.isStaff" [class.mine]="!m.isStaff">
+              <div class="sc-msg-author">{{ m.authorName || (m.isStaff ? 'Support' : 'You') }}</div>
+              <div class="sc-msg-body">{{ m.body }}</div>
+              <div class="sc-msg-time">{{ formatWhen(m.createdAt) }}</div>
+            </div>
+          }
+          <div #messagesEnd></div>
+        </div>
+
+        @if (ticket.status === 'closed') {
+          <p class="nd-muted sc-closed">This request is closed. Start a new request if you need more help.</p>
+        } @else {
+          <div class="sc-reply">
+            <textarea
+              class="nd-input"
+              rows="3"
+              maxlength="5000"
+              [(ngModel)]="reply"
+              (keydown)="onReplyKey($event)"
+              placeholder="Write a message... (Ctrl+Enter to send)"
+              aria-label="Reply"
+            ></textarea>
+            <div class="sc-reply-actions">
+              @if (ticket.status === 'resolved') {
+                <button type="button" class="nd-btn-secondary" [disabled]="changingStatus" (click)="setStatus('open')">Reopen</button>
+              } @else {
+                <button type="button" class="nd-btn-secondary" [disabled]="changingStatus" (click)="setStatus('resolved')">Mark resolved</button>
+              }
+              <button type="button" class="nd-btn-primary" [disabled]="sending || !reply.trim()" (click)="sendReply()">
+                {{ sending ? 'Sending...' : 'Send' }}
+              </button>
+            </div>
+          </div>
+        }
+      }
+    }
+  }
+</div>

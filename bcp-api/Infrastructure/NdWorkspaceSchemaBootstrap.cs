@@ -65,6 +65,8 @@ public static class NdWorkspaceSchemaBootstrap
         ("nd_internal_document_departments", "stored_documents", "stored_document_id", null),
         ("nd_profile_departments", "profiles", "profile_id", null),
         ("nd_analysis_run_departments", "analysis_runs", "analysis_run_id", null),
+        ("nd_support_tickets", null, null, "created_by"),
+        ("nd_support_messages", "nd_support_tickets", "ticket_id", null),
     ];
 
     public static async Task EnsureAsync(AppDbContext db, CancellationToken ct = default)
@@ -278,6 +280,48 @@ public static class NdWorkspaceSchemaBootstrap
             );
             CREATE INDEX IF NOT EXISTS idx_nd_analysis_run_departments_department
               ON nd_analysis_run_departments (tenant_id, department_id);
+            """,
+            ct);
+
+        // Support center: tickets a workspace sends to the platform team, and the chat on each one.
+        // ticket_no is one platform-wide sequence so SUP-00042 means the same ticket everywhere.
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS nd_support_tickets (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              ticket_no BIGSERIAL NOT NULL,
+              tenant_id UUID NULL,
+              subject TEXT NOT NULL,
+              category TEXT NOT NULL DEFAULT 'question',
+              priority TEXT NOT NULL DEFAULT 'normal',
+              status TEXT NOT NULL DEFAULT 'open',
+              created_by UUID NULL,
+              created_by_name TEXT NULL,
+              created_by_email TEXT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              last_message_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              last_client_message_at TIMESTAMPTZ NULL,
+              last_staff_message_at TIMESTAMPTZ NULL,
+              client_last_read_at TIMESTAMPTZ NULL,
+              staff_last_read_at TIMESTAMPTZ NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_nd_support_tickets_no ON nd_support_tickets (ticket_no);
+            CREATE INDEX IF NOT EXISTS idx_nd_support_tickets_activity
+              ON nd_support_tickets (tenant_id, last_message_at DESC);
+            CREATE TABLE IF NOT EXISTS nd_support_messages (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              ticket_id UUID NOT NULL REFERENCES nd_support_tickets(id) ON DELETE CASCADE,
+              tenant_id UUID NULL,
+              author_id UUID NULL,
+              author_name TEXT NULL,
+              is_staff BOOLEAN NOT NULL DEFAULT false,
+              is_internal BOOLEAN NOT NULL DEFAULT false,
+              body TEXT NOT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_nd_support_messages_ticket
+              ON nd_support_messages (ticket_id, created_at);
             """,
             ct);
 

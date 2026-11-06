@@ -68,6 +68,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NdAiCreditLedgerEntry> NdAiCreditLedger => Set<NdAiCreditLedgerEntry>();
     public DbSet<NdCloudConnection> NdCloudConnections => Set<NdCloudConnection>();
     public DbSet<NdCloudImportLog> NdCloudImportLog => Set<NdCloudImportLog>();
+    public DbSet<NdSupportTicket> NdSupportTickets => Set<NdSupportTicket>();
+    public DbSet<NdSupportMessage> NdSupportMessages => Set<NdSupportMessage>();
 
     /// <summary>
     /// Workspace the current request acts in; null outside a request (workers, startup) = no filter.
@@ -476,6 +478,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         });
         modelBuilder.Entity<NdCloudConnection>(e => e.HasIndex(x => new { x.TenantId, x.Provider }).IsUnique());
         modelBuilder.Entity<NdCloudImportLog>(e => e.HasIndex(x => new { x.TenantId, x.CreatedAt }));
+        modelBuilder.Entity<NdSupportTicket>(e =>
+        {
+            e.Property(x => x.TicketNo).UseIdentityByDefaultColumn().ValueGeneratedOnAdd();
+            e.HasIndex(x => x.TicketNo).IsUnique();
+        });
+        modelBuilder.Entity<NdSupportMessage>(e =>
+        {
+            e.HasOne<NdSupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.TicketId, x.CreatedAt });
+        });
         modelBuilder.Entity<NdAiCreditLedgerEntry>(e =>
         {
             e.HasIndex(x => new { x.TenantId, x.CreatedAt });

@@ -6,6 +6,7 @@ import { getNdAccessToken } from './nd-supabase-client';
 import type { InternalDocumentFinalizeEmbed, PointGapAttachment, RulebookCategory } from '../../../lib/nd/types';
 import type { GapEvidenceRerun, GapEvidenceRerunRequest } from '../../../lib/nd/gap-evidence-rerun';
 import { checkUploadAgainstLimits, type NdUploadLimits } from '../../../lib/nd/upload-limits';
+import type { NewSupportTicket, SupportMessage, SupportThread, SupportTicket } from '../../../lib/nd/support';
 
 export type RunGapEvidenceUpload = {
   storedDocumentId: string;
@@ -929,6 +930,59 @@ export class NdApiService {
 
   setUserPassword(userId: string, password: string) {
     return this.request<unknown>('POST', `/nd/users/${userId}/set-password`, { password });
+  }
+
+  // ---- Support center (workspace side) ----
+  getSupportTickets() {
+    return this.request<SupportTicket[]>('GET', '/nd/support/tickets');
+  }
+
+  getSupportUnread() {
+    return this.request<{ count: number }>('GET', '/nd/support/unread');
+  }
+
+  createSupportTicket(body: NewSupportTicket) {
+    return this.request<SupportTicket>('POST', '/nd/support/tickets', body);
+  }
+
+  getSupportThread(id: string) {
+    return this.request<SupportThread>('GET', `/nd/support/tickets/${id}`);
+  }
+
+  replySupportTicket(id: string, body: string) {
+    return this.request<SupportMessage>('POST', `/nd/support/tickets/${id}/messages`, { body });
+  }
+
+  setSupportTicketStatus(id: string, status: 'resolved' | 'open') {
+    return this.request<SupportTicket>('PUT', `/nd/support/tickets/${id}/status`, { status });
+  }
+
+  // ---- Support inbox (platform super admin) ----
+  getSupportInbox(filters: { status?: string; workspaceId?: string; category?: string; priority?: string; q?: string } = {}) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(filters)) if (v) qs.set(k, v);
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return this.request<SupportTicket[]>('GET', `/nd/admin/support/tickets${suffix}`);
+  }
+
+  getSupportInboxUnread() {
+    return this.request<{ count: number; open: number }>('GET', '/nd/admin/support/unread');
+  }
+
+  getSupportInboxWorkspaces() {
+    return this.request<{ id: string; name: string }[]>('GET', '/nd/admin/support/workspaces');
+  }
+
+  getSupportInboxThread(id: string) {
+    return this.request<SupportThread>('GET', `/nd/admin/support/tickets/${id}`);
+  }
+
+  replySupportInbox(id: string, body: string, internal: boolean) {
+    return this.request<SupportMessage>('POST', `/nd/admin/support/tickets/${id}/messages`, { body, internal });
+  }
+
+  updateSupportInboxTicket(id: string, body: { status?: string; priority?: string }) {
+    return this.request<SupportTicket>('PUT', `/nd/admin/support/tickets/${id}`, body);
   }
 
   getDepartments() {

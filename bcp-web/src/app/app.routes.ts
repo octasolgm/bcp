@@ -404,6 +404,13 @@ export const routes: Routes = [
               import('./pages/in-progress/in-progress.component').then((m) => m.InProgressComponent),
           },
           {
+            path: 'support',
+            canActivate: [ndDenyDemoViewerGuard],
+            title: 'Support · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/support/nd-support-page.component').then((m) => m.NdSupportPageComponent),
+          },
+          {
             path: 'inbox',
             title: 'Notifications · Comply Solutions',
             loadComponent: () =>
@@ -694,6 +701,16 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./pages/nd/admin/nd-admin-deleted-runs.component').then(
                 (m) => m.NdAdminDeletedRunsComponent,
+              ),
+          },
+          {
+            path: 'admin/support',
+            canActivate: [ndRoleGuard, ndPlatformAdminGuard, ndDenyDemoViewerGuard],
+            data: { ndRoles: ['super_admin'] },
+            title: 'Support inbox · Comply Solutions',
+            loadComponent: () =>
+              import('./pages/nd/admin/nd-admin-support-inbox.component').then(
+                (m) => m.NdAdminSupportInboxComponent,
               ),
           },
           {

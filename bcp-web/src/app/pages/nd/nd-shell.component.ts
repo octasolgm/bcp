@@ -31,6 +31,7 @@ import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.compo
 import { NdPipelineProgressPanelComponent } from '../../components/nd/nd-pipeline-progress-panel.component';
 import { NdStepTrackerComponent } from '../../components/nd/nd-step-tracker.component';
 import { NdPageHeaderComponent } from '../../components/nd/nd-page-header.component';
+import { NdSupportWidgetComponent } from '../../components/nd/support/nd-support-widget.component';
 import { startPanelResize } from '../shared/panel-resize';
 
 type NavIcon =
@@ -46,6 +47,7 @@ type NavIcon =
   | 'trash'
   | 'settings'
   | 'inbox'
+  | 'support'
   | 'chevron';
 
 type NavItem = {
@@ -84,6 +86,7 @@ type NavEntry =
     NdPipelineProgressPanelComponent,
     NdStepTrackerComponent,
     NdPageHeaderComponent,
+    NdSupportWidgetComponent,
   ],
   templateUrl: './nd-shell.component.html',
   styleUrl: './nd-shell.component.scss',
@@ -1205,6 +1208,29 @@ export class NdShellComponent implements OnInit, OnDestroy {
     };
   }
 
+  /** Floating Support button: real workspace users only. The platform super admin answers from the
+   *  Support inbox instead, and demo accounts stay a fixed simulation with no support channel. */
+  get showSupportWidget(): boolean {
+    return !!this.auth.profile() && !this.auth.isDemoViewer() && !this.auth.isPlatformAdmin();
+  }
+
+  /** Support menu entries. Workspace users get "Support" (their requests); the platform super admin gets the
+   *  "Support center" group with the inbox of every workspace's tickets. Never shown to demo accounts. */
+  private supportEntries(): NavEntry[] {
+    if (this.auth.isDemoViewer()) return [];
+    if (this.auth.isPlatformAdmin()) {
+      return [
+        this.group({
+          id: 'support-center',
+          label: 'Support center',
+          icon: 'support',
+          children: [{ id: 'admin-support-inbox', path: '/nd/admin/support', label: 'Support inbox', icon: 'inbox' }],
+        }),
+      ];
+    }
+    return [this.link({ id: 'support', path: '/nd/support', label: 'Support', icon: 'support' })];
+  }
+
   /// Menu order per the 28 Sep meeting: Overview, Analysis, Pending reviews, a divider, then
   /// Documents, then Administration. Inbox moved out of the sidebar entirely (it's a top-bar
   /// "Notifications" button now — see nd-shell.component.html). The old "Other" group (Landing AI +
@@ -1225,6 +1251,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
           ...(this.auth.isDemoViewer() ? [] : [this.group(this.regulatoryLibraryGroup())]),
           this.group(this.adminGroup()),
           ...(billing ? [this.group(billing)] : []),
+          ...this.supportEntries(),
         ];
       }
       case 'maker': {
@@ -1236,6 +1263,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
           this.divider('after-pending-reviews'),
           this.group(this.documentsGroup(role)),
           ...(this.auth.isDemoViewer() ? [] : [this.group(this.regulatoryLibraryGroup())]),
+          ...this.supportEntries(),
         ];
       }
       case 'checker': {
@@ -1257,6 +1285,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
             ],
           }),
           ...(pending ? [this.group(pending)] : []),
+          ...this.supportEntries(),
         ];
       }
       case 'reviewer': {
@@ -1278,6 +1307,7 @@ export class NdShellComponent implements OnInit, OnDestroy {
             ],
           }),
           ...(pending ? [this.group(pending)] : []),
+          ...this.supportEntries(),
         ];
       }
       default:

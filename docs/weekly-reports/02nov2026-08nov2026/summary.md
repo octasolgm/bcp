@@ -100,3 +100,25 @@ Investigated, follow up pending
 - Business Users panel tested in ABC: list, search, Add form fields and role change (changed and put back). Adding a real user and Deactivate not tested
 - Not yet tested: signing in as a user who belongs to several businesses, the switcher and their role in each; deleting a user with the new delete order
 - Not yet tested: what a non-admin account sees, because ABC has no non-admin user; saving Visible to on a real analysis, because ABC has no analyses
+
+06 Nov 2026
+
+Tasks
+- Created and pushed release/demo1 from release/2026.11.05.01
+- Started feature/support-center: Contact support for workspace users
+- Support button at the bottom right of every page opens a side panel: send a new request (Report an issue, Ask a question, Knowledge request, Feature request) with subject, priority and message; list of requests; chat on each request; mark resolved or reopen
+- Support item in the left menu opens the same requests as a full page
+- Workspace admins see all of their workspace's requests; other roles see their own
+- Unread badge on the Support button when support has replied
+- Platform super admin gets a Support center menu group with Support inbox: requests from every workspace, filter by status, workspace, type and priority, search by subject, sender or SUP number; reply, add internal notes the client never sees, change status and priority
+- Each request gets a number like SUP-00001; open chats check for new messages every few seconds
+- Demo accounts see no Support button or menu and the server refuses them; the platform super admin uses the inbox instead of the button
+- New tables nd_support_tickets and nd_support_messages are scoped to each workspace
+
+Bug fixes
+- None
+
+Investigated, follow up pending
+- Email alerts for new requests and replies: the Zoho free plan does not allow sending from other apps (SMTP); options are Azure Communication Services Email (recommended), a paid Zoho plan, or Brevo/SendGrid. Email is not built yet, waiting on the choice
+- Support center compiled and the new endpoints answer, but it is not yet tested signed in (sending a request, replying from the inbox, demo account hidden)
+- Attachments on requests are not included yet
