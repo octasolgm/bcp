@@ -279,9 +279,9 @@ export class NdActionPlansSectionComponent implements OnChanges {
         : this.departmentPool();
 
     if (this.draft.responsibilityType !== 'user' && !this.ndAuth.isDemoViewer()) {
-      // Departments as their tree: every level shown, search matches the full path.
+      // Departments as a collapsible tree; while typing, every match is shown with its full path.
       return pool
-        .filter((o) => !q || o.label.toLowerCase().includes(q))
+        .filter((o) => (q ? o.label.toLowerCase().includes(q) : this.deptVisible(o.departmentId)))
         .filter((o) => !this.draft.assignees.some((a) => sameAssignee(a, o)));
     }
 
@@ -600,7 +600,7 @@ export class NdActionPlansSectionComponent implements OnChanges {
     const q = this.reviewAssigneeQuery.trim().toLowerCase();
     return this.reviewAssigneeChoices
       .filter((c) => c.group === wanted)
-      .filter((c) => !q || c.label.toLowerCase().includes(q))
+      .filter((c) => (q ? c.label.toLowerCase().includes(q) : this.deptVisible(this.reviewDeptId(c.key))))
       .filter((c) => !this.reviewAssignees.some((a) => a.key === c.key))
       // Departments show the whole tree; people (and demo accounts) keep the short list.
       .slice(0, wanted === 'Departments' && !this.ndAuth.isDemoViewer() ? 1000 : 8);
@@ -644,6 +644,43 @@ export class NdActionPlansSectionComponent implements OnChanges {
 
   reviewDeptId(key: string): string | null {
     return key.startsWith('department:') ? key.slice('department:'.length) : null;
+  }
+
+  /** Departments whose units / teams are shown in the pickers (collapsed by default). */
+  expandedDepts = new Set<string>();
+
+  deptHasChildren(departmentId: string | null | undefined): boolean {
+    if (!departmentId || this.ndAuth.isDemoViewer()) return false;
+    return this.departmentRows().some((r) => r.dept.parentId === departmentId);
+  }
+
+  isDeptExpanded(departmentId: string | null | undefined): boolean {
+    return !!departmentId && this.expandedDepts.has(departmentId);
+  }
+
+  /** Shown when every department above it is expanded (people and demo rows are always shown). */
+  private deptVisible(departmentId: string | null | undefined): boolean {
+    if (!departmentId || this.ndAuth.isDemoViewer()) return true;
+    this.departmentRows();
+    let parent = this.treeById.get(departmentId)?.dept.parentId ?? null;
+    let guard = 0;
+    while (parent && guard++ < 10) {
+      if (!this.treeById.has(parent)) return true;
+      if (!this.expandedDepts.has(parent)) return false;
+      parent = this.treeById.get(parent)?.dept.parentId ?? null;
+    }
+    return true;
+  }
+
+  toggleDept(departmentId: string | null | undefined, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!departmentId) return;
+    const next = new Set(this.expandedDepts);
+    if (next.has(departmentId)) next.delete(departmentId);
+    else next.add(departmentId);
+    this.expandedDepts = next;
+    this.cdr.markForCheck();
   }
 
   setReviewAssigneeType(type: ActionPlanResponsibilityType): void {

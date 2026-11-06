@@ -942,3 +942,32 @@
 .ap-owner-suggestions button.ap-dept-top {
   font-weight: 600;
 }
+
+/* Collapsible department tree rows: an arrow to show / hide units and teams, then the name. */
+.ap-owner-suggestions li.ap-sugg-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+
+  > button:not(.ap-dept-caret) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.ap-owner-suggestions button.ap-dept-caret {
+  flex: 0 0 1.5rem;
+  width: 1.5rem;
+  padding: 0.35rem 0;
+  text-align: center;
+  color: var(--text-muted);
+  transition: transform 0.12s ease;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.ap-dept-caret-space {
+  flex: 0 0 1.5rem;
+}
