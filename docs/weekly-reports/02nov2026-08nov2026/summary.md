@@ -106,6 +106,7 @@ Investigated, follow up pending
 Tasks
 - New branch feature/demo1-plan-limits from release/demo1
 - Created and pushed release/2026.11.06.01 from feature/demo1-plan-limits: release/demo1 plus plan limits, coloured progress title and deactivation fixes; the support center is not included
+- Deployed release/2026.11.06.01 to Azure dev (API and web), shown as version 2026.11.06.02; API reported ready, new features confirmed in the live site files; not yet tested signed in on the live site
 - New per-analysis clause limit for each business: the platform super admin sets "Clauses per analysis" on Business workspaces; Business settings shows it read only
 - New businesses now start with 100 clauses in total (was 50) and 10 clauses per analysis; existing businesses and the demo keep their current values
 - New analysis shows a Demo plan notice for any business with a clause limit: clauses per analysis, clauses left, and selected out of the per-analysis limit
