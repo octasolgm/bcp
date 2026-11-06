@@ -432,6 +432,43 @@
                                 </button>
                               </form>
 
+                              <form class="limit-card" (ngSubmit)="saveAnalysisClauseLimit(item)">
+                                <div class="limit-card-head">
+                                  <strong>Clauses per analysis</strong>
+                                  <span class="muted">
+                                    @if (c.summary.maxClausesPerAnalysis != null) {
+                                      Up to {{ c.summary.maxClausesPerAnalysis | number: '1.0-0' }} per analysis
+                                    } @else {
+                                      Not limited
+                                    }
+                                  </span>
+                                </div>
+                                <div class="seg" role="group" aria-label="Clauses per analysis mode">
+                                  <button type="button" [class.on]="perAnalysisNoLimit" (click)="perAnalysisNoLimit = true">No limit</button>
+                                  <button type="button" [class.on]="!perAnalysisNoLimit" (click)="perAnalysisNoLimit = false">Set limit</button>
+                                </div>
+                                @if (!perAnalysisNoLimit) {
+                                  <div class="limit-field">
+                                    <div class="input-affix">
+                                      <input
+                                        type="number"
+                                        step="1"
+                                        min="1"
+                                        [(ngModel)]="perAnalysisInput"
+                                        name="perAnalysisInput-{{ item.workspace.id }}"
+                                        placeholder="10"
+                                        aria-label="Clauses per analysis"
+                                      />
+                                      <span class="affix">clauses</span>
+                                    </div>
+                                    <span class="limit-equiv">Most clauses one new analysis may include.</span>
+                                  </div>
+                                }
+                                <button type="submit" class="btn-secondary btn-sm limit-save" [disabled]="savingPerAnalysis">
+                                  {{ savingPerAnalysis ? 'Saving...' : 'Save per-analysis limit' }}
+                                </button>
+                              </form>
+
                               <form class="limit-card" (ngSubmit)="saveMarkup(item)">
                                 <div class="limit-card-head">
                                   <strong>Margin</strong>

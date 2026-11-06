@@ -659,6 +659,54 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Demo plan: how many clauses this business may analyse (set by the platform admin). */
+.plan-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-card));
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.plan-chip {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.plan-text {
+  flex: 1 1 14rem;
+  line-height: 1.4;
+}
+
+.plan-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-notice-over {
+  border-color: color-mix(in srgb, #dc2626 55%, var(--border));
+  background: color-mix(in srgb, #fee2e2 60%, var(--bg-card));
+
+  .plan-count {
+    color: #b91c1c;
+  }
+}
+
+.analyse-regul-page .stat-box.stat-box-over strong {
+  color: #dc2626;
+}
+
 .dv-failed-banner {
   display: flex;
   flex-wrap: wrap;

@@ -100,3 +100,28 @@ Investigated, follow up pending
 - Business Users panel tested in ABC: list, search, Add form fields and role change (changed and put back). Adding a real user and Deactivate not tested
 - Not yet tested: signing in as a user who belongs to several businesses, the switcher and their role in each; deleting a user with the new delete order
 - Not yet tested: what a non-admin account sees, because ABC has no non-admin user; saving Visible to on a real analysis, because ABC has no analyses
+
+06 Nov 2026
+
+Tasks
+- New branch feature/demo1-plan-limits from release/demo1
+- New per-analysis clause limit for each business: the platform super admin sets "Clauses per analysis" on Business workspaces; Business settings shows it read only
+- New businesses now start with 100 clauses in total (was 50) and 10 clauses per analysis; existing businesses and the demo keep their current values
+- New analysis shows a Demo plan notice for any business with a clause limit: clauses per analysis, clauses left, and selected out of the per-analysis limit
+- New analysis blocks Run analysis, with a reason, when the selection is over the per-analysis limit or over the clauses left; the server refuses the same on start
+- Progress title in the blue top bar on New analysis now has colour: amber with a pulsing dot while an analysis starts or runs, green when complete, red when it failed, stopped or did not start
+- Demo accounts see no notice and no limits; demo runs skip the limit checks as before
+
+Bug fixes
+- A user still signed in when their business was deactivated saw every page fail; they are now signed out once and the sign-in page says the workspace has been deactivated
+- A user whose home business was deactivated but who also belongs to another active business was locked out; they now continue in the other business
+
+Investigated, follow up pending
+- Business deactivation checked in code: sign-in is refused, every page is refused within about 30 seconds (members' cached access is cleared at once), the platform super admin keeps access, the default workspace cannot be deactivated
+- Tested signed in as platform super admin: a new business "Limit test" was created with 100 total and 10 per analysis; Clauses per analysis changed to 3 on Business workspaces and saved; New analysis in Limit test showed the Demo plan notice (3 per analysis, 100 of 100 left)
+- Tested on New analysis in the Default workspace with 30 clauses selected and a limit set in the page only (no data changed): over 3 per analysis, over clauses left and all clauses used each disabled Run analysis with the right message; within limits it was enabled; Default workspace itself shows no notice
+- Tested the amber progress title with pulsing dot; green and red use the same mechanism, not seen on a real run
+- Limit test was then deactivated (left deactivated, with 3 per analysis); platform super admin kept access
+- Not tested: a real user of a deactivated business being signed out, or moving to their other business, because there is no test user; the server refusing an over-limit start, because Limit test has no documents
+- Unit tests for the per-analysis limit added; 31 limit and workspace tests pass
+- This week's report on feature/support-center has its own 06 Nov section; combine the two when both branches are merged

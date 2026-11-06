@@ -15,6 +15,17 @@ export type RunGapEvidenceUpload = {
   attachments: PointGapAttachment[];
 };
 
+/** Fired on window when the API says the user's business has been deactivated (the shell signs them out). */
+export const ND_WORKSPACE_DEACTIVATED_EVENT = 'nd-workspace-deactivated';
+
+/** The business was deactivated while this user was signed in: tell the shell once, so it signs them out
+ *  instead of every page failing on its own. */
+function notifyIfWorkspaceDeactivated(status: number, raw: string | undefined): void {
+  if (status !== 403 || !raw || !/workspace has been deactivated/i.test(raw)) return;
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(ND_WORKSPACE_DEACTIVATED_EVENT, { detail: raw }));
+}
+
 /** Default ND API calls — Supabase pooler can exceed 25s under load (regul runs, cold start). */
 const API_TIMEOUT_MS = 60_000;
 /** Document/library catalog lists — first load after API restart can be slow on Supabase. */
@@ -404,6 +415,8 @@ export type NdWorkspaceSummary = {
   aiCreditLimit?: number | null;
   /** Most clauses this workspace may ever have analysed. Null/undefined = no limit. */
   clauseLimit?: number | null;
+  /** Most clauses one analysis may include. Null/undefined = no per-analysis limit. */
+  maxClausesPerAnalysis?: number | null;
   /** This workspace's own markup, overriding the platform default. Null/undefined = uses the default. */
   aiMarkupOverride?: number | null;
   /** Which country's date convention this workspace displays dates in. Null/undefined = UAE default. */
@@ -458,6 +471,8 @@ export type NdAiCreditSummary = {
   clausesUsed?: number;
   clausesRemaining?: number | null;
   clauseLimitReached?: boolean;
+  /** Most clauses one analysis may include (null/undefined = no per-analysis limit). */
+  maxClausesPerAnalysis?: number | null;
   /** This workspace's own markup override. Null/undefined = uses the platform default. */
   markupOverride?: number | null;
   /** The markup actually applied to this workspace's calls (override, else the platform default). */
@@ -898,6 +913,7 @@ export class NdApiService {
             ? body
             : body?.message ?? err.message ?? `Request failed (${err.status})`;
         const message = friendlyNdApiError(raw, err.status);
+        notifyIfWorkspaceDeactivated(err.status, raw);
         return { success: false, message, status: err.status };
       }
       const e = err as { error?: { message?: string }; message?: string };
@@ -1239,6 +1255,16 @@ export class NdApiService {
       `/nd/ai-credits/workspaces/${workspaceId}/clause-limit`,
       { clauseLimit },
     );
+  }
+
+  /** Sets the most clauses one analysis may include in this workspace. Pass null to remove the limit. */
+  setWorkspaceAnalysisClauseLimit(workspaceId: string, maxClausesPerAnalysis: number | null) {
+    return this.request<{
+      clauseLimit: number | null;
+      clausesUsed: number;
+      clausesRemaining: number | null;
+      maxClausesPerAnalysis: number | null;
+    }>('PUT', `/nd/ai-credits/workspaces/${workspaceId}/analysis-clause-limit`, { maxClausesPerAnalysis });
   }
 
   /** Sets this workspace's own markup, overriding the platform default. Pass null to use the default. */
@@ -2923,6 +2949,7 @@ export class NdApiService {
             ? body
             : body?.message ?? err.message ?? `Request failed (${err.status})`;
         const message = friendlyNdApiError(raw, err.status);
+        notifyIfWorkspaceDeactivated(err.status, raw);
         return { success: false, message, status: err.status };
       }
       const e = err as { message?: string };

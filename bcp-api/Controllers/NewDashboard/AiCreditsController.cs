@@ -153,6 +153,7 @@ public class AiCreditsController(
                 clausesUsed = clauses.Used,
                 clausesRemaining = clauses.Remaining,
                 clauseLimitReached = clauses.IsReached,
+                maxClausesPerAnalysis = clauses.PerAnalysisLimit,
             },
         });
     }
@@ -354,6 +355,7 @@ public class AiCreditsController(
                     clausesUsed = clauses.Used,
                     clausesRemaining = clauses.Remaining,
                     clauseLimitReached = clauses.IsReached,
+                maxClausesPerAnalysis = clauses.PerAnalysisLimit,
                     // Platform admin only: what the AI cost us against what this client was charged.
                     costUsd = totalCost,
                     billedUsd = totalBilled,
@@ -693,6 +695,41 @@ public class AiCreditsController(
                 clausesUsed = usage.Used,
                 clausesRemaining = usage.Remaining,
                 clauseLimitReached = usage.IsReached,
+                maxClausesPerAnalysis = usage.PerAnalysisLimit,
+            },
+        });
+    }
+
+    public record AnalysisClauseLimitRequest(int? MaxClausesPerAnalysis);
+
+    /// <summary>Sets (or clears, with null) the most clauses one analysis may include in this workspace.</summary>
+    [HttpPut("workspaces/{workspaceId:guid}/analysis-clause-limit")]
+    public async Task<IActionResult> SetAnalysisClauseLimit(Guid workspaceId, [FromBody] AnalysisClauseLimitRequest body, CancellationToken ct)
+    {
+        var (_, error) = await RequirePlatformAdminAsync(db, jwt, ct);
+        if (error != null) return error;
+
+        if (body.MaxClausesPerAnalysis is < 1)
+            return BadRequest(new { success = false, message = "Clauses per analysis must be at least 1, or empty for no limit." });
+
+        var ws = await db.NdWorkspaces.FirstOrDefaultAsync(w => w.Id == workspaceId, ct);
+        if (ws == null) return NotFound(new { success = false, message = "Workspace not found." });
+
+        ws.MaxClausesPerAnalysis = body.MaxClausesPerAnalysis;
+        ws.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var usage = await credits.GetClauseUsageAsync(workspaceId, ct);
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                clauseLimit = usage.Limit,
+                clausesUsed = usage.Used,
+                clausesRemaining = usage.Remaining,
+                clauseLimitReached = usage.IsReached,
+                maxClausesPerAnalysis = usage.PerAnalysisLimit,
             },
         });
     }

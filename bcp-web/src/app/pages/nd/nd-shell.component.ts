@@ -816,6 +816,20 @@ export class NdShellComponent implements OnInit, OnDestroy {
     await this.router.navigate(['/nd/auth/login']);
   }
 
+  private signingOutDeactivated = false;
+
+  /** The API said this user's business was deactivated while they were signed in: sign out once and
+   *  show why on the sign-in page (every page would otherwise just fail on its own). */
+  // Same name as ND_WORKSPACE_DEACTIVATED_EVENT (decorator arguments must be literal).
+  @HostListener('window:nd-workspace-deactivated')
+  async onWorkspaceDeactivated(): Promise<void> {
+    if (this.signingOutDeactivated || this.auth.isPlatformAdmin()) return;
+    this.signingOutDeactivated = true;
+    await this.auth.signOut();
+    this.closeSettings();
+    await this.router.navigate(['/nd/auth/login'], { queryParams: { reason: 'business-deactivated' } });
+  }
+
   private link(item: NavItem): NavEntry {
     return { kind: 'link', item };
   }

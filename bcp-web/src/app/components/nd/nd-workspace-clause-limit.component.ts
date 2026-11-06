@@ -32,6 +32,7 @@ import { NdApiService } from '../../services/nd/nd-api.service';
       } @else {
         <dl class="cl-list">
           <div><dt>Clause limit</dt><dd>{{ limit ?? 'No limit' }}</dd></div>
+          <div><dt>Clauses per analysis</dt><dd>{{ perAnalysis ?? 'No limit' }}</dd></div>
         </dl>
       }
       <p class="cl-used">
@@ -70,6 +71,7 @@ export class NdWorkspaceClauseLimitComponent implements OnChanges {
   limit: number | null = null;
   used = 0;
   remaining: number | null = null;
+  perAnalysis: number | null = null;
   limitInput: number | null = null;
   loading = true;
   saving = false;
@@ -99,8 +101,10 @@ export class NdWorkspaceClauseLimitComponent implements OnChanges {
     this.cdr.markForCheck();
     const res = await this.api.getMyAiCredits();
     this.loading = false;
-    if (res.success && res.data) this.apply(res.data.clauseLimit, res.data.clausesUsed, res.data.clausesRemaining);
-    else this.error = res.message ?? 'Could not load the clause limit.';
+    if (res.success && res.data) {
+      this.apply(res.data.clauseLimit, res.data.clausesUsed, res.data.clausesRemaining);
+      this.perAnalysis = res.data.maxClausesPerAnalysis ?? null;
+    } else this.error = res.message ?? 'Could not load the clause limit.';
     this.cdr.markForCheck();
   }
 

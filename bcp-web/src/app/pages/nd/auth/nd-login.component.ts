@@ -24,6 +24,13 @@ export class NdLoginComponent {
   loading = false;
   showPassword = false;
 
+  constructor() {
+    // Sent here after the business was deactivated during a session.
+    if (this.router.parseUrl(this.router.url).queryParams['reason'] === 'business-deactivated') {
+      this.error = 'Your workspace has been deactivated. Contact your administrator.';
+    }
+  }
+
   async submit(): Promise<void> {
     this.error = '';
     if (!this.email.trim() || !this.password) {

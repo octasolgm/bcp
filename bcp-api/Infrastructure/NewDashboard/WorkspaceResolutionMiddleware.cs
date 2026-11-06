@@ -121,6 +121,23 @@ public sealed class WorkspaceResolutionMiddleware(RequestDelegate next)
                 .FirstOrDefaultAsync(ct);
         }
 
+        if (workspace is not { IsActive: true } && profile is { IsPlatformAdmin: false })
+        {
+            // Home business deactivated: a user who also works in another, still active business carries on
+            // there instead of being locked out. Users with no other active business stay blocked.
+            var fallback = await db.NdWorkspaceMembers.AsNoTracking()
+                .Where(m => m.ProfileId == userId && m.IsActive
+                    && db.NdWorkspaces.Any(w => w.Id == m.WorkspaceId && w.IsActive))
+                .OrderBy(m => m.CreatedAt)
+                .Select(m => (Guid?)m.WorkspaceId)
+                .FirstOrDefaultAsync(ct);
+            if (fallback is Guid other)
+            {
+                target = other;
+                workspace = new { Id = other, IsActive = true };
+            }
+        }
+
         var state = new WorkspaceScopeState(
             target,
             home,

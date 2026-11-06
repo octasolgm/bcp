@@ -24,10 +24,15 @@ import { InProgressNavButtonComponent } from '../in-progress-nav-button/in-progr
         <h1 class="nd-page-header-title">{{ titleOverride() || title }}</h1>
       </div>
       @if (marqueeText(); as ticker) {
-        <div class="nd-page-header-marquee" aria-live="polite">
-          <div class="nd-page-header-marquee-track">
-            <span class="nd-page-header-marquee-text">{{ ticker }}</span>
-            <span class="nd-page-header-marquee-text" aria-hidden="true">{{ ticker }}</span>
+        <div class="nd-page-header-marquee" [class]="'tone-' + marqueeTone()" aria-live="polite">
+          @if (marqueeTone() === 'active') {
+            <span class="nd-page-header-marquee-dot" aria-hidden="true"></span>
+          }
+          <div class="nd-page-header-marquee-viewport">
+            <div class="nd-page-header-marquee-track">
+              <span class="nd-page-header-marquee-text">{{ ticker }}</span>
+              <span class="nd-page-header-marquee-text" aria-hidden="true">{{ ticker }}</span>
+            </div>
           </div>
         </div>
       }
@@ -130,6 +135,7 @@ export class NdPageHeaderComponent {
 
   readonly headerActions = this.actionsService.actions;
   readonly marqueeText = this.actionsService.marquee;
+  readonly marqueeTone = this.actionsService.marqueeTone;
   readonly showInProgressNav = this.actionsService.showInProgressNav;
   readonly titleOverride = this.actionsService.titleOverride;
 }

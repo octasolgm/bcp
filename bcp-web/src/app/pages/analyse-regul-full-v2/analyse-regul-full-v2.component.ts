@@ -22,7 +22,7 @@ import { indexGapStates } from '../../../lib/nd/gap-state';
 import type { GapEvidenceReview } from '../../../lib/nd/gap-evidence-rerun';
 import { NdPipelinePanelService } from '../../services/nd/nd-pipeline-panel.service';
 import { NdStepTrackerService, type NdStep } from '../../services/nd/nd-step-tracker.service';
-import { NdPageHeaderActionsService } from '../../services/nd/nd-page-header-actions.service';
+import { NdPageHeaderActionsService, type NdMarqueeTone } from '../../services/nd/nd-page-header-actions.service';
 import type { NdLocalExtractionSection } from '../../services/nd/nd-api.service';
 import { startPanelResize } from '../shared/panel-resize';
 import { capGapsForAnalysisPoint } from '../../../lib/nd/cap-gap-count';
@@ -321,6 +321,7 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     this.syncPageHeaderMarquee();
     this.pageHeaderActions.setShowInProgressNav(true);
     super.ngOnInit();
+    void this.loadPlanLimits();
     void this.loadFinishSoundMode();
     // Doc lists themselves load asynchronously (super.ngOnInit kicks that off), and how long
     // that takes varies with network/DB latency — no fixed delay is ever safely "long enough".
@@ -347,26 +348,38 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   /** Mirrors the Progress column empty/live/complete states in the blue shell header ticker. */
   private syncPageHeaderMarquee(): void {
     let text: string;
+    let tone: NdMarqueeTone = 'idle';
     const runStatus = (this.ndRunWorkflowStatus || '').toLowerCase();
     if (this.runStartingCount) {
       text = `Starting analysis · ${this.runStartingCount} points`;
+      tone = 'active';
     } else if (!this.ndAuth.isDemoViewer() && this.ndRunId && !this.ndRunInFlight) {
       // The page keeps its run view open for a run that stopped early, but nothing is running.
-      if (runStatus === 'failed') text = 'This analysis did not finish';
-      else if (runStatus === 'cancelled') text = `Analysis stopped · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
-      else text = `Analysis complete · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
+      if (runStatus === 'failed') {
+        text = 'This analysis did not finish';
+        tone = 'warn';
+      } else if (runStatus === 'cancelled') {
+        text = `Analysis stopped · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
+        tone = 'warn';
+      } else {
+        text = `Analysis complete · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
+        tone = 'done';
+      }
     } else if (this.showLiveProgressColumn) {
       const summary = this.forwardClauseProgressSummary;
       const count = this.sessionProgressLabel;
       text = `${summary} · Clauses ${count}`;
+      tone = 'active';
     } else if (this.showPostAnalysisWorkflow) {
       text = `Analysis complete · ${this.analysingListDone}/${this.analysingListTotal} points analysed`;
+      tone = 'done';
     } else if (this.isNdRunStuck) {
       text = 'Analysis did not start — use Rerun all or rerun each point below';
+      tone = 'warn';
     } else {
       text = 'Run analysis to see live progress here';
     }
-    this.pageHeaderActions.setMarquee(text);
+    this.pageHeaderActions.setMarquee(text, tone);
   }
 
   /** Recursive self-pacing poll: fires every ~200ms until the doc lists have actually populated
@@ -1017,7 +1030,66 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
     }
   }
 
+  // ---- Plan limits (real accounts only; demo accounts are a fixed simulation and never limited) ----
+
+  /** This business's clause limits and usage, from Business settings. Null until loaded or for demo accounts. */
+  planLimits: {
+    clauseLimit: number | null;
+    clausesUsed: number;
+    clausesRemaining: number | null;
+    maxClausesPerAnalysis: number | null;
+  } | null = null;
+
+  private async loadPlanLimits(): Promise<void> {
+    if (!this.isNdShell || this.ndAuth.isDemoViewer()) return;
+    const res = await this.ndApi.getMyAiCredits();
+    if (!res.success || !res.data) return;
+    this.planLimits = {
+      clauseLimit: res.data.clauseLimit ?? null,
+      clausesUsed: res.data.clausesUsed ?? 0,
+      clausesRemaining: res.data.clausesRemaining ?? null,
+      maxClausesPerAnalysis: res.data.maxClausesPerAnalysis ?? null,
+    };
+  }
+
+  /** "You are on the Demo plan": shown when this business has any clause limit. */
+  get showPlanNotice(): boolean {
+    const p = this.planLimits;
+    return !!p && !this.ndAuth.isDemoViewer() && (p.clauseLimit != null || p.maxClausesPerAnalysis != null);
+  }
+
+  /** Why the current selection does not fit the plan, or null when it does (or nothing is limited). */
+  get planLimitBlockReason(): string | null {
+    const p = this.planLimits;
+    if (!p || this.ndAuth.isDemoViewer() || this.isSessionActive) return null;
+    // A run already part way through may finish; the server checks only fresh starts too.
+    if (this.ndRunId && this.analysingListDone > 0) return null;
+    const n = this.selectedCount;
+    if (p.clauseLimit != null && (p.clausesRemaining ?? 0) <= 0) {
+      return `Your plan's ${p.clauseLimit} clauses are all used. Ask your administrator to raise the clause limit.`;
+    }
+    if (n <= 0) return null;
+    if (p.maxClausesPerAnalysis != null && n > p.maxClausesPerAnalysis) {
+      return `Your plan allows up to ${p.maxClausesPerAnalysis} clauses per analysis. You selected ${n} - remove ${n - p.maxClausesPerAnalysis} to continue.`;
+    }
+    if (p.clausesRemaining != null && n > p.clausesRemaining) {
+      return `You selected ${n} clauses but your plan has ${p.clausesRemaining} left. Remove ${n - p.clausesRemaining} to continue.`;
+    }
+    return null;
+  }
+
+  /** Selected clauses go over the per-analysis or remaining limit (drives the red counter). */
+  get planOverLimit(): boolean {
+    return !!this.planLimitBlockReason && this.selectedCount > 0;
+  }
+
+  override get canRun(): boolean {
+    return super.canRun && !this.planLimitBlockReason;
+  }
+
   override get runBlockedReason(): string | null {
+    const planReason = this.planLimitBlockReason;
+    if (planReason) return planReason;
     if (this.ndAuth.isDemoViewer() && this.isNdShell) {
       return super.runBlockedReason;
     }

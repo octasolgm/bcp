@@ -82,6 +82,9 @@ export class NdAdminWorkspacesComponent implements OnInit {
   clauseLimitNoLimit = true;
   clauseLimitInput: number | null = null;
   savingClauseLimit = false;
+  perAnalysisNoLimit = true;
+  perAnalysisInput: number | null = null;
+  savingPerAnalysis = false;
   savingCreditLimit = false;
   markupUseDefault = true;
   markupInput: number | null = null;
@@ -233,6 +236,8 @@ export class NdAdminWorkspacesComponent implements OnInit {
         : Math.round(item.workspace.aiCreditLimit * this.priceUsdPerCredit * 100) / 100;
     this.clauseLimitNoLimit = item.workspace.clauseLimit == null;
     this.clauseLimitInput = item.workspace.clauseLimit ?? null;
+    this.perAnalysisNoLimit = item.workspace.maxClausesPerAnalysis == null;
+    this.perAnalysisInput = item.workspace.maxClausesPerAnalysis ?? null;
     this.markupUseDefault = item.workspace.aiMarkupOverride == null;
     this.markupInput = item.workspace.aiMarkupOverride ?? null;
     this.creditsLoading = true;
@@ -313,6 +318,26 @@ export class NdAdminWorkspacesComponent implements OnInit {
     }
     item.workspace.clauseLimit = limit;
     this.message = limit == null ? `"${item.workspace.name}" now has no clause limit.` : 'Clause limit saved.';
+    const refreshed = await this.api.getWorkspaceAiCredits(item.workspace.id);
+    if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
+  }
+
+  async saveAnalysisClauseLimit(item: NdWorkspaceListItem): Promise<void> {
+    const limit = this.perAnalysisNoLimit ? null : Math.floor(Number(this.perAnalysisInput));
+    if (!this.perAnalysisNoLimit && (limit == null || !Number.isFinite(limit) || limit < 1)) {
+      this.error = 'Enter at least 1 clause per analysis, or choose "No limit".';
+      return;
+    }
+    this.savingPerAnalysis = true;
+    const res = await this.api.setWorkspaceAnalysisClauseLimit(item.workspace.id, limit);
+    this.savingPerAnalysis = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not save the per-analysis limit';
+      return;
+    }
+    item.workspace.maxClausesPerAnalysis = limit;
+    this.message =
+      limit == null ? `"${item.workspace.name}" now has no per-analysis limit.` : 'Per-analysis clause limit saved.';
     const refreshed = await this.api.getWorkspaceAiCredits(item.workspace.id);
     if (refreshed.success && refreshed.data) this.credits.set(item.workspace.id, refreshed.data);
   }

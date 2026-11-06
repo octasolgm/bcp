@@ -101,8 +101,10 @@ public partial class WorkspacesController(
         });
     }
 
-    /// <summary>Clause limit a new workspace starts with; the platform admin can change or clear it.</summary>
-    private const int DefaultClauseLimit = 50;
+    /// <summary>Clause limits a new workspace starts with (total, and per analysis); the platform admin can
+    /// change or clear either one.</summary>
+    private const int DefaultClauseLimit = 100;
+    private const int DefaultMaxClausesPerAnalysis = 10;
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateWorkspaceRequest body, CancellationToken ct)
@@ -136,6 +138,7 @@ public partial class WorkspacesController(
             MaxUploadMb = NdUploadLimits.DefaultMaxUploadMb,
             MaxStorageMb = NdUploadLimits.DefaultMaxStorageMb,
             ClauseLimit = DefaultClauseLimit,
+            MaxClausesPerAnalysis = DefaultMaxClausesPerAnalysis,
         };
         db.NdWorkspaces.Add(workspace);
         await db.SaveChangesAsync(ct);
@@ -666,6 +669,7 @@ public partial class WorkspacesController(
         aiCreditLowThresholdPct = w.AiCreditLowThresholdPct,
         aiCreditLimit = w.AiCreditLimit,
         clauseLimit = w.ClauseLimit,
+        maxClausesPerAnalysis = w.MaxClausesPerAnalysis,
         aiMarkupOverride = w.AiMarkupOverride,
         dateFormatRegion = w.DateFormatRegion,
         actionsEnabled = w.ActionsEnabled,

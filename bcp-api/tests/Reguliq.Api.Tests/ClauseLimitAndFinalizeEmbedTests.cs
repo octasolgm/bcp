@@ -67,6 +67,30 @@ public class ClauseLimitAndFinalizeEmbedTests
         Assert.False(usage.Fits(40));
     }
 
+    [Theory]
+    [InlineData(null, 500, true)] // no per-analysis limit
+    [InlineData(10, 10, true)]    // exactly the limit
+    [InlineData(10, 11, false)]   // one clause too many
+    [InlineData(10, 1, true)]
+    public void Per_analysis_limit_allows_only_analyses_within_it(int? perAnalysis, int clauses, bool fits) =>
+        Assert.Equal(fits, new NdClauseUsage(100, 0, perAnalysis).FitsOneAnalysis(clauses));
+
+    [Fact]
+    public async Task Clause_usage_carries_the_per_analysis_limit()
+    {
+        var bank = Guid.NewGuid();
+        await using var db = CreateDb();
+        db.NdWorkspaces.Add(new NdWorkspace { Id = bank, Name = "Bank", Slug = "bank", ClauseLimit = 100, MaxClausesPerAnalysis = 10 });
+        await db.SaveChangesAsync();
+
+        var usage = await new NdAiCreditService(db, new MemoryCache(new MemoryCacheOptions())).GetClauseUsageAsync(bank);
+
+        Assert.Equal(100, usage.Limit);
+        Assert.Equal(10, usage.PerAnalysisLimit);
+        Assert.True(usage.FitsOneAnalysis(10));
+        Assert.False(usage.FitsOneAnalysis(11));
+    }
+
     private static NdActionPlanEmbedTarget Target(Guid docId, int? page, string action = "Amend the manual to define PEPs.") =>
         new(docId, page, "anchor", "6.1.1", "Customer due diligence", "PEP definition missing.", action,
             "Compliance", DateTimeOffset.UtcNow, "Reviewer", GapIndex: 1);

@@ -812,8 +812,25 @@
         }
       </div>
     }
+    @if (showPlanNotice && planLimits; as plan) {
+      <div class="plan-notice" [class.plan-notice-over]="planOverLimit" role="status">
+        <span class="plan-chip">Demo plan</span>
+        <span class="plan-text">
+          You are on the Demo plan.
+          @if (plan.maxClausesPerAnalysis != null) {
+            Up to <strong>{{ plan.maxClausesPerAnalysis }}</strong> clauses per analysis.
+          }
+          @if (plan.clauseLimit != null) {
+            <strong>{{ plan.clausesRemaining ?? 0 }}</strong> of {{ plan.clauseLimit }} clauses left.
+          }
+        </span>
+        @if (plan.maxClausesPerAnalysis != null && !isSessionActive) {
+          <span class="plan-count">Selected {{ selectedCount }} / {{ plan.maxClausesPerAnalysis }}</span>
+        }
+      </div>
+    }
     <div class="metrics-row metrics-row-2">
-      <div class="stat-box">
+      <div class="stat-box" [class.stat-box-over]="planOverLimit">
         <strong>{{ selectedCount }}</strong>
         <em>Regulation points</em>
       </div>

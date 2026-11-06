@@ -58,6 +58,20 @@ One person can now work in several businesses using the same login, with a separ
 
 Business settings are now clearly separated. Modules, the clause limit and upload limits are changed on the Business workspaces page, and the Business settings page shows them as view only.
 
+## Plan limits on New analysis
+
+Each business can now have a limit on how many clauses one analysis may include, alongside the existing limit on the total number of clauses it may analyse. New businesses start with 10 clauses per analysis and 100 clauses in total, and our team can change either limit at any time.
+
+When a business has a limit, the New analysis page shows that it is on the Demo plan, how many clauses one analysis may include, and how many clauses are left. If the selected clauses go over a limit, the page explains why and the analysis cannot be started until fewer clauses are selected.
+
+## Clearer analysis progress
+
+The progress message in the top bar of the New analysis page now uses colour so it is easy to notice. It is amber with a pulsing dot while an analysis is starting or running, green when it is complete, and red if it did not finish.
+
+## Deactivated businesses
+
+When a business is deactivated, anyone still signed in to it is now signed out straight away and told that their workspace has been deactivated, instead of seeing errors on every page. People who also work in another business that is still active continue in that business.
+
 ## Being worked on
 
 We are confirming the New analysis selection and clause number changes on a full analysis run before releasing them.
@@ -71,3 +85,5 @@ We corrected a setting that stopped the link in password reset emails from retur
 We are completing final testing of the department access rules with non-admin accounts before releasing them.
 
 We have also prepared separate query dictionaries and synonyms for each business, and will schedule this change separately.
+
+We are testing the new plan limits and the deactivation changes with real accounts before releasing them.

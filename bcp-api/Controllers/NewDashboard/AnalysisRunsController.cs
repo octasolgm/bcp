@@ -64,6 +64,25 @@ public class AnalysisRunsController(
     {
         var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? WorkspaceScope.DefaultWorkspaceId;
         var usage = await aiCredits.GetClauseUsageAsync(workspaceId, ct);
+
+        // Per-analysis cap: checked on a fresh start only, so a run already part way through can finish.
+        if (run.ProcessedPointsCount == 0 && !usage.FitsOneAnalysis(run.TotalPointsCount))
+        {
+            return StatusCode(402, new
+            {
+                success = false,
+                code = "analysis_clause_limit",
+                message = $"This analysis has {run.TotalPointsCount} clauses, but your plan allows up to {usage.PerAnalysisLimit} clauses per analysis. Select fewer clauses, or ask your administrator to raise the limit.",
+                data = new
+                {
+                    maxClausesPerAnalysis = usage.PerAnalysisLimit,
+                    clauseLimit = usage.Limit,
+                    clausesUsed = usage.Used,
+                    clausesRemaining = usage.Remaining,
+                },
+            });
+        }
+
         if (!usage.HasLimit) return null;
         var toRun = Math.Max(0, run.TotalPointsCount - run.ProcessedPointsCount);
         if (usage.Fits(toRun)) return null;

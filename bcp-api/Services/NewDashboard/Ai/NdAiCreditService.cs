@@ -29,9 +29,12 @@ public sealed record NdAiCreditSummary(
 }
 
 /// <summary>How many clauses a workspace has had analysed against its clause limit (null = no limit).</summary>
-public sealed record NdClauseUsage(int? Limit, int Used)
+public sealed record NdClauseUsage(int? Limit, int Used, int? PerAnalysisLimit = null)
 {
     public bool HasLimit => Limit.HasValue;
+
+    /// <summary>True when one analysis of <paramref name="clauses"/> clauses is within the per-analysis limit.</summary>
+    public bool FitsOneAnalysis(int clauses) => !PerAnalysisLimit.HasValue || clauses <= PerAnalysisLimit.Value;
     public bool IsReached => Limit.HasValue && Used >= Limit.Value;
     public int? Remaining => Limit.HasValue ? Math.Max(0, Limit.Value - Used) : null;
 
@@ -98,14 +101,14 @@ public sealed class NdAiCreditService(AppDbContext db, IMemoryCache cache)
     /// </summary>
     public async Task<NdClauseUsage> GetClauseUsageAsync(Guid workspaceId, CancellationToken ct = default)
     {
-        var limit = await db.NdWorkspaces.AsNoTracking()
+        var limits = await db.NdWorkspaces.AsNoTracking()
             .Where(w => w.Id == workspaceId)
-            .Select(w => w.ClauseLimit)
+            .Select(w => new { w.ClauseLimit, w.MaxClausesPerAnalysis })
             .FirstOrDefaultAsync(ct);
         var used = await db.NdAnalysisRuns.IgnoreQueryFilters().AsNoTracking()
             .Where(r => r.TenantId == workspaceId)
             .SumAsync(r => (int?)r.ProcessedPointsCount, ct) ?? 0;
-        return new NdClauseUsage(limit, used);
+        return new NdClauseUsage(limits?.ClauseLimit, used, limits?.MaxClausesPerAnalysis);
     }
 
     /// <summary>Adds credits (or removes them, as an adjustment) and returns the new position.</summary>

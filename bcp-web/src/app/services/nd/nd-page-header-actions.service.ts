@@ -47,12 +47,17 @@ export type NdPageHeaderActionsState = {
   history?: NdPageHeaderHistoryAction;
 };
 
+export type NdMarqueeTone = 'idle' | 'active' | 'done' | 'warn';
+
 /** Routed ND pages register refresh/upload controls for the shell title bar. */
 @Injectable({ providedIn: 'root' })
 export class NdPageHeaderActionsService {
   readonly actions = signal<NdPageHeaderActionsState | null>(null);
   /** Center ticker on the blue page header (e.g. New Analysis live progress). */
   readonly marquee = signal<string | null>(null);
+  /** Colour of the ticker so a running analysis stands out: active (amber, pulsing), done (green),
+   *  warn (red), idle (plain white text). */
+  readonly marqueeTone = signal<NdMarqueeTone>('idle');
   /** Shell header "In progress" nav — only New Analysis opts in. */
   readonly showInProgressNav = signal(false);
   /** When set, replaces the shell blue bar title (e.g. unified gap report matching review workspace). */
@@ -62,9 +67,10 @@ export class NdPageHeaderActionsService {
     this.actions.set(state);
   }
 
-  setMarquee(text: string | null): void {
+  setMarquee(text: string | null, tone: NdMarqueeTone = 'idle'): void {
     const trimmed = text?.trim() ?? '';
     this.marquee.set(trimmed ? trimmed : null);
+    this.marqueeTone.set(tone);
   }
 
   clearActions(): void {
@@ -73,6 +79,7 @@ export class NdPageHeaderActionsService {
 
   clearMarquee(): void {
     this.marquee.set(null);
+    this.marqueeTone.set('idle');
   }
 
   setShowInProgressNav(show: boolean): void {

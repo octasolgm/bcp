@@ -41,6 +41,11 @@ public class NdWorkspace
     [Column("clause_limit")]
     public int? ClauseLimit { get; set; }
 
+    /// <summary>Most clauses one analysis may include. Null = no per-analysis limit. Works alongside
+    /// <see cref="ClauseLimit"/>: a new analysis must fit both.</summary>
+    [Column("max_clauses_per_analysis")]
+    public int? MaxClausesPerAnalysis { get; set; }
+
     /// <summary>Per-workspace markup override. Null = use the platform default markup.</summary>
     [Column("ai_markup_override")]
     public decimal? AiMarkupOverride { get; set; }
