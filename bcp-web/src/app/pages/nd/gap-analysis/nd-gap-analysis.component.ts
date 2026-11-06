@@ -389,7 +389,7 @@ export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {
   /** Evals are a platform-admin tool for real Regul analyses (never shown to demo accounts). */
   get canUseEvals(): boolean {
     return !this.embedMode && !!this.ndRunId && this.isNdRegulWorkflow
-      && this.auth.isPlatformAdmin() && !this.auth.isDemoViewer();
+      && this.auth.isPlatformAdminInDefaultWorkspace();
   }
 
   /** Temporary test of the "sound when an analysis finishes" notification on an existing analysis: plays the chime

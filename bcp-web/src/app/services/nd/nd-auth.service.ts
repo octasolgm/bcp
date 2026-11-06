@@ -46,6 +46,13 @@ export class NdAuthService {
     return p?.role === 'super_admin' && p.isPlatformAdmin === true;
   }
 
+  /** Platform super admin working in the Default workspace (not inside a client business). Internal
+   *  tools such as Evals are shown only here. */
+  isPlatformAdminInDefaultWorkspace(): boolean {
+    const ws = this.profileSignal()?.workspace?.id ?? this.profileSignal()?.workspaceId;
+    return this.isPlatformAdmin() && !this.isDemoViewer() && ws === '00000000-0000-0000-0000-000000000001';
+  }
+
   /** Workspace management is platform-only and never shown to demo accounts. */
   canManageWorkspaces(): boolean {
     return this.isPlatformAdmin() && !this.isDemoViewer();
