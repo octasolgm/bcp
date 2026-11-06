@@ -170,11 +170,15 @@ public class AnalysisRunsController(
             hiddenLegacySet = hiddenLegacy.ToHashSet();
         }
 
+        var departmentScope = await NdDepartmentAccess.ResolveAsync(db, profile!, demoCtx, ct);
         var q = NdDemoDataFilters.ApplyToAnalysisRuns(
             db.NdAnalysisRuns.AsNoTracking().Where(r => r.Status != DeletedStatus),
-            demoCtx).ApplyToRuns(db, await NdDepartmentAccess.ResolveAsync(db, profile!, demoCtx, ct));
+            demoCtx).ApplyToRuns(db, departmentScope);
 
-        if (profile!.Role == "maker" || mineOnly)
+        // Real makers: their own analyses plus those shared with their departments. Demo and "mine only" as before.
+        if (profile!.Role == "maker" && !demoCtx.ViewerIsDemo)
+            q = q.ApplyMakerVisibility(db, departmentScope);
+        else if (profile.Role == "maker" || mineOnly)
             q = NdDemoDataFilters.ApplyMakerRunScope(q, profile.Id, profile.Role, mineOnly, demoCtx);
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -848,7 +852,8 @@ public class AnalysisRunsController(
         if (run == null) return NotFound(new { success = false, message = "Not found" });
         if (run.Status == DeletedStatus)
             return NotFound(new { success = false, message = "Not found" });
-        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id
+            && !await NdDepartmentAccess.IsRunSharedWithAsync(db, profile, run.Id, ct))
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
@@ -876,7 +881,8 @@ public class AnalysisRunsController(
 
         var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
-        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id
+            && !await NdDepartmentAccess.IsRunSharedWithAsync(db, profile, run.Id, ct))
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);
@@ -930,7 +936,8 @@ public class AnalysisRunsController(
 
         var run = await db.NdAnalysisRuns.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct);
         if (run == null) return NotFound(new { success = false, message = "Not found" });
-        if (profile!.Role == "maker" && run.CreatedBy != profile.Id)
+        if (profile!.Role == "maker" && run.CreatedBy != profile.Id
+            && !await NdDepartmentAccess.IsRunSharedWithAsync(db, profile, run.Id, ct))
             return StatusCode(403, new { success = false, message = "Forbidden" });
 
         var demoCtx = await NdDemoIsolationContext.ResolveAsync(demoDirectory, user, ct);

@@ -126,7 +126,7 @@ export class NdAnalysisRunsComponent implements OnInit {
         : this.finalizedOnly
           ? 'Analyses the reviewer has finalized'
           : this.mineOnly && role === 'maker'
-            ? 'Runs you created'
+            ? 'Analyses you created, and analyses shared with your departments'
             : 'All compliance analysis runs across the workspace';
       this.page = 1;
       void this.load();

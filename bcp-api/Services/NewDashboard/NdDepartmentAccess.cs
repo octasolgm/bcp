@@ -33,10 +33,14 @@ public static class NdDepartmentAccess
     private static bool IsHomeHere(NdProfile profile) =>
         WorkspaceScope.CurrentWorkspaceId is not Guid current || current == profile.TenantId;
 
-    public static async Task<NdDepartmentScope> ResolveAsync(
-        AppDbContext db, NdProfile profile, NdDemoIsolationContext demoCtx, CancellationToken ct)
+    public static Task<NdDepartmentScope> ResolveAsync(
+        AppDbContext db, NdProfile profile, NdDemoIsolationContext demoCtx, CancellationToken ct) =>
+        ResolveForProfileAsync(db, profile, demoCtx.ViewerIsDemo, ct);
+
+    private static async Task<NdDepartmentScope> ResolveForProfileAsync(
+        AppDbContext db, NdProfile profile, bool viewerIsDemo, CancellationToken ct)
     {
-        if (profile.Role == "super_admin" || demoCtx.ViewerIsDemo) return NdDepartmentScope.All(profile.Id);
+        if (profile.Role == "super_admin" || viewerIsDemo) return NdDepartmentScope.All(profile.Id);
 
         var own = await UserDepartmentIdsAsync(db, profile, ct);
         if (own.Count == 0) return new NdDepartmentScope(false, profile.Id, [], []);
@@ -71,6 +75,30 @@ public static class NdDepartmentAccess
         return query.Where(r => r.CreatedBy == me
             || !db.NdAnalysisRunDepartments.Any(l => l.AnalysisRunId == r.Id)
             || db.NdAnalysisRunDepartments.Any(l => l.AnalysisRunId == r.Id && ids.Contains(l.DepartmentId)));
+    }
+
+    /// <summary>
+    /// What a maker sees: analyses they created, plus analyses explicitly shared with one of their departments
+    /// (Visible to). Analyses left on "All departments" stay with their creator, as before.
+    /// </summary>
+    public static IQueryable<NdAnalysisRun> ApplyMakerVisibility(this IQueryable<NdAnalysisRun> query, AppDbContext db, NdDepartmentScope scope)
+    {
+        var me = scope.ProfileId;
+        var ids = scope.RunDepartmentIds;
+        if (scope.Unrestricted || ids.Count == 0) return query.Where(r => r.CreatedBy == me);
+        return query.Where(r => r.CreatedBy == me
+            || db.NdAnalysisRunDepartments.Any(l => l.AnalysisRunId == r.Id && ids.Contains(l.DepartmentId)));
+    }
+
+    /// <summary>True when this analysis is shared (Visible to) with one of the user's departments, so a maker who did
+    /// not create it may still read it. Changing it stays with its creator.</summary>
+    public static async Task<bool> IsRunSharedWithAsync(AppDbContext db, NdProfile profile, Guid runId, CancellationToken ct)
+    {
+        var scope = await ResolveForProfileAsync(db, profile, viewerIsDemo: false, ct);
+        var ids = scope.RunDepartmentIds;
+        if (scope.Unrestricted || ids.Count == 0) return false;
+        return await db.NdAnalysisRunDepartments.AsNoTracking()
+            .AnyAsync(l => l.AnalysisRunId == runId && ids.Contains(l.DepartmentId), ct);
     }
 
     public static IQueryable<StoredDocument> ApplyToDocuments(this IQueryable<StoredDocument> query, AppDbContext db, NdDepartmentScope scope)

@@ -146,7 +146,8 @@ public class GapEvidenceRerunsController(
             .Select(r => new { r.CreatedBy })
             .FirstOrDefaultAsync(ct);
         if (run == null) return NotFound(new { success = false, message = "Analysis run not found." });
-        if (profile.Role == "maker" && run.CreatedBy != profile.Id) return StatusCode(403);
+        if (profile.Role == "maker" && run.CreatedBy != profile.Id
+            && !await NdDepartmentAccess.IsRunSharedWithAsync(db, profile, runId, ct)) return StatusCode(403);
         return null;
     }
 

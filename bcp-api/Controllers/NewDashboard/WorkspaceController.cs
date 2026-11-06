@@ -57,7 +57,9 @@ public class WorkspaceController(
             {
                 var q = NdDemoDataFilters.ApplyToAnalysisRuns(ctx.NdAnalysisRuns.AsNoTracking(), demoCtx)
                     .ApplyToRuns(ctx, departmentScope);
-                return NdDemoDataFilters.ApplyMakerRunScope(q, profile.Id, role, mineOnly, demoCtx);
+                return role == "maker" && !demoCtx.ViewerIsDemo
+                    ? q.ApplyMakerVisibility(ctx, departmentScope)
+                    : NdDemoDataFilters.ApplyMakerRunScope(q, profile.Id, role, mineOnly, demoCtx);
             }
 
             var runCountsTask = RunsFor(db)
