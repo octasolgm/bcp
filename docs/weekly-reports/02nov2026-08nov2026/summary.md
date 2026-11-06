@@ -126,6 +126,7 @@ Tasks
 - New businesses now start with 10 MB per document and 50 MB total storage (was 2 MB and 20 MB); 20 MB per upload unchanged; existing businesses keep their limits
 - Evals (menu item and the Compare with evals, Save clauses as evals and Retrieval check buttons) now show only for the platform super admin in the Default workspace, not when working inside a client business
 - Popup messages now have clear colours: errors (such as a file over the upload limit) are red with a "!" icon, warnings amber, successes green; before, an error popup was white and easy to miss
+- Deployed the popup colours, new upload limit defaults and Evals change to Azure dev (web and API), live as version 2026.11.06.10; API reported ready
 - Tested signed in as platform super admin: Default workspace page works as before; in ABC the services showed with the Pro note instead of Connect, and the server refused connecting; Integrations switched on and off for the Limit test business; Business settings shows the Integrations row
 Bug fixes
 - New analysis: a file refused for being over the upload limit left a red error row in the document list; it now only shows a popup message
