@@ -26,7 +26,7 @@ The first column now shows the name of the regulatory document, including the co
 
 ## Default upload limits for new businesses
 
-A new business workspace now starts with upload limits of 2 MB per document, 20 MB per upload and 20 MB of total storage. The platform administrator can change or remove these limits for any business. Existing businesses keep their current limits.
+A new business workspace now starts with upload limits of 10 MB per document, 20 MB per upload and 50 MB of total storage. The platform administrator can change or remove these limits for any business. Existing businesses keep their current limits.
 
 A new business workspace also starts with a limit of 50 analysed clauses in total. The limit now appears on the Business settings page, where the business can see how many clauses it has used and how many are left. Only the platform administrator can change it.
 

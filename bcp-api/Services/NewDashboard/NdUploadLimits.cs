@@ -19,9 +19,9 @@ public static class NdUploadLimits
     public const int ServerMaxDocumentMb = 50;
 
     /// <summary>Limits a new workspace starts with; the platform admin can change or clear them afterwards.</summary>
-    public const int DefaultMaxDocumentMb = 2;
+    public const int DefaultMaxDocumentMb = 10;
     public const int DefaultMaxUploadMb = 20;
-    public const int DefaultMaxStorageMb = 20;
+    public const int DefaultMaxStorageMb = 50;
 
     private const long BytesPerMb = 1024L * 1024L;
 
