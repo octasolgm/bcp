@@ -382,7 +382,13 @@
                         <ul class="ap-owner-suggestions">
                           @for (suggestion of reviewAssigneeSuggestions; track suggestion.key) {
                             <li>
-                              <button type="button" (click)="pickReviewAssignee(suggestion)">{{ suggestion.label }}</button>
+                              <button
+                                type="button"
+                                [title]="suggestion.label"
+                                [style.padding-left.rem]="0.6 + deptLevel(reviewDeptId(suggestion.key)) * 1.1"
+                                [class.ap-dept-top]="!!reviewDeptId(suggestion.key) && deptLevel(reviewDeptId(suggestion.key)) === 0"
+                                (click)="pickReviewAssignee(suggestion)"
+                              >{{ deptRowName(reviewDeptId(suggestion.key), suggestion.label) }}</button>
                             </li>
                           }
                         </ul>
@@ -501,7 +507,13 @@
           <ul class="ap-owner-suggestions">
             @for (suggestion of ownerSuggestions; track suggestion.label) {
               <li>
-                <button type="button" (click)="addOwner(suggestion)">{{ suggestion.label }}</button>
+                <button
+                  type="button"
+                  [title]="suggestion.label"
+                  [style.padding-left.rem]="0.6 + deptLevel(suggestion.departmentId) * 1.1"
+                  [class.ap-dept-top]="suggestion.type === 'department' && deptLevel(suggestion.departmentId) === 0"
+                  (click)="addOwner(suggestion)"
+                >{{ deptRowName(suggestion.departmentId, suggestion.label) }}</button>
               </li>
             }
           </ul>

@@ -14,6 +14,8 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService, type NdReviewAssignee } from '../../services/nd/nd-api.service';
+import { NdAuthService } from '../../services/nd/nd-auth.service';
+import { ndDepartmentTreeRows, type NdTreeRow } from '../../../lib/nd/department-tree';
 import {
   ACTION_PLAN_STATUS_OPTIONS,
   actionPlanPriorityClass,
@@ -60,6 +62,7 @@ import { formatDate } from '../../../lib/nd/utils';
 })
 export class NdActionPlansSectionComponent implements OnChanges {
   private readonly api = inject(NdApiService);
+  private readonly ndAuth = inject(NdAuthService);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly host = inject(ElementRef<HTMLElement>);
 
@@ -273,11 +276,14 @@ export class NdActionPlansSectionComponent implements OnChanges {
             userId: u.id,
             label: u.email ? `${u.fullName} — ${u.email}` : u.fullName,
           }))
-        : this.options.departments.map((d) => ({
-            type: 'department' as const,
-            departmentId: d.id,
-            label: d.name,
-          }));
+        : this.departmentPool();
+
+    if (this.draft.responsibilityType !== 'user' && !this.ndAuth.isDemoViewer()) {
+      // Departments as their tree: every level shown, search matches the full path.
+      return pool
+        .filter((o) => !q || o.label.toLowerCase().includes(q))
+        .filter((o) => !this.draft.assignees.some((a) => sameAssignee(a, o)));
+    }
 
     return pool
       .filter((o) => !q || o.label.toLowerCase().includes(q))
@@ -571,9 +577,9 @@ export class NdActionPlansSectionComponent implements OnChanges {
 
   get reviewAssigneeChoices(): { key: string; label: string; group: string }[] {
     return [
-      ...this.options.departments.map((d) => ({
-        key: `department:${d.id}`,
-        label: d.name,
+      ...this.departmentPool().map((d) => ({
+        key: `department:${d.departmentId}`,
+        label: d.label,
         group: 'Departments',
       })),
       ...this.options.users.map((u) => ({
@@ -596,7 +602,48 @@ export class NdActionPlansSectionComponent implements OnChanges {
       .filter((c) => c.group === wanted)
       .filter((c) => !q || c.label.toLowerCase().includes(q))
       .filter((c) => !this.reviewAssignees.some((a) => a.key === c.key))
-      .slice(0, 8);
+      // Departments show the whole tree; people (and demo accounts) keep the short list.
+      .slice(0, wanted === 'Departments' && !this.ndAuth.isDemoViewer() ? 1000 : 8);
+  }
+
+  // ---- departments as a tree (department, unit, team) ----
+  private treeSource: unknown = null;
+  private treeRows: NdTreeRow<{ id: string; name: string; parentId?: string | null }>[] = [];
+  private treeById = new Map<string, NdTreeRow<{ id: string; name: string; parentId?: string | null }>>();
+
+  private departmentRows(): NdTreeRow<{ id: string; name: string; parentId?: string | null }>[] {
+    if (this.treeSource !== this.options.departments) {
+      this.treeSource = this.options.departments;
+      this.treeRows = ndDepartmentTreeRows(this.options.departments);
+      this.treeById = new Map(this.treeRows.map((r) => [r.dept.id, r]));
+    }
+    return this.treeRows;
+  }
+
+  /** Departments for the pickers. Real accounts: tree order, labelled with the full path. Demo: as before. */
+  private departmentPool(): ActionPlanAssignee[] {
+    if (this.ndAuth.isDemoViewer()) {
+      return this.options.departments.map((d) => ({ type: 'department' as const, departmentId: d.id, label: d.name }));
+    }
+    return this.departmentRows().map((r) => ({ type: 'department' as const, departmentId: r.dept.id, label: r.path }));
+  }
+
+  /** Indent of a department row in a suggestion list (0 for people and demo accounts). */
+  deptLevel(departmentId: string | null | undefined): number {
+    if (!departmentId || this.ndAuth.isDemoViewer()) return 0;
+    this.departmentRows();
+    return this.treeById.get(departmentId)?.level ?? 0;
+  }
+
+  /** In the tree list a row shows its own name; the full path is the tooltip and the chip label. */
+  deptRowName(departmentId: string | null | undefined, fallback: string): string {
+    if (!departmentId || this.ndAuth.isDemoViewer()) return fallback;
+    this.departmentRows();
+    return this.treeById.get(departmentId)?.dept.name ?? fallback;
+  }
+
+  reviewDeptId(key: string): string | null {
+    return key.startsWith('department:') ? key.slice('department:'.length) : null;
   }
 
   setReviewAssigneeType(type: ActionPlanResponsibilityType): void {

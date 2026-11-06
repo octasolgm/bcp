@@ -131,6 +131,8 @@ Tasks
 Bug fixes
 - New analysis: a file refused for being over the upload limit left a red error row in the document list; it now only shows a popup message
 - New analysis: Visible to departments chosen before Run analysis was not saved on two of the ways a run is started, so the analysis stayed visible to all departments; it is now saved every time, and a red popup shows if saving fails; deployed to Azure dev (web), not yet tested with a real run and a non-admin user
+- Analysis report: Send review to (Departments), action Responsibility (Department) and the gap review Responsibility dropdown now list departments as their tree (department, then units, then teams, indented); search matches the full path and a picked department shows its full path
+- Analysis report: Send review to (Individuals) and action owners could hide users: names were sorted with capitals first (so "abc" came last) and the list was cut off by the card around it; names now sort ignoring case and the list sits inside the card
 - Internal Documents and Regulation Documents: a refused upload (over the limit, or refused by the server, one file or several) left an error message on the page; it now shows as a popup only
 - A user still signed in when their business was deactivated saw every page fail; they are now signed out once and the sign-in page says the workspace has been deactivated
 - A user whose home business was deactivated but who also belongs to another active business was locked out; they now continue in the other business

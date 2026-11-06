@@ -534,16 +534,17 @@ public class ActionPlanInsightsController(
 
         var departments = await NdDemoDataFilters
             .ApplyToDepartments(db.NdDepartments.AsNoTracking().Where(d => d.IsActive), ctx)
-            .OrderBy(d => d.Name)
-            .Select(d => new { id = d.Id, name = d.Name })
+            .Select(d => new { id = d.Id, name = d.Name, parentId = d.ParentId })
             .ToListAsync(ct);
+        departments = departments.OrderBy(d => d.name, StringComparer.OrdinalIgnoreCase).ToList();
 
         var emails = await FetchAuthEmailsAsync(ct);
         // Profiles are not tenant-filtered globally; assignees come from this workspace only.
         var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? WorkspaceScope.DefaultWorkspaceId;
         var profiles = (await NdWorkspaceMembers.ProfilesInWorkspaceAsync(db, workspaceId, ct))
             .Where(p => p.IsActive)
-            .OrderBy(p => p.FullName)
+            // Ignore case: the API runs with invariant globalization, where "abc" would sort after every capital.
+            .OrderBy(p => p.FullName, StringComparer.OrdinalIgnoreCase)
             .ToList();
         profiles = NdDemoDataFilters.FilterProfiles(profiles, ctx, emails);
 

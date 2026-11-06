@@ -78,7 +78,7 @@ export type ActionPlanTargetDateChange = {
 };
 
 export type ActionPlanResponsibilityOptions = {
-  departments: { id: string; name: string }[];
+  departments: { id: string; name: string; parentId?: string | null }[];
   users: { id: string; fullName: string; email?: string | null; role?: string | null }[];
 };
 

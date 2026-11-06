@@ -169,8 +169,8 @@
               <span class="field-label">Responsibility</span>
               <select class="item-review-input" [(ngModel)]="draft.responsibility">
                 <option value="">Select department…</option>
-                @for (dept of departments; track dept.id) {
-                  <option [value]="dept.name">{{ dept.name }}</option>
+                @for (row of departmentRows; track row.dept.id) {
+                  <option [value]="row.dept.name" [title]="row.path">{{ indentedName(row) }}</option>
                 }
               </select>
             </label>

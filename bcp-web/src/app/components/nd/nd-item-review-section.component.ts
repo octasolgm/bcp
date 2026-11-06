@@ -24,6 +24,7 @@ import {
 } from '../../../lib/nd/risk-priority-score';
 import { formatDate } from '../../../lib/nd/utils';
 import type { Department } from '../../../lib/nd/types';
+import { ndDepartmentTreeRows, ndIndentedName, type NdTreeRow } from '../../../lib/nd/department-tree';
 
 export type ItemReviewSaveEvent = {
   reviewId?: string;
@@ -58,6 +59,20 @@ export class NdItemReviewSectionComponent {
   @Input() showPanel = false;
   @Input() disabledHint = '';
   @Input() departments: Department[] = [];
+
+  private deptSource: Department[] | null = null;
+  private deptRowsCache: NdTreeRow<Department>[] = [];
+
+  /** Departments as their tree (department, unit, team), indented in the dropdown. */
+  get departmentRows(): NdTreeRow<Department>[] {
+    if (this.deptSource !== this.departments) {
+      this.deptSource = this.departments;
+      this.deptRowsCache = ndDepartmentTreeRows(this.departments ?? []);
+    }
+    return this.deptRowsCache;
+  }
+
+  readonly indentedName = ndIndentedName;
   @Input() savingActionIndex: number | null = null;
   @Input() savingReviewId: string | null = null;
   /** Use on light CAP cards where dark-theme text tokens are unreadable. */
