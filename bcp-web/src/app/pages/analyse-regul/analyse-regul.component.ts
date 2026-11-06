@@ -4361,6 +4361,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
     const runId = createRes.data.id;
     this.ndRunId = runId;
+    this.onNdRunCreated(runId);
     this.notifyNewAnalysisRunCreated({ all: true });
     await this.router.navigate([this.regulAnalysisRoute], {
       queryParams: { run: runId },
@@ -4431,6 +4432,7 @@ export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDest
 
     const runId = createRes.data.id;
     this.ndRunId = runId;
+    this.onNdRunCreated(runId);
     this.notifyNewAnalysisRunCreated({ all: true });
     await this.router.navigate([this.regulAnalysisRoute], {
       queryParams: { run: runId },

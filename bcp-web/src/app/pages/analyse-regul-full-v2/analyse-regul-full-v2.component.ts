@@ -93,11 +93,16 @@ export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {
   /** Departments chosen on this page before the analysis exists; empty means all departments. */
   pendingRunDepartmentIds: string[] = [];
 
+  /** Every place that creates the run calls this, so "Visible to" chosen before Run analysis is saved. */
   protected override onNdRunCreated(runId: string): void {
     const ids = this.pendingRunDepartmentIds;
     if (!ids.length) return;
     this.pendingRunDepartmentIds = [];
-    void this.ndApi.setAnalysisRunDepartments(runId, ids);
+    void this.ndApi.setAnalysisRunDepartments(runId, ids).then((res) => {
+      if (!res.success) {
+        this.toast.show(res.message ?? 'The analysis started, but who can see it was not saved. Set Visible to again.', 'error', 7000);
+      }
+    });
   }
 
   override readonly versionLabel = '';
