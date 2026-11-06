@@ -841,15 +841,45 @@
   pointer-events: auto;
   animation: toast-slide-in 180ms ease-out;
 
+  border-left-width: 4px;
+
   &.success {
-    border-color: color-mix(in srgb, var(--low) 45%, transparent);
+    border-color: color-mix(in srgb, #16a34a 45%, transparent);
+    border-left-color: #16a34a;
+    background: color-mix(in srgb, #16a34a 9%, var(--bg-elevated));
   }
   &.warning {
-    border-color: color-mix(in srgb, var(--updated) 45%, transparent);
+    border-color: color-mix(in srgb, #d97706 50%, transparent);
+    border-left-color: #d97706;
+    background: color-mix(in srgb, #f59e0b 12%, var(--bg-elevated));
+
+    .toast-icon {
+      background: #d97706;
+    }
   }
+  /* Errors must be noticed at a glance (e.g. a file over the upload limit). */
   &.error {
-    border-color: color-mix(in srgb, var(--critical) 45%, transparent);
+    border-color: color-mix(in srgb, #dc2626 55%, transparent);
+    border-left-color: #dc2626;
+    background: color-mix(in srgb, #dc2626 12%, var(--bg-elevated));
+    font-weight: 600;
+
+    .toast-icon {
+      background: #dc2626;
+    }
   }
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.25rem;
+  text-align: center;
 }
 
 @keyframes toast-slide-in {
