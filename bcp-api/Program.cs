@@ -62,6 +62,8 @@ builder.Services.AddSwaggerGen();
 
 CorsPolicySetup.AddBcpCors(builder.Services, builder.Configuration);
 
+Reguliq.Api.Infrastructure.RateLimiterSetup.AddBcpRateLimiting(builder.Services);
+
 builder.Services.AddDbContext<AppDbContext>(opt =>
 {
     if (dbConfig.UsePostgres)
@@ -346,6 +348,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseRouting();
+// Rate limiting runs after routing (so per-endpoint policies resolve) and before the workspace/auth work.
+app.UseRateLimiter();
 app.UseCors();
 // Must run before controllers: scopes every ND request's EF queries to the caller's workspace.
 app.UseMiddleware<Reguliq.Api.Infrastructure.NewDashboard.WorkspaceResolutionMiddleware>();

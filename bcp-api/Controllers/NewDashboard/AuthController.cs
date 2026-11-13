@@ -96,6 +96,7 @@ public class AuthController(
     }
 
     [HttpPost("forgot-password")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Reguliq.Api.Infrastructure.RateLimiterSetup.AuthPolicy)]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest body, CancellationToken ct)
     {
         var email = body.Email?.Trim();
