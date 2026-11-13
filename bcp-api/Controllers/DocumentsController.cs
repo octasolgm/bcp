@@ -579,9 +579,8 @@ public class DocumentsController(
         var versionNumber = existing == null ? 1 : existing.VersionNumber + 1;
         var version = $"v{versionNumber}";
         var fileType = DetectFileType(file.FileName);
-        var contentType = string.IsNullOrWhiteSpace(file.ContentType)
-            ? "application/octet-stream"
-            : file.ContentType;
+        // Content-type from the file name server-side, never the client-sent value.
+        var contentType = Reguliq.Api.Infrastructure.SafeContentType.FromFileName(file.FileName);
         var safeName = SanitizeFileName(file.FileName);
         var objectPath = $"{kind}s/{ws}/{titleKey}/{version}/{safeName}";
         var fileHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();

@@ -96,11 +96,13 @@ public class AnalysisPointAttachmentsController(
             var bytes = ms.ToArray();
             var title = Path.GetFileNameWithoutExtension(file.FileName).Trim();
             var safeName = SanitizeFileName(file.FileName);
+            // Derive the content-type from the file name server-side, never from the client-sent value.
+            var safeContentType = Reguliq.Api.Infrastructure.SafeContentType.FromFileName(file.FileName);
             var objectPath =
                 $"documents/nd/gap-evidence/{runId:N}/{pointId:N}/{Guid.NewGuid():N}/{safeName}";
 
             await using (var stream = new MemoryStream(bytes))
-                await storage.UploadAsync(objectPath, stream, file.ContentType ?? "application/pdf", true, ct);
+                await storage.UploadAsync(objectPath, stream, safeContentType, true, ct);
 
             var row = new StoredDocument
             {
@@ -112,7 +114,7 @@ public class AnalysisPointAttachmentsController(
                 StoragePath = objectPath,
                 FileHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
                 SizeBytes = bytes.Length,
-                ContentType = file.ContentType ?? "application/pdf",
+                ContentType = safeContentType,
                 ParseStatus = skipLiveParse ? "skipped" : "pending",
                 ParseError = skipLiveParse ? "Demo mode — evidence upload stored without live AI parse." : null,
                 UploadedBy = profile!.Id,
