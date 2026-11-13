@@ -347,6 +347,10 @@ app.Lifetime.ApplicationStarted.Register(() =>
     });
 });
 
+// First in the pipeline: turn any unhandled exception into a generic JSON error (full detail logged,
+// not sent to the client).
+app.UseMiddleware<Reguliq.Api.Infrastructure.GlobalExceptionMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
