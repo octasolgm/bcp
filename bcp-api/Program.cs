@@ -346,6 +346,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    // Tell browsers to stick to HTTPS. (HTTP->HTTPS enforcement itself is the Azure "HTTPS Only" setting.)
+    app.UseHsts();
+}
+
+// Baseline security response headers on every response.
+app.UseMiddleware<Reguliq.Api.Infrastructure.SecurityHeadersMiddleware>();
 
 app.UseRouting();
 // Rate limiting runs after routing (so per-endpoint policies resolve) and before the workspace/auth work.
