@@ -353,6 +353,8 @@ app.UseRateLimiter();
 app.UseCors();
 // Must run before controllers: scopes every ND request's EF queries to the caller's workspace.
 app.UseMiddleware<Reguliq.Api.Infrastructure.NewDashboard.WorkspaceResolutionMiddleware>();
+// Default-deny safety net: every /nd endpoint requires a validated user unless marked [AllowAnonymous].
+app.UseMiddleware<Reguliq.Api.Infrastructure.NewDashboard.NdRequireAuthenticatedMiddleware>();
 app.MapControllers();
 
 app.MapGet("/", () => Results.Ok(new
