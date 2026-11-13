@@ -351,12 +351,15 @@ app.Lifetime.ApplicationStarted.Register(() =>
 // not sent to the client).
 app.UseMiddleware<Reguliq.Api.Infrastructure.GlobalExceptionMiddleware>();
 
-if (app.Environment.IsDevelopment())
+// Swagger/OpenAPI explorer: local Development only, and never on a deployed Azure host even if it is
+// misconfigured to the Development environment - so the full API surface can't be exposed in the cloud.
+if (app.Environment.IsDevelopment() && !Reguliq.Api.Infrastructure.AzureHosting.IsAppService)
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-else
+
+if (!app.Environment.IsDevelopment())
 {
     // Tell browsers to stick to HTTPS. (HTTP->HTTPS enforcement itself is the Azure "HTTPS Only" setting.)
     app.UseHsts();
