@@ -195,6 +195,10 @@ public class RulebookCategoriesController(
             || url.Scheme != Uri.UriSchemeHttps)
             return BadRequest(new { success = false, message = "This category has no document to download." });
 
+        // SSRF guard: never fetch an internal/private address, even for an admin-set URL.
+        if (!await Reguliq.Api.Infrastructure.SsrfGuard.IsPublicHostAsync(url.DnsSafeHost, ct))
+            return BadRequest(new { success = false, message = "The document URL must point to a public web address." });
+
         if ((await LinkedDocumentCountsAsync(ct)).GetValueOrDefault(id) > 0)
             return Ok(new { success = true, skipped = true, message = "Already imported." });
 
