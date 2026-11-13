@@ -1,17 +1,21 @@
 namespace Reguliq.Api.Infrastructure;
 
-/// <summary>Shared CORS policy for local Angular and Azure App Service web apps.</summary>
+/// <summary>
+/// Shared CORS policy. Only an explicit allow-list of known front-end origins is trusted: the built-in
+/// defaults below plus anything added via configuration (Bcp:CorsOrigins / BCP_CORS_ORIGINS /
+/// REGULIQ_CORS_ORIGINS, comma-separated). There is deliberately no wildcard: localhost is allowed only in
+/// Development, and a blanket "*.azurewebsites.net" trust was removed (any attacker can host there) - add the
+/// exact Azure hostname to configuration instead.
+/// </summary>
 public static class CorsPolicySetup
 {
     private static readonly string[] DefaultOrigins =
     [
-        "http://localhost:3002",
-        "http://localhost:4200",
         "https://bcp-web-dev.azurewebsites.net",
         "https://app.comply-solutions.com",
     ];
 
-    public static void AddBcpCors(IServiceCollection services, IConfiguration config)
+    public static void AddBcpCors(IServiceCollection services, IConfiguration config, IHostEnvironment environment)
     {
         var raw = BcpConfiguration.GetString(
             config,
@@ -20,12 +24,14 @@ public static class CorsPolicySetup
             "REGULIQ_CORS_ORIGINS");
 
         var configured = ParseOrigins(raw);
+        var allowLocalhost = environment.IsDevelopment();
         Console.WriteLine(
             $"CORS allow-list: {string.Join(", ", configured)}"
-            + (string.IsNullOrWhiteSpace(raw) ? " (defaults)" : ""));
+            + (string.IsNullOrWhiteSpace(raw) ? " (defaults)" : "")
+            + (allowLocalhost ? " + localhost (Development)" : ""));
 
         services.AddCors(o => o.AddDefaultPolicy(p => p
-            .SetIsOriginAllowed(origin => IsOriginAllowed(origin, configured))
+            .SetIsOriginAllowed(origin => IsOriginAllowed(origin, configured, allowLocalhost))
             .AllowAnyHeader()
             .AllowAnyMethod()
             // Content-Disposition isn't in the browser's default exposed-headers safelist, so without
@@ -49,21 +55,22 @@ public static class CorsPolicySetup
         return set;
     }
 
-    private static bool IsOriginAllowed(string? origin, HashSet<string> configured)
+    private static bool IsOriginAllowed(string? origin, HashSet<string> configured, bool allowLocalhost)
     {
         if (string.IsNullOrWhiteSpace(origin))
             return false;
 
+        // Exact match against the configured allow-list.
         if (configured.Contains(origin))
             return true;
 
-        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
-            return false;
-
-        if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-            || uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase))
+        // Local dev servers (any port) are trusted only in the Development environment.
+        if (allowLocalhost
+            && Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+            && (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)))
             return true;
 
-        return uri.Host.EndsWith(".azurewebsites.net", StringComparison.OrdinalIgnoreCase);
+        return false;
     }
 }

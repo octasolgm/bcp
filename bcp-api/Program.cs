@@ -60,7 +60,7 @@ builder.Services.AddControllers(o => o.Filters.Add<Reguliq.Api.Infrastructure.Ne
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-CorsPolicySetup.AddBcpCors(builder.Services, builder.Configuration);
+CorsPolicySetup.AddBcpCors(builder.Services, builder.Configuration, builder.Environment);
 
 Reguliq.Api.Infrastructure.RateLimiterSetup.AddBcpRateLimiting(builder.Services);
 
