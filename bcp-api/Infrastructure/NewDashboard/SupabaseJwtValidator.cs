@@ -395,13 +395,10 @@ public class SupabaseJwtValidator(
         if (_loggedConfig) return;
         _loggedConfig = true;
 
-        var secretPrefix = string.IsNullOrEmpty(_opts.JwtSecret)
-            ? "(empty)"
-            : _opts.JwtSecret[..Math.Min(10, _opts.JwtSecret.Length)] + "...";
-
+        // Never log any part of the secret - only whether it is configured.
         logger.LogInformation(
-            "[ND JWT] JwtSecret prefix={SecretPrefix}, issuer={Issuer}",
-            secretPrefix,
+            "[ND JWT] JwtSecret {SecretState}, issuer={Issuer}",
+            string.IsNullOrEmpty(_opts.JwtSecret) ? "not set" : "configured",
             string.IsNullOrWhiteSpace(_opts.ExpectedIssuer) ? "(set Supabase:Url)" : _opts.ExpectedIssuer);
     }
 

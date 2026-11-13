@@ -10,6 +10,8 @@ using System.Net.Http.Headers;
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
+// Don't advertise the server technology in responses (removes the "Server: Kestrel" header).
+builder.WebHost.ConfigureKestrel(o => o.AddServerHeader = false);
 
 // Optional local secrets file — published to Azure with deploy (gitignored). See appsettings.Secrets.example.json.
 builder.Configuration.AddJsonFile("appsettings.Secrets.json", optional: true, reloadOnChange: false);
