@@ -265,6 +265,12 @@ builder.Services.Configure<Reguliq.Api.Infrastructure.NewDashboard.SupabaseJwtOp
     o.Url = BcpConfiguration.GetString(builder.Configuration, "Supabase:Url", "SUPABASE_URL") ?? "";
     o.ServiceRoleKey = BcpConfiguration.GetString(
         builder.Configuration, "Supabase:ServiceRoleKey", "SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    // Off by default. Only the string "true" turns on the unsigned-JWT dev path, and even then only in
+    // local Development (see SupabaseJwtValidator). Never set this in a deployed environment.
+    o.AllowUnsignedJwtInDevelopment = string.Equals(
+        BcpConfiguration.GetString(
+            builder.Configuration, "Supabase:AllowUnsignedJwtDev", "SUPABASE_ALLOW_UNSIGNED_JWT_DEV"),
+        "true", StringComparison.OrdinalIgnoreCase);
 });
 builder.Services.AddSingleton<Reguliq.Api.Infrastructure.NewDashboard.SupabaseJwtValidator>();
 builder.Services.AddHttpClient(nameof(Reguliq.Api.Infrastructure.NewDashboard.SupabaseJwtValidator), c =>

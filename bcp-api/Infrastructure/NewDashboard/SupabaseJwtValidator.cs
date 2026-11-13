@@ -34,13 +34,17 @@ public class SupabaseJwtValidator(
 
         if (!_opts.IsConfigured)
         {
-            // Fast local path when JwtSecret is not set — parse claims without signature check. Local Development
-            // only: on any other host (Azure, an in-house server) this would accept a hand-made token for any user.
-            if (hostEnvironment.IsDevelopment() && !AzureHosting.IsAppService)
+            // Fast local path when JwtSecret is not set — parse claims WITHOUT a signature check. Off by
+            // default (fail closed): it requires the explicit Supabase:AllowUnsignedJwtDev opt-in AND the
+            // Development environment off Azure App Service, so it can never accept a hand-made token in a
+            // deployed environment. Without the opt-in, validation falls through to JWKS / the Supabase Auth
+            // API below, or returns null (401).
+            if (hostEnvironment.IsDevelopment() && !AzureHosting.IsAppService && _opts.AllowUnsignedJwtInDevelopment)
             {
                 logger.LogWarning(
-                    "[ND JWT] Supabase:JwtSecret is not set — using payload parse (no signature check). " +
-                    "Set Supabase:JwtSecret for production-like validation.");
+                    "[ND JWT] DANGEROUS: accepting token WITHOUT signature verification because " +
+                    "Supabase:AllowUnsignedJwtDev is enabled and no JwtSecret is set. Local development only — " +
+                    "never enable this anywhere else.");
                 var parsed = ParseJwtPayloadWithoutSignature(bearerToken);
                 if (parsed != null)
                     return parsed;
