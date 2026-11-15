@@ -6,12 +6,8 @@
    "children": [
     {
      "name": "United Arab Emirates",
-     "children": [
-      {
-       "name": "Abu Dhabi Global Market (ADGM)",
-       "sourceUrl": "https://www.adgm.com/legal-framework/rules-and-regulations"
-      }
-     ]
+     "note": "Authorities come from rulebook-categories-cbuae.json (see JurisdictionCatalog IncludePacks): Central Bank of the UAE, Dubai Financial Services Authority, Abu Dhabi Global Market and Capital Market Authority, each with its full rulebook tree. Listing them again here would duplicate over 250 nodes and give two entries per authority.",
+     "children": []
     },
     {
      "name": "Saudi Arabia",

@@ -194,6 +194,13 @@
 }
 
 /* ── Workspace list ── */
+// The create form is folded away by default so the page opens on the list itself rather than on a form
+// that is usually not needed. This button is the way back to it.
+.ws-new-btn {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .ws-table-wrap {
   overflow: auto;
   // The business list scrolls inside this box rather than with the whole page, which is what lets the

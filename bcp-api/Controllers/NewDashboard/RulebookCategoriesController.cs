@@ -220,7 +220,30 @@ public class RulebookCategoriesController(
         if (regionNode == null || countryNode == null)
             return BadRequest(new { success = false, message = $"No rulebooks are listed for {jurisdiction.Country} yet." });
 
-        var scoped = new List<SampleNode> { regionNode with { Children = [countryNode] } };
+        // Some of a country's authorities live in another pack (the UAE's are the full CBUAE tree). Merge those
+        // in by name so the same authority is never filed twice, keeping the richer existing entry.
+        var children = new List<SampleNode>(countryNode.Children ?? []);
+        foreach (var packFile in jurisdiction.IncludePacks)
+        {
+            var extraPath = Path.Combine(env.ContentRootPath, "SeedData", packFile);
+            if (!System.IO.File.Exists(extraPath)) continue;
+            var extra = JsonSerializer.Deserialize<SamplePack>(
+                await System.IO.File.ReadAllTextAsync(extraPath, ct),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            foreach (var node in extra?.Categories ?? [])
+            {
+                var name = node.Name?.Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                if (children.Any(c => string.Equals(c.Name?.Trim(), name, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+                children.Add(node);
+            }
+        }
+
+        var scoped = new List<SampleNode>
+        {
+            regionNode with { Children = [countryNode with { Children = children }] },
+        };
 
         var (added, skipped) = await AddMissingAsync(scoped, null, 1, profile!.Id, ct);
         await db.SaveChangesAsync(ct);
