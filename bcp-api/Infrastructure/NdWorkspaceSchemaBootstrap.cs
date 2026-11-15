@@ -161,6 +161,10 @@ public static class NdWorkspaceSchemaBootstrap
             -- NULL = platform default (UAE, DD/MM/YYYY); a value sets this workspace's own date format.
             ALTER TABLE nd_workspaces
               ADD COLUMN IF NOT EXISTS date_format_region TEXT NULL;
+            -- Country this business operates in (JurisdictionCatalog code, e.g. 'ae'), grouped under a region.
+            -- Drives the default date convention and which regulator rulebooks the workspace imports.
+            ALTER TABLE nd_workspaces
+              ADD COLUMN IF NOT EXISTS jurisdiction TEXT NULL;
             -- Business modules, on by default (existing workspaces, including the demo, keep everything).
             ALTER TABLE nd_workspaces
               ADD COLUMN IF NOT EXISTS actions_enabled BOOLEAN NOT NULL DEFAULT TRUE;

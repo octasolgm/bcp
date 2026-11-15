@@ -55,6 +55,12 @@ public class NdWorkspace
     [Column("date_format_region")]
     public string? DateFormatRegion { get; set; }
 
+    /// <summary>Country this business operates in (a <see cref="Reguliq.Api.Infrastructure.NewDashboard.
+    /// JurisdictionCatalog"/> code such as "ae"), grouped under a region. Drives the default date convention
+    /// and which regulator rulebooks this workspace imports. Null = not set yet.</summary>
+    [Column("jurisdiction")]
+    public string? Jurisdiction { get; set; }
+
     /// <summary>Actions module: when off, corrective actions are hidden in this workspace's reports. Gaps and
     /// actions are still produced and stored exactly as before; this only controls what is shown.</summary>
     [Column("actions_enabled")]

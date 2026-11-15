@@ -428,22 +428,24 @@ export class NdAdminRulebookCategoriesComponent implements OnInit {
     await this.load(true);
   }
 
-  async importMiddleEast(): Promise<void> {
+  /** Imports the rulebooks for this business's own country (set in Business settings); adds only what's missing. */
+  async importRulebooks(): Promise<void> {
     if (this.importing) return;
     this.importing = true;
     this.error = '';
-    const res = await this.api.importMiddleEastRulebooks();
+    const res = await this.api.importRulebooks();
     this.importing = false;
     if (!res.success) {
-      this.error = res.message ?? 'Could not add the Middle East rulebooks';
+      this.error = res.message ?? 'Could not import the rulebooks';
       return;
     }
     const added = (res as { added?: number }).added ?? 0;
     const skipped = (res as { skipped?: number }).skipped ?? 0;
+    const country = (res as { country?: string }).country ?? 'this region';
     this.toast.show(
       added > 0
-        ? `Added ${added} Middle East rulebook ${added === 1 ? 'category' : 'categories'}${skipped ? ` (${skipped} already present)` : ''}`
-        : 'Middle East rulebooks are already present',
+        ? `Added ${added} ${country} rulebook ${added === 1 ? 'category' : 'categories'}${skipped ? ` (${skipped} already present)` : ''}`
+        : `${country} rulebooks are already present`,
       'success',
       3500);
     await this.load(true);

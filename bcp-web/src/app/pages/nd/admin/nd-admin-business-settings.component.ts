@@ -4,6 +4,7 @@ import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdWorkspaceModulesComponent } from '../../../components/nd/nd-workspace-modules.component';
 import { NdWorkspaceClauseLimitComponent } from '../../../components/nd/nd-workspace-clause-limit.component';
 import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-workspace-upload-limits.component';
+import { NdWorkspaceRegionComponent } from '../../../components/nd/nd-workspace-region.component';
 
 /**
  * Read-only view of the current workspace's modules (Actions, Embeddings), clause limit and upload limits, for
@@ -12,7 +13,13 @@ import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-work
 @Component({
   selector: 'app-nd-admin-business-settings',
   standalone: true,
-  imports: [RouterLink, NdWorkspaceModulesComponent, NdWorkspaceClauseLimitComponent, NdWorkspaceUploadLimitsComponent],
+  imports: [
+    RouterLink,
+    NdWorkspaceModulesComponent,
+    NdWorkspaceClauseLimitComponent,
+    NdWorkspaceUploadLimitsComponent,
+    NdWorkspaceRegionComponent,
+  ],
   template: `
     <div class="page-header">
       <div>
@@ -32,6 +39,23 @@ import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-work
               These settings are set by the platform administrator. Contact them to change anything here.
             }
           </p>
+
+          <section class="nd-card settings-card">
+            <header class="settings-card-header">
+              <div>
+                <h2>Region</h2>
+                <p class="nd-muted">
+                  The country this business operates in. It sets the date format and which regulator rulebooks
+                  this business imports.
+                </p>
+              </div>
+            </header>
+            <app-nd-workspace-region
+              [workspaceId]="ws.id"
+              [jurisdiction]="ws.jurisdiction ?? null"
+              [editable]="canEditRegion()"
+            />
+          </section>
 
           <section class="nd-card settings-card">
             <header class="settings-card-header">
@@ -80,4 +104,6 @@ import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-work
 export class NdAdminBusinessSettingsComponent {
   readonly auth = inject(NdAuthService);
   readonly workspace = computed(() => this.auth.profile()?.workspace ?? null);
+  /** Any admin (the business's own Admin, or the platform super admin) may set the region. */
+  readonly canEditRegion = computed(() => this.auth.profile()?.role === 'super_admin');
 }

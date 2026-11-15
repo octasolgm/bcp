@@ -250,6 +250,80 @@ public partial class WorkspacesController(
         return Ok(new { success = true, data = new { dateFormatRegion = ws.DateFormatRegion } });
     }
 
+    /// <summary>The regions and the countries under them a business can operate in, for the settings picker.</summary>
+    [HttpGet("jurisdictions")]
+    public async Task<IActionResult> Jurisdictions(CancellationToken ct)
+    {
+        var (_, error) = await RequireAuthAsync(db, jwt, ct, "super_admin", "maker", "checker", "reviewer");
+        if (error != null) return error;
+
+        var data = JurisdictionCatalog.All
+            .GroupBy(j => j.Region)
+            .Select(g => new
+            {
+                region = g.Key,
+                countries = g.Select(j => new
+                {
+                    code = j.Code,
+                    country = j.Country,
+                    dateFormat = j.DateFormat,
+                    regulators = j.Regulators,
+                }),
+            });
+        return Ok(new { success = true, data });
+    }
+
+    public record JurisdictionRequest(string? Jurisdiction);
+
+    /// <summary>Sets the country this business operates in. When the workspace has no date format of its own
+    /// yet it also adopts that country's convention, so the single choice covers dates and rulebooks.</summary>
+    [HttpPut("{id:guid}/jurisdiction")]
+    public async Task<IActionResult> SetJurisdiction(Guid id, [FromBody] JurisdictionRequest body, CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        if (!IsPlatformAdmin(profile) && profile.TenantId != id)
+            return StatusCode(403, new { success = false, message = "You can only set your own workspace's region." });
+
+        var raw = body.Jurisdiction;
+        var clearing = string.IsNullOrWhiteSpace(raw) || raw.Equals("none", StringComparison.OrdinalIgnoreCase);
+        var code = JurisdictionCatalog.Normalize(raw);
+        if (!clearing && code == null)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = $"'{raw}' isn't a supported country. Use one of: "
+                    + $"{string.Join(", ", JurisdictionCatalog.All.Select(j => j.Code))}, or none.",
+            });
+        }
+
+        var ws = await db.NdWorkspaces.FirstOrDefaultAsync(w => w.Id == id, ct);
+        if (ws == null) return NotFound(new { success = false, message = "Workspace not found." });
+
+        ws.Jurisdiction = code;
+        var jurisdiction = JurisdictionCatalog.Find(code);
+        // One choice covers both: adopt the country's date convention when none was set explicitly.
+        if (jurisdiction != null && string.IsNullOrWhiteSpace(ws.DateFormatRegion))
+            ws.DateFormatRegion = jurisdiction.DateFormat;
+        ws.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        await InvalidateMembersAsync(id, ct);
+
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                jurisdiction = ws.Jurisdiction,
+                country = jurisdiction?.Country,
+                region = jurisdiction?.Region,
+                dateFormatRegion = ws.DateFormatRegion,
+            },
+        });
+    }
+
     public record ModulesRequest(bool? ActionsEnabled, bool? EmbeddingsEnabled, bool? IntegrationsEnabled = null);
 
     /// <summary>Turns this workspace's optional modules on or off. Actions off only hides corrective actions
@@ -673,6 +747,9 @@ public partial class WorkspacesController(
         maxClausesPerAnalysis = w.MaxClausesPerAnalysis,
         aiMarkupOverride = w.AiMarkupOverride,
         dateFormatRegion = w.DateFormatRegion,
+        jurisdiction = w.Jurisdiction,
+        country = JurisdictionCatalog.Find(w.Jurisdiction)?.Country,
+        region = JurisdictionCatalog.Find(w.Jurisdiction)?.Region,
         actionsEnabled = w.ActionsEnabled,
         embeddingsEnabled = w.EmbeddingsEnabled,
         integrationsEnabled = w.IntegrationsEnabled,

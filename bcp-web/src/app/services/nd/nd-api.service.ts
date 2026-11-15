@@ -3,7 +3,12 @@ import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http
 import { firstValueFrom, timeout, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { getNdAccessToken } from './nd-supabase-client';
-import type { InternalDocumentFinalizeEmbed, PointGapAttachment, RulebookCategory } from '../../../lib/nd/types';
+import type {
+  InternalDocumentFinalizeEmbed,
+  NdJurisdictionCountry,
+  PointGapAttachment,
+  RulebookCategory,
+} from '../../../lib/nd/types';
 import type { GapEvidenceRerun, GapEvidenceRerunRequest } from '../../../lib/nd/gap-evidence-rerun';
 import { checkUploadAgainstLimits, type NdUploadLimits } from '../../../lib/nd/upload-limits';
 
@@ -424,6 +429,12 @@ export type NdWorkspaceSummary = {
   aiMarkupOverride?: number | null;
   /** Which country's date convention this workspace displays dates in. Null/undefined = UAE default. */
   dateFormatRegion?: string | null;
+  /** Country this business operates in (jurisdiction code, e.g. "ae"). Null/undefined = not set. */
+  jurisdiction?: string | null;
+  /** Display name of that country, resolved by the server. */
+  country?: string | null;
+  /** Region the country sits under, e.g. "Middle East". */
+  region?: string | null;
   /** Actions module (default on). Off hides corrective actions in this workspace's reports. */
   actionsEnabled?: boolean;
   /** Embeddings module (default on). Off means finalize generates no corrected document copies. */
@@ -1033,9 +1044,9 @@ export class NdApiService {
     return this.request<unknown>('POST', '/nd/rulebook-categories/import-sample');
   }
 
-  /** Adds the Middle East region rulebooks (ADGM, SAMA, QFCRA, CBO, CBB); only the missing ones are added. */
-  importMiddleEastRulebooks() {
-    return this.request<unknown>('POST', '/nd/rulebook-categories/import-middle-east');
+  /** Imports the rulebooks for this business's own country (set in Business settings); adds only the missing ones. */
+  importRulebooks() {
+    return this.request<unknown>('POST', '/nd/rulebook-categories/import-rulebooks');
   }
 
   /** Downloads one rulebook's document from its source into Regulation Documents, filed under the category. */
@@ -1293,6 +1304,24 @@ export class NdApiService {
       `/nd/workspaces/${workspaceId}/date-format`,
       { region },
     );
+  }
+
+  /** The regions and the countries under them a business can operate in, for the region picker. */
+  getJurisdictions() {
+    return this.request<{ region: string; countries: NdJurisdictionCountry[] }[]>(
+      'GET',
+      '/nd/workspaces/jurisdictions',
+    );
+  }
+
+  /** Sets the country a business operates in. Pass null to clear it. Also sets the date format when unset. */
+  setWorkspaceJurisdiction(workspaceId: string, jurisdiction: string | null) {
+    return this.request<{
+      jurisdiction: string | null;
+      country: string | null;
+      region: string | null;
+      dateFormatRegion: string | null;
+    }>('PUT', `/nd/workspaces/${workspaceId}/jurisdiction`, { jurisdiction });
   }
 
   /** Turns a workspace's Actions / Embeddings / Integrations modules on or off (omit one to leave it unchanged). */

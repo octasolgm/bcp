@@ -19,6 +19,23 @@ export type RulebookCategory = {
   createdAt?: string;
 };
 
+/** One country a business can operate in, inside a region (see NdJurisdictionRegion). */
+export type NdJurisdictionCountry = {
+  /** Stable short code stored on the workspace, e.g. "ae". */
+  code: string;
+  country: string;
+  /** Date convention this country defaults to (an NdDateFormatRegion value). */
+  dateFormat: string;
+  /** Regulators whose rulebooks this country imports. */
+  regulators: string[];
+};
+
+/** A region with the countries under it, for the Business settings region picker. */
+export type NdJurisdictionRegion = {
+  region: string;
+  countries: NdJurisdictionCountry[];
+};
+
 export type Department = {
   id: string;
   name: string;

@@ -178,28 +178,60 @@ public class RulebookCategoriesController(
     }
 
     /// <summary>
-    /// Adds the Middle East region rulebook structure (ADGM, SAMA, QFCRA, CBO, CBB) to this workspace, creating
-    /// only the categories that are missing. Safe to run repeatedly: existing categories are kept and only new
-    /// ones are added (matched by name under the same parent), so an admin who already has some rulebooks just
-    /// gets the ones they are missing.
+    /// Imports the rulebooks for the country this business operates in (its jurisdiction, set in Business
+    /// settings), filed as Region › Country › Regulator. Only the categories that are missing are created, so
+    /// it is safe to run repeatedly: an admin who already has some rulebooks just gets the missing ones.
     /// </summary>
-    [HttpPost("import-middle-east")]
-    public async Task<IActionResult> ImportMiddleEast(CancellationToken ct)
+    [HttpPost("import-rulebooks")]
+    public async Task<IActionResult> ImportRulebooksForJurisdiction(CancellationToken ct)
     {
         var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
         if (error != null) return error;
 
-        var path = Path.Combine(env.ContentRootPath, "SeedData", "rulebook-categories-middle-east.json");
+        var workspaceId = WorkspaceScope.CurrentWorkspaceId ?? profile!.TenantId ?? WorkspaceScope.DefaultWorkspaceId;
+        var ws = await db.NdWorkspaces.AsNoTracking().FirstOrDefaultAsync(w => w.Id == workspaceId, ct);
+        var jurisdiction = JurisdictionCatalog.Find(ws?.Jurisdiction);
+        if (jurisdiction == null)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                needsJurisdiction = true,
+                message = "Set this business's region in Business settings first, then import its rulebooks.",
+            });
+        }
+
+        if (!JurisdictionCatalog.SeedFileByRegion.TryGetValue(jurisdiction.Region, out var seedFile))
+            return BadRequest(new { success = false, message = $"No rulebook pack is available for {jurisdiction.Region} yet." });
+
+        var path = Path.Combine(env.ContentRootPath, "SeedData", seedFile);
         if (!System.IO.File.Exists(path))
-            return StatusCode(500, new { success = false, message = "Middle East rulebook categories are not available." });
+            return StatusCode(500, new { success = false, message = "Rulebook categories are not available." });
 
         var pack = JsonSerializer.Deserialize<SamplePack>(
             await System.IO.File.ReadAllTextAsync(path, ct),
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-        var (added, skipped) = await AddMissingAsync(pack?.Categories, null, 1, profile!.Id, ct);
+        // Narrow the pack to this workspace's own country, keeping the Region › Country › Regulator shape.
+        var regionNode = pack?.Categories?.FirstOrDefault(c =>
+            string.Equals(c.Name?.Trim(), jurisdiction.Region, StringComparison.OrdinalIgnoreCase));
+        var countryNode = regionNode?.Children?.FirstOrDefault(c =>
+            string.Equals(c.Name?.Trim(), jurisdiction.Country, StringComparison.OrdinalIgnoreCase));
+        if (regionNode == null || countryNode == null)
+            return BadRequest(new { success = false, message = $"No rulebooks are listed for {jurisdiction.Country} yet." });
+
+        var scoped = new List<SampleNode> { regionNode with { Children = [countryNode] } };
+
+        var (added, skipped) = await AddMissingAsync(scoped, null, 1, profile!.Id, ct);
         await db.SaveChangesAsync(ct);
-        return Ok(new { success = true, added, skipped });
+        return Ok(new
+        {
+            success = true,
+            added,
+            skipped,
+            region = jurisdiction.Region,
+            country = jurisdiction.Country,
+        });
     }
 
     /// <summary>Adds categories not already present (matched by name under the same parent); recurses into children.</summary>

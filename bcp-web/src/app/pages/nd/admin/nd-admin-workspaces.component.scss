@@ -216,6 +216,20 @@
     min-width: 14.5rem;
     white-space: normal;
   }
+
+  td.col-region {
+    min-width: 8rem;
+    white-space: normal;
+  }
+
+  // Sticky column headings: the list scrolls under them, so which column is which stays visible.
+  // (The narrow layout below hides thead entirely, so this only applies to the table view.)
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-card);
+  }
 }
 
 .ws-table {

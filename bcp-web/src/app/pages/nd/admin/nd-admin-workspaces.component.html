@@ -132,6 +132,7 @@
             <thead>
               <tr>
                 <th>Workspace</th>
+                <th>Region</th>
                 <th>Admins</th>
                 <th class="num">Users</th>
                 <th class="num">Documents</th>
@@ -165,6 +166,14 @@
                         <span class="ws-tag">Default</span>
                       }
                       <div class="muted">{{ item.workspace.slug }}@if (item.workspace.description) { · {{ item.workspace.description }} }</div>
+                    }
+                  </td>
+                  <td class="col-region" data-label="Region">
+                    @if (item.workspace.region) {
+                      <strong>{{ item.workspace.region }}</strong>
+                      <div class="muted">{{ item.workspace.country }}</div>
+                    } @else {
+                      <span class="muted">Not set</span>
                     }
                   </td>
                   <td class="col-admins" data-label="Admins">
@@ -228,7 +237,7 @@
                 </tr>
                 @if (settingsFor === item.workspace.id) {
                   <tr class="members-row ws-detail-row">
-                    <td colspan="8">
+                    <td colspan="9">
                       <div class="ws-detail">
                         <div class="ws-detail-split">
                             <section class="ws-detail-section">
@@ -280,7 +289,7 @@
                 }
                 @if (creditsFor === item.workspace.id) {
                   <tr class="members-row ws-detail-row">
-                    <td colspan="8">
+                    <td colspan="9">
                       @if (creditsOf(item); as c) {
                         <div class="ws-detail">
                           <section class="ws-detail-section">
@@ -567,7 +576,7 @@
                 }
                 @if (membersFor === item.workspace.id) {
                   <tr class="members-row ws-detail-row">
-                    <td colspan="8">
+                    <td colspan="9">
                       <div class="ws-detail">
                         <section class="mu-card" [attr.aria-label]="'Users of ' + item.workspace.name">
                           <header class="mu-head">
