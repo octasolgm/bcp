@@ -127,7 +127,16 @@
           <span class="filter-count">{{ visibleItems.length }} of {{ items.length }}</span>
         </div>
 
-        <div class="card-surface table-wrap table-scroll-body ws-table-wrap">
+        <div
+          class="card-surface table-wrap table-scroll-body ws-table-wrap"
+          #wsTableWrap
+          (scroll)="onTableScroll(wsTableWrap)"
+        >
+          @if (tableScrolled) {
+            <button type="button" class="ws-back-to-top" (click)="scrollTableToTop(wsTableWrap)">
+              Back to top
+            </button>
+          }
           <table class="ws-table">
             <thead>
               <tr>
@@ -156,9 +165,50 @@
                           placeholder="Description"
                           aria-label="Workspace description"
                         />
+                        <div class="name-edit-actions">
+                          <button
+                            type="button"
+                            class="ws-icon-btn ws-icon-confirm"
+                            title="Save name"
+                            aria-label="Save name"
+                            [disabled]="savingId === item.workspace.id"
+                            (click)="saveEdit()"
+                          >
+                            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                              <path fill="none" stroke="currentColor" stroke-width="1.8" d="M5 10.5l3.2 3.2L15 6.5" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            class="ws-icon-btn"
+                            title="Cancel"
+                            aria-label="Cancel renaming"
+                            (click)="cancelEdit()"
+                          >
+                            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                              <path fill="none" stroke="currentColor" stroke-width="1.8" d="M6 6l8 8M14 6l-8 8" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     } @else {
                       <strong>{{ item.workspace.name }}</strong>
+                      <button
+                        type="button"
+                        class="ws-icon-btn ws-name-edit"
+                        title="Rename"
+                        [attr.aria-label]="'Rename ' + item.workspace.name"
+                        (click)="startEdit(item)"
+                      >
+                        <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+                          <path
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            d="M4.2 15.8l.8-3 8.4-8.4a1.4 1.4 0 012 0l.2.2a1.4 1.4 0 010 2l-8.4 8.4-3 .8z"
+                          />
+                        </svg>
+                      </button>
                       @if (item.workspace.id === currentWorkspaceId) {
                         <span class="you-tag">Viewing</span>
                       }
@@ -235,10 +285,6 @@
                     <app-nd-status-badge [status]="item.workspace.isActive ? 'active' : 'deactivated'" />
                   </td>
                   <td class="col-actions actions">
-                    @if (editingId === item.workspace.id) {
-                      <button type="button" class="btn-primary btn-sm" [disabled]="savingId === item.workspace.id" (click)="saveEdit()">Save</button>
-                      <button type="button" class="btn-secondary btn-sm" (click)="cancelEdit()">Cancel</button>
-                    } @else {
                       <button
                         type="button"
                         class="btn-primary btn-sm"
@@ -256,7 +302,6 @@
                       <button type="button" class="btn-secondary btn-sm" (click)="toggleSettings(item)">
                         {{ settingsFor === item.workspace.id ? 'Hide settings' : 'Settings' }}
                       </button>
-                      <button type="button" class="btn-secondary btn-sm" (click)="startEdit(item)">Rename</button>
                       @if (!item.workspace.isDefault) {
                         <button
                           type="button"
@@ -267,7 +312,6 @@
                           {{ item.workspace.isActive ? 'Deactivate' : 'Activate' }}
                         </button>
                       }
-                    }
                   </td>
                 </tr>
                 @if (settingsFor === item.workspace.id) {

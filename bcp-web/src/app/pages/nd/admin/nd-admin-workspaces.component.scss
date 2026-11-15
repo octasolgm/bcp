@@ -218,7 +218,7 @@
   }
 
   td.col-actions {
-    min-width: 14.5rem;
+    min-width: 16rem;
     white-space: normal;
   }
 
@@ -268,6 +268,86 @@
   gap: 0.35rem;
 }
 
+// Renaming happens on the title itself: a pencil beside the name, then a tick to confirm. That keeps
+// the edit where the thing being edited is, and takes a whole button out of the Actions column.
+.ws-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.3rem;
+  background: none;
+  color: var(--text-secondary, var(--muted));
+  cursor: pointer;
+  vertical-align: middle;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bg-muted);
+    color: var(--text-primary);
+    border-color: var(--border);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+// The pencil stays quiet so the list reads as names first, but never invisible: on a touch screen there
+// is no hover to reveal it, so a hidden control would simply be undiscoverable.
+.ws-name-edit {
+  opacity: 0.45;
+  margin-left: 0.15rem;
+}
+
+.ws-row:hover .ws-name-edit,
+.ws-name-edit:hover,
+.ws-name-edit:focus-visible {
+  opacity: 1;
+}
+
+.ws-icon-confirm {
+  color: var(--success, #2e7d4f);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--success, #2e7d4f);
+  }
+}
+
+.name-edit-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.15rem;
+}
+
+// Shortcut back to the first business once the list has been scrolled. It rides along at the bottom
+// right of the scrolling list rather than sitting in the page, so it is only there when it is useful.
+.ws-back-to-top {
+  position: sticky;
+  top: calc(100% - 2.75rem);
+  float: right;
+  z-index: 3;
+  margin-right: 0.6rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bg-muted);
+  }
+}
+
 .ws-table {
   width: 100%;
 
@@ -280,11 +360,31 @@
     font-size: 0.75rem;
   }
 
-  td.col-actions > button {
-    min-width: 6.4rem;
-    justify-content: center;
-    text-align: center;
-    margin: 0.15rem 0 0.15rem 0.3rem;
+  // Six actions used to sit two-per-row at a 6.4rem minimum, making every business three rows tall with a
+  // lot of empty space. They now pack as compact chips that fit in one or two short rows.
+  td.col-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    justify-content: flex-end;
+    align-items: center;
+
+    > button {
+      min-width: 0;
+      margin: 0;
+      padding: 0.26rem 0.55rem;
+      font-size: 0.75rem;
+      line-height: 1.3;
+      justify-content: center;
+      text-align: center;
+      white-space: nowrap;
+    }
+  }
+
+  // Tighter cells: the list shows more businesses per screen instead of padding.
+  th,
+  td {
+    padding: 0.45rem 0.6rem;
   }
 
   .ws-row-open > td {

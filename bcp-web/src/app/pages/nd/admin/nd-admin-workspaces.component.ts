@@ -61,6 +61,8 @@ export class NdAdminWorkspacesComponent implements OnInit {
 
   editingId: string | null = null;
   editName = '';
+  /** True once the business list has been scrolled, so the "Back to top" shortcut is offered. */
+  tableScrolled = false;
   /** Inline region edit: the row whose Region cell is open, and the code chosen in it. */
   editingRegionId: string | null = null;
   regionInput = '';
@@ -117,6 +119,14 @@ export class NdAdminWorkspacesComponent implements OnInit {
   private async loadJurisdictions(): Promise<void> {
     const res = await this.api.getJurisdictions();
     if (res.success && res.data) this.jurisdictionRegions = res.data as NdJurisdictionRegion[];
+  }
+
+  onTableScroll(wrap: HTMLElement): void {
+    this.tableScrolled = wrap.scrollTop > 120;
+  }
+
+  scrollTableToTop(wrap: HTMLElement): void {
+    wrap.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   /** Opens the Region cell of one row for editing. */
