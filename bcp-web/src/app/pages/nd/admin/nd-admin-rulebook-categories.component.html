@@ -124,6 +124,29 @@
         </button>
       </div>
 
+      @if (selectedCount) {
+        <div class="nd-card rb-bulk-bar" role="status" aria-live="polite">
+          <label class="rb-bulk-all">
+            <input
+              type="checkbox"
+              [checked]="allVisibleSelected"
+              [disabled]="bulkDeleting"
+              (change)="toggleSelectAllVisible($any($event.target).checked)"
+            />
+            Select all shown
+          </label>
+          <span class="rb-bulk-count">{{ selectedCount }} selected</span>
+          <span class="rb-bulk-spacer"></span>
+          <button type="button" class="nd-btn-secondary" [disabled]="bulkDeleting" (click)="clearSelection()">
+            Clear
+          </button>
+          <button type="button" class="nd-btn-secondary nd-danger" [disabled]="bulkDeleting" (click)="deleteSelected()">
+            @if (bulkDeleting) { <span class="rb-spinner" aria-hidden="true"></span> }
+            {{ bulkDeleting ? 'Deleting…' : 'Delete selected' }}
+          </button>
+        </div>
+      }
+
       @if (uploadNotice) {
         <div class="nd-card rb-import-progress" role="status" aria-live="polite">
           <span class="rb-spinner" aria-hidden="true"></span>
@@ -182,7 +205,16 @@
               [class.rb-level-3]="node.level === 3"
               [class.rb-level-4]="node.level === 4"
               [class.rb-busy]="deletingId === node.category.id"
+              [class.rb-row-selected]="isSelected(node.category.id)"
             >
+              <input
+                type="checkbox"
+                class="rb-select"
+                [checked]="isSelected(node.category.id)"
+                [disabled]="bulkDeleting"
+                (change)="toggleSelected(node.category.id, $any($event.target).checked)"
+                [attr.aria-label]="'Select ' + node.category.name"
+              />
               @if (isEditing(node)) {
                 <div class="rb-indent"></div>
                 <ng-container [ngTemplateOutlet]="categoryForm" [ngTemplateOutletContext]="{ placeholder: 'Category name' }" />

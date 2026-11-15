@@ -244,6 +244,81 @@ export class NdAdminRulebookCategoriesComponent implements OnInit {
     await this.load(true);
   }
 
+  // ---- bulk selection -----------------------------------------------------------------------------------
+
+  /** Categories ticked for a bulk action. Deleting one removes everything under it, so this is handled
+   *  carefully: parents go first and a child that a parent already took is not reported as a failure. */
+  readonly selectedIds = new Set<string>();
+  bulkDeleting = false;
+
+  isSelected(id: string): boolean {
+    return this.selectedIds.has(id);
+  }
+
+  toggleSelected(id: string, checked: boolean): void {
+    if (checked) this.selectedIds.add(id);
+    else this.selectedIds.delete(id);
+  }
+
+  get selectedCount(): number {
+    return this.selectedIds.size;
+  }
+
+  clearSelection(): void {
+    this.selectedIds.clear();
+  }
+
+  get allVisibleSelected(): boolean {
+    const rows = this.visibleRows;
+    return rows.length > 0 && rows.every((r) => this.selectedIds.has(r.node.category.id));
+  }
+
+  toggleSelectAllVisible(checked: boolean): void {
+    for (const r of this.visibleRows) {
+      if (checked) this.selectedIds.add(r.node.category.id);
+      else this.selectedIds.delete(r.node.category.id);
+    }
+  }
+
+  /** Deletes every ticked category. Parents first, so a selected child is usually already gone with it. */
+  async deleteSelected(): Promise<void> {
+    if (this.bulkDeleting || this.selectedIds.size === 0) return;
+
+    // Order by depth so a parent is removed before any of its selected children.
+    const byId = new Map(this.visibleRows.map((r) => [r.node.category.id, r.node]));
+    const ids = [...this.selectedIds].sort(
+      (a, b) => (byId.get(a)?.level ?? 99) - (byId.get(b)?.level ?? 99),
+    );
+    const count = ids.length;
+    const message =
+      `Delete ${count} selected categor${count === 1 ? 'y' : 'ies'} and everything under them? ` +
+      'This cannot be undone.';
+    if (!confirm(message)) return;
+
+    this.bulkDeleting = true;
+    this.error = '';
+    let deleted = 0;
+    let alreadyGone = 0;
+    const failures: string[] = [];
+    for (const id of ids) {
+      const res = await this.api.deleteRulebookCategory(id);
+      if (res.success) deleted++;
+      // A child the cascade already took reports "not found"; that is the delete working, not a failure.
+      else if ((res.message ?? '').toLowerCase().includes('not found')) alreadyGone++;
+      else failures.push(byId.get(id)?.category.name ?? id);
+    }
+    this.bulkDeleting = false;
+    this.selectedIds.clear();
+
+    if (failures.length) {
+      this.error = `Could not delete: ${failures.join(', ')}`;
+    } else {
+      const removed = deleted + alreadyGone;
+      this.toast.show(`Deleted ${removed} categor${removed === 1 ? 'y' : 'ies'}`, 'success', 3000);
+    }
+    await this.load(true);
+  }
+
   // ---- delete / import ----------------------------------------------------------------------------------
 
   async remove(node: CategoryNode): Promise<void> {

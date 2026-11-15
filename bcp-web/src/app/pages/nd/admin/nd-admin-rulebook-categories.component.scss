@@ -24,6 +24,44 @@
   font-size: 0.8125rem;
 }
 
+// Bulk selection: the tick box sits ahead of the indent so it lines up down the tree whatever the depth.
+.rb-select {
+  flex: 0 0 auto;
+  margin: 0 0.5rem 0 0;
+  cursor: pointer;
+}
+
+.rb-row-selected {
+  background: var(--bg-muted);
+}
+
+// Appears only once something is ticked, so the page is unchanged until a bulk action is possible.
+.rb-bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.5rem 0 0;
+  padding: 0.6rem 0.85rem;
+}
+
+.rb-bulk-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.rb-bulk-count {
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.rb-bulk-spacer {
+  flex: 1 1 auto;
+}
+
 .rb-add-root {
   margin-left: auto;
 }
