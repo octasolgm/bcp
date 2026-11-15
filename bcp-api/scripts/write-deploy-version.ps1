@@ -48,7 +48,10 @@ if ($env:DEPLOY_VERSION_LABEL -and -not $Label.Trim()) {
 }
 
 if (-not $Label.Trim()) {
-    $datePart = (Get-Date).ToUniversalTime().ToString("yyyy.MM.dd")
+    # Local date, not UTC: the label is read as "which day was this built" by people looking at the app, and
+    # a UTC date reads as yesterday for any timezone ahead of it (here UTC+5, so until 05:00 every morning).
+    # builtAt below stays UTC, which is what a timestamp should be.
+    $datePart = (Get-Date).ToString("yyyy.MM.dd")
     if ($commit) {
         $Label = "$datePart.$commit"
     } else {

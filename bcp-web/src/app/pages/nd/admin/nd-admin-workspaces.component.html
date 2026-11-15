@@ -290,6 +290,7 @@
                     <app-nd-status-badge [status]="item.workspace.isActive ? 'active' : 'deactivated'" />
                   </td>
                   <td class="col-actions actions">
+                    <div class="ws-actions">
                       <button
                         type="button"
                         class="btn-primary btn-sm"
@@ -311,6 +312,7 @@
                           {{ item.workspace.isActive ? 'Deactivate' : 'Activate' }}
                         </button>
                       }
+                    </div>
                   </td>
                 </tr>
                 @if (openPanelFor === item.workspace.id) {
