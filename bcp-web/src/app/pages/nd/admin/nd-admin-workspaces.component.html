@@ -153,7 +153,7 @@
             </thead>
             <tbody>
               @for (item of visibleItems; track item.workspace.id) {
-                <tr class="ws-row" [class.row-saving]="savingId === item.workspace.id" [class.ws-row-open]="creditsFor === item.workspace.id || membersFor === item.workspace.id || settingsFor === item.workspace.id">
+                <tr class="ws-row" [class.row-saving]="savingId === item.workspace.id" [class.ws-row-open]="openPanelFor === item.workspace.id">
                   <td class="col-name" data-label="Workspace">
                     @if (editingId === item.workspace.id) {
                       <div class="edit-stack">
@@ -293,14 +293,8 @@
                       >
                         {{ switchingId === item.workspace.id ? 'Opening…' : 'Open' }}
                       </button>
-                      <button type="button" class="btn-secondary btn-sm" (click)="toggleMembers(item)">
-                        {{ membersFor === item.workspace.id ? 'Hide users' : 'Users' }}
-                      </button>
-                      <button type="button" class="btn-secondary btn-sm" (click)="toggleCredits(item)">
-                        {{ creditsFor === item.workspace.id ? 'Hide credits' : 'Credits' }}
-                      </button>
-                      <button type="button" class="btn-secondary btn-sm" (click)="toggleSettings(item)">
-                        {{ settingsFor === item.workspace.id ? 'Hide settings' : 'Settings' }}
+                      <button type="button" class="btn-secondary btn-sm" (click)="togglePanel(item)">
+                        {{ openPanelFor === item.workspace.id ? 'Close' : 'Settings' }}
                       </button>
                       @if (!item.workspace.isDefault) {
                         <button
@@ -314,6 +308,44 @@
                       }
                   </td>
                 </tr>
+                @if (openPanelFor === item.workspace.id) {
+                  <tr class="ws-detail-row ws-tabs-row">
+                    <td colspan="9">
+                      <div class="ws-tabs" role="tablist" [attr.aria-label]="item.workspace.name + ' settings'">
+                        <button
+                          type="button"
+                          role="tab"
+                          class="ws-tab"
+                          [class.is-active]="panelTab === 'settings'"
+                          [attr.aria-selected]="panelTab === 'settings'"
+                          (click)="setPanelTab(item, 'settings')"
+                        >
+                          Settings
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          class="ws-tab"
+                          [class.is-active]="panelTab === 'users'"
+                          [attr.aria-selected]="panelTab === 'users'"
+                          (click)="setPanelTab(item, 'users')"
+                        >
+                          Users <span class="ws-tab-count">{{ item.userCount }}</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          class="ws-tab"
+                          [class.is-active]="panelTab === 'credits'"
+                          [attr.aria-selected]="panelTab === 'credits'"
+                          (click)="setPanelTab(item, 'credits')"
+                        >
+                          Credits
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                }
                 @if (settingsFor === item.workspace.id) {
                   <tr class="members-row ws-detail-row">
                     <td colspan="9">

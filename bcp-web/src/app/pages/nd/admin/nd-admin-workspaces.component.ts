@@ -263,6 +263,40 @@ export class NdAdminWorkspacesComponent implements OnInit {
     return 'ok';
   }
 
+  /** The row whose detail panel is open, and which of its tabs is showing. */
+  openPanelFor: string | null = null;
+  panelTab: 'settings' | 'users' | 'credits' = 'settings';
+  /** The create-workspace form is folded away by default so the list starts at the top of the page. */
+  showCreateForm = false;
+
+  /** One button opens the row's panel; Settings, Users and Credits are tabs inside it. */
+  async togglePanel(item: NdWorkspaceListItem): Promise<void> {
+    if (this.openPanelFor === item.workspace.id) {
+      this.closePanel();
+      return;
+    }
+    this.openPanelFor = item.workspace.id;
+    await this.setPanelTab(item, 'settings');
+  }
+
+  closePanel(): void {
+    this.openPanelFor = null;
+    this.settingsFor = null;
+    this.creditsFor = null;
+    this.membersFor = null;
+  }
+
+  /** Switches tab by reusing each section's existing open logic (clearing first so they open, not toggle). */
+  async setPanelTab(item: NdWorkspaceListItem, tab: 'settings' | 'users' | 'credits'): Promise<void> {
+    this.panelTab = tab;
+    this.settingsFor = null;
+    this.creditsFor = null;
+    this.membersFor = null;
+    if (tab === 'settings') this.toggleSettings(item);
+    else if (tab === 'credits') await this.toggleCredits(item);
+    else await this.toggleMembers(item);
+  }
+
   toggleSettings(item: NdWorkspaceListItem): void {
     if (this.settingsFor === item.workspace.id) {
       this.settingsFor = null;
@@ -744,9 +778,8 @@ export class NdAdminWorkspacesComponent implements OnInit {
   onEscape(event: Event): void {
     if (event.defaultPrevented) return;
     if (this.memberFormMode) this.memberFormMode = null;
-    else if (this.membersFor) this.membersFor = null;
-    else if (this.creditsFor) this.creditsFor = null;
-    else if (this.settingsFor) this.settingsFor = null;
+    else if (this.editingRegionId) this.cancelEditRegion();
+    else if (this.openPanelFor) this.closePanel();
     else if (this.editingId) this.cancelEdit();
   }
 

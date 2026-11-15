@@ -325,6 +325,56 @@
   margin-top: 0.15rem;
 }
 
+// One Settings button opens the row; Settings, Users and Credits are tabs inside it, so the Actions
+// column stays a single short row instead of carrying three separate toggles.
+.ws-tabs-row > td {
+  padding: 0 0.6rem !important;
+  border-bottom: 0;
+}
+
+.ws-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding-top: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  white-space: normal;
+}
+
+.ws-tab {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 0.35rem 0.35rem 0 0;
+  background: none;
+  color: var(--text-secondary, var(--muted));
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-muted);
+  }
+
+  &.is-active {
+    color: var(--accent);
+    background: var(--bg-card);
+    border-color: var(--border);
+    // Sit the active tab over the strip's own line so it reads as joined to the panel below.
+    margin-bottom: -1px;
+    border-bottom: 1px solid var(--bg-card);
+  }
+}
+
+.ws-tab-count {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  font-size: 0.6875rem;
+}
+
 // Shortcut back to the first business once the list has been scrolled. It rides along at the bottom
 // right of the scrolling list rather than sitting in the page, so it is only there when it is useful.
 .ws-back-to-top {
