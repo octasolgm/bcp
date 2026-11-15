@@ -52,6 +52,9 @@
           <button type="button" class="nd-btn-primary" [disabled]="importing" (click)="importSample()">
             @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }{{ importing ? 'Importing categories…' : 'Import sample rulebook categories' }}
           </button>
+          <button type="button" class="nd-btn-secondary" [disabled]="importing" (click)="importMiddleEast()">
+            @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }Add Middle East rulebooks
+          </button>
           <button type="button" class="nd-btn-secondary" [disabled]="importing" (click)="openAddRoot()">
             Add category
           </button>
@@ -94,6 +97,9 @@
             Import rulebook documents ({{ pendingDocumentImports.length }})
           </button>
         }
+        <button type="button" class="nd-btn-secondary rb-add-root" [disabled]="importing" (click)="importMiddleEast()">
+          @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }Add Middle East rulebooks
+        </button>
         <button type="button" class="nd-btn-primary" [class.rb-add-root]="!pendingDocumentImports.length || docImport" (click)="openAddRoot()">
           Add category
         </button>

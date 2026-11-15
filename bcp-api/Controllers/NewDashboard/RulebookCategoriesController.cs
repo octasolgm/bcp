@@ -178,6 +178,85 @@ public class RulebookCategoriesController(
     }
 
     /// <summary>
+    /// Adds the Middle East region rulebook structure (ADGM, SAMA, QFCRA, CBO, CBB) to this workspace, creating
+    /// only the categories that are missing. Safe to run repeatedly: existing categories are kept and only new
+    /// ones are added (matched by name under the same parent), so an admin who already has some rulebooks just
+    /// gets the ones they are missing.
+    /// </summary>
+    [HttpPost("import-middle-east")]
+    public async Task<IActionResult> ImportMiddleEast(CancellationToken ct)
+    {
+        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
+        if (error != null) return error;
+
+        var path = Path.Combine(env.ContentRootPath, "SeedData", "rulebook-categories-middle-east.json");
+        if (!System.IO.File.Exists(path))
+            return StatusCode(500, new { success = false, message = "Middle East rulebook categories are not available." });
+
+        var pack = JsonSerializer.Deserialize<SamplePack>(
+            await System.IO.File.ReadAllTextAsync(path, ct),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        var (added, skipped) = await AddMissingAsync(pack?.Categories, null, 1, profile!.Id, ct);
+        await db.SaveChangesAsync(ct);
+        return Ok(new { success = true, added, skipped });
+    }
+
+    /// <summary>Adds categories not already present (matched by name under the same parent); recurses into children.</summary>
+    private async Task<(int Added, int Skipped)> AddMissingAsync(
+        List<SampleNode>? nodes, Guid? parentId, int depth, Guid creatorId, CancellationToken ct)
+    {
+        if (nodes == null || depth > MaxDepth) return (0, 0);
+        var added = 0;
+        var skipped = 0;
+        foreach (var node in nodes)
+        {
+            var name = node.Name?.Trim();
+            if (string.IsNullOrEmpty(name)) continue;
+
+            var existing = await db.NdRulebookCategories
+                .FirstOrDefaultAsync(c => c.ParentId == parentId && c.Name == name, ct);
+
+            Guid categoryId;
+            if (existing != null)
+            {
+                categoryId = existing.Id;
+                skipped++;
+                // Backfill a missing reference link, without overwriting anything an admin already set.
+                if (string.IsNullOrWhiteSpace(existing.SourceUrl) && !string.IsNullOrWhiteSpace(node.SourceUrl))
+                {
+                    existing.SourceUrl = Clean(node.SourceUrl);
+                    existing.UpdatedAt = DateTimeOffset.UtcNow;
+                }
+            }
+            else
+            {
+                var nextOrder = (await db.NdRulebookCategories
+                    .Where(c => c.ParentId == parentId)
+                    .MaxAsync(c => (int?)c.SortOrder, ct) ?? -1) + 1;
+                var row = new NdRulebookCategory
+                {
+                    ParentId = parentId,
+                    Name = name,
+                    SourceUrl = Clean(node.SourceUrl),
+                    DocumentUrl = Clean(node.DocumentUrl),
+                    SortOrder = nextOrder,
+                    CreatedBy = creatorId,
+                };
+                db.NdRulebookCategories.Add(row);
+                await db.SaveChangesAsync(ct); // persist so children can reference its Id
+                categoryId = row.Id;
+                added++;
+            }
+
+            var (childAdded, childSkipped) = await AddMissingAsync(node.Children, categoryId, depth + 1, creatorId, ct);
+            added += childAdded;
+            skipped += childSkipped;
+        }
+        return (added, skipped);
+    }
+
+    /// <summary>
     /// Downloads one rulebook's official document from its source link, adds it to Regulation Documents filed under
     /// this category, and starts parse and extract on the server. Skipped when the category already has a document.
     /// The page calls this once per rulebook, so a large import shows progress and can be stopped.

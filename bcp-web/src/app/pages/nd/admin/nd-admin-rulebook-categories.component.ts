@@ -427,4 +427,25 @@ export class NdAdminRulebookCategoriesComponent implements OnInit {
     this.toast.show(`Imported ${imported} rulebook categories`, 'success', 3500);
     await this.load(true);
   }
+
+  async importMiddleEast(): Promise<void> {
+    if (this.importing) return;
+    this.importing = true;
+    this.error = '';
+    const res = await this.api.importMiddleEastRulebooks();
+    this.importing = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not add the Middle East rulebooks';
+      return;
+    }
+    const added = (res as { added?: number }).added ?? 0;
+    const skipped = (res as { skipped?: number }).skipped ?? 0;
+    this.toast.show(
+      added > 0
+        ? `Added ${added} Middle East rulebook ${added === 1 ? 'category' : 'categories'}${skipped ? ` (${skipped} already present)` : ''}`
+        : 'Middle East rulebooks are already present',
+      'success',
+      3500);
+    await this.load(true);
+  }
 }

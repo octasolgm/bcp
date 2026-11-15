@@ -1,0 +1,55 @@
+{
+ "source": "Middle East regulatory authorities and their official rulebook portals, to maintain by region (links as supplied 15 Nov 2026). Authority nodes carry the portal link as sourceUrl; specific rulebook documents are added or imported under each authority afterwards.",
+ "categories": [
+  {
+   "name": "Middle East",
+   "children": [
+    {
+     "name": "United Arab Emirates",
+     "children": [
+      {
+       "name": "Abu Dhabi Global Market (ADGM)",
+       "sourceUrl": "https://www.adgm.com/legal-framework/rules-and-regulations"
+      }
+     ]
+    },
+    {
+     "name": "Saudi Arabia",
+     "children": [
+      {
+       "name": "Saudi Central Bank (SAMA) Rulebook",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en"
+      }
+     ]
+    },
+    {
+     "name": "Qatar",
+     "children": [
+      {
+       "name": "Qatar Financial Centre Regulatory Authority (QFCRA)",
+       "sourceUrl": "https://www.qfcra.com/qfc-regulatory-authority-rules/"
+      }
+     ]
+    },
+    {
+     "name": "Oman",
+     "children": [
+      {
+       "name": "Central Bank of Oman (CBO) Circulars",
+       "sourceUrl": "https://cbo.gov.om/Pages/Circulars.aspx"
+      }
+     ]
+    },
+    {
+     "name": "Bahrain",
+     "children": [
+      {
+       "name": "Central Bank of Bahrain (CBB) Rulebook - Volume 1 (Conventional Banks)",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-1-conventional-banks-0"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

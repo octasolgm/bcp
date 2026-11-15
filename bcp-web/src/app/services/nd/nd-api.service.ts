@@ -1033,6 +1033,11 @@ export class NdApiService {
     return this.request<unknown>('POST', '/nd/rulebook-categories/import-sample');
   }
 
+  /** Adds the Middle East region rulebooks (ADGM, SAMA, QFCRA, CBO, CBB); only the missing ones are added. */
+  importMiddleEastRulebooks() {
+    return this.request<unknown>('POST', '/nd/rulebook-categories/import-middle-east');
+  }
+
   /** Downloads one rulebook's document from its source into Regulation Documents, filed under the category. */
   importRulebookDocument(categoryId: string) {
     return this.request<{ regulationDocumentId: string; name: string }>(
