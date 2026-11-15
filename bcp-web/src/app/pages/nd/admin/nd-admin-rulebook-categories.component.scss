@@ -17,6 +17,13 @@
   gap: 0.5rem;
 }
 
+// Why "Import rulebook" is unavailable, said next to the disabled button rather than after a failed click.
+.rb-region-hint {
+  width: 100%;
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+}
+
 .rb-add-root {
   margin-left: auto;
 }

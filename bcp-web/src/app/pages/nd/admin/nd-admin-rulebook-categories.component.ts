@@ -428,9 +428,17 @@ export class NdAdminRulebookCategoriesComponent implements OnInit {
     await this.load(true);
   }
 
+  /**
+   * Which rulebooks to import follows the business's region, so the import is only offered once a region
+   * is set. Without this the button could only fail after the click, which is a worse way to say the same.
+   */
+  get hasRegion(): boolean {
+    return !!this.auth.profile()?.workspace?.jurisdiction;
+  }
+
   /** Imports the rulebooks for this business's own country (set in Business settings); adds only what's missing. */
   async importRulebooks(): Promise<void> {
-    if (this.importing) return;
+    if (this.importing || !this.hasRegion) return;
     this.importing = true;
     this.error = '';
     const res = await this.api.importRulebooks();

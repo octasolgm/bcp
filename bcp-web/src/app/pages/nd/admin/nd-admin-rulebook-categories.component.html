@@ -52,9 +52,22 @@
           <button type="button" class="nd-btn-primary" [disabled]="importing" (click)="importSample()">
             @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }{{ importing ? 'Importing categories…' : 'Import sample rulebook categories' }}
           </button>
-          <button type="button" class="nd-btn-secondary" [disabled]="importing" (click)="importRulebooks()">
+          <button
+            type="button"
+            class="nd-btn-secondary"
+            [disabled]="importing || !hasRegion"
+            [title]="hasRegion ? 'Import this business\'s regulator rulebooks' : 'Set this business\'s region first'"
+            (click)="importRulebooks()"
+          >
             @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }Import rulebook
           </button>
+          @if (!hasRegion) {
+            <p class="rb-region-hint nd-muted">
+              Set this business's region in
+              <a routerLink="/nd/admin/business-settings">Business settings</a>
+              to import its regulator rulebooks.
+            </p>
+          }
           <button type="button" class="nd-btn-secondary" [disabled]="importing" (click)="openAddRoot()">
             Add category
           </button>
@@ -97,7 +110,13 @@
             Import rulebook documents ({{ pendingDocumentImports.length }})
           </button>
         }
-        <button type="button" class="nd-btn-secondary rb-add-root" [disabled]="importing" (click)="importRulebooks()">
+        <button
+          type="button"
+          class="nd-btn-secondary rb-add-root"
+          [disabled]="importing || !hasRegion"
+          [title]="hasRegion ? 'Import this business\'s regulator rulebooks' : 'Set this business\'s region in Business settings first'"
+          (click)="importRulebooks()"
+        >
           @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }Import rulebook
         </button>
         <button type="button" class="nd-btn-primary" [class.rb-add-root]="!pendingDocumentImports.length || docImport" (click)="openAddRoot()">
