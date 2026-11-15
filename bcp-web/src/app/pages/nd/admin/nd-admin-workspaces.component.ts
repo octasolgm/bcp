@@ -17,6 +17,7 @@ import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { matchesSearch } from '../../../../lib/nd/list-utils';
 import { NdWorkspaceModulesComponent } from '../../../components/nd/nd-workspace-modules.component';
 import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-workspace-upload-limits.component';
+import { NdWorkspaceRegionComponent } from '../../../components/nd/nd-workspace-region.component';
 import { ND_DATE_FORMAT_OPTIONS } from '../../../../lib/nd/date-format';
 
 /**
@@ -27,7 +28,7 @@ import { ND_DATE_FORMAT_OPTIONS } from '../../../../lib/nd/date-format';
 @Component({
   selector: 'app-nd-admin-workspaces',
   standalone: true,
-  imports: [NdTypeaheadPickerComponent, CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdPageAlertComponent, NdWorkspaceModulesComponent, NdWorkspaceUploadLimitsComponent],
+  imports: [NdTypeaheadPickerComponent, CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdPageAlertComponent, NdWorkspaceModulesComponent, NdWorkspaceUploadLimitsComponent, NdWorkspaceRegionComponent],
   templateUrl: './nd-admin-workspaces.component.html',
   styleUrls: [
     './nd-admin-users.component.scss',
@@ -367,6 +368,20 @@ export class NdAdminWorkspacesComponent implements OnInit {
     item.workspace.embeddingsEnabled = modules.embeddingsEnabled;
     item.workspace.integrationsEnabled = modules.integrationsEnabled;
     // The platform admin may be acting inside this workspace: keep their own session's flags current too.
+    if (this.auth.profile()?.workspace?.id === item.workspace.id) void this.auth.refreshProfile(true);
+  }
+
+  /** Keeps the row (Region column) and the open panel in step after the region picker saves. */
+  onRegionSaved(
+    item: NdWorkspaceListItem,
+    saved: { jurisdiction: string | null; country: string | null; region: string | null },
+  ): void {
+    item.workspace.jurisdiction = saved.jurisdiction;
+    item.workspace.country = saved.country;
+    item.workspace.region = saved.region;
+    // Setting a region may also have set this workspace's date format, so reload the row's picker value.
+    void this.load();
+    // The platform admin may be acting inside this workspace: refresh their own session's date format too.
     if (this.auth.profile()?.workspace?.id === item.workspace.id) void this.auth.refreshProfile(true);
   }
 

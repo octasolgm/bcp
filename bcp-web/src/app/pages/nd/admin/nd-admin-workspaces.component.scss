@@ -196,6 +196,11 @@
 /* ── Workspace list ── */
 .ws-table-wrap {
   overflow: auto;
+  // The business list scrolls inside this box rather than with the whole page, which is what lets the
+  // shared sticky column headings (nd-shared.scss `thead th`) actually stay in view while scrolling.
+  // Without a height to scroll within, the page scrolls instead and the headings leave the screen.
+  max-height: calc(100vh - 21rem);
+  min-height: 18rem;
 }
 
 // The shared table style sizes tables to their content, which made the open credits panel stretch the
@@ -220,15 +225,6 @@
   td.col-region {
     min-width: 8rem;
     white-space: normal;
-  }
-
-  // Sticky column headings: the list scrolls under them, so which column is which stays visible.
-  // (The narrow layout below hides thead entirely, so this only applies to the table view.)
-  thead th {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: var(--bg-card);
   }
 }
 
@@ -288,6 +284,41 @@
   flex-direction: column;
   gap: 0.6rem;
   min-width: 0;
+}
+
+// Which business this open panel belongs to, with its key facts. The table headings scroll away as the
+// list grows, so the panel names the business and repeats region, counts and status on its own.
+.ws-detail-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+
+  h3 {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+}
+
+.ws-summary-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin: 0;
+
+  dt {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary, var(--muted));
+  }
+
+  dd {
+    margin: 0.1rem 0 0;
+    font-weight: 600;
+    font-size: 0.8125rem;
+  }
 }
 
 .ws-detail-head {

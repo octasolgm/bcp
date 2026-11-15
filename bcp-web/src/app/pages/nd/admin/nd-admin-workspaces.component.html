@@ -239,7 +239,36 @@
                   <tr class="members-row ws-detail-row">
                     <td colspan="9">
                       <div class="ws-detail">
+                        <header class="ws-detail-summary">
+                          <h3>{{ item.workspace.name }}</h3>
+                          <dl class="ws-summary-facts">
+                            <div>
+                              <dt>Region</dt>
+                              <dd>{{ item.workspace.region || 'Not set' }}</dd>
+                            </div>
+                            <div>
+                              <dt>Country</dt>
+                              <dd>{{ item.workspace.country || 'Not set' }}</dd>
+                            </div>
+                            <div><dt>Users</dt><dd>{{ item.userCount }}</dd></div>
+                            <div><dt>Documents</dt><dd>{{ item.documentCount }}</dd></div>
+                            <div><dt>Analyses</dt><dd>{{ item.analysisCount }}</dd></div>
+                            <div><dt>Status</dt><dd>{{ item.workspace.isActive ? 'Active' : 'Inactive' }}</dd></div>
+                          </dl>
+                        </header>
                         <div class="ws-detail-split">
+                            <section class="ws-detail-section">
+                              <header class="ws-detail-head">
+                                <h3>Region</h3>
+                              </header>
+                              <app-nd-workspace-region
+                                [workspaceId]="item.workspace.id"
+                                [jurisdiction]="item.workspace.jurisdiction ?? null"
+                                [editable]="true"
+                                (saved)="onRegionSaved(item, $event)"
+                              />
+                            </section>
+
                             <section class="ws-detail-section">
                               <header class="ws-detail-head">
                                 <h3>Date format</h3>
