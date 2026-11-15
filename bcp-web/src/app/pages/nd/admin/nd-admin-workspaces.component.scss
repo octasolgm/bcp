@@ -221,7 +221,7 @@
   // Each text column wraps within its cap; nothing relies on the table being as wide as its content.
   td.col-name {
     min-width: 11rem;
-    max-width: 18rem;
+    max-width: 15rem;
     white-space: normal;
   }
 
@@ -229,20 +229,22 @@
   // its own to wrap inside.
   td.col-admins,
   th.col-admins {
-    min-width: 9rem;
-    max-width: 13rem;
+    min-width: 8rem;
+    max-width: 11rem;
     white-space: normal;
   }
 
+  // Wide enough for all three buttons on one line. Too narrow and "Deactivate" drops to a second row,
+  // which is what made the actions look out of line with everything else.
   td.col-actions {
-    min-width: 12.5rem;
+    min-width: 15.5rem;
     white-space: normal;
   }
 
-  // Cost and billed sit on their own line under the limit chip, so this cell wraps rather than stretching.
+  // Cost and billed read as one line, so give them room rather than letting the pair break in half.
   td.col-credits {
     white-space: normal;
-    min-width: 8rem;
+    min-width: 9.5rem;
   }
 
   td.col-region {
@@ -439,7 +441,8 @@
   // table cell, which knocked the buttons out of line with their own rows.
   .ws-actions {
     display: flex;
-    flex-wrap: wrap;
+    // One row: the column is sized to hold all three, so wrapping here would only ever look like a mistake.
+    flex-wrap: nowrap;
     gap: 0.3rem;
     justify-content: flex-end;
     align-items: center;
