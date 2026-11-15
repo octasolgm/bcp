@@ -169,11 +169,46 @@
                     }
                   </td>
                   <td class="col-region" data-label="Region">
-                    @if (item.workspace.region) {
-                      <strong>{{ item.workspace.region }}</strong>
-                      <div class="muted">{{ item.workspace.country }}</div>
+                    @if (editingRegionId === item.workspace.id) {
+                      <div class="edit-stack">
+                        <select
+                          class="inline-input"
+                          [(ngModel)]="regionInput"
+                          name="regionInput-{{ item.workspace.id }}"
+                          aria-label="Region and country"
+                        >
+                          <option value="">Not set</option>
+                          @for (r of jurisdictionRegions; track r.region) {
+                            <optgroup [label]="r.region">
+                              @for (c of r.countries; track c.code) {
+                                <option [value]="c.code">{{ c.country }}</option>
+                              }
+                            </optgroup>
+                          }
+                        </select>
+                        <div class="region-edit-actions">
+                          <button type="button" class="btn-secondary btn-sm" [disabled]="savingRegion" (click)="saveRegion(item)">
+                            {{ savingRegion ? 'Saving...' : 'Save' }}
+                          </button>
+                          <button type="button" class="btn-ghost btn-sm" [disabled]="savingRegion" (click)="cancelEditRegion()">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
                     } @else {
-                      <span class="muted">Not set</span>
+                      <button
+                        type="button"
+                        class="region-cell-btn"
+                        (click)="startEditRegion(item)"
+                        [attr.aria-label]="'Set region for ' + item.workspace.name"
+                      >
+                        @if (item.workspace.region) {
+                          <strong>{{ item.workspace.region }}</strong>
+                          <span class="muted">{{ item.workspace.country }}</span>
+                        } @else {
+                          <span class="region-unset">Not set</span>
+                        }
+                      </button>
                     }
                   </td>
                   <td class="col-admins" data-label="Admins">

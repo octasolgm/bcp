@@ -18,6 +18,7 @@ import { matchesSearch } from '../../../../lib/nd/list-utils';
 import { NdWorkspaceModulesComponent } from '../../../components/nd/nd-workspace-modules.component';
 import { NdWorkspaceUploadLimitsComponent } from '../../../components/nd/nd-workspace-upload-limits.component';
 import { NdWorkspaceRegionComponent } from '../../../components/nd/nd-workspace-region.component';
+import type { NdJurisdictionRegion } from '../../../../lib/nd/types';
 import { ND_DATE_FORMAT_OPTIONS } from '../../../../lib/nd/date-format';
 
 /**
@@ -60,6 +61,11 @@ export class NdAdminWorkspacesComponent implements OnInit {
 
   editingId: string | null = null;
   editName = '';
+  /** Inline region edit: the row whose Region cell is open, and the code chosen in it. */
+  editingRegionId: string | null = null;
+  regionInput = '';
+  savingRegion = false;
+  jurisdictionRegions: NdJurisdictionRegion[] = [];
   editDescription = '';
 
   membersFor: string | null = null;
@@ -105,6 +111,40 @@ export class NdAdminWorkspacesComponent implements OnInit {
     await this.auth.refreshProfile();
     await this.load();
     await this.loadPricing();
+    await this.loadJurisdictions();
+  }
+
+  private async loadJurisdictions(): Promise<void> {
+    const res = await this.api.getJurisdictions();
+    if (res.success && res.data) this.jurisdictionRegions = res.data as NdJurisdictionRegion[];
+  }
+
+  /** Opens the Region cell of one row for editing. */
+  startEditRegion(item: NdWorkspaceListItem): void {
+    this.editingRegionId = item.workspace.id;
+    this.regionInput = item.workspace.jurisdiction ?? '';
+  }
+
+  cancelEditRegion(): void {
+    this.editingRegionId = null;
+    this.regionInput = '';
+  }
+
+  /** Saves the region chosen in the row's cell, then refreshes so the date format follows it. */
+  async saveRegion(item: NdWorkspaceListItem): Promise<void> {
+    this.savingRegion = true;
+    const res = await this.api.setWorkspaceJurisdiction(item.workspace.id, this.regionInput || null);
+    this.savingRegion = false;
+    if (!res.success) {
+      this.error = res.message ?? 'Could not save the region.';
+      return;
+    }
+    item.workspace.jurisdiction = res.data?.jurisdiction ?? null;
+    item.workspace.country = res.data?.country ?? null;
+    item.workspace.region = res.data?.region ?? null;
+    this.editingRegionId = null;
+    await this.load();
+    if (this.auth.profile()?.workspace?.id === item.workspace.id) void this.auth.refreshProfile(true);
   }
 
   private async loadPricing(): Promise<void> {

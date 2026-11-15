@@ -223,9 +223,49 @@
   }
 
   td.col-region {
-    min-width: 8rem;
+    min-width: 9rem;
     white-space: normal;
   }
+}
+
+// The Region cell is editable in place: the whole value is a button that swaps the cell for a picker,
+// so an admin can set a business's region without opening its settings panel.
+.region-cell-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.2rem 0.3rem;
+  margin: -0.2rem -0.3rem;
+  border: 0;
+  border-radius: 0.3rem;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bg-muted);
+  }
+
+  .muted {
+    font-size: 0.75rem;
+  }
+}
+
+// "Not set" is an invitation to click, so it reads as an action rather than an empty value.
+.region-unset {
+  color: var(--accent);
+  border-bottom: 1px dashed currentColor;
+  font-size: 0.8125rem;
+}
+
+.region-edit-actions {
+  display: flex;
+  gap: 0.35rem;
 }
 
 .ws-table {
