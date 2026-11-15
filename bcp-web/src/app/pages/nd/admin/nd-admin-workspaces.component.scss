@@ -206,7 +206,9 @@
   // The business list scrolls inside this box rather than with the whole page, which is what lets the
   // shared sticky column headings (nd-shared.scss `thead th`) actually stay in view while scrolling.
   // Without a height to scroll within, the page scrolls instead and the headings leave the screen.
-  max-height: calc(100vh - 21rem);
+  // With the create form folded away and the page blurb gone, the list takes nearly the whole viewport:
+  // what is reserved here is the app bar, the page title bar and the search row above it.
+  max-height: calc(100vh - 13rem);
   min-height: 18rem;
 }
 
