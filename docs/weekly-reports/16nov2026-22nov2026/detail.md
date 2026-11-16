@@ -31,3 +31,16 @@ Importing a rulebook used to sit with the button spinning for a long time on the
 The sidebar was also quietly asking the server about running analyses on every page, using a channel that is only open to the platform's own workspace. Inside a client business the request was refused every time and never had anything to report, so it now runs only where it applies. Nothing about this was visible on screen, but it removes a repeated failed request from every page.
 
 This work is live on the test environment as build 2026.11.16.26.
+
+## Rulebooks for the rest of the region
+
+Until now only the UAE had a real regulatory library behind it. The other countries we support had a single entry each, a link to the regulator's website, so a business in Bahrain that pressed Import rulebook received one line rather than a library.
+
+Each regulator's published rulebook has now been read in full and built into the library, so importing gives a working structure from the first day:
+
+- Bahrain: the Central Bank of Bahrain rulebook, all seven volumes plus the common volume, each with its sections and modules, including the financial crime module
+- Saudi Arabia: the Saudi Central Bank rulebook, every sector with its topics and the instructions issued under each
+- Qatar: the QFC law and regulations together with all twenty QFC Regulatory Authority rulebooks, each broken down into its parts, the anti money laundering rules among them
+- Oman: the Central Bank of Oman publishes individual laws, frameworks and guidance rather than a single rulebook, so each one is listed with a direct link to its document, which means those documents can also be pulled in automatically
+
+Deliberately left out are quarterly updates, ad hoc communications, archived material, forms, consultation papers and circulars. These are published continuously and are a running history rather than part of the rulebook itself.
