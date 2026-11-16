@@ -204,11 +204,13 @@ public class RulebookCategoriesController(
         // on its own was the rest of the delay: the writes were batched, but the duplicate check and the
         // sort order were still a round trip each, and the request timed out before the import finished.
         var existingRows = await db.NdRulebookCategories.ToListAsync(ct);
-        var byParentName = new Dictionary<(Guid? Parent, string Name), NdRulebookCategory>();
+        // Both are keyed by the parent with Guid.Empty standing in for the top level, because a dictionary
+        // refuses a null key and the regulators themselves have no parent.
+        var byParentName = new Dictionary<(Guid Parent, string Name), NdRulebookCategory>();
         foreach (var existing in existingRows)
-            byParentName.TryAdd((existing.ParentId, (existing.Name ?? "").Trim().ToLowerInvariant()), existing);
+            byParentName.TryAdd((existing.ParentId ?? Guid.Empty, (existing.Name ?? "").Trim().ToLowerInvariant()), existing);
         var nextOrder = existingRows
-            .GroupBy(r => r.ParentId)
+            .GroupBy(r => r.ParentId ?? Guid.Empty)
             .ToDictionary(g => g.Key, g => g.Max(r => r.SortOrder) + 1);
 
         var (added, skipped) = AddMissing(children, null, 1, profile!.Id, byParentName, nextOrder);
@@ -229,8 +231,8 @@ public class RulebookCategoriesController(
     /// </summary>
     private (int Added, int Skipped) AddMissing(
         List<SampleNode>? nodes, Guid? parentId, int depth, Guid creatorId,
-        Dictionary<(Guid? Parent, string Name), NdRulebookCategory> byParentName,
-        Dictionary<Guid?, int> nextOrder)
+        Dictionary<(Guid Parent, string Name), NdRulebookCategory> byParentName,
+        Dictionary<Guid, int> nextOrder)
     {
         if (nodes == null || depth > MaxDepth) return (0, 0);
         var added = 0;
@@ -240,7 +242,8 @@ public class RulebookCategoriesController(
         {
             var name = node.Name?.Trim();
             if (string.IsNullOrEmpty(name)) continue;
-            var key = (parentId, name.ToLowerInvariant());
+            var parentKey = parentId ?? Guid.Empty;
+            var key = (parentKey, name.ToLowerInvariant());
 
             Guid categoryId;
             if (byParentName.TryGetValue(key, out var existing))
@@ -256,7 +259,7 @@ public class RulebookCategoriesController(
             }
             else
             {
-                nextOrder.TryGetValue(parentId, out var order);
+                nextOrder.TryGetValue(parentKey, out var order);
                 var row = new NdRulebookCategory
                 {
                     ParentId = parentId,
@@ -266,7 +269,7 @@ public class RulebookCategoriesController(
                     SortOrder = order,
                     CreatedBy = creatorId,
                 };
-                nextOrder[parentId] = order + 1;
+                nextOrder[parentKey] = order + 1;
                 db.NdRulebookCategories.Add(row);
                 byParentName[key] = row;
                 // The key is generated here, not by the database, so children can point at it without the
