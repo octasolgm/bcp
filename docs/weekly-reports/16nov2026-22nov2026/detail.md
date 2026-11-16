@@ -26,4 +26,4 @@ The release is on the test environment but has had little hands-on use so far, s
 
 The create-business form at the top has since been folded away behind a button, so the page now opens on the list. The look of the list is still not settled and is the main thing to pick up next. More regulator links are also expected, and those supplied so far point at rulebook websites rather than individual documents, so each specific rulebook document is still added separately.
 
-Importing a rulebook used to sit with the button spinning for a long time on the larger packs, because each category was saved to the database on its own. The whole import is now saved in one step, so it completes promptly.
+Importing a rulebook used to sit with the button spinning for a long time on the larger packs, and on the largest ones gave up before it finished. Each category was being written, and then checked for duplicates, one at a time. The whole import is now prepared in one pass and written once. A full UAE import, 256 categories covering 205 rulebooks, now completes in under two seconds.
