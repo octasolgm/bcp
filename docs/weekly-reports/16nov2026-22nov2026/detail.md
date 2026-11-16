@@ -27,3 +27,7 @@ The release is on the test environment but has had little hands-on use so far, s
 The create-business form at the top has since been folded away behind a button, so the page now opens on the list. The look of the list is still not settled and is the main thing to pick up next. More regulator links are also expected, and those supplied so far point at rulebook websites rather than individual documents, so each specific rulebook document is still added separately.
 
 Importing a rulebook used to sit with the button spinning for a long time on the larger packs, and on the largest ones gave up before it finished. Each category was being written, and then checked for duplicates, one at a time. The whole import is now prepared in one pass and written once. A full UAE import, 256 categories covering 205 rulebooks, now completes in under two seconds.
+
+The sidebar was also quietly asking the server about running analyses on every page, using a channel that is only open to the platform's own workspace. Inside a client business the request was refused every time and never had anything to report, so it now runs only where it applies. Nothing about this was visible on screen, but it removes a repeated failed request from every page.
+
+This work is live on the test environment as build 2026.11.16.26.
