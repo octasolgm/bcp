@@ -1,0 +1,3439 @@
+{
+ "source": "Saudi Central Bank (SAMA) Rulebook, read from https://rulebook.sama.gov.sa/en on 16 Nov 2026. Each sector holds its topics, and each topic the instructions published under it. Circulars and the regulatory sandbox are left out: they are chronological listings rather than rulebook structure.",
+ "categories": [
+  {
+   "name": "Saudi Central Bank (SAMA)",
+   "sourceUrl": "https://rulebook.sama.gov.sa/en",
+   "children": [
+    {
+     "name": "Laws and Implementing Regulations",
+     "sourceUrl": "https://rulebook.sama.gov.sa/en/book-category/1361",
+     "children": [
+      {
+       "name": "Saudi Central Bank Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/saudi-central-bank-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Saudi Central Bank Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/saudi-central-bank-law"
+        },
+        {
+         "name": "Chapter 1: Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-1-definitions-and-general-provisions"
+        }
+       ]
+      },
+      {
+       "name": "Saudi Arabian Monetary Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/saudi-arabian-monetary-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Saudi Arabian Monetary Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/saudi-arabian-monetary-law"
+        },
+        {
+         "name": "Article 27",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-27-11"
+        },
+        {
+         "name": "Article 1",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-1-4"
+        }
+       ]
+      },
+      {
+       "name": "Banking Control Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-control-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Banking Control Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-control-law"
+        },
+        {
+         "name": "Article 15",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-15-10"
+        },
+        {
+         "name": "Article 1",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-1-2"
+        }
+       ]
+      },
+      {
+       "name": "Implementation Rules for Banking Control Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/implementation-rules-banking-control-law-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Implementation Rules for Banking Control Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/implementation-rules-banking-control-law-0"
+        },
+        {
+         "name": "Article 26",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-26-6"
+        },
+        {
+         "name": "Finance Companies Control Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-companies-control-law"
+        }
+       ]
+      },
+      {
+       "name": "Finance Companies Control Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-companies-control-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Finance Companies Control Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-companies-control-law"
+        },
+        {
+         "name": "Implementation Rules for Banking Control Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/implementation-rules-banking-control-law-0"
+        },
+        {
+         "name": "Introductory Chapter: Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/introductory-chapter-definitions-0"
+        }
+       ]
+      },
+      {
+       "name": "Implementing Regulation of the Finance Companies Control Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulation-finance-companies-control-law-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Implementing Regulation of the Finance Companies Control Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulation-finance-companies-control-law-0"
+        },
+        {
+         "name": "Article 40",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-40-6"
+        },
+        {
+         "name": "Chapter 1: Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-1-definitions-and-general-provisions-0"
+        }
+       ]
+      },
+      {
+       "name": "Real Estate Finance Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/real-estate-finance-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Real Estate Finance Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/real-estate-finance-law"
+        },
+        {
+         "name": "Article 106",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-106-0"
+        },
+        {
+         "name": "Introductory Chapter: Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/introductory-chapter-definitions-1"
+        }
+       ]
+      },
+      {
+       "name": "Implementing Regulation of the Real Estate Finance Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulation-real-estate-finance-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Implementing Regulation of the Real Estate Finance Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulation-real-estate-finance-law"
+        },
+        {
+         "name": "Article 15",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-15-17"
+        },
+        {
+         "name": "Chapter One Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-one-definitions-and-general-provisions-1"
+        }
+       ]
+      },
+      {
+       "name": "Finance Lease Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-lease-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Finance Lease Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-lease-law"
+        },
+        {
+         "name": "Article 31",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-31-7"
+        },
+        {
+         "name": "Introductory Chapter Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/introductory-chapter-definitions"
+        }
+       ]
+      },
+      {
+       "name": "Implementing Regulation of the Finance Lease Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulation-finance-lease-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Implementing Regulation of the Finance Lease Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulation-finance-lease-law"
+        },
+        {
+         "name": "Article 28",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-28-11"
+        },
+        {
+         "name": "Part One Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/part-one-definitions-and-general-provisions"
+        }
+       ]
+      },
+      {
+       "name": "Law of Payments and Payment Services",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/law-payments-and-payment-services",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Law of Payments and Payment Services",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/law-payments-and-payment-services"
+        },
+        {
+         "name": "Article Thirty-Two",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-thirty-two-0"
+        },
+        {
+         "name": "Article 1",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-1-19"
+        }
+       ]
+      },
+      {
+       "name": "Implementing Regulations of Payments and Payment Services Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulations-payments-and-payment-services-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Implementing Regulations of Payments and Payment Services Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulations-payments-and-payment-services-law"
+        },
+        {
+         "name": "Article 20",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-20-17"
+        },
+        {
+         "name": "Part 1: General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/part-1-general-provisions-0"
+        }
+       ]
+      },
+      {
+       "name": "Credit Information Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/credit-information-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Credit Information Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/credit-information-law"
+        },
+        {
+         "name": "Article 133",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-133"
+        },
+        {
+         "name": "Article 1: Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-1-definitions-7"
+        }
+       ]
+      },
+      {
+       "name": "Implementing Regulations of Credit Information Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulations-credit-information-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Implementing Regulations of Credit Information Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulations-credit-information-law"
+        },
+        {
+         "name": "Article 17",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-17-9"
+        },
+        {
+         "name": "Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/definitions-4"
+        }
+       ]
+      },
+      {
+       "name": "Anti-Money Laundering Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-law",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Anti-Money Laundering Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-law"
+        },
+        {
+         "name": "Article 55",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-55-1"
+        },
+        {
+         "name": "I. Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/i-definitions-0"
+        }
+       ]
+      },
+      {
+       "name": "Implementing Regulation to the Anti-Money Laundering Law",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulation-anti-money-laundering-law-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Implementing Regulation to the Anti-Money Laundering Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulation-anti-money-laundering-law-0"
+        },
+        {
+         "name": "Article 51",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-51-7"
+        },
+        {
+         "name": "I. Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/i-definitions"
+        },
+        {
+         "name": "Technical Integration with \"Wathq\" Service for Verifying the Identity of the Ultimate Beneficial Owner (UBO) ( 472047799 )",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/technical-integration-wathq-service-verifying-identity-ultimate-beneficial-owner-ubo"
+        },
+        {
+         "name": "Utilization of the Beneficial Owner Information Inquiry Service for Private Associations and Foundations ( 472058161 )",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/utilization-beneficial-owner-information-inquiry-service-private-associations-and-foundations"
+        },
+        {
+         "name": "Utilization of the Services of the General Authority for Awqaf to Verify the Beneficial Owner Data ( 482008022 )",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/utilization-services-general-authority-awqaf-verify-beneficial-owner-data"
+        }
+       ]
+      },
+      {
+       "name": "Law on Combating the Financing of Terrorism",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/law-combating-financing-terrorism",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Law on Combating the Financing of Terrorism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/law-combating-financing-terrorism"
+        },
+        {
+         "name": "Article 51",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-51-8"
+        },
+        {
+         "name": "Chapter One Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-one-definitions"
+        }
+       ]
+      },
+      {
+       "name": "Implementing Regulations of the Law of Combating Terrorist Crimes and its Financing",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulations-law-combating-terrorist-crimes-and-its-financing",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Implementing Regulations of the Law of Combating Terrorist Crimes and its Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/implementing-regulations-law-combating-terrorist-crimes-and-its-financing"
+        },
+        {
+         "name": "Article 96",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-96-1"
+        },
+        {
+         "name": "Article 1",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-1-17"
+        }
+       ]
+      },
+      {
+       "name": "Systemically Important Financial Institutions",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/systemically-important-financial-institutions",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Systemically Important Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/systemically-important-financial-institutions"
+        },
+        {
+         "name": "Article 26",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-26-13"
+        },
+        {
+         "name": "Chapter 1: Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-1-definitions-1"
+        }
+       ]
+      },
+      {
+       "name": "Close-out Netting and related Collateral Arrangements Regulation",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/close-out-netting-and-related-collateral-arrangements-regulation",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Laws and Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-implementing-regulations"
+        },
+        {
+         "name": "Close-out Netting and related Collateral Arrangements Regulation",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/close-out-netting-and-related-collateral-arrangements-regulation"
+        },
+        {
+         "name": "Article 38",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-38-10"
+        },
+        {
+         "name": "Article (One): Scope of Application of this Regulation",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-one-scope-application-regulation"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "All Financial Institutions",
+     "sourceUrl": "https://rulebook.sama.gov.sa/en/book-category/1362",
+     "children": [
+      {
+       "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "All Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/all-financial-institutions"
+        },
+        {
+         "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-0"
+        },
+        {
+         "name": "The Anti-Money Laundering and Counter-Terrorism Financing (AML/CTF) Guide",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/guidance-anti-money-laundering-and-combating-terrorist-financing"
+        }
+       ]
+      },
+      {
+       "name": "Cyber Risk Control",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "All Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/all-financial-institutions"
+        },
+        {
+         "name": "Cyber Risk Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-0"
+        },
+        {
+         "name": "Chapter IV: Final Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-iv-final-provisions"
+        },
+        {
+         "name": "Cyber Resilience",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-resilience-2"
+        },
+        {
+         "name": "Cyber Resilience Fundamental Requirements (CRFR)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-resilience-fundamental-requirements-crfr-1"
+        },
+        {
+         "name": "Cyber Security Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-security-framework-2"
+        },
+        {
+         "name": "Cyber Threat Intelligence Principles for Financial Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-sector-cyber-threat-intelligence-principles-0"
+        },
+        {
+         "name": "Minimum Verification Controls",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/minimum-verification-controls-0"
+        },
+        {
+         "name": "Business Continuity Management Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/business-continuity-management-framework-1"
+        },
+        {
+         "name": "Financial Entities Ethical Red-Teaming",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-entities-ethical-red-teaming-0"
+        },
+        {
+         "name": "Information Technology Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/information-technology-governance"
+        },
+        {
+         "name": "Information Technology Governance Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/information-technology-governance-framework"
+        },
+        {
+         "name": "Counter Fraud",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/counter-fraud"
+        },
+        {
+         "name": "Counter-Fraud Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/counter-fraud-framework-0"
+        },
+        {
+         "name": "Counter-Fraud Fundamental Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/counter-fraud-fundamental-requirements"
+        },
+        {
+         "name": "Data Privacy",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/data-privacy-2"
+        },
+        {
+         "name": "Adherence to the Personal Data Protection Law and Data Governance Policies, Regulations and Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/adherence-personal-data-protection-law-and-data-governance-policies-regulations-and-rules"
+        }
+       ]
+      },
+      {
+       "name": "Corporate Governance for Financial Institutions",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/corporate-governance-financial-institutions",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "All Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/all-financial-institutions"
+        },
+        {
+         "name": "Corporate Governance for Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/corporate-governance-financial-institutions"
+        },
+        {
+         "name": "Adherence to the Personal Data Protection Law and Data Governance Policies, Regulations and Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/adherence-personal-data-protection-law-and-data-governance-policies-regulations-and-rules"
+        },
+        {
+         "name": "Key Principles of Governance in Financial Institutions Subject to Saudi Central Bank’s Oversight and Supervision",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/key-principles-governance-financial-institutions-2"
+        },
+        {
+         "name": "Chapter I Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-i-definitions-and-general-provisions-1"
+        },
+        {
+         "name": "Chapter II Key Principles of Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-ii-key-principles-governance"
+        },
+        {
+         "name": "Requirements for Appointments to Senior Positions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/requirements-appointments-senior-positions-2"
+        },
+        {
+         "name": "Chapter 1 Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-1-definitions-0"
+        },
+        {
+         "name": "Chapter 2 General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-2-general-provisions-0"
+        },
+        {
+         "name": "Chapter 3 Senior Positions that Require SAMA’s Non-objection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-3-senior-positions-require-sama%E2%80%99s-non-objection"
+        },
+        {
+         "name": "Chapter 4 Fit and Proper Criteria and Disclosure",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-4-fit-and-proper-criteria-and-disclosure"
+        },
+        {
+         "name": "Chapter 5 Senior Positions that Do Not Require SAMA’s Non-Objection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-5-senior-positions-do-not-require-sama%E2%80%99s-non-objection"
+        },
+        {
+         "name": "Chapter 6 Effectiveness",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-6-effectiveness"
+        },
+        {
+         "name": "Appendix (1): Senior Positions in Banks Operating in Saudi Arabia that Require SAMA’s Written Non-Objection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-1-senior-positions-banks-operating-saudi-arabia-require-sama%E2%80%99s-written-non-objection"
+        },
+        {
+         "name": "Appendix (2): Senior Positions in Credit Bureau Companies Operating in Saudi Arabia that Require SAMA’s Written Non-Objection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-2-senior-positions-credit-bureau-companies-operating-saudi-arabia-require-sama%E2%80%99s-written"
+        },
+        {
+         "name": "Appendix (3): Senior Positions in Insurance Sector Operating in Saudi Arabia that Require SAMA’s Written Non-Objection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-3-senior-positions-insurance-sector-operating-saudi-arabia-require-sama%E2%80%99s-written-non"
+        },
+        {
+         "name": "Appendix (4): Senior Positions in Finance/Refinance Companies and Contract Registration Companies Operating in Saudi Arabia that Require SAMA’s Written Non-Objection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-4-senior-positions-financerefinance-companies-and-contract-registration-companies"
+        },
+        {
+         "name": "Appendix (5): Senior Positions in Money Changers Operating in Saudi Arabia that Require SAMA’s Written Non-Objection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-5-senior-positions-money-changers-operating-saudi-arabia-require-sama%E2%80%99s-written-non"
+        },
+        {
+         "name": "Appendix (6): Senior Positions in Payment and Fintech Companies Operating in Saudi Arabia that Require SAMA’s Written Non-Objection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-6-senior-positions-payment-and-fintech-companies-operating-saudi-arabia-require-sama%E2%80%99s"
+        },
+        {
+         "name": "Appendix (A): List of Members of Board of Directors, Committee, and Senior Management Position Holders",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-list-members-board-directors-committee-and-senior-management-position-holders"
+        },
+        {
+         "name": "Appendix (B): Documents Required to Obtain SAMA’s Written Non-Objection for Senior Positions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-b-documents-required-obtain-sama%E2%80%99s-written-non-objection-senior-positions"
+        },
+        {
+         "name": "Appendix (C): Requesting SAMA’s Written Non-Objection on Appointment to Senior Positions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-c-requesting-sama%E2%80%99s-written-non-objection-appointment-senior-positions"
+        },
+        {
+         "name": "Fit and Proper Form",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/fit-and-proper-form"
+        }
+       ]
+      },
+      {
+       "name": "Consumer Protection and Financial Conduct",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-protection-and-financial-conduct",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "All Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/all-financial-institutions"
+        },
+        {
+         "name": "Consumer Protection and Financial Conduct",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-protection-and-financial-conduct"
+        },
+        {
+         "name": "Attestation by the Financial Institution",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/attestation-financial-institution"
+        },
+        {
+         "name": "Financial Consumer Protection Principles and Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-consumer-protection-principles-and-rules"
+        },
+        {
+         "name": "Section 1: Introduction, Purpose and Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-1-introduction-purpose-and-definitions"
+        },
+        {
+         "name": "Section 2: Consumer Protection Principles",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-2-consumer-protection-principles"
+        },
+        {
+         "name": "Section 3: General Conduct Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-3-general-conduct-rules"
+        },
+        {
+         "name": "Section 4: Specific Conduct Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-4-specific-conduct-rules"
+        },
+        {
+         "name": "Section 5: Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-5-concluding-provisions"
+        },
+        {
+         "name": "Guide To Financial Institutions Services Fees",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/guide-financial-institutions-services-fees"
+        },
+        {
+         "name": "Chapter One: General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-one-general-provisions-3"
+        },
+        {
+         "name": "Chapter Two: Financial Institutions’ Fees for Essential Retail Services Provided to Individual Customers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-two-financial-institutions%E2%80%99-fees-essential-retail-services-provided-individual-customers"
+        },
+        {
+         "name": "Chapter Three: Criteria for Determining Fees for Services and Products",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-three-criteria-determining-fees-services-and-products"
+        },
+        {
+         "name": "Chapter Four: Final Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-four-final-provisions-0"
+        },
+        {
+         "name": "Instructions for Services Provided to Persons with Disabilities in Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-services-provided-persons-disabilities-financial-institutions"
+        },
+        {
+         "name": "I. Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/i-introduction-2"
+        },
+        {
+         "name": "II. Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/ii-definitions-0"
+        },
+        {
+         "name": "III. Instructions on Services Provided for People with Disabilities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/iii-instructions-services-provided-people-disabilities"
+        },
+        {
+         "name": "Principles of Conduct and Work Ethics in Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/principles-conduct-and-work-ethics-financial-institutions-0"
+        },
+        {
+         "name": "I. Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/i-introduction-1"
+        },
+        {
+         "name": "II. Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/ii-definitions"
+        },
+        {
+         "name": "III. Principles of Conduct and Work Ethics",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/iii-principles-conduct-and-work-ethics"
+        },
+        {
+         "name": "IV. Consequences of Non-Compliance with the Principles of Conduct and Work Ethics",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/iv-consequences-non-compliance-principles-conduct-and-work-ethics"
+        },
+        {
+         "name": "Rules for Advertising Products and Services Provided by Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-advertising-products-and-services-provided-financial-institutions"
+        },
+        {
+         "name": "Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/introduction-14"
+        },
+        {
+         "name": "Scope of Application",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/scope-application-2"
+        },
+        {
+         "name": "Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/definitions-20"
+        },
+        {
+         "name": "Purpose",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/purpose-13"
+        },
+        {
+         "name": "Compliance with Relevant Laws, Regulations and Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/compliance-relevant-laws-regulations-and-instructions"
+        },
+        {
+         "name": "Rules and Procedures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-and-procedures"
+        },
+        {
+         "name": "Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/concluding-provisions"
+        },
+        {
+         "name": "Consumer Complaints",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-complaints"
+        },
+        {
+         "name": "Launch of the First Phase of the Complaint Management System",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/launch-first-phase-complaint-management-system"
+        },
+        {
+         "name": "The Unified Form for Responding to Complaints Received Through the “SAMACares” System",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/unified-form-responding-complaints-received-through-%E2%80%9Csamacares%E2%80%9D-system"
+        },
+        {
+         "name": "A Guide for Calculating the Early Payment Amount",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/guide-calculating-early-payment-amount"
+        },
+        {
+         "name": "Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/introduction-8"
+        },
+        {
+         "name": "Early Repayment",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/early-repayment"
+        },
+        {
+         "name": "Key Conditions for Calculating the Early Repayment Amount",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/key-conditions-calculating-early-repayment-amount"
+        },
+        {
+         "name": "Examples of Early Repayment Amount Calculation",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/examples-early-repayment-amount-calculation"
+        },
+        {
+         "name": "Frequently Asked Questions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/frequently-asked-questions-0"
+        }
+       ]
+      },
+      {
+       "name": "General Provisions",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/general-provisions-3",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "All Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/all-financial-institutions"
+        },
+        {
+         "name": "General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/general-provisions-3"
+        },
+        {
+         "name": "Frequently Asked Questions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/frequently-asked-questions-0"
+        },
+        {
+         "name": "License Disclosure Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/license-disclosure-instructions"
+        },
+        {
+         "name": "1. Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/1-introduction-20"
+        },
+        {
+         "name": "2. Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/2-definitions-1"
+        },
+        {
+         "name": "3. Scope of Application",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/3-scope-application-1"
+        },
+        {
+         "name": "4. Commitment Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/4-commitment-instructions"
+        },
+        {
+         "name": "5. Proposed Disclosure Format",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/5-proposed-disclosure-format"
+        },
+        {
+         "name": "Whistle Blowing Policy for Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/whistle-blowing-policy-financial-institutions"
+        },
+        {
+         "name": "I. Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/i-introduction-6"
+        },
+        {
+         "name": "II. Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/ii-definitions-2"
+        },
+        {
+         "name": "III. Policy Content",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/iii-policy-content"
+        },
+        {
+         "name": "General Rules for Participation in Events",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/general-rules-participation-events"
+        },
+        {
+         "name": "Chapter One Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-one-definitions-and-general-provisions-7"
+        },
+        {
+         "name": "Chapter Two Governance and Internal Policies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-two-governance-and-internal-policies"
+        },
+        {
+         "name": "Chapter Three Professional and Conduct obligations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-three-professional-and-conduct-obligations"
+        },
+        {
+         "name": "Chapter Four Risk Management and Commitments Related to Events",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-four-risk-management-and-commitments-related-events"
+        },
+        {
+         "name": "Chapter Five Final Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-five-final-provisions-1"
+        },
+        {
+         "name": "Instructions to Replace the Unified Number Starting with (7) Issued by the National Information Center with the Commercial Register Number for Non-Governmental Establishments",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-replace-unified-number-starting-7-issued-national-information-center-commercial"
+        },
+        {
+         "name": "1. Automation Requirements for Replacement in Automated Systems",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/1-automation-requirements-replacement-automated-systems"
+        },
+        {
+         "name": "2. Continuation of the Commercial Register Number Field",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/2-continuation-commercial-register-number-field"
+        },
+        {
+         "name": "3. Service Providers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/3-service-providers"
+        },
+        {
+         "name": "4. Implications of Replacement",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/4-implications-replacement"
+        },
+        {
+         "name": "5. Necessary Identification",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/5-necessary-identification"
+        },
+        {
+         "name": "6. Fulfilling the Unified Number",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/6-fulfilling-unified-number"
+        },
+        {
+         "name": "7. Inability to Obtain the Unified Number according to Paragraph (6)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/7-inability-obtain-unified-number-according-paragraph-6"
+        },
+        {
+         "name": "8. Replacing the Unified Number",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/8-replacing-unified-number"
+        },
+        {
+         "name": "9. The Actual and Testing Environment",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/9-actual-and-testing-environment"
+        },
+        {
+         "name": "10. National Payment Systems",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/10-national-payment-systems"
+        },
+        {
+         "name": "11. Tanfeeth and SAMA Net Automated Systems",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/11-tanfeeth-and-sama-net-automated-systems"
+        },
+        {
+         "name": "12. Instructions Communicated by SAMA Regarding the Implementation of Judicial, Security and Civil Procedures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/12-instructions-communicated-sama-regarding-implementation-judicial-security-and-civil-procedures"
+        },
+        {
+         "name": "13. Opening Accounts, New Relationships, and Contracts",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/13-opening-accounts-new-relationships-and-contracts"
+        },
+        {
+         "name": "14. Training",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/14-training"
+        },
+        {
+         "name": "15. Project Management and Requirements Implementation",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/15-project-management-and-requirements-implementation"
+        },
+        {
+         "name": "16. Submitting a Periodic Report of Achievements to the Institution",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/16-submitting-periodic-report-achievements-institution"
+        },
+        {
+         "name": "Other Matters",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/other-matters-0"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Banking Sector",
+     "sourceUrl": "https://rulebook.sama.gov.sa/en/book-category/1363",
+     "children": [
+      {
+       "name": "Laws and Regulations",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-2",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Banking Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-sector-0"
+        },
+        {
+         "name": "Laws and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-2"
+        },
+        {
+         "name": "Licensing Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-2"
+        },
+        {
+         "name": "Banking Control Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/996"
+        },
+        {
+         "name": "Implementation Rules for Banking Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1429"
+        },
+        {
+         "name": "Credit Information Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/961"
+        },
+        {
+         "name": "Implementing Regulations of Credit Information Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/353"
+        },
+        {
+         "name": "Law of Systemically Important Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1216"
+        },
+        {
+         "name": "Saudi Arabian Monetary Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/979"
+        }
+       ]
+      },
+      {
+       "name": "Licensing Provisions",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-2",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Banking Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-sector-0"
+        },
+        {
+         "name": "Licensing Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-2"
+        },
+        {
+         "name": "Laws and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-2"
+        },
+        {
+         "name": "Types of Licenses",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/types-licenses-3"
+        },
+        {
+         "name": "Licensing Guidelines",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-guidelines-0"
+        },
+        {
+         "name": "Licensing Guidelines and Minimum Criteria",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-guidelines-and-minimum-criteria"
+        },
+        {
+         "name": "Additional Licensing Guidelines and Criteria for Digital-Only Banks in Saudi Arabia",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/additional-licensing-guidelines-and-criteria-digital-only-banks-saudi-arabia-feb-2020"
+        },
+        {
+         "name": "Application Forms",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/application-forms-3"
+        },
+        {
+         "name": "Application Process",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/application-process-4"
+        }
+       ]
+      },
+      {
+       "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-2",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Banking Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-sector-0"
+        },
+        {
+         "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-2"
+        },
+        {
+         "name": "Application Process",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/application-process-4"
+        },
+        {
+         "name": "Cyber Risk Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-4"
+        },
+        {
+         "name": "The Anti-Money Laundering and Counter-Terrorism Financing (AML/CTF) Guide",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1704"
+        },
+        {
+         "name": "Guide to the Implementation of the Mechanisms for the of Security Council Resolutions Relating to the CTF and its Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/5045"
+        },
+        {
+         "name": "Guide to the Implementation of Security Council Resolutions Related to Prevention of Proliferation of Arms of Mass Destruction and their Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/5033"
+        }
+       ]
+      },
+      {
+       "name": "Cyber Risk Control",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-4",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Banking Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-sector-0"
+        },
+        {
+         "name": "Cyber Risk Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-4"
+        },
+        {
+         "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-2"
+        },
+        {
+         "name": "Cyber Resilience",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-resilience-1"
+        },
+        {
+         "name": "Cyber Resilience Fundamental Requirements (CRFR)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-resilience-fundamental-requirements-crfr-0"
+        },
+        {
+         "name": "Circular Re. Cyber Security Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-security-framework-3"
+        },
+        {
+         "name": "Financial Sector Cyber Threat Intelligence Principles",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-sector-cyber-threat-intelligence-principles-1"
+        },
+        {
+         "name": "Minimum Verification Controls",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/minimum-verification-controls-1"
+        },
+        {
+         "name": "Business Continuity Management Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/business-continuity-management-framework-2"
+        },
+        {
+         "name": "Financial Entities Ethical Red-Teaming",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-entities-ethical-red-teaming-1"
+        },
+        {
+         "name": "Information Technology Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/information-technology-governance-3"
+        },
+        {
+         "name": "Counter Fraud",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/counter-fraud-3"
+        },
+        {
+         "name": "Counter-Fraud Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/counter-fraud-framework-1"
+        },
+        {
+         "name": "Outsourcing and Third Party",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/outsourcing-and-third-party-0"
+        },
+        {
+         "name": "Rules on Outsourcing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-outsourcing"
+        },
+        {
+         "name": "Data Privacy",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/data-privacy-3"
+        }
+       ]
+      },
+      {
+       "name": "Governance and Internal Control",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/governance-and-internal-control-1",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Banking Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-sector-0"
+        },
+        {
+         "name": "Governance and Internal Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/governance-and-internal-control-1"
+        },
+        {
+         "name": "Data Privacy",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/data-privacy-3"
+        },
+        {
+         "name": "Key Principles of Governance in Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/key-principles-governance-financial-institutions-1"
+        },
+        {
+         "name": "Requirements for Appointments to Senior Positions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/requirements-appointments-senior-positions-1"
+        },
+        {
+         "name": "Banks Remuneration Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banks-remuneration-rules"
+        },
+        {
+         "name": "1. General Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/1-general-requirements"
+        },
+        {
+         "name": "2. Governance of Remuneration",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/2-governance-remuneration"
+        },
+        {
+         "name": "3. Performance Measurement",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/3-performance-measurement"
+        },
+        {
+         "name": "4. Determining Remuneration",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/4-determining-remuneration"
+        },
+        {
+         "name": "5. Remuneration Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/5-remuneration-control"
+        },
+        {
+         "name": "Appendix-I: Coverage of the Compliance Report",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-i-coverage-compliance-report"
+        },
+        {
+         "name": "Compliance Principles and Internal Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/compliance-principles-and-internal-control"
+        },
+        {
+         "name": "Principles of Internal Auditing for Local Banks Operating in Saudi Arabia",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/principles-internal-auditing-local-banks-operating-saudi-arabia"
+        },
+        {
+         "name": "Principles of compliance for commercial banks operating in the Kingdom of Saudi Arabia",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/principles-compliance-commercial-banks-operating-kingdom-saudi-arabia"
+        },
+        {
+         "name": "Shariah Governance Framework for Local Banks Operating in Saudi Arabia",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/shariah-governance-framework-local-banks-operating-saudi-arabia"
+        },
+        {
+         "name": "Chapter One: Preliminary Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-one-preliminary-provisions-0"
+        },
+        {
+         "name": "Chapter Two: Composition of the Shariah Governance Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-two-composition-shariah-governance-framework"
+        },
+        {
+         "name": "Chapter Three: Responsibilities of the Board and the Executive Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-three-responsibilities-board-and-executive-management"
+        },
+        {
+         "name": "Chapter Four: Formation, Appointment, and Membership of the Shariah Committee",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-four-formation-appointment-and-membership-shariah-committee"
+        },
+        {
+         "name": "Chapter Five: Responsibilities and Duties of the Shariah Committee",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-five-responsibilities-and-duties-shariah-committee"
+        },
+        {
+         "name": "Chapter Six: Independence and Confidentiality of Information",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-six-independence-and-confidentiality-information"
+        },
+        {
+         "name": "Chapter Seven: Internal Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-seven-internal-control"
+        },
+        {
+         "name": "Chapter Eight: Islamic Window Operations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-eight-islamic-window-operations"
+        },
+        {
+         "name": "Chapter Nine: The Development Process of Shariah-Compliant Products",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-nine-development-process-shariah-compliant-products"
+        },
+        {
+         "name": "Related Parties Rules for Banks",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/related-parties-rules-banks"
+        },
+        {
+         "name": "1. Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/1-introduction-36"
+        },
+        {
+         "name": "2. Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/2-definitions-8"
+        },
+        {
+         "name": "3. Scope and Level of Application",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/3-scope-and-level-application-1"
+        },
+        {
+         "name": "4. Governance and Risk Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/4-governance-and-risk-management-0"
+        },
+        {
+         "name": "5. Exposure/Transaction Limits",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/5-exposuretransaction-limits"
+        },
+        {
+         "name": "6. Security for Related Party Transactions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/6-security-related-party-transactions"
+        },
+        {
+         "name": "7. Reporting",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/7-reporting"
+        },
+        {
+         "name": "8. Effective Date",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/8-effective-date-0"
+        },
+        {
+         "name": "Appendix-I",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-i"
+        }
+       ]
+      },
+      {
+       "name": "Prudential and Supervisory Requirements",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/prudential-and-supervisory-requirements-3",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Banking Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-sector-0"
+        },
+        {
+         "name": "Prudential and Supervisory Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/prudential-and-supervisory-requirements-3"
+        },
+        {
+         "name": "Appendix-I",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendix-i"
+        },
+        {
+         "name": "Preface",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/preface"
+        },
+        {
+         "name": "Scope of Application of Basel Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/scope-application-basel-framework"
+        },
+        {
+         "name": "Minimum Capital Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/minimum-capital-requirements"
+        },
+        {
+         "name": "Minimum Capital Requirements for Credit Risk",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/minimum-capital-requirements-credit-risk"
+        },
+        {
+         "name": "Minimum Capital Requirements for Market Risk",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/minimum-capital-requirements-market-risk"
+        },
+        {
+         "name": "Minimum Capital Requirements for Operational Risk",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/minimum-capital-requirements-operational-risk"
+        },
+        {
+         "name": "Minimum Capital Requirements for Counterparty Credit Risk (CCR) and Credit Valuation Adjustment (CVA)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/minimum-capital-requirements-counterparty-credit-risk-ccr-and-credit-valuation-adjustment-cva"
+        },
+        {
+         "name": "Output Floor Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/output-floor-requirements"
+        },
+        {
+         "name": "Additional Requirements on Capital Adequacy for Shari’ah Compliant Banking",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/additional-requirements-capital-adequacy-shari%E2%80%99ah-compliant-banking"
+        },
+        {
+         "name": "Leverage",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/leverage"
+        },
+        {
+         "name": "Leverage Ratio Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/leverage-ratio-framework"
+        },
+        {
+         "name": "Large Exposures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/large-exposures"
+        },
+        {
+         "name": "Large Exposure (LEX) Rules for Banks",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/large-exposure-lex-rules-banks"
+        },
+        {
+         "name": "Risk Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/risk-management"
+        },
+        {
+         "name": "Supervisory Review",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/supervisory-review"
+        },
+        {
+         "name": "Credit Risk Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/credit-risk-management"
+        },
+        {
+         "name": "Liquidity Risk Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/liquidity-risk-management"
+        },
+        {
+         "name": "Operational Risk Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/operational-risk-management"
+        },
+        {
+         "name": "Risk Management for Shariah Compliant Banking",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/risk-management-shariah-compliant-banking"
+        },
+        {
+         "name": "Disclosure and Reporting Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/disclosure-and-reporting-requirements"
+        },
+        {
+         "name": "Pillar 3 Disclosure Requirements Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/pillar-3-disclosure-requirements-framework"
+        },
+        {
+         "name": "Trade Repository Reporting and Risk Mitigation Requirements for Over-the-Counter (OTC) Derivatives Contracts",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/trade-repository-reporting-and-risk-mitigation-requirements-over-counter-otc-derivatives-0"
+        },
+        {
+         "name": "Basel III: The Liquidity Coverage Ratio and Liquidity Risk Monitoring Tools - BCBS",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/basel-iii-liquidity-coverage-ratio-and-liquidity-risk-monitoring-tools-bcbs"
+        },
+        {
+         "name": "Interest Rates on Assets and Liabilities Reporting Guidelines",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/interest-rates-assets-and-liabilities-reporting-guidelines"
+        },
+        {
+         "name": "Macroprudential Policy",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/macroprudential-policy"
+        },
+        {
+         "name": "Applicability of countercyclical Capital Buffer​ (CCyB) in Saudi Arabia",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/countercyclical-capital-buffer-ccyb-saudi-arabia"
+        },
+        {
+         "name": "Update of the Countercyclical Capital Buffer (CCyB) Rate",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/update-countercyclical-capital-buffer-ccyb-rate"
+        },
+        {
+         "name": "A Framework for Dealing with Domestic Systemically Important Banks in Saudi Arabia",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/framework-dealing-domestic-systemically-important-banks-saudi-arabia"
+        },
+        {
+         "name": "Domestic Systemically Important Banks (D-SIBs)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/domestic-systemically-important-banks-d-sibs"
+        },
+        {
+         "name": "Statutory Deposit Recognition in Liquidity Reserves Ratio",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/statutory-deposit-recognition-liquidity-reserves-ratio"
+        },
+        {
+         "name": "Foreign Banks Branches",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/foreign-banks-branches"
+        },
+        {
+         "name": "Regulations for Foreign Banks Branches (FBB)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/foreign-bank-branch-instructions"
+        }
+       ]
+      },
+      {
+       "name": "Business Activities and Financial Conduct",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/business-activities-and-financial-conduct-1",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Banking Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-sector-0"
+        },
+        {
+         "name": "Business Activities and Financial Conduct",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/business-activities-and-financial-conduct-1"
+        },
+        {
+         "name": "Attachment D",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/attachment-d"
+        },
+        {
+         "name": "Banknotes, Currency, and Cash Movement",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banknotes-currency-and-cash-movement"
+        },
+        {
+         "name": "Instructions on Forms for Straps of Banknote Stacks of Sixth Edition",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-forms-straps-banknote-stacks-sixth-edition"
+        },
+        {
+         "name": "Compliance with Employing Citizens and the Requirements for Contracting with Recruitment Service Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/compliance-employing-citizens-and-requirements-contracting-recruitment-service-companies"
+        },
+        {
+         "name": "Contract with Cash Transfer Companies and Using High-Specification Security Bags",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/contract-cash-transfer-companies-and-using-high-specification-security-bags"
+        },
+        {
+         "name": "Prohibition on Dealing with Representatives of Private Security Companies and Cash Transport Companies that are non-Saudis",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/prohibition-dealing-representatives-private-security-companies-and-cash-transport-companies-are-non"
+        },
+        {
+         "name": "Recommendations on the Law of Transporting Money",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/recommendations-cash-transfer-system"
+        },
+        {
+         "name": "Mechanism for the Entry and Exit of Saudi and Foreign Currency via King Fahd Causeway",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/mechanism-entry-and-exit-saudi-and-foreign-currency-king-fahd-causeway"
+        },
+        {
+         "name": "Cash Transfers must be Coordinated with Security Authorities Well Enough in Advance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cash-transfers-must-be-coordinated-security-authorities-well-enough-advance"
+        },
+        {
+         "name": "Internal Controls on ATMs and POSs",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/internal-controls-atms-and-poss"
+        },
+        {
+         "name": "Criteria and Requirements for Operating a Cash Transportation Service",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/criteria-and-requirements-operating-cash-transportation-service"
+        },
+        {
+         "name": "Follow-up circular on Instructions to Be Followed When Opening, Relocating or Closing Bank Branches, Instant Remittance Centers and ATMs, Whether Operational or Non-Operational",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/follow-circular-instructions-be-followed-when-opening-relocating-or-closing-bank-branches-instant"
+        },
+        {
+         "name": "Operational Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/operational-rules"
+        },
+        {
+         "name": "Account Opening Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/account-opening-rules"
+        },
+        {
+         "name": "Rules Governing Bancassurance Activities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-governing-bancassurance-activities"
+        },
+        {
+         "name": "Profit Sharing Investment Accounts Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/profit-sharing-investment-accounts-rules"
+        },
+        {
+         "name": "Regulation of Agent Banking in the Kingdom of Saudi Arabia",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulation-agent-banking-kingdom-saudi-arabia"
+        },
+        {
+         "name": "Guide to Rules Governing Banks’ Remittance Centers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/guide-rules-governing-banks%E2%80%99-remittance-centers"
+        },
+        {
+         "name": "Regulation on Branch Network",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulation-branch-network"
+        },
+        {
+         "name": "Governing Rules for Electronic Issuance and Authenticity Verification of Banking Documents",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/governing-rules-electronic-issuance-and-authenticity-verification-banking-documents"
+        },
+        {
+         "name": "Saudi Arabian Benchmark (SAIBOR/SAIBID)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/saudi-arabian-benchmark-saiborsaibid"
+        },
+        {
+         "name": "Charging Policy for Cross Currency Payments Using \"AFAQ\" Service",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/charging-policy-cross-currency-payments-using-afaq-service"
+        },
+        {
+         "name": "Initial Public Offering (IPO) Rules for Receiving and Lending Banks",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/initial-public-offering-ipo-rules-receiving-and-lending-banks"
+        },
+        {
+         "name": "Instructions on Periods of Issuing the Clearance Letter and Executing Requests for Account Transfer and Debt Transfer",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-periods-issuing-clearance-letter-and-executing-requests-account-transfer-and-debt-0"
+        },
+        {
+         "name": "Operating Rules for Cross Currency Payments using AFAQ Service",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/operating-rules-cross-currency-payments-using-afaq-service"
+        },
+        {
+         "name": "Instructions for Banking Obligations and Transactions in Accordance with the Bankruptcy Law and Its Implementing Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-banking-obligations-and-transactions-accordance-bankruptcy-law-and-its-implementing"
+        },
+        {
+         "name": "The requirements and Information Needed for Customers’ Bank Account Statements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/requirements-and-information-needed-customers%E2%80%99-bank-account-statements"
+        },
+        {
+         "name": "Instructions on the Working Hours of Bank Branches, Self-Service Centers, and Remittance Centers in Shopping Centers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-working-hours-bank-branches-self-service-centers-and-remittance-centers-shopping"
+        },
+        {
+         "name": "Rules of Saudi Arabian Riyal Interbank Express Indirect Participation",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-saudi-arabian-riyal-interbank-express-indirect-participation"
+        },
+        {
+         "name": "Financial Sector Safety and Security Guidelines CCTV Specifications Summary",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-sector-safety-and-security-guidelines-cctv-specifications-summary"
+        },
+        {
+         "name": "Depositors Protection Fund(DPF) Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/depositors-protection-funddpf-rules"
+        },
+        {
+         "name": "Banking Products and Finance Activities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-products-and-finance-activities"
+        },
+        {
+         "name": "Responsible Lending Principles for Individual Customers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/responsible-lending-principles-individual-customers-0"
+        },
+        {
+         "name": "Regulations for Consumer Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulations-consumer-financing"
+        },
+        {
+         "name": "Rules Governing Calculation of Annual Percentage Rate (APR)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-governing-calculation-annual-percentage-rate-apr-0"
+        },
+        {
+         "name": "New Banking Products and Services Regulation",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/new-banking-products-and-services-regulation"
+        },
+        {
+         "name": "Rules of Issuance and Operation of Credit Cards",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-issuance-and-operation-credit-cards"
+        },
+        {
+         "name": "General Rules for Savings Products in Banks",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/general-rules-savings-products-banks"
+        },
+        {
+         "name": "Regulatory Rules for Prepaid Payment Services in the Kingdom of Saudi Arabia",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulatory-rules-prepaid-payment-services-kingdom-saudi-arabia"
+        },
+        {
+         "name": "Rules Governing Disposal of Finance Assets or Their Contractual Rights",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-governing-disposal-finance-assets-or-their-contractual-rights"
+        },
+        {
+         "name": "Instructions When Offering Real Estate Finance Products for Individuals",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-when-offering-real-estate-finance-products-individuals"
+        },
+        {
+         "name": "Instructions for Creditors on Dealing with Promissory Notes",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-creditors-dealing-promissory-notes"
+        },
+        {
+         "name": "Rules for Comprehensive Insurance of Motor Vehicles Financially Leased to Individuals",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-comprehensive-insurance-motor-vehicles-financially-leased-individuals-0"
+        },
+        {
+         "name": "Regulations for Total Loss Settlement of Vehicle Leasing Contracts",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulations-total-loss-settlement-vehicle-leasing-contracts"
+        },
+        {
+         "name": "The Guidelines on Standing Orders for Financing Entity",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/guidelines-standing-orders-financing-entity-0"
+        },
+        {
+         "name": "The Working Mechanism of Dealing with the Beneficiaries of First Home Regarding Tax Revenues",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/working-mechanism-dealing-beneficiaries-first-home-regarding-tax-revenues"
+        },
+        {
+         "name": "Transfer of The Real Estate Financing Debts",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/transfer-real-estate-financing-debts-0"
+        },
+        {
+         "name": "Real Estate Murabaha Finance Buyout",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/real-estate-murabaha-finance-buyout"
+        },
+        {
+         "name": "Self-Build Product Instructions for Retail Mortgage Finance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/self-build-product-instructions-retail-mortgage-finance"
+        },
+        {
+         "name": "Collecting Amounts Owed to Finance Entities for Previous Periods in Exchange for VAT on Real Estate Finance Contracts",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/collecting-amounts-owed-finance-entities-previous-periods-exchange-vat-real-estate-finance"
+        },
+        {
+         "name": "Variable-Cost Real Estate Financing Products for Individuals",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/variable-cost-real-estate-financing-products-individuals"
+        },
+        {
+         "name": "Digital Confirmation of Banking Products for Bank Customers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/digital-confirmation-banking-products-bank-customers"
+        },
+        {
+         "name": "Regulations for Processing Financial Refunds for Bank Cards",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulations-processing-financial-refunds-bank-cards"
+        },
+        {
+         "name": "Procedural Requirements for Mortgage Registration",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/procedural-requirements-mortgage-registration"
+        },
+        {
+         "name": "Financial Market Activities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-market-activities"
+        },
+        {
+         "name": "Banks Investment Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banks-investment-rules"
+        },
+        {
+         "name": "Guidelines on Repurchase Agreements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/guidelines-repurchase-agreements"
+        },
+        {
+         "name": "Margin Requirements for Non-Centrally Cleared Derivatives",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/margin-requirements-non-centrally-cleared-derivatives"
+        },
+        {
+         "name": "Primary Dealer in the Government Securities Market",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/primary-dealer-government-securities-market"
+        },
+        {
+         "name": "Consumer Protection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-protection"
+        },
+        {
+         "name": "Regulations for Establishing Customer Care Departments in Banks",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulations-establishing-customer-care-departments-banks"
+        },
+        {
+         "name": "Debt Collection Regulations and Procedures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/debt-collection-regulations-and-procedures"
+        },
+        {
+         "name": "Financial Consumer Protection Principles and Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-consumer-protection-principles-and-rules-0"
+        },
+        {
+         "name": "Instructions for services provided to persons with disabilities in financial institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-services-provided-persons-disabilities-financial-institutions-0"
+        },
+        {
+         "name": "Code of Conduct and Work Ethics in Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/code-conduct-and-work-ethics-financial-institutions"
+        },
+        {
+         "name": "Rules for Advertising Products and Services Provided by Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-advertising-products-and-services-provided-financial-institutions-0"
+        },
+        {
+         "name": "License Disclosure Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/license-disclosure-instructions-0"
+        },
+        {
+         "name": "A Guide for Calculating the Early Payment Amount",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/guide-calculating-early-payment-amount-0"
+        },
+        {
+         "name": "Disclosure of Interest Rates on Financing and Savings Products",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/disclosure-interest-rates-financing-and-savings-products-0"
+        },
+        {
+         "name": "Consumer Complaints",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-complaints-0"
+        },
+        {
+         "name": "Regulating Banking Employees' Communications with Customers for Payment of Outstanding Debts",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulating-banking-employees-communications-customers-payment-outstanding-debts"
+        },
+        {
+         "name": "Control and Awareness Measures for Branch and Customer Service Employees in Banks Operating in the Kingdom",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/control-and-awareness-measures-branch-and-customer-service-employees-banks-operating-kingdom"
+        },
+        {
+         "name": "Standardization of Notification Elements Sent to Financial Institutions Customers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/standardization-notification-elements-sent-financial-institutions-customers"
+        },
+        {
+         "name": "Rules Governing Calculation of Annual Percentage Rate (APR)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-governing-calculation-annual-percentage-rate-apr-1"
+        },
+        {
+         "name": "Model Contracts",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/model-contracts-0"
+        },
+        {
+         "name": "The Standard Contract Forms for Opening Current Bank Accounts for Individuals and Juristic Persons",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/standard-contract-forms-opening-current-bank-accounts-individuals-and-juristic-persons"
+        },
+        {
+         "name": "Finance Contract Summary Form",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-contract-summary-form"
+        },
+        {
+         "name": "Mortgage Finance Model Contract for Individuals in Murabaha and Ejarah",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/mortgage-finance-model-contract-individuals-murabaha-and-ejarah"
+        },
+        {
+         "name": "Consumer Financing Model Contract",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-financing-model-contract"
+        },
+        {
+         "name": "Model Contract of the Financial Lease of Vehicles for Individuals",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/model-contract-financial-lease-vehicles-individuals"
+        }
+       ]
+      },
+      {
+       "name": "Enforcement and Financial Penalties",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/enforcement-and-financial-penalties-1",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Banking Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/banking-sector-0"
+        },
+        {
+         "name": "Enforcement and Financial Penalties",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/enforcement-and-financial-penalties-1"
+        },
+        {
+         "name": "Model Contract of the Financial Lease of Vehicles for Individuals",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/model-contract-financial-lease-vehicles-individuals"
+        },
+        {
+         "name": "Instructions for Publishing Banking Penalties",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-publishing-banking-penalties"
+        },
+        {
+         "name": "Annex: Instructions for Publishing Banking Penalties",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/annex-instructions-publishing-banking-penalties"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Finance Sector",
+     "sourceUrl": "https://rulebook.sama.gov.sa/en/book-category/1365",
+     "children": [
+      {
+       "name": "Laws and Regulations",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-1",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Laws and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-1"
+        },
+        {
+         "name": "Licensing Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-3"
+        },
+        {
+         "name": "Finance Companies Control Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1023"
+        },
+        {
+         "name": "Implementing Regulation of the Finance Companies Control Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/10698"
+        },
+        {
+         "name": "Real Estate Finance Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1272"
+        },
+        {
+         "name": "Implementing Regulation of the Real Estate Finance Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/190"
+        },
+        {
+         "name": "Finance Lease Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1073"
+        },
+        {
+         "name": "Implementing Regulation of the Finance Lease Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/123"
+        }
+       ]
+      },
+      {
+       "name": "Licensing Provisions",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-3",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Licensing Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-3"
+        },
+        {
+         "name": "Laws and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-1"
+        },
+        {
+         "name": "Types of Licenses",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/types-licenses-1"
+        }
+       ]
+      },
+      {
+       "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-3",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-3"
+        },
+        {
+         "name": "Application Process",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/application-process-0"
+        },
+        {
+         "name": "Cyber Risk Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-3"
+        },
+        {
+         "name": "The Anti-Money Laundering and Counter-Terrorism Financing (AML/CTF) Guide",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1704"
+        },
+        {
+         "name": "Guide to the Implementation of the Mechanisms for the of Security Council Resolutions Relating to the CTF and its Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/5045"
+        },
+        {
+         "name": "Guide to the Implementation of Security Council Resolutions Related to Prevention of Proliferation of Arms of Mass Destruction and their Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/5033"
+        },
+        {
+         "name": "Questionnaire of Compliance with the Requirements of the Fight against Money Laundering and Terrorism Financing and Statistic Data",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/7255"
+        }
+       ]
+      },
+      {
+       "name": "Cyber Risk Control",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-3",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Cyber Risk Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-3"
+        },
+        {
+         "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-3"
+        },
+        {
+         "name": "Cyber Resilience",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-resilience-0"
+        },
+        {
+         "name": "Cyber Resilience Fundamental Requirements (CRFR)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-resilience-fundamental-requirements-crfr"
+        },
+        {
+         "name": "Cyber Security Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-security-framework-0"
+        },
+        {
+         "name": "Financial Sector Cyber Threat Intelligence Principles",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-sector-cyber-threat-intelligence-principles"
+        },
+        {
+         "name": "Minimum Verification Controls",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/minimum-verification-controls"
+        },
+        {
+         "name": "Business Continuity Management Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/business-continuity-management-framework"
+        },
+        {
+         "name": "Financial Entities Ethical Red-Teaming",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-entities-ethical-red-teaming"
+        },
+        {
+         "name": "Information Technology Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/information-technology-governance-0"
+        },
+        {
+         "name": "Counter Fraud",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/counter-fraud-0"
+        },
+        {
+         "name": "Outsourcing and Third Party",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/outsourcing-and-third-party"
+        },
+        {
+         "name": "Rules on Outsourcing for Finance Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-outsourcing-finance-companies"
+        },
+        {
+         "name": "Data Privacy",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/data-privacy"
+        }
+       ]
+      },
+      {
+       "name": "Governance and Internal Control",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/governance-and-internal-control-3",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Governance and Internal Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/governance-and-internal-control-3"
+        },
+        {
+         "name": "Data Privacy",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/data-privacy"
+        },
+        {
+         "name": "Key Principles of Governance in Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/key-principles-governance-financial-institutions-0"
+        },
+        {
+         "name": "Requirements for Appointments to Senior Positions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/requirements-appointments-senior-positions-0"
+        },
+        {
+         "name": "Compliance Principles for Finance Companies and Real Estate Refinance Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/compliance-principles-finance-companies-and-real-estate-refinance-companies"
+        },
+        {
+         "name": "Chapter I: Definitions, General Provisions and Scope of Application",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-i-definitions-general-provisions-and-scope-application"
+        },
+        {
+         "name": "Chapter II: Duties and Responsibilities of the Board, Audit Committee and Executive Management Towards Compliance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-ii-duties-and-responsibilities-board-audit-committee-and-executive-management-towards"
+        },
+        {
+         "name": "Chapter III: Features, Duties and Responsibilities of the Unit",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-iii-features-duties-and-responsibilities-unit"
+        },
+        {
+         "name": "Chapter IV: Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-iv-concluding-provisions-1"
+        },
+        {
+         "name": "Internal Audit Principles for Finance Companies and Real Estate Refinance Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/internal-audit-principles-finance-companies-and-real-estate-refinance-companies"
+        },
+        {
+         "name": "Section One: Definitions, General Provisions and Scope of Application",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-one-definitions-general-provisions-and-scope-application"
+        },
+        {
+         "name": "Section Two: Duties and Responsibilities of the Board, Audit Committee and Executive Management toward Internal Audit",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-two-duties-and-responsibilities-board-audit-committee-and-executive-management-toward"
+        },
+        {
+         "name": "Section Three: Department Features, Duties and Responsibilities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-three-department-features-duties-and-responsibilities"
+        },
+        {
+         "name": "Section Four: Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-four-concluding-provisions"
+        },
+        {
+         "name": "Shariah Governance Instructions for Finance Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/shariah-governance-instructions-finance-companies"
+        },
+        {
+         "name": "Chapter One: Preliminary Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-one-preliminary-provisions"
+        },
+        {
+         "name": "Chapter Two: Responsibilities of the Board of Directors and Senior Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-two-responsibilities-board-directors-and-senior-management"
+        },
+        {
+         "name": "Chapter Three: Shariah Compliance Supervision",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-three-shariah-compliance-supervision"
+        },
+        {
+         "name": "Chapter Four: Regulations for the Work of the Shariah Committee",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-four-regulations-work-shariah-committee"
+        },
+        {
+         "name": "Chapter Five: Independence and Confidentiality of Information",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-five-independence-and-confidentiality-information"
+        },
+        {
+         "name": "Chapter Six: Final Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-six-final-provisions"
+        },
+        {
+         "name": "The General Committee of General Managers in Financing Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/general-committee-general-managers-financing-companies"
+        },
+        {
+         "name": "1. Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/1-introduction-28"
+        },
+        {
+         "name": "2. Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/2-definitions-5"
+        },
+        {
+         "name": "3. Organizational Structure of the Financing Companies Committees",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/3-organizational-structure-financing-companies-committees"
+        },
+        {
+         "name": "4. Committees",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/4-committees"
+        },
+        {
+         "name": "5. Saudi Central Bank",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/5-saudi-central-bank"
+        }
+       ]
+      },
+      {
+       "name": "Prudential and Supervisory Requirements",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/prudential-and-supervisory-requirements-2",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Prudential and Supervisory Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/prudential-and-supervisory-requirements-2"
+        },
+        {
+         "name": "5.3. Proposals Submitted by the Committees",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/53-proposals-submitted-committees"
+        },
+        {
+         "name": "Rules on Liquidity Risk Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-liquidity-risk-management"
+        },
+        {
+         "name": "1. General Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/1-general-requirements-4"
+        },
+        {
+         "name": "2. Liquidity Risk Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/2-liquidity-risk-governance"
+        },
+        {
+         "name": "3. Liquidity Risk Strategies, Policies and Procedures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/3-liquidity-risk-strategies-policies-and-procedures"
+        },
+        {
+         "name": "4. Liquidity Risk Identification, Measurement and Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/4-liquidity-risk-identification-measurement-and-management"
+        },
+        {
+         "name": "5. Stress Testing and Scenario Analysis",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/5-stress-testing-and-scenario-analysis"
+        },
+        {
+         "name": "6. Contingency Funding Plan",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/6-contingency-funding-plan"
+        },
+        {
+         "name": "7. Internal Controls",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/7-internal-controls"
+        },
+        {
+         "name": "8. Implementation",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/8-implementation"
+        },
+        {
+         "name": "Rules Governing Credit Risk Exposure Classification and Provisioning",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-governing-credit-risk-exposure-classification-and-provisioning"
+        },
+        {
+         "name": "1. General Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/1-general-requirements-0"
+        },
+        {
+         "name": "2. Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/2-governance"
+        },
+        {
+         "name": "3. Credit Risk Classification",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/3-credit-risk-classification"
+        },
+        {
+         "name": "4. Expected Credit Loss Provisioning",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/4-expected-credit-loss-provisioning"
+        },
+        {
+         "name": "5. Interest Recognition",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/5-interest-recognition"
+        },
+        {
+         "name": "6. Macroeconomic Factors",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/6-macroeconomic-factors"
+        },
+        {
+         "name": "7. Restructuring",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/7-restructuring"
+        },
+        {
+         "name": "8. Default",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/8-default"
+        },
+        {
+         "name": "9. Write-Off",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/9-write"
+        },
+        {
+         "name": "10. Credit Risk Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/10-credit-risk-management"
+        },
+        {
+         "name": "11. Implementation",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/11-implementation"
+        },
+        {
+         "name": "12. Annexures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/12-annexures"
+        }
+       ]
+      },
+      {
+       "name": "Business Activities and Financial Conduct",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/business-activities-and-financial-conduct-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Business Activities and Financial Conduct",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/business-activities-and-financial-conduct-0"
+        },
+        {
+         "name": "12. Annexures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/12-annexures"
+        },
+        {
+         "name": "Finance Activities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-activities"
+        },
+        {
+         "name": "Finance Regulations and Principles",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-regulations-and-principles"
+        },
+        {
+         "name": "Real Estate Finance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/real-estate-finance"
+        },
+        {
+         "name": "Consumer Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-financing"
+        },
+        {
+         "name": "Credit Card Finance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/credit-card-finance"
+        },
+        {
+         "name": "Microfinancing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/microfinancing"
+        },
+        {
+         "name": "Debt Based Crowdfunding",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/debt-based-crowdfunding"
+        },
+        {
+         "name": "Buy Now Pay Later (BNPL)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/buy-now-pay-later-bnpl"
+        },
+        {
+         "name": "Financial Support Activities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-support-activities"
+        },
+        {
+         "name": "Model Contracts",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/model-contracts"
+        },
+        {
+         "name": "Consumer Protection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-protection-1"
+        }
+       ]
+      },
+      {
+       "name": "Disclosure and Reports",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/disclosure-and-reports",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Disclosure and Reports",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/disclosure-and-reports"
+        },
+        {
+         "name": "Consumer Protection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-protection-1"
+        },
+        {
+         "name": "Prudential Data Models",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/prudential-data-forms"
+        },
+        {
+         "name": "Provide SAMA with Quarterly Risk Reports, Audited Annual Financial Statements and Quarterly Financial Statements of Finance Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/provide-sama-quarterly-risk-reports-audited-annual-financial-statements-and-quarterly-financial"
+        },
+        {
+         "name": "Start Date for Adopting the International Accounting Standards",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/start-date-adopting-international-accounting-standards"
+        }
+       ]
+      },
+      {
+       "name": "Special Finance Companies",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/special-finance-companies",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Special Finance Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/special-finance-companies"
+        },
+        {
+         "name": "Start Date for Adopting the International Accounting Standards",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/start-date-adopting-international-accounting-standards"
+        },
+        {
+         "name": "The Rules Governing Real Estate Refinance Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-governing-real-estate-refinance-companies-0"
+        },
+        {
+         "name": "Chapter I: Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-i-definitions-and-general-provisions"
+        },
+        {
+         "name": "Chapter II: Capital Adequacy and Liquidity",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-ii-capital-adequacy-and-liquidity"
+        },
+        {
+         "name": "Chapter III: Corporate Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-iii-corporate-governance"
+        },
+        {
+         "name": "Chapter IV: Activities of Real Estate Refinance Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-iv-activities-real-estate-refinance-companies"
+        },
+        {
+         "name": "Chapter V: Internal Organization",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-v-internal-organization"
+        },
+        {
+         "name": "Chapter VI: Outsourcing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-vi-outsourcing"
+        },
+        {
+         "name": "Chapter VII: Risk Management",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-vii-risk-management"
+        },
+        {
+         "name": "Chapter VIII: Compliance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-viii-compliance"
+        },
+        {
+         "name": "Chapter IX: Internal Audit",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-ix-internal-audit"
+        },
+        {
+         "name": "Chapter X: Supervision of Real Estate Refinance Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-x-supervision-real-estate-refinance-companies"
+        },
+        {
+         "name": "Chapter XI: Secondary Market",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-xi-secondary-market"
+        },
+        {
+         "name": "Chapter XII: Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-xii-concluding-provisions"
+        },
+        {
+         "name": "Rules for Regulating Buy-Now-Pay-Later (BNPL) Companies",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-regulating-buy-now-pay-later-bnpl-companies-0"
+        },
+        {
+         "name": "Chapter I. Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-i-definitions-and-general-provisions-0"
+        },
+        {
+         "name": "Chapter II. Licensing Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-ii-licensing-provisions"
+        },
+        {
+         "name": "Chapter III: Internal Organization",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-iii-internal-organization"
+        },
+        {
+         "name": "Chapter IV: Activity Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-iv-activity-provisions"
+        },
+        {
+         "name": "Chapter V: Supervision and Compliance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-v-supervision-and-compliance"
+        },
+        {
+         "name": "Chapter VI: Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-vi-concluding-provisions"
+        },
+        {
+         "name": "Deposit Taking Finance Companies (DTFCs) Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/deposit-taking-finance-companies-dtfcs-regulations-0"
+        },
+        {
+         "name": "1 Part I: Approach and Corporate Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/1-part-i-approach-and-corporate-governance"
+        },
+        {
+         "name": "2 Part II: Prudential Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/2-part-ii-prudential-regulations"
+        },
+        {
+         "name": "3 Part III: Account Opening and Operating Rules and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/3-part-iii-account-opening-and-operating-rules-and-regulations"
+        }
+       ]
+      },
+      {
+       "name": "Financial Support Activities",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-support-activities-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Financial Support Activities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/financial-support-activities-0"
+        },
+        {
+         "name": "Chapter 18: Final Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-18-final-provisions"
+        },
+        {
+         "name": "Rules of Licensing Finance Support Activities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-licensing-finance-support-activities-0"
+        },
+        {
+         "name": "Chapter I: Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-i-definitions-and-general-provisions-4"
+        },
+        {
+         "name": "Chapter II: Licensing Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-ii-licensing-provisions-2"
+        },
+        {
+         "name": "Chapter III: Activity Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-iii-activity-provisions-0"
+        },
+        {
+         "name": "Chapter IV: Supervision and Compliance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-iv-supervision-and-compliance-0"
+        },
+        {
+         "name": "Chapter V: Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/chapter-v-concluding-provisions-1"
+        },
+        {
+         "name": "Instructions for Practicing Aggregation Activity",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-practicing-aggregation-activity"
+        },
+        {
+         "name": "Section I: Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-i-definitions-and-general-provisions"
+        },
+        {
+         "name": "Section II: Regulatory and Technical Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-ii-regulatory-and-technical-instructions"
+        },
+        {
+         "name": "Section III: Contract Requirements Between Parties",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-iii-contract-requirements-between-parties"
+        },
+        {
+         "name": "Section IV: Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-iv-concluding-provisions"
+        }
+       ]
+      },
+      {
+       "name": "Enforcement and Financial Penalties",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/enforcement-and-financial-penalties-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Finance Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/finance-sector-0"
+        },
+        {
+         "name": "Enforcement and Financial Penalties",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/enforcement-and-financial-penalties-0"
+        },
+        {
+         "name": "Section IV: Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-iv-concluding-provisions"
+        },
+        {
+         "name": "Instructions for Publishing Sanctions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/instructions-publishing-sanctions"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Payment Systems and Payment Services Providers",
+     "sourceUrl": "https://rulebook.sama.gov.sa/en/book-category/1367",
+     "children": [
+      {
+       "name": "Laws and Regulations",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Payment Systems and Payment Services Providers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/payment-systems-and-payment-services-providers"
+        },
+        {
+         "name": "Laws and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-0"
+        },
+        {
+         "name": "Licensing Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-0"
+        },
+        {
+         "name": "Law of Payments and Payment Services",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1195"
+        },
+        {
+         "name": "Implementing Regulations of Payments and Payment Services Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1430"
+        },
+        {
+         "name": "Law of Systemically Important Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1216"
+        }
+       ]
+      },
+      {
+       "name": "Licensing Provisions",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Payment Systems and Payment Services Providers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/payment-systems-and-payment-services-providers"
+        },
+        {
+         "name": "Licensing Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-0"
+        },
+        {
+         "name": "Laws and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-0"
+        },
+        {
+         "name": "Types of Licenses",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/types-licenses-2"
+        }
+       ]
+      },
+      {
+       "name": "Rules and Instructions",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-and-instructions-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Payment Systems and Payment Services Providers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/payment-systems-and-payment-services-providers"
+        },
+        {
+         "name": "Rules and Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-and-instructions-0"
+        },
+        {
+         "name": "Application Process",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/application-process-2"
+        },
+        {
+         "name": "Oversight Framework on Payment Systems and their Operators",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/oversight-framework-payment-systems-and-their-operators"
+        },
+        {
+         "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-4"
+        },
+        {
+         "name": "Cyber Risk Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-2"
+        },
+        {
+         "name": "Cyber Resilience",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-resilience-4"
+        },
+        {
+         "name": "Information Technology Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/information-technology-governance-2"
+        },
+        {
+         "name": "Counter Fraud",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/counter-fraud-2"
+        },
+        {
+         "name": "Data Privacy",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/data-privacy-0"
+        },
+        {
+         "name": "Governance and Internal Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/governance-and-internal-control-0"
+        },
+        {
+         "name": "Key Principles of Governance in Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/key-principles-governance-financial-institutions"
+        },
+        {
+         "name": "Requirements for Appointments to Senior Positions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/requirements-appointments-senior-positions-3"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Money Exchange Sector",
+     "sourceUrl": "https://rulebook.sama.gov.sa/en/book-category/1366",
+     "children": [
+      {
+       "name": "Laws and Regulations",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-3",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Money Exchange Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/money-exchange-sector-0"
+        },
+        {
+         "name": "Laws and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-3"
+        },
+        {
+         "name": "Rules Regulating Money Changing Business",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-regulating-money-changing-business"
+        },
+        {
+         "name": "Section 1: Definitions and General Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-1-definitions-and-general-provisions"
+        },
+        {
+         "name": "Section 2: Licensing Requirements and Procedures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-2-licensing-requirements-and-procedures"
+        },
+        {
+         "name": "Section 3: Money Changer’s Operations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-3-money-changer%E2%80%99s-operations"
+        },
+        {
+         "name": "Section 4: Customer Protection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-4-customer-protection"
+        },
+        {
+         "name": "Section 5: Supervision of Money Changers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-5-supervision-money-changers"
+        },
+        {
+         "name": "Section 6: Data and Reports",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-6-data-and-reports"
+        },
+        {
+         "name": "Section 7: Anti-Money Laundering and Counter-Terrorist Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-7-anti-money-laundering-and-counter-terrorist-financing"
+        },
+        {
+         "name": "Section 8: Violations and Revocation of License",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-8-violations-and-revocation-license"
+        },
+        {
+         "name": "Section 9: Concluding Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/section-9-concluding-provisions"
+        },
+        {
+         "name": "Regulations of License Fees for Money Changing Business",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulations-license-fees-money-changing-business"
+        },
+        {
+         "name": "Guide to Organize Operational Procedures for Money Exchange Centers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/guide-organize-operational-procedures-money-exchange-centers"
+        },
+        {
+         "name": "Laws",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws"
+        },
+        {
+         "name": "Regulations and Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/regulations-and-instructions"
+        },
+        {
+         "name": "Definitions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/definitions-14"
+        },
+        {
+         "name": "Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/introduction-7"
+        },
+        {
+         "name": "1) Customers of Money Exchange Centers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/1-customers-money-exchange-centers"
+        },
+        {
+         "name": "2) Customer Acceptance Policies and Procedures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/2-customer-acceptance-policies-and-procedures"
+        },
+        {
+         "name": "3) Money Exchange Activities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/3-money-exchange-activities"
+        },
+        {
+         "name": "4) Supporting Activities for Banking Operations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/4-supporting-activities-banking-operations"
+        },
+        {
+         "name": "5) Security Systems and Anti-Counterfeiting Devices",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/5-security-systems-and-anti-counterfeiting-devices"
+        },
+        {
+         "name": "6) Reporting",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/6-reporting"
+        },
+        {
+         "name": "7) Employment and Training",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/7-employment-and-training"
+        },
+        {
+         "name": "Appendices",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/appendices-0"
+        },
+        {
+         "name": "Law of Transporting Cash, Precious Metals, and Valuable Documents",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/law-transporting-cash-precious-metals-and-valuable-documents"
+        },
+        {
+         "name": "Article 1",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-1-7"
+        },
+        {
+         "name": "Article 2",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-2-12"
+        },
+        {
+         "name": "Article 3",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-3-12"
+        },
+        {
+         "name": "Article 4",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-4-12"
+        },
+        {
+         "name": "Article 5",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-5-13"
+        },
+        {
+         "name": "Article 6",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-6-11"
+        },
+        {
+         "name": "Article 7",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-7-12"
+        },
+        {
+         "name": "Article 8",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-8-11"
+        },
+        {
+         "name": "Article 9",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-9-13"
+        },
+        {
+         "name": "Article 10",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-10-12"
+        },
+        {
+         "name": "Article 11",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-11-14"
+        },
+        {
+         "name": "Article 12",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-12-14"
+        },
+        {
+         "name": "Article 13",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-13-11"
+        },
+        {
+         "name": "Article 14",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-14-12"
+        },
+        {
+         "name": "Article 15",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-15-12"
+        },
+        {
+         "name": "Article 16",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-16-11"
+        },
+        {
+         "name": "Article 17",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-17-12"
+        }
+       ]
+      },
+      {
+       "name": "Licensing Provisions",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-1",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Money Exchange Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/money-exchange-sector-0"
+        },
+        {
+         "name": "Licensing Provisions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/licensing-provisions-1"
+        },
+        {
+         "name": "Article 17",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/article-17-12"
+        },
+        {
+         "name": "Eligibility Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/eligibility-requirements"
+        },
+        {
+         "name": "Money exchanging laws and regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/9198"
+        },
+        {
+         "name": "Money exchanging instructions and rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1366"
+        },
+        {
+         "name": "Circulars issued to the money Exchanging sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/9440"
+        },
+        {
+         "name": "Regulations of license fees for money changing business",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/9328"
+        },
+        {
+         "name": "Eligibility requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/10327"
+        },
+        {
+         "name": "License Application Form for Money Exchange Business.",
+         "sourceUrl": "https://rulebook.sama.gov.sa/sites/default/files/en_net_file_store/License_Application_for_Money_Changing_Business-EN.xlsx"
+        },
+        {
+         "name": "Fit and Proper Form",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/2188"
+        },
+        {
+         "name": "Letter of Guarantee for the Purposes of Conducting Money Exchanging Business",
+         "sourceUrl": "https://rulebook.sama.gov.sa/sites/default/files/en_net_file_store/Letter%20of%20Guarantee%20For%20the%20Purposes%20of%20Conducting%20Money%20Changing%20Business%20in%20the%20Kingdom.docx"
+        },
+        {
+         "name": "Cash Reserve Deposit Certificate Form for Class (B And C)",
+         "sourceUrl": "https://rulebook.sama.gov.sa/sites/default/files/en_net_file_store/Cash%20Reserve%20Deposit%20Certificate%20for%20those%20practicing%20money%20changing%20business%20in%20Saudi%20Arabia%20(1).docx"
+        },
+        {
+         "name": "Other Requests Forms",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/10965"
+        }
+       ]
+      },
+      {
+       "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-1",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Money Exchange Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/money-exchange-sector-0"
+        },
+        {
+         "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-1"
+        },
+        {
+         "name": "Application Process",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/application-process-1"
+        },
+        {
+         "name": "Cyber Risk Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-1"
+        },
+        {
+         "name": "The Anti-Money Laundering and Counter-Terrorism Financing (AML/CTF) Guide",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1704"
+        },
+        {
+         "name": "Guide to the Implementation of the Mechanisms for the of Security Council Resolutions Relating to the CTF and its Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/5045"
+        },
+        {
+         "name": "Guide to the Implementation of Security Council Resolutions Related to Prevention of Proliferation of Arms of Mass Destruction and their Financing",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/5033"
+        },
+        {
+         "name": "Questionnaire of Compliance with the Requirements of the Fight against Money Laundering and Terrorism Financing and Statistic Data",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/7255"
+        }
+       ]
+      },
+      {
+       "name": "Cyber Risk Control",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-1",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Money Exchange Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/money-exchange-sector-0"
+        },
+        {
+         "name": "Cyber Risk Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-risk-control-1"
+        },
+        {
+         "name": "Anti Money Laundering and Combating the Financing of Terrorism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/anti-money-laundering-and-combating-financing-terrorism-1"
+        },
+        {
+         "name": "Cyber Resilience",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/cyber-resilience-3"
+        },
+        {
+         "name": "Information Technology Governance",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/information-technology-governance-1"
+        },
+        {
+         "name": "Counter Fraud",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/counter-fraud-1"
+        },
+        {
+         "name": "Data Privacy",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/data-privacy-1"
+        }
+       ]
+      },
+      {
+       "name": "Governance and Internal Control",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/governance-and-internal-control-2",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Money Exchange Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/money-exchange-sector-0"
+        },
+        {
+         "name": "Governance and Internal Control",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/governance-and-internal-control-2"
+        },
+        {
+         "name": "Data Privacy",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/data-privacy-1"
+        },
+        {
+         "name": "Governance Controls of the Money Exchange Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/governance-controls-money-exchange-sector"
+        },
+        {
+         "name": "Requirements for Appointments to Senior Positions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/requirements-appointments-senior-positions"
+        }
+       ]
+      },
+      {
+       "name": "Prudential and Supervisory Requirements",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/prudential-and-supervisory-requirements-0",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Money Exchange Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/money-exchange-sector-0"
+        },
+        {
+         "name": "Prudential and Supervisory Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/prudential-and-supervisory-requirements-0"
+        },
+        {
+         "name": "Requirements for Appointments to Senior Positions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/requirements-appointments-senior-positions"
+        },
+        {
+         "name": "Creation and Regulation of the Statutory Reserve for Money changers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/creation-and-regulation-statutory-reserve-money-changers"
+        }
+       ]
+      },
+      {
+       "name": "Business Activities and Financial Conduct",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/business-activities-and-financial-conduct",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Money Exchange Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/money-exchange-sector-0"
+        },
+        {
+         "name": "Business Activities and Financial Conduct",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/business-activities-and-financial-conduct"
+        },
+        {
+         "name": "Creation and Regulation of the Statutory Reserve for Money changers",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/creation-and-regulation-statutory-reserve-money-changers"
+        },
+        {
+         "name": "Permissible and Prohibited Activities",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/permissible-and-prohibited-activities-0"
+        },
+        {
+         "name": "Minimum Requirements for Money Exchange premises",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/minimum-requirements-money-exchange-premises"
+        },
+        {
+         "name": "First: The General Location of the Exchange Center",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/first-general-location-exchange-center"
+        },
+        {
+         "name": "Second: The Minimum Area Requirements for Premises",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/second-minimum-area-requirements-premises"
+        },
+        {
+         "name": "Third: Architectural Designs",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/third-architectural-designs"
+        },
+        {
+         "name": "Fourth: Required Equipment",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/fourth-required-equipment"
+        },
+        {
+         "name": "Fifth: Technical Requirements",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/fifth-technical-requirements"
+        },
+        {
+         "name": "Rules of Receiving Financial Transfers for the Purposes of Remittance or Currency Exchange Transactions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-receiving-financial-transfers-purposes-remittance-or-currency-exchange-transactions"
+        },
+        {
+         "name": "First: Introduction",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/first-introduction"
+        },
+        {
+         "name": "Second: Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/second-regulations"
+        },
+        {
+         "name": "Controls for Handling Banking Transaction Procedures",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/controls-handling-banking-transaction-procedures"
+        },
+        {
+         "name": "First: Transaction Processing Timelines",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/first-transaction-processing-timelines"
+        },
+        {
+         "name": "Second: Departments and Units Handling Banking Procedure Transactions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/second-departments-and-units-handling-banking-procedure-transactions"
+        },
+        {
+         "name": "Third: Transaction Processing Mechanism",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/third-transaction-processing-mechanism"
+        },
+        {
+         "name": "Fourth: Verification of Compliance with Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/fourth-verification-compliance-instructions"
+        },
+        {
+         "name": "Consumer Protection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-protection-0"
+        }
+       ]
+      },
+      {
+       "name": "Data and Reports",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/data-and-reports",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Money Exchange Sector",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/money-exchange-sector-0"
+        },
+        {
+         "name": "Data and Reports",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/data-and-reports"
+        },
+        {
+         "name": "Consumer Protection",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/consumer-protection-0"
+        },
+        {
+         "name": "Provide SAMA with Annual and Quarterly Financial Statements and Annual Reports on internal control systems",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/provide-sama-annual-and-quarterly-financial-statements-and-annual-reports-internal-control-systems"
+        },
+        {
+         "name": "Supervisory Data Templates for Money Changers and Their Submission Through the RMS System",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/supervisory-data-templates-money-changers-and-their-submission-through-rms-system"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Credit Bureaus",
+     "sourceUrl": "https://rulebook.sama.gov.sa/en/book-category/5902",
+     "children": [
+      {
+       "name": "Laws and Regulations",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-4",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Credit Bureaus",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/credit-bureaus"
+        },
+        {
+         "name": "Laws and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-4"
+        },
+        {
+         "name": "Rules and Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-and-instructions"
+        },
+        {
+         "name": "Credit Information Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/961"
+        },
+        {
+         "name": "Implementing Regulations of Credit Information Law",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/353"
+        },
+        {
+         "name": "Regulation of Work Procedures and Litigation Before the Committee for Consideration and Settlement of Credit Information Violations and Disputes",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/9844"
+        }
+       ]
+      },
+      {
+       "name": "Rules and Instructions",
+       "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-and-instructions",
+       "children": [
+        {
+         "name": "SAMA Rulebook",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en"
+        },
+        {
+         "name": "Credit Bureaus",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/credit-bureaus"
+        },
+        {
+         "name": "Rules and Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/rules-and-instructions"
+        },
+        {
+         "name": "Laws and Regulations",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/laws-and-regulations-4"
+        },
+        {
+         "name": "Credit Bureaus Circulars",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/credit-bureaus-circulars"
+        },
+        {
+         "name": "Requirements for Appointments to Senior Positions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/1997"
+        },
+        {
+         "name": "Financial Sector Cyber Threat Intelligence Principles",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/3081"
+        },
+        {
+         "name": "Cyber Security Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/3837"
+        },
+        {
+         "name": "Information Technology Governance Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/4066"
+        },
+        {
+         "name": "Financial Entities Ethical Red-Teaming Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/2898"
+        },
+        {
+         "name": "Business Continuity Management Framework",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/3709"
+        },
+        {
+         "name": "Adherence to the Personal Data Protection Law and Data Governance Policies, Regulations and Rules",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/4725"
+        },
+        {
+         "name": "Instructions for Services Provided to Persons with Disabilities in Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/4926"
+        },
+        {
+         "name": "Principles of Conduct and Work Ethics in Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/5547"
+        },
+        {
+         "name": "License Disclosure Instructions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/5536"
+        },
+        {
+         "name": "Whistle Blowing Policy for Financial Institutions",
+         "sourceUrl": "https://rulebook.sama.gov.sa/en/node/5096"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

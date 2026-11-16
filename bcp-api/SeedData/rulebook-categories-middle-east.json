@@ -1,49 +1,33 @@
 {
- "source": "Middle East regulatory authorities and their official rulebook portals, to maintain by region (links as supplied 15 Nov 2026). Authority nodes carry the portal link as sourceUrl; specific rulebook documents are added or imported under each authority afterwards.",
+ "source": "Which countries each region covers. Each country's regulators live in that country's own pack (rulebook-categories-<country>.json), referenced from JurisdictionCatalog, so this file stays a list of countries rather than a copy of every rulebook.",
  "categories": [
   {
    "name": "Middle East",
    "children": [
     {
      "name": "United Arab Emirates",
-     "note": "Authorities come from rulebook-categories-cbuae.json (see JurisdictionCatalog IncludePacks): Central Bank of the UAE, Dubai Financial Services Authority, Abu Dhabi Global Market and Capital Market Authority, each with its full rulebook tree. Listing them again here would duplicate over 250 nodes and give two entries per authority.",
+     "note": "Regulators come from this country's own pack, see JurisdictionCatalog.",
      "children": []
     },
     {
      "name": "Saudi Arabia",
-     "children": [
-      {
-       "name": "Saudi Central Bank (SAMA) Rulebook",
-       "sourceUrl": "https://rulebook.sama.gov.sa/en"
-      }
-     ]
+     "children": [],
+     "note": "Regulators come from this country's own pack, see JurisdictionCatalog."
     },
     {
      "name": "Qatar",
-     "children": [
-      {
-       "name": "Qatar Financial Centre Regulatory Authority (QFCRA)",
-       "sourceUrl": "https://www.qfcra.com/qfc-regulatory-authority-rules/"
-      }
-     ]
+     "children": [],
+     "note": "Regulators come from this country's own pack, see JurisdictionCatalog."
     },
     {
      "name": "Oman",
-     "children": [
-      {
-       "name": "Central Bank of Oman (CBO) Circulars",
-       "sourceUrl": "https://cbo.gov.om/Pages/Circulars.aspx"
-      }
-     ]
+     "children": [],
+     "note": "Regulators come from this country's own pack, see JurisdictionCatalog."
     },
     {
      "name": "Bahrain",
-     "children": [
-      {
-       "name": "Central Bank of Bahrain (CBB) Rulebook - Volume 1 (Conventional Banks)",
-       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-1-conventional-banks-0"
-      }
-     ]
+     "children": [],
+     "note": "Regulators come from this country's own pack, see JurisdictionCatalog."
     }
    ]
   }

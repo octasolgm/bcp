@@ -1,0 +1,267 @@
+{
+ "source": "Central Bank of Oman laws and regulations, read from https://cbo.gov.om on 16 Nov 2026. CBO publishes its requirements as individual laws, frameworks and guidance rather than a rulebook tree, so each entry here carries its own document. Circulars are left out: they are issued continuously and listed by year on the CBO site.",
+ "categories": [
+  {
+   "name": "Central Bank of Oman (CBO)",
+   "sourceUrl": "https://cbo.gov.om/Pages/LawAndRegulations.aspx",
+   "children": [
+    {
+     "name": "AML and CFT",
+     "sourceUrl": "https://cbo.gov.om/Pages/AMLandCFT.aspx",
+     "children": [
+      {
+       "name": "Whistle Blowing Channel to Report Unlicensed Banking Business and Payment Service/Operation",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/AMLCFT/23-10-4%20BM%201196%20Whistle%20Blowing.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/AMLCFT/23-10-4%20BM%201196%20Whistle%20Blowing.pdf"
+      },
+      {
+       "name": "Manual for Combating Terrorism Financing NCFI",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/AMLCFTCirc/EN/Manual%20for%20Combating%20Terrorism%20Financing%20NCFI-En.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/AMLCFTCirc/EN/Manual%20for%20Combating%20Terrorism%20Financing%20NCFI-En.pdf"
+      },
+      {
+       "name": "AML and CFT Guidelines for Financial Institutions",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/LawRegulations/AMLCFT%20Guidelines_English.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/LawRegulations/AMLCFT%20Guidelines_English.pdf"
+      },
+      {
+       "name": "Decision issued by the NCCT regarding Implementation of Security Council",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Decision%20issued%20by%20the%20NCCT%20regarding%20Implementation%20of%20Security%20Council.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Decision%20issued%20by%20the%20NCCT%20regarding%20Implementation%20of%20Security%20Council.pdf"
+      },
+      {
+       "name": "National Risk Assessment 2023",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/National%20Risk%20Assessment%202023.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/National%20Risk%20Assessment%202023.pdf"
+      },
+      {
+       "name": "Registering with National Center for Financial Information",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Registering%20with%20National%20Center%20for%20Financial%20Information.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Registering%20with%20National%20Center%20for%20Financial%20Information.pdf"
+      },
+      {
+       "name": "Social Protection Benefits",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Social%20Protection%20benefits.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Social%20Protection%20benefits.pdf"
+      },
+      {
+       "name": "BM 1191 e-KYC",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/BM%201191%20e-KYC.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/BM%201191%20e-KYC.pdf"
+      },
+      {
+       "name": "Guidelines on the mechanism of providing information to the Public Prosecution",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Guidelines%20on%20the%20mechanism%20of%20providing%20information%20to%20the%20Public%20Prosecution.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Guidelines%20on%20the%20mechanism%20of%20providing%20information%20to%20the%20Public%20Prosecution.pdf"
+      },
+      {
+       "name": "Summary on ML and TF Sectoral Risk Assessment Banking and FLCs Sectors",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Summary%20on%20ML%20and%20TF%20Sectoral%20Risk%20Assessment%20Banking%20and%20FLCs%20Sectors.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Summary%20on%20ML%20and%20TF%20Sectoral%20Risk%20Assessment%20Banking%20and%20FLCs%20Sectors.pdf"
+      },
+      {
+       "name": "Summary on ML and TF Sectoral Risk Assessment Money Exchange Establishments",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Summary%20on%20ML%20and%20TF%20Sectoral%20Risk%20Assessment%20Money%20Exchange%20Establishments.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2023/Summary%20on%20ML%20and%20TF%20Sectoral%20Risk%20Assessment%20Money%20Exchange%20Establishments.pdf"
+      },
+      {
+       "name": "Beneficial Ownership Guidelines Circular",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Beneficial%20Ownership%20Guidelines%20Circular.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Beneficial%20Ownership%20Guidelines%20Circular.pdf"
+      },
+      {
+       "name": "Guideline Manual for Opening accounts with the banks operating",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Guideline%20Manual%20for%20Opening%20accounts%20with%20the%20banks%20operating%20.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Guideline%20Manual%20for%20Opening%20accounts%20with%20the%20banks%20operating%20.pdf"
+      },
+      {
+       "name": "Monitoring of Withdrawals through ATMs",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Monitoring%20of%20Withdrawals%20through%20ATMs.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Monitoring%20of%20Withdrawals%20through%20ATMs.pdf"
+      },
+      {
+       "name": "Resolution No. ( 32022) High risk countries",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Resolution%20No.%20(%2032022)%20High%20risk%20countries.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Resolution%20No.%20(%2032022)%20High%20risk%20countries.pdf"
+      },
+      {
+       "name": "Transaction Monitoring and Suspicious Transaction Reporting Guidelines",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Transaction%20Monitoring%20and%20Suspicious%20Transaction%20Reporting%20Guidelines.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/Global/Circulars/2022/Transaction%20Monitoring%20and%20Suspicious%20Transaction%20Reporting%20Guidelines.pdf"
+      },
+      {
+       "name": "Guidelines to the implementation of Targeted Financial Sanctions",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2022/Guidelines%20to%20the%20implementation%20of%20Targeted%20Financial%20Sanctions.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2022/Guidelines%20to%20the%20implementation%20of%20Targeted%20Financial%20Sanctions.pdf"
+      },
+      {
+       "name": "Decision No 01-2022 NCCT",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2022/Decision%20No%2001-2022%20NCCT.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2022/Decision%20No%2001-2022%20NCCT.pdf"
+      },
+      {
+       "name": "Guideline Implementation of AML-CFT Measures - Good and Poor Practices",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Guideline%20Implementation%20of%20AML-CFT%20Measures%20-%20Good%20and%20Poor%20Practices.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Guideline%20Implementation%20of%20AML-CFT%20Measures%20-%20Good%20and%20Poor%20Practices.pdf"
+      },
+      {
+       "name": "Circular on the implementation of AML-CFT Measures - Good and Poor Practices",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Circular%20on%20the%20implementation%20of%20AML-CFT%20Measures%20-%20Good%20and%20Poor%20Practices.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Circular%20on%20the%20implementation%20of%20AML-CFT%20Measures%20-%20Good%20and%20Poor%20Practices.pdf"
+      },
+      {
+       "name": "Circular AMLandCFT Measures for MEEs",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Circular%20AMLandCFT%20Measures%20for%20MEEs.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Circular%20AMLandCFT%20Measures%20for%20MEEs.pdf"
+      },
+      {
+       "name": "Guidance - Good and Poor Practices on AMLandCFT Measures_MEE",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Guidance%20Good%20and%20Poor%20Practices%20on%20AMLandCFT%20Measures_MEE.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Guidance%20Good%20and%20Poor%20Practices%20on%20AMLandCFT%20Measures_MEE.pdf"
+      },
+      {
+       "name": "Guidance on AMLCFT Measures",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Guidance%20on%20AMLCFT%20Measures.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Guidance%20on%20AMLCFT%20Measures.pdf"
+      },
+      {
+       "name": "Guidelines for the establishment of a Quality Assurance Function for AML-CFT",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Guidelines%20for%20the%20establishment%20of%20a%20Quality%20Assurance%20Function%20for%20AML-CFT.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Guidelines%20for%20the%20establishment%20of%20a%20Quality%20Assurance%20Function%20for%20AML-CFT.pdf"
+      },
+      {
+       "name": "Micro-Business onboarding guidelines for e-payment services",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Micro-Business%20onboarding%20guidelines%20for%20e-payment%20services.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Micro-Business%20onboarding%20guidelines%20for%20e-payment%20services.pdf"
+      },
+      {
+       "name": "Opening Savings Account through digital onboarding - during COVID19",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Opening%20Savings%20Account%20through%20digital%20onboarding%20-%20during%20COVID19.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Opening%20Savings%20Account%20through%20digital%20onboarding%20-%20during%20COVID19.pdf"
+      },
+      {
+       "name": "Politically Exposed Persons (PEP) - Identification  Customer DD",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Politically%20Exposed%20Persons%20PEP%20-%20Identification%20Customer%20DD.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2021/Politically%20Exposed%20Persons%20PEP%20-%20Identification%20Customer%20DD.pdf"
+      },
+      {
+       "name": "Economic Sanctions of United States of America (USA)",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Economic%20Sanctions%20of%20United%20States%20of%20America%20(USA).pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Economic%20Sanctions%20of%20United%20States%20of%20America%20(USA).pdf"
+      },
+      {
+       "name": "FATF Paper on Risk and Policy Responses",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/FATF%20Paper%20on%20Risk%20and%20Policy%20Responses.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/FATF%20Paper%20on%20Risk%20and%20Policy%20Responses.pdf"
+      },
+      {
+       "name": "Measures to Combat MLTF during COVID19 FATF-MEEs",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Measures%20to%20Combat%20MLTF%20during%20COVID19%20FATF-MEEs.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Measures%20to%20Combat%20MLTF%20during%20COVID19%20FATF-MEEs.pdf"
+      },
+      {
+       "name": "Measures to Combat Money Laundering ML Terrorist Financing TF risks",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Measures%20to%20Combat%20Money%20Laundering%20ML%20Terrorist%20Financing%20TF%20risks.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Measures%20to%20Combat%20Money%20Laundering%20ML%20Terrorist%20Financing%20TF%20risks.pdf"
+      },
+      {
+       "name": "Measures to Combat Money Laundering",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Measures%20to%20Combat%20Money%20Laundering.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Measures%20to%20Combat%20Money%20Laundering.pdf"
+      },
+      {
+       "name": "Opening saving accounts through digital onboarding-COVID19",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Opening%20saving%20accounts%20through%20digital%20onboarding-COVID19.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Opening%20saving%20accounts%20through%20digital%20onboarding-COVID19.pdf"
+      },
+      {
+       "name": "Virtual Assets and Virtual Assets Service Providers",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Virtual%20Assets%20and%20Virtual%20Assets%20Service%20Providers.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2020/Virtual%20Assets%20and%20Virtual%20Assets%20Service%20Providers.pdf"
+      },
+      {
+       "name": "AML CFT Offsite Surveillance Framework",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2019/AML%20CFT%20Offsite%20Surveillance%20Framework.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2019/AML%20CFT%20Offsite%20Surveillance%20Framework.pdf"
+      },
+      {
+       "name": "Common Reporting Standard- Multilateral Competent Authority Agreement on Automatic Exchange of Financial Account Information",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2019/CRS.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2019/CRS.pdf"
+      },
+      {
+       "name": "Guidance on Politically Exposed Persons in the context of Combating Laundering and Financing of Terrorism",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2019/PEP%20Circular%20Letter%205671.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2019/PEP%20Circular%20Letter%205671.pdf"
+      },
+      {
+       "name": "AML CFT Offsite Surveillance Framework - D BM 1156",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/D%20BM%20-%201156.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/D%20BM%20-%201156.pdf"
+      },
+      {
+       "name": "Joint Comprehensive Plan of Action",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/Joint%20Comprehensive%20Plan%20of%20Action.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/Joint%20Comprehensive%20Plan%20of%20Action.pdf"
+      },
+      {
+       "name": "Legal Cases involving former Prime Ministers of Thailand",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/Legal%20Cases%20involving%20former%20Prime%20Ministers%20of%20Thailand.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/Legal%20Cases%20involving%20former%20Prime%20Ministers%20of%20Thailand.pdf"
+      },
+      {
+       "name": "OECD-Multilateral Competent Authority Agreement on Automatic Exchange of Financial Account Information",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/OECD-%20CRS%20circular%20letter%20BDD%206233.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/OECD-%20CRS%20circular%20letter%20BDD%206233.pdf"
+      },
+      {
+       "name": "Simplified know your customer (KYC) for Mobile Wallets and Prepaid Cards",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/Simplified%20know%20your%20customer%20(KYC)%20for%20mobile%20wallets%20and%20prepaid%20Cards.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/Simplified%20know%20your%20customer%20(KYC)%20for%20mobile%20wallets%20and%20prepaid%20Cards.pdf"
+      },
+      {
+       "name": "Instructions for all Licensed Financial Institutions under the Supervision of Central Bank Of Oman on implementing Combating Money Laundering and Terrorism Financing",
+       "sourceUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/ME%2030%20SUPPLEMENT%20-AML%20LAW%20ROYAL%20DECREE%2030%20-%202016%20-FINAL%20INSTRUCTIONS%20FOR%20ALL%20LISCENESED%20INSTITUTIONS%20-%20ENGLISH.pdf",
+       "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/Circulars/2018/ME%2030%20SUPPLEMENT%20-AML%20LAW%20ROYAL%20DECREE%2030%20-%202016%20-FINAL%20INSTRUCTIONS%20FOR%20ALL%20LISCENESED%20INSTITUTIONS%20-%20ENGLISH.pdf"
+      }
+     ]
+    },
+    {
+     "name": "The Banking Law",
+     "sourceUrl": "https://cbo.gov.om/Pages/BankingLaw.aspx",
+     "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/LawRegulations/BankingLaw.pdf"
+    },
+    {
+     "name": "Bank Deposit Protection Law",
+     "sourceUrl": "https://cbo.gov.om/Pages/BankingDepositsSchemeLaw.aspx",
+     "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/LawRegulations/BDP%20Law%20English%20Version.pdf"
+    },
+    {
+     "name": "Executive Regulation of the Banking Deposits Protection Law",
+     "sourceUrl": "https://cbo.gov.om/Pages/Regulations.aspx",
+     "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/LawRegulations/BDP%20Regulations%20-%20English.pdf"
+    },
+    {
+     "name": "Law on Combating Money Laundering and Terrorism Financing",
+     "sourceUrl": "https://cbo.gov.om/Pages/AntiMoneyLaunderingLaw.aspx",
+     "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/LawRegulations/AMLCFTLawEnglish8Sept16.pdf"
+    },
+    {
+     "name": "Executive Regulation of the AML and CFT Law",
+     "sourceUrl": "https://cbo.gov.om/Pages/AntiMoneyLaunderingLaw.aspx",
+     "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/LawRegulations/AMLCFTLawEnglishInst89Sept16.pdf"
+    },
+    {
+     "name": "Regulatory Framework for Digital Banks",
+     "sourceUrl": "https://cbo.gov.om/Pages/DigitalBanking.aspx",
+     "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/LawRegulations/Regulatory%20Framework%20for%20Digital%20Bank_Oman.pdf"
+    },
+    {
+     "name": "Open Banking Regulatory Framework",
+     "sourceUrl": "https://cbo.gov.om/Pages/OpenBanking.aspx",
+     "documentUrl": "https://cbo.gov.om/sites/assets/Documents/English/LawRegulations/Regulatory%20Framework%20for%20Open%20Bank_Oman.pdf"
+    }
+   ]
+  }
+ ]
+}

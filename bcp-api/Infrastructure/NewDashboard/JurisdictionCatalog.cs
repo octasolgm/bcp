@@ -17,9 +17,9 @@ public static class JurisdictionCatalog
     /// <param name="DateFormat">Date convention this country defaults to (a ValidDateFormatRegions value).</param>
     /// <param name="Regulators">Regulators whose rulebooks this country imports (display only).</param>
     /// <param name="IncludePacks">
-    /// Other seed packs whose top-level authorities also belong to this country. The UAE's regulators already
-    /// live in the CBUAE pack as a full tree (CBUAE alone is over 200 nodes, with document links), so they are
-    /// referenced from there rather than copied, keeping one source of truth per authority.
+    /// Other seed packs whose top-level authorities also belong to this country. Each country's regulator is
+    /// held in its own pack, read from that regulator's own published rulebook, so one country can be
+    /// re-read and replaced without touching the others. The region pack only lists which countries exist.
     /// </param>
     public sealed record Jurisdiction(
         string Code,
@@ -39,10 +39,14 @@ public static class JurisdictionCatalog
                 "Capital Market Authority",
             ],
             ["rulebook-categories-cbuae.json"]),
-        new("sa", "Saudi Arabia", "Middle East", "uae", ["Saudi Central Bank (SAMA)"], []),
-        new("qa", "Qatar",        "Middle East", "uae", ["Qatar Financial Centre Regulatory Authority (QFCRA)"], []),
-        new("om", "Oman",         "Middle East", "uae", ["Central Bank of Oman (CBO)"], []),
-        new("bh", "Bahrain",      "Middle East", "uae", ["Central Bank of Bahrain (CBB)"], []),
+        new("sa", "Saudi Arabia", "Middle East", "uae", ["Saudi Central Bank (SAMA)"],
+            ["rulebook-categories-saudi-arabia.json"]),
+        new("qa", "Qatar", "Middle East", "uae", ["Qatar Financial Centre Regulatory Authority (QFCRA)"],
+            ["rulebook-categories-qatar.json"]),
+        new("om", "Oman", "Middle East", "uae", ["Central Bank of Oman (CBO)"],
+            ["rulebook-categories-oman.json"]),
+        new("bh", "Bahrain", "Middle East", "uae", ["Central Bank of Bahrain (CBB)"],
+            ["rulebook-categories-bahrain.json"]),
     ];
 
     /// <summary>Seed pack holding each region's rulebook tree, by region name.</summary>

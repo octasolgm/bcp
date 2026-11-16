@@ -1,0 +1,779 @@
+{
+ "source": "Central Bank of Bahrain Rulebook, read from https://cbben.thomsonreuters.com on 16 Nov 2026. Volumes 1 to 7 and the Common Volume, each with its Part A sections and their modules. Quarterly updates, ad-hoc communications, archived parts and forms are left out: they are published continuously and are not part of the rulebook structure.",
+ "categories": [
+  {
+   "name": "Central Bank of Bahrain (CBB)",
+   "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-1-conventional-banks-0",
+   "children": [
+    {
+     "name": "Common Volume",
+     "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/common-volume",
+     "children": [
+      {
+       "name": "Environmental, Social and Governance Requirements",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/environmental-social-and-governance-requirements",
+       "children": [
+        {
+         "name": "ESG-A: Introduction",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/esg-introduction"
+        },
+        {
+         "name": "ESG-1: Reporting Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/esg-1-reporting-requirements"
+        },
+        {
+         "name": "Appendix 1 – ESG KPIs and Guidance",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/appendix-1-esg-kpis-and-guidance"
+        },
+        {
+         "name": "Appendix 2 – ESG Reporting Frameworks and Global Initiatives",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/appendix-2-esg-reporting-frameworks-and-global-initiatives"
+        }
+       ]
+      },
+      {
+       "name": "Fit and Proper Requirements",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fit-and-proper-requirements-2",
+       "children": [
+        {
+         "name": "FP-A: Introduction",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fp-introduction"
+        },
+        {
+         "name": "FP-1: Fit and Proper",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fp-1-fit-and-proper"
+        },
+        {
+         "name": "FP-2: CBB Approval Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fp-2-cbb-approval-requirements"
+        },
+        {
+         "name": "FP-3: Other Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fp-3-other-requirements"
+        },
+        {
+         "name": "Appendix FP-1 Illustrative Qualifications and Core Competencies",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/appendix-fp-1-illustrative-qualifications-and-core-competencies"
+        },
+        {
+         "name": "Appendix FP-2 – List of senior management positions/persons requiring CBB Approval",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/appendix-fp-2-list-senior-management-positionspersons-requiring-cbb-approval"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Volume 1 - Conventional Banks",
+     "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-1-conventional-banks-0",
+     "children": [
+      {
+       "name": "Introduction",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/introduction-35",
+       "children": [
+        {
+         "name": "UG Users' Guide",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ug-users-guide-3"
+        }
+       ]
+      },
+      {
+       "name": "High Level Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/high-level-standards-3",
+       "children": [
+        {
+         "name": "LR Licensing Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/lr-licensing-requirements-6"
+        },
+        {
+         "name": "PB Principles of Business",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/pb-principles-business-3"
+        },
+        {
+         "name": "HC High-Level Controls",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/hc-high-level-controls-13"
+        },
+        {
+         "name": "AU Auditors and Accounting Standards",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/au-auditors-and-accounting-standards-3"
+        },
+        {
+         "name": "GR General Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/gr-general-requirements-5"
+        }
+       ]
+      },
+      {
+       "name": "Business Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/business-standards-3",
+       "children": [
+        {
+         "name": "BC Business and Market Conduct",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/bc-business-and-market-conduct-7"
+        },
+        {
+         "name": "CA Capital Adequacy",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ca-capital-adequacy-6"
+        },
+        {
+         "name": "CM Credit Risk Management (Effective June 2022)",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/cm-credit-risk-management-effective-june-2022"
+        },
+        {
+         "name": "OM Operational Risk Management",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/om-operational-risk-management-6"
+        },
+        {
+         "name": "FC Financial Crime",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fc-financial-crime-4"
+        },
+        {
+         "name": "ICCAP Internal Capital Adequacy Assessment Process",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/iccap-internal-capital-adequacy-assessment-process-0"
+        },
+        {
+         "name": "ST Stress Testing",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/st-stress-testing-0"
+        },
+        {
+         "name": "DSIBs Domestic Systemically Important Banks",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/dsibs-domestic-systemically-important-banks-0"
+        },
+        {
+         "name": "RR Reputational Risk Management",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/rr-reputational-risk-management-0"
+        },
+        {
+         "name": "LM Liquidity Risk Management",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/lm-liquidity-risk-management-0"
+        },
+        {
+         "name": "DA Digital Finance Advice",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/da-digital-finance-advice-0"
+        }
+       ]
+      },
+      {
+       "name": "Reporting Requirements",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/reporting-requirements-2",
+       "children": [
+        {
+         "name": "BR CBB Reporting Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/br-cbb-reporting-requirements-6"
+        },
+        {
+         "name": "PD Public Disclosure",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/pd-public-disclosure-1"
+        }
+       ]
+      },
+      {
+       "name": "Enforcement & Redress",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/enforcement-redress-2",
+       "children": [
+        {
+         "name": "CP Compensation",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/cp-compensation-5"
+        },
+        {
+         "name": "EN Enforcement",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/en-enforcement-5"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Volume 2 - Islamic Banks",
+     "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-2-islamic-banks",
+     "children": [
+      {
+       "name": "Introduction",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/introduction-45",
+       "children": [
+        {
+         "name": "UG Users' Guide",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ug-users-guide-5"
+        }
+       ]
+      },
+      {
+       "name": "High Level Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/high-level-standards-5",
+       "children": [
+        {
+         "name": "LR Licensing Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/lr-licensing-requirements-9"
+        },
+        {
+         "name": "PB Principles of Business",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/pb-principles-business-5"
+        },
+        {
+         "name": "HC High-Level Controls",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/hc-high-level-controls-14"
+        },
+        {
+         "name": "AU Auditors and Accounting Standards",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/au-auditors-and-accounting-standards-5"
+        },
+        {
+         "name": "GR General Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/gr-general-requirements-8"
+        },
+        {
+         "name": "SG Shari'a Governance",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/sg-sharia-governance-1"
+        }
+       ]
+      },
+      {
+       "name": "Business Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/business-standards-5",
+       "children": [
+        {
+         "name": "BC Business and Market Conduct",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/bc-business-and-market-conduct-11"
+        },
+        {
+         "name": "CA Capital Adequacy",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ca-capital-adequacy-10"
+        },
+        {
+         "name": "RM Risk Management",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/rm-risk-management-0"
+        },
+        {
+         "name": "CM Credit Risk Management (Effective June 2022)",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/cm-credit-risk-management-effective-june-2022-0"
+        },
+        {
+         "name": "OM Operational Risk Management",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/om-operational-risk-management-7"
+        },
+        {
+         "name": "LM Liquidity Risk Management",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/lm-liquidity-risk-management-1"
+        },
+        {
+         "name": "FC Financial Crime",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fc-financial-crime-7"
+        },
+        {
+         "name": "ICCAP Internal Capital Adequacy Assessment Process",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/iccap-internal-capital-adequacy-assessment-process-1"
+        },
+        {
+         "name": "ST Stress Testing",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/st-stress-testing-1"
+        },
+        {
+         "name": "DS Domestic Systemically Important Banks",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ds-domestic-systemically-important-banks"
+        },
+        {
+         "name": "RR Reputational Risk Management",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/rr-reputational-risk-management-1"
+        },
+        {
+         "name": "DA Digital Financial Advice",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/da-digital-financial-advice"
+        }
+       ]
+      },
+      {
+       "name": "Reporting Requirements",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/reporting-requirements-4",
+       "children": [
+        {
+         "name": "BR CBB Reporting Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/br-cbb-reporting-requirements-9"
+        },
+        {
+         "name": "PD Public Disclosure Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/pd-public-disclosure-requirements-3"
+        }
+       ]
+      },
+      {
+       "name": "Enforcement & Redress",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/enforcement-redress-4",
+       "children": [
+        {
+         "name": "CP Compensation",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/cp-compensation-8"
+        },
+        {
+         "name": "EN Enforcement",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/en-enforcement-8"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Volume 3 - Insurance",
+     "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-3-insurance",
+     "children": [
+      {
+       "name": "Introduction",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/introduction-71",
+       "children": [
+        {
+         "name": "UG Users Guide",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ug-users-guide-6"
+        },
+        {
+         "name": "ES Executive Summary",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/es-executive-summary"
+        }
+       ]
+      },
+      {
+       "name": "High Level Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/high-level-standards-6",
+       "children": [
+        {
+         "name": "AU Authorisation",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/au-authorisation"
+        },
+        {
+         "name": "PB Principles of Business",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/pb-principles-business-6"
+        },
+        {
+         "name": "HC High-Level Controls",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/hc-high-level-controls-12"
+        },
+        {
+         "name": "AA Auditors and Actuaries",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/aa-auditors-and-actuaries"
+        },
+        {
+         "name": "GR General Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/gr-general-requirements-10"
+        }
+       ]
+      },
+      {
+       "name": "Business Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/business-standards-6",
+       "children": [
+        {
+         "name": "CA Capital Adequacy",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ca-capital-adequacy-12"
+        },
+        {
+         "name": "BC Business and Market Conduct",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/bc-business-and-market-conduct-12"
+        },
+        {
+         "name": "CL Client Money",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/cl-client-money"
+        },
+        {
+         "name": "RM Risk Management",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/rm-risk-management-1"
+        },
+        {
+         "name": "FC Financial Crime",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fc-financial-crime-8"
+        },
+        {
+         "name": "IA Insurance Aggregators",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ia-insurance-aggregators"
+        }
+       ]
+      },
+      {
+       "name": "Reporting Requirements",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/reporting-requirements-5",
+       "children": [
+        {
+         "name": "BR CBB Reporting",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/br-cbb-reporting-0"
+        },
+        {
+         "name": "PD Public Disclosure",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/pd-public-disclosure-4"
+        }
+       ]
+      },
+      {
+       "name": "Enforcement & Redress",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/enforcement-redress-5",
+       "children": [
+        {
+         "name": "EN Enforcement",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/en-enforcement-11"
+        },
+        {
+         "name": "CP Compensation",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/cp-compensation-9"
+        }
+       ]
+      },
+      {
+       "name": "Sector Guides",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/sector-guides",
+       "children": [
+        {
+         "name": "CI Captive Insurance",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ci-captive-insurance"
+        },
+        {
+         "name": "IM Insurance Intermediaries and Managers",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/im-insurance-intermediaries-and-managers"
+        },
+        {
+         "name": "TA Takaful / Retakaful",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ta-takaful-retakaful"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Volume 4 - Investment Business",
+     "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-4-investment-business",
+     "children": [
+      {
+       "name": "Introduction",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/introduction-73",
+       "children": [
+        {
+         "name": "UG User's Guide",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ug-users-guide-7"
+        },
+        {
+         "name": "ES Executive Summary",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/es-executive-summary-0"
+        }
+       ]
+      },
+      {
+       "name": "High Level Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/high-level-standards-7",
+       "children": [
+        {
+         "name": "AU Authorisation",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/au-authorisation-1"
+        },
+        {
+         "name": "PB Principles of Business",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/pb-principles-business-7"
+        },
+        {
+         "name": "HC High-Level Controls",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/hc-high-level-controls-15"
+        },
+        {
+         "name": "AA Auditors and Accounting Standards",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/aa-auditors-and-accounting-standards"
+        },
+        {
+         "name": "GR General Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/gr-general-requirements-12"
+        }
+       ]
+      },
+      {
+       "name": "Business Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/business-standards-7",
+       "children": [
+        {
+         "name": "CA Capital Adequacy",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ca-capital-adequacy-13"
+        },
+        {
+         "name": "BC Business Conduct",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/bc-business-conduct"
+        },
+        {
+         "name": "CL Client Assets",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/cl-client-assets"
+        },
+        {
+         "name": "RM Risk Management",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/rm-risk-management-2"
+        },
+        {
+         "name": "FC Financial Crime",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fc-financial-crime-10"
+        },
+        {
+         "name": "GS Group Supervision",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/gs-group-supervision"
+        },
+        {
+         "name": "DA Digital Financial Advice",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/da-digital-financial-advice-0"
+        },
+        {
+         "name": "Category 4 Investment Firms",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/category-4-investment-firms"
+        },
+        {
+         "name": "FO Family Office Services",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/fo-family-office-services"
+        }
+       ]
+      },
+      {
+       "name": "Reporting Requirements",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/reporting-requirements-6",
+       "children": [
+        {
+         "name": "BR CBB Reporting",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/br-cbb-reporting-1"
+        },
+        {
+         "name": "PD Public Disclosure",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/pd-public-disclosure-5"
+        }
+       ]
+      },
+      {
+       "name": "Enforcement & Redress",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/enforcement-redress-6",
+       "children": [
+        {
+         "name": "EN Enforcement",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/en-enforcement-12"
+        },
+        {
+         "name": "DP Dispute Procedures",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/dp-dispute-procedures"
+        },
+        {
+         "name": "CP Compensation",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/cp-compensation-10"
+        }
+       ]
+      },
+      {
+       "name": "Sector Guides",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/sector-guides-0",
+       "children": [
+        {
+         "name": "C1 Category 1 licensees",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/c1-category-1-licensees"
+        },
+        {
+         "name": "C2 Category 2 licensees",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/c2-category-2-licensees"
+        },
+        {
+         "name": "C3 Category 3 licensees",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/c3-category-3-licensees"
+        },
+        {
+         "name": "IF Islamic Investment Firms",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/if-islamic-investment-firms"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Volume 5 - Specialised Licensees",
+     "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-5-specialised-licensees",
+     "children": [
+      {
+       "name": "Common Modules (Applicable to all Specialised Licensees)",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/common-modules-applicable-all-specialised-licensees",
+       "children": [
+        {
+         "name": "Part A",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/part-6"
+        }
+       ]
+      },
+      {
+       "name": "Specific Modules (By Type of Licensee)",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/specific-modules-type-licensee",
+       "children": [
+        {
+         "name": "Type 1: Money Changers Licensees",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/type-1-money-changers-licensees"
+        },
+        {
+         "name": "Type 2: Representative Office Licensees",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/type-2-representative-office-licensees"
+        },
+        {
+         "name": "Type 3: Financing Companies",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/type-3-financing-companies"
+        },
+        {
+         "name": "Type 4: Administrators",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/type-4-administrators"
+        },
+        {
+         "name": "Type 5: Trust Service Providers",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/type-5-trust-service-providers"
+        },
+        {
+         "name": "Type 6: Microfinance Institutions",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/type-6-microfinance-institutions"
+        },
+        {
+         "name": "Type 7: Ancillary Service Providers",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/type-7-ancillary-service-providers"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Volume 6 - Capital Markets",
+     "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-6-capital-markets",
+     "children": [
+      {
+       "name": "Introduction",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/introduction-85",
+       "children": [
+        {
+         "name": "UG — User's Guide",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ug-users-guide-9"
+        },
+        {
+         "name": "ES — Executive Summary",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/es-executive-summary-2"
+        }
+       ]
+      },
+      {
+       "name": "Institutions",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/institutions",
+       "children": [
+        {
+         "name": "MAE — Markets and Exchanges",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/mae-markets-and-exchanges"
+        },
+        {
+         "name": "CSD — Clearing, Settlement and Depository",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/csd-clearing-settlement-and-depository"
+        },
+        {
+         "name": "MIR Market Intermediaries and Representatives License",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/mir-market-intermediaries-and-representatives-license"
+        },
+        {
+         "name": "CRA Crypto-Asset",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/cra-crypto-asset"
+        },
+        {
+         "name": "SIO Stablecoin Issuance & Offering",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/sio-stablecoin-issuance-offering"
+        }
+       ]
+      },
+      {
+       "name": "Market Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/market-standards",
+       "children": [
+        {
+         "name": "OFS — Offering of Securities",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ofs-offering-securities"
+        },
+        {
+         "name": "TMA — Take-overs, Mergers and Acquisitions",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/tma-take-overs-mergers-and-acquisitions"
+        },
+        {
+         "name": "MAM — Prohibition of Market Abuse and Manipulation",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/mam-prohibition-market-abuse-and-manipulation"
+        },
+        {
+         "name": "MIE — Market Surveillance, Investigation & Enforcement",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/mie-market-surveillance-investigation-enforcement"
+        },
+        {
+         "name": "AML — Anti-Money Laundering & Combating Financial Crime",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/aml-anti-money-laundering-combating-financial-crime"
+        }
+       ]
+      },
+      {
+       "name": "Ongoing Obligations",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ongoing-obligations",
+       "children": [
+        {
+         "name": "LIR — Listing Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/lir-listing-requirements"
+        },
+        {
+         "name": "DIS — Disclosure Requirements",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/dis-disclosure-requirements"
+        }
+       ]
+      },
+      {
+       "name": "High Level Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/high-level-standards-16",
+       "children": [
+        {
+         "name": "HC — High-Level Controls (Corporate Governance)",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/hc-high-level-controls-corporate-governance"
+        }
+       ]
+      },
+      {
+       "name": "Dispute Resolution and Investor Protection",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/dispute-resolution-and-investor-protection",
+       "children": [
+        {
+         "name": "DRA — Dispute Resolution, Arbitration and Disciplinary Proceedings",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/dra-dispute-resolution-arbitration-and-disciplinary-proceedings"
+        }
+       ]
+      },
+      {
+       "name": "International Co-operation",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/international-co-operation",
+       "children": [
+        {
+         "name": "ICO — International Co-operation & Exchange of Information",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ico-international-co-operation-exchange-information"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "name": "Volume 7 - Collective Investment Undertakings",
+     "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/central-bank-bahrain-volume-7-collective-investment-undertakings",
+     "children": [
+      {
+       "name": "Introduction",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/introduction-88"
+      },
+      {
+       "name": "High Level Standards",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/high-level-standards-17"
+      },
+      {
+       "name": "Classification of Undertakings",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/classification-undertakings",
+       "children": [
+        {
+         "name": "CIU Collective Investment Undertakings Module",
+         "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/ciu-collective-investment-undertakings-module"
+        }
+       ]
+      },
+      {
+       "name": "Reporting Requirements",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/reporting-requirements-16"
+      },
+      {
+       "name": "Enforcement & Redress",
+       "sourceUrl": "https://cbben.thomsonreuters.com/rulebook/enforcement-redress-8"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
