@@ -219,6 +219,14 @@ public class RulebookCategoriesController(
         if (nodes == null || depth > MaxDepth) return (0, 0);
         var added = 0;
         var skipped = 0;
+
+        // Carry the sort order through the loop, continuing after whatever is already stored under this
+        // parent. Re-reading it per row would return the same number for every new sibling, since nothing
+        // is written until the caller saves.
+        var nextOrder = (await db.NdRulebookCategories
+            .Where(c => c.ParentId == parentId)
+            .MaxAsync(c => (int?)c.SortOrder, ct) ?? -1) + 1;
+
         foreach (var node in nodes)
         {
             var name = node.Name?.Trim();
@@ -241,20 +249,20 @@ public class RulebookCategoriesController(
             }
             else
             {
-                var nextOrder = (await db.NdRulebookCategories
-                    .Where(c => c.ParentId == parentId)
-                    .MaxAsync(c => (int?)c.SortOrder, ct) ?? -1) + 1;
                 var row = new NdRulebookCategory
                 {
                     ParentId = parentId,
                     Name = name,
                     SourceUrl = Clean(node.SourceUrl),
                     DocumentUrl = Clean(node.DocumentUrl),
-                    SortOrder = nextOrder,
+                    SortOrder = nextOrder++,
                     CreatedBy = creatorId,
                 };
                 db.NdRulebookCategories.Add(row);
-                await db.SaveChangesAsync(ct); // persist so children can reference its Id
+                // The key is generated here, not by the database, so children can point at it without the
+                // row being written first. Saving per row meant one round trip each to a remote database -
+                // over 250 of them for the UAE pack, which is why the import appeared to hang. The caller
+                // saves the whole import once instead.
                 categoryId = row.Id;
                 added++;
             }
