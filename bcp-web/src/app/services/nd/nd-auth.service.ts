@@ -16,6 +16,9 @@ function normalizeNdProfile(profile: NdUserProfile): NdUserProfile {
 
 @Injectable({ providedIn: 'root' })
 export class NdAuthService {
+  /** Every pre-workspace row and every demo account lives here. */
+  static readonly DEFAULT_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
+
   private readonly api = inject(NdApiService);
   private readonly profileSignal = signal<NdUserProfile | null>(this.readCachedProfile());
   private refreshInFlight: Promise<NdUserProfile | null> | null = null;
@@ -46,11 +49,21 @@ export class NdAuthService {
     return p?.role === 'super_admin' && p.isPlatformAdmin === true;
   }
 
+  /**
+   * The platform's own Default workspace. The pre-workspace endpoints (/dual-verify-kafka, /documents,
+   * /bcpweb) read tables that carry no workspace of their own, so they answer 403 anywhere else and
+   * must not be called from a client business.
+   */
+  isDefaultWorkspace(): boolean {
+    const p = this.profileSignal();
+    if (!p) return false;
+    return (p.workspace?.id ?? p.workspaceId) === NdAuthService.DEFAULT_WORKSPACE_ID;
+  }
+
   /** Platform super admin working in the Default workspace (not inside a client business). Internal
    *  tools such as Evals are shown only here. */
   isPlatformAdminInDefaultWorkspace(): boolean {
-    const ws = this.profileSignal()?.workspace?.id ?? this.profileSignal()?.workspaceId;
-    return this.isPlatformAdmin() && !this.isDemoViewer() && ws === '00000000-0000-0000-0000-000000000001';
+    return this.isPlatformAdmin() && !this.isDemoViewer() && this.isDefaultWorkspace();
   }
 
   /** Workspace management is platform-only and never shown to demo accounts. */

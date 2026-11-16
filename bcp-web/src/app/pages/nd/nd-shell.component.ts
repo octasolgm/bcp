@@ -526,18 +526,24 @@ export class NdShellComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Overview is DB-heavy — do not poll /sessions/active while it loads. */
+  /**
+   * Overview is DB-heavy - do not poll /sessions/active while it loads. The endpoint also belongs to the
+   * Default workspace only, so inside a client business it answers 403 on every poll and there is nothing
+   * for it to report. The workspace is checked when the timer fires, not now, because the profile may not
+   * have loaded yet; every navigation calls this again, so a late profile still starts the poll.
+   */
   private syncActiveSessionPolling(): void {
-    if (this.isOverviewRoute()) {
+    if (this.isOverviewRoute() || !this.auth.isDefaultWorkspace()) {
       if (this.sessionsWatching) {
         this.activeSessions.unwatch();
         this.sessionsWatching = false;
       }
-      return;
+      if (this.isOverviewRoute()) return;
     }
     if (this.sessionsWatching) return;
     setTimeout(() => {
       if (this.isOverviewRoute() || this.sessionsWatching) return;
+      if (!this.auth.isDefaultWorkspace()) return;
       this.activeSessions.watch();
       this.sessionsWatching = true;
     }, 8000);
