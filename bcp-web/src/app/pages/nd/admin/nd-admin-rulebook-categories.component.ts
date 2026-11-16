@@ -488,21 +488,6 @@ export class NdAdminRulebookCategoriesComponent implements OnInit {
     this.docsByCategory = byCategory;
   }
 
-  async importSample(): Promise<void> {
-    if (this.importing) return;
-    this.importing = true;
-    this.error = '';
-    const res = await this.api.importSampleRulebookCategories();
-    this.importing = false;
-    if (!res.success) {
-      this.error = res.message ?? 'Could not import the sample categories';
-      return;
-    }
-    const imported = (res as { imported?: number }).imported ?? 0;
-    this.toast.show(`Imported ${imported} rulebook categories`, 'success', 3500);
-    await this.load(true);
-  }
-
   /**
    * Which rulebooks to import follows the business's region, so the import is only offered once a region
    * is set. Without this the button could only fail after the click, which is a worse way to say the same.

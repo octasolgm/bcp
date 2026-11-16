@@ -45,16 +45,13 @@
       <div class="nd-card rb-empty">
         <strong>No rulebook categories yet</strong>
         <p class="nd-muted">
-          Start from the regulatory authorities (Central Bank of the UAE, DFSA, ADGM and the Capital Market Authority)
-          with their rulebooks, including the full CBUAE Rulebook, and adjust them, or add your own.
+          Bring in the regulators for the country this business operates in, with their rulebooks, and adjust
+          them or add your own.
         </p>
         <div class="rb-empty-actions">
-          <button type="button" class="nd-btn-primary" [disabled]="importing" (click)="importSample()">
-            @if (importing) { <span class="rb-spinner" aria-hidden="true"></span> }{{ importing ? 'Importing categories…' : 'Import sample rulebook categories' }}
-          </button>
           <button
             type="button"
-            class="nd-btn-secondary"
+            class="nd-btn-primary"
             [disabled]="importing || !hasRegion"
             [title]="hasRegion ? 'Import this business\'s regulator rulebooks' : 'Set this business\'s region first'"
             (click)="importRulebooks()"
@@ -63,9 +60,9 @@
           </button>
           @if (!hasRegion) {
             <p class="rb-region-hint nd-muted">
-              Set this business's region in
-              <a routerLink="/nd/admin/business-settings">Business settings</a>
-              to import its regulator rulebooks.
+              Rulebooks cannot be imported yet: this business has no region set, so there is no way to tell
+              which regulators apply to it. Choose its country in
+              <a routerLink="/nd/admin/business-settings">Business settings</a> first.
             </p>
           }
           <button type="button" class="nd-btn-secondary" [disabled]="importing" (click)="openAddRoot()">
@@ -123,6 +120,14 @@
           Add category
         </button>
       </div>
+
+      @if (!hasRegion) {
+        <div class="nd-card rb-import-notice">
+          <strong>Import rulebook is unavailable.</strong> This business has no region set, so there is no way
+          to tell which regulators apply to it. Choose its country in
+          <a routerLink="/nd/admin/business-settings">Business settings</a>, then import.
+        </div>
+      }
 
       @if (selectedCount) {
         <div class="nd-card rb-bulk-bar" role="status" aria-live="polite">

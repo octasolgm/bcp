@@ -30,6 +30,9 @@ public class RulebookCategoriesController(
     /// <summary>Authority › category › sub-category › rulebook (e.g. Central Bank of the UAE › Banking › Capital
     /// Adequacy › Regulations Re Capital Adequacy).</summary>
     public const int MaxDepth = 4;
+
+    /// <summary>Pack the UAE's regulators come from, and the source of the link backfill in
+    /// <see cref="LoadSampleAsync"/>. Referenced by JurisdictionCatalog.IncludePacks for the UAE.</summary>
     private const string SampleFile = "rulebook-categories-cbuae.json";
 
     public record CategoryRequest(string? Name, string? Description, Guid? ParentId);
@@ -130,52 +133,6 @@ public class RulebookCategoriesController(
         return Ok(new { success = true, deleted = toDelete.Count });
     }
 
-    /// <summary>Imports the CBUAE Rulebook structure into an empty workspace. Refused once any category exists.</summary>
-    [HttpPost("import-sample")]
-    public async Task<IActionResult> ImportSample(CancellationToken ct)
-    {
-        var (profile, error) = await RequireAuthAsync(db, jwt, ct, "super_admin");
-        if (error != null) return error;
-
-        if (await db.NdRulebookCategories.AnyAsync(ct))
-            return Conflict(new { success = false, message = "This workspace already has rulebook categories." });
-
-        var path = Path.Combine(env.ContentRootPath, "SeedData", SampleFile);
-        if (!System.IO.File.Exists(path))
-            return StatusCode(500, new { success = false, message = "Sample rulebook categories are not available." });
-
-        var pack = JsonSerializer.Deserialize<SamplePack>(
-            await System.IO.File.ReadAllTextAsync(path, ct),
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-        var added = 0;
-        void AddLevel(IEnumerable<SampleNode>? nodes, Guid? parentId, int depth)
-        {
-            if (nodes == null || depth > MaxDepth) return;
-            var order = 0;
-            foreach (var node in nodes)
-            {
-                var name = node.Name?.Trim();
-                if (string.IsNullOrEmpty(name)) continue;
-                var row = new NdRulebookCategory
-                {
-                    ParentId = parentId,
-                    Name = name,
-                    SortOrder = order++,
-                    SourceUrl = Clean(node.SourceUrl),
-                    DocumentUrl = Clean(node.DocumentUrl),
-                    CreatedBy = profile!.Id,
-                };
-                db.NdRulebookCategories.Add(row);
-                added++;
-                AddLevel(node.Children, row.Id, depth + 1);
-            }
-        }
-
-        AddLevel(pack?.Categories, null, 1);
-        await db.SaveChangesAsync(ct);
-        return Ok(new { success = true, imported = added });
-    }
 
     /// <summary>
     /// Imports the rulebooks for the country this business operates in (its jurisdiction, set in Business
@@ -240,12 +197,10 @@ public class RulebookCategoriesController(
             }
         }
 
-        var scoped = new List<SampleNode>
-        {
-            regionNode with { Children = [countryNode with { Children = children }] },
-        };
-
-        var (added, skipped) = await AddMissingAsync(scoped, null, 1, profile!.Id, ct);
+        // The regulators are filed at the top level, not under a Region › Country pair. The business already
+        // has its own region, and it only ever sees its own country's regulators, so those two levels would
+        // be the same on every row and only push the actual rulebooks further down the tree.
+        var (added, skipped) = await AddMissingAsync(children, null, 1, profile!.Id, ct);
         await db.SaveChangesAsync(ct);
         return Ok(new
         {

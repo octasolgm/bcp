@@ -1039,11 +1039,6 @@ export class NdApiService {
     return this.request<unknown>('DELETE', `/nd/rulebook-categories/${id}`);
   }
 
-  /** Imports the CBUAE Rulebook structure; only when the workspace has no categories yet. */
-  importSampleRulebookCategories() {
-    return this.request<unknown>('POST', '/nd/rulebook-categories/import-sample');
-  }
-
   /** Imports the rulebooks for this business's own country (set in Business settings); adds only the missing ones. */
   importRulebooks() {
     return this.request<unknown>('POST', '/nd/rulebook-categories/import-rulebooks');
