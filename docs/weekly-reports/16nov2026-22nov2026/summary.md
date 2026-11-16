@@ -1,0 +1,25 @@
+16 Nov 2026
+
+Tasks
+- Business workspaces list: the Region shown against each business is now editable in place, so an admin clicks "Not set" (or the current region) in the row and picks the country without opening anything
+- Business workspaces list: tidied the row height. The six action buttons had a wide minimum size, so they sat two per row and made every business three rows tall; actions are now compact and cell padding is tighter
+- Business workspaces list: Users, Credits and Settings were three separate buttons each opening their own panel. One Settings button now opens the row and those three are tabs inside it, so the actions fit one short row (Open, Settings, Deactivate)
+- Business workspaces list: renaming moved onto the title itself, a pencil beside the name with a tick to confirm, which also took a button out of the actions column
+- Business workspaces list: added a "Back to top" shortcut once the list has been scrolled, and the open panel now names the business and repeats its region, counts and status
+- Rulebook categories: Import rulebook is now disabled until the business has a region, with a tooltip and a line pointing at Business settings, instead of only failing after the click
+- Rulebook categories: added multi-select with a bulk delete. Each row has a tick box and a bar appears with the count, Select all shown, Clear and Delete selected. It confirms first, deletes parents before children, and does not report a child the cascade already took as a failure
+- Business workspaces: the create form is folded behind a "+ New workspace" button and the "Platform admin" heading and explanatory paragraph were removed, so the page opens on the list and it runs nearly the full height of the screen
+- Created release branch release/2026.11.16.01 and pushed it, the regions feature branch and the security fixes branch to GitHub
+- Deployed both the API and the web app to the dev Azure apps (bcp-api-dev, bcp-web-dev). Confirmed afterwards against the live site that the security work is in effect there: the protective headers and HSTS are returned, unauthenticated requests are refused, and an unrelated azurewebsites.net origin is no longer trusted by the cross-origin rules
+
+Bug fixes
+- Sticky column headings on the Business workspaces list did not actually stick: the table wrapper allowed overflow but had no height to scroll within, so the page scrolled and the headings left the screen. The list now scrolls inside the table, which is what the shared sticky heading rule needs. Also removed a duplicate rule that was overriding the shared heading colours
+- Import rulebook appeared to hang with the button spinning. The import was writing one row at a time so that each category had a stored parent to point at, which against the hosted database meant a separate round trip per row, over 250 of them for the UAE pack. The whole import is now written in one go. The ordering of new categories was also being read once per row, which gave every new sibling the same position
+- The build number shown in the app was a day behind late in the evening because it was stamped in UTC rather than local time. It now uses the local date, so today reads 2026.11.16
+
+Investigated, follow up pending
+- The Business workspaces table still does not look right and is the main thing to pick up next. Several passes were made from screenshots (actions on one row, column widths, centring rows, showing clause limits beside the credit chip) and it is closer, but not settled. The likely remaining cause is the admins column: a business with several admins makes its row far taller than the rest, so capping that cell, for example showing the first admin and a count, is probably the real fix rather than more width tuning
+- Everything is on the dev apps but has had very little hands-on use, so the regions picker, the settings tabs, renaming from the title and especially the bulk delete should be exercised on dev before this goes any further. Bulk delete removes everything beneath what is selected, so it is worth trying on a throwaway category first
+- Removing the header that advertises the server software is only half done: the application no longer sends its own, but Azure's front end still adds one. Finishing it is an Azure-level setting rather than a code change
+- Regulator links supplied so far are rulebook portal pages rather than single documents, so they import as reference categories; pulling in an actual rulebook document still needs a document link per rulebook. More country links are expected
+- The web app that app.comply-solutions.com serves is the same Azure app as bcp-web-dev, so what has been called a dev deploy all week has been going to the address clients use. Nothing is broken by that, but a separate dev app, or a decision to treat this one as production and gate deploys, needs to be made before the next release
