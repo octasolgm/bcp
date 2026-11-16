@@ -200,7 +200,18 @@ public class RulebookCategoriesController(
         // The regulators are filed at the top level, not under a Region › Country pair. The business already
         // has its own region, and it only ever sees its own country's regulators, so those two levels would
         // be the same on every row and only push the actual rulebooks further down the tree.
-        var (added, skipped) = await AddMissingAsync(children, null, 1, profile!.Id, ct);
+        // Everything already filed is read once here. Checking each of the 250-odd rows against the database
+        // on its own was the rest of the delay: the writes were batched, but the duplicate check and the
+        // sort order were still a round trip each, and the request timed out before the import finished.
+        var existingRows = await db.NdRulebookCategories.ToListAsync(ct);
+        var byParentName = new Dictionary<(Guid? Parent, string Name), NdRulebookCategory>();
+        foreach (var existing in existingRows)
+            byParentName.TryAdd((existing.ParentId, (existing.Name ?? "").Trim().ToLowerInvariant()), existing);
+        var nextOrder = existingRows
+            .GroupBy(r => r.ParentId)
+            .ToDictionary(g => g.Key, g => g.Max(r => r.SortOrder) + 1);
+
+        var (added, skipped) = AddMissing(children, null, 1, profile!.Id, byParentName, nextOrder);
         await db.SaveChangesAsync(ct);
         return Ok(new
         {
@@ -212,31 +223,27 @@ public class RulebookCategoriesController(
         });
     }
 
-    /// <summary>Adds categories not already present (matched by name under the same parent); recurses into children.</summary>
-    private async Task<(int Added, int Skipped)> AddMissingAsync(
-        List<SampleNode>? nodes, Guid? parentId, int depth, Guid creatorId, CancellationToken ct)
+    /// <summary>
+    /// Adds categories not already present (matched by name under the same parent); recurses into children.
+    /// Works entirely against what was read up front, so a whole pack costs one read and one save.
+    /// </summary>
+    private (int Added, int Skipped) AddMissing(
+        List<SampleNode>? nodes, Guid? parentId, int depth, Guid creatorId,
+        Dictionary<(Guid? Parent, string Name), NdRulebookCategory> byParentName,
+        Dictionary<Guid?, int> nextOrder)
     {
         if (nodes == null || depth > MaxDepth) return (0, 0);
         var added = 0;
         var skipped = 0;
 
-        // Carry the sort order through the loop, continuing after whatever is already stored under this
-        // parent. Re-reading it per row would return the same number for every new sibling, since nothing
-        // is written until the caller saves.
-        var nextOrder = (await db.NdRulebookCategories
-            .Where(c => c.ParentId == parentId)
-            .MaxAsync(c => (int?)c.SortOrder, ct) ?? -1) + 1;
-
         foreach (var node in nodes)
         {
             var name = node.Name?.Trim();
             if (string.IsNullOrEmpty(name)) continue;
-
-            var existing = await db.NdRulebookCategories
-                .FirstOrDefaultAsync(c => c.ParentId == parentId && c.Name == name, ct);
+            var key = (parentId, name.ToLowerInvariant());
 
             Guid categoryId;
-            if (existing != null)
+            if (byParentName.TryGetValue(key, out var existing))
             {
                 categoryId = existing.Id;
                 skipped++;
@@ -249,25 +256,27 @@ public class RulebookCategoriesController(
             }
             else
             {
+                nextOrder.TryGetValue(parentId, out var order);
                 var row = new NdRulebookCategory
                 {
                     ParentId = parentId,
                     Name = name,
                     SourceUrl = Clean(node.SourceUrl),
                     DocumentUrl = Clean(node.DocumentUrl),
-                    SortOrder = nextOrder++,
+                    SortOrder = order,
                     CreatedBy = creatorId,
                 };
+                nextOrder[parentId] = order + 1;
                 db.NdRulebookCategories.Add(row);
+                byParentName[key] = row;
                 // The key is generated here, not by the database, so children can point at it without the
-                // row being written first. Saving per row meant one round trip each to a remote database -
-                // over 250 of them for the UAE pack, which is why the import appeared to hang. The caller
-                // saves the whole import once instead.
+                // row being written first and the caller saves the whole import once.
                 categoryId = row.Id;
                 added++;
             }
 
-            var (childAdded, childSkipped) = await AddMissingAsync(node.Children, categoryId, depth + 1, creatorId, ct);
+            var (childAdded, childSkipped) =
+                AddMissing(node.Children, categoryId, depth + 1, creatorId, byParentName, nextOrder);
             added += childAdded;
             skipped += childSkipped;
         }
