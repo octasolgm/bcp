@@ -278,6 +278,9 @@
                   <td class="num" data-label="Analyses">{{ item.analysisCount }}</td>
                   <td class="col-credits" data-label="AI credits">
                     <span class="credit-chip" [class]="'credit-' + creditState(item)">{{ creditLabel(item) }}</span>
+                    @if (clauseLimitLabel(item); as clauses) {
+                      <div class="credit-money muted">{{ clauses }}</div>
+                    }
                     @if (creditsOf(item); as cc) {
                       @if (cc.summary.billedUsd) {
                         <div class="credit-money muted">

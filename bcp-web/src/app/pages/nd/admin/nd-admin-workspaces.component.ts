@@ -250,8 +250,20 @@ export class NdAdminWorkspacesComponent implements OnInit {
         ? `Limit reached (${limit.toFixed(0)})`
         : `${c.summary.used.toFixed(0)} / ${limit.toFixed(0)} used`;
     }
-    if (c.summary.unlimited) return 'No limit';
+    // "No spend limit", not "No limit": a business can still have a clause limit, and calling that
+    // unlimited read as wrong next to limits that were plainly set.
+    if (c.summary.unlimited) return 'No spend limit';
     return `${c.summary.balance.toFixed(2)} left`;
+  }
+
+  /** Clause limits shown beside the credit chip, so the cell never implies nothing is capped. */
+  clauseLimitLabel(item: NdWorkspaceListItem): string {
+    const total = item.workspace.clauseLimit;
+    const perRun = item.workspace.maxClausesPerAnalysis;
+    const parts: string[] = [];
+    if (total != null) parts.push(`${total} clauses`);
+    if (perRun != null) parts.push(`${perRun} per analysis`);
+    return parts.join(' · ');
   }
 
   creditState(item: NdWorkspaceListItem): 'ok' | 'low' | 'empty' | 'unlimited' {

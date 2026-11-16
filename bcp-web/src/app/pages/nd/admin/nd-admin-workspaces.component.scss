@@ -465,6 +465,12 @@
     padding: 0.45rem 0.6rem;
   }
 
+  // Every cell sits centred against its row. A business with several admins makes a tall row, and without
+  // this the shorter cells (the actions especially) sat at the top of it and read as out of line.
+  tbody td {
+    vertical-align: middle;
+  }
+
   .ws-row-open > td {
     border-bottom-color: transparent;
   }
