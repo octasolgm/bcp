@@ -30,8 +30,6 @@ const MIME = {
 function runtimeConfig() {
   const host = process.env.WEBSITE_HOSTNAME;
   return {
-    supabaseUrl: process.env.supabaseUrl || '',
-    supabaseAnonKey: process.env.supabaseAnonKey || '',
     ndApiUrl: process.env.ndApiUrl || '',
     appUrl: process.env.appUrl || (host ? `https://${host}` : ''),
   };

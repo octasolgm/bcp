@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom, timeout, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { getNdAccessToken } from './nd-supabase-client';
+import { getNdAccessToken, type NdSessionPayload } from './nd-session';
 import type {
   InternalDocumentFinalizeEmbed,
   NdJurisdictionCountry,
@@ -950,6 +950,39 @@ export class NdApiService {
 
   upsertProfile(body: { fullName?: string; role?: string; departmentId?: string }) {
     return this.request<NdUserProfile>('POST', '/nd/auth/profile', body, true, AUTH_API_TIMEOUT_MS);
+  }
+
+  /** Sign in through our own API. The browser never calls the identity provider. */
+  login(email: string, password: string) {
+    return this.request<NdSessionPayload>(
+      'POST',
+      '/nd/auth/login',
+      { email, password },
+      true,
+      AUTH_API_TIMEOUT_MS,
+      '',
+    );
+  }
+
+  logout() {
+    return this.request<unknown>('POST', '/nd/auth/logout', {}, true, AUTH_API_TIMEOUT_MS);
+  }
+
+  /** Turn the one-time token from a reset or invite email into a session. */
+  verifyOtp(tokenHash: string, type?: string) {
+    return this.request<NdSessionPayload>(
+      'POST',
+      '/nd/auth/verify-otp',
+      { tokenHash, type },
+      true,
+      AUTH_API_TIMEOUT_MS,
+      '',
+    );
+  }
+
+  /** Set a new password for the signed-in user. */
+  changePassword(password: string) {
+    return this.request<unknown>('POST', '/nd/auth/password', { password }, true, AUTH_API_TIMEOUT_MS);
   }
 
   forgotPassword(email: string, redirectTo?: string) {

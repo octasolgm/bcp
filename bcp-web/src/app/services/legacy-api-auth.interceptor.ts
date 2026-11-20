@@ -1,7 +1,7 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { from, switchMap } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { getNdSupabaseClient } from './nd/nd-supabase-client';
+import { getNdAccessToken } from './nd/nd-session';
 
 /** Pre-ND API routes (ApiService). The API now requires a signed-in user on them. */
 const LEGACY_PREFIXES = ['/documents', '/landing-ai', '/dual-verify-kafka', '/bcpweb'];
@@ -29,23 +29,15 @@ function isLegacyApiCall(url: string): boolean {
 }
 
 /**
- * Adds the signed-in user's Supabase access token to ApiService calls, which never sent one. Only our own
+ * Adds the signed-in user's access token to ApiService calls, which never sent one. Only our own
  * API origin gets the token, and requests that already carry an Authorization header are left alone.
  */
 export const legacyApiAuthInterceptor: HttpInterceptorFn = (req, next) => {
   if (req.headers.has('Authorization') || !isLegacyApiCall(req.url)) return next(req);
 
-  let session: ReturnType<ReturnType<typeof getNdSupabaseClient>['auth']['getSession']>;
-  try {
-    session = getNdSupabaseClient().auth.getSession();
-  } catch {
-    return next(req); // Supabase not configured: send as before, the API answers 401.
-  }
-
-  return from(session).pipe(
-    switchMap(({ data }) => {
-      const token = data.session?.access_token;
-      return next(token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req);
-    }),
+  return from(getNdAccessToken().catch(() => null)).pipe(
+    switchMap((token) =>
+      next(token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req),
+    ),
   );
 };

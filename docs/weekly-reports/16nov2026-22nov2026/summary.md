@@ -30,3 +30,62 @@ Investigated, follow up pending
 - After an import the page reloads the whole tree, which on a local machine talking to the hosted database is another 3 seconds on top, so the rows appear a moment after the button finishes. Having the import return the tree it just wrote would remove that second wait
 - The new country packs are committed but have not been imported end to end yet: Bahrain should be imported on a test business to confirm the tree lands as expected before this goes out
 - Oman's circulars are not in its pack. They are issued continuously and listed by year behind a filter on the CBO site, so they need a different approach from a fixed seed file if they are wanted
+
+17 Nov 2026
+
+Tasks
+- Comply-Solutions repo: brought in everything done in bcp since the clean copy was made (35 commits: the security fixes, regions per business, rulebook packs for Bahrain, Saudi Arabia, Qatar and Oman, the Business workspaces changes). Each changed file was merged so the new work lands without undoing the cleanup
+- Comply-Solutions repo: removed the regulation document detail page (not linked from anywhere) and the old "Dual verify model" setting and its endpoints; the OpenRouter privacy switches went with the OpenRouter client
+- Comply-Solutions repo: added a .gitignore so the local secrets files and build output are never committed
+- Comply-Solutions repo: the analysis pipeline-version setting and the local embedding model are kept as they are, so analysis works the same as in /nd
+- Comply-Solutions repo: API and web app both build, the API starts against the existing database and the web app opens on the sign-in page at the root address
+- Comply-Solutions repo: API tests run - 371 pass; the 19 that fail fail the same way on the current bcp code, so none come from the cleanup
+- Comply-Solutions repo: checked signed in - all 23 pages open with no errors or failed requests, Overview matches the old app
+- Comply-Solutions repo: committed the clean copy on branch clean-nd-copy (not pushed). No keys in the commit: the Supabase anon key moved out of the web environment files and scripts into the local, gitignored app-config.json and API settings, sample settings carry placeholders, and an old check script holding a key was removed
+- Comply-Solutions repo: removed the Kafka leftovers - the Kafka settings, the old non-/nd route prefixes, the dual verify health types and the browser-side Kafka session store
+- Comply-Solutions repo: full clean, keeping only what is used. Web: unreachable files, 23 unused API client methods and about 270 unused functions, types and class members. API: 16 endpoints no page calls, 11 unused classes and about 90 unused methods, plus the tests that only covered them. Settings: removed the sections for providers that are gone (Gemini, OpenAI, Anthropic, xAI, Moonshot, DeepSeek, Zhipu, Qwen, OpenRouter), NodeBridge, dual verify and the demo keys, and added an empty Azure Foundry section. Removed three unused scripts, a template request file, an unused schema and an unused package. Rewrote the API and web READMEs and the API deployment guide for this repo
+- Comply-Solutions repo: after the clean, API and web both build, the API tests give the same results as bcp, and all 26 signed-in pages open with no failed requests. Committed as a second commit on clean-nd-copy and pushed to GitHub, secret scan clean
+- Comply-Solutions repo: connected Azure AI Foundry. The endpoint and key are in the local, gitignored settings only. The resource has one deployment, FW-Kimi-K3, which is now the model list and default. A direct test call answered in under 3 seconds, and Admin settings shows Azure AI Foundry with FW-Kimi-K3 and the key configured for analysis and finalize
+
+Bug fixes
+- Two links added in the 16 Nov rulebook work still pointed at /nd/admin/business-settings in the new repo; they now use /admin/business-settings
+- Publishing the API from the new repo would have failed: the build calls a script that copies keys into the publish settings, but that script was only a local file in bcp and never came across. Added it, copying only the sections this app uses
+- The sign-in error for a slow database told the user to run a stuck-runs script whose endpoint no longer exists; that line was removed
+
+Investigated, follow up pending
+- Signed-in actions in the new repo not tried yet: opening a gap report, using New analysis, Parse and Extract, review approve and send back, exports
+- First full analysis on Azure Kimi K3 (one clause) completed but took 5 min 19 s against under a minute on OpenRouter; see 19 Nov
+- The API build still warns about constructor parameters left unused after the clean (about 20); removing them is a small follow-up
+- The API startup log still prints the first characters of the JWT secret (Program.cs); this is the same in bcp and was left identical
+- 18 API tests fail in the new repo and the same ones fail in bcp (normalisers, the section splitter, prompt versions, in-memory database mapping of the vector column, rulebook import) and need looking at
+- Full move off Supabase onto Azure: went through what Supabase is actually doing for the platform today and what has to be created on Azure to replace it. Three things are in use - the Postgres database (all tables, including the vector columns the retrieval uses), sign-in (browser sessions, password reset, invite links, the admin user list) and the private document bucket. Mapped to Azure that is Azure Database for PostgreSQL Flexible Server with the vector extension (not Azure SQL - the data layer, the vector type and the raw SQL are Postgres specific, so Azure SQL would be a rewrite and would lose vector search), a Blob Storage account with a private container, a replacement for sign-in, an email sender for reset and invite mail, and Key Vault for the secrets that sit in local settings files today. Document Intelligence, the embedding deployment and the Kafka namespace are already on Azure. Sign-in decided on 19 Nov: our own API, see below
+
+19 Nov 2026
+
+Tasks
+- Azure move: sign-in decided - the platform will handle sign-in itself (email and password, short access token plus refresh token, reset and invite links by email). All 20 users are email and password with standard bcrypt hashes and no two-step or Microsoft sign-in, so the hashes copy across and nobody resets a password. Entra External ID was the alternative but cannot import the hashes
+- Azure move: DevOps request written for PostgreSQL 17, Blob Storage, Communication Services email, Key Vault, Application Insights and App Service checks. First version came to about 500 dollars a month; cut to a lean version (Burstable B2s database, LRS storage, no App Service upgrade, 1 GB log cap) at roughly 40 to 50 dollars a month for the new resources
+- Checked the live Supabase database to size the move: PostgreSQL 17.6, extensions vector, pgcrypto and uuid-ossp, 114 MB of data, 433 MB of documents (160 files), no links from our tables to Supabase's sign-in tables
+- Key Vault kv-comply-solutions created. Local runs of Comply-Solutions now read their keys from it after az login (secret names use -- for :). Only in Development, so the App Service keeps its own settings. Added a script that copies local keys into the vault without printing them; 15 keys imported, cleared from the local settings files, and the API verified to start and reach the database from the vault alone
+- Committed abf3186 on clean-nd-copy, secret scan clean
+- Wrote a Key Vault guide (bcp-api/KEY-VAULT.md) for other developers and the App Service; the import script and web config script now also cover the non-secret values a fresh clone needs, so a new developer only needs vault access and az login. Committed 2aa681b
+- Settings files tidied for Key Vault (519e26a): the developer template no longer holds keys or a placeholder vault address, Landing AI settings removed everywhere, local secrets file retired
+- Landing AI removed from Comply-Solutions (2dd3c6e): the web client, parser and extraction code are gone, the remaining text tools moved to a neutral DocumentText folder, the unused Dual verify V3 prompts left the Admin prompts page, and the Landing AI labels users saw were reworded. 83 files, about 2,300 lines removed. All 26 signed-in pages checked with no failed requests; tests unchanged (same 18 failures as before). Branch clean-nd-copy pushed to GitHub up to 2dd3c6e
+
+- Sign-in moved behind our own API: the browser no longer calls Supabase at all. Sign in, token refresh, sign out, password change and reset/invite link checks now go to /nd/auth endpoints on our API, which talks to the identity provider server side. The Supabase JavaScript library and the project URL and anon key are out of the web app and its bundle
+Bug fixes
+- Kimi K3 on Azure ran at its default maximum reasoning effort because nothing was sent, doubling tokens and time compared with bcp. Now sends reasoning effort high and a 65,536 token budget, the same as bcp
+- AI usage rows for Azure calls showed the raw Azure host instead of a provider name; new calls are labelled azure-foundry
+- The Kimi K3 key had been typed into the committed appsettings.json; it is now empty there and lives only in Key Vault
+- The web config script never found the local API settings file: the backslash in its path had turned into a control character. Fixed
+- The developer settings template carried a placeholder Key Vault address that overrode the real one, so a new developer's vault would silently fail. Removed
+- Analysis of an internal document without Azure Document Intelligence text fell back to Landing AI and stopped with 'Landing AI is not configured' even when its text was already saved. It now uses the saved text, or asks for Azure Document Intelligence to be run
+
+Investigated, follow up pending
+- Azure Kimi K3 runs about 40 tokens a second, roughly 3 times slower than the same model through OpenRouter. Expect analyses about 3 times longer even with the reasoning fix. DevOps to confirm the deployment type (Global Standard) and raise the tokens-per-minute quota so 8 clauses can run at once
+- FW-Kimi-K3 has no price on the model price list, so its AI usage cost is an estimate at the default rate until the real Azure price is added
+- The Kimi K3 key was pasted in chat and should be regenerated in AI Foundry, then updated in Key Vault
+- Waiting on DevOps for the database, storage and email resources before the data copy, blob storage switch and sign-in work can be tested against Azure
+- The six non-secret values (endpoints, embedding deployment, Google client ID, Supabase anon key) still need importing into the vault by re-running the import script
+- 93 internal documents, 5 gap evidence files and 19 regulations have no saved text and need Azure Document Intelligence run on them before they can be analysed
+- Database tables and columns named landing_ai_* stay as they are: they hold current analysis results in the database shared with bcp. Rename during the Azure database move

@@ -2,8 +2,6 @@ import { resolveApiUrl } from './api-url';
 import { environment } from './environment';
 
 export interface RuntimeAppConfig {
-  supabaseUrl?: string;
-  supabaseAnonKey?: string;
   ndApiUrl?: string;
   appUrl?: string;
   /** "client" on client installs (deploy/client-package); hides pages that are not part of the client product. */
@@ -13,12 +11,8 @@ export interface RuntimeAppConfig {
 /** Overlay build-time environment with values from /assets/app-config.json (or Azure App Settings via server.js). */
 export function applyRuntimeConfig(cfg: RuntimeAppConfig | null | undefined): void {
   if (!cfg) return;
-  const url = cfg.supabaseUrl?.trim();
-  const key = cfg.supabaseAnonKey?.trim();
   const ndApi = cfg.ndApiUrl?.trim();
   const app = cfg.appUrl?.trim();
-  if (url) environment.supabaseUrl = url;
-  if (key) environment.supabaseAnonKey = key;
   // app-config.json targets Azure; ng serve on localhost must keep using the local API.
   if (ndApi) {
     const isLocalHost =
@@ -28,8 +22,4 @@ export function applyRuntimeConfig(cfg: RuntimeAppConfig | null | undefined): vo
   }
   if (app) environment.appUrl = app;
   if (cfg.edition?.trim().toLowerCase() === 'client') environment.clientEdition = true;
-}
-
-export function supabaseConfigured(): boolean {
-  return Boolean(environment.supabaseUrl?.trim() && environment.supabaseAnonKey?.trim());
 }

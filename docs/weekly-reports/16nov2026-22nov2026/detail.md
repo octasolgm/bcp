@@ -44,3 +44,27 @@ Each regulator's published rulebook has now been read in full and built into the
 - Oman: the Central Bank of Oman publishes individual laws, frameworks and guidance rather than a single rulebook, so each one is listed with a direct link to its document, which means those documents can also be pulled in automatically
 
 Deliberately left out are quarterly updates, ad hoc communications, archived material, forms, consultation papers and circulars. These are published continuously and are a running history rather than part of the rulebook itself.
+
+## A clean edition of the platform
+
+The cleaned up edition of the platform has been brought up to date with everything delivered this week and last: the security improvements, regions per business, the regional rulebook libraries and the business workspace changes. It keeps the same features and works the same way, without the older test pages, demo accounts and unused engines, and it now opens directly at the main address. It uses the existing data, so nothing needs to be moved. The next step is a full walk through of the signed in pages, and connecting the Azure hosted AI model that analyses will run on.
+
+The clean edition was then taken a step further, so it now holds only what the platform actually uses. Every screen, server function, setting and script was checked against what the pages call, and anything nothing calls was taken out, along with the settings for AI providers that are no longer offered. The setup and deployment guides were rewritten to match. Every page was opened again afterwards and works as before. While doing this we also found and fixed a step that would have stopped the server from being published from the new edition, and removed a sign-in message that pointed to a tool which no longer exists.
+
+The clean edition is now connected to the Azure hosted AI model, Kimi K3, which replaces every other AI provider. It answers test requests in a few seconds, and the admin settings page shows it as the model for analysis. When more models are deployed on Azure, adding their names makes them selectable there.
+
+The first full analysis on this model was slower than expected. Part of that came from the model thinking at its most thorough setting, which doubled the work for no gain; it now uses the same high setting the platform has always used, with no loss of accuracy. The rest comes from the speed of the Azure deployment itself, which is being reviewed with our infrastructure team. AI usage for these calls is now shown under the Azure AI Foundry name.
+
+The keys the platform uses to reach its database and AI services now live in Azure Key Vault, Azure's secure store for secrets, instead of in settings files on developers' machines. This is the first piece of the move to Azure and changes nothing for users.
+
+The clean edition no longer contains any connection to Landing AI, the older document reading service. Documents are now read only by Azure Document Intelligence, and anything read in the past is still used, so earlier work is not lost. Where a document has never been read, the platform now says so plainly and points to the Azure Document Intelligence step, instead of showing a technical error. Labels that still mentioned the old service have been reworded.
+
+## Being worked on
+
+A full move of the platform onto Azure. Three things are still hosted outside Azure today: the database, sign-in, and the store that holds uploaded documents. The work to come is a managed Azure database of the same kind we use now, so the data and the semantic search behind analysis move across unchanged, an Azure storage container for documents, a replacement for sign-in, and an Azure mail sender for password reset and invitation emails. Secrets that currently live in files on the server move into Azure's own secret store. The document reading service and the model that produces the search index are already running on Azure. Sign-in will be handled by the platform itself, with the same email and password every user has today, so nobody needs to reset a password, and it also suits a bank that hosts the platform on its own servers. The Azure resources have been requested at a size that fits current use, keeping the monthly cost low, with room to scale up later. Nothing changes on screen, and no data is lost in the move.
+
+## Sign-in now runs through the platform's own service
+
+Until now the sign-in page talked straight to the hosted identity service, which meant the browser's network activity showed a third party address and the project's public key sat inside the web app. That is no longer the case. Signing in, renewing a session, signing out, changing a password and opening a password reset or invitation link all go to the platform's own service, which then speaks to the identity provider privately on the server. 
+
+For anyone using the product nothing changes: the same email and password, the same reset emails, the same session. What changes is what the product shows about itself. Everything on screen is served by the platform, the identity provider's address and keys have been removed from the web app entirely, and anyone inspecting the application only sees calls to our own service.

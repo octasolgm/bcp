@@ -24,6 +24,296 @@ public class AuthController(
 {
     public record ProfileUpsertRequest(string? FullName, string? Role, Guid? DepartmentId);
     public record ForgotPasswordRequest(string Email, string? RedirectTo);
+    public record LoginRequest(string Email, string Password);
+    public record RefreshRequest(string RefreshToken);
+    public record ChangePasswordRequest(string Password);
+    public record VerifyOtpRequest(string TokenHash, string? Type);
+
+    /// <summary>
+    /// Sign in. The browser posts the email and password here and the API talks to the identity
+    /// provider; the browser never calls it directly and never holds the project keys.
+    /// </summary>
+    [HttpPost("login")]
+    [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Reguliq.Api.Infrastructure.RateLimiterSetup.AuthPolicy)]
+    public async Task<IActionResult> Login([FromBody] LoginRequest body, CancellationToken ct)
+    {
+        var email = body?.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(body?.Password))
+            return BadRequest(new { success = false, message = "Email and password are required." });
+
+        var opts = jwtOptions.Value;
+        if (!AuthApiConfigured(opts))
+            return StatusCode(503, new { success = false, message = "Sign-in is not configured on the server." });
+
+        return await TokenGrantAsync(
+            opts,
+            "password",
+            new Dictionary<string, object?> { ["email"] = email, ["password"] = body.Password },
+            "Invalid email or password.",
+            ct);
+    }
+
+    /// <summary>Exchange a refresh token for a fresh access token.</summary>
+    [HttpPost("refresh")]
+    [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Reguliq.Api.Infrastructure.RateLimiterSetup.AuthPolicy)]
+    public async Task<IActionResult> Refresh([FromBody] RefreshRequest body, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(body?.RefreshToken))
+            return BadRequest(new { success = false, message = "Refresh token is required." });
+
+        var opts = jwtOptions.Value;
+        if (!AuthApiConfigured(opts))
+            return StatusCode(503, new { success = false, message = "Sign-in is not configured on the server." });
+
+        return await TokenGrantAsync(
+            opts,
+            "refresh_token",
+            new Dictionary<string, object?> { ["refresh_token"] = body.RefreshToken },
+            "Your session has expired. Sign in again.",
+            ct);
+    }
+
+    /// <summary>Sign out: revokes the session upstream. Always answers OK so the browser can clear its copy.</summary>
+    [HttpPost("logout")]
+    [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+    public async Task<IActionResult> Logout(CancellationToken ct)
+    {
+        var opts = jwtOptions.Value;
+        var bearer = ReadBearerToken();
+        if (AuthApiConfigured(opts) && !string.IsNullOrWhiteSpace(bearer))
+        {
+            try
+            {
+                var client = CreateUserClient(opts, bearer);
+                var content = new StringContent("{}", Encoding.UTF8, "application/json");
+                await client.PostAsync($"{opts.Url.TrimEnd('/')}/auth/v1/logout", content, ct);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                // The browser clears its session either way.
+            }
+        }
+
+        return Ok(new { success = true });
+    }
+
+    /// <summary>Set a new password for the signed-in user (profile page, reset link, invite).</summary>
+    [HttpPost("password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest body, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(body?.Password))
+            return BadRequest(new { success = false, message = "Password is required." });
+
+        var bearer = ReadBearerToken();
+        var user = await jwt.ValidateTokenAsync(Request.Headers.Authorization.FirstOrDefault(), ct);
+        if (user == null || string.IsNullOrWhiteSpace(bearer))
+            return Unauthorized(new { success = false, message = "You are not signed in." });
+
+        var opts = jwtOptions.Value;
+        if (!AuthApiConfigured(opts))
+            return StatusCode(503, new { success = false, message = "Password changes are not configured on the server." });
+
+        var client = CreateUserClient(opts, bearer);
+        var payload = JsonSerializer.Serialize(new Dictionary<string, object?> { ["password"] = body.Password });
+        var res = await client.PutAsync(
+            $"{opts.Url.TrimEnd('/')}/auth/v1/user",
+            new StringContent(payload, Encoding.UTF8, "application/json"),
+            ct);
+
+        if (res.IsSuccessStatusCode)
+            return Ok(new { success = true });
+
+        var responseBody = await res.Content.ReadAsStringAsync(ct);
+        return StatusCode(
+            (int)res.StatusCode == 422 ? 400 : (int)res.StatusCode,
+            new { success = false, message = OwnWording(ParseSupabaseError(responseBody), "Could not update the password.") });
+    }
+
+    /// <summary>
+    /// Turn the one-time token from a reset or invite email into a session. The link lands on our own
+    /// page, which posts the token here instead of to the identity provider.
+    /// </summary>
+    [HttpPost("verify-otp")]
+    [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Reguliq.Api.Infrastructure.RateLimiterSetup.AuthPolicy)]
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest body, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(body?.TokenHash))
+            return BadRequest(new { success = false, message = "This link is invalid or has expired. Request a new one." });
+
+        var opts = jwtOptions.Value;
+        if (!AuthApiConfigured(opts))
+            return StatusCode(503, new { success = false, message = "Sign-in is not configured on the server." });
+
+        var type = string.IsNullOrWhiteSpace(body.Type) ? "recovery" : body.Type.Trim();
+        var client = CreateAnonClient(opts);
+        var payload = JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["type"] = type,
+            ["token_hash"] = body.TokenHash,
+        });
+
+        var res = await client.PostAsync(
+            $"{opts.Url.TrimEnd('/')}/auth/v1/verify",
+            new StringContent(payload, Encoding.UTF8, "application/json"),
+            ct);
+        var responseBody = await res.Content.ReadAsStringAsync(ct);
+
+        if (!res.IsSuccessStatusCode)
+        {
+            return StatusCode(400, new
+            {
+                success = false,
+                message = OwnWording(
+                    ParseSupabaseError(responseBody),
+                    "This link is invalid or has expired. Request a new one."),
+            });
+        }
+
+        var session = ReadSession(responseBody);
+        if (session == null)
+            return StatusCode(400, new { success = false, message = "This link is invalid or has expired. Request a new one." });
+
+        return Ok(new { success = true, data = session });
+    }
+
+    private static bool AuthApiConfigured(SupabaseJwtOptions opts) =>
+        !string.IsNullOrWhiteSpace(opts.Url) && !string.IsNullOrWhiteSpace(opts.ApiKey);
+
+    private string? ReadBearerToken()
+    {
+        var header = Request.Headers.Authorization.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(header)) return null;
+        return header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? header["Bearer ".Length..].Trim()
+            : header.Trim();
+    }
+
+    private async Task<IActionResult> TokenGrantAsync(
+        SupabaseJwtOptions opts,
+        string grantType,
+        Dictionary<string, object?> payload,
+        string fallbackError,
+        CancellationToken ct)
+    {
+        HttpResponseMessage res;
+        string responseBody;
+        try
+        {
+            var client = CreateAnonClient(opts);
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            res = await client.PostAsync($"{opts.Url.TrimEnd('/')}/auth/v1/token?grant_type={grantType}", content, ct);
+            responseBody = await res.Content.ReadAsStringAsync(ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or SocketException)
+        {
+            return StatusCode(503, new
+            {
+                success = false,
+                message = "The sign-in service is temporarily unreachable. Wait a moment and try again.",
+            });
+        }
+
+        if (!res.IsSuccessStatusCode)
+        {
+            var message = OwnWording(ParseSupabaseError(responseBody), fallbackError);
+            var status = (int)res.StatusCode;
+            if (status == 429)
+                return StatusCode(429, new { success = false, message = "Too many attempts. Wait a moment and try again." });
+            return StatusCode(status is 400 or 401 or 403 ? 401 : status, new { success = false, message });
+        }
+
+        var session = ReadSession(responseBody);
+        if (session == null)
+            return StatusCode(502, new { success = false, message = "Sign-in succeeded but no session was returned. Try again." });
+
+        return Ok(new { success = true, data = session });
+    }
+
+    /// <summary>
+    /// Keep the identity provider's own phrasing off our sign-in page. Anything we have a wording for is
+    /// replaced; anything else falls back to our generic message rather than leaking a provider string.
+    /// </summary>
+    private static string OwnWording(string? providerMessage, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(providerMessage)) return fallback;
+
+        var m = providerMessage.Trim();
+        // Password rules are worth showing as-is: they carry no provider branding and tell the user what to fix.
+        if (m.Contains("password", StringComparison.OrdinalIgnoreCase)
+            && (m.Contains("should be", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("at least", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("characters", StringComparison.OrdinalIgnoreCase)))
+            return m;
+        if (m.Contains("invalid login credentials", StringComparison.OrdinalIgnoreCase))
+            return "Invalid email or password.";
+        if (m.Contains("email not confirmed", StringComparison.OrdinalIgnoreCase))
+            return "This account has not been activated yet. Use the link in your invitation email.";
+        if (m.Contains("user is banned", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("user not found", StringComparison.OrdinalIgnoreCase))
+            return "Invalid email or password.";
+        if (m.Contains("refresh token", StringComparison.OrdinalIgnoreCase))
+            return "Your session has expired. Sign in again.";
+        if (m.Contains("rate limit", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("too many", StringComparison.OrdinalIgnoreCase))
+            return "Too many attempts. Wait a moment and try again.";
+
+        return fallback;
+    }
+
+    private static object? ReadSession(string responseBody)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            var root = doc.RootElement;
+            var accessToken = root.TryGetProperty("access_token", out var atEl) ? atEl.GetString() : null;
+            if (string.IsNullOrWhiteSpace(accessToken)) return null;
+
+            var refreshToken = root.TryGetProperty("refresh_token", out var rtEl) ? rtEl.GetString() : null;
+            long? expiresAt = root.TryGetProperty("expires_at", out var eaEl) && eaEl.TryGetInt64(out var ea) ? ea : null;
+            int? expiresIn = root.TryGetProperty("expires_in", out var eiEl) && eiEl.TryGetInt32(out var ei) ? ei : null;
+
+            string? userId = null;
+            string? email = null;
+            if (root.TryGetProperty("user", out var userEl) && userEl.ValueKind == JsonValueKind.Object)
+            {
+                userId = userEl.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                email = userEl.TryGetProperty("email", out var emailEl) ? emailEl.GetString() : null;
+            }
+
+            return new
+            {
+                accessToken,
+                refreshToken,
+                expiresAt,
+                expiresIn,
+                userId,
+                email,
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private HttpClient CreateAnonClient(SupabaseJwtOptions opts)
+    {
+        var client = httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("apikey", opts.ApiKey);
+        return client;
+    }
+
+    private HttpClient CreateUserClient(SupabaseJwtOptions opts, string userAccessToken)
+    {
+        var client = httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("apikey", opts.ApiKey);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", userAccessToken);
+        return client;
+    }
 
     [HttpGet("me")]
     public async Task<IActionResult> Me(CancellationToken ct)

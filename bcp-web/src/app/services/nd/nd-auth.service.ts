@@ -1,8 +1,14 @@
 import { Injectable, inject, signal } from '@angular/core';
-import type { Session } from '@supabase/supabase-js';
 import { environment } from '../../../environments/environment';
 import { NdApiService, type NdUserProfile } from './nd-api.service';
-import { getNdSupabaseClient } from './nd-supabase-client';
+import {
+  clearNdSession,
+  getNdAccessToken,
+  getNdSession,
+  refreshNdSession,
+  setNdSession,
+  type NdSession,
+} from './nd-session';
 
 const PROFILE_CACHE_KEY = 'reguliq-nd-profile-cache';
 
@@ -25,14 +31,12 @@ export class NdAuthService {
 
   readonly profile = this.profileSignal.asReadonly();
 
-  async getSession(): Promise<Session | null> {
-    const { data } = await getNdSupabaseClient().auth.getSession();
-    return data.session;
+  async getSession(): Promise<NdSession | null> {
+    return getNdSession();
   }
 
   async getAccessToken(): Promise<string | null> {
-    const session = await this.getSession();
-    return session?.access_token ?? null;
+    return getNdAccessToken();
   }
 
   getRole(): NdUserProfile['role'] | null {
@@ -115,9 +119,8 @@ export class NdAuthService {
     const profile = await this.loadProfile();
     if (profile) return profile;
 
-    const supabase = getNdSupabaseClient();
-    const { data, error } = await supabase.auth.refreshSession();
-    if (!error && data.session) {
+    const refreshed = await refreshNdSession();
+    if (refreshed) {
       const retried = await this.loadProfile();
       if (retried) return retried;
     }
@@ -155,8 +158,7 @@ export class NdAuthService {
     if (res.success && res.data) {
       let profile = res.data;
       if (!profile.email) {
-        const { data } = await getNdSupabaseClient().auth.getUser();
-        const sessionEmail = data.user?.email?.trim();
+        const sessionEmail = getNdSession()?.email?.trim();
         if (sessionEmail) {
           profile = { ...profile, email: sessionEmail };
         }
@@ -172,13 +174,13 @@ export class NdAuthService {
   }
 
   async signIn(email: string, password: string): Promise<string | null> {
-    const { data, error } = await getNdSupabaseClient().auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    if (error) return error.message;
+    const res = await this.api.login(email.trim(), password);
+    if (!res.success || !res.data) {
+      return res.message ?? 'Invalid email or password.';
+    }
 
-    const accessToken = data.session?.access_token;
+    const session = setNdSession(res.data);
+    const accessToken = session?.accessToken;
     if (!accessToken) {
       return 'Sign-in succeeded but no session token was returned. Try again.';
     }
@@ -207,7 +209,12 @@ export class NdAuthService {
   }
 
   async signOut(): Promise<void> {
-    await getNdSupabaseClient().auth.signOut();
+    try {
+      if (getNdSession()) await this.api.logout();
+    } catch {
+      // the local session is cleared either way
+    }
+    clearNdSession();
     this.profileSignal.set(null);
     this.writeCachedProfile(null);
   }
@@ -234,8 +241,6 @@ export class NdAuthService {
 
   /** Parse recovery / invite tokens from the email link and establish a session. */
   async establishRecoverySession(): Promise<string | null> {
-    const supabase = getNdSupabaseClient();
-
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
       const hashParams = new URLSearchParams(
@@ -244,11 +249,12 @@ export class NdAuthService {
 
       const tokenHash = url.searchParams.get('token_hash') ?? hashParams.get('token_hash');
       if (tokenHash) {
-        const otpType = (url.searchParams.get('type') ??
-          hashParams.get('type') ??
-          'recovery') as 'recovery' | 'invite' | 'signup' | 'magiclink' | 'email';
-        const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: otpType });
-        if (error) return error.message;
+        const otpType = url.searchParams.get('type') ?? hashParams.get('type') ?? 'recovery';
+        const res = await this.api.verifyOtp(tokenHash, otpType);
+        if (!res.success || !res.data) {
+          return res.message ?? 'This link is invalid or has expired. Request a new reset email.';
+        }
+        setNdSession(res.data);
         this.cleanAuthUrl(url);
         return null;
       }
@@ -256,41 +262,25 @@ export class NdAuthService {
       const accessToken = hashParams.get('access_token');
       const refreshToken = hashParams.get('refresh_token');
       if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
+        const expiresAt = Number(hashParams.get('expires_at'));
+        setNdSession({
+          accessToken,
+          refreshToken,
+          expiresAt: Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : null,
         });
-        if (error) return error.message;
         this.cleanAuthUrl(url);
         return null;
       }
 
-      const code = url.searchParams.get('code');
-      if (code) {
-        if (!this.hasPkceVerifier()) {
-          return 'This reset link must be opened in the same browser where you requested it, or ask a super admin to set a new password from User Management.';
-        }
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) return error.message;
-        this.cleanAuthUrl(url);
+      if (url.searchParams.get('code')) {
+        return 'This reset link is in an old format. Request a new reset email, or ask a super admin to set a new password from User Management.';
       }
     }
 
-    const { data, error } = await supabase.auth.getSession();
-    if (error) return error.message;
-    if (!data.session) {
+    if (!getNdSession()) {
       return 'This link is invalid or has expired. Request a new reset email.';
     }
     return null;
-  }
-
-  private hasPkceVerifier(): boolean {
-    if (typeof localStorage === 'undefined') return false;
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.includes('code-verifier')) return true;
-    }
-    return false;
   }
 
   private cleanAuthUrl(url: URL): void {
@@ -305,8 +295,8 @@ export class NdAuthService {
     if (!(await this.getSession())) {
       return 'You are not signed in.';
     }
-    const { error } = await getNdSupabaseClient().auth.updateUser({ password });
-    if (error) return error.message;
+    const res = await this.api.changePassword(password);
+    if (!res.success) return res.message ?? 'Could not update the password.';
     return null;
   }
 
@@ -316,8 +306,8 @@ export class NdAuthService {
       if (sessionErr) return sessionErr;
     }
 
-    const { error } = await getNdSupabaseClient().auth.updateUser({ password });
-    if (error) return error.message;
+    const res = await this.api.changePassword(password);
+    if (!res.success) return res.message ?? 'Could not update the password.';
 
     await this.signOut();
     return null;
@@ -329,8 +319,8 @@ export class NdAuthService {
       if (sessionErr) return sessionErr;
     }
 
-    const { error } = await getNdSupabaseClient().auth.updateUser({ password });
-    if (error) return error.message;
+    const res = await this.api.changePassword(password);
+    if (!res.success) return res.message ?? 'Could not update the password.';
     await this.api.upsertProfile({ fullName: fullName.trim() });
     await this.refreshProfile();
     return null;
