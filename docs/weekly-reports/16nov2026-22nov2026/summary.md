@@ -89,3 +89,12 @@ Investigated, follow up pending
 - The six non-secret values (endpoints, embedding deployment, Google client ID, Supabase anon key) still need importing into the vault by re-running the import script
 - 93 internal documents, 5 gap evidence files and 19 regulations have no saved text and need Azure Document Intelligence run on them before they can be analysed
 - Database tables and columns named landing_ai_* stay as they are: they hold current analysis results in the database shared with bcp. Rename during the Azure database move
+
+20 Nov 2026
+
+Tasks
+- Released the sign-in change on branch release/2026.11.20.01 and deployed it. Build 2026.11.20.03 is live on the API and the web app. Checked after deploy: the served config names only our own API, the web bundle has no identity provider code left, and a sign-in attempt on the live site is answered by our API in our own wording
+- The deploy scripts now send the publishable sign-in key to the API app settings and no longer write the provider URL and key into the web app's config file
+
+Investigated, follow up pending
+- A real successful sign-in has not been tested end to end by us, only failed attempts. Worth one sign-in, one session left open past the access token's hour, and one password reset on the live site

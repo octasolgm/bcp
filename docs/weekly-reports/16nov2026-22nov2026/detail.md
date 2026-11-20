@@ -68,3 +68,9 @@ A full move of the platform onto Azure. Three things are still hosted outside Az
 Until now the sign-in page talked straight to the hosted identity service, which meant the browser's network activity showed a third party address and the project's public key sat inside the web app. That is no longer the case. Signing in, renewing a session, signing out, changing a password and opening a password reset or invitation link all go to the platform's own service, which then speaks to the identity provider privately on the server. 
 
 For anyone using the product nothing changes: the same email and password, the same reset emails, the same session. What changes is what the product shows about itself. Everything on screen is served by the platform, the identity provider's address and keys have been removed from the web app entirely, and anyone inspecting the application only sees calls to our own service.
+
+This went live on 20 November as build 2026.11.20.03. After the release we checked the live site: the settings the browser downloads name only our own service, no identity provider code is left in the application, and a sign-in attempt is answered by our own service in our own wording.
+
+## Being worked on
+
+We have confirmed the failure paths on the live site but not yet walked through a full successful sign-in, a session left open long enough to renew itself, and a password reset. Those three checks are next.
