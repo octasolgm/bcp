@@ -28,6 +28,7 @@ function Get-BcpApiAzureSettings {
         Supabase__Url                       = $sb.Url
         Supabase__JwtSecret                 = $sb.JwtSecret
         Supabase__ServiceRoleKey            = $sb.ServiceRoleKey
+        Supabase__AnonKey                   = $sb.AnonKey
         Supabase__DbHost                    = $sb.DbHost
         Supabase__DbPort                    = "$($sb.DbPort)"
         Supabase__DbUser                    = $sb.DbUser
