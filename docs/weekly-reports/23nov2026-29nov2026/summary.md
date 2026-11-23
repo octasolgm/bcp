@@ -16,14 +16,15 @@ Tasks
   - Fonts are served from our own site, so the browser no longer contacts Google
   - Checked live: protected endpoints refuse requests without a token, a wrong sign-in is answered in our own wording, the root shows only a status, the font comes from our own site
 - Security register updated: 42 done, 8 partial, 17 open; 11 of 13 penetration test findings fixed
+- Comply-Solutions deploy now reads keys from Key Vault only: removed the secrets file the deploy used to ship and the script that built it; deploy-api and deploy-web target staging by default and refuse the live bcp apps; new set-keyvault-settings script turns every vault secret into a Key Vault reference on an App Service (names only, no values). Redeployed staging with it: all 20 references resolved, startup ready, sign-in answered by our API
+- Security register rebuilt to show what is done and what is not: 43 done, 8 partial, 17 open. Key Vault and managed identity marked done on staging, not yet on live; new control for deploy packages carrying no keys
 
 Bug fixes
 - Staging sign-in failed with 'An unexpected error occurred'. The new logs showed why: the staging API cannot read Key Vault yet, so its settings are the unresolved reference text and the sign-in service address is empty. Needs the Key Vault Secrets User role, no code change. Role granted; after a restart all 20 Key Vault references resolved, the staging API connected to the database and sign-in answers correctly
 
 Investigated, follow up pending
-- The staging API cannot read the Key Vault yet (AccessToKeyVaultDenied): it needs the Key Vault Secrets User role on kv-comply-solutions, and our account can manage secrets but not grant roles. Someone with Owner or User Access Administrator on the vault has to add it, then restart bcp-api-staging
 - Staging uses the same Supabase database as live, so anything done on staging happens in real data until the Azure PostgreSQL server exists
 - Google Drive import on staging needs the staging API address added to the Google app's redirect list before it can connect
 - Security gaps for bank-grade assurance: multi-factor sign-in, monitoring and an incident plan, written policies, an accredited third-party penetration test, then SOC 2 and ISO 27001
-- Moving the live API's keys to Key Vault is bigger than first thought: the bcp deploy ships a secrets file that overrides App Service settings, and the live API needs keys not yet in the vault (OpenRouter, Landing AI, Gemini). Needs a deploy script change as its own step
+- The live API keeps its keys in App Service settings (bcp is live, small changes only); it moves to Key Vault when Comply-Solutions replaces it. Staging already reads everything from the vault
 - The bcp test project does not build (a test still calls the renamed ImportSample); fixed in Comply-Solutions only

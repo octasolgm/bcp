@@ -10,6 +10,8 @@ All of its passwords and keys are read from Azure Key Vault, Azure's secure stor
 
 A new Security and Trust Overview explains to a bank's IT and security team how the platform protects their information: encryption, sign-in and access control, separation between banks, testing results, and how the AI is governed and reviewed by people. It is ready to share with banks we are in conversation with. Alongside it, the team now keeps a full internal register of every security control and its status, which guides the next improvements.
 
+Releases to staging now carry no passwords or keys at all. The server reads each one from Key Vault when it starts, so a key is changed in one place and never travels with the software. The release tools also refuse to send the new edition to the live site by mistake.
+
 ## Being worked on
 
-The staging server is waiting for one permission on the Key Vault before it can read its keys. Once that is granted, staging will be checked end to end: sign-in, documents and an analysis.
+Staging is checked end to end next: sign-in, documents and an analysis. The live site keeps its current key setup until the new edition replaces it.
