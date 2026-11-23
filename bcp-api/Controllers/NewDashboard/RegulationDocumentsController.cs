@@ -1424,7 +1424,7 @@ public class RegulationDocumentsController(
         }
         catch (Exception ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -1462,7 +1462,7 @@ public class RegulationDocumentsController(
         }
         catch (Exception ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -1600,15 +1600,15 @@ public class RegulationDocumentsController(
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
         {
-            return NotFound(new { success = false, message = ex.Message });
+            return NotFound(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (Exception ex)
         {
-            return BadRequest(new { success = false, message = FormatSaveError(ex) });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex, "Could not save the change.") });
         }
     }
 
@@ -1727,11 +1727,11 @@ public class RegulationDocumentsController(
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
         {
-            return NotFound(new { success = false, message = ex.Message });
+            return NotFound(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (Exception ex)
         {
-            return BadRequest(new { success = false, message = FormatSaveError(ex) });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex, "Could not save the change.") });
         }
     }
 
@@ -1749,7 +1749,7 @@ public class RegulationDocumentsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (Exception)
         {
@@ -2260,7 +2260,7 @@ public class RegulationDocumentsController(
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { success = false, message = ex.Message });
+                return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
             }
         }
 
@@ -2280,8 +2280,7 @@ public class RegulationDocumentsController(
         }
         catch (DbUpdateException ex)
         {
-            var inner = ex.InnerException?.Message ?? ex.Message;
-            return StatusCode(500, new { success = false, message = $"Could not save point: {inner}" });
+            return StatusCode(500, new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex, "Could not save point.") });
         }
 
         dashboardCache.Invalidate();
@@ -3243,8 +3242,4 @@ public class RegulationDocumentsController(
         return "mandatory";
     }
 
-    private static string FormatSaveError(Exception ex) =>
-        ex is DbUpdateException dbEx
-            ? dbEx.InnerException?.Message ?? dbEx.Message
-            : ex.GetBaseException().Message;
 }

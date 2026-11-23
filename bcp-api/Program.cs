@@ -271,6 +271,9 @@ builder.Services.Configure<Reguliq.Api.Infrastructure.NewDashboard.SupabaseJwtOp
     o.Url = BcpConfiguration.GetString(builder.Configuration, "Supabase:Url", "SUPABASE_URL") ?? "";
     o.ServiceRoleKey = BcpConfiguration.GetString(
         builder.Configuration, "Supabase:ServiceRoleKey", "SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    // Publishable key for the API's own sign-in calls (never sent to the browser). Without it the sign-in
+    // calls fell back to the admin service-role key.
+    o.AnonKey = BcpConfiguration.GetString(builder.Configuration, "Supabase:AnonKey", "SUPABASE_ANON_KEY") ?? "";
     // Off by default. Only the string "true" turns on the unsigned-JWT dev path, and even then only in
     // local Development (see SupabaseJwtValidator). Never set this in a deployed environment.
     o.AllowUnsignedJwtInDevelopment = string.Equals(
@@ -336,7 +339,7 @@ if (string.IsNullOrWhiteSpace(ndJwtSecret))
 else
 {
     Console.WriteLine(
-        $"ND JWT validator: secret prefix={ndJwtSecret[..Math.Min(5, ndJwtSecret.Length)]}..., " +
+        "ND JWT validator: secret configured, " +
         $"issuer={(string.IsNullOrWhiteSpace(ndSupabaseUrl) ? "(set Supabase:Url)" : $"{ndSupabaseUrl.TrimEnd('/')}/auth/v1")}");
 }
 
@@ -384,15 +387,9 @@ app.UseMiddleware<Reguliq.Api.Infrastructure.NewDashboard.WorkspaceResolutionMid
 app.UseMiddleware<Reguliq.Api.Infrastructure.NewDashboard.NdRequireAuthenticatedMiddleware>();
 app.MapControllers();
 
-app.MapGet("/", () => Results.Ok(new
-{
-    name = "BCP API",
-    version = deployVersion.Api,
-    deploy = deployVersion.Label,
-    commit = deployVersion.Commit,
-    persistence = dbConfig.UsePostgres ? "supabase" : "sqlite",
-    bootstrap = bootstrapState.Status,
-}));
+// Minimal public root response: no product name, version or storage details for an attacker to map.
+// The build number for the app itself is at /health/version.
+app.MapGet("/", () => Results.Ok(new { status = "ok" }));
 
 app.MapGet("/health/version", () => Results.Ok(deployVersion.ToPayload(
     dbConfig.UsePostgres ? "supabase" : "sqlite",

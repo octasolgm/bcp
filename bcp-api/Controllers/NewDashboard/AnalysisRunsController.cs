@@ -314,7 +314,7 @@ public class AnalysisRunsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (Exception ex)
         {
@@ -349,7 +349,7 @@ public class AnalysisRunsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (Exception ex)
         {
@@ -388,7 +388,7 @@ public class AnalysisRunsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (Exception ex)
         {
@@ -423,7 +423,7 @@ public class AnalysisRunsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (Exception ex)
         {

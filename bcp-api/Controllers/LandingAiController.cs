@@ -81,7 +81,7 @@ public class LandingAiController(
         }
         catch (Exception ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -138,7 +138,7 @@ public class LandingAiController(
         }
         catch (Exception ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -181,7 +181,7 @@ public class LandingAiController(
         }
         catch (Exception ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 

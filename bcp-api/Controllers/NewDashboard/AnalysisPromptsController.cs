@@ -195,11 +195,11 @@ public class AnalysisPromptsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (HttpRequestException ex)
         {
-            return BadRequest(new { success = false, message = $"AI provider request failed: {ex.Message}" });
+            return BadRequest(new { success = false, message = $"AI provider request failed: {Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex)}" });
         }
     }
 
@@ -238,7 +238,7 @@ public class AnalysisPromptsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -280,7 +280,7 @@ public class AnalysisPromptsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 

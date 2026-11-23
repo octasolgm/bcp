@@ -115,7 +115,7 @@ public class LocalDocumentsController(
         }
         catch (Exception ex)
         {
-            await MarkParseFailedAsync(row, $"Could not access stored file: {ex.Message}", ct);
+            await MarkParseFailedAsync(row, $"Could not access stored file: {Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex)}", ct);
             return StatusCode(502, new { success = false, message = row.Error });
         }
 
@@ -143,12 +143,12 @@ public class LocalDocumentsController(
         }
         catch (NotSupportedException ex)
         {
-            await MarkParseFailedAsync(row, ex.Message, ct);
-            return BadRequest(new { success = false, message = ex.Message });
+            await MarkParseFailedAsync(row, Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex), ct);
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (Exception ex)
         {
-            await MarkParseFailedAsync(row, $"Local parse failed: {ex.Message}", ct);
+            await MarkParseFailedAsync(row, $"Local parse failed: {Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex)}", ct);
             return StatusCode(500, new { success = false, message = row.Error });
         }
         finally
@@ -275,7 +275,7 @@ public class LocalDocumentsController(
         catch (Exception ex)
         {
             row.ExtractStatus = "failed";
-            row.ExtractError = $"Local extract failed: {ex.Message}";
+            row.ExtractError = $"Local extract failed: {Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex)}";
             row.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
             return StatusCode(500, new { success = false, message = row.ExtractError });
@@ -412,7 +412,7 @@ public class LocalDocumentsController(
         catch (Exception ex)
         {
             row.SemanticExtractStatus = "failed";
-            row.SemanticExtractError = $"Semantic extract failed: {ex.Message}";
+            row.SemanticExtractError = $"Semantic extract failed: {Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex)}";
             row.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(CancellationToken.None);
             return StatusCode(500, new { success = false, message = row.SemanticExtractError });

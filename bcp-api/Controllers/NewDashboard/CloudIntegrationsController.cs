@@ -196,7 +196,7 @@ public class CloudIntegrationsController(
         }
         catch (Exception ex) when (ex is CloudProviderException or CloudReconnectRequiredException or HttpRequestException)
         {
-            return ResultPage(verified.ReturnOrigin, provider, false, ex.Message);
+            return ResultPage(verified.ReturnOrigin, provider, false, Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex));
         }
     }
 
@@ -245,11 +245,11 @@ public class CloudIntegrationsController(
         }
         catch (CloudReconnectRequiredException ex)
         {
-            return Conflict(new { success = false, needsReconnect = true, message = ex.Message });
+            return Conflict(new { success = false, needsReconnect = true, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
         catch (CloudProviderException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -281,7 +281,7 @@ public class CloudIntegrationsController(
         }
         catch (CloudReconnectRequiredException ex)
         {
-            return Conflict(new { success = false, needsReconnect = true, message = ex.Message, data = results });
+            return Conflict(new { success = false, needsReconnect = true, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex), data = results });
         }
 
         return Ok(new

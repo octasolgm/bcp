@@ -148,7 +148,7 @@ public class DualVerifyKafkaController(
         }
         catch (Exception ex)
         {
-            return BadRequest(new ApiResponse<object>(false, null!, ex.Message));
+            return BadRequest(new ApiResponse<object>(false, null!, Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex)));
         }
     }
 
@@ -249,7 +249,7 @@ public class DualVerifyKafkaController(
         }
         catch (Exception ex)
         {
-            return BadRequest(new ApiResponse<object>(false, null!, ex.Message));
+            return BadRequest(new ApiResponse<object>(false, null!, Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex)));
         }
     }
 
@@ -344,7 +344,7 @@ public class DualVerifyKafkaController(
         }
         catch (Exception ex)
         {
-            return BadRequest(new ApiResponse<object>(false, null!, ex.Message));
+            return BadRequest(new ApiResponse<object>(false, null!, Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex)));
         }
     }
 

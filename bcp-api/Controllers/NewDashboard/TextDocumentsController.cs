@@ -101,7 +101,7 @@ public class TextDocumentsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 

@@ -85,7 +85,7 @@ public class DocumentsController(
             {
                 success = false,
                 duplicate = true,
-                message = ex.Message,
+                message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex),
                 existing = ToDto(ex.Existing),
                 nextVersion = $"v{ex.Existing.VersionNumber + 1}",
             });
@@ -93,7 +93,7 @@ public class DocumentsController(
         catch (Exception ex)
         {
             logger.LogError(ex, "Document upload failed");
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -141,7 +141,7 @@ public class DocumentsController(
             {
                 success = false,
                 duplicate = true,
-                message = ex.Message,
+                message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex),
                 existing = ToDto(ex.Existing),
                 nextVersion = $"v{ex.Existing.VersionNumber + 1}",
             });
@@ -149,7 +149,7 @@ public class DocumentsController(
         catch (Exception ex)
         {
             logger.LogError(ex, "Regulation upload+extract failed");
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -236,7 +236,7 @@ public class DocumentsController(
         catch (Exception ex)
         {
             logger.LogError(ex, "Load points failed for {Id}", id);
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -485,7 +485,7 @@ public class DocumentsController(
         catch (Exception ex)
         {
             logger.LogError(ex, "TFS guidelines seed failed");
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
@@ -534,7 +534,7 @@ public class DocumentsController(
         catch (Exception ex)
         {
             logger.LogError(ex, "Analysis bundle seed failed");
-            return BadRequest(new { success = false, message = ex.Message });
+            return BadRequest(new { success = false, message = Reguliq.Api.Infrastructure.ClientErrors.Safe(HttpContext, ex) });
         }
     }
 
