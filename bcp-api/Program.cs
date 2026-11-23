@@ -12,6 +12,10 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 var builder = WebApplication.CreateBuilder(args);
 // Don't advertise the server technology in responses (removes the "Server: Kestrel" header).
 builder.WebHost.ConfigureKestrel(o => o.AddServerHeader = false);
+// On Azure App Service, send log lines (including the full error detail the global handler keeps out of
+// responses) to App Service logs, so they show in Log stream once Application logging is turned on.
+// Does nothing outside App Service.
+builder.Logging.AddAzureWebAppDiagnostics();
 
 // Optional local secrets file — published to Azure with deploy (gitignored). See appsettings.Secrets.example.json.
 builder.Configuration.AddJsonFile("appsettings.Secrets.json", optional: true, reloadOnChange: false);
