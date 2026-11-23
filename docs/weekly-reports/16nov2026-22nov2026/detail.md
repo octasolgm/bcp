@@ -74,3 +74,7 @@ This went live on 20 November as build 2026.11.20.03. After the release we check
 ## Being worked on
 
 We have confirmed the failure paths on the live site but not yet walked through a full successful sign-in, a session left open long enough to renew itself, and a password reset. Those three checks are next.
+
+## Signing in stays inside the platform
+
+In the clean edition, signing in, staying signed in, signing out, changing a password and opening a reset link now all go through the platform's own server. The browser no longer contacts any outside sign-in or storage service, and no outside service is named on screen. Opening a document works the same way: the platform hands the browser a short-lived link to its own address and delivers the file itself. Everything was checked with a real sign-in across every page.

@@ -95,6 +95,16 @@ Investigated, follow up pending
 Tasks
 - Released the sign-in change on branch release/2026.11.20.01 and deployed it. Build 2026.11.20.03 is live on the API and the web app. Checked after deploy: the served config names only our own API, the web bundle has no identity provider code left, and a sign-in attempt on the live site is answered by our API in our own wording
 - The deploy scripts now send the publishable sign-in key to the API app settings and no longer write the provider URL and key into the web app's config file
+- Comply-Solutions: same sign-in change carried over (9d80b2e). The browser now only talks to our own API for sign-in, session refresh, sign-out, password changes and reset links. Tested with a real sign-in locally: the only outside requests left are Google Fonts, and all 26 pages load without errors
+- Comply-Solutions: document links no longer hand the browser a storage-provider address. Opening a PDF now uses a one-hour signed link on our own API that streams the file; checked with an internal document (1.3 MB) and a regulation (9.3 MB)
+- Comply-Solutions: messages that named the provider (storage or user management not configured, reset link errors) reworded, and the health check reports postgres instead of supabase
+
+Bug fixes
+- Comply-Solutions: password reset links pointed at /nd/auth/reset-password, a page that does not exist in the clean edition (its pages sit at the root). Now /auth/reset-password
+- Comply-Solutions and bcp: the new publishable sign-in key was never read from settings by the API, so sign-in calls always used the admin key. Comply now reads it; bcp still has the same gap
+- Comply-Solutions: a regulation whose title has no .pdf ending downloaded instead of opening, through the new document links. The file type now comes from the stored file
 
 Investigated, follow up pending
 - A real successful sign-in has not been tested end to end by us, only failed attempts. Worth one sign-in, one session left open past the access token's hour, and one password reset on the live site
+- Reset emails are still sent by Supabase from its template; the link passes through supabase.co unless the Reset password template is changed to link straight to our page with the token hash
+- Fonts load from Google Fonts; serving them from our own site would remove the last outside request
