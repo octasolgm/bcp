@@ -12,6 +12,15 @@ A new Security and Trust Overview explains to a bank's IT and security team how 
 
 Releases to staging now carry no passwords or keys at all. The server reads each one from Key Vault when it starts, so a key is changed in one place and never travels with the software. The release tools also refuse to send the new edition to the live site by mistake.
 
+## Stronger sign-in and a full audit trail
+
+The new edition, now on staging, adds the sign-in protections banks ask about first.
+
+- Two-step sign-in: after their password, people enter a 6-digit code from an authenticator app on their phone, such as Google Authenticator or Microsoft Authenticator. Set-up takes a minute with a QR code, or by typing a key. Administrators can reset it for someone who loses their phone, and a business can require it for everyone.
+- Sign-in PIN: people who prefer not to use an app can choose a 6-digit PIN instead. It is checked after the password and locks after five wrong tries.
+- Stronger passwords: new passwords need at least 12 characters and a mix of character types, and common or easily guessed passwords are refused.
+- Audit log: administrators can now see who signed in, failed sign-in attempts, security changes, every change made and what was opened, with filters and a spreadsheet export. Entries are kept for three months.
+
 ## Being worked on
 
-Staging is checked end to end next: sign-in, documents and an analysis. The live site keeps its current key setup until the new edition replaces it.
+A separate staging copy of the sign-in service and database, so testing never touches live accounts, and updates to the web app's underlying libraries.
