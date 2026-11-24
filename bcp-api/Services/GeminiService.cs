@@ -35,7 +35,7 @@ public class GeminiService(HttpClient http, IOptions<GeminiOptions> options, ILo
         CancellationToken ct = default)
     {
         EnsureApiKey();
-        var parts = new List<object> { new { text = prompt } };
+        var parts = new List<object> { new { text = Llm.AiInputGuard.Guard(prompt, logger: logger) } };
         foreach (var (pdf, _) in pdfs)
         {
             if (pdf is not { Length: > 0 }) continue;
@@ -51,6 +51,7 @@ public class GeminiService(HttpClient http, IOptions<GeminiOptions> options, ILo
 
         var body = new
         {
+            systemInstruction = new { parts = new[] { new { text = Llm.AiInputGuard.SystemInstruction } } },
             contents = new[] { new { parts = parts.ToArray() } },
             generationConfig = new { temperature = 0.1, maxOutputTokens = 8192 }
         };
@@ -63,7 +64,8 @@ public class GeminiService(HttpClient http, IOptions<GeminiOptions> options, ILo
         EnsureApiKey();
         var body = new
         {
-            contents = new[] { new { parts = new[] { new { text = prompt } } } },
+            systemInstruction = new { parts = new[] { new { text = Llm.AiInputGuard.SystemInstruction } } },
+            contents = new[] { new { parts = new[] { new { text = Llm.AiInputGuard.Guard(prompt, logger: logger) } } } },
             generationConfig = new { temperature = 0.1, maxOutputTokens = 8192 }
         };
 

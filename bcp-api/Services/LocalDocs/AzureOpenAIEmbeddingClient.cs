@@ -33,7 +33,8 @@ public sealed class AzureOpenAIEmbeddingClient(HttpClient http, Microsoft.Extens
         var url = $"openai/deployments/{opts.EmbeddingDeployment}/embeddings?api-version={ApiVersion}";
 
         using var content = new StringContent(
-            JsonSerializer.Serialize(new { input = text }),
+            // Personal data is masked before it leaves the server, as for the chat models.
+            JsonSerializer.Serialize(new { input = Reguliq.Api.Services.Llm.AiInputGuard.MaskPersonalData(text).Text }),
             System.Text.Encoding.UTF8,
             "application/json");
 
@@ -70,7 +71,10 @@ public sealed class AzureOpenAIEmbeddingClient(HttpClient http, Microsoft.Extens
         if (inputs.Count == 0) return [];
 
         var url = $"openai/deployments/{opts.EmbeddingDeployment}/embeddings?api-version={ApiVersion}";
-        var payload = JsonSerializer.Serialize(new { input = inputs.Select(t => string.IsNullOrWhiteSpace(t) ? " " : t).ToArray() });
+        var payload = JsonSerializer.Serialize(new
+        {
+            input = inputs.Select(t => string.IsNullOrWhiteSpace(t) ? " " : Reguliq.Api.Services.Llm.AiInputGuard.MaskPersonalData(t).Text).ToArray(),
+        });
         for (var attempt = 1; ; attempt++)
         {
             using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");

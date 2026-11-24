@@ -16,7 +16,11 @@ public class OpenAiCompatibleLlmClient(HttpClient http, IConfiguration config)
     public async Task<string> AnalyzeTextAsync(string prompt, string model, CancellationToken ct = default)
     {
         EnsureApiKey("OpenAI");
-        var messages = new[] { new { role = "user", content = prompt } };
+        var messages = new object[]
+        {
+            new { role = "system", content = AiInputGuard.SystemInstruction },
+            new { role = "user", content = AiInputGuard.Guard(prompt, config) },
+        };
         // GPT-5 / GPT-6 / o-series are reasoning models: they reject `max_tokens` and a custom
         // temperature, and reasoning tokens share the completion budget, so give them more headroom.
         object body = IsReasoningModel(model)
@@ -153,9 +157,11 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config, ILogger<
         EnsureApiKey();
         var messages = new[]
         {
-            new { role = "user", content = new object[] { new { type = "text", text = prompt } } },
+            new { role = "user", content = new object[] { new { type = "text", text = AiInputGuard.Guard(prompt, config, logger) } } },
         };
-        return await PostMessagesAsync(BuildMessagesBody(model, messages), ct);
+        var textBody = BuildMessagesBody(model, messages);
+        textBody["system"] = AiInputGuard.SystemInstruction;
+        return await PostMessagesAsync(textBody, ct);
     }
 
     /// <summary>
@@ -177,7 +183,7 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config, ILogger<
         var contextContent = new Dictionary<string, object>
         {
             ["type"] = "text",
-            ["text"] = contextBlock,
+            ["text"] = AiInputGuard.Guard(contextBlock, config, logger),
         };
         if (cacheContextBlock)
             contextContent["cache_control"] = new { type = "ephemeral" };
@@ -185,12 +191,12 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config, ILogger<
         var userContent = new object[]
         {
             contextContent,
-            new { type = "text", text = queryBlock },
+            new { type = "text", text = AiInputGuard.Guard(queryBlock, config, logger) },
         };
 
         var messages = new object[] { new { role = "user", content = userContent } };
         var body = BuildMessagesBody(model, messages);
-        body["system"] = system;
+        body["system"] = AiInputGuard.SystemInstruction + "\n\n" + system;
         body["tools"] = new object[]
         {
             new
@@ -212,7 +218,7 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config, ILogger<
         CancellationToken ct = default)
     {
         EnsureApiKey();
-        var content = new List<object> { new { type = "text", text = prompt } };
+        var content = new List<object> { new { type = "text", text = AiInputGuard.Guard(prompt, config, logger) } };
         foreach (var (pdf, _) in pdfs)
         {
             if (pdf is not { Length: > 0 }) continue;
@@ -229,7 +235,9 @@ public class AnthropicLlmClient(HttpClient http, IConfiguration config, ILogger<
         }
 
         var messages = new[] { new { role = "user", content = content.ToArray() } };
-        return await PostMessagesAsync(BuildMessagesBody(model, messages), ct);
+        var pdfBody = BuildMessagesBody(model, messages);
+        pdfBody["system"] = AiInputGuard.SystemInstruction;
+        return await PostMessagesAsync(pdfBody, ct);
     }
 
     private async Task<string> PostMessagesAsync(
@@ -334,7 +342,11 @@ public class XAiLlmClient(IHttpClientFactory httpFactory, IConfiguration config)
             model,
             temperature = 0.1,
             max_tokens = 8192,
-            messages = new[] { new { role = "user", content = prompt } },
+            messages = new object[]
+            {
+                new { role = "system", content = AiInputGuard.SystemInstruction },
+                new { role = "user", content = AiInputGuard.Guard(prompt, config) },
+            },
         };
         var url = $"{BaseUrl.TrimEnd('/')}/chat/completions";
         using var req = new HttpRequestMessage(HttpMethod.Post, url)
@@ -418,7 +430,11 @@ public abstract class ChatCompletionsClientBase(
         {
             ["model"] = model,
             ["max_tokens"] = 16384,
-            ["messages"] = new[] { new { role = "user", content = prompt } },
+            ["messages"] = new object[]
+            {
+                new { role = "system", content = AiInputGuard.SystemInstruction },
+                new { role = "user", content = AiInputGuard.Guard(prompt, config, logger) },
+            },
         };
         foreach (var (key, value) in ExtraFields(model))
             body[key] = value;
