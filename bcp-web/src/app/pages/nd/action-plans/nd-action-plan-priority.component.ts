@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -33,6 +33,7 @@ type PriorityRunRow = {
   standalone: true,
   imports: [RouterLink],
   templateUrl: './nd-action-plan-priority.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-action-plan-priority.component.scss', '../nd-shared.scss'],
 })
 export class NdActionPlanPriorityComponent implements OnInit, OnDestroy {

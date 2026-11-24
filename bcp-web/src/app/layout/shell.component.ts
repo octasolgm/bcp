@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { ThemeService, type ThemeMode } from '../services/theme.service';
@@ -14,6 +14,7 @@ import { BrandLogoComponent } from '../components/brand-logo/brand-logo.componen
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive, BrandLogoComponent],
   templateUrl: './shell.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './shell.component.scss',
 })
 export class ShellComponent implements OnInit, OnDestroy {

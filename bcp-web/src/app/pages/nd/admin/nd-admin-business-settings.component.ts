@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdWorkspaceModulesComponent } from '../../../components/nd/nd-workspace-modules.component';
@@ -99,6 +99,7 @@ import { NdWorkspaceRegionComponent } from '../../../components/nd/nd-workspace-
     </div>
   `,
   styleUrls: ['./nd-admin-settings.component.scss', '../nd-shared.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`.settings-card + .settings-card { margin-top: 1rem; } .settings-note { margin: 0 0 1rem; }`],
 })
 export class NdAdminBusinessSettingsComponent {

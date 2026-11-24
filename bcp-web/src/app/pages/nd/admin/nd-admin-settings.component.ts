@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -11,6 +11,7 @@ import type { DualVerifyLlmProviderOption, DualVerifyLlmSettings } from '../../.
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './nd-admin-settings.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-admin-settings.component.scss', '../nd-shared.scss'],
 })
 export class NdAdminSettingsComponent implements OnInit {

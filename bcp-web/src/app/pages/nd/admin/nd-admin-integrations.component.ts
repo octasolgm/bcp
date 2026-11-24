@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
@@ -27,6 +27,7 @@ const COMING_SOON: { id: string; name: string }[] = [
   standalone: true,
   imports: [CommonModule, RouterLink],
   templateUrl: './nd-admin-integrations.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-admin-integrations.component.scss', './nd-admin-modern.scss', '../nd-shared.scss'],
 })
 export class NdAdminIntegrationsComponent implements OnInit, OnDestroy {

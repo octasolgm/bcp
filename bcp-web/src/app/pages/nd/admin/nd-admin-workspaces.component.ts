@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, HostListener } from '@angular/core';
+import { Component, OnInit, inject, HostListener, ChangeDetectionStrategy } from '@angular/core';
 import { NdTypeaheadPickerComponent, type NdTypeaheadOption, type NdTypeaheadRolePick } from '../../../components/nd/nd-typeahead-picker.component';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -31,6 +31,7 @@ import { ND_DATE_FORMAT_OPTIONS } from '../../../../lib/nd/date-format';
   standalone: true,
   imports: [NdTypeaheadPickerComponent, CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdPageAlertComponent, NdWorkspaceModulesComponent, NdWorkspaceUploadLimitsComponent, NdWorkspaceRegionComponent],
   templateUrl: './nd-admin-workspaces.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
     './nd-admin-users.component.scss',
     './nd-admin-workspaces.component.scss',

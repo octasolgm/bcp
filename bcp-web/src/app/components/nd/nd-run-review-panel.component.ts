@@ -6,6 +6,7 @@ import {
   OnInit,
   Output,
   SimpleChanges,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -56,6 +57,7 @@ const SUBMIT_TARGETS: Record<Exclude<RunReviewPanelMode, 'none'>, SubmitTargetOp
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './nd-run-review-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-run-review-panel.component.scss',
 })
 export class NdRunReviewPanelComponent implements OnInit, OnChanges {

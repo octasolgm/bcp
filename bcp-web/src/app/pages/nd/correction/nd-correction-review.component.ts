@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { NdGapAnalysisComponent } from '../gap-analysis/nd-gap-analysis.component';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
@@ -8,6 +8,7 @@ import type { RunReviewPanelMode } from '../../../components/nd/nd-run-review-pa
   selector: 'app-nd-correction-review',
   standalone: true,
   imports: [NdGapAnalysisComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     @if (runId) {
       <app-nd-gap-analysis [embedRunId]="runId" [reviewWorkspaceMode]="reviewMode" />

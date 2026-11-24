@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -27,6 +27,7 @@ type MetricRunRow = {
   standalone: true,
   imports: [RouterLink, NdStatusBadgeComponent],
   templateUrl: './nd-dashboard-metric-runs.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-dashboard-metric-runs.component.scss', '../nd-shared.scss'],
 })
 export class NdDashboardMetricRunsComponent implements OnInit, OnDestroy {

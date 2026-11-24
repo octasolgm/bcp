@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { NdPageHeaderActionsService } from '../../services/nd/nd-page-header-actions.service';
 import { InProgressNavButtonComponent } from '../in-progress-nav-button/in-progress-nav-button.component';
@@ -124,6 +124,7 @@ import { InProgressNavButtonComponent } from '../in-progress-nav-button/in-progr
       </div>
     </header>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-page-header.component.scss',
 })
 export class NdPageHeaderComponent {

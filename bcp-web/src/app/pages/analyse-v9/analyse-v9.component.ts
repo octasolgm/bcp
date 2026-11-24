@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRouteSnapshot, NavigationEnd, Router, RouterLink } from '@angular/router';
@@ -71,6 +71,7 @@ const EMPTY_POINT_REVIEWS: ActionItemReviewEntry[] = [];
   standalone: true,
   imports: [FormsModule, RouterLink, InProgressNavButtonComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdGapAnalysisComponent, NdReportSummaryStackComponent],
   templateUrl: './analyse-v9.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analyse-v9.component.scss',
 })
 export class AnalyseV9Component extends AnalyseBase implements OnInit, OnDestroy {

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 
 import { togglePointSort, type PointSortMode } from '../../../lib/nd/point-sort';
 import type { SortDir } from '../../../lib/nd/list-utils';
@@ -17,6 +17,7 @@ import type { SortDir } from '../../../lib/nd/list-utils';
       </button>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     :host {
       display: contents;

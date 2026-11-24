@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
@@ -9,6 +9,7 @@ import { NdLibraryPointsPanelComponent } from './nd-library-points-panel.compone
   standalone: true,
   imports: [RouterLink, NdLibraryPointsPanelComponent],
   templateUrl: './nd-library-view.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-library-view.component.scss', '../nd-shared.scss'],
 })
 export class NdLibraryViewComponent implements OnInit {

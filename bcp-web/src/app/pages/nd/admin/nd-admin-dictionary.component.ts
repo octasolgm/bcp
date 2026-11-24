@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -42,6 +42,7 @@ type SortColumn = 'acronym' | 'definition' | 'source' | 'status';
   standalone: true,
   imports: [FormsModule],
   templateUrl: './nd-admin-dictionary.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-admin-dictionary.component.scss', '../nd-shared.scss'],
 })
 export class NdAdminDictionaryComponent implements OnInit {

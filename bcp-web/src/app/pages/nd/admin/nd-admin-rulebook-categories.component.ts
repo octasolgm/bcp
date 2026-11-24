@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -29,6 +29,7 @@ type FormTarget = { mode: 'add-root' } | { mode: 'add-child'; parentId: string }
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './nd-admin-rulebook-categories.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['../nd-shared.scss', './nd-admin-rulebook-categories.component.scss'],
 })
 export class NdAdminRulebookCategoriesComponent implements OnInit {

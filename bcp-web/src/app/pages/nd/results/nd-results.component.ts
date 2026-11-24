@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -57,6 +57,7 @@ import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sor
   standalone: true,
   imports: [NdRunDepartmentsComponent, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdExportOptionsDialogComponent, NdReportSummaryStackComponent],
   templateUrl: './nd-results.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-results.component.scss', '../nd-shared.scss'],
 })
 export class NdResultsComponent implements OnInit, OnChanges {

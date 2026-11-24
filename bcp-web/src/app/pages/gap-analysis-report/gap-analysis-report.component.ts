@@ -1,4 +1,4 @@
-import { Component, inject, OnDestroy, OnInit } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
@@ -52,6 +52,7 @@ const SEEDED_COMPLIANCE_SESSION = 'a339de5e-06b9-4067-bd97-e7d8086bf31e';
   standalone: true,
   imports: [FormsModule, RouterLink, NdStatusBadgeComponent, NdReportSummaryStackComponent],
   templateUrl: './gap-analysis-report.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './gap-analysis-report.component.scss',
 })
 export class GapAnalysisReportComponent implements OnInit, OnDestroy {

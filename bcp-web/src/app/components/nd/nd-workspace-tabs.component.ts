@@ -1,4 +1,4 @@
-import { Component, Input, inject } from '@angular/core';
+import { Component, Input, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 
@@ -13,6 +13,7 @@ export type NdWorkspaceTab =
   selector: 'app-nd-workspace-tabs',
   standalone: true,
   imports: [RouterLink],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <div class="filter-pills tabs nd-shrink">
       @if (showAllAnalysis) {

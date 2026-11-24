@@ -6,6 +6,7 @@ import {
   OnChanges,
   Output,
   SimpleChanges,
+  ChangeDetectionStrategy
 } from '@angular/core';
 
 import {
@@ -20,6 +21,7 @@ import type { LibraryPointDisplayRow, PointDisplayTreeNode } from '../../../../l
   standalone: true,
   imports: [forwardRef(() => NdPointNumberTreeComponent)],
   templateUrl: './nd-point-number-tree.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-point-number-tree.component.scss',
 })
 export class NdPointNumberTreeComponent implements OnChanges {

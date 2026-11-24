@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
@@ -30,6 +30,7 @@ type PendingRegUpload = {
   standalone: true,
   imports: [RouterLink],
   templateUrl: './regulation-library.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './regulation-library.component.scss',
 })
 export class RegulationLibraryComponent implements OnInit {

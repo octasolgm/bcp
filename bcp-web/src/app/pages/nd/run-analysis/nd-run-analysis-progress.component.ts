@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
@@ -38,6 +38,7 @@ type RunDetail = {
   standalone: true,
   imports: [RouterLink, NdStatusBadgeComponent],
   templateUrl: './nd-run-analysis-progress.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['../nd-shared.scss'],
 })
 export class NdRunAnalysisProgressComponent implements OnInit, OnDestroy {

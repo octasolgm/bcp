@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -39,6 +39,7 @@ type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
   standalone: true,
   imports: [FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
   templateUrl: './nd-reviewer-queue.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-reviewer-queue.component.scss', '../run-analysis/nd-run-analysis.component.scss', '../nd-shared.scss'],
 })
 export class NdReviewerQueueComponent implements OnInit {

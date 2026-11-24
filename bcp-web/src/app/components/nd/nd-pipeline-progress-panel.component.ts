@@ -11,6 +11,7 @@ import {
   inject,
   input,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -88,6 +89,7 @@ type DocStatusRow = {
   imports: [FormsModule],
   host: { '[class.phone]': 'phone()' },
   templateUrl: './nd-pipeline-progress-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-pipeline-progress-panel.component.scss',
 })
 export class NdPipelineProgressPanelComponent implements OnInit, OnDestroy {

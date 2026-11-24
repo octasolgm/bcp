@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 import { NdApiService } from '../../services/nd/nd-api.service';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
 import { ToastService } from '../../services/toast.service';
@@ -34,6 +34,7 @@ import { NdDepartmentPickerComponent, type NdPickerDepartment } from './nd-depar
       </span>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .rd-btn {
       padding: 0.2rem 0.55rem; border: 1px solid var(--border); border-radius: 999px; background: none;

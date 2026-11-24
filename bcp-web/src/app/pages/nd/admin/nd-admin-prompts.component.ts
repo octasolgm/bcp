@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService, NdEmbeddingProviderSetting, NdPipelineVersionSetting } from '../../../services/nd/nd-api.service';
@@ -24,6 +24,7 @@ import {
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './nd-admin-prompts.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-admin-prompts.component.scss', '../nd-shared.scss'],
 })
 export class NdAdminPromptsComponent implements OnInit {

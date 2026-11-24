@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdRunDepartmentsComponent } from '../../components/nd/nd-run-departments.component';
@@ -87,6 +87,7 @@ const UPLOAD_PREPARE_WAIT_MS = 20 * 60_000;
   // changes) specifically so this page's redesign never touches analyse-regul.component.html/.scss,
   // which V3 and V4 still use unmodified. Edit only these two files for V2-only UI work.
   templateUrl: './analyse-regul-full-v2.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analyse-regul-full-v2.component.scss',
 })
 export class AnalyseRegulFullV2Component extends AnalyseRegulComponent {

@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -11,6 +11,7 @@ import { BrandLogoComponent } from '../../../components/brand-logo/brand-logo.co
   standalone: true,
   imports: [FormsModule, RouterLink, BrandLogoComponent],
   templateUrl: './nd-login.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-login.component.scss',
 })
 export class NdLoginComponent {

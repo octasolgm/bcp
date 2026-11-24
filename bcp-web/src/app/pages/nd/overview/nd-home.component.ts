@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DashboardComponent } from '../../dashboard/dashboard.component';
 import { NdOverviewComponent } from './nd-overview.component';
@@ -20,6 +20,7 @@ import type { AnalysisRunSummary } from '../../../../lib/nd/types';
       <app-nd-overview />
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .nd-home-loading {

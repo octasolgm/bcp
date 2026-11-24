@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
@@ -44,6 +44,7 @@ type UserSortColumn = 'name' | 'email' | 'role' | 'status';
   standalone: true,
   imports: [FormsModule, NdStatusBadgeComponent, NdPageAlertComponent, NdDepartmentPickerComponent],
   templateUrl: './nd-admin-users.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-admin-users.component.scss', '../nd-shared.scss'],
 })
 export class NdAdminUsersComponent implements OnInit {

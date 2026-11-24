@@ -1,4 +1,4 @@
-import { Component, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, OnInit, Output, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 export type NdPickerDepartment = { id: string; name: string; parentId?: string | null; isActive?: boolean };
@@ -72,6 +72,7 @@ export function ndDepartmentPath(all: NdPickerDepartment[], id: string): string 
       </footer>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .rb-picker-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.35); z-index: 1000; }
     .rb-picker {

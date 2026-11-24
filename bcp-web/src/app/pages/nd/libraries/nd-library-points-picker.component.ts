@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, inject, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -60,6 +60,7 @@ type DocPointsGroup = {
   standalone: true,
   imports: [FormsModule],
   templateUrl: './nd-library-points-picker.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-library-points-picker.component.scss'],
 })
 export class NdLibraryPointsPickerComponent implements OnInit, OnChanges {

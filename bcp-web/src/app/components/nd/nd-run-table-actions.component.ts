@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
@@ -23,6 +23,7 @@ import type { AnalysisRunSummary } from '../../../lib/nd/types';
   selector: 'app-nd-run-table-actions',
   standalone: true,
   imports: [RouterLink, FormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <div class="row-actions-compact">
       <div class="row-actions-icons">

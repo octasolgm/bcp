@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { complianceSeverityLabel, type ComplianceSeverity } from '../../../lib/nd/point-compliance-status';
 import {
@@ -11,6 +11,7 @@ import {
   selector: 'app-nd-status-badge',
   standalone: true,
   imports: [CommonModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<span class="nd-badge" [ngClass]="badgeClass">{{ label }}</span>`,
 })
 export class NdStatusBadgeComponent {

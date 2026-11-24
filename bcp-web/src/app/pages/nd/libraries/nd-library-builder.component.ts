@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, OnInit, ViewChild, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -19,6 +19,7 @@ type ApiLibraryPoint = {
   standalone: true,
   imports: [FormsModule, RouterLink, NdLibraryPointsPickerComponent],
   templateUrl: './nd-library-builder.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-library-builder.component.scss', '../nd-shared.scss'],
 })
 export class NdLibraryBuilderComponent implements OnInit {

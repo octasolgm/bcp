@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -17,6 +17,7 @@ type TreeNode = RegulationPoint & { depth: number; children: TreeNode[] };
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './nd-manual-regulation-points-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-manual-regulation-points-panel.component.scss', '../nd-shared.scss'],
 })
 export class NdManualRegulationPointsPanelComponent implements OnChanges {

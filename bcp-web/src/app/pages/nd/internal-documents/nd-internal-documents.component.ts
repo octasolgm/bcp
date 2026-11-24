@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -75,6 +75,7 @@ const RecentUploadKeepMs = 90_000;
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, NdInternalDocumentSectionsPanelComponent, NdPageAlertComponent, NdCloudImportDialogComponent],
   templateUrl: './nd-internal-documents.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-internal-documents.component.scss', '../nd-shared.scss'],
 })
 export class NdInternalDocumentsComponent implements OnInit, OnDestroy {

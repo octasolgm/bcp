@@ -1,4 +1,4 @@
-import { Component, EventEmitter, HostListener, Input, OnInit, Output, inject } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, OnInit, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   NdApiService,
@@ -18,6 +18,7 @@ import {
   standalone: true,
   imports: [FormsModule],
   templateUrl: './nd-retrieval-check-drawer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-retrieval-check-drawer.component.scss',
 })
 export class NdRetrievalCheckDrawerComponent implements OnInit {

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdApiService, NdLocalExtractionResult, NdLocalExtractionSection } from '../../../services/nd/nd-api.service';
 
@@ -30,6 +30,7 @@ type PointNode = {
   standalone: true,
   imports: [CommonModule, NdPageAlertComponent],
   templateUrl: './nd-text-documents.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-text-documents.component.scss',
 })
 export class NdTextDocumentsComponent implements OnInit {

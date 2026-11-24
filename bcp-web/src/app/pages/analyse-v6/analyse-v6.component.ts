@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { InProgressNavButtonComponent } from '../../components/in-progress-nav-button/in-progress-nav-button.component';
@@ -9,6 +9,7 @@ import { AnalyseBase } from '../shared/analyse-base';
   standalone: true,
   imports: [CommonModule, FormsModule, DecimalPipe, InProgressNavButtonComponent],
   templateUrl: './analyse-v6.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analyse-v6.component.scss',
 })
 export class AnalyseV6Component extends AnalyseBase {

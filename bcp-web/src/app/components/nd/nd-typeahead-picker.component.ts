@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, Output, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 export type NdTypeaheadOption = { id: string; label: string; hint?: string; role?: string };
@@ -97,6 +97,7 @@ export type NdTypeaheadRolePick = { id: string; role: string };
       </div>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: `
     .ta-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; }
     .ta-field { position: relative; flex: 1 1 16rem; min-width: 0; }

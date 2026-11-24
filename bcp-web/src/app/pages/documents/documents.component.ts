@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -40,6 +40,7 @@ type PendingUpload = {
   standalone: true,
   imports: [],
   templateUrl: './documents.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './documents.component.scss',
 })
 export class DocumentsComponent implements OnInit {

@@ -9,6 +9,7 @@ import {
   SimpleChanges,
   ViewChild,
   ViewChildren,
+  ChangeDetectionStrategy
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -22,6 +23,7 @@ import { sanitizePolicySectionText } from '../../../../lib/nd/policy-section-tex
   standalone: true,
   imports: [FormsModule],
   templateUrl: './nd-internal-document-sections-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-internal-document-sections-panel.component.scss',
 })
 export class NdInternalDocumentSectionsPanelComponent implements OnChanges {

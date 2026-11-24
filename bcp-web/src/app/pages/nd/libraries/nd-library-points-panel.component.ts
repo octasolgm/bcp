@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -36,6 +36,7 @@ type ApiLibraryPoint = {
   standalone: true,
   imports: [CommonModule, FormsModule, NdPointNumberTreeComponent],
   templateUrl: './nd-library-points-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-library-points-panel.component.scss',
 })
 export class NdLibraryPointsPanelComponent implements OnChanges {

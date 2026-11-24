@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -20,6 +20,7 @@ import type { AnalysisRunSummary } from '../../../../lib/nd/types';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './nd-admin-deleted-runs.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-admin-deleted-runs.component.scss', '../nd-shared.scss'],
 })
 export class NdAdminDeletedRunsComponent implements OnInit, OnDestroy {

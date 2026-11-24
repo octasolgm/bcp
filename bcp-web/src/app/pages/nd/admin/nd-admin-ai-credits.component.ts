@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService, type NdAiCreditEntry, type NdAiCreditSummary } from '../../../services/nd/nd-api.service';
@@ -14,6 +14,7 @@ import { NdAuthService } from '../../../services/nd/nd-auth.service';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './nd-admin-ai-credits.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-admin-ai-credits.component.scss', './nd-admin-modern.scss', '../nd-shared.scss'],
 })
 export class NdAdminAiCreditsComponent implements OnInit {

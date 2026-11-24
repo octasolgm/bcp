@@ -40,9 +40,9 @@ import { formatMb, type NdUploadLimits } from '../../../lib/nd/upload-limits';
       }
     } @else {
       <dl class="ul-list">
-        <div><dt>Per document</dt><dd>{{ show(limits?.maxDocumentMb) }}</dd></div>
-        <div><dt>Per upload</dt><dd>{{ show(limits?.maxUploadMb) }}</dd></div>
-        <div><dt>Total storage</dt><dd>{{ show(limits?.maxStorageMb) }}</dd></div>
+        <div><dt>Per document</dt><dd>{{ show($safeNavigationMigration(limits?.maxDocumentMb)) }}</dd></div>
+        <div><dt>Per upload</dt><dd>{{ show($safeNavigationMigration(limits?.maxUploadMb)) }}</dd></div>
+        <div><dt>Total storage</dt><dd>{{ show($safeNavigationMigration(limits?.maxStorageMb)) }}</dd></div>
       </dl>
     }
     @if (limits && !loading) {

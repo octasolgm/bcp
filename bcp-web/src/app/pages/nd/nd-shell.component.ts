@@ -10,6 +10,7 @@ import {
   ChangeDetectorRef,
   effect,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { Location, NgTemplateOutlet } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
@@ -88,6 +89,7 @@ type NavEntry =
     NdPageHeaderComponent,
   ],
   templateUrl: './nd-shell.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-shell.component.scss',
 })
 export class NdShellComponent implements OnInit, OnDestroy {

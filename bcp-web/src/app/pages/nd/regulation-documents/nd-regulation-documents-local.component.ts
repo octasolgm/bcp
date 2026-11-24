@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -129,6 +129,7 @@ type RegulationDocAnalysisRun = {
   imports: [
     NdTreeSelectComponent,CommonModule, FormsModule, NdRegulationPointsPanelComponent, NdManualRegulationPointsPanelComponent, NdPageAlertComponent, NdCloudImportDialogComponent],
   templateUrl: './nd-regulation-documents-local.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
     './nd-regulation-documents.component.scss',
     '../nd-shared.scss',

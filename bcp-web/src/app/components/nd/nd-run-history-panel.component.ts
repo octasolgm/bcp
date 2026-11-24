@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, inject, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NdApiService } from '../../services/nd/nd-api.service';
 import { formatDate } from '../../../lib/nd/utils';
@@ -24,6 +24,7 @@ import { NdStatusBadgeComponent } from './nd-status-badge.component';
   standalone: true,
   imports: [CommonModule, NdStatusBadgeComponent],
   templateUrl: './nd-run-history-panel.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-run-history-panel.component.scss', '../../pages/nd/nd-shared.scss'],
 })
 export class NdRunHistoryPanelComponent implements OnChanges {

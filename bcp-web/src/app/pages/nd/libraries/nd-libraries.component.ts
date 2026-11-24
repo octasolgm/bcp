@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
@@ -27,6 +27,7 @@ type LibrarySortColumn = 'name' | 'description' | 'points' | 'docs' | 'created';
   standalone: true,
   imports: [FormsModule, RouterLink, NdLibraryPointsPanelComponent],
   templateUrl: './nd-libraries.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-libraries.component.scss', '../nd-shared.scss'],
 })
 export class NdLibrariesComponent implements OnInit {

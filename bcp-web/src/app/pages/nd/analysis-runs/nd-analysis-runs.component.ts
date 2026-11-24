@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
@@ -56,6 +56,7 @@ const NO_DEPARTMENTS: string[] = [];
   standalone: true,
   imports: [NdRunDepartmentsComponent, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
   templateUrl: './nd-analysis-runs.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-analysis-runs.component.scss', '../nd-shared.scss'],
 })
 export class NdAnalysisRunsComponent implements OnInit {

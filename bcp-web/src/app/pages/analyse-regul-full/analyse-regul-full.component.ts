@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -34,6 +34,7 @@ import { AnalyseRegulComponent } from '../analyse-regul/analyse-regul.component'
     NdReportSummaryStackComponent,
   ],
   templateUrl: '../analyse-regul/analyse-regul.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: '../analyse-regul/analyse-regul.component.scss',
 })
 export class AnalyseRegulFullComponent extends AnalyseRegulComponent {

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -18,6 +18,7 @@ import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.c
     NdRegulationPointsPanelComponent
 ],
   templateUrl: './nd-regulation-document-detail.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-regulation-document-detail.component.scss', '../nd-shared.scss'],
 })
 export class NdRegulationDocumentDetailComponent implements OnInit {

@@ -1,4 +1,4 @@
-import { Component, Input, inject } from '@angular/core';
+import { Component, Input, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { Router } from '@angular/router';
 import { ActiveAnalysisSessionsService } from '../../services/active-analysis-sessions.service';
@@ -9,6 +9,7 @@ import { shellRoute } from '../../services/app-route-prefix';
   standalone: true,
   imports: [],
   templateUrl: './in-progress-nav-button.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './in-progress-nav-button.component.scss',
 })
 export class InProgressNavButtonComponent {

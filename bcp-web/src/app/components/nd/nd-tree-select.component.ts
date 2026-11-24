@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, Output, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 /** One option of a tree dropdown, in tree order (parents before their children). */
@@ -77,6 +77,7 @@ export type NdTreeSelectOption = { id: string; name: string; parentId?: string |
       }
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host { display: inline-block; position: relative; }

@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { InProgressNavButtonComponent } from '../../components/in-progress-nav-button/in-progress-nav-button.component';
@@ -11,6 +11,7 @@ import { startPanelResize, type PanelResizeKind } from '../shared/panel-resize';
   standalone: true,
   imports: [FormsModule, InProgressNavButtonComponent, DualVerifyResultCardComponent],
   templateUrl: './analyse-v2.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analyse-v2.component.scss',
 })
 export class AnalyseV2Component extends AnalyseBase implements OnDestroy {

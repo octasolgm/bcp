@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -45,6 +45,7 @@ type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'st
     NdRunTableActionsComponent
 ],
   templateUrl: './in-progress.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./in-progress.component.scss', '../nd/nd-shared.scss', '../nd/analysis-runs/nd-analysis-runs.component.scss'],
 })
 export class InProgressComponent implements OnInit, OnDestroy {

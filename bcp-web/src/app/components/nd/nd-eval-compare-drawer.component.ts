@@ -1,4 +1,4 @@
-import { Component, EventEmitter, HostListener, Input, OnInit, Output, inject } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, OnInit, Output, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -23,6 +23,7 @@ export type NdEvalDrawerMode = 'compare' | 'save';
   standalone: true,
   imports: [FormsModule, RouterLink],
   templateUrl: './nd-eval-compare-drawer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-eval-compare-drawer.component.scss',
 })
 export class NdEvalCompareDrawerComponent implements OnInit {

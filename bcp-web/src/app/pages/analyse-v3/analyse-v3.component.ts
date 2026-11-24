@@ -1,4 +1,4 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { InProgressNavButtonComponent } from '../../components/in-progress-nav-button/in-progress-nav-button.component';
@@ -12,6 +12,7 @@ type DocViewMode = 'list' | 'table';
   standalone: true,
   imports: [FormsModule, InProgressNavButtonComponent],
   templateUrl: './analyse-v3.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analyse-v3.component.scss',
 })
 export class AnalyseV3Component extends AnalyseBase implements OnDestroy {

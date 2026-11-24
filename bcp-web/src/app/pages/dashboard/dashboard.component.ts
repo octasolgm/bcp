@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { forkJoin, Observable, of } from 'rxjs';
@@ -112,6 +112,7 @@ type RecentRow = {
     NdMisPanelComponent
 ],
   templateUrl: './dashboard.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./dashboard.component.scss', '../nd/nd-shared.scss'],
 })
 export class DashboardComponent implements OnInit {

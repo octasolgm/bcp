@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NdApiService, NdClauseEvalDetail, NdClauseEvalSummary } from '../../../services/nd/nd-api.service';
 
@@ -19,6 +19,7 @@ type ClauseGroup = {
   standalone: true,
   imports: [RouterLink],
   templateUrl: './nd-evals.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-evals.component.scss',
 })
 export class NdEvalsComponent implements OnInit {

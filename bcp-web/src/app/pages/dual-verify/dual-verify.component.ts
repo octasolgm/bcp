@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -77,6 +77,7 @@ type SavedSessionOption = {
   standalone: true,
   imports: [CommonModule, FormsModule, DualVerifyResultCardComponent],
   templateUrl: './dual-verify.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './dual-verify.component.scss',
 })
 export class DualVerifyComponent implements OnInit, OnDestroy {

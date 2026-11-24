@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges } from '@angular/core';
+import { Component, Input, OnChanges, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
   hasDisplayableFulfilledClauses,
@@ -18,6 +18,7 @@ import type { ColorTier } from '../../../lib/ai-lab/color-tier';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './reference-compliance-card.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reference-compliance-card.component.scss',
 })
 export class ReferenceComplianceCardComponent implements OnChanges {

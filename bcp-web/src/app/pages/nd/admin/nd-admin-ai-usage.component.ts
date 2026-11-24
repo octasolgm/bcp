@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -18,6 +18,7 @@ type PeriodKey = '7d' | '30d' | 'month' | 'all' | 'custom';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './nd-admin-ai-usage.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-admin-ai-usage.component.scss', './nd-admin-modern.scss', '../nd-shared.scss'],
 })
 export class NdAdminAiUsageComponent implements OnInit {

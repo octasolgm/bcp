@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, ViewChild, computed, effect, inject, input, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, ViewChild, computed, effect, inject, input, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { NdStepTrackerService } from '../../services/nd/nd-step-tracker.service';
 
@@ -73,6 +73,7 @@ import { NdStepTrackerService } from '../../services/nd/nd-step-tracker.service'
       }
     </aside>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-step-tracker.component.scss',
 })
 export class NdStepTrackerComponent {

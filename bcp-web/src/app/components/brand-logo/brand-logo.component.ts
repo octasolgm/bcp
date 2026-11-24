@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
 import { BRAND } from '../../config/brand';
 
 export type BrandLogoVariant = 'header' | 'primary' | 'mark';
@@ -30,6 +30,7 @@ export type BrandLogoVariant = 'header' | 'primary' | 'mark';
       </span>
     }
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

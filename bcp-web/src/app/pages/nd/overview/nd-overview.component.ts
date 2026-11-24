@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs/operators';
@@ -21,6 +21,7 @@ import { emptyGapRiskCounts, type GapRiskCounts } from '../../../../lib/nd/risk-
   standalone: true,
   imports: [RouterLink, NdStatusBadgeComponent, NdRunHistoryPanelComponent, NdRunRoleBadgeComponent, NdRunTableActionsComponent],
   templateUrl: './nd-overview.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-overview.component.scss', '../nd-shared.scss'],
 })
 export class NdOverviewComponent implements OnInit {

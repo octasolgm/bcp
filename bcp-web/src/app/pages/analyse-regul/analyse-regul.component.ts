@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRouteSnapshot, NavigationEnd, Router, RouterLink } from '@angular/router';
@@ -103,6 +103,7 @@ const EMPTY_TEMP_COMMENTS: TempPointReviewComment[] = [];
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, InProgressNavButtonComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdGapAnalysisComponent, NdClauseRailCardComponent, NdReportSummaryStackComponent],
   templateUrl: './analyse-regul.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analyse-regul.component.scss',
 })
 export class AnalyseRegulComponent extends AnalyseBase implements OnInit, OnDestroy {

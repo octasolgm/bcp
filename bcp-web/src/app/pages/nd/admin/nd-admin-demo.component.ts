@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -59,6 +59,7 @@ export type DemoTemplateDetail = DemoTemplateSummary & {
   standalone: true,
   imports: [FormsModule, NdGapPointDetailComponent, NdClauseRailCardComponent],
   templateUrl: './nd-admin-demo.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./nd-admin-demo.component.scss', '../nd-shared.scss'],
 })
 export class NdAdminDemoComponent implements OnInit {

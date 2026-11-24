@@ -12,6 +12,7 @@ import {
   signal,
   SimpleChanges,
   ViewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -204,6 +205,7 @@ const PREP_QUEUE_GRACE_MS = 10 * 60_000;
   standalone: true,
   imports: [NdRunDepartmentsComponent, NdEmbedPreviewDrawerComponent, FormsModule, RouterLink, NgTemplateOutlet, NdStatusBadgeComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdRunHistoryPanelComponent, NdExportOptionsDialogComponent, NdReviewSummaryPanelComponent, NdReportSummaryStackComponent, NdClauseRailCardComponent, NdEvidenceHistoryDrawerComponent, NdEvalCompareDrawerComponent, NdRetrievalCheckDrawerComponent],
   templateUrl: './nd-gap-analysis.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nd-gap-analysis.component.scss',
 })
 export class NdGapAnalysisComponent implements OnInit, OnChanges, OnDestroy {

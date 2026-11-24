@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -34,6 +34,7 @@ type DeptForm = { mode: 'add-root' } | { mode: 'add-child'; parentId: string } |
   standalone: true,
   imports: [CommonModule, FormsModule, NdTypeaheadPickerComponent],
   templateUrl: './nd-admin-departments.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['../nd-shared.scss', './nd-admin-rulebook-categories.component.scss', './nd-admin-departments.component.scss'],
 })
 export class NdAdminDepartmentsComponent implements OnInit {

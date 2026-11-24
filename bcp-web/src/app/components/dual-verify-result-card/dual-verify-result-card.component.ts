@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReferenceComplianceCardComponent } from '../reference-compliance-card/reference-compliance-card.component';
 import type { DualVerifyReportItem } from '../../../lib/dual-verify-report';
@@ -18,6 +18,7 @@ import {
   standalone: true,
   imports: [CommonModule, ReferenceComplianceCardComponent],
   templateUrl: './dual-verify-result-card.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './dual-verify-result-card.component.scss',
 })
 export class DualVerifyResultCardComponent implements OnChanges {

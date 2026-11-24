@@ -1,4 +1,4 @@
-import { Component, HostListener, inject, OnDestroy, OnInit } from '@angular/core';
+import { Component, HostListener, inject, OnDestroy, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { FormsModule } from '@angular/forms';
@@ -47,6 +47,7 @@ type AnalysisStep = { label: string; done: boolean; active: boolean };
   standalone: true,
   imports: [FormsModule],
   templateUrl: './analyse.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analyse.component.scss',
 })
 export class AnalyseComponent implements OnInit, OnDestroy {
