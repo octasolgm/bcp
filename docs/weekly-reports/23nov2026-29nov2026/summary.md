@@ -40,6 +40,12 @@ Tasks
   - Reset and invite pages ask for the authenticator code when the account uses two-step sign-in
   - Dependency scan script; System.Text.Json, System.IO.Packaging and brace-expansion updated
 - Security register updated: 43 done, 10 partial, 15 open
+- Release branch release/2026.11.24.01 in both repositories (pushed; Comply deployed to staging, bcp not deployed):
+  - Angular 19 to 22, jsPDF 2 to 4 and patched packages: 0 known web vulnerabilities in both apps (the critical jsPDF one is gone)
+  - AI input guard on every AI call, both apps: emails, phones, IBANs, card numbers and Emirates IDs masked before text leaves the server; a fixed instruction that document text is data, not instructions; instruction-like text logged. Demo accounts never call AI, so the demo is unchanged
+  - Comply only: two-step backup codes (10 one-time codes, stored hashed, "Use a backup code" at sign-in, new codes from My profile)
+  - Comply API tests: 392 pass, the same 18 known failures as before
+- Security register: 43 done, 12 partial, 13 open
 
 Bug fixes
 - Two-step set-up showed no QR code: the sign-in service now sends raw SVG, which the API turns into an image
@@ -47,4 +53,4 @@ Bug fixes
 
 Investigated, follow up pending
 - Staging and live share one Supabase sign-in service: an account with two-step sign-in cannot change or reset its password in live bcp. Plan: a separate staging Supabase project (about $10 a month on Pro), waiting on the project and a second Key Vault
-- Web packages: Angular 19 and jsPDF 2 (one critical finding) need major upgrades, planned as their own task
+- The bcp release branch needs a full click-through (sign-in, documents, analysis, results, exports, admin, demo) before it goes live; one known analysis should be re-run and compared because of the AI input guard

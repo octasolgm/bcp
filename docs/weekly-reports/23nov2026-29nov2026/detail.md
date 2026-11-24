@@ -21,6 +21,10 @@ The new edition, now on staging, adds the sign-in protections banks ask about fi
 - Stronger passwords: new passwords need at least 12 characters and a mix of character types, and common or easily guessed passwords are refused.
 - Audit log: administrators can now see who signed in, failed sign-in attempts, security changes, every change made and what was opened, with filters and a spreadsheet export. Entries are kept for three months.
 
+## Up-to-date foundations and safer AI
+
+Both editions of the platform have moved to the latest version of their web framework and PDF export library, which clears every known vulnerability in the web app's libraries. Before any text is sent to an AI service, personal details such as email addresses, phone numbers, bank account numbers, card numbers and ID numbers are now replaced with placeholders, so they never leave our servers. The AI is also told, on every request, to treat document content strictly as material to assess and never as instructions. In the new edition, people using two-step sign-in now get ten one-time backup codes for the day they lose their phone.
+
 ## Being worked on
 
-A separate staging copy of the sign-in service and database, so testing never touches live accounts, and updates to the web app's underlying libraries.
+A separate staging copy of the sign-in service and database, so testing never touches live accounts, and a full check of the updated live edition before it is released.
