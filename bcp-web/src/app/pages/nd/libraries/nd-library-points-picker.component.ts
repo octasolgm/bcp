@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, inject, ChangeDetectorRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import type { LibraryPointInput, RegulationDocument, RegulationPoint } from '../../../../lib/nd/types';
@@ -58,7 +58,7 @@ type DocPointsGroup = {
 @Component({
   selector: 'app-nd-library-points-picker',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './nd-library-points-picker.component.html',
   styleUrls: ['./nd-library-points-picker.component.scss'],
 })

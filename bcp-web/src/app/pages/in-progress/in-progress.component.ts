@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { isNdRunProcessing } from '../../../lib/nd/nd-run-activity';
@@ -37,14 +37,13 @@ type RunSortColumn = 'name' | 'points' | 'created' | 'source' | 'workflow' | 'st
   selector: 'app-in-progress',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     RouterLink,
     NdStatusBadgeComponent,
     NdRunRoleBadgeComponent,
     NdRunHistoryPanelComponent,
-    NdRunTableActionsComponent,
-  ],
+    NdRunTableActionsComponent
+],
   templateUrl: './in-progress.component.html',
   styleUrls: ['./in-progress.component.scss', '../nd/nd-shared.scss', '../nd/analysis-runs/nd-analysis-runs.component.scss'],
 })

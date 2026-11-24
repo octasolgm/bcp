@@ -1,12 +1,12 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { togglePointSort, type PointSortMode } from '../../../lib/nd/point-sort';
 import type { SortDir } from '../../../lib/nd/list-utils';
 
 @Component({
   selector: 'app-nd-point-sort-controls',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     <div class="nd-point-sort">
       <button type="button" class="filter-util" [class.active]="sort === 'number'" (click)="pick('number')">

@@ -9,7 +9,7 @@ import {
   SimpleChanges,
   inject,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../services/nd/nd-api.service';
 import { NdAuthService } from '../../services/nd/nd-auth.service';
@@ -24,7 +24,7 @@ import {
 @Component({
   selector: 'app-nd-temp-point-review-comments',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './nd-temp-point-review-comments.component.html',
   styleUrl: './nd-temp-point-review-comments.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

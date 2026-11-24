@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -36,7 +36,7 @@ type RunDetail = {
 @Component({
   selector: 'app-nd-run-analysis-progress',
   standalone: true,
-  imports: [CommonModule, RouterLink, NdStatusBadgeComponent],
+  imports: [RouterLink, NdStatusBadgeComponent],
   templateUrl: './nd-run-analysis-progress.component.html',
   styleUrls: ['../nd-shared.scss'],
 })

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import {
   COMPLIANCE_SEVERITY_LABELS,
   type ComplianceSeverity,
@@ -12,7 +12,7 @@ export type ReportSummaryFilterId = ComplianceSeverity | 'all';
 @Component({
   selector: 'app-nd-report-summary-stack',
   standalone: true,
-  imports: [CommonModule, NdRollupStatCardsComponent],
+  imports: [NdRollupStatCardsComponent],
   templateUrl: './nd-report-summary-stack.component.html',
   styleUrl: './nd-report-summary-stack.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

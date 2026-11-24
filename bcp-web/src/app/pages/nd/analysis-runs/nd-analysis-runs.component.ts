@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs/operators';
@@ -54,7 +54,7 @@ const NO_DEPARTMENTS: string[] = [];
 @Component({
   selector: 'app-nd-analysis-runs',
   standalone: true,
-  imports: [NdRunDepartmentsComponent, CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
+  imports: [NdRunDepartmentsComponent, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
   templateUrl: './nd-analysis-runs.component.html',
   styleUrls: ['./nd-analysis-runs.component.scss', '../nd-shared.scss'],
 })

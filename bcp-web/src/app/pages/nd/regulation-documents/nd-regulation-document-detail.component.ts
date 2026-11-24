@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
@@ -12,12 +12,11 @@ import { NdRegulationPointsPanelComponent } from './nd-regulation-points-panel.c
   selector: 'app-nd-regulation-document-detail',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     RouterLink,
     NdStatusBadgeComponent,
-    NdRegulationPointsPanelComponent,
-  ],
+    NdRegulationPointsPanelComponent
+],
   templateUrl: './nd-regulation-document-detail.component.html',
   styleUrls: ['./nd-regulation-document-detail.component.scss', '../nd-shared.scss'],
 })

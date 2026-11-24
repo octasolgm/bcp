@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -31,7 +31,7 @@ type PriorityRunRow = {
 @Component({
   selector: 'app-nd-action-plan-priority',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [RouterLink],
   templateUrl: './nd-action-plan-priority.component.html',
   styleUrls: ['./nd-action-plan-priority.component.scss', '../nd-shared.scss'],
 })

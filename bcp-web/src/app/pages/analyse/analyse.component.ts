@@ -1,6 +1,6 @@
 import { Component, HostListener, inject, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { forkJoin, of } from 'rxjs';
@@ -45,7 +45,7 @@ type AnalysisStep = { label: string; done: boolean; active: boolean };
 @Component({
   selector: 'app-analyse',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './analyse.component.html',
   styleUrl: './analyse.component.scss',
 })

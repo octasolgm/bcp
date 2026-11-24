@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { ApiService, type StoredDocumentDto } from '../../services/api.service';
@@ -28,7 +28,7 @@ type PendingRegUpload = {
 @Component({
   selector: 'app-regulation-library',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [RouterLink],
   templateUrl: './regulation-library.component.html',
   styleUrl: './regulation-library.component.scss',
 })

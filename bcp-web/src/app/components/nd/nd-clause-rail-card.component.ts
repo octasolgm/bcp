@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import type { ClauseRollup } from '../../../lib/nd/gap-state';
 import { resolveClauseRailHeading } from '../../../lib/nd/clause-rail-card-display';
 
@@ -7,7 +7,7 @@ import { resolveClauseRailHeading } from '../../../lib/nd/clause-rail-card-displ
 @Component({
   selector: 'app-nd-clause-rail-card',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './nd-clause-rail-card.component.html',
   styleUrls: ['./nd-clause-rail-card.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,

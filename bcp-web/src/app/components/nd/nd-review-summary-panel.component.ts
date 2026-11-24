@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, HostListener, Input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import {
   assigneesForPlan,
@@ -20,7 +20,7 @@ type ReviewRow = ActionPlanReviewEntry & { clause: string; planText: string };
 @Component({
   selector: 'app-nd-review-summary-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdRollupStatCardsComponent],
+  imports: [FormsModule, NdRollupStatCardsComponent],
   templateUrl: './nd-review-summary-panel.component.html',
   styleUrl: './nd-review-summary-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

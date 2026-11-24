@@ -1,5 +1,5 @@
 import { Component, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { InProgressNavButtonComponent } from '../../components/in-progress-nav-button/in-progress-nav-button.component';
 import { AnalyseBase } from '../shared/analyse-base';
@@ -10,7 +10,7 @@ type DocViewMode = 'list' | 'table';
 @Component({
   selector: 'app-analyse-v3',
   standalone: true,
-  imports: [CommonModule, FormsModule, InProgressNavButtonComponent],
+  imports: [FormsModule, InProgressNavButtonComponent],
   templateUrl: './analyse-v3.component.html',
   styleUrl: './analyse-v3.component.scss',
 })

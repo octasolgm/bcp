@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import {
@@ -38,7 +38,7 @@ type PendingUpload = {
 @Component({
   selector: 'app-documents',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './documents.component.html',
   styleUrl: './documents.component.scss',
 })

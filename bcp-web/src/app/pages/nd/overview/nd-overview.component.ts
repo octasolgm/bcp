@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -19,7 +19,7 @@ import { emptyGapRiskCounts, type GapRiskCounts } from '../../../../lib/nd/risk-
 @Component({
   selector: 'app-nd-overview',
   standalone: true,
-  imports: [CommonModule, RouterLink, NdStatusBadgeComponent, NdRunHistoryPanelComponent, NdRunRoleBadgeComponent, NdRunTableActionsComponent],
+  imports: [RouterLink, NdStatusBadgeComponent, NdRunHistoryPanelComponent, NdRunRoleBadgeComponent, NdRunTableActionsComponent],
   templateUrl: './nd-overview.component.html',
   styleUrls: ['./nd-overview.component.scss', '../nd-shared.scss'],
 })

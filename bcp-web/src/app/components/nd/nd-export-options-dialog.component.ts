@@ -8,7 +8,7 @@ import {
   Input,
   Output,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import {
   ACTION_PLAN_EXPORT_COLUMNS,
@@ -23,7 +23,7 @@ import {
 @Component({
   selector: 'app-nd-export-options-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './nd-export-options-dialog.component.html',
   styleUrl: './nd-export-options-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

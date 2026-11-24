@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs/operators';
@@ -25,7 +25,7 @@ type LibrarySortColumn = 'name' | 'description' | 'points' | 'docs' | 'created';
 @Component({
   selector: 'app-nd-libraries',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdLibraryPointsPanelComponent],
+  imports: [FormsModule, RouterLink, NdLibraryPointsPanelComponent],
   templateUrl: './nd-libraries.component.html',
   styleUrls: ['./nd-libraries.component.scss', '../nd-shared.scss'],
 })

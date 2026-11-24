@@ -12,7 +12,7 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import {
   NdPipelinePanelService,
@@ -85,7 +85,7 @@ type DocStatusRow = {
 @Component({
   selector: 'app-nd-pipeline-progress-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   host: { '[class.phone]': 'phone()' },
   templateUrl: './nd-pipeline-progress-panel.component.html',
   styleUrl: './nd-pipeline-progress-panel.component.scss',

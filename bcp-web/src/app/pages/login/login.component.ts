@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -9,7 +9,7 @@ import { BrandLogoComponent } from '../../components/brand-logo/brand-logo.compo
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, BrandLogoComponent],
+  imports: [FormsModule, BrandLogoComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
 })

@@ -7,7 +7,7 @@ import {
   Output,
   SimpleChanges,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import {
   formatSectionGroupLabel,
   sectionHeadingTitleForKey,
@@ -18,7 +18,7 @@ import type { LibraryPointDisplayRow, PointDisplayTreeNode } from '../../../../l
 @Component({
   selector: 'app-nd-point-number-tree',
   standalone: true,
-  imports: [CommonModule, forwardRef(() => NdPointNumberTreeComponent)],
+  imports: [forwardRef(() => NdPointNumberTreeComponent)],
   templateUrl: './nd-point-number-tree.component.html',
   styleUrl: './nd-point-number-tree.component.scss',
 })

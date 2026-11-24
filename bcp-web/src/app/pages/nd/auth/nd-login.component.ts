@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
@@ -9,7 +9,7 @@ import { BrandLogoComponent } from '../../../components/brand-logo/brand-logo.co
 @Component({
   selector: 'app-nd-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, BrandLogoComponent],
+  imports: [FormsModule, RouterLink, BrandLogoComponent],
   templateUrl: './nd-login.component.html',
   styleUrl: './nd-login.component.scss',
 })

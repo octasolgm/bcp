@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import type { ClauseRollup } from '../../../lib/nd/gap-state';
 
 /** Gap / action tallies in the same card layout as compliance summary cards (ss2). */
 @Component({
   selector: 'app-nd-rollup-stat-cards',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './nd-rollup-stat-cards.component.html',
   styleUrl: './nd-rollup-stat-cards.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

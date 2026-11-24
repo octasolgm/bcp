@@ -1,5 +1,5 @@
 import { Component, HostListener, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { NdPageAlertComponent } from '../../../components/nd/nd-page-alert.component';
 import { NdStatusBadgeComponent } from '../../../components/nd/nd-status-badge.component';
@@ -42,7 +42,7 @@ type UserSortColumn = 'name' | 'email' | 'role' | 'status';
 @Component({
   selector: 'app-nd-admin-users',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdStatusBadgeComponent, NdPageAlertComponent, NdDepartmentPickerComponent],
+  imports: [FormsModule, NdStatusBadgeComponent, NdPageAlertComponent, NdDepartmentPickerComponent],
   templateUrl: './nd-admin-users.component.html',
   styleUrls: ['./nd-admin-users.component.scss', '../nd-shared.scss'],
 })

@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
@@ -57,7 +57,7 @@ export type DemoTemplateDetail = DemoTemplateSummary & {
 @Component({
   selector: 'app-nd-admin-demo',
   standalone: true,
-  imports: [CommonModule, FormsModule, NdGapPointDetailComponent, NdClauseRailCardComponent],
+  imports: [FormsModule, NdGapPointDetailComponent, NdClauseRailCardComponent],
   templateUrl: './nd-admin-demo.component.html',
   styleUrls: ['./nd-admin-demo.component.scss', '../nd-shared.scss'],
 })

@@ -1,12 +1,12 @@
 import { Component, ElementRef, HostListener, ViewChild, computed, effect, inject, input, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { NdStepTrackerService } from '../../services/nd/nd-step-tracker.service';
 
 /** Left-side vertical progress rail for the New Analysis page — see NdStepTrackerService. */
 @Component({
   selector: 'app-nd-step-tracker',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   host: { '[class.phone]': 'phone()' },
   template: `
     @if (phone() && phoneOpen()) {

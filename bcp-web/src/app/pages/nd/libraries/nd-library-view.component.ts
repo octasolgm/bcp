@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
 import { NdLibraryPointsPanelComponent } from './nd-library-points-panel.component';
@@ -7,7 +7,7 @@ import { NdLibraryPointsPanelComponent } from './nd-library-points-panel.compone
 @Component({
   selector: 'app-nd-library-view',
   standalone: true,
-  imports: [CommonModule, RouterLink, NdLibraryPointsPanelComponent],
+  imports: [RouterLink, NdLibraryPointsPanelComponent],
   templateUrl: './nd-library-view.component.html',
   styleUrls: ['./nd-library-view.component.scss', '../nd-shared.scss'],
 })

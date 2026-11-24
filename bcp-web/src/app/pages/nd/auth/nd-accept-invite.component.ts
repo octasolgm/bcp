@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
@@ -7,7 +7,7 @@ import { NdAuthService } from '../../../services/nd/nd-auth.service';
 @Component({
   selector: 'app-nd-accept-invite',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink],
   template: `
     <div class="nd-auth-page">
       <div class="nd-card nd-auth-card">

@@ -1,5 +1,5 @@
 import { Component, Input, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { Router } from '@angular/router';
 import { ActiveAnalysisSessionsService } from '../../services/active-analysis-sessions.service';
 import { shellRoute } from '../../services/app-route-prefix';
@@ -7,7 +7,7 @@ import { shellRoute } from '../../services/app-route-prefix';
 @Component({
   selector: 'app-in-progress-nav-button',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './in-progress-nav-button.component.html',
   styleUrl: './in-progress-nav-button.component.scss',
 })

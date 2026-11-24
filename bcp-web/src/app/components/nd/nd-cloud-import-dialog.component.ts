@@ -9,7 +9,7 @@ import {
   Output,
   inject,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -33,7 +33,7 @@ const MAX_FILES = 25;
 @Component({
   selector: 'app-nd-cloud-import-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink],
   templateUrl: './nd-cloud-import-dialog.component.html',
   styleUrl: './nd-cloud-import-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

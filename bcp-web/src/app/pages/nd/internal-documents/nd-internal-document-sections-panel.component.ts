@@ -10,7 +10,7 @@ import {
   ViewChild,
   ViewChildren,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import type { InternalDocumentSection, InternalDocumentSectionPageBlock } from '../../../../lib/nd/types';
 import { sortInternalSectionsByPointRef, normalizeInternalSectionRef } from '../../../../lib/nd/internal-section-group';
@@ -20,7 +20,7 @@ import { sanitizePolicySectionText } from '../../../../lib/nd/policy-section-tex
 @Component({
   selector: 'app-nd-internal-document-sections-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './nd-internal-document-sections-panel.component.html',
   styleUrl: './nd-internal-document-sections-panel.component.scss',
 })

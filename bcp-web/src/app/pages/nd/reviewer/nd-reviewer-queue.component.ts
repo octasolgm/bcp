@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -37,7 +37,7 @@ type QueueSortColumn = 'name' | 'maker' | 'date' | 'status';
 @Component({
   selector: 'app-nd-reviewer-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
+  imports: [FormsModule, RouterLink, NdWorkspaceTabsComponent, NdStatusBadgeComponent, NdRunRoleBadgeComponent, NdRunHistoryPanelComponent, NdRunTableActionsComponent, NdPaginationComponent],
   templateUrl: './nd-reviewer-queue.component.html',
   styleUrls: ['./nd-reviewer-queue.component.scss', '../run-analysis/nd-run-analysis.component.scss', '../nd-shared.scss'],
 })

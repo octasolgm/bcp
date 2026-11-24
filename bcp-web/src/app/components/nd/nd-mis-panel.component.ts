@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { RouterLink } from '@angular/router';
 import {
   NdApiService,
@@ -30,7 +30,7 @@ type MisPlanRow = NdMisItem & { owners: string[] };
 @Component({
   selector: 'app-nd-mis-panel',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [RouterLink],
   templateUrl: './nd-mis-panel.component.html',
   styleUrl: './nd-mis-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

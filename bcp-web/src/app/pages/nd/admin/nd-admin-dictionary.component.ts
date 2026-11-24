@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { NdApiService } from '../../../services/nd/nd-api.service';
 import { NdAuthService } from '../../../services/nd/nd-auth.service';
@@ -40,7 +40,7 @@ type SortColumn = 'acronym' | 'definition' | 'source' | 'status';
 @Component({
   selector: 'app-nd-admin-dictionary',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './nd-admin-dictionary.component.html',
   styleUrls: ['./nd-admin-dictionary.component.scss', '../nd-shared.scss'],
 })

@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -25,7 +25,7 @@ type MetricRunRow = {
 @Component({
   selector: 'app-nd-dashboard-metric-runs',
   standalone: true,
-  imports: [CommonModule, RouterLink, NdStatusBadgeComponent],
+  imports: [RouterLink, NdStatusBadgeComponent],
   templateUrl: './nd-dashboard-metric-runs.component.html',
   styleUrls: ['./nd-dashboard-metric-runs.component.scss', '../nd-shared.scss'],
 })

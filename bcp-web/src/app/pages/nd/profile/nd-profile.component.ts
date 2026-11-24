@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -20,7 +20,7 @@ const ROLE_LABELS: Record<string, string> = {
 @Component({
   selector: 'app-nd-profile',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdPageAlertComponent],
+  imports: [FormsModule, RouterLink, NdPageAlertComponent],
   templateUrl: './nd-profile.component.html',
   styleUrls: ['./nd-profile.component.scss', '../nd-shared.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,5 +1,5 @@
 import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRouteSnapshot, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
@@ -71,7 +71,7 @@ const EMPTY_POINT_REVIEWS: ActionItemReviewEntry[] = [];
 @Component({
   selector: 'app-analyse-v8',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, InProgressNavButtonComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdGapAnalysisComponent, NdReportSummaryStackComponent],
+  imports: [FormsModule, RouterLink, InProgressNavButtonComponent, DualVerifyResultCardComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdPointNumberTreeComponent, NdStatusBadgeComponent, NdGapAnalysisComponent, NdReportSummaryStackComponent],
   templateUrl: './analyse-v8.component.html',
   styleUrl: './analyse-v8.component.scss',
 })

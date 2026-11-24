@@ -1,6 +1,6 @@
 import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { CommonModule } from '@angular/common';
+
 import { forkJoin, Observable, of } from 'rxjs';
 import { catchError, finalize, timeout } from 'rxjs/operators';
 import {
@@ -104,14 +104,13 @@ type RecentRow = {
   selector: 'app-dashboard',
   standalone: true,
   imports: [
-    CommonModule,
     RouterLink,
     NdStatusBadgeComponent,
     NdRunHistoryPanelComponent,
     NdRunRoleBadgeComponent,
     NdRunTableActionsComponent,
-    NdMisPanelComponent,
-  ],
+    NdMisPanelComponent
+],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss', '../nd/nd-shared.scss'],
 })

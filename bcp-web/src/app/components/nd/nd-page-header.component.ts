@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { NdPageHeaderActionsService } from '../../services/nd/nd-page-header-actions.service';
 import { InProgressNavButtonComponent } from '../in-progress-nav-button/in-progress-nav-button.component';
 
@@ -10,7 +10,7 @@ import { InProgressNavButtonComponent } from '../in-progress-nav-button/in-progr
 @Component({
   selector: 'app-nd-page-header',
   standalone: true,
-  imports: [CommonModule, InProgressNavButtonComponent],
+  imports: [InProgressNavButtonComponent],
   template: `
     <header class="nd-page-header">
       <div class="nd-page-header-main">

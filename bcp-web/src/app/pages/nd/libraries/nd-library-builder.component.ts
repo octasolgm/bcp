@@ -1,5 +1,5 @@
 import { Component, OnInit, ViewChild, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdApiService } from '../../../services/nd/nd-api.service';
@@ -17,7 +17,7 @@ type ApiLibraryPoint = {
 @Component({
   selector: 'app-nd-library-builder',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NdLibraryPointsPickerComponent],
+  imports: [FormsModule, RouterLink, NdLibraryPointsPickerComponent],
   templateUrl: './nd-library-builder.component.html',
   styleUrls: ['./nd-library-builder.component.scss', '../nd-shared.scss'],
 })

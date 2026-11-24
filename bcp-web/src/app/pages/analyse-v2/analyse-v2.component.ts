@@ -1,5 +1,5 @@
 import { Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { InProgressNavButtonComponent } from '../../components/in-progress-nav-button/in-progress-nav-button.component';
 import { DualVerifyResultCardComponent } from '../../components/dual-verify-result-card/dual-verify-result-card.component';
@@ -9,7 +9,7 @@ import { startPanelResize, type PanelResizeKind } from '../shared/panel-resize';
 @Component({
   selector: 'app-analyse-v2',
   standalone: true,
-  imports: [CommonModule, FormsModule, InProgressNavButtonComponent, DualVerifyResultCardComponent],
+  imports: [FormsModule, InProgressNavButtonComponent, DualVerifyResultCardComponent],
   templateUrl: './analyse-v2.component.html',
   styleUrl: './analyse-v2.component.scss',
 })

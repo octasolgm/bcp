@@ -11,7 +11,7 @@ import {
   ViewChild,
   inject,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import {
   buildGovPointDisplayCatalog,
@@ -47,7 +47,7 @@ type PointNavRef = {
 @Component({
   selector: 'app-nd-regulation-points-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './nd-regulation-points-panel.component.html',
   styleUrl: './nd-regulation-points-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

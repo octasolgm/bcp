@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NdGapPointDetailComponent } from '../../../components/nd/nd-gap-point-detail.component';
@@ -55,7 +55,7 @@ import { sortByPointKey, type PointSortMode } from '../../../../lib/nd/point-sor
 @Component({
   selector: 'app-nd-results',
   standalone: true,
-  imports: [NdRunDepartmentsComponent, CommonModule, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdExportOptionsDialogComponent, NdReportSummaryStackComponent],
+  imports: [NdRunDepartmentsComponent, FormsModule, RouterLink, NdStatusBadgeComponent, NdGapPointDetailComponent, NdPointSortControlsComponent, NdRunReviewPanelComponent, NdExportOptionsDialogComponent, NdReportSummaryStackComponent],
   templateUrl: './nd-results.component.html',
   styleUrls: ['./nd-results.component.scss', '../nd-shared.scss'],
 })
